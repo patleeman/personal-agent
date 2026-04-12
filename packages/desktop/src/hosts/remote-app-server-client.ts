@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import type { IncomingMessage } from 'node:http';
 import WebSocket from 'ws';
 import type { DesktopApiStreamEvent, HostApiDispatchResult } from './types.js';
 
@@ -34,6 +35,16 @@ function renderWebSocketUrl(baseUrl: string): string {
 function renderRpcError(response: JsonRpcResponse): Error {
   const message = response.error?.message?.trim() || `RPC request ${String(response.id)} failed.`;
   return new Error(message);
+}
+
+async function readUnexpectedResponseMessage(response: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of response) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  const bodyText = Buffer.concat(chunks).toString('utf-8').trim();
+  return bodyText || `${String(response.statusCode ?? 500)} ${response.statusMessage ?? 'Remote app-server connection failed.'}`;
 }
 
 export class RemoteAppServerClient {
@@ -140,6 +151,13 @@ export class RemoteAppServerClient {
 
       socket.on('message', (data: WebSocket.RawData) => {
         this.handleSocketMessage(socket, data.toString());
+      });
+
+      socket.once('unexpected-response', (_request: unknown, response: IncomingMessage) => {
+        void (async () => {
+          const message = await readUnexpectedResponseMessage(response);
+          finishReject(new Error(message));
+        })();
       });
 
       socket.once('error', (error: Error) => {

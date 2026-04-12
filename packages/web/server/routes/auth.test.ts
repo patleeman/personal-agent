@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  createRemoteAccessDeviceTokenMock,
   createRemoteAccessPairingCodeMock,
   createInMemoryRateLimitMock,
   exchangeRemoteAccessPairingCodeMock,
@@ -16,6 +17,7 @@ const {
   });
 
   return {
+    createRemoteAccessDeviceTokenMock: vi.fn(),
     createRemoteAccessPairingCodeMock: vi.fn(),
     createInMemoryRateLimitMock: vi.fn(() => rateLimitMiddlewareMock),
     exchangeRemoteAccessPairingCodeMock: vi.fn(),
@@ -29,6 +31,7 @@ const {
 });
 
 vi.mock('../ui/remoteAccessAuth.js', () => ({
+  createRemoteAccessDeviceToken: createRemoteAccessDeviceTokenMock,
   createRemoteAccessPairingCode: createRemoteAccessPairingCodeMock,
   exchangeRemoteAccessPairingCode: exchangeRemoteAccessPairingCodeMock,
   readRemoteAccessAdminState: readRemoteAccessAdminStateMock,
@@ -110,6 +113,7 @@ function createHarness() {
 
 describe('auth routes', () => {
   beforeEach(() => {
+    createRemoteAccessDeviceTokenMock.mockReset();
     createRemoteAccessPairingCodeMock.mockReset();
     createInMemoryRateLimitMock.mockClear();
     exchangeRemoteAccessPairingCodeMock.mockReset();
@@ -177,6 +181,7 @@ describe('auth routes', () => {
   it('handles remote access exchange, logout, and admin routes', () => {
     const harness = createHarness();
     const desktopExchangeHandlers = harness.postHandler('/api/remote-access/exchange');
+    const deviceTokenHandlers = harness.postHandler('/api/remote-access/device-token');
     const desktopLogoutHandlers = harness.postHandler('/api/remote-access/logout');
     const [adminStateHandler] = harness.getHandler('/api/remote-access');
     const [pairingCodeHandler] = harness.postHandler('/api/remote-access/pairing-code');
@@ -184,6 +189,8 @@ describe('auth routes', () => {
 
     expect(desktopExchangeHandlers).toHaveLength(2);
     expect(desktopExchangeHandlers[0]).toBe(rateLimitMiddlewareMock);
+    expect(deviceTokenHandlers).toHaveLength(2);
+    expect(deviceTokenHandlers[0]).toBe(rateLimitMiddlewareMock);
 
     const missingCodeRes = createResponse();
     desktopExchangeHandlers[1]!(createRequest({ body: {} }), missingCodeRes);
@@ -218,6 +225,26 @@ describe('auth routes', () => {
     desktopExchangeHandlers[1]!(createRequest({ body: { code: 'PAIR-9999' } }), failingExchangeRes);
     expect(failingExchangeRes.status).toHaveBeenCalledWith(500);
     expect(failingExchangeRes.json).toHaveBeenCalledWith({ error: 'desktop exchange failed' });
+
+    const missingDeviceCodeRes = createResponse();
+    deviceTokenHandlers[1]!(createRequest({ body: {} }), missingDeviceCodeRes);
+    expect(missingDeviceCodeRes.status).toHaveBeenCalledWith(400);
+    expect(missingDeviceCodeRes.json).toHaveBeenCalledWith({ error: 'Pairing code required.' });
+
+    createRemoteAccessDeviceTokenMock.mockReturnValueOnce({ session, bearerToken: 'desktop-bearer-token' });
+    const deviceTokenRes = createResponse();
+    deviceTokenHandlers[1]!(createRequest({ body: { code: 'PAIR-4321', deviceLabel: 'Patrick desktop' } }), deviceTokenRes);
+    expect(createRemoteAccessDeviceTokenMock).toHaveBeenCalledWith('PAIR-4321', { deviceLabel: 'Patrick desktop' });
+    expect(deviceTokenRes.status).toHaveBeenCalledWith(201);
+    expect(deviceTokenRes.json).toHaveBeenCalledWith({ session, bearerToken: 'desktop-bearer-token' });
+
+    createRemoteAccessDeviceTokenMock.mockImplementationOnce(() => {
+      throw new Error('Pairing code is invalid or expired.');
+    });
+    const expiredDeviceTokenRes = createResponse();
+    deviceTokenHandlers[1]!(createRequest({ body: { code: 'expired' } }), expiredDeviceTokenRes);
+    expect(expiredDeviceTokenRes.status).toHaveBeenCalledWith(400);
+    expect(expiredDeviceTokenRes.json).toHaveBeenCalledWith({ error: 'Pairing code is invalid or expired.' });
 
     const logoutRes = createResponse();
     desktopLogoutHandlers[0]!(createRequest({ headers: { cookie: 'pa_web=desktop%3Dtoken', host: 'localhost:3000' } }), logoutRes);
@@ -276,6 +303,10 @@ describe('auth routes', () => {
     const authPathNext = vi.fn();
     desktopGate(createRequest({ path: '/remote-access/session' }), createResponse(), authPathNext);
     expect(authPathNext).toHaveBeenCalledTimes(1);
+
+    const deviceTokenNext = vi.fn();
+    desktopGate(createRequest({ path: '/remote-access/device-token' }), createResponse(), deviceTokenNext);
+    expect(deviceTokenNext).toHaveBeenCalledTimes(1);
 
     const publicNext = vi.fn();
     desktopGate(createRequest({ path: '/tasks', headers: { host: 'localhost:3000' } }), createResponse(), publicNext);

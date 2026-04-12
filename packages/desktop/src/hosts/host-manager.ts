@@ -1,4 +1,9 @@
 import { loadDesktopConfig, saveDesktopConfig } from '../state/desktop-config.js';
+import {
+  clearDesktopRemoteHostAuth,
+  readDesktopRemoteHostAuthState,
+  writeDesktopRemoteHostAuth,
+} from '../state/remote-host-auth.js';
 import type {
   DesktopConfig,
   DesktopConnectionsState,
@@ -128,6 +133,15 @@ export class HostManager {
     };
 
     if (existing) {
+      if (
+        existing.kind === 'web'
+        && (
+          record.kind !== 'web'
+          || existing.baseUrl.trim() !== record.baseUrl.trim()
+        )
+      ) {
+        clearDesktopRemoteHostAuth(record.id);
+      }
       await this.disposeController(record.id);
     }
 
@@ -156,7 +170,77 @@ export class HostManager {
       defaultHostId: this.activeHostId,
       hosts: this.config.hosts.filter((host) => host.id !== hostId),
     };
+    clearDesktopRemoteHostAuth(hostId);
     saveDesktopConfig(this.config);
+  }
+
+  readHostAuthState(hostId: string) {
+    const record = this.getHostRecordById(hostId);
+    if (record.kind !== 'web') {
+      return {
+        hostId: record.id,
+        hasBearerToken: false,
+      };
+    }
+
+    return readDesktopRemoteHostAuthState(record.id);
+  }
+
+  async pairHost(hostId: string, input: { code: string; deviceLabel?: string }): Promise<ReturnType<HostManager['readHostAuthState']>> {
+    const record = this.getHostRecordById(hostId);
+    if (record.kind !== 'web') {
+      throw new Error('Only direct web hosts support bearer-token pairing.');
+    }
+
+    const baseUrl = new URL('/api/remote-access/device-token', record.baseUrl).toString();
+    const response = await fetch(baseUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        code: input.code,
+        ...(typeof input.deviceLabel === 'string' && input.deviceLabel.trim().length > 0
+          ? { deviceLabel: input.deviceLabel.trim() }
+          : {}),
+      }),
+    });
+
+    let payload: {
+      error?: string;
+      bearerToken?: string;
+      session?: { id?: string; deviceLabel?: string; createdAt?: string; expiresAt?: string };
+    } | null = null;
+    try {
+      payload = await response.json() as {
+        error?: string;
+        bearerToken?: string;
+        session?: { id?: string; deviceLabel?: string; createdAt?: string; expiresAt?: string };
+      };
+    } catch {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.error?.trim() || `${response.status} ${response.statusText}`);
+    }
+
+    const bearerToken = payload?.bearerToken?.trim() ?? '';
+    if (!bearerToken) {
+      throw new Error('Remote host pairing did not return a bearer token.');
+    }
+
+    writeDesktopRemoteHostAuth({
+      hostId: record.id,
+      bearerToken,
+      session: payload?.session,
+    });
+    await this.disposeController(record.id);
+    return this.readHostAuthState(record.id);
+  }
+
+  async clearHostAuth(hostId: string): Promise<ReturnType<HostManager['readHostAuthState']>> {
+    const record = this.getHostRecordById(hostId);
+    await this.disposeController(record.id);
+    return clearDesktopRemoteHostAuth(record.id);
   }
 
   getActiveHostRecord(): DesktopHostRecord {

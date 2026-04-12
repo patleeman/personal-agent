@@ -88,6 +88,8 @@ A web remote host is a reachable personal-agent instance that exposes the app-se
 
 The desktop shell still probes `/api/status`, but it now keeps rendering the local packaged UI over `personal-agent://app/` and forwards `/api/*` work to the remote instance over app-server.
 
+When that remote host is protected behind Tailnet remote-access auth, the desktop pairs once with a short-lived pairing code and stores a revocable bearer token for future app-server connections.
+
 ### SSH remote host
 
 An SSH remote host:

@@ -1,4 +1,5 @@
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
+import { readDesktopRemoteHostBearerToken } from '../state/remote-host-auth.js';
 import { parseApiDispatchResult } from './api-dispatch.js';
 import { RemoteAppServerClient } from './remote-app-server-client.js';
 import type {
@@ -39,8 +40,12 @@ export class WebHostController implements HostController {
     this.id = record.id;
     this.label = record.label;
     this.baseUrl = normalizeBaseUrl(this.record.baseUrl);
+    const bearerToken = readDesktopRemoteHostBearerToken(record.id);
     this.appServerClient = new RemoteAppServerClient({
       baseUrl: this.baseUrl,
+      headers: bearerToken
+        ? { Authorization: `Bearer ${bearerToken}` }
+        : undefined,
     });
   }
 

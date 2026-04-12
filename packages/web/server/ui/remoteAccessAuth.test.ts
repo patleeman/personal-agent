@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  createRemoteAccessDeviceToken,
   createRemoteAccessPairingCode,
   exchangeRemoteAccessPairingCode,
   readRemoteAccessAdminState,
@@ -80,6 +81,22 @@ describe('remote access auth', () => {
     expect(() => exchangeRemoteAccessPairingCode(created.code, {
       now: new Date('2026-03-25T12:02:00.000Z'),
     })).toThrow('Pairing code is invalid or expired.');
+  });
+
+  it('can mint a device bearer token from a pairing code', () => {
+    const stateRoot = createTempDir('pa-remote-access-auth-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const created = createRemoteAccessPairingCode({ now: new Date('2026-03-25T12:00:00.000Z') });
+    const exchanged = createRemoteAccessDeviceToken(created.code, {
+      deviceLabel: 'Patrick desktop',
+      now: new Date('2026-03-25T12:01:00.000Z'),
+    });
+
+    expect(exchanged.bearerToken).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(exchanged.session).toEqual(expect.objectContaining({ deviceLabel: 'Patrick desktop' }));
+    expect(readRemoteAccessSession(exchanged.bearerToken, { now: new Date('2026-03-25T12:02:00.000Z') }))
+      .toEqual(expect.objectContaining({ id: exchanged.session.id }));
   });
 
   it('extends active session expiry when the paired device is used again', () => {

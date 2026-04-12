@@ -46,6 +46,11 @@ export interface RemoteAccessSessionSummary {
   revokedAt?: string;
 }
 
+export interface RemoteAccessDeviceTokenResult {
+  bearerToken: string;
+  session: RemoteAccessSessionSummary;
+}
+
 export interface RemoteAccessAdminState {
   pendingPairings: Array<{
     id: string;
@@ -286,6 +291,17 @@ export function exchangeRemoteAccessPairingCode(
       session: toSessionSummary(session),
     };
   }, options?.now);
+}
+
+export function createRemoteAccessDeviceToken(
+  codeInput: string,
+  options?: { deviceLabel?: string; now?: Date },
+): RemoteAccessDeviceTokenResult {
+  const exchanged = exchangeRemoteAccessPairingCode(codeInput, options);
+  return {
+    bearerToken: exchanged.sessionToken,
+    session: exchanged.session,
+  };
 }
 
 export function readRemoteAccessSession(

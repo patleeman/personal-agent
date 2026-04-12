@@ -21,6 +21,7 @@ import type {
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
   DesktopConnectionsState,
+  DesktopRemoteHostAuthState,
   DurableRunDetailResult,
   DurableRunListResult,
   DesktopEnvironmentState,
@@ -94,6 +95,9 @@ export interface PersonalAgentDesktopBridge {
   switchHost(hostId: string): Promise<void>;
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
+  readHostAuthState(hostId: string): Promise<DesktopRemoteHostAuthState>;
+  pairHost(input: { hostId: string; code: string; deviceLabel?: string }): Promise<DesktopRemoteHostAuthState>;
+  clearHostAuth(hostId: string): Promise<DesktopRemoteHostAuthState>;
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;

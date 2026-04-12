@@ -112,6 +112,31 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getConnectionsState();
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-host-auth-state`, async (_event, hostId: string) => {
+    return options.hostManager.readHostAuthState(hostId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:pair-host`, async (_event, input: { hostId?: string; code?: string; deviceLabel?: string }) => {
+    const hostId = typeof input?.hostId === 'string' ? input.hostId.trim() : '';
+    const code = typeof input?.code === 'string' ? input.code.trim() : '';
+    if (!hostId || !code) {
+      throw new Error('Host id and pairing code are required.');
+    }
+
+    const result = await options.hostManager.pairHost(hostId, {
+      code,
+      ...(typeof input.deviceLabel === 'string' ? { deviceLabel: input.deviceLabel } : {}),
+    });
+    options.onHostStateChanged?.();
+    return result;
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:clear-host-auth`, async (_event, hostId: string) => {
+    const result = await options.hostManager.clearHostAuth(hostId);
+    options.onHostStateChanged?.();
+    return result;
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

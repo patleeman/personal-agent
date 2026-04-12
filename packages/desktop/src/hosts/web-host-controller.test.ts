@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   dispatchApiRequest: vi.fn(),
   subscribeApiStream: vi.fn(),
   dispose: vi.fn(),
+  readDesktopRemoteHostBearerToken: vi.fn(() => ''),
   registerSchemesAsPrivileged: vi.fn(),
   protocolHandle: vi.fn(),
   partitionProtocolHandle: vi.fn(),
@@ -27,6 +28,10 @@ vi.mock('electron', () => ({
   session: {
     fromPartition: mocks.fromPartition,
   },
+}));
+
+vi.mock('../state/remote-host-auth.js', () => ({
+  readDesktopRemoteHostBearerToken: mocks.readDesktopRemoteHostBearerToken,
 }));
 
 vi.mock('./remote-app-server-client.js', () => ({

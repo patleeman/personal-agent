@@ -729,6 +729,15 @@ export interface DesktopConnectionsState {
   hosts: DesktopHostRecord[];
 }
 
+export interface DesktopRemoteHostAuthState {
+  hostId: string;
+  hasBearerToken: boolean;
+  sessionId?: string;
+  deviceLabel?: string;
+  createdAt?: string;
+  expiresAt?: string;
+}
+
 export interface DesktopNavigationState {
   canGoBack: boolean;
   canGoForward: boolean;

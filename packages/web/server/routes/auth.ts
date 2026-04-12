@@ -1,5 +1,6 @@
 import type { Express, NextFunction, Request, Response } from 'express';
 import {
+  createRemoteAccessDeviceToken,
   createRemoteAccessPairingCode,
   exchangeRemoteAccessPairingCode,
   readRemoteAccessAdminState,
@@ -142,6 +143,24 @@ function handleRemoteAccessExchangeRequest(req: Request, res: Response): void {
   }
 }
 
+function handleRemoteAccessDeviceTokenRequest(req: Request, res: Response): void {
+  try {
+    const { code, deviceLabel } = req.body as { code?: unknown; deviceLabel?: unknown };
+    if (typeof code !== 'string' || code.trim().length === 0) {
+      res.status(400).json({ error: 'Pairing code required.' });
+      return;
+    }
+
+    const exchanged = createRemoteAccessDeviceToken(code, {
+      ...(typeof deviceLabel === 'string' ? { deviceLabel } : {}),
+    });
+    res.status(201).json({ session: exchanged.session, bearerToken: exchanged.bearerToken });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.status(message.includes('invalid or expired') ? 400 : 500).json({ error: message });
+  }
+}
+
 function handleRemoteAccessLogoutRequest(req: Request, res: Response): void {
   revokeRemoteAccessSessionByToken(readCookieValue(req, REMOTE_ACCESS_SESSION_COOKIE));
   clearRemoteAccessSessionCookie(req, res);
@@ -174,7 +193,7 @@ function handleRemoteAccessRevokeSessionRequest(req: Request, res: Response): vo
 }
 
 function handleRemoteAccessGate(req: Request, res: Response, next: NextFunction): void {
-  if (req.path === '/remote-access/session' || req.path === '/remote-access/exchange' || req.path === '/remote-access/logout') {
+  if (req.path === '/remote-access/session' || req.path === '/remote-access/exchange' || req.path === '/remote-access/device-token' || req.path === '/remote-access/logout') {
     next();
     return;
   }
@@ -200,6 +219,7 @@ function registerRemoteAccessAdminRoutes(app: Express): void {
 export function registerAuthRoutes(app: Express): void {
   app.get('/api/remote-access/session', handleRemoteAccessSessionRequest);
   app.post('/api/remote-access/exchange', remoteAccessExchangeRateLimit, handleRemoteAccessExchangeRequest);
+  app.post('/api/remote-access/device-token', remoteAccessExchangeRateLimit, handleRemoteAccessDeviceTokenRequest);
   app.post('/api/remote-access/logout', handleRemoteAccessLogoutRequest);
 
   app.use('/api', (req, res, next) => {

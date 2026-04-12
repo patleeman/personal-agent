@@ -154,6 +154,16 @@ Desktop logs live under:
 ~/.local/state/personal-agent/desktop/logs/
 ```
 
+## Direct web remote desktop host will not connect
+
+Check:
+
+- the saved base URL is correct
+- the remote host's managed web UI is up
+- if the host uses Tailnet remote-access auth, this saved desktop host has been paired and still has a valid stored bearer token
+
+If needed, generate a new pairing code on the remote host and pair the saved desktop host again.
+
 ## SSH remote desktop host will not connect
 
 Check:

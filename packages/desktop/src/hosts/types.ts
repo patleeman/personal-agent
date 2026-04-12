@@ -53,6 +53,15 @@ export interface DesktopApiStreamEvent {
   message?: string;
 }
 
+export interface DesktopRemoteHostAuthState {
+  hostId: string;
+  hasBearerToken: boolean;
+  sessionId?: string;
+  deviceLabel?: string;
+  createdAt?: string;
+  expiresAt?: string;
+}
+
 export interface HostApiDispatchResult {
   statusCode: number;
   headers: Record<string, string>;

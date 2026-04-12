@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   loadDesktopConfig: vi.fn(),
   saveDesktopConfig: vi.fn(),
+  readDesktopRemoteHostAuthState: vi.fn((hostId: string) => ({ hostId, hasBearerToken: false })),
+  writeDesktopRemoteHostAuth: vi.fn(),
+  clearDesktopRemoteHostAuth: vi.fn((hostId: string) => ({ hostId, hasBearerToken: false })),
   LocalHostController: vi.fn(),
   SshHostController: vi.fn(),
   WebHostController: vi.fn(),
@@ -11,6 +14,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../state/desktop-config.js', () => ({
   loadDesktopConfig: mocks.loadDesktopConfig,
   saveDesktopConfig: mocks.saveDesktopConfig,
+}));
+
+vi.mock('../state/remote-host-auth.js', () => ({
+  readDesktopRemoteHostAuthState: mocks.readDesktopRemoteHostAuthState,
+  writeDesktopRemoteHostAuth: mocks.writeDesktopRemoteHostAuth,
+  clearDesktopRemoteHostAuth: mocks.clearDesktopRemoteHostAuth,
 }));
 
 vi.mock('./local-host-controller.js', () => ({
@@ -66,6 +75,11 @@ describe('HostManager', () => {
         { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' },
       ],
     });
+
+    mocks.readDesktopRemoteHostAuthState.mockImplementation((hostId: string) => ({ hostId, hasBearerToken: false }));
+    mocks.writeDesktopRemoteHostAuth.mockReset();
+    mocks.writeDesktopRemoteHostAuth.mockImplementation(({ hostId }: { hostId: string }) => ({ hostId, hasBearerToken: true }));
+    mocks.clearDesktopRemoteHostAuth.mockImplementation((hostId: string) => ({ hostId, hasBearerToken: false }));
 
     mocks.LocalHostController.mockImplementation(function LocalHostController(record) {
       return createController(record.id, record.label, 'local');
@@ -133,5 +147,40 @@ describe('HostManager', () => {
       expect.objectContaining({ id: 'web-1', autoConnect: false }),
       expect.objectContaining({ id: 'ssh-gpu', autoConnect: true }),
     ]));
+  });
+
+  it('pairs direct web hosts by exchanging a pairing code for a bearer token', async () => {
+    const manager = new HostManager();
+    mocks.readDesktopRemoteHostAuthState.mockImplementation((hostId: string) => ({
+      hostId,
+      hasBearerToken: true,
+      deviceLabel: 'Patrick desktop',
+      sessionId: 'session-1',
+    }));
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        bearerToken: 'desktop-token',
+        session: {
+          id: 'session-1',
+          deviceLabel: 'Patrick desktop',
+        },
+      }),
+    }));
+
+    await expect(manager.pairHost('web-1', { code: 'PAIR-1234', deviceLabel: 'Patrick desktop' })).resolves.toEqual({
+      hostId: 'web-1',
+      hasBearerToken: true,
+      deviceLabel: 'Patrick desktop',
+      sessionId: 'session-1',
+    });
+    expect(mocks.writeDesktopRemoteHostAuth).toHaveBeenCalledWith({
+      hostId: 'web-1',
+      bearerToken: 'desktop-token',
+      session: {
+        id: 'session-1',
+        deviceLabel: 'Patrick desktop',
+      },
+    });
   });
 });

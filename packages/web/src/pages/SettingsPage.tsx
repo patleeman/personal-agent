@@ -12,6 +12,7 @@ import type {
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
+  DesktopRemoteHostAuthState,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,
@@ -404,8 +405,9 @@ function DesktopConnectionsSettingsPanel() {
   const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
+  const [selectedHostAuth, setSelectedHostAuth] = useState<DesktopRemoteHostAuthState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'pair' | 'clear-auth' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -455,6 +457,32 @@ function DesktopConnectionsSettingsPanel() {
 
     setSelectedHostId('');
     setDraft(createDesktopHostDraft());
+  }, [connections, selectedHostId]);
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    const selectedHost = connections?.hosts.find((host) => host.id === selectedHostId) ?? null;
+    if (!bridge || !selectedHost || selectedHost.kind !== 'web') {
+      setSelectedHostAuth(null);
+      return;
+    }
+
+    let cancelled = false;
+    void bridge.readHostAuthState(selectedHost.id)
+      .then((state) => {
+        if (!cancelled) {
+          setSelectedHostAuth(state);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedHostAuth(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [connections, selectedHostId]);
 
   if (!loading && !environment?.isElectron) {
@@ -609,6 +637,74 @@ function DesktopConnectionsSettingsPanel() {
       setSelectedHostId('');
       setDraft(createDesktopHostDraft());
       setNotice('Remote host deleted.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handlePairHost(hostId: string) {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      return;
+    }
+
+    const code = window.prompt('Enter pairing code from the remote host');
+    if (code === null) {
+      return;
+    }
+
+    const normalizedCode = code.trim();
+    if (!normalizedCode) {
+      setError('Pairing code is required.');
+      return;
+    }
+
+    const deviceLabel = window.prompt('Optional device label', 'Desktop app') ?? undefined;
+
+    setAction('pair');
+    setError(null);
+    setNotice(null);
+
+    try {
+      const authState = await bridge.pairHost({
+        hostId,
+        code: normalizedCode,
+        ...(typeof deviceLabel === 'string' && deviceLabel.trim().length > 0
+          ? { deviceLabel: deviceLabel.trim() }
+          : {}),
+      });
+      setSelectedHostAuth(authState);
+      setNotice(authState.deviceLabel
+        ? `Stored bearer token for ${authState.deviceLabel}.`
+        : 'Stored bearer token for this remote host.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handleClearHostAuth(hostId: string) {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      return;
+    }
+
+    const confirmed = window.confirm('Clear the stored bearer token for this host?');
+    if (!confirmed) {
+      return;
+    }
+
+    setAction('clear-auth');
+    setError(null);
+    setNotice(null);
+
+    try {
+      const authState = await bridge.clearHostAuth(hostId);
+      setSelectedHostAuth(authState);
+      setNotice('Cleared stored bearer token.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -830,6 +926,40 @@ function DesktopConnectionsSettingsPanel() {
               <p className="ui-card-meta">
                 The active host controls this window right now. The default host controls which host opens the next time the desktop app launches.
               </p>
+
+              {selectedHostId && draft.kind === 'web' ? (
+                <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
+                  <p className="text-[13px] font-medium text-primary">Direct remote auth</p>
+                  <p className="ui-card-meta">
+                    Direct web remotes use a stored bearer token for the app-server WebSocket. Generate a short-lived pairing code on the remote host, then pair this saved host once.
+                  </p>
+                  <p className="ui-card-meta">
+                    {selectedHostAuth?.hasBearerToken
+                      ? `Stored token${selectedHostAuth.deviceLabel ? ` for ${selectedHostAuth.deviceLabel}` : ''}${selectedHostAuth.expiresAt ? ` · expires ${new Date(selectedHostAuth.expiresAt).toLocaleString()}` : ''}`
+                      : 'No stored bearer token for this host.'}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { void handlePairHost(selectedHostId); }}
+                      disabled={action !== null}
+                      className={ACTION_BUTTON_CLASS}
+                    >
+                      {action === 'pair' ? 'Pairing…' : selectedHostAuth?.hasBearerToken ? 'Replace token' : 'Pair with code'}
+                    </button>
+                    {selectedHostAuth?.hasBearerToken ? (
+                      <button
+                        type="button"
+                        onClick={() => { void handleClearHostAuth(selectedHostId); }}
+                        disabled={action !== null}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {action === 'clear-auth' ? 'Clearing…' : 'Clear token'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
                 <button

@@ -59,6 +59,7 @@ That means:
 
 - Electron windows still render the packaged `personal-agent://app/` UI for remote hosts
 - remote `/api/*` requests and SSE-style streams are forwarded through the main process over app-server
+- direct web remotes authenticate app-server with a stored bearer token minted from a one-time pairing-code exchange
 - the preload bridge remains the renderer boundary; app-server replaces the old remote transport, not desktop IPC
 
 ## UI shape
