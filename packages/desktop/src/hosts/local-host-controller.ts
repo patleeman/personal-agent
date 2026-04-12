@@ -261,11 +261,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopProviderAuth();
   }
 
-  async readCodexPlanUsage(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopCodexPlanUsage();
-  }
-
   async setProviderApiKey(input: { provider: string; apiKey: string }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.setDesktopProviderApiKey(input);

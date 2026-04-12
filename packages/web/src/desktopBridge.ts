@@ -1,6 +1,5 @@
 import type {
   AppStatus,
-  CodexPlanUsageState,
   RemoteAccessAdminState,
   RemoteAccessPairingCodeResult,
   ConversationArtifactRecord,
@@ -50,6 +49,25 @@ export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversa
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
+export type DesktopConversationContextMenuAction =
+  | 'pin'
+  | 'unpin'
+  | 'archive'
+  | 'duplicate'
+  | 'summarize-and-new'
+  | 'copy-id';
+
+export interface DesktopConversationContextMenuRequest {
+  x: number;
+  y: number;
+  pinAction?: 'pin' | 'unpin' | null;
+  canArchive?: boolean;
+  canDuplicate?: boolean;
+  canSummarizeAndNew?: boolean;
+  canCopyId?: boolean;
+  busyAction?: 'duplicate' | 'summarize' | null;
+}
+
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
   getConnections(): Promise<DesktopConnectionsState>;
@@ -58,6 +76,7 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
+  showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;
@@ -114,7 +133,6 @@ export interface PersonalAgentDesktopBridge {
   }): Promise<ModelProviderState>;
   deleteModelProviderModel(input: { provider: string; modelId: string }): Promise<ModelProviderState>;
   readProviderAuth(): Promise<ProviderAuthState>;
-  readCodexPlanUsage(): Promise<CodexPlanUsageState>;
   setProviderApiKey(input: { provider: string; apiKey: string }): Promise<ProviderAuthState>;
   removeProviderCredential(provider: string): Promise<ProviderAuthState>;
   startProviderOAuthLogin(provider: string): Promise<ProviderOAuthLoginState>;

@@ -35,6 +35,16 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
+  showConversationContextMenu: (input: {
+    x: number;
+    y: number;
+    pinAction?: 'pin' | 'unpin' | null;
+    canArchive?: boolean;
+    canDuplicate?: boolean;
+    canSummarizeAndNew?: boolean;
+    canCopyId?: boolean;
+    busyAction?: 'duplicate' | 'summarize' | null;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-conversation-context-menu`, input),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
@@ -92,7 +102,6 @@ const desktopBridge = {
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-model-provider-model`, input),
   deleteModelProviderModel: (input: { provider: string; modelId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-model-provider-model`, input),
   readProviderAuth: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-provider-auth`),
-  readCodexPlanUsage: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-codex-plan-usage`),
   setProviderApiKey: (input: { provider: string; apiKey: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-provider-api-key`, input),
   removeProviderCredential: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:remove-provider-credential`, provider),
   startProviderOAuthLogin: (provider: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:start-provider-oauth-login`, provider),

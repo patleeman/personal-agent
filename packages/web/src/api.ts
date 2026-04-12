@@ -1,4 +1,4 @@
-import type { AppStatus, CodexPlanUsageState, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -452,14 +452,6 @@ export const api = {
     }
 
     return get<ProviderAuthState>('/provider-auth');
-  },
-  codexPlanUsage: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readCodexPlanUsage();
-    }
-
-    return get<CodexPlanUsageState>('/provider-auth/openai-codex/usage');
   },
   setProviderApiKey: async (provider: string, apiKey: string) => {
     const desktopBridge = getDesktopBridge();

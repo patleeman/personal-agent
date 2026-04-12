@@ -15,7 +15,6 @@ const {
   logErrorMock,
   normalizeSavedModelPreferencesMock,
   persistSettingsWriteMock,
-  readCodexPlanUsageMock,
   readMachineConfigMock,
   readModelProvidersStateMock,
   readProviderAuthStateMock,
@@ -48,7 +47,6 @@ const {
   logErrorMock: vi.fn(),
   normalizeSavedModelPreferencesMock: vi.fn(),
   persistSettingsWriteMock: vi.fn(),
-  readCodexPlanUsageMock: vi.fn(),
   readMachineConfigMock: vi.fn(),
   readModelProvidersStateMock: vi.fn(),
   readProviderAuthStateMock: vi.fn(),
@@ -104,10 +102,6 @@ vi.mock('../models/providerAuth.js', () => ({
   startProviderOAuthLogin: startProviderOAuthLoginMock,
   submitProviderOAuthLoginInput: submitProviderOAuthLoginInputMock,
   subscribeProviderOAuthLogin: subscribeProviderOAuthLoginMock,
-}));
-
-vi.mock('../models/codexUsage.js', () => ({
-  readCodexPlanUsage: readCodexPlanUsageMock,
 }));
 
 vi.mock('../ui/defaultCwdPreferences.js', () => ({
@@ -257,7 +251,6 @@ describe('model routes', () => {
     logErrorMock.mockReset();
     normalizeSavedModelPreferencesMock.mockReset();
     persistSettingsWriteMock.mockReset();
-    readCodexPlanUsageMock.mockReset();
     readMachineConfigMock.mockReset();
     readModelProvidersStateMock.mockReset();
     readProviderAuthStateMock.mockReset();
@@ -290,7 +283,6 @@ describe('model routes', () => {
       currentThinkingLevel: 'high',
     });
     persistSettingsWriteMock.mockImplementation((write: (settingsFile: string) => unknown, options: { runtimeSettingsFile: string }) => write(options.runtimeSettingsFile));
-    readCodexPlanUsageMock.mockResolvedValue({ available: true, updatedAt: '2026-04-09T00:00:00.000Z' });
     readMachineConfigMock.mockImplementation(() => machineConfig);
     readModelProvidersStateMock.mockReturnValue({ providers: [] });
     readProviderAuthStateMock.mockReturnValue({ providers: [] });
@@ -645,20 +637,6 @@ describe('model routes', () => {
     const authRes = createResponse();
     getHandler('/api/provider-auth')(createRequest(), authRes);
     expect(authRes.json).toHaveBeenCalledWith({ providers: [] });
-
-    const usageRes = createResponse();
-    await getHandler('/api/provider-auth/openai-codex/usage')(createRequest(), usageRes);
-    expect(usageRes.json).toHaveBeenCalledWith({ available: true, updatedAt: '2026-04-09T00:00:00.000Z' });
-
-    readCodexPlanUsageMock.mockRejectedValueOnce(new Error('network failed'));
-    const usageErrorRes = createResponse();
-    await getHandler('/api/provider-auth/openai-codex/usage')(createRequest(), usageErrorRes);
-    expect(logErrorMock).toHaveBeenCalledWith('request handler error', expect.objectContaining({ message: 'network failed' }));
-    expect(usageErrorRes.status).toHaveBeenCalledWith(500);
-    expect(usageErrorRes.json).toHaveBeenCalledWith(expect.objectContaining({
-      available: true,
-      error: 'network failed',
-    }));
 
     const invalidApiKeyRes = createResponse();
     patchHandler('/api/provider-auth/:provider/api-key')(createRequest({ params: { provider: '' }, body: {} }), invalidApiKeyRes);

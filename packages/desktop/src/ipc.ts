@@ -1,4 +1,5 @@
 import { ipcMain, type WebContents } from 'electron';
+import { showConversationContextMenu } from './conversation-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 
@@ -114,6 +115,10 @@ export function registerDesktopIpc(options: {
       ?? options.hostManager.getActiveHostId();
     const url = await options.hostManager.openNewConversationForHost(hostId);
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-context-menu`, async (event, input) => {
+    return showConversationContextMenu(event.sender, input ?? {});
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {
@@ -455,17 +460,6 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readProviderAuth();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-codex-plan-usage`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readCodexPlanUsage) {
-      throw new Error('Dedicated desktop Codex usage reads are only available for the local host.');
-    }
-
-    return controller.readCodexPlanUsage();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:set-provider-api-key`, async (event, input) => {

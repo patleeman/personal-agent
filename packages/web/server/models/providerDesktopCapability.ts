@@ -16,7 +16,6 @@ import {
   startProviderOAuthLogin,
   submitProviderOAuthLoginInput,
 } from './providerAuth.js';
-import { readCodexPlanUsage } from './codexUsage.js';
 import { refreshAllLiveSessionModelRegistries, reloadAllLiveSessionAuth } from '../middleware/index.js';
 
 export interface ProviderDesktopCapabilityContext {
@@ -158,10 +157,6 @@ export function deleteModelProviderModelCapability(
 
 export function readProviderAuthCapability(context: ProviderDesktopCapabilityContext): ProviderAuthState {
   return readProviderAuthState(context.getAuthFile());
-}
-
-export async function readCodexPlanUsageCapability(context: ProviderDesktopCapabilityContext) {
-  return readCodexPlanUsage(context.getAuthFile());
 }
 
 export function setProviderApiKeyCapability(

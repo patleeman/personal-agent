@@ -82,7 +82,6 @@ import {
   cancelProviderOAuthLoginCapability,
   deleteModelProviderCapability,
   deleteModelProviderModelCapability,
-  readCodexPlanUsageCapability,
   readModelProvidersCapability,
   readProviderAuthCapability,
   readProviderOAuthLoginCapability,
@@ -1584,22 +1583,6 @@ export async function readDesktopModelProviders() {
 
 export async function readDesktopProviderAuth() {
   return readProviderAuthCapability(await getLocalProviderDesktopCapabilityContext());
-}
-
-export async function readDesktopCodexPlanUsage() {
-  try {
-    return await readCodexPlanUsageCapability(await getLocalProviderDesktopCapabilityContext());
-  } catch (error) {
-    return {
-      available: true,
-      planType: null,
-      fiveHour: null,
-      weekly: null,
-      credits: null,
-      updatedAt: null,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
 }
 
 export async function saveDesktopModelProvider(input: {

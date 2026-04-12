@@ -40,7 +40,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     saveDesktopModelProviderModel: vi.fn(),
     deleteDesktopModelProviderModel: vi.fn(),
     readDesktopProviderAuth: vi.fn(),
-    readDesktopCodexPlanUsage: vi.fn(),
     setDesktopProviderApiKey: vi.fn(),
     removeDesktopProviderCredential: vi.fn(),
     startDesktopProviderOAuthLogin: vi.fn(),

@@ -319,7 +319,6 @@ export interface HostController {
   }): Promise<unknown>;
   deleteModelProviderModel?(input: { provider: string; modelId: string }): Promise<unknown>;
   readProviderAuth?(): Promise<unknown>;
-  readCodexPlanUsage?(): Promise<unknown>;
   setProviderApiKey?(input: DesktopProviderApiKeyRequest): Promise<unknown>;
   removeProviderCredential?(provider: string): Promise<unknown>;
   startProviderOAuthLogin?(provider: string): Promise<unknown>;

@@ -101,7 +101,6 @@ export interface LocalApiModule {
   }): Promise<unknown>;
   deleteDesktopModelProviderModel(input: { provider: string; modelId: string }): Promise<unknown>;
   readDesktopProviderAuth(): Promise<unknown>;
-  readDesktopCodexPlanUsage(): Promise<unknown>;
   setDesktopProviderApiKey(input: { provider: string; apiKey: string }): Promise<unknown>;
   removeDesktopProviderCredential(provider: string): Promise<unknown>;
   startDesktopProviderOAuthLogin(provider: string): Promise<unknown>;

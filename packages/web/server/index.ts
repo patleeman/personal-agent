@@ -40,7 +40,6 @@ import {
   submitProviderOAuthLoginInput,
   subscribeProviderOAuthLogin,
 } from './models/providerAuth.js';
-import { readCodexPlanUsage } from './models/codexUsage.js';
 import {
   applyConversationModelPreferencesToSessionManager,
   readConversationModelPreferenceSnapshot,

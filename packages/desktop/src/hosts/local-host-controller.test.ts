@@ -55,7 +55,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     saveDesktopModelProviderModel: vi.fn(),
     deleteDesktopModelProviderModel: vi.fn(),
     readDesktopProviderAuth: vi.fn(),
-    readDesktopCodexPlanUsage: vi.fn(),
     setDesktopProviderApiKey: vi.fn(),
     removeDesktopProviderCredential: vi.fn(),
     startDesktopProviderOAuthLogin: vi.fn(),
@@ -494,7 +493,6 @@ describe('LocalHostController', () => {
     const saveDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
     const deleteDesktopModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const readDesktopProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
-    const readDesktopCodexPlanUsage = vi.fn().mockResolvedValue({ available: true, planType: 'plus' });
     const setDesktopProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
     const removeDesktopProviderCredential = vi.fn().mockResolvedValue({ providers: [] });
     const startDesktopProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', status: 'running' });
@@ -511,7 +509,6 @@ describe('LocalHostController', () => {
       saveDesktopModelProviderModel,
       deleteDesktopModelProviderModel,
       readDesktopProviderAuth,
-      readDesktopCodexPlanUsage,
       setDesktopProviderApiKey,
       removeDesktopProviderCredential,
       startDesktopProviderOAuthLogin,
@@ -536,7 +533,6 @@ describe('LocalHostController', () => {
     await expect(controller.saveModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
     await expect(controller.deleteModelProviderModel?.({ provider: 'openrouter', modelId: 'model-a' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
     await expect(controller.readProviderAuth?.()).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
-    await expect(controller.readCodexPlanUsage?.()).resolves.toEqual({ available: true, planType: 'plus' });
     await expect(controller.setProviderApiKey?.({ provider: 'openai', apiKey: 'sk-test' })).resolves.toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
     await expect(controller.removeProviderCredential?.('openai')).resolves.toEqual({ providers: [] });
     await expect(controller.startProviderOAuthLogin?.('openrouter')).resolves.toEqual({ id: 'login-1', provider: 'openrouter', status: 'running' });
@@ -553,7 +549,6 @@ describe('LocalHostController', () => {
     expect(saveDesktopModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
     expect(deleteDesktopModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
     expect(readDesktopProviderAuth).toHaveBeenCalledTimes(1);
-    expect(readDesktopCodexPlanUsage).toHaveBeenCalledTimes(1);
     expect(setDesktopProviderApiKey).toHaveBeenCalledWith({ provider: 'openai', apiKey: 'sk-test' });
     expect(removeDesktopProviderCredential).toHaveBeenCalledWith('openai');
     expect(startDesktopProviderOAuthLogin).toHaveBeenCalledWith('openrouter');

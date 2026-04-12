@@ -237,32 +237,6 @@ describe('SettingsPage', () => {
         });
       }
 
-      if (key?.startsWith('codex-plan-usage:')) {
-        return buildUseApiResult({
-          available: true,
-          planType: 'pro',
-          fiveHour: {
-            remainingPercent: 72,
-            usedPercent: 28,
-            windowMinutes: 300,
-            resetsAt: '2026-03-28T05:00:00.000Z',
-          },
-          weekly: {
-            remainingPercent: 84,
-            usedPercent: 16,
-            windowMinutes: 10080,
-            resetsAt: '2026-04-04T00:00:00.000Z',
-          },
-          credits: {
-            hasCredits: true,
-            unlimited: false,
-            balance: '$20.00',
-          },
-          updatedAt: '2026-03-28T00:15:00.000Z',
-          error: null,
-        });
-      }
-
       if (key === 'system-remote-auth') {
         return buildUseApiResult({
           sessions: [],

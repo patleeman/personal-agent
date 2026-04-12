@@ -31,7 +31,6 @@ import {
   submitProviderOAuthLoginInput,
   subscribeProviderOAuthLogin,
 } from '../models/providerAuth.js';
-import { readCodexPlanUsage } from '../models/codexUsage.js';
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import {
@@ -504,26 +503,6 @@ export function registerModelRoutes(
     }
   });
 
-  router.get('/api/provider-auth/openai-codex/usage', async (_req, res) => {
-    try {
-      res.json(await readCodexPlanUsage(AUTH_FILE));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      res.status(500).json({
-        available: true,
-        planType: null,
-        fiveHour: null,
-        weekly: null,
-        credits: null,
-        updatedAt: null,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    }
-  });
-
   router.patch('/api/provider-auth/:provider/api-key', (req, res) => {
     try {
       const { provider } = req.params;
@@ -668,4 +647,3 @@ export function registerModelRoutes(
     }
   });
 }
-

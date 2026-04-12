@@ -58,7 +58,6 @@ describe('api desktop transport', () => {
     const saveModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
     const deleteModelProviderModel = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const readProviderAuth = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
-    const readCodexPlanUsage = vi.fn().mockResolvedValue({ available: true, planType: 'plus' });
     const setProviderApiKey = vi.fn().mockResolvedValue({ providers: [{ id: 'openai', authType: 'api_key' }] });
     const removeProviderCredential = vi.fn().mockResolvedValue({ providers: [] });
     const startProviderOAuthLogin = vi.fn().mockResolvedValue({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });
@@ -167,7 +166,6 @@ describe('api desktop transport', () => {
         saveModelProviderModel,
         deleteModelProviderModel,
         readProviderAuth,
-        readCodexPlanUsage,
         setProviderApiKey,
         removeProviderCredential,
         startProviderOAuthLogin,
@@ -228,7 +226,6 @@ describe('api desktop transport', () => {
     const savedModelProviderModel = await api.saveModelProviderModel('openrouter', { modelId: 'model-a' });
     const removedModelProviderModel = await api.deleteModelProviderModel('openrouter', 'model-a');
     const providerAuth = await api.providerAuth();
-    const codexPlanUsage = await api.codexPlanUsage();
     const providerApiKey = await api.setProviderApiKey('openai', 'sk-test');
     const removedProviderCredential = await api.removeProviderCredential('openai');
     const startedProviderOAuthLogin = await api.startProviderOAuthLogin('openrouter');
@@ -291,7 +288,6 @@ describe('api desktop transport', () => {
     expect(saveModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
     expect(deleteModelProviderModel).toHaveBeenCalledWith({ provider: 'openrouter', modelId: 'model-a' });
     expect(readProviderAuth).toHaveBeenCalledTimes(1);
-    expect(readCodexPlanUsage).toHaveBeenCalledTimes(1);
     expect(setProviderApiKey).toHaveBeenCalledWith({ provider: 'openai', apiKey: 'sk-test' });
     expect(removeProviderCredential).toHaveBeenCalledWith('openai');
     expect(startProviderOAuthLogin).toHaveBeenCalledWith('openrouter');
@@ -391,7 +387,6 @@ describe('api desktop transport', () => {
     expect(savedModelProviderModel).toEqual({ providers: [{ id: 'openrouter', models: [{ id: 'model-a' }] }] });
     expect(removedModelProviderModel).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
     expect(providerAuth).toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
-    expect(codexPlanUsage).toEqual({ available: true, planType: 'plus' });
     expect(providerApiKey).toEqual({ providers: [{ id: 'openai', authType: 'api_key' }] });
     expect(removedProviderCredential).toEqual({ providers: [] });
     expect(startedProviderOAuthLogin).toEqual({ id: 'login-1', provider: 'openrouter', providerName: 'OpenRouter', status: 'running' });

@@ -9,7 +9,6 @@ import { getDesktopBridge, readDesktopConnections, readDesktopEnvironment } from
 import { createDesktopAwareEventSource } from '../desktopEventSource';
 import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
-  CodexPlanUsageState,
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
@@ -22,7 +21,6 @@ import type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../types';
-import { CodexPlanUsageSummary } from '../components/CodexPlanUsageSummary';
 import { SectionLabel, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
@@ -37,16 +35,6 @@ const SETTINGS_QUICK_LINKS = [
 ] as const;
 
 type ModelOption = ModelState['models'][number];
-
-const EMPTY_CODEX_PLAN_USAGE: CodexPlanUsageState = {
-  available: false,
-  planType: null,
-  fiveHour: null,
-  weekly: null,
-  credits: null,
-  updatedAt: null,
-  error: null,
-};
 
 const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string }> = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
@@ -933,16 +921,6 @@ export function SettingsPage() {
     error: providerAuthError,
     refetch: refetchProviderAuth,
   } = useApi(api.providerAuth);
-  const codexUsageEnabled = providerAuthState?.providers.some((provider) => provider.id === 'openai-codex' && provider.authType === 'oauth') ?? false;
-  const {
-    data: codexPlanUsage,
-    loading: codexPlanUsageLoading,
-    refreshing: codexPlanUsageRefreshing,
-    refetch: refetchCodexPlanUsage,
-  } = useApi(
-    () => codexUsageEnabled ? api.codexPlanUsage() : Promise.resolve(EMPTY_CODEX_PLAN_USAGE),
-    `codex-plan-usage:${codexUsageEnabled ? 'enabled' : 'disabled'}`,
-  );
   const [instructionFilesDraft, setInstructionFilesDraft] = useState<string[]>([]);
   const [savingInstructionFiles, setSavingInstructionFiles] = useState(false);
   const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
@@ -1869,7 +1847,6 @@ export function SettingsPage() {
                 refetchDefaultCwd({ resetLoading: false }),
                 refetchConversationTitleSettings({ resetLoading: false }),
                 refetchProviderAuth({ resetLoading: false }),
-                refetchCodexPlanUsage({ resetLoading: false }),
                 oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
               ]);
             }}
@@ -3030,11 +3007,6 @@ export function SettingsPage() {
                 </div>
               </SettingsPanel>
 
-              <CodexPlanUsageSummary
-                usage={codexPlanUsage}
-                loading={codexUsageEnabled && codexPlanUsageLoading}
-                refreshing={codexPlanUsageRefreshing}
-              />
             </div>
           </SettingsSection>
 
