@@ -1900,7 +1900,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [draftCwdError, setDraftCwdError] = useState<string | null>(null);
   const [conversationCwdEditorOpen, setConversationCwdEditorOpen] = useState(false);
   const [conversationCwdDraft, setConversationCwdDraft] = useState('');
-  const [conversationCwdPickBusy, setConversationCwdPickBusy] = useState(false);
   const [conversationCwdBusy, setConversationCwdBusy] = useState(false);
   const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
 
@@ -3346,7 +3345,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [conversationCwdBusy, conversationCwdDraft, currentSurfaceId, draft, ensureConversationCanControl, id, navigate, refetchLiveSessionContext, showNotice, stream.isStreaming]);
 
   const beginConversationCwdEdit = useCallback(() => {
-    if (draft || !id || conversationCwdBusy || conversationCwdPickBusy) {
+    if (draft || !id || conversationCwdBusy) {
       return;
     }
 
@@ -3362,46 +3361,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationCwdDraft(currentCwd ?? '');
     setConversationCwdError(null);
     setConversationCwdEditorOpen(true);
-  }, [conversationCwdBusy, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming]);
+  }, [conversationCwdBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming]);
 
   const cancelConversationCwdEdit = useCallback(() => {
     setConversationCwdDraft(currentCwd ?? '');
     setConversationCwdError(null);
     setConversationCwdEditorOpen(false);
   }, [currentCwd]);
-
-  const pickConversationCwd = useCallback(async () => {
-    if (draft || !id || conversationCwdPickBusy || conversationCwdBusy) {
-      return;
-    }
-
-    if (!ensureConversationCanControl('change its working directory')) {
-      return;
-    }
-
-    if (stream.isStreaming) {
-      showNotice('danger', 'Stop the current response before changing the working directory.', 4000);
-      return;
-    }
-
-    setConversationCwdPickBusy(true);
-    setConversationCwdError(null);
-
-    try {
-      const result = await api.pickFolder(currentCwd ?? undefined);
-      if (result.cancelled || !result.path) {
-        return;
-      }
-
-      setConversationCwdDraft(result.path);
-      setConversationCwdEditorOpen(false);
-      await submitConversationCwdChange(result.path);
-    } catch (error) {
-      setConversationCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
-    } finally {
-      setConversationCwdPickBusy(false);
-    }
-  }, [conversationCwdBusy, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, showNotice, stream.isStreaming, submitConversationCwdChange]);
 
   useEffect(() => {
     if (!shouldAutoDispatchPendingInitialPrompt({
@@ -5024,14 +4990,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const composerDisabled = conversationNeedsTakeover;
-  const conversationCwdActionDisabledReason = conversationNeedsTakeover
-    ? 'Take over this conversation to change its working directory.'
-    : stream.isStreaming
-      ? 'Stop the current response before changing the working directory.'
-      : null;
   const renameConversationDisabled = conversationNeedsTakeover
     || conversationCwdEditorOpen
-    || conversationCwdPickBusy
     || conversationCwdBusy;
   const hasComposerShelfContent = draftMentionItems.length > 0
     || pendingQueue.length > 0
@@ -5351,11 +5311,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               cwdEditing={conversationCwdEditorOpen}
               cwdDraft={conversationCwdDraft}
               cwdError={conversationCwdError}
-              cwdPickBusy={conversationCwdPickBusy}
               cwdSaveBusy={conversationCwdBusy}
-              cwdActionDisabledReason={conversationCwdActionDisabledReason}
-              onPickCwd={() => { void pickConversationCwd(); }}
-              onStartEditingCwd={beginConversationCwdEdit}
               onCwdDraftChange={(value) => {
                 setConversationCwdDraft(value);
                 if (conversationCwdError) {
