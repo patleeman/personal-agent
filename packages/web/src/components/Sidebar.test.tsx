@@ -278,6 +278,35 @@ describe('Sidebar', () => {
     expect(html).toContain('aria-label="Collapse Desktop"');
   });
 
+  it('keeps workspace groups in the saved workspace order even when thread activity changes', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-alpha', 'conv-beta']));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/beta-worktree', '/tmp/alpha-worktree']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'updated');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-alpha',
+          title: 'Alpha thread',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+          lastActivityAt: '2026-03-16T09:55:00.000Z',
+        }),
+        createSession({
+          id: 'conv-beta',
+          title: 'Beta thread',
+          cwd: '/tmp/beta-worktree',
+          cwdSlug: 'beta-worktree',
+          lastActivityAt: '2026-03-16T09:35:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html.indexOf('beta-worktree')).toBeLessThan(html.indexOf('alpha-worktree'));
+    expect(html.indexOf('beta-worktree')).toBeLessThan(html.indexOf('Beta thread'));
+    expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('Alpha thread'));
+  });
+
   it('can render a flat chronological thread list sorted by the saved sort mode', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-older', 'conv-newer']));
     storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
@@ -305,6 +334,30 @@ describe('Sidebar', () => {
     expect(html).not.toContain('aria-label="Collapse alpha-worktree"');
     expect(html).not.toContain('aria-label="Collapse beta-worktree"');
     expect(html.indexOf('Newer thread')).toBeLessThan(html.indexOf('Older thread'));
+  });
+
+  it('defaults to sorting threads by created time when no sort preference is saved', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-earlier', 'conv-later']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-earlier',
+          title: 'Earlier created thread',
+          timestamp: '2026-03-16T09:05:00.000Z',
+          lastActivityAt: '2026-03-16T09:59:00.000Z',
+        }),
+        createSession({
+          id: 'conv-later',
+          title: 'Later created thread',
+          timestamp: '2026-03-16T09:45:00.000Z',
+          lastActivityAt: '2026-03-16T09:10:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html.indexOf('Later created thread')).toBeLessThan(html.indexOf('Earlier created thread'));
   });
 
   it('can sort threads by created time when that preference is saved', () => {

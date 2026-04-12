@@ -55,9 +55,9 @@ Important behaviors:
 - draft conversation state is durable in the browser UI
 - multiple saved conversations can stay open or pinned at once
 - the Threads sidebar keeps conversation rows to a single line, with the relative timestamp in the trailing slot by default and only lightweight row chrome on hover
-- saved workspaces stay visible in the Threads sidebar even when they do not currently have any open threads
+- saved workspaces stay visible in the Threads sidebar even when they do not currently have any open threads, and project-grouped workspaces keep that saved/open order instead of being reshuffled by thread activity
 - auto-generated conversation titles are tuned for that narrow single-line Threads layout and default to the dedicated title model `openai-codex/gpt-5.4-mini` unless you pin another title model in Settings
-- the Threads header includes a filter action for organize/sort controls and an add-workspace action that opens a quick-select modal for saved workspaces, with a fallback to choose a new folder and seed a new draft conversation in that cwd
+- the Threads header includes a filter action for organize/sort controls and an add-workspace action that opens a quick-select modal for saved workspaces, with a fallback to choose a new folder and seed a new draft conversation in that cwd; created-time sorting is the default unless you switch it to updated
 - the Threads sidebar exposes per-conversation actions from a row-level right-click menu instead of the main header, including archive, duplicate, summarize and open new, and copy actions for the working directory, session ID, and deeplink
 - the desktop shell keeps open conversation tabs warm by prefetching transcript bootstrap state and keeping background live threads subscribed, so switching tabs can reuse hot cache instead of cold-loading the thread again
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar

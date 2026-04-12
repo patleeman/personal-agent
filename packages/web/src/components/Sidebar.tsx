@@ -427,9 +427,9 @@ function writeThreadsOrganizeMode(value: ThreadsOrganizeMode): void {
 function readThreadsSortMode(): ThreadsSortMode {
   try {
     const raw = localStorage.getItem(THREADS_SORT_BY_STORAGE_KEY);
-    return raw === 'created' ? 'created' : 'updated';
+    return raw === 'updated' ? 'updated' : 'created';
   } catch {
-    return 'updated';
+    return 'created';
   }
 }
 
@@ -1638,6 +1638,10 @@ export function Sidebar() {
 
     return [...items].sort((left, right) => compareConversationItems(left, right, threadsSortMode));
   }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
+  const workspaceOrder = useMemo(
+    () => normalizeWorkspacePaths([...savedWorkspacePaths, ...openWorkspacePaths]),
+    [openWorkspacePaths, savedWorkspacePaths],
+  );
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -1664,21 +1668,25 @@ export function Sidebar() {
       return [];
     }
 
-    const groups = groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd);
-    const seenWorkspacePaths = new Set(groups.map((group) => group.cwd).filter((cwd): cwd is string => Boolean(cwd)));
+    const groupsByKey = new Map(
+      groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd)
+        .map((group) => [group.key, group] as const),
+    );
+    const groups = workspaceOrder.map((workspacePath) => groupsByKey.get(workspacePath) ?? {
+      key: workspacePath,
+      cwd: workspacePath,
+      label: getConversationGroupLabel(workspacePath),
+      items: [],
+    });
+    const seenGroupKeys = new Set(groups.map((group) => group.key));
 
-    for (const workspacePath of savedWorkspacePaths) {
-      if (seenWorkspacePaths.has(workspacePath)) {
+    for (const group of groupsByKey.values()) {
+      if (seenGroupKeys.has(group.key)) {
         continue;
       }
 
-      groups.push({
-        key: workspacePath,
-        cwd: workspacePath,
-        label: getConversationGroupLabel(workspacePath),
-        items: [],
-      });
-      seenWorkspacePaths.add(workspacePath);
+      groups.push(group);
+      seenGroupKeys.add(group.key);
     }
 
     return groups.map((group) => ({
@@ -1686,7 +1694,7 @@ export function Sidebar() {
       defaultLabel: group.label,
       label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
     }));
-  }, [conversationGroupLabelOverrides, orderedConversationItems, savedWorkspacePaths, threadsOrganizeMode]);
+  }, [conversationGroupLabelOverrides, orderedConversationItems, threadsOrganizeMode, workspaceOrder]);
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
