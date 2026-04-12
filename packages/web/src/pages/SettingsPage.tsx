@@ -35,6 +35,7 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-interface', label: 'Interface' },
 ] as const;
 
+type SettingsQuickLinkId = (typeof SETTINGS_QUICK_LINKS)[number]['id'];
 type ModelOption = ModelState['models'][number];
 
 const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string }> = [
@@ -1097,6 +1098,8 @@ export function SettingsPage() {
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [resetting, setResetting] = useState<'layout' | 'conversation' | null>(null);
   const [resetError, setResetError] = useState<string | null>(null);
+  const settingsScrollRef = useRef<HTMLDivElement | null>(null);
+  const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
   const pageMeta = [
     theme,
@@ -1120,6 +1123,52 @@ export function SettingsPage() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const container = settingsScrollRef.current;
+    if (!container || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    let frame: number | null = null;
+    const updateActiveQuickLink = () => {
+      frame = null;
+      const containerTop = container.getBoundingClientRect().top;
+      let nextId = SETTINGS_QUICK_LINKS[0].id;
+
+      for (const item of SETTINGS_QUICK_LINKS) {
+        const section = container.querySelector<HTMLElement>(`#${item.id}`);
+        if (!section) {
+          continue;
+        }
+
+        if (section.getBoundingClientRect().top - containerTop <= 96) {
+          nextId = item.id;
+        }
+      }
+
+      setActiveQuickLinkId((current) => (current === nextId ? current : nextId));
+    };
+
+    const scheduleUpdate = () => {
+      if (frame !== null) {
+        return;
+      }
+      frame = window.requestAnimationFrame(updateActiveQuickLink);
+    };
+
+    scheduleUpdate();
+    container.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+
+    return () => {
+      container.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
     };
   }, []);
 
@@ -2045,7 +2094,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="h-full overflow-y-auto px-4 py-4">
+    <div ref={settingsScrollRef} className="h-full overflow-y-auto px-4 py-4">
       <div className="mx-auto w-full max-w-[68rem] space-y-4 pb-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="max-w-2xl space-y-1">
@@ -2072,17 +2121,19 @@ export function SettingsPage() {
           </ToolbarButton>
         </div>
 
-        <nav className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border-subtle/70 bg-surface/55 p-1 text-[11px]">
-            {SETTINGS_QUICK_LINKS.map((item) => (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                className="rounded-md px-2.5 py-1 text-secondary transition-colors hover:bg-elevated/70 hover:text-primary"
-              >
-                {item.label}
-              </a>
-            ))}
-          </nav>
+        <nav className="ui-settings-quick-links">
+          {SETTINGS_QUICK_LINKS.map((item) => (
+            <a
+              key={item.id}
+              href={`#${item.id}`}
+              onClick={() => setActiveQuickLinkId(item.id)}
+              className={cx('ui-settings-quick-link', activeQuickLinkId === item.id && 'ui-settings-quick-link-active')}
+              aria-current={activeQuickLinkId === item.id ? 'location' : undefined}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
 
           <SettingsSection
             id="settings-general"

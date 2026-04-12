@@ -60,12 +60,13 @@
   }
 
   .ui-toolbar-button {
-    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md border border-border-default/70 bg-surface/80 px-2.5 py-1.5 text-[11px] font-medium text-secondary shadow-sm transition-colors hover:border-border-default hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base active:bg-panel disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md border border-border-default/70 bg-surface/80 px-2.5 py-1.5 text-[11px] font-medium text-secondary shadow-sm transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base active:border-accent/40 active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .ui-toolbar-button.text-accent,
   .ui-toolbar-button.text-accent:hover,
   .ui-toolbar-button.text-accent:focus-visible {
+    @apply border-accent/30 bg-accent/10;
     color: rgb(var(--color-accent));
   }
 
@@ -191,16 +192,22 @@
   }
 
   .ui-action-button {
-    @apply inline-flex select-none items-center gap-1 rounded-md border border-border-subtle bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-border-default hover:bg-elevated hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-border-subtle bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-accent/30 hover:bg-accent/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .ui-message-action-button {
-    @apply inline-flex select-none items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[10px] font-medium text-dim transition-colors hover:border-border-subtle hover:bg-surface/45 hover:text-secondary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[10px] font-medium text-dim transition-colors hover:border-accent/15 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .ui-message-action-button:hover,
+  .ui-message-action-button:focus-visible {
+    color: rgb(var(--color-accent));
   }
 
   .ui-action-button.text-accent,
   .ui-action-button.text-accent:hover,
   .ui-action-button.text-accent:focus-visible {
+    @apply border-accent/25 bg-accent/10;
     color: rgb(var(--color-accent));
   }
 
@@ -213,6 +220,7 @@
   .ui-message-action-button.text-accent,
   .ui-message-action-button.text-accent:hover,
   .ui-message-action-button.text-accent:focus-visible {
+    @apply border-accent/15 bg-accent/5;
     color: rgb(var(--color-accent));
   }
 
@@ -227,11 +235,15 @@
   }
 
   .ui-sidebar-nav-item {
-    @apply flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-accent/10 hover:text-primary;
   }
 
   .ui-sidebar-nav-item-active {
-    @apply bg-elevated text-primary;
+    @apply bg-accent/10 text-accent ring-1 ring-accent/15;
+  }
+
+  .ui-sidebar-nav-item-active svg {
+    opacity: 1;
   }
 
   .ui-sidebar-nav-badge {
@@ -239,19 +251,23 @@
   }
 
   .ui-sidebar-subnav-item {
-    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-elevated/40 hover:text-secondary;
+    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-accent/5 hover:text-secondary;
   }
 
   .ui-sidebar-subnav-item-active {
-    @apply bg-elevated/60 text-primary;
+    @apply bg-accent/10 text-accent;
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-accent/5 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
-    @apply bg-elevated text-primary;
+    @apply bg-accent/10 text-primary ring-1 ring-accent/15;
+  }
+
+  .ui-sidebar-session-row-active .ui-sidebar-session-meta {
+    color: rgb(var(--color-accent) / 0.8);
   }
 
   .ui-sidebar-session-meta {
@@ -294,6 +310,18 @@
     @apply text-[10px] tabular-nums text-dim/50;
   }
 
+  .ui-settings-quick-links {
+    @apply inline-flex flex-wrap items-center gap-1 rounded-lg border border-border-subtle/70 bg-surface/55 p-1 text-[11px];
+  }
+
+  .ui-settings-quick-link {
+    @apply rounded-md px-2.5 py-1 text-secondary transition-colors hover:bg-accent/10 hover:text-primary;
+  }
+
+  .ui-settings-quick-link-active {
+    @apply bg-accent/10 text-accent ring-1 ring-accent/15;
+  }
+
   .ui-segmented-control {
     @apply inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-surface/60 p-1;
   }
@@ -315,7 +343,7 @@
   }
 
   .ui-browser-entry-selected {
-    @apply border-border-default bg-elevated/70;
+    @apply border-accent/35 bg-accent/5;
   }
 
   .ui-browser-entry-header {
@@ -351,7 +379,7 @@
   }
 
   .ui-list-row-selected {
-    @apply bg-surface;
+    @apply bg-accent/5;
   }
 
   .ui-list-row-hover {
