@@ -56,18 +56,20 @@
   }
 
   .ui-page-meta {
-    @apply text-xs text-secondary mt-0.5 font-mono;
+    @apply text-xs mt-0.5 font-mono;
+    color: rgb(var(--color-steel) / 0.82);
   }
 
   .ui-toolbar-button {
-    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md border border-border-default/70 bg-surface/80 px-2.5 py-1.5 text-[11px] font-medium text-secondary shadow-sm transition-colors hover:border-accent/35 hover:bg-accent/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base active:border-accent/40 active:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center justify-center gap-1.5 rounded-md border border-steel/20 bg-surface/80 px-2.5 py-1.5 text-[11px] font-medium text-secondary shadow-sm transition-colors hover:border-steel/35 hover:bg-steel/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base active:border-steel/40 active:bg-steel/15 disabled:cursor-not-allowed disabled:opacity-40;
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.08);
   }
 
   .ui-toolbar-button.text-accent,
   .ui-toolbar-button.text-accent:hover,
   .ui-toolbar-button.text-accent:focus-visible {
-    @apply border-accent/30 bg-accent/10;
-    color: rgb(var(--color-accent));
+    @apply border-steel/30 bg-steel/10;
+    color: rgb(var(--color-steel));
   }
 
   .ui-toolbar-button.text-warning,
@@ -83,7 +85,12 @@
   }
 
   .ui-icon-button {
-    @apply inline-flex items-center justify-center rounded-md p-1.5 text-secondary transition-colors hover:bg-surface hover:text-primary disabled:opacity-40 disabled:hover:bg-transparent;
+    @apply inline-flex items-center justify-center rounded-md p-1.5 text-secondary transition-colors hover:bg-steel/10 disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+
+  .ui-icon-button:hover,
+  .ui-icon-button:focus-visible {
+    color: rgb(var(--color-steel));
   }
 
   .ui-icon-button-compact {
@@ -172,11 +179,12 @@
   }
 
   .ui-chat-avatar {
-    @apply w-6 h-6 rounded-md bg-accent/20 flex items-center justify-center shrink-0;
+    @apply flex h-6 w-6 items-center justify-center rounded-md shrink-0;
+    background-color: rgb(var(--color-steel) / 0.18);
   }
 
   .ui-chat-avatar-mark {
-    @apply text-accent text-[9px] font-bold font-mono select-none;
+    @apply text-steel text-[9px] font-bold font-mono select-none;
   }
 
   .ui-message-card-user {
@@ -184,7 +192,7 @@
   }
 
   .ui-message-card-assistant {
-    @apply rounded-2xl border border-border-subtle bg-surface/60 px-3.5 py-3;
+    @apply rounded-2xl border border-steel/20 bg-surface/60 px-3.5 py-3;
   }
 
   .ui-message-meta {
@@ -192,23 +200,23 @@
   }
 
   .ui-action-button {
-    @apply inline-flex select-none items-center gap-1 rounded-md border border-border-subtle bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-accent/30 hover:bg-accent/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-steel/20 bg-surface/55 px-2 py-1 text-[11px] font-medium text-secondary transition-colors hover:border-steel/30 hover:bg-steel/10 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .ui-message-action-button {
-    @apply inline-flex select-none items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[10px] font-medium text-dim transition-colors hover:border-accent/15 hover:bg-accent/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
+    @apply inline-flex select-none items-center gap-1 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-[10px] font-medium text-dim transition-colors hover:border-steel/15 hover:bg-steel/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-steel/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .ui-message-action-button:hover,
   .ui-message-action-button:focus-visible {
-    color: rgb(var(--color-accent));
+    color: rgb(var(--color-steel));
   }
 
   .ui-action-button.text-accent,
   .ui-action-button.text-accent:hover,
   .ui-action-button.text-accent:focus-visible {
-    @apply border-accent/25 bg-accent/10;
-    color: rgb(var(--color-accent));
+    @apply border-steel/25 bg-steel/10;
+    color: rgb(var(--color-steel));
   }
 
   .ui-action-button.text-danger,
@@ -220,8 +228,8 @@
   .ui-message-action-button.text-accent,
   .ui-message-action-button.text-accent:hover,
   .ui-message-action-button.text-accent:focus-visible {
-    @apply border-accent/15 bg-accent/5;
-    color: rgb(var(--color-accent));
+    @apply border-steel/15 bg-steel/5;
+    color: rgb(var(--color-steel));
   }
 
   .ui-message-action-button.text-danger,
@@ -235,47 +243,71 @@
   }
 
   .ui-sidebar-nav-item {
-    @apply flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-accent/10 hover:text-primary;
+    @apply relative flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-steel/10 hover:text-primary;
   }
 
   .ui-sidebar-nav-item-active {
-    @apply bg-accent/10 text-accent ring-1 ring-accent/15;
+    @apply text-primary ring-1 ring-accent/15;
+    background-color: rgb(var(--color-accent) / 0.1);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.16), rgb(var(--color-steel) / 0.1));
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
+  }
+
+  .ui-sidebar-nav-item-active::before,
+  .ui-sidebar-session-row-active::before,
+  .ui-browser-entry-selected::before,
+  .ui-list-row-selected::before {
+    content: '';
+    position: absolute;
+    left: 0.45rem;
+    top: 0.38rem;
+    bottom: 0.38rem;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgb(var(--color-accent)), rgb(var(--color-steel)));
+    opacity: 0.95;
   }
 
   .ui-sidebar-nav-item-active svg {
     opacity: 1;
+    color: rgb(var(--color-steel));
   }
 
   .ui-sidebar-nav-badge {
-    @apply ml-auto min-w-[18px] rounded-full bg-accent/15 px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-accent;
+    @apply ml-auto min-w-[18px] rounded-full bg-steel/15 px-1.5 py-0.5 text-center text-[10px] font-semibold tabular-nums text-steel;
   }
 
   .ui-sidebar-subnav-item {
-    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-accent/5 hover:text-secondary;
+    @apply block px-3 py-1.5 mx-1 rounded-lg text-[12px] text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
   }
 
   .ui-sidebar-subnav-item-active {
-    @apply bg-accent/10 text-accent;
+    @apply text-primary;
+    background-color: rgb(var(--color-steel) / 0.1);
   }
 
   .ui-sidebar-session-row {
-    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-accent/5 hover:text-primary;
+    @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
   }
 
   .ui-sidebar-session-row-active {
-    @apply bg-accent/10 text-primary ring-1 ring-accent/15;
+    @apply text-primary ring-1 ring-accent/15;
+    background-color: rgb(var(--color-accent) / 0.08);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.14), rgb(var(--color-steel) / 0.08));
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
   }
 
   .ui-sidebar-session-row-active .ui-sidebar-session-meta {
-    color: rgb(var(--color-accent) / 0.8);
+    color: rgb(var(--color-steel) / 0.9);
   }
 
   .ui-sidebar-session-meta {
-    @apply text-[10px] leading-none text-dim truncate;
+    @apply truncate text-[10px] leading-none;
+    color: rgb(var(--color-steel) / 0.66);
   }
 
   .ui-sidebar-shelf-row {
-    @apply mx-1 flex w-full items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-dim transition-colors hover:bg-elevated/50 hover:text-secondary;
+    @apply mx-1 flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-dim transition-colors hover:bg-steel/5 hover:text-secondary;
   }
 
   .ui-loading-state {
@@ -303,11 +335,13 @@
   }
 
   .ui-section-label {
-    @apply text-[10px] font-semibold uppercase tracking-wider text-dim;
+    @apply text-[10px] font-semibold uppercase tracking-wider;
+    color: rgb(var(--color-teal) / 0.88);
   }
 
   .ui-section-count {
-    @apply text-[10px] tabular-nums text-dim/50;
+    @apply text-[10px] tabular-nums;
+    color: rgb(var(--color-steel) / 0.55);
   }
 
   .ui-settings-quick-links {
@@ -315,11 +349,14 @@
   }
 
   .ui-settings-quick-link {
-    @apply rounded-md px-2.5 py-1 text-secondary transition-colors hover:bg-accent/10 hover:text-primary;
+    @apply rounded-md px-2.5 py-1 text-secondary transition-colors hover:bg-steel/10 hover:text-primary;
   }
 
   .ui-settings-quick-link-active {
-    @apply bg-accent/10 text-accent ring-1 ring-accent/15;
+    @apply text-primary ring-1 ring-accent/15;
+    background-color: rgb(var(--color-accent) / 0.1);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.16), rgb(var(--color-steel) / 0.1));
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
   }
 
   .ui-segmented-control {
@@ -327,11 +364,14 @@
   }
 
   .ui-segmented-button {
-    @apply inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-[11px] font-medium text-dim transition-colors hover:bg-elevated hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
+    @apply inline-flex items-center justify-center rounded-md px-2.5 py-1.5 text-[11px] font-medium text-dim transition-colors hover:bg-steel/10 hover:text-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/25 focus-visible:ring-offset-1 focus-visible:ring-offset-surface;
   }
 
   .ui-segmented-button-active {
-    @apply bg-accent/10 text-accent shadow-sm ring-1 ring-accent/20;
+    @apply text-primary shadow-sm ring-1 ring-accent/20;
+    background-color: rgb(var(--color-accent) / 0.1);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.16), rgb(var(--color-steel) / 0.1));
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
   }
 
   .ui-browser-entry {
@@ -343,7 +383,9 @@
   }
 
   .ui-browser-entry-selected {
-    @apply border-accent/35 bg-accent/5;
+    @apply relative border-accent/35;
+    background-color: rgb(var(--color-accent) / 0.06);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.11), rgb(var(--color-steel) / 0.06));
   }
 
   .ui-browser-entry-header {
@@ -351,11 +393,13 @@
   }
 
   .ui-browser-entry-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.12em] text-dim;
+    @apply text-[10px] font-semibold uppercase tracking-[0.12em];
+    color: rgb(var(--color-teal) / 0.88);
   }
 
   .ui-browser-entry-aside {
-    @apply text-[10px] text-secondary;
+    @apply text-[10px];
+    color: rgb(var(--color-steel) / 0.82);
   }
 
   .ui-browser-entry-title {
@@ -379,7 +423,9 @@
   }
 
   .ui-list-row-selected {
-    @apply bg-accent/5;
+    @apply relative;
+    background-color: rgb(var(--color-accent) / 0.05);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.09), rgb(var(--color-steel) / 0.05));
   }
 
   .ui-list-row-hover {
@@ -399,7 +445,8 @@
   }
 
   .ui-row-meta {
-    @apply text-[11px] text-dim mt-0.5 font-mono;
+    @apply mt-0.5 text-[11px] font-mono;
+    color: rgb(var(--color-steel) / 0.76);
   }
 
   .ui-card-title {
@@ -411,7 +458,8 @@
   }
 
   .ui-card-meta {
-    @apply text-[11px] text-dim;
+    @apply text-[11px];
+    color: rgb(var(--color-steel) / 0.76);
   }
 
   .ui-disclosure {
@@ -672,7 +720,7 @@
   }
 
   .ui-rich-editor .ProseMirror code {
-    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent whitespace-pre-wrap break-words;
+    @apply rounded bg-teal/10 px-1 py-0.5 font-mono text-[0.82em] text-teal whitespace-pre-wrap break-words;
     overflow-wrap: anywhere;
   }
 
@@ -701,7 +749,7 @@
   }
 
   .ui-rich-editor .ProseMirror a {
-    @apply text-accent underline decoration-accent/40 underline-offset-2;
+    @apply text-steel underline decoration-steel/40 underline-offset-2;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
@@ -712,7 +760,7 @@
   }
 
   .ui-rich-editor-mention {
-    @apply font-mono text-[0.92em] text-accent underline decoration-accent/25 underline-offset-2;
+    @apply font-mono text-[0.92em] text-teal underline decoration-teal/25 underline-offset-2;
   }
 
   .ui-rich-editor-mention-link {
@@ -811,7 +859,7 @@
   }
 
   .ui-rich-fields-block-action {
-    @apply text-[12px] text-accent transition-colors hover:text-accent/70;
+    @apply text-[12px] text-steel transition-colors hover:text-steel/70;
   }
 
   .ui-rich-fields-empty {
@@ -827,11 +875,12 @@
   }
 
   .ui-detail-label {
-    @apply w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider text-dim;
+    @apply w-16 shrink-0 text-[10px] font-semibold uppercase tracking-wider;
+    color: rgb(var(--color-teal) / 0.84);
   }
 
   .ui-detail-value {
-    @apply text-[12px] text-secondary leading-relaxed min-w-0;
+    @apply min-w-0 text-[12px] leading-relaxed text-secondary;
   }
 
   .ui-markdown {
@@ -914,7 +963,7 @@
   }
 
   .ui-markdown :not(pre) > code {
-    @apply rounded bg-elevated px-1 py-0.5 font-mono text-[0.82em] text-accent whitespace-pre-wrap break-words;
+    @apply rounded bg-teal/10 px-1 py-0.5 font-mono text-[0.82em] text-teal whitespace-pre-wrap break-words;
     overflow-wrap: anywhere;
   }
 
@@ -939,7 +988,7 @@
   }
 
   .ui-markdown a {
-    @apply text-accent underline decoration-accent/40 underline-offset-2;
+    @apply text-steel underline decoration-steel/40 underline-offset-2;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
@@ -987,7 +1036,7 @@
   }
 
   .ui-markdown-mention {
-    @apply inline-flex items-center rounded-full bg-accent/10 px-1.5 py-0.5 font-mono text-[0.82em] text-accent;
+    @apply inline-flex items-center rounded-full bg-teal/10 px-1.5 py-0.5 font-mono text-[0.82em] text-teal;
   }
 
   .ui-skill-invocation {
@@ -1012,7 +1061,8 @@
   }
 
   .ui-skill-invocation-label {
-    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-dim;
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em];
+    color: rgb(var(--color-teal) / 0.88);
   }
 
   .ui-skill-invocation-name {
@@ -1024,7 +1074,8 @@
   }
 
   .ui-skill-invocation-meta {
-    @apply m-0 text-[12px] text-secondary;
+    @apply m-0 text-[12px];
+    color: rgb(var(--color-steel) / 0.76);
   }
 }
 
