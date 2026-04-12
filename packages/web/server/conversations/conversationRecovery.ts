@@ -3,6 +3,7 @@ import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { parsePendingOperation } from '@personal-agent/daemon';
 import { getDurableRun } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
+import { readConversationAutoModeStateFromSessionManager } from './conversationAutoMode.js';
 import { readWebUiConfig } from '../ui/webUi.js';
 import {
   createWebLiveConversationRunId,
@@ -15,6 +16,7 @@ import {
   isLive as isLiveSession,
   promptSession,
   queuePromptContext,
+  requestConversationAutoModeTurn,
   registry as liveRegistry,
   resumeSession,
 } from './liveSessions.js';
@@ -205,6 +207,17 @@ export async function recoverConversationCapability(
         sessionId: resumed.id,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  } else if (resumedEntry?.session.sessionManager
+    && readConversationAutoModeStateFromSessionManager(resumedEntry.session.sessionManager).enabled) {
+    queueMicrotask(() => {
+      void Promise.resolve(requestConversationAutoModeTurn(resumed.id)).catch((error) => {
+        logError('conversation recovery auto mode request failed', {
+          sessionId: resumed.id,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
       });
     });
   }

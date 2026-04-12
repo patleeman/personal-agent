@@ -24,6 +24,7 @@ import {
   promptSession as promptLocalSession,
   queuePromptContext,
   readLiveSessionAutoModeState,
+  requestConversationAutoModeTurn,
   registry as liveRegistry,
   renameSession,
   resumeSession as resumeLocalSession,
@@ -53,6 +54,7 @@ import {
   isMissingConversationBootstrapState,
   readConversationBootstrapState,
 } from '../conversations/conversationBootstrap.js';
+import { recoverConversationCapability } from '../conversations/conversationRecovery.js';
 import {
   readConversationAutoModeStateFromSessionManager,
   writeConversationAutoModeState,
@@ -247,6 +249,19 @@ export function registerConversationStateRoutes(
       if (isLocalLive(req.params.id)) {
         ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
         const state = await setLiveSessionAutoModeState(req.params.id, { enabled });
+        res.json(state);
+        return;
+      }
+
+      if (enabled) {
+        const recovered = await recoverConversationCapability(req.params.id, {
+          getCurrentProfile: getCurrentProfileFn,
+          buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
+          buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
+          flushLiveDeferredResumes: flushLiveDeferredResumesFn,
+        });
+        ensureRequestControlsLocalLiveConversation(recovered.conversationId, req.body);
+        const state = await setLiveSessionAutoModeState(recovered.conversationId, { enabled });
         res.json(state);
         return;
       }
@@ -460,6 +475,17 @@ export function registerConversationStateRoutes(
             sessionId: resumed.id,
             message: error instanceof Error ? error.message : String(error),
             stack: error instanceof Error ? error.stack : undefined,
+          });
+        });
+      } else if (resumedEntry?.session.sessionManager
+        && readConversationAutoModeStateFromSessionManager(resumedEntry.session.sessionManager).enabled) {
+        queueMicrotask(() => {
+          void Promise.resolve(requestConversationAutoModeTurn(resumed.id)).catch((error) => {
+            logError('conversation recovery auto mode request failed', {
+              sessionId: resumed.id,
+              message: error instanceof Error ? error.message : String(error),
+              stack: error instanceof Error ? error.stack : undefined,
+            });
           });
         });
       }

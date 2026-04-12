@@ -16,6 +16,7 @@ const {
   liveRegistry,
   logErrorMock,
   publishAppEventMock,
+  recoverConversationCapabilityMock,
   readConversationAutoModeStateFromSessionManagerMock,
   readLiveSessionAutoModeStateMock,
   logSlowConversationPerfMock,
@@ -24,6 +25,7 @@ const {
   promptLocalSessionMock,
   publishConversationSessionMetaChangedMock,
   queuePromptContextMock,
+  requestConversationAutoModeTurnMock,
   readConversationModelPreferenceStateByIdMock,
   readConversationSessionSignatureMock,
   readSavedModelPreferencesMock,
@@ -59,6 +61,7 @@ const {
   logErrorMock: vi.fn(),
   logSlowConversationPerfMock: vi.fn(),
   publishAppEventMock: vi.fn(),
+  recoverConversationCapabilityMock: vi.fn(),
   readConversationAutoModeStateFromSessionManagerMock: vi.fn(),
   readLiveSessionAutoModeStateMock: vi.fn(),
   parsePendingOperationMock: vi.fn(),
@@ -66,6 +69,7 @@ const {
   promptLocalSessionMock: vi.fn(),
   publishConversationSessionMetaChangedMock: vi.fn(),
   queuePromptContextMock: vi.fn(),
+  requestConversationAutoModeTurnMock: vi.fn(),
   readConversationModelPreferenceStateByIdMock: vi.fn(),
   readConversationSessionSignatureMock: vi.fn(),
   readSavedModelPreferencesMock: vi.fn(),
@@ -133,6 +137,7 @@ vi.mock('../conversations/liveSessions.js', () => ({
   promptSession: promptLocalSessionMock,
   queuePromptContext: queuePromptContextMock,
   readLiveSessionAutoModeState: readLiveSessionAutoModeStateMock,
+  requestConversationAutoModeTurn: requestConversationAutoModeTurnMock,
   registry: liveRegistry,
   renameSession: renameSessionMock,
   resumeSession: resumeLocalSessionMock,
@@ -172,6 +177,10 @@ vi.mock('./liveSessions.js', () => ({
 vi.mock('../conversations/conversationAutoMode.js', () => ({
   readConversationAutoModeStateFromSessionManager: readConversationAutoModeStateFromSessionManagerMock,
   writeConversationAutoModeState: writeConversationAutoModeStateMock,
+}));
+
+vi.mock('../conversations/conversationRecovery.js', () => ({
+  recoverConversationCapability: recoverConversationCapabilityMock,
 }));
 
 vi.mock('../shared/appEvents.js', () => ({
@@ -242,6 +251,7 @@ describe('registerConversationStateRoutes', () => {
     logErrorMock.mockReset();
     logSlowConversationPerfMock.mockReset();
     publishAppEventMock.mockReset();
+    recoverConversationCapabilityMock.mockReset();
     readConversationAutoModeStateFromSessionManagerMock.mockReset();
     readLiveSessionAutoModeStateMock.mockReset();
     parsePendingOperationMock.mockReset();
@@ -249,6 +259,7 @@ describe('registerConversationStateRoutes', () => {
     promptLocalSessionMock.mockReset();
     publishConversationSessionMetaChangedMock.mockReset();
     queuePromptContextMock.mockReset();
+    requestConversationAutoModeTurnMock.mockReset();
     readConversationModelPreferenceStateByIdMock.mockReset();
     readConversationSessionSignatureMock.mockReset();
     readSavedModelPreferencesMock.mockReset();
@@ -489,15 +500,35 @@ describe('registerConversationStateRoutes', () => {
     expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', { enabled: true });
     expect(liveRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:10:00.000Z' });
 
+    recoverConversationCapabilityMock.mockResolvedValueOnce({
+      conversationId: 'conversation-1',
+      live: true,
+      recovered: true,
+      replayedPendingOperation: false,
+      usedFallbackPrompt: false,
+    });
+    setLiveSessionAutoModeStateMock.mockResolvedValueOnce({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
+    const recoveredRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: { enabled: true, surfaceId: 'surface-2' } }, recoveredRes);
+    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith('conversation-1', expect.objectContaining({
+      getCurrentProfile: expect.any(Function),
+      buildLiveSessionResourceOptions: expect.any(Function),
+      buildLiveSessionExtensionFactories: expect.any(Function),
+      flushLiveDeferredResumes: expect.any(Function),
+    }));
+    expect(ensureRequestControlsLocalLiveConversationMock).toHaveBeenCalledWith('conversation-1', { enabled: true, surfaceId: 'surface-2' });
+    expect(setLiveSessionAutoModeStateMock).toHaveBeenCalledWith('conversation-1', { enabled: true });
+    expect(recoveredRes.json).toHaveBeenCalledWith({ enabled: true, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
+
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
     existsSyncMock.mockReturnValueOnce(true);
     SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
-    writeConversationAutoModeStateMock.mockReturnValueOnce({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
+    writeConversationAutoModeStateMock.mockReturnValueOnce({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:12:00.000Z' });
     const storedRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: { enabled: false } }, storedRes);
     expect(writeConversationAutoModeStateMock).toHaveBeenCalledWith({ id: 'session-manager' }, { enabled: false });
     expect(publishAppEventMock).toHaveBeenCalledWith({ type: 'session_file_changed', sessionId: 'conversation-1' });
-    expect(storedRes.json).toHaveBeenCalledWith({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:11:00.000Z' });
+    expect(storedRes.json).toHaveBeenCalledWith({ enabled: false, stopReason: null, updatedAt: '2026-04-12T15:12:00.000Z' });
   });
 
   it('validates model preference patch input', async () => {
@@ -747,8 +778,29 @@ describe('registerConversationStateRoutes', () => {
     });
     readSessionBlocksMock.mockReturnValueOnce(null);
     resumeLocalSessionMock.mockResolvedValueOnce({ id: 'conversation-2-live' });
+    liveRegistry.set('conversation-2-live', {
+      cwd: '/checkpoint-cwd',
+      session: {
+        sessionManager: {
+          getEntries: () => [{
+            type: 'custom',
+            customType: 'conversation-auto-mode',
+            data: {
+              enabled: true,
+              updatedAt: '2026-04-12T15:12:00.000Z',
+            },
+          }],
+        },
+      },
+    });
+    readConversationAutoModeStateFromSessionManagerMock.mockReturnValueOnce({
+      enabled: true,
+      stopReason: null,
+      updatedAt: '2026-04-12T15:12:00.000Z',
+    });
 
     await handler({ params: { id: 'conversation-2' } }, res);
+    await Promise.resolve();
 
     expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/from-checkpoint.json', {
       additionalExtensionPaths: [],
@@ -764,6 +816,7 @@ describe('registerConversationStateRoutes', () => {
     }));
     expect(syncWebLiveConversationRunMock.mock.calls[0]?.[0]?.pendingOperation).toBeNull();
     expect(promptLocalSessionMock).not.toHaveBeenCalled();
+    expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-2-live');
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-2-live',
       live: true,

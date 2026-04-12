@@ -3,17 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createConversationAutoModeAgentExtension } from './conversationAutoModeAgentExtension.js';
 
 const {
-  promptSessionMock,
+  markConversationAutoModeContinueRequestedMock,
   requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeStateMock,
 } = vi.hoisted(() => ({
-  promptSessionMock: vi.fn(),
+  markConversationAutoModeContinueRequestedMock: vi.fn(),
   requestConversationAutoModeTurnMock: vi.fn(),
   setLiveSessionAutoModeStateMock: vi.fn(),
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
-  promptSession: promptSessionMock,
+  markConversationAutoModeContinueRequested: markConversationAutoModeContinueRequestedMock,
   requestConversationAutoModeTurn: requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeState: setLiveSessionAutoModeStateMock,
 }));
@@ -63,22 +63,23 @@ function createSessionManager(options: {
 }
 
 beforeEach(() => {
-  promptSessionMock.mockReset();
+  markConversationAutoModeContinueRequestedMock.mockReset();
   requestConversationAutoModeTurnMock.mockReset();
   setLiveSessionAutoModeStateMock.mockReset();
 });
 
 describe('conversation auto mode agent extension', () => {
-  it('registers the auto control tool with stop guidance', () => {
+  it('registers the auto control tool with continue-first guidance', () => {
     const { tool } = createHarness();
     const guidelines = tool.promptGuidelines?.join('\n') ?? '';
 
     expect(tool.name).toBe('conversation_auto_control');
     expect(guidelines).toContain('hidden auto-review turns');
-    expect(guidelines).toContain('short reason');
+    expect(guidelines).toContain('uninterrupted progress');
+    expect(guidelines).toContain('explicit validation target');
   });
 
-  it('queues a visible follow-up turn when the controller continues', async () => {
+  it('marks the current review turn to continue when the controller continues', async () => {
     const { tool } = createHarness();
 
     await tool.execute?.(
@@ -91,7 +92,7 @@ describe('conversation auto mode agent extension', () => {
       } as never,
     );
 
-    expect(promptSessionMock).toHaveBeenCalledWith('conversation-1', 'Continue from where you left off.', 'followUp');
+    expect(markConversationAutoModeContinueRequestedMock).toHaveBeenCalledWith('conversation-1');
   });
 
   it('stops auto mode through the live session helper', async () => {

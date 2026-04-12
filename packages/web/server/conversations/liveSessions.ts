@@ -42,6 +42,8 @@ import {
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
 import { logWarn } from '../shared/logging.js';
 import {
+  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
+  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
   CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
   readConversationAutoModeStateFromSessionManager,
@@ -167,6 +169,7 @@ interface LiveEntry {
   contextUsageTimer?: ReturnType<typeof setTimeout>;
   pendingHiddenTurnCustomTypes: string[];
   activeHiddenTurnCustomType: string | null;
+  pendingAutoModeContinuation?: boolean;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
@@ -1523,6 +1526,7 @@ function wireSession(
     currentTurnError: null,
     pendingHiddenTurnCustomTypes: [],
     activeHiddenTurnCustomType: null,
+    pendingAutoModeContinuation: false,
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
     isCompacting: false,
@@ -1541,11 +1545,27 @@ function wireSession(
     if (event.type === 'agent_start' && !entry.activeHiddenTurnCustomType && entry.pendingHiddenTurnCustomTypes.length > 0) {
       entry.activeHiddenTurnCustomType = entry.pendingHiddenTurnCustomTypes.shift() ?? null;
     }
+    const activeHiddenTurnCustomType = entry.activeHiddenTurnCustomType;
     const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
 
     if (event.type === 'turn_end') {
-      if (!entry.activeHiddenTurnCustomType) {
+      if (!activeHiddenTurnCustomType) {
         maybeAutoTitleConversation(entry);
+      }
+      if (activeHiddenTurnCustomType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
+        const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
+        entry.pendingAutoModeContinuation = false;
+        if (shouldContinueAutoMode) {
+          queueMicrotask(() => {
+            void Promise.resolve(requestConversationAutoModeContinuationTurn(entry.sessionId)).catch((error) => {
+              logWarn('conversation auto mode continuation request failed', {
+                sessionId: entry.sessionId,
+                message: error instanceof Error ? error.message : String(error),
+                stack: error instanceof Error ? error.stack : undefined,
+              });
+            });
+          });
+        }
       }
       void syncDurableConversationRun(entry, 'waiting');
       notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
@@ -2383,6 +2403,47 @@ export async function requestConversationAutoModeTurn(sessionId: string): Promis
   }
 }
 
+export function markConversationAutoModeContinueRequested(sessionId: string): void {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  entry.pendingAutoModeContinuation = true;
+}
+
+export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  if (!readConversationAutoModeState(entry).enabled || entry.session.isStreaming) {
+    return false;
+  }
+
+  const steering = typeof entry.session.getSteeringMessages === 'function'
+    ? entry.session.getSteeringMessages()
+    : [];
+  const followUp = typeof entry.session.getFollowUpMessages === 'function'
+    ? entry.session.getFollowUpMessages()
+    : [];
+  if (steering.length > 0 || followUp.length > 0) {
+    return false;
+  }
+
+  await entry.session.sendCustomMessage({
+    customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
+    content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
+    display: false,
+    details: { source: 'conversation-auto-mode' },
+  }, {
+    deliverAs: 'followUp',
+    triggerTurn: true,
+  });
+  return true;
+}
+
 export async function setLiveSessionAutoModeState(
   sessionId: string,
   input: ConversationAutoModeStateInput,
@@ -2393,6 +2454,9 @@ export async function setLiveSessionAutoModeState(
   }
 
   const nextState = writeConversationAutoModeState(entry.session.sessionManager, input);
+  if (!nextState.enabled) {
+    entry.pendingAutoModeContinuation = false;
+  }
   broadcastAutoModeState(entry, true);
   publishSessionMetaChanged(sessionId);
   publishAppEvent({ type: 'session_file_changed', sessionId });

@@ -51,6 +51,12 @@ A conversation can carry:
 
 This is useful execution context, but it still should not replace durable vault pages.
 
+## Auto mode
+
+When auto mode is enabled, the conversation backend treats it as durable conversation state and runs a hidden review turn after each visible assistant turn.
+
+That hidden controller step should prefer continuing while useful work remains, and only stop auto mode when the task is complete for the user's request or blocked on a real dependency or missing user input. If the user did not give an explicit validation target, the agent should infer the expected level of doneness from the request and work so far. Continuing should stay inside the conversation lifecycle as hidden continuation work, not as a fake visible follow-up prompt.
+
 ## Async follow-through from a conversation
 
 A conversation often creates or receives other durable async surfaces:
@@ -74,6 +80,7 @@ In the local Electron app, the conversation page should render from a single bac
 The local shape now follows this rule:
 
 - the backend owns the authoritative conversation view model
+- opening a saved conversation in the local desktop app should auto-resume it into a live backend session instead of tailing the transcript as a fake interactive thread
 - the renderer subscribes to that state over desktop IPC
 - prompt, abort, takeover, rename, and other mutations stay as separate commands
 - the browser-style SSE path remains available for non-local surfaces, but it is no longer the primary local mental model

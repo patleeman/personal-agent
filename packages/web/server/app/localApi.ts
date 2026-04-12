@@ -130,7 +130,6 @@ import {
 } from '../conversations/liveSessionCapability.js';
 import {
   applyDesktopConversationStreamEvent,
-  createDesktopConversationStreamStateFromSnapshot,
   readDesktopConversationState,
   type DesktopConversationState,
 } from '../conversations/desktopConversationState.js';
@@ -909,6 +908,25 @@ export async function subscribeDesktopConversationState(
   });
   let lastSerializedState = '';
 
+  const ensureCurrentStateIsLive = async () => {
+    if (closed || currentState.liveSession.live || !currentState.sessionDetail) {
+      return;
+    }
+
+    await recoverConversationCapability(conversationId, {
+      getCurrentProfile: capabilityContext.getCurrentProfile,
+      buildLiveSessionResourceOptions: capabilityContext.buildLiveSessionResourceOptions,
+      buildLiveSessionExtensionFactories: capabilityContext.buildLiveSessionExtensionFactories,
+      flushLiveDeferredResumes: capabilityContext.flushLiveDeferredResumes,
+    });
+
+    currentState = await readDesktopConversationState({
+      conversationId,
+      profile: capabilityContext.getCurrentProfile(),
+      tailBlocks: input.tailBlocks,
+    });
+  };
+
   const emitState = (state: DesktopConversationState) => {
     if (closed) {
       return;
@@ -978,11 +996,13 @@ export async function subscribeDesktopConversationState(
       profile: capabilityContext.getCurrentProfile(),
       tailBlocks: input.tailBlocks,
     });
+    await ensureCurrentStateIsLive();
     syncLiveSubscription();
     emitState(currentState);
   };
 
   onEvent({ type: 'open' });
+  await ensureCurrentStateIsLive();
   emitState(currentState);
   syncLiveSubscription();
 

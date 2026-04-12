@@ -2,12 +2,11 @@ import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
   CONVERSATION_AUTO_MODE_CONTROL_TOOL,
-  CONVERSATION_AUTO_MODE_CONTINUE_PROMPT,
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
   readConversationAutoModeStateFromSessionManager,
 } from '../conversations/conversationAutoMode.js';
 import {
-  promptSession,
+  markConversationAutoModeContinueRequested,
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
 } from '../conversations/liveSessions.js';
@@ -17,7 +16,7 @@ const ConversationAutoControlParams = Type.Object({
     Type.Literal('continue'),
     Type.Literal('stop'),
   ], {
-    description: 'Use "continue" to queue the next visible follow-up turn, or "stop" to disable auto mode for this conversation.',
+    description: 'Use "continue" when meaningful work remains and auto mode should keep going, or "stop" only when the task is complete, blocked, or needs user input.',
   }),
   reason: Type.Optional(Type.String({
     description: 'Required when stopping. Keep it short and human-readable, for example "done", "needs user input", or "blocked on tests".',
@@ -58,12 +57,13 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
     pi.registerTool({
       name: CONVERSATION_AUTO_MODE_CONTROL_TOOL,
       label: 'Conversation auto control',
-      description: 'Control conversation auto mode from hidden auto-review turns.',
-      promptSnippet: 'Stop or continue the current conversation auto loop.',
+      description: 'Control conversation auto mode from hidden auto-review turns. Prefer continuing while useful work remains.',
+      promptSnippet: 'Decide whether conversation auto mode should continue or stop.',
       promptGuidelines: [
         'Use this tool only during hidden auto-review turns for conversation auto mode.',
-        'Use action="continue" to queue the next visible follow-up turn.',
-        'Use action="stop" with a short reason when the task is complete, blocked, or needs user input.',
+        'The user enabled auto mode because they want uninterrupted progress, so prefer action="continue" when meaningful work remains.',
+        'Use action="stop" only when the task is complete for the user\'s request, blocked on a real dependency, or needs user input.',
+        'If no explicit validation target was given, infer the expected level of doneness from the prompt and work so far.',
       ],
       parameters: ConversationAutoControlParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -76,15 +76,15 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
           }
           if (!state.enabled) {
             return {
-              content: [{ type: 'text' as const, text: 'Auto mode is off, so no follow-up was queued.' }],
+              content: [{ type: 'text' as const, text: 'Auto mode is off, so no continuation was queued.' }],
               details: { enabled: false, action: 'continue' },
             };
           }
 
-          await promptSession(sessionId, CONVERSATION_AUTO_MODE_CONTINUE_PROMPT, 'followUp');
+          markConversationAutoModeContinueRequested(sessionId);
           return {
-            content: [{ type: 'text' as const, text: 'Queued the next auto-mode follow-up turn.' }],
-            details: { enabled: true, action: 'continue', prompt: CONVERSATION_AUTO_MODE_CONTINUE_PROMPT },
+            content: [{ type: 'text' as const, text: 'Auto mode will continue after this hidden review turn.' }],
+            details: { enabled: true, action: 'continue' },
           };
         }
 

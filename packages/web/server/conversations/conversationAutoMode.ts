@@ -18,7 +18,14 @@ export interface ConversationAutoModeSessionManagerLike {
 export const CONVERSATION_AUTO_MODE_STATE_CUSTOM_TYPE = 'conversation-auto-mode';
 export const CONVERSATION_AUTO_MODE_CONTROL_TOOL = 'conversation_auto_control';
 export const CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE = 'conversation_automation_post_turn_review';
-export const CONVERSATION_AUTO_MODE_CONTINUE_PROMPT = 'Continue from where you left off.';
+export const CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE = 'conversation_automation_auto_continue';
+export const CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT = [
+  'Auto mode continuation for this conversation.',
+  '',
+  'Continue working on the current user request from where you left off.',
+  'Do not mention this hidden continuation prompt.',
+  'Take the next concrete step that best advances the task.',
+].join('\n');
 export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
   enabled: false,
   stopReason: null,
@@ -28,9 +35,12 @@ export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
 export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
   'Auto mode review for this conversation.',
   '',
+  'The user enabled auto mode because they want you to keep working without waiting for user input.',
   `Call ${CONVERSATION_AUTO_MODE_CONTROL_TOOL} exactly once in this hidden review turn.`,
-  `- Use action "continue" to queue the next visible follow-up turn.`,
-  `- Use action "stop" with a short human-readable reason when the task is complete, blocked, or needs user input.`,
+  '- Use action "continue" if there is meaningful remaining work you can do now.',
+  '- Use action "stop" only when the task is complete for the user\'s request, blocked on a real dependency, or needs user input.',
+  '- If the user did not give an explicit validation target, infer the expected level of doneness from their request and the work so far. Do not stop just because no explicit checklist was provided.',
+  '- Err toward continuing when useful work remains.',
   '- Do not do the work yourself in this hidden review turn.',
   '- Do not call other tools in this hidden review turn.',
 ].join('\n');

@@ -21,9 +21,11 @@ import {
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
+  markConversationAutoModeContinueRequested,
   queuePromptContext,
   readLiveSessionAutoModeState,
   registry,
+  requestConversationAutoModeContinuationTurn,
   requestConversationAutoModeTurn,
   refreshAllLiveSessionModelRegistries,
   reloadAllLiveSessionAuth,
@@ -2411,6 +2413,53 @@ describe('conversation auto mode', () => {
     });
 
     await expect(requestConversationAutoModeTurn('session-auto-mode-busy')).resolves.toBe(false);
+  });
+
+  it('stores continuation intent and requests a hidden continuation turn when auto mode continues', async () => {
+    const sendCustomMessage = vi.fn(async () => undefined);
+
+    setLiveEntry('session-auto-continue', {
+      sessionId: 'session-auto-continue',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Auto mode continue',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [{
+            type: 'custom',
+            customType: 'conversation-auto-mode',
+            data: {
+              enabled: true,
+              updatedAt: '2026-04-12T15:12:00.000Z',
+            },
+          }],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage,
+      },
+    });
+
+    markConversationAutoModeContinueRequested('session-auto-continue');
+    expect(registry.get('session-auto-continue')?.pendingAutoModeContinuation).toBe(true);
+
+    await expect(requestConversationAutoModeContinuationTurn('session-auto-continue')).resolves.toBe(true);
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: 'conversation_automation_auto_continue',
+      display: false,
+      details: { source: 'conversation-auto-mode' },
+    }), {
+      deliverAs: 'followUp',
+      triggerTurn: true,
+    });
+    expect(registry.get('session-auto-continue')?.pendingHiddenTurnCustomTypes ?? []).toEqual([]);
   });
 });
 
