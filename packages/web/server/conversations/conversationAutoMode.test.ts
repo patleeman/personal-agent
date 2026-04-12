@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
   DEFAULT_CONVERSATION_AUTO_MODE_STATE,
   readConversationAutoModeStateFromEntries,
   readConversationAutoModeStateFromSessionManager,
@@ -67,5 +68,12 @@ describe('conversation auto mode state', () => {
     expect(readConversationAutoModeStateFromSessionManager({
       getEntries: () => [{ type: 'custom', customType: 'conversation-auto-mode', data: state }],
     })).toEqual(state);
+  });
+
+  it('tells the hidden review turn to keep going until the work is actually done', () => {
+    expect(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT).toContain('The user enabled auto mode because they want you to keep working without waiting for user input.');
+    expect(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT).toContain('Use action "stop" only when the task is complete for the user\'s request, blocked on a real dependency, or needs user input.');
+    expect(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT).toContain('If the user did not give an explicit validation target, infer the expected level of doneness from their request and the work so far.');
+    expect(CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT).toContain('Err toward continuing when useful work remains.');
   });
 });
