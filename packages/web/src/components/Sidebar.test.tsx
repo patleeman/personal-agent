@@ -307,6 +307,36 @@ describe('Sidebar', () => {
     expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('Alpha thread'));
   });
 
+  it('brings pinned conversations and their workspace to the top of the project list', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-beta']));
+    storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-alpha']));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/beta-worktree', '/tmp/alpha-worktree']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'updated');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-alpha',
+          title: 'Pinned alpha thread',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+          lastActivityAt: '2026-03-16T09:05:00.000Z',
+        }),
+        createSession({
+          id: 'conv-beta',
+          title: 'Beta thread',
+          cwd: '/tmp/beta-worktree',
+          cwdSlug: 'beta-worktree',
+          lastActivityAt: '2026-03-16T09:55:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html.indexOf('alpha-worktree')).toBeLessThan(html.indexOf('beta-worktree'));
+    expect(html.indexOf('Pinned alpha thread')).toBeLessThan(html.indexOf('beta-worktree'));
+    expect(html.indexOf('Pinned alpha thread')).toBeLessThan(html.indexOf('Beta thread'));
+  });
+
   it('can render a flat chronological thread list sorted by the saved sort mode', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-older', 'conv-newer']));
     storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
@@ -383,6 +413,43 @@ describe('Sidebar', () => {
     });
 
     expect(html.indexOf('Later created thread')).toBeLessThan(html.indexOf('Earlier created thread'));
+  });
+
+  it('can render a flat manual thread list in explicit pinned and open order', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-second', 'conv-third']));
+    storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-first']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'manual');
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'updated');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-first',
+          title: 'Pinned first thread',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+          lastActivityAt: '2026-03-16T09:05:00.000Z',
+        }),
+        createSession({
+          id: 'conv-second',
+          title: 'Second thread',
+          cwd: '/tmp/beta-worktree',
+          cwdSlug: 'beta-worktree',
+          lastActivityAt: '2026-03-16T09:55:00.000Z',
+        }),
+        createSession({
+          id: 'conv-third',
+          title: 'Third thread',
+          cwd: '/tmp/gamma-worktree',
+          cwdSlug: 'gamma-worktree',
+          lastActivityAt: '2026-03-16T09:15:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html).not.toContain('aria-label="Collapse alpha-worktree"');
+    expect(html.indexOf('Pinned first thread')).toBeLessThan(html.indexOf('Second thread'));
+    expect(html.indexOf('Second thread')).toBeLessThan(html.indexOf('Third thread'));
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {

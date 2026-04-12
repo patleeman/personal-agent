@@ -249,6 +249,18 @@ describe('sessionTabs', () => {
     expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
+  it('pins a conversation to the front of the pinned shelf', () => {
+    replaceConversationLayout({ sessionIds: ['session-1', 'session-2'], pinnedSessionIds: ['session-3'] });
+    dispatchEvent.mockReset();
+
+    expect(pinConversationTab('session-2')).toEqual({
+      sessionIds: ['session-1'],
+      pinnedSessionIds: ['session-2', 'session-3'],
+      archivedSessionIds: [],
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+  });
+
   it('unpins a conversation back into open tabs by default', () => {
     replaceConversationLayout({ sessionIds: ['session-1'], pinnedSessionIds: ['session-2'] });
     dispatchEvent.mockReset();

@@ -345,7 +345,14 @@ export function reopenMostRecentlyArchivedConversation(): {
 }
 
 export function pinConversationTab(sessionId: string): ConversationLayout {
-  return moveConversationTab(sessionId, 'pinned');
+  const normalizedSessionId = normalizeSessionId(sessionId);
+  const current = readConversationLayout();
+  if (!normalizedSessionId) {
+    return current;
+  }
+
+  const firstPinnedSessionId = current.pinnedSessionIds.find((id) => id !== normalizedSessionId) ?? null;
+  return moveConversationTab(normalizedSessionId, 'pinned', firstPinnedSessionId, 'before');
 }
 
 export function unpinConversationTab(

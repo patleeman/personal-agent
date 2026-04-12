@@ -60,6 +60,7 @@ const PATH = {
   moreHorizontal: 'M5.25 12h.01M12 12h.01M18.75 12h.01',
   filter: 'M4.5 7.5h15M7.5 12h9M10.5 16.5h3',
   list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
+  grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
   clock: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   sparkles: 'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
   check: 'm5 12.75 4.5 4.5L19 7.75',
@@ -82,7 +83,7 @@ type DesktopConversationShortcutAction =
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive';
 
-type ThreadsOrganizeMode = 'project' | 'chronological';
+type ThreadsOrganizeMode = 'project' | 'chronological' | 'manual';
 type ThreadsSortMode = 'created' | 'updated';
 
 type SidebarConversationItem = {
@@ -410,7 +411,11 @@ function writeConversationGroupLabelOverrides(overrides: Record<string, string>)
 function readThreadsOrganizeMode(): ThreadsOrganizeMode {
   try {
     const raw = localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY);
-    return raw === 'chronological' ? 'chronological' : 'project';
+    if (raw === 'chronological' || raw === 'manual') {
+      return raw;
+    }
+
+    return 'project';
   } catch {
     return 'project';
   }
@@ -605,7 +610,7 @@ function ThreadsFilterButton({
     }
 
     const menuWidth = 172;
-    const menuHeight = 208;
+    const menuHeight = 240;
     const edgePadding = 12;
     const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
     const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
@@ -703,6 +708,12 @@ function ThreadsFilterButton({
               icon: PATH.list,
               checked: organizeMode === 'chronological',
               onClick: () => onChangeOrganizeMode('chronological'),
+            })}
+            {renderMenuItem({
+              label: 'Manual order',
+              icon: PATH.grip,
+              checked: organizeMode === 'manual',
+              onClick: () => onChangeOrganizeMode('manual'),
             })}
             <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
             <div className="px-2.5 pt-1 pb-1 text-[12px] font-medium text-dim">Sort by</div>
@@ -1555,14 +1566,18 @@ export function Sidebar() {
     () => [...pinnedSessions, ...visibleConversationTabs],
     [pinnedSessions, visibleConversationTabs],
   );
-  const openWorkspacePaths = useMemo(() => {
-    const sessionsById = new Map((sessions ?? []).map((session) => [session.id, session] as const));
-    return normalizeWorkspacePaths([
+  const pinnedWorkspacePaths = useMemo(
+    () => normalizeWorkspacePaths(pinnedSessions.map((session) => session.cwd ?? '')),
+    [pinnedSessions],
+  );
+  const openWorkspacePaths = useMemo(
+    () => normalizeWorkspacePaths([
       draftCwd,
-      ...pinnedIds.map((sessionId) => sessionsById.get(sessionId)?.cwd ?? ''),
-      ...openIds.map((sessionId) => sessionsById.get(sessionId)?.cwd ?? ''),
-    ]);
-  }, [draftCwd, openIds, pinnedIds, sessions]);
+      ...pinnedSessions.map((session) => session.cwd ?? ''),
+      ...visibleConversationTabs.map((session) => session.cwd ?? ''),
+    ]),
+    [draftCwd, pinnedSessions, visibleConversationTabs],
+  );
 
   const persistSavedWorkspacePathsState = useCallback((workspacePaths: string[]) => {
     const normalized = normalizeWorkspacePaths(workspacePaths);
@@ -1626,21 +1641,31 @@ export function Sidebar() {
   }, [openWorkspacePaths, persistSavedWorkspacePathsState, savedWorkspacePaths, sessions, workspaceSyncReady]);
 
   const orderedConversationItems = useMemo(() => {
-    const items: SidebarConversationItem[] = [
-      ...pinnedSessions.map((session, originalIndex) => ({ session, section: 'pinned' as const, pinned: true, originalIndex })),
-      ...visibleConversationTabs.map((session, index) => ({
-        session,
-        section: 'open' as const,
-        pinned: false,
-        originalIndex: pinnedSessions.length + index,
-      })),
-    ];
+    const pinnedItems: SidebarConversationItem[] = pinnedSessions.map((session, originalIndex) => ({
+      session,
+      section: 'pinned' as const,
+      pinned: true,
+      originalIndex,
+    }));
+    const openItems: SidebarConversationItem[] = visibleConversationTabs.map((session, originalIndex) => ({
+      session,
+      section: 'open' as const,
+      pinned: false,
+      originalIndex,
+    }));
 
-    return [...items].sort((left, right) => compareConversationItems(left, right, threadsSortMode));
-  }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
+    if (threadsOrganizeMode === 'manual') {
+      return [...pinnedItems, ...openItems];
+    }
+
+    return [
+      ...pinnedItems,
+      ...[...openItems].sort((left, right) => compareConversationItems(left, right, threadsSortMode)),
+    ];
+  }, [pinnedSessions, threadsOrganizeMode, threadsSortMode, visibleConversationTabs]);
   const workspaceOrder = useMemo(
-    () => normalizeWorkspacePaths([...savedWorkspacePaths, ...openWorkspacePaths]),
-    [openWorkspacePaths, savedWorkspacePaths],
+    () => normalizeWorkspacePaths([...pinnedWorkspacePaths, ...savedWorkspacePaths, ...openWorkspacePaths]),
+    [openWorkspacePaths, pinnedWorkspacePaths, savedWorkspacePaths],
   );
 
   const activeConversationId = useMemo(() => {
@@ -1699,7 +1724,12 @@ export function Sidebar() {
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
   );
-
+  const renderedConversationItems = useMemo(
+    () => (threadsOrganizeMode === 'project'
+      ? groupedConversationRows.flatMap((group) => group.items)
+      : orderedConversationItems),
+    [groupedConversationRows, orderedConversationItems, threadsOrganizeMode],
+  );
 
   const toggleConversationGroupCollapsed = useCallback((groupKey: string) => {
     const normalizedGroupKey = groupKey.trim();
@@ -1812,6 +1842,20 @@ export function Sidebar() {
     if (targetSessionId === draggingSessionId) {
       clearDragState();
       return;
+    }
+
+    if (threadsOrganizeMode !== 'manual') {
+      replaceConversationLayout({
+        sessionIds: renderedConversationItems
+          .filter((item) => item.section === 'open')
+          .map((item) => item.session.id),
+        pinnedSessionIds: renderedConversationItems
+          .filter((item) => item.section === 'pinned')
+          .map((item) => item.session.id),
+        archivedSessionIds: archivedConversationIds,
+      });
+      setThreadsOrganizeMode('manual');
+      writeThreadsOrganizeMode('manual');
     }
 
     moveSession(draggingSessionId, targetSection, targetSessionId, position);
