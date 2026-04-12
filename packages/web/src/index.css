@@ -303,7 +303,7 @@
   }
 
   .ui-segmented-button-active {
-    @apply bg-elevated text-primary shadow-sm;
+    @apply bg-accent/10 text-accent shadow-sm ring-1 ring-accent/20;
   }
 
   .ui-browser-entry {
@@ -1000,51 +1000,55 @@
   }
 }
 
-/* ─── Light theme (default) ───────────────────────────────────────────────── */
-:root {
+/* ─── Adapted Tokyo Night light theme (default) ───────────────────────────── */
+:root,
+:root[data-theme="light"],
+:root[data-theme="tokyo-night-light"] {
   color-scheme: light;
-  --color-base:           245 241 235;
-  --color-surface:        237 233 226;
-  --color-elevated:       229 224 216;
-  --color-panel:          240 236 229;
-  --color-border-subtle:  216 210 200;
-  --color-border-default: 200 194 182;
-  --color-primary:        28  26  20;
-  --color-secondary:      90  84  72;
-  --color-dim:            110 100 86;
-  --color-accent:         149 90  16;
-  --color-accent-bg:      254 243 224;
-  --color-success:        22  110 72;
-  --color-warning:        179 78  20;
-  --color-danger:         196 48  48;
-  --color-teal:           26  120 120;
-  --color-steel:          30  90  150;
+  --color-base:           238 240 244;
+  --color-surface:        228 231 236;
+  --color-elevated:       214 218 227;
+  --color-panel:          220 223 230;
+  --color-border-subtle:  192 197 210;
+  --color-border-default: 172 178 194;
+  --color-primary:        22  26  40;
+  --color-secondary:      55  63  90;
+  --color-dim:            88  97  124;
+  --color-accent:         120 71  189;
+  --color-accent-bg:      225 217 245;
+  --color-success:        73  105 44;
+  --color-warning:        130 97  49;
+  --color-danger:         183 54  80;
+  --color-teal:           0   106 141;
+  --color-steel:          46  125 233;
+  --color-selection:      184 198 244;
+  --color-hover:          218 222 230;
+  --color-active:         207 212 223;
 }
 
-/* ─── Dark theme ──────────────────────────────────────────────────────────── */
-[data-theme="dark"] {
+/* ─── Adapted Tokyo Night dark theme ──────────────────────────────────────── */
+:root[data-theme="dark"],
+:root[data-theme="tokyo-night-dark"] {
   color-scheme: dark;
-  /* Backgrounds — warm dark grey, not near-black */
-  --color-base:           52  49  43;
-  --color-surface:        60  57  51;
-  --color-elevated:       70  67  60;
-  --color-panel:          46  44  38;
-  /* Borders */
-  --color-border-subtle:  78  75  66;
-  --color-border-default: 96  92  82;
-  /* Text — warm grey, not blue-grey */
-  --color-primary:        242 239 232;
-  --color-secondary:      182 176 162;
-  --color-dim:            142 136 122;
-  /* Accent */
-  --color-accent:         224 152 48;
-  --color-accent-bg:      72  54  18;
-  /* Semantic */
-  --color-success:        61  186 130;
-  --color-warning:        224 122 72;
-  --color-danger:         224 89  89;
-  --color-teal:           61  168 168;
-  --color-steel:          91  144 204;
+  --color-base:           26  27  38;
+  --color-surface:        31  35  53;
+  --color-elevated:       43  49  72;
+  --color-panel:          36  40  59;
+  --color-border-subtle:  55  62  91;
+  --color-border-default: 75  83  118;
+  --color-primary:        228 233 255;
+  --color-secondary:      186 196 233;
+  --color-dim:            136 146 189;
+  --color-accent:         187 154 247;
+  --color-accent-bg:      78  61  120;
+  --color-success:        158 206 106;
+  --color-warning:        224 175 104;
+  --color-danger:         247 118 142;
+  --color-teal:           125 207 255;
+  --color-steel:          122 162 247;
+  --color-selection:      68  86  146;
+  --color-hover:          49  55  80;
+  --color-active:         60  68  98;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
@@ -1058,6 +1062,11 @@ body {
   color: rgb(var(--color-primary));
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+}
+
+::selection {
+  background: rgb(var(--color-selection));
+  color: rgb(var(--color-primary));
 }
 
 ::-webkit-scrollbar        { width: 3px; height: 3px; }

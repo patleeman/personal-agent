@@ -49,13 +49,13 @@ export function languageExtensionForPath(path: string): Extension | null {
 
 export function editorChromeTheme(isDark: boolean): Extension {
   const highlightTheme = HighlightStyle.define([
-    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.modifier], color: isDark ? 'rgb(224 152 48)' : 'rgb(149 90 16)' },
-    { tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float], color: isDark ? 'rgb(91 144 204)' : 'rgb(30 90 150)' },
-    { tag: [tags.string, tags.special(tags.string), tags.regexp], color: isDark ? 'rgb(61 168 168)' : 'rgb(26 120 120)' },
+    { tag: [tags.keyword, tags.controlKeyword, tags.operatorKeyword, tags.modifier], color: 'rgb(var(--color-steel))' },
+    { tag: [tags.atom, tags.bool, tags.number, tags.integer, tags.float], color: 'rgb(var(--color-warning))' },
+    { tag: [tags.string, tags.special(tags.string), tags.regexp], color: 'rgb(var(--color-success))' },
     { tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'rgb(var(--color-dim))', fontStyle: 'italic' },
-    { tag: [tags.typeName, tags.className, tags.namespace, tags.definition(tags.typeName)], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)' },
+    { tag: [tags.typeName, tags.className, tags.namespace, tags.definition(tags.typeName)], color: 'rgb(var(--color-teal))' },
     { tag: [tags.variableName, tags.propertyName, tags.attributeName], color: 'rgb(var(--color-primary))' },
-    { tag: [tags.definition(tags.variableName), tags.function(tags.variableName), tags.labelName], color: isDark ? 'rgb(242 239 232)' : 'rgb(28 26 20)' },
+    { tag: [tags.definition(tags.variableName), tags.function(tags.variableName), tags.labelName], color: 'rgb(var(--color-accent))' },
     { tag: [tags.punctuation, tags.separator, tags.bracket], color: 'rgb(var(--color-secondary))' },
     { tag: [tags.meta, tags.docString], color: 'rgb(var(--color-dim))' },
     { tag: tags.invalid, color: 'rgb(var(--color-danger))' },
@@ -85,17 +85,17 @@ export function editorChromeTheme(isDark: boolean): Extension {
         minHeight: '100%',
         border: 'none',
         borderRight: '1px solid rgb(var(--color-border-subtle))',
-        backgroundColor: isDark ? 'rgb(60 57 51)' : 'rgb(237 233 226)',
+        backgroundColor: 'rgb(var(--color-base))',
         color: 'rgb(var(--color-dim))',
       },
       '.cm-lineNumbers .cm-gutterElement': {
         padding: '0 10px 0 6px',
       },
       '.cm-activeLine, .cm-activeLineGutter': {
-        backgroundColor: isDark ? 'rgb(224 152 48 / 0.09)' : 'rgb(149 90 16 / 0.055)',
+        backgroundColor: 'rgb(var(--color-active) / 0.34)',
       },
       '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
-        backgroundColor: isDark ? 'rgb(224 152 48 / 0.18)' : 'rgb(149 90 16 / 0.13)',
+        backgroundColor: 'rgb(var(--color-selection) / 0.6)',
       },
       '.cm-focused': {
         outline: 'none',
@@ -110,26 +110,26 @@ export function editorChromeTheme(isDark: boolean): Extension {
         color: 'rgb(var(--color-primary))',
       },
       '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-        backgroundColor: isDark ? 'rgb(224 152 48 / 0.12)' : 'rgb(149 90 16 / 0.08)',
+        backgroundColor: 'rgb(var(--color-hover) / 0.92)',
         color: 'rgb(var(--color-primary))',
       },
       '.cm-searchMatch': {
-        backgroundColor: isDark ? 'rgb(224 152 48 / 0.14)' : 'rgb(149 90 16 / 0.10)',
+        backgroundColor: 'rgb(var(--color-accent) / 0.18)',
         outline: '1px solid rgb(var(--color-border-default))',
       },
       '.cm-matchingBracket, .cm-nonmatchingBracket': {
-        backgroundColor: isDark ? 'rgb(91 144 204 / 0.12)' : 'rgb(30 90 150 / 0.10)',
+        backgroundColor: 'rgb(var(--color-teal) / 0.14)',
         outline: '1px solid rgb(var(--color-border-subtle))',
       },
       '&.cm-mergeView .cm-changedText, &.cm-mergeView .cm-deletedText, &.cm-mergeView .cm-insertedLine, &.cm-mergeView .cm-deletedLine, &.cm-mergeView .cm-deletedLine del': {
         textDecoration: 'none',
       },
-      '&.cm-merge-b .cm-changedText': {
-        background: isDark ? 'rgb(61 168 168 / 0.18)' : 'rgb(26 120 120 / 0.14)',
+      '&.cm-merge-b .cm-changedText, &.cm-mergeView .cm-insertedLine': {
+        background: 'rgb(var(--color-success) / 0.18)',
         borderRadius: '2px',
       },
-      '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText': {
-        background: isDark ? 'rgb(210 96 96 / 0.18)' : 'rgb(186 66 66 / 0.14)',
+      '&.cm-merge-a .cm-changedText, .cm-deletedChunk .cm-deletedText, &.cm-mergeView .cm-deletedLine': {
+        background: 'rgb(var(--color-danger) / 0.16)',
         borderRadius: '2px',
       },
     }, { dark: isDark }),
