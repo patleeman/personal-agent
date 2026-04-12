@@ -93,7 +93,7 @@ describe('conversation recovery', () => {
     });
   });
 
-  it('does not replay the synthetic resume fallback prompt during startup recovery', async () => {
+  it('does not auto-recover conversations that only have the synthetic resume fallback prompt', async () => {
     const stateRoot = createTempDir('pa-web-conversation-recovery-state-');
     const daemonSocketDir = createTempDir('pa-web-conversation-recovery-sock-');
     const sessionDir = join(stateRoot, 'sessions');
@@ -146,16 +146,55 @@ describe('conversation recovery', () => {
       },
     });
 
-    expect(resumeSession).toHaveBeenCalledWith(sessionFile, undefined);
+    expect(resumeSession).not.toHaveBeenCalled();
     expect(queuePromptContext).not.toHaveBeenCalled();
     expect(promptSession).not.toHaveBeenCalled();
-    expect(recovered).toEqual({
-      recovered: [{
-        runId: 'conversation-live-conv-789',
-        conversationId: 'conv-789',
-        replayedPendingOperation: false,
-      }],
+    expect(recovered).toEqual({ recovered: [] });
+  });
+
+  it('does not auto-recover interrupted conversations that have no pending operation to replay', async () => {
+    const stateRoot = createTempDir('pa-web-conversation-recovery-state-');
+    const daemonSocketDir = createTempDir('pa-web-conversation-recovery-sock-');
+    const sessionDir = join(stateRoot, 'sessions');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-790.jsonl');
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-790","timestamp":"2026-03-12T13:00:00.000Z","cwd":"/tmp/workspace"}\n');
+
+    process.env = {
+      ...originalEnv,
+      PERSONAL_AGENT_STATE_ROOT: stateRoot,
+      PERSONAL_AGENT_DAEMON_SOCKET_PATH: join(daemonSocketDir, 'personal-agentd.sock'),
+    };
+
+    await syncWebLiveConversationRun({
+      conversationId: 'conv-790',
+      sessionFile,
+      cwd: '/tmp/workspace',
+      title: 'Recover me later',
+      profile: 'datadog',
+      state: 'interrupted',
+      lastError: 'web process stopped',
     });
+
+    const resumeSession = vi.fn(async () => ({ id: 'conv-790' }));
+    const queuePromptContext = vi.fn(async () => undefined);
+    const promptSession = vi.fn(async () => undefined);
+
+    const recovered = await recoverDurableLiveConversations({
+      isLive: () => false,
+      resumeSession,
+      queuePromptContext,
+      promptSession,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+      },
+    });
+
+    expect(resumeSession).not.toHaveBeenCalled();
+    expect(queuePromptContext).not.toHaveBeenCalled();
+    expect(promptSession).not.toHaveBeenCalled();
+    expect(recovered).toEqual({ recovered: [] });
   });
 
   it('skips conversations that are already live', async () => {

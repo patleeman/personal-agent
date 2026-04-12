@@ -231,10 +231,15 @@ export async function recoverDurableLiveConversations(
     }
 
     try {
-      const resumed = await dependencies.resumeSession(run.sessionFile, dependencies.loaderOptions);
       const pendingOperation = isSyntheticResumeFallbackOperation(run.pendingOperation, resumeFallbackPrompt)
         ? null
         : run.pendingOperation;
+
+      if (!pendingOperation) {
+        continue;
+      }
+
+      const resumed = await dependencies.resumeSession(run.sessionFile, dependencies.loaderOptions);
 
       await syncWebLiveConversationRun({
         conversationId: resumed.id,
@@ -246,26 +251,24 @@ export async function recoverDurableLiveConversations(
         pendingOperation,
       });
 
-      if (pendingOperation) {
-        for (const message of pendingOperation.contextMessages ?? []) {
-          await dependencies.queuePromptContext(resumed.id, message.customType, message.content);
-        }
-
-        await dependencies.promptSession(
-          resumed.id,
-          pendingOperation.text,
-          pendingOperation.behavior,
-          pendingOperation.images,
-        );
+      for (const message of pendingOperation.contextMessages ?? []) {
+        await dependencies.queuePromptContext(resumed.id, message.customType, message.content);
       }
+
+      await dependencies.promptSession(
+        resumed.id,
+        pendingOperation.text,
+        pendingOperation.behavior,
+        pendingOperation.images,
+      );
 
       recovered.push({
         runId: run.runId,
         conversationId: resumed.id,
-        replayedPendingOperation: Boolean(pendingOperation),
+        replayedPendingOperation: true,
       });
       dependencies.logger?.info(
-        `recovered conversation run=${run.runId} conversation=${resumed.id} replayed=${String(Boolean(pendingOperation))}`,
+        `recovered conversation run=${run.runId} conversation=${resumed.id} replayed=true`,
       );
     } catch (error) {
       dependencies.logger?.warn(
