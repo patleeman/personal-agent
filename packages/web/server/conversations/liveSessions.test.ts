@@ -7,6 +7,7 @@ import {
   abortSession,
   appendDetachedUserMessage,
   appendVisibleCustomMessage,
+  cancelQueuedPrompt,
   compactSession,
   destroySession,
   ensureSessionFileExists,
@@ -16,6 +17,7 @@ import {
   getSessionContextUsage,
   getSessionStats,
   isLive,
+  listQueuedPromptPreviews,
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
@@ -1860,6 +1862,123 @@ describe('queued prompt restore', () => {
     expect(clearQueue).toHaveBeenCalledTimes(1);
     expect(steer).toHaveBeenCalledTimes(1);
     expect(steer).toHaveBeenCalledWith('first queued prompt');
+  });
+
+  it('lists queued prompt previews for live sessions', () => {
+    setLiveEntry('session-list-queued-prompts', {
+      sessionId: 'session-list-queued-prompts',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'List queued prompts',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => ['first queued prompt'],
+        getFollowUpMessages: () => ['follow-up prompt'],
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    expect(listQueuedPromptPreviews('session-list-queued-prompts')).toEqual({
+      steering: [{ id: 'steer-visible-0', text: 'first queued prompt', imageCount: 0, restorable: true }],
+      followUp: [{ id: 'followUp-visible-0', text: 'follow-up prompt', imageCount: 0, restorable: true }],
+    });
+  });
+
+  it('cancels a visible-only queued prompt by clearing and rebuilding the remaining queue', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const clearQueue = vi.fn(() => ({ steering: [...steeringMessages], followUp: [] }));
+    const steer = vi.fn(async (text: string) => {
+      steeringMessages.push(text);
+    });
+
+    setLiveEntry('session-visible-only-cancel', {
+      sessionId: 'session-visible-only-cancel',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Visible-only cancel',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        clearQueue,
+        steer,
+        followUp: vi.fn(async () => undefined),
+        isStreaming: true,
+        agent: {},
+      },
+    });
+
+    const cancelled = await cancelQueuedPrompt('session-visible-only-cancel', 'steer', 'steer-visible-1');
+
+    expect(cancelled).toEqual({ id: 'steer-visible-1', text: 'second queued prompt', imageCount: 0, restorable: true });
+    expect(clearQueue).toHaveBeenCalledTimes(1);
+    expect(steer).toHaveBeenCalledTimes(1);
+    expect(steer).toHaveBeenCalledWith('first queued prompt');
+  });
+
+  it('cancels an internal queued prompt by preview id without disturbing other queued items', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const steeringQueue = {
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'second queued prompt' }],
+        },
+      ],
+    };
+
+    setLiveEntry('session-queue-cancel', {
+      sessionId: 'session-queue-cancel',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Cancel queued prompt',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        getContextUsage: () => null,
+        isStreaming: true,
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        agent: {
+          steeringQueue,
+          followUpQueue: {
+            messages: [],
+          },
+        },
+      },
+    });
+
+    const previews = listQueuedPromptPreviews('session-queue-cancel');
+    const secondPromptPreviewId = previews.steering[1]?.id;
+    expect(secondPromptPreviewId).toBeTruthy();
+
+    const cancelled = await cancelQueuedPrompt('session-queue-cancel', 'steer', secondPromptPreviewId as string);
+
+    expect(cancelled).toEqual(expect.objectContaining({ id: secondPromptPreviewId, text: 'second queued prompt', imageCount: 0 }));
+    expect(steeringMessages).toEqual(['first queued prompt']);
+    expect(steeringQueue).toEqual({
+      messages: [
+        {
+          role: 'user',
+          content: [{ type: 'text', text: 'first queued prompt' }],
+        },
+      ],
+    });
   });
 
   it('restores a queued prompt back to the composer payload without disturbing other queued items', async () => {

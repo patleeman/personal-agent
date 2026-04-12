@@ -30,7 +30,6 @@ import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferenc
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
-import { buildDeferredResumeAutoResumeKey } from '../deferredResumeAutoResume';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversationMentions';
@@ -2413,7 +2412,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerResizeFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef   = useRef<HTMLDivElement>(null);
-  const deferredResumeAutoResumeKeyRef = useRef<string | null>(null);
   const pendingJumpMessageIndexRef = useRef<number | null>(null);
   const [requestedFocusMessageIndex, setRequestedFocusMessageIndex] = useState<number | null>(null);
 
@@ -2629,11 +2627,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [deferredResumes],
   );
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
-  const deferredResumeAutoResumeKey = useMemo(() => buildDeferredResumeAutoResumeKey({
-    resumes: orderedDeferredResumes,
-    isLiveSession,
-    sessionFile: savedConversationSessionFile,
-  }), [isLiveSession, orderedDeferredResumes, savedConversationSessionFile]);
   const deferredResumeIndicatorText = useMemo(
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
@@ -2830,36 +2823,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     void refetchDeferredResumes().catch(() => {});
   }, [id, initialDeferredResumeState, location.key, refetchDeferredResumes]);
-
-  useEffect(() => {
-    if (!deferredResumeAutoResumeKey) {
-      deferredResumeAutoResumeKeyRef.current = null;
-      return;
-    }
-
-    if (deferredResumeAutoResumeKeyRef.current === deferredResumeAutoResumeKey) {
-      return;
-    }
-
-    deferredResumeAutoResumeKeyRef.current = deferredResumeAutoResumeKey;
-    let cancelled = false;
-
-    void resumeDeferredConversation()
-      .then(() => {
-        if (!cancelled) {
-          showNotice('accent', 'Wakeup firing…');
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deferredResumeAutoResumeKey, resumeDeferredConversation, showNotice]);
 
   useEffect(() => {
     if (deferredResumes.length === 0) {

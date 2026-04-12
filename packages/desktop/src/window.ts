@@ -35,6 +35,21 @@ type ManagedWindowRole = 'main' | 'remote';
 
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
 
+export function getDesktopWindowChromeOptions(platform = process.platform): {
+  titleBarStyle: 'hidden' | 'hiddenInset';
+  trafficLightPosition?: { x: number; y: number };
+} {
+  if (platform === 'darwin') {
+    return {
+      titleBarStyle: 'hiddenInset',
+    };
+  }
+
+  return {
+    titleBarStyle: 'hidden',
+  };
+}
+
 export function toDesktopShellUrl(url: string): string {
   const parsed = new URL(url);
   parsed.searchParams.set('desktop-shell', '1');
@@ -268,9 +283,8 @@ export class DesktopWindowController {
       title: buildWindowTitle(host),
       icon: runtime.colorIconFile,
       autoHideMenuBar: true,
-      titleBarStyle: 'hidden',
       backgroundColor: host.kind === 'local' ? undefined : '#1f1a12',
-      trafficLightPosition: process.platform === 'darwin' ? { x: 14, y: 8 } : undefined,
+      ...getDesktopWindowChromeOptions(),
       webPreferences: {
         preload: resolvePreloadPath(),
         partition,

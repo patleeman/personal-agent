@@ -1,5 +1,7 @@
-import { ipcMain, type WebContents } from 'electron';
+import { ipcMain, shell, type WebContents } from 'electron';
 import { showConversationContextMenu } from './conversation-context-menu.js';
+import { showConversationCwdGroupContextMenu } from './conversation-cwd-group-context-menu.js';
+import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 
@@ -119,6 +121,28 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-context-menu`, async (event, input) => {
     return showConversationContextMenu(event.sender, input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-cwd-group-context-menu`, async (event, input) => {
+    return showConversationCwdGroupContextMenu(event.sender, input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:show-selection-context-menu`, async (event, input) => {
+    return showSelectionContextMenu(event.sender, input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:open-path`, async (_event, targetPath: unknown) => {
+    const normalizedPath = typeof targetPath === 'string' ? targetPath.trim() : '';
+    if (!normalizedPath) {
+      return { path: '', opened: false, error: 'Path is required.' };
+    }
+
+    const error = await shell.openPath(normalizedPath);
+    return {
+      path: normalizedPath,
+      opened: error.length === 0,
+      ...(error ? { error } : {}),
+    };
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {

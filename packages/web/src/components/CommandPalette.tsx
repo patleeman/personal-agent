@@ -665,7 +665,13 @@ export function CommandPalette() {
     <div
       className="ui-overlay-backdrop"
       data-command-palette="true"
-      style={{ background: 'rgb(0 0 0 / 0.48)', backdropFilter: 'blur(3px)' }}
+      style={{
+        background: 'rgb(0 0 0 / 0.48)',
+        backdropFilter: 'blur(3px)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '1.75rem',
+      }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           closePalette();

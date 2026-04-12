@@ -649,6 +649,19 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('ui-message-card-assistant');
   });
 
+  it('marks the transcript container as a selection context-menu surface', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'text',
+        id: 'assistant-1',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Assistant reply body.',
+      }],
+    }));
+
+    expect(html).toContain('data-chat-transcript-panel="1"');
+  });
+
   it('marks assistant-facing transcript blocks as reply-selectable scopes', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [

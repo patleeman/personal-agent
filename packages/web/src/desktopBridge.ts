@@ -55,7 +55,15 @@ export type DesktopConversationContextMenuAction =
   | 'archive'
   | 'duplicate'
   | 'summarize-and-new'
-  | 'copy-id';
+  | 'copy-working-directory'
+  | 'copy-id'
+  | 'copy-deeplink';
+
+export type DesktopConversationCwdGroupContextMenuAction =
+  | 'open-in-finder'
+  | 'edit-name'
+  | 'archive-threads'
+  | 'remove';
 
 export interface DesktopConversationContextMenuRequest {
   x: number;
@@ -64,8 +72,19 @@ export interface DesktopConversationContextMenuRequest {
   canArchive?: boolean;
   canDuplicate?: boolean;
   canSummarizeAndNew?: boolean;
+  canCopyWorkingDirectory?: boolean;
   canCopyId?: boolean;
+  canCopyDeeplink?: boolean;
   busyAction?: 'duplicate' | 'summarize' | null;
+}
+
+export interface DesktopConversationCwdGroupContextMenuRequest {
+  x: number;
+  y: number;
+  canOpenInFinder?: boolean;
+  canEditName?: boolean;
+  canArchiveThreads?: boolean;
+  canRemove?: boolean;
 }
 
 export interface PersonalAgentDesktopBridge {
@@ -77,6 +96,9 @@ export interface PersonalAgentDesktopBridge {
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
+  showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
+  showSelectionContextMenu(input: { x: number; y: number; canCopy?: boolean }): Promise<{ shown: boolean }>;
+  openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;

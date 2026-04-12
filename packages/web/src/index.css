@@ -141,6 +141,14 @@
     @apply px-3 pt-2.5 pb-1.5 border-b border-border-subtle flex items-center justify-between gap-2;
   }
 
+  .ui-context-menu-shell {
+    @apply rounded-xl border border-border-default bg-surface/95 p-1 shadow-2xl backdrop-blur-md;
+  }
+
+  .ui-context-menu-item {
+    @apply flex w-full items-center rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium leading-5 text-primary transition-colors hover:bg-elevated/70 focus-visible:outline-none focus-visible:bg-elevated/70 disabled:cursor-default disabled:opacity-40;
+  }
+
   .ui-overlay-backdrop {
     @apply fixed inset-0 z-50 flex items-start justify-center pt-12;
   }
@@ -219,7 +227,7 @@
   }
 
   .ui-sidebar-nav-item {
-    @apply flex items-center gap-2.5 px-3 py-2 mx-1 rounded-lg text-[13px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
+    @apply flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary;
   }
 
   .ui-sidebar-nav-item-active {

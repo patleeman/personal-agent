@@ -101,9 +101,8 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | Save reusable procedure | skill page | `~/Documents/personal-agent/_skills/<skill>/SKILL.md` |
 | Track ongoing work | tracked page | `~/Documents/personal-agent/projects/<id>/project.md` + `state.yaml` |
 | Store durable behavior or profile preferences | `AGENTS.md`, profile `settings.json`, profile `models.json` | `~/Documents/personal-agent/_profiles/<profile>/` |
-<<<<<<< HEAD
 | Notice async results later | conversation attention / alerts | owning thread state + wakeup/alert state |
-| Wake the same conversation later | reminder or deferred resume | machine-local wakeup state |
+| Wake the same conversation later | conversation queue or reminder | live queue state or machine-local wakeup state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` |
 | Run automation later or repeatedly | scheduled task | `~/.local/state/personal-agent/sync/{_tasks|tasks}/**` |
 | Render inspectable output in a thread | conversation artifact | conversation artifact state |

@@ -12,7 +12,7 @@ const {
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
   createConversationAutoModeAgentExtensionMock,
-  createDeferredResumeAgentExtensionMock,
+  createConversationQueueAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
@@ -34,7 +34,7 @@ const {
   createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
   createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
   createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
-  createDeferredResumeAgentExtensionMock: vi.fn(() => 'deferred-resume-extension'),
+  createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
   createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
   createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
@@ -75,8 +75,8 @@ vi.mock('../extensions/conversationAutoModeAgentExtension.js', () => ({
   createConversationAutoModeAgentExtension: createConversationAutoModeAgentExtensionMock,
 }));
 
-vi.mock('../extensions/deferredResumeAgentExtension.js', () => ({
-  createDeferredResumeAgentExtension: createDeferredResumeAgentExtensionMock,
+vi.mock('../extensions/conversationQueueAgentExtension.js', () => ({
+  createConversationQueueAgentExtension: createConversationQueueAgentExtensionMock,
 }));
 
 vi.mock('../extensions/reminderAgentExtension.js', () => ({
@@ -152,7 +152,7 @@ describe('createProfileState', () => {
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
     createConversationAutoModeAgentExtensionMock.mockClear();
-    createDeferredResumeAgentExtensionMock.mockClear();
+    createConversationQueueAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
@@ -216,7 +216,7 @@ describe('createProfileState', () => {
       'run-extension',
       'artifact-extension',
       'conversation-auto-mode-extension',
-      'deferred-resume-extension',
+      'conversation-queue-extension',
       'reminder-extension',
     ]);
     expect(createScheduledTaskAgentExtensionMock).toHaveBeenCalledWith({
@@ -256,7 +256,7 @@ describe('createProfileState', () => {
         'run-extension',
         'artifact-extension',
         'conversation-auto-mode-extension',
-        'deferred-resume-extension',
+        'conversation-queue-extension',
         'reminder-extension',
       ],
     });

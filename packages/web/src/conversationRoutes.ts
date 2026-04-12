@@ -36,6 +36,10 @@ export function buildConversationSurfacePath(id: string): string {
   return id === DRAFT_CONVERSATION_ID ? DRAFT_CONVERSATION_ROUTE : buildConversationPath(id);
 }
 
+export function buildConversationDeeplink(id: string, baseUrl: string): string {
+  return new URL(buildConversationSurfacePath(id), baseUrl).toString();
+}
+
 export function resolveConversationIndexRedirect(input: {
   openIds?: Iterable<unknown>;
   pinnedIds?: Iterable<unknown>;

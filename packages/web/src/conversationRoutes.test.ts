@@ -1,9 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildConversationDeeplink,
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
   resolveConversationIndexRedirect,
 } from './conversationRoutes';
+
+describe('buildConversationDeeplink', () => {
+  it('builds browser deeplinks from the current origin', () => {
+    expect(buildConversationDeeplink('conversation-1', 'https://agent.tail.ts.net/settings')).toBe('https://agent.tail.ts.net/conversations/conversation-1');
+  });
+
+  it('preserves the desktop app protocol when running inside Electron', () => {
+    expect(buildConversationDeeplink('conversation-1', 'personal-agent://app/automations')).toBe('personal-agent://app/conversations/conversation-1');
+  });
+});
 
 describe('resolveConversationIndexRedirect', () => {
   it('prefers the open workspace conversations', () => {

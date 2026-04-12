@@ -56,7 +56,7 @@ This is useful execution context, but it still should not replace durable vault 
 A conversation often creates or receives other durable async surfaces:
 
 - **reminder** — tell me later
-- **deferred resume** — wake this conversation later
+- **conversation queue** — wake this conversation later or queue the next step after the current turn
 - **run** — detached work started now
 - **scheduled task** — future or recurring automation
 - **activity / alert** — later attention outside the active conversation

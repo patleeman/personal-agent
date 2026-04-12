@@ -64,7 +64,7 @@ describe('ask user question agent extension', () => {
     expect(guidelines).toContain('questions[]');
     expect(guidelines).toContain('radio');
     expect(guidelines).toContain('check style');
-    expect(guidelines).toContain('deferred_resume');
+    expect(guidelines).toContain('conversation_queue');
   });
 
   it('normalizes structured multi-question payloads in the tool result', async () => {

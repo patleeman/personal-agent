@@ -137,7 +137,7 @@ describe('run agent extension', () => {
     expect(logs.content[0]?.text).toContain('(empty log)');
   });
 
-  it('starts a background run through the daemon', async () => {
+  it('starts a background run through the daemon without conversation callbacks by default', async () => {
     ensureDaemonAvailableMock.mockResolvedValue(undefined);
     startBackgroundRunMock.mockResolvedValue({
       accepted: true,
@@ -168,20 +168,15 @@ describe('run agent extension', () => {
         id: 'conv-999',
         filePath: '/tmp/sessions/conv-999.jsonl',
       },
-      callbackConversation: {
-        conversationId: 'conv-999',
-        sessionFile: '/tmp/sessions/conv-999.jsonl',
-        profile: 'assistant',
-        repoRoot: '/repo',
-      },
-      checkpointPayload: {
-        resumeParentOnExit: true,
-      },
     });
     expect(result.content[0]?.text).toContain('Started durable run run-456');
+    expect(result.details).toMatchObject({
+      action: 'start',
+      deliverResultToConversation: false,
+    });
   });
 
-  it('starts a durable agent run through the daemon', async () => {
+  it('starts a durable agent run through the daemon without conversation callbacks by default', async () => {
     ensureDaemonAvailableMock.mockResolvedValue(undefined);
     startBackgroundRunMock.mockResolvedValue({
       accepted: true,
@@ -218,17 +213,13 @@ describe('run agent extension', () => {
         id: 'conv-agent',
         filePath: '/tmp/sessions/conv-agent.jsonl',
       },
-      callbackConversation: {
-        conversationId: 'conv-agent',
-        sessionFile: '/tmp/sessions/conv-agent.jsonl',
-        profile: 'assistant',
-        repoRoot: '/repo',
-      },
-      checkpointPayload: {
-        resumeParentOnExit: true,
-      },
+      checkpointPayload: {},
     });
     expect(result.content[0]?.text).toContain('Started durable agent run run-agent-123');
+    expect(result.details).toMatchObject({
+      action: 'start_agent',
+      deliverResultToConversation: false,
+    });
   });
 
   it('passes trimmed scheduling options to detached agent runs without a persisted conversation', async () => {
@@ -274,7 +265,6 @@ describe('run agent extension', () => {
         id: 'conv-loop',
       },
       checkpointPayload: {
-        resumeParentOnExit: true,
         defer: '30m',
         cron: '0 9 * * 1-5',
         at: '2026-04-10T09:00:00Z',
@@ -284,6 +274,79 @@ describe('run agent extension', () => {
       },
     });
     expect(result.content[0]?.text).toContain('[defer 30m, cron 0 9 * * 1-5, at 2026-04-10T09:00:00Z, loop]');
+  });
+
+  it('can opt into delivering run results back to the current conversation', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    startBackgroundRunMock.mockResolvedValue({
+      accepted: true,
+      runId: 'run-agent-callback',
+      logPath: '/tmp/run-agent-callback.log',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'deploy-watch',
+        prompt: 'Watch the deployment and report back.',
+        deliverResultToConversation: true,
+      },
+      undefined,
+      undefined,
+      createToolContext('conv-callback', '/tmp/sessions/conv-callback.jsonl'),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(startBackgroundRunMock).toHaveBeenCalledWith({
+      taskSlug: 'deploy-watch',
+      cwd: '/tmp/workspace',
+      agent: {
+        prompt: 'Watch the deployment and report back.',
+        profile: 'assistant',
+      },
+      source: {
+        type: 'tool',
+        id: 'conv-callback',
+        filePath: '/tmp/sessions/conv-callback.jsonl',
+      },
+      callbackConversation: {
+        conversationId: 'conv-callback',
+        sessionFile: '/tmp/sessions/conv-callback.jsonl',
+        profile: 'assistant',
+        repoRoot: '/repo',
+      },
+      checkpointPayload: {
+        resumeParentOnExit: true,
+      },
+    });
+    expect(result.details).toMatchObject({
+      action: 'start_agent',
+      deliverResultToConversation: true,
+    });
+  });
+
+  it('requires a persisted conversation when opting into result delivery', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'deploy-watch',
+        prompt: 'Watch the deployment and report back.',
+        deliverResultToConversation: true,
+      },
+      undefined,
+      undefined,
+      createToolContext('conv-no-file', ''),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('deliverResultToConversation requires an active persisted conversation.');
+    expect(startBackgroundRunMock).not.toHaveBeenCalled();
   });
 
   it('reruns a stopped durable run through the daemon', async () => {

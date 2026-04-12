@@ -20,6 +20,8 @@ async function createFinishedBackgroundRun(input: {
   sessionFile: string;
   taskSlug: string;
   endedAt: string;
+  exitCode?: number;
+  cancelled?: boolean;
 }): Promise<{ runId: string; checkpointPath: string }> {
   const record = await createBackgroundRunRecord(input.daemonRoot, {
     taskSlug: input.taskSlug,
@@ -49,9 +51,9 @@ async function createFinishedBackgroundRun(input: {
     cwd: createTempDir('bg-run-callback-finished-cwd-'),
     startedAt: '2026-04-04T01:00:01.000Z',
     endedAt: input.endedAt,
-    exitCode: 0,
+    exitCode: input.exitCode ?? 0,
     signal: null,
-    cancelled: false,
+    cancelled: input.cancelled ?? false,
   });
 
   return {
@@ -139,5 +141,31 @@ describe('background run callbacks', () => {
       triggerRunId: run.runId,
       now: new Date('2026-04-04T01:10:00.000Z'),
     })).resolves.toEqual({ surfacedRunIds: [] });
+  });
+
+  it('does not create callback wakeups for cancelled runs', async () => {
+    const daemonRoot = createTempDir('pa-background-run-callback-daemon-');
+    const stateRoot = createTempDir('pa-background-run-callback-state-');
+    const runsRoot = join(daemonRoot, 'runs');
+    const sessionFile = '/tmp/conversations/callback-cancelled.jsonl';
+
+    const run = await createFinishedBackgroundRun({
+      daemonRoot,
+      sessionFile,
+      taskSlug: 'sidebar-check',
+      endedAt: '2026-04-04T01:15:00.000Z',
+      exitCode: 1,
+      cancelled: true,
+    });
+
+    await expect(deliverBackgroundRunCallbackWakeup({
+      daemonRoot,
+      stateRoot,
+      runsRoot,
+      runId: run.runId,
+    })).resolves.toEqual({ delivered: false });
+
+    const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
+    expect(Object.keys(deferredState.resumes)).toEqual([]);
   });
 });

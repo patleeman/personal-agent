@@ -19,6 +19,7 @@ const RunToolParams = Type.Object({
   profile: Type.Optional(Type.String({ description: 'Optional profile override for start_agent. Defaults to the active conversation profile.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for start. Defaults to the current conversation cwd.' })),
   tail: Type.Optional(Type.Number({ minimum: 1, maximum: 1000, description: 'Number of log lines to include for logs.' })),
+  deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether run completion should queue a wakeup back to the current conversation. Runs are detached by default.' })),
   // Trigger options for start_agent
   defer: Type.Optional(Type.String({ description: 'Delay before running, for example 30s, 10m, 2h, 1d. Use with start_agent.' })),
   cron: Type.Optional(Type.String({ description: 'Cron expression for recurring runs, for example "0 9 * * 1-5". Use with start_agent.' })),
@@ -89,9 +90,10 @@ export function createRunAgentExtension(options: {
         'Use this tool for durable background jobs that should keep running outside the current turn.',
         'Prefer one focused run per independent task slug.',
         'Use start for detached shell work, start_agent for detached subagents, rerun to replay a stopped run, follow_up to continue a stopped background agent run, get/logs for inspection, and cancel to stop a run.',
+        'Runs are detached by default. Only set deliverResultToConversation=true when the result should flow back to this conversation.',
         'For time-based runs, use defer/cron/at with start_agent.',
         'For looping agents, use loop=true with start_agent.',
-        'For pure time-based conversation wakeups, prefer deferred_resume instead.',
+        'For pure conversation follow-up later, prefer conversation_queue with trigger="after_turn", "delay", or "at" instead.',
         'For persistent task-file-based automation, prefer scheduled_task instead.',
       ],
       parameters: RunToolParams,
@@ -161,7 +163,12 @@ export function createRunAgentExtension(options: {
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
-              const callbackConversation = conversationFile
+              const deliverResultToConversation = params.deliverResultToConversation === true;
+              if (deliverResultToConversation && !conversationFile) {
+                throw new Error('deliverResultToConversation requires an active persisted conversation.');
+              }
+
+              const callbackConversation = deliverResultToConversation && conversationFile
                 ? {
                     conversationId,
                     sessionFile: conversationFile,
@@ -181,9 +188,13 @@ export function createRunAgentExtension(options: {
                   ...(conversationFile ? { filePath: conversationFile } : {}),
                 },
                 ...(callbackConversation ? { callbackConversation } : {}),
-                checkpointPayload: {
-                  resumeParentOnExit: true,
-                },
+                ...(deliverResultToConversation
+                  ? {
+                      checkpointPayload: {
+                        resumeParentOnExit: true,
+                      },
+                    }
+                  : {}),
               });
 
               if (!result.accepted) {
@@ -202,6 +213,7 @@ export function createRunAgentExtension(options: {
                   taskSlug,
                   cwd,
                   logPath: result.logPath,
+                  deliverResultToConversation,
                 },
               };
             }
@@ -212,7 +224,12 @@ export function createRunAgentExtension(options: {
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
               const conversationFile = ctx.sessionManager.getSessionFile();
-              const callbackConversation = conversationFile
+              const deliverResultToConversation = params.deliverResultToConversation === true;
+              if (deliverResultToConversation && !conversationFile) {
+                throw new Error('deliverResultToConversation requires an active persisted conversation.');
+              }
+
+              const callbackConversation = deliverResultToConversation && conversationFile
                 ? {
                     conversationId,
                     sessionFile: conversationFile,
@@ -252,7 +269,7 @@ export function createRunAgentExtension(options: {
                 },
                 ...(callbackConversation ? { callbackConversation } : {}),
                 checkpointPayload: {
-                  resumeParentOnExit: true,
+                  ...(deliverResultToConversation ? { resumeParentOnExit: true } : {}),
                   ...(defer ? { defer } : {}),
                   ...(cron ? { cron } : {}),
                   ...(at ? { at } : {}),
@@ -292,6 +309,7 @@ export function createRunAgentExtension(options: {
                   ...(cron ? { cron } : {}),
                   ...(at ? { at } : {}),
                   ...(loop ? { loop: true } : {}),
+                  deliverResultToConversation,
                 },
               };
             }

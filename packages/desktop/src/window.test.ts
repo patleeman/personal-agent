@@ -4,7 +4,13 @@ vi.mock('electron', () => ({
   BrowserWindow: class BrowserWindow {},
 }));
 
-import { DesktopWindowController, canNavigateWindowInApp, toDesktopShellRoute, toDesktopShellUrl } from './window.js';
+import {
+  DesktopWindowController,
+  canNavigateWindowInApp,
+  getDesktopWindowChromeOptions,
+  toDesktopShellRoute,
+  toDesktopShellUrl,
+} from './window.js';
 
 function createWindowDouble(currentUrl = '') {
   return {
@@ -23,6 +29,18 @@ function createWindowDouble(currentUrl = '') {
 }
 
 describe('window desktop navigation helpers', () => {
+  it('uses the inset macOS title bar style so traffic lights stay visible', () => {
+    expect(getDesktopWindowChromeOptions('darwin')).toEqual({
+      titleBarStyle: 'hiddenInset',
+    });
+  });
+
+  it('keeps the existing hidden custom chrome outside macOS', () => {
+    expect(getDesktopWindowChromeOptions('linux')).toEqual({
+      titleBarStyle: 'hidden',
+    });
+  });
+
   it('keeps the desktop shell marker in full URLs but strips it from in-app routes', () => {
     expect(toDesktopShellUrl('http://127.0.0.1:3741/conversations/new')).toBe(
       'http://127.0.0.1:3741/conversations/new?desktop-shell=1',

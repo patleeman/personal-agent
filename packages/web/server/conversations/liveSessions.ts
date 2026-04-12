@@ -699,6 +699,15 @@ function readQueueState(session: AgentSession): { steering: QueuedPromptPreview[
   };
 }
 
+export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  return readQueueState(entry.session);
+}
+
 function removeQueuedUserMessage(
   queue: InternalQueuedAgentMessage[],
   input: { index: number; previewId?: string },
@@ -2687,6 +2696,77 @@ export async function restoreQueuedMessage(
   const restored = extractQueuedPromptContent(removed.message, fallbackText);
   broadcastQueueState(entry, true);
   return restored;
+}
+
+export async function cancelQueuedPrompt(
+  sessionId: string,
+  behavior: 'steer' | 'followUp',
+  previewId: string,
+): Promise<QueuedPromptPreview> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const normalizedPreviewId = previewId.trim();
+  if (!normalizedPreviewId) {
+    throw new Error('Queued prompt id is required');
+  }
+
+  const visibleQueue = (behavior === 'steer'
+    ? entry.session.getSteeringMessages()
+    : entry.session.getFollowUpMessages()) as string[];
+  const internalAgent = entry.session.agent as unknown as InternalAgentQueues;
+  const queueContainer = behavior === 'steer'
+    ? internalAgent.steeringQueue
+    : internalAgent.followUpQueue;
+  const internalQueue = resolveInternalQueuedMessages(queueContainer);
+  const previews = readQueuedPromptPreviews(behavior, [...visibleQueue], queueContainer);
+  const previewIndex = previews.findIndex((preview) => preview.id === normalizedPreviewId);
+  if (previewIndex < 0) {
+    throw new Error('Queued prompt changed before it could be cancelled. Try again.');
+  }
+
+  const cancelledPreview = previews[previewIndex] as QueuedPromptPreview;
+
+  if (!Array.isArray(internalQueue) || isVisibleQueueFallbackPreviewId(behavior, normalizedPreviewId)) {
+    if (typeof entry.session.clearQueue !== 'function') {
+      throw new Error('Queued prompt changed before it could be cancelled. Try again.');
+    }
+
+    const cleared = entry.session.clearQueue();
+    const remainingSteering = behavior === 'steer'
+      ? cleared.steering.filter((_, queueIndex) => queueIndex !== previewIndex)
+      : cleared.steering;
+    const remainingFollowUp = behavior === 'followUp'
+      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== previewIndex)
+      : cleared.followUp;
+
+    for (const queuedText of remainingSteering) {
+      await entry.session.steer(queuedText);
+    }
+    for (const queuedText of remainingFollowUp) {
+      await entry.session.followUp(queuedText);
+    }
+
+    broadcastQueueState(entry, true);
+    return cancelledPreview;
+  }
+
+  const removed = removeQueuedUserMessage(internalQueue, {
+    index: previewIndex,
+    previewId: normalizedPreviewId,
+  });
+  if (!removed) {
+    throw new Error('Queued prompt changed before it could be cancelled. Try again.');
+  }
+
+  if (previewIndex < visibleQueue.length) {
+    visibleQueue.splice(previewIndex, 1);
+  }
+
+  broadcastQueueState(entry, true);
+  return cancelledPreview;
 }
 
 export async function compactSession(sessionId: string, customInstructions?: string) {

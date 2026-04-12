@@ -17,10 +17,15 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { timeAgoCompact } from '../utils';
-import type { ConversationShelf, OpenConversationDropPosition } from '../sessionTabs';
-import { groupConversationItemsByCwd } from '../conversationCwdGroups';
-import { getDesktopBridge } from '../desktopBridge';
+import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../sessionTabs';
+import { getConversationGroupLabel, groupConversationItemsByCwd } from '../conversationCwdGroups';
 import {
+  getDesktopBridge,
+  type DesktopConversationContextMenuAction,
+  type DesktopConversationCwdGroupContextMenuAction,
+} from '../desktopBridge';
+import {
+  buildConversationDeeplink,
   buildConversationSurfacePath,
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
@@ -43,15 +48,25 @@ const PATH = {
   notes: 'M12 6.042A8.967 8.967 0 0 0 6 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 0 1 6 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 0 1 6-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0 0 18 18a8.967 8.967 0 0 0-6 2.292m0-14.25v14.25',
   skills: 'M12 3.75l7.5 4.125v8.25L12 20.25 4.5 16.125v-8.25L12 3.75Zm0 0v16.5M4.5 7.875 12 12l7.5-4.125',
   workspace: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
+  workspaceAdd: 'M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z M3.75 9.75h16.5 M15.75 11.25v4.5 M13.5 13.5h4.5',
   automations: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   settings: 'M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3',
   close: 'M6 18 18 6M6 6l12 12',
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
+  moreHorizontal: 'M5.25 12h.01M12 12h.01M18.75 12h.01',
+  filter: 'M4.5 7.5h15M7.5 12h9M10.5 16.5h3',
+  list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
+  clock: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
+  sparkles: 'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
+  check: 'm5 12.75 4.5 4.5L19 7.75',
 };
 
 const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
+const THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-cwd-group-label-overrides');
+const THREADS_ORGANIZE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-organize');
+const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -64,6 +79,16 @@ type DesktopConversationShortcutAction =
   | 'next-conversation'
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive';
+
+type ThreadsOrganizeMode = 'project' | 'chronological';
+type ThreadsSortMode = 'created' | 'updated';
+
+type SidebarConversationItem = {
+  session: SessionMeta;
+  section: ConversationShelf;
+  pinned: boolean;
+  originalIndex: number;
+};
 
 type PointerPosition = { x: number; y: number };
 
@@ -175,6 +200,103 @@ function writeCollapsedConversationGroupKeys(keys: readonly string[]): void {
   }
 }
 
+function readConversationGroupLabelOverrides(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return {};
+    }
+
+    const overrides: Record<string, string> = {};
+    for (const [rawKey, rawValue] of Object.entries(parsed)) {
+      const key = rawKey.trim();
+      const value = typeof rawValue === 'string' ? rawValue.trim() : '';
+      if (!key || !value) {
+        continue;
+      }
+
+      overrides[key] = value;
+    }
+
+    return overrides;
+  } catch {
+    return {};
+  }
+}
+
+function writeConversationGroupLabelOverrides(overrides: Record<string, string>): void {
+  try {
+    const entries = Object.entries(overrides)
+      .map(([rawKey, rawValue]) => [rawKey.trim(), rawValue.trim()] as const)
+      .filter(([key, value]) => key.length > 0 && value.length > 0);
+
+    if (entries.length > 0) {
+      localStorage.setItem(THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY, JSON.stringify(Object.fromEntries(entries)));
+      return;
+    }
+
+    localStorage.removeItem(THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readThreadsOrganizeMode(): ThreadsOrganizeMode {
+  try {
+    const raw = localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY);
+    return raw === 'chronological' ? 'chronological' : 'project';
+  } catch {
+    return 'project';
+  }
+}
+
+function writeThreadsOrganizeMode(value: ThreadsOrganizeMode): void {
+  try {
+    localStorage.setItem(THREADS_ORGANIZE_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readThreadsSortMode(): ThreadsSortMode {
+  try {
+    const raw = localStorage.getItem(THREADS_SORT_BY_STORAGE_KEY);
+    return raw === 'created' ? 'created' : 'updated';
+  } catch {
+    return 'updated';
+  }
+}
+
+function writeThreadsSortMode(value: ThreadsSortMode): void {
+  try {
+    localStorage.setItem(THREADS_SORT_BY_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function getConversationItemSortTimestamp(session: SessionMeta, sortMode: ThreadsSortMode): number {
+  const source = sortMode === 'created'
+    ? session.timestamp
+    : session.lastActivityAt ?? session.attentionUpdatedAt ?? session.timestamp;
+  const parsed = Date.parse(source);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function compareConversationItems(left: SidebarConversationItem, right: SidebarConversationItem, sortMode: ThreadsSortMode): number {
+  const timestampDelta = getConversationItemSortTimestamp(right.session, sortMode) - getConversationItemSortTimestamp(left.session, sortMode);
+  if (timestampDelta !== 0) {
+    return timestampDelta;
+  }
+
+  return left.originalIndex - right.originalIndex;
+}
+
 function matchesSettingsRoute(pathname: string): boolean {
   return SETTINGS_ROUTE_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
 }
@@ -266,32 +388,332 @@ function TopNavItem({
   );
 }
 
+function ThreadsFilterButton({
+  organizeMode,
+  sortMode,
+  onChangeOrganizeMode,
+  onChangeSortMode,
+}: {
+  organizeMode: ThreadsOrganizeMode;
+  sortMode: ThreadsSortMode;
+  onChangeOrganizeMode: (value: ThreadsOrganizeMode) => void;
+  onChangeSortMode: (value: ThreadsSortMode) => void;
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const menuItemClass = 'ui-context-menu-item';
+
+  useEffect(() => {
+    if (!menuOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        return;
+      }
+
+      if (menuRootRef.current?.contains(target) || buttonRef.current?.contains(target)) {
+        return;
+      }
+
+      setMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [menuOpen]);
+
+  function openMenu() {
+    const bounds = buttonRef.current?.getBoundingClientRect();
+    if (!bounds) {
+      return;
+    }
+
+    const menuWidth = 172;
+    const menuHeight = 208;
+    const edgePadding = 12;
+    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
+    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+
+    setMenuPosition({
+      x: Math.max(edgePadding, Math.min(bounds.right - menuWidth, viewportWidth - menuWidth - edgePadding)),
+      y: Math.max(edgePadding, Math.min(bounds.bottom + 6, viewportHeight - menuHeight - edgePadding)),
+    });
+    setMenuOpen(true);
+  }
+
+  function stopMenuEvent(event: { preventDefault: () => void; stopPropagation: () => void }) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function handleMenuToggle() {
+    if (menuOpen) {
+      setMenuOpen(false);
+      return;
+    }
+
+    openMenu();
+  }
+
+  function renderMenuItem({
+    label,
+    icon,
+    checked,
+    onClick,
+  }: {
+    label: string;
+    icon: string;
+    checked: boolean;
+    onClick: () => void;
+  }) {
+    return (
+      <button
+        type="button"
+        onPointerDown={stopMenuEvent}
+        onMouseDown={stopMenuEvent}
+        onClick={() => {
+          onClick();
+          setMenuOpen(false);
+        }}
+        className={menuItemClass}
+        role="menuitemradio"
+        aria-checked={checked}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <span className="shrink-0 text-secondary">
+            <Ico d={icon} size={11} />
+          </span>
+          <span className="truncate">{label}</span>
+        </span>
+        <span className="ml-3 flex h-4 w-4 shrink-0 items-center justify-center text-accent">
+          {checked ? <Ico d={PATH.check} size={11} /> : null}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={handleMenuToggle}
+        className="ui-icon-button ui-icon-button-compact shrink-0"
+        title="Organize and sort threads"
+        aria-label="Organize and sort threads"
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+      >
+        <Ico d={PATH.filter} size={12} />
+      </button>
+      {menuOpen && menuPosition ? (
+        <div
+          ref={menuRootRef}
+          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[172px]"
+          style={{ left: menuPosition.x, top: menuPosition.y }}
+          role="menu"
+          aria-label="Threads organization options"
+        >
+          <div className="space-y-px">
+            <div className="px-2.5 pt-2 pb-1 text-[12px] font-medium text-dim">Organize</div>
+            {renderMenuItem({
+              label: 'By project',
+              icon: PATH.workspace,
+              checked: organizeMode === 'project',
+              onClick: () => onChangeOrganizeMode('project'),
+            })}
+            {renderMenuItem({
+              label: 'Chronological list',
+              icon: PATH.list,
+              checked: organizeMode === 'chronological',
+              onClick: () => onChangeOrganizeMode('chronological'),
+            })}
+            <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+            <div className="px-2.5 pt-1 pb-1 text-[12px] font-medium text-dim">Sort by</div>
+            {renderMenuItem({
+              label: 'Created',
+              icon: PATH.clock,
+              checked: sortMode === 'created',
+              onClick: () => onChangeSortMode('created'),
+            })}
+            {renderMenuItem({
+              label: 'Updated',
+              icon: PATH.sparkles,
+              checked: sortMode === 'updated',
+              onClick: () => onChangeSortMode('updated'),
+            })}
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function ConversationCwdGroupHeader({
   label,
   cwd,
   collapsed,
   onToggleCollapsed,
   onNewConversation,
+  onOpenInFinder,
+  onEditName,
+  onArchiveThreads,
+  onRemove,
 }: {
   label: string;
   cwd: string | null;
   collapsed: boolean;
   onToggleCollapsed: () => void;
   onNewConversation: () => void;
+  onOpenInFinder?: () => void | Promise<void>;
+  onEditName?: () => void | Promise<void>;
+  onArchiveThreads?: () => void | Promise<void>;
+  onRemove?: () => void | Promise<void>;
 }) {
   const [hovered, setHovered] = useState(false);
+  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const hoverTitle = cwd ?? label;
   const newConversationTitle = cwd
     ? `New conversation in ${cwd}`
     : 'New conversation';
+  const workspaceActionsTitle = cwd
+    ? `Workspace actions for ${cwd}`
+    : `Workspace actions for ${label}`;
   const toggleTitle = `${collapsed ? 'Expand' : 'Collapse'} ${label}`;
   const iconPath = hovered
     ? (collapsed ? PATH.chevronRight : PATH.chevronDown)
     : PATH.workspace;
+  const hasMenuActions = Boolean(onOpenInFinder || onEditName || onArchiveThreads || onRemove);
+  const menuActionCount = Number(Boolean(onOpenInFinder))
+    + Number(Boolean(onEditName))
+    + Number(Boolean(onArchiveThreads))
+    + Number(Boolean(onRemove));
+  const showMenuDivider = Boolean((onOpenInFinder || onEditName) && (onArchiveThreads || onRemove));
+  const menuItemClass = 'ui-context-menu-item';
+
+  useEffect(() => {
+    if (!menuOpen || typeof document === 'undefined') {
+      return;
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node) || !menuRootRef.current || menuRootRef.current.contains(target)) {
+        return;
+      }
+
+      setMenuOpen(false);
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
+  }, [menuOpen]);
+
+  function stopMenuEvent(event: { preventDefault: () => void; stopPropagation: () => void }) {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  function openDomContextMenu(x: number, y: number) {
+    const menuWidth = 214;
+    const menuHeight = Math.max(1, menuActionCount) * 33 + (showMenuDivider ? 9 : 0) + 10;
+    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
+    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+    const edgePadding = 12;
+
+    setMenuPosition({
+      x: Math.max(edgePadding, Math.min(x, viewportWidth - menuWidth - edgePadding)),
+      y: Math.max(edgePadding, Math.min(y, viewportHeight - menuHeight - edgePadding)),
+    });
+    setMenuOpen(true);
+  }
+
+  async function runMenuHandler(handler?: () => void | Promise<void>) {
+    await handler?.();
+    setMenuOpen(false);
+  }
+
+  async function runNativeContextMenuAction(action: DesktopConversationCwdGroupContextMenuAction | null) {
+    switch (action) {
+      case 'open-in-finder':
+        await onOpenInFinder?.();
+        return;
+      case 'edit-name':
+        await onEditName?.();
+        return;
+      case 'archive-threads':
+        await onArchiveThreads?.();
+        return;
+      case 'remove':
+        await onRemove?.();
+        return;
+      default:
+        return;
+    }
+  }
+
+  function openContextMenuAt(x: number, y: number) {
+    if (!hasMenuActions) {
+      return;
+    }
+
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge?.showConversationCwdGroupContextMenu) {
+      setMenuOpen(false);
+      setMenuPosition(null);
+      void desktopBridge.showConversationCwdGroupContextMenu({
+        x,
+        y,
+        canOpenInFinder: Boolean(onOpenInFinder),
+        canEditName: Boolean(onEditName),
+        canArchiveThreads: Boolean(onArchiveThreads),
+        canRemove: Boolean(onRemove),
+      })
+        .then(({ action }) => runNativeContextMenuAction(action))
+        .catch(() => {
+          openDomContextMenu(x, y);
+        });
+      return;
+    }
+
+    openDomContextMenu(x, y);
+  }
+
+  function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
+    if (!hasMenuActions) {
+      return;
+    }
+
+    stopMenuEvent(event);
+    openContextMenuAt(event.clientX, event.clientY);
+  }
+
+  function handleMenuButtonClick(event: ReactMouseEvent<HTMLButtonElement>) {
+    stopMenuEvent(event);
+    const bounds = event.currentTarget.getBoundingClientRect();
+    openContextMenuAt(bounds.left, bounds.bottom + 4);
+  }
 
   return (
-    <div className="px-4 pt-1 pb-0.5">
-      <div className="flex items-center gap-2">
+    <div className="px-4 pt-1 pb-0.5" onContextMenu={handleContextMenu}>
+      <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={onToggleCollapsed}
@@ -307,6 +729,17 @@ function ConversationCwdGroupHeader({
           </span>
           <span className="min-w-0 truncate text-[14px] font-semibold tracking-tight">{label}</span>
         </button>
+        {hasMenuActions ? (
+          <button
+            type="button"
+            onClick={handleMenuButtonClick}
+            className="ui-icon-button ui-icon-button-compact shrink-0"
+            title={workspaceActionsTitle}
+            aria-label={workspaceActionsTitle}
+          >
+            <Ico d={PATH.moreHorizontal} size={11} />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onNewConversation}
@@ -317,9 +750,83 @@ function ConversationCwdGroupHeader({
           <Ico d={PATH.plus} size={11} />
         </button>
       </div>
+      {menuOpen && menuPosition ? (
+        <div
+          ref={menuRootRef}
+          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[214px]"
+          style={{ left: menuPosition.x, top: menuPosition.y }}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              setMenuOpen(false);
+            }
+          }}
+          role="menu"
+          aria-label={`Workspace actions for ${label}`}
+        >
+          <div className="space-y-px">
+            {onOpenInFinder ? (
+              <button
+                type="button"
+                onPointerDown={stopMenuEvent}
+                onMouseDown={stopMenuEvent}
+                onClick={() => { void runMenuHandler(onOpenInFinder); }}
+                className={menuItemClass}
+                role="menuitem"
+              >
+                Open in Finder
+              </button>
+            ) : null}
+            {onEditName ? (
+              <button
+                type="button"
+                onPointerDown={stopMenuEvent}
+                onMouseDown={stopMenuEvent}
+                onClick={() => { void runMenuHandler(onEditName); }}
+                className={menuItemClass}
+                role="menuitem"
+              >
+                Edit Name
+              </button>
+            ) : null}
+            {showMenuDivider ? <div className="my-1 h-px bg-border-subtle" aria-hidden="true" /> : null}
+            {onArchiveThreads ? (
+              <button
+                type="button"
+                onPointerDown={stopMenuEvent}
+                onMouseDown={stopMenuEvent}
+                onClick={() => { void runMenuHandler(onArchiveThreads); }}
+                className={menuItemClass}
+                role="menuitem"
+              >
+                Archive Threads
+              </button>
+            ) : null}
+            {onRemove ? (
+              <button
+                type="button"
+                onPointerDown={stopMenuEvent}
+                onMouseDown={stopMenuEvent}
+                onClick={() => { void runMenuHandler(onRemove); }}
+                className={`${menuItemClass} text-danger`}
+                role="menuitem"
+              >
+                Remove
+              </button>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
+
+type ConversationCopyMenuAction = 'id' | 'working-directory' | 'deeplink';
+
+type ConversationCopyMenuState = {
+  action: ConversationCopyMenuAction;
+  status: 'copied' | 'failed';
+};
 
 function OpenConversationRow({
   session,
@@ -334,7 +841,9 @@ function OpenConversationRow({
   onArchive,
   onDuplicate,
   onSummarizeAndNew,
+  onCopyWorkingDirectory,
   onCopyId,
+  onCopyDeeplink,
   onDragStart,
   onDragOver,
   onDrop,
@@ -352,7 +861,9 @@ function OpenConversationRow({
   onArchive?: () => boolean | Promise<boolean>;
   onDuplicate?: () => boolean | Promise<boolean>;
   onSummarizeAndNew?: () => boolean | Promise<boolean>;
+  onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
+  onCopyDeeplink?: () => boolean | Promise<boolean>;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
@@ -365,8 +876,24 @@ function OpenConversationRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuPosition, setMenuPosition] = useState<{ x: number; y: number } | null>(null);
   const [busyAction, setBusyAction] = useState<'duplicate' | 'summarize' | null>(null);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
-  const hasContextMenuActions = Boolean(onPin || onUnpin || onArchive || onDuplicate || onSummarizeAndNew || onCopyId);
+  const [copyState, setCopyState] = useState<ConversationCopyMenuState | null>(null);
+  const hasContextMenuActions = Boolean(
+    onPin
+      || onUnpin
+      || onArchive
+      || onDuplicate
+      || onSummarizeAndNew
+      || onCopyWorkingDirectory
+      || onCopyId
+      || onCopyDeeplink,
+  );
+  const contextMenuItemCount = (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0)
+    + Number(Boolean(onArchive))
+    + Number(Boolean(onDuplicate))
+    + Number(Boolean(onSummarizeAndNew))
+    + Number(Boolean(onCopyWorkingDirectory))
+    + Number(Boolean(onCopyId))
+    + Number(Boolean(onCopyDeeplink));
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -398,11 +925,11 @@ function OpenConversationRow({
         window.clearTimeout(copyResetTimeoutRef.current);
         copyResetTimeoutRef.current = null;
       }
-      setCopyState('idle');
+      setCopyState(null);
       return;
     }
 
-    if (copyState === 'idle') {
+    if (!copyState) {
       return;
     }
 
@@ -411,7 +938,7 @@ function OpenConversationRow({
     }
 
     copyResetTimeoutRef.current = window.setTimeout(() => {
-      setCopyState('idle');
+      setCopyState(null);
       copyResetTimeoutRef.current = null;
     }, 1500);
 
@@ -427,7 +954,7 @@ function OpenConversationRow({
   const showCloseButton = showQuickActions && Boolean(onClose);
   const showTrailingControls = showCloseButton;
   const rowTitle = canDrag ? 'Drag to reorder conversations' : undefined;
-  const menuItemClass = 'flex w-full items-center rounded-lg px-3 py-2 text-left text-[13px] text-primary transition-colors hover:bg-elevated disabled:cursor-default disabled:opacity-40';
+  const menuItemClass = 'ui-context-menu-item';
 
   function stopRowInteraction(event: { preventDefault: () => void; stopPropagation: () => void }) {
     event.preventDefault();
@@ -453,13 +980,93 @@ function OpenConversationRow({
     }
   }
 
-  async function handleCopyIdClick() {
-    if (!onCopyId || busyAction) {
+  function getCopyMenuLabel(action: ConversationCopyMenuAction): string {
+    if (!copyState || copyState.action !== action) {
+      switch (action) {
+        case 'working-directory':
+          return 'Copy Working Directory';
+        case 'id':
+          return 'Copy Session ID';
+        case 'deeplink':
+          return 'Copy Deeplink';
+      }
+    }
+
+    if (copyState.status === 'failed') {
+      return 'Copy Failed';
+    }
+
+    switch (action) {
+      case 'working-directory':
+        return 'Copied Working Directory';
+      case 'id':
+        return 'Copied Session ID';
+      case 'deeplink':
+        return 'Copied Deeplink';
+    }
+  }
+
+  async function handleCopyClick(
+    action: ConversationCopyMenuAction,
+    handler?: () => boolean | Promise<boolean>,
+  ) {
+    if (!handler || busyAction) {
       return;
     }
 
-    const succeeded = await onCopyId();
-    setCopyState(succeeded === false ? 'failed' : 'copied');
+    const succeeded = await handler();
+    setCopyState({ action, status: succeeded === false ? 'failed' : 'copied' });
+  }
+
+  function openDomContextMenu(x: number, y: number) {
+    const menuWidth = 224;
+    const menuHeight = Math.max(1, contextMenuItemCount) * 33 + 10;
+    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
+    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+    const edgePadding = 12;
+
+    setMenuPosition({
+      x: Math.max(edgePadding, Math.min(x, viewportWidth - menuWidth - edgePadding)),
+      y: Math.max(edgePadding, Math.min(y, viewportHeight - menuHeight - edgePadding)),
+    });
+    setMenuOpen(true);
+  }
+
+  async function runNativeContextMenuAction(action: DesktopConversationContextMenuAction | null) {
+    if (!action) {
+      return;
+    }
+
+    switch (action) {
+      case 'pin':
+        await onPin?.();
+        return;
+      case 'unpin':
+        await onUnpin?.();
+        return;
+      case 'archive':
+        await onArchive?.();
+        return;
+      case 'duplicate':
+        if (onDuplicate) {
+          await runMenuAction('duplicate', onDuplicate);
+        }
+        return;
+      case 'summarize-and-new':
+        if (onSummarizeAndNew) {
+          await runMenuAction('summarize', onSummarizeAndNew);
+        }
+        return;
+      case 'copy-working-directory':
+        await onCopyWorkingDirectory?.();
+        return;
+      case 'copy-id':
+        await onCopyId?.();
+        return;
+      case 'copy-deeplink':
+        await onCopyDeeplink?.();
+        return;
+    }
   }
 
   function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
@@ -468,17 +1075,33 @@ function OpenConversationRow({
     }
 
     stopRowInteraction(event);
-    const menuWidth = 214;
-    const menuHeight = 252;
-    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
-    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
-    const edgePadding = 12;
+    const x = event.clientX;
+    const y = event.clientY;
+    const desktopBridge = getDesktopBridge();
 
-    setMenuPosition({
-      x: Math.max(edgePadding, Math.min(event.clientX, viewportWidth - menuWidth - edgePadding)),
-      y: Math.max(edgePadding, Math.min(event.clientY, viewportHeight - menuHeight - edgePadding)),
-    });
-    setMenuOpen(true);
+    if (desktopBridge?.showConversationContextMenu) {
+      setMenuOpen(false);
+      setMenuPosition(null);
+      void desktopBridge.showConversationContextMenu({
+        x,
+        y,
+        pinAction: pinned && onUnpin ? 'unpin' : !pinned && onPin ? 'pin' : null,
+        canArchive: Boolean(onArchive),
+        canDuplicate: Boolean(onDuplicate),
+        canSummarizeAndNew: Boolean(onSummarizeAndNew),
+        canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
+        canCopyId: Boolean(onCopyId),
+        canCopyDeeplink: Boolean(onCopyDeeplink),
+        busyAction,
+      })
+        .then(({ action }) => runNativeContextMenuAction(action))
+        .catch(() => {
+          openDomContextMenu(x, y);
+        });
+      return;
+    }
+
+    openDomContextMenu(x, y);
   }
 
   return (
@@ -522,11 +1145,11 @@ function OpenConversationRow({
             />
           ) : null}
         </div>
-        <div className="min-w-0 flex-1 pr-16">
+        <div className="min-w-0 flex-1 pr-[4.5rem]">
           <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>
         </div>
       </Link>
-      <div className="pointer-events-none absolute inset-y-0 right-1.5 flex w-14 items-center justify-end">
+      <div className="pointer-events-none absolute inset-y-0 right-2.5 flex w-[3.75rem] items-center justify-end pr-1">
         {showTrailingControls ? (
           <div className="pointer-events-auto flex items-center gap-0.5">
             {showCloseButton ? (
@@ -552,7 +1175,7 @@ function OpenConversationRow({
       {menuOpen && menuPosition ? (
         <div
           ref={menuRootRef}
-          className="ui-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[190px] px-2 py-2"
+          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
           style={{ left: menuPosition.x, top: menuPosition.y }}
           onKeyDown={(event) => {
             if (event.key === 'Escape') {
@@ -563,7 +1186,7 @@ function OpenConversationRow({
           role="menu"
           aria-label={`Conversation actions for ${session.title}`}
         >
-          <div className="space-y-0.5">
+          <div className="space-y-px">
             {pinned && onUnpin ? (
               <button
                 type="button"
@@ -648,19 +1271,49 @@ function OpenConversationRow({
                 {busyAction === 'summarize' ? 'Summarizing…' : 'Summarize & New'}
               </button>
             ) : null}
+            {onCopyWorkingDirectory ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  void handleCopyClick('working-directory', onCopyWorkingDirectory);
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                {getCopyMenuLabel('working-directory')}
+              </button>
+            ) : null}
             {onCopyId ? (
               <button
                 type="button"
                 onPointerDown={stopRowInteraction}
                 onMouseDown={stopRowInteraction}
                 onClick={() => {
-                  void handleCopyIdClick();
+                  void handleCopyClick('id', onCopyId);
                 }}
                 className={menuItemClass}
                 disabled={busyAction !== null}
                 role="menuitem"
               >
-                {copyState === 'copied' ? 'Copied ID' : copyState === 'failed' ? 'Copy Failed' : 'Copy ID'}
+                {getCopyMenuLabel('id')}
+              </button>
+            ) : null}
+            {onCopyDeeplink ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={() => {
+                  void handleCopyClick('deeplink', onCopyDeeplink);
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                {getCopyMenuLabel('deeplink')}
               </button>
             ) : null}
           </div>
@@ -674,6 +1327,9 @@ export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
+    pinnedIds,
+    openIds,
+    archivedConversationIds,
     pinnedSessions,
     tabs,
     archivedSessions,
@@ -691,7 +1347,10 @@ export function Sidebar() {
   } = useConversations();
 
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
+  const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
+  const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
+  const [conversationGroupLabelOverrides, setConversationGroupLabelOverrides] = useState(() => readConversationGroupLabelOverrides());
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -702,6 +1361,7 @@ export function Sidebar() {
   const conversationSurfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const sidebarNoticeTimeoutRef = useRef<number | null>(null);
   const [sidebarNotice, setSidebarNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
+  const [addWorkspaceBusy, setAddWorkspaceBusy] = useState(false);
 
   const showSidebarNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
     setSidebarNotice({ tone, text });
@@ -728,6 +1388,19 @@ export function Sidebar() {
     () => [...pinnedSessions, ...visibleConversationTabs],
     [pinnedSessions, visibleConversationTabs],
   );
+  const orderedConversationItems = useMemo(() => {
+    const items: SidebarConversationItem[] = [
+      ...pinnedSessions.map((session, originalIndex) => ({ session, section: 'pinned' as const, pinned: true, originalIndex })),
+      ...visibleConversationTabs.map((session, index) => ({
+        session,
+        section: 'open' as const,
+        pinned: false,
+        originalIndex: pinnedSessions.length + index,
+      })),
+    ];
+
+    return [...items].sort((left, right) => compareConversationItems(left, right, threadsSortMode));
+  }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -749,10 +1422,17 @@ export function Sidebar() {
     closingId,
   }), [workspaceConversationTabs]);
   const settingsRouteActive = useMemo(() => matchesSettingsRoute(location.pathname), [location.pathname]);
-  const groupedConversationRows = useMemo(() => groupConversationItemsByCwd([
-    ...pinnedSessions.map((session) => ({ session, section: 'pinned' as const, pinned: true })),
-    ...visibleConversationTabs.map((session) => ({ session, section: 'open' as const, pinned: false })),
-  ], (item) => item.session.cwd), [pinnedSessions, visibleConversationTabs]);
+  const groupedConversationRows = useMemo(() => {
+    if (threadsOrganizeMode !== 'project') {
+      return [];
+    }
+
+    return groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd).map((group) => ({
+      ...group,
+      defaultLabel: group.label,
+      label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
+    }));
+  }, [conversationGroupLabelOverrides, orderedConversationItems, threadsOrganizeMode]);
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -772,6 +1452,52 @@ export function Sidebar() {
       writeCollapsedConversationGroupKeys(next);
       return next;
     });
+  }, []);
+
+  const clearConversationGroupCollapsedState = useCallback((groupKey: string) => {
+    const normalizedGroupKey = groupKey.trim();
+    if (!normalizedGroupKey) {
+      return;
+    }
+
+    setCollapsedConversationGroupKeys((current) => {
+      if (!current.includes(normalizedGroupKey)) {
+        return current;
+      }
+
+      const next = current.filter((key) => key !== normalizedGroupKey);
+      writeCollapsedConversationGroupKeys(next);
+      return next;
+    });
+  }, []);
+
+  const updateConversationGroupLabelOverride = useCallback((groupKey: string, nextLabel: string | null) => {
+    const normalizedGroupKey = groupKey.trim();
+    if (!normalizedGroupKey) {
+      return;
+    }
+
+    setConversationGroupLabelOverrides((current) => {
+      const next = { ...current };
+      const normalizedLabel = nextLabel?.trim() ?? '';
+      if (normalizedLabel) {
+        next[normalizedGroupKey] = normalizedLabel;
+      } else {
+        delete next[normalizedGroupKey];
+      }
+      writeConversationGroupLabelOverrides(next);
+      return next;
+    });
+  }, []);
+
+  const handleThreadsOrganizeModeChange = useCallback((value: ThreadsOrganizeMode) => {
+    setThreadsOrganizeMode(value);
+    writeThreadsOrganizeMode(value);
+  }, []);
+
+  const handleThreadsSortModeChange = useCallback((value: ThreadsSortMode) => {
+    setThreadsSortMode(value);
+    writeThreadsSortMode(value);
   }, []);
 
   function clearDragState() {
@@ -863,6 +1589,29 @@ export function Sidebar() {
     navigate('/conversations/new');
   }, [navigate]);
 
+  const handleAddWorkspace = useCallback(async () => {
+    if (addWorkspaceBusy) {
+      return;
+    }
+
+    setAddWorkspaceBusy(true);
+    try {
+      const result = await api.pickFolder({
+        cwd: draftCwd.trim() || undefined,
+        prompt: 'Choose a workspace folder',
+      });
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      handleNewConversation(result.path);
+    } catch (error) {
+      showSidebarNotice('danger', `Add workspace failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+    } finally {
+      setAddWorkspaceBusy(false);
+    }
+  }, [addWorkspaceBusy, draftCwd, handleNewConversation, showSidebarNotice]);
+
   const resolveLiveConversationIdForAction = useCallback(async (
     session: Pick<SessionMeta, 'id' | 'isLive'>,
     actionDescription: string,
@@ -925,20 +1674,166 @@ export function Sidebar() {
     }
   }, [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice]);
 
-  const handleCopyConversationId = useCallback(async (conversationId: string) => {
+  const copyTextToClipboard = useCallback(async (value: string) => {
     if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
       showSidebarNotice('danger', 'Clipboard access is unavailable in this browser.', 4000);
       return false;
     }
 
     try {
-      await navigator.clipboard.writeText(conversationId);
+      await navigator.clipboard.writeText(value);
       return true;
     } catch {
       showSidebarNotice('danger', 'Copy to clipboard failed.', 4000);
       return false;
     }
   }, [showSidebarNotice]);
+
+  const handleCopyConversationId = useCallback(async (conversationId: string) => {
+    return copyTextToClipboard(conversationId);
+  }, [copyTextToClipboard]);
+
+  const handleCopyConversationWorkingDirectory = useCallback(async (cwd: string | null | undefined) => {
+    const normalizedCwd = cwd?.trim() ?? '';
+    if (!normalizedCwd) {
+      showSidebarNotice('danger', 'No working directory is saved for this conversation.', 4000);
+      return false;
+    }
+
+    return copyTextToClipboard(normalizedCwd);
+  }, [copyTextToClipboard, showSidebarNotice]);
+
+  const handleCopyConversationDeeplink = useCallback(async (conversationId: string) => {
+    if (typeof window === 'undefined') {
+      showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
+      return false;
+    }
+
+    try {
+      return copyTextToClipboard(buildConversationDeeplink(conversationId, window.location.href));
+    } catch {
+      showSidebarNotice('danger', 'Could not build a deeplink for this conversation.', 4000);
+      return false;
+    }
+  }, [copyTextToClipboard, showSidebarNotice]);
+
+  const resolveConversationGroupRedirectPath = useCallback((closingIds: readonly string[]) => {
+    const closingIdSet = new Set(closingIds.map((value) => value.trim()).filter(Boolean));
+    const orderedIds = workspaceConversationTabs.map((session) => session.id);
+    const remainingIds = orderedIds.filter((id) => !closingIdSet.has(id));
+    if (remainingIds.length === 0) {
+      return DRAFT_CONVERSATION_ROUTE;
+    }
+
+    const activeIndex = activeConversationSurfaceId ? orderedIds.findIndex((id) => id === activeConversationSurfaceId) : -1;
+    const nextIndex = activeIndex >= 0
+      ? Math.min(activeIndex, remainingIds.length - 1)
+      : remainingIds.length - 1;
+    return buildConversationSurfacePath(remainingIds[nextIndex]);
+  }, [activeConversationSurfaceId, workspaceConversationTabs]);
+
+  const archiveConversationGroupSessions = useCallback((sessionIds: readonly string[]) => {
+    const normalizedSessionIds = sessionIds.map((value) => value.trim()).filter(Boolean);
+    if (normalizedSessionIds.length === 0) {
+      return 0;
+    }
+
+    const sessionIdSet = new Set(normalizedSessionIds);
+    if (activeConversationSurfaceId && sessionIdSet.has(activeConversationSurfaceId)) {
+      navigate(resolveConversationGroupRedirectPath(normalizedSessionIds));
+    }
+
+    replaceConversationLayout({
+      sessionIds: openIds.filter((id) => !sessionIdSet.has(id)),
+      pinnedSessionIds: pinnedIds.filter((id) => !sessionIdSet.has(id)),
+      archivedSessionIds: [...new Set([...archivedConversationIds, ...normalizedSessionIds])],
+    });
+
+    return normalizedSessionIds.length;
+  }, [activeConversationSurfaceId, archivedConversationIds, navigate, openIds, pinnedIds, resolveConversationGroupRedirectPath]);
+
+  const handleOpenConversationGroupInFinder = useCallback(async (cwd: string | null, label: string) => {
+    const normalizedCwd = cwd?.trim() ?? '';
+    if (!normalizedCwd) {
+      showSidebarNotice('danger', `No working directory is saved for ${label}.`, 4000);
+      return;
+    }
+
+    const desktopBridge = getDesktopBridge();
+    if (!desktopBridge?.openPath) {
+      showSidebarNotice('danger', 'Open in Finder is only available in the desktop app.', 4000);
+      return;
+    }
+
+    const result = await desktopBridge.openPath(normalizedCwd);
+    if (!result.opened) {
+      showSidebarNotice('danger', result.error ? `Could not open ${label}: ${result.error}` : `Could not open ${label}.`, 4000);
+    }
+  }, [showSidebarNotice]);
+
+  const handleRenameConversationGroup = useCallback((groupKey: string, cwd: string | null, currentLabel: string) => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const nextLabel = window.prompt('Edit workspace name', currentLabel);
+    if (nextLabel === null) {
+      return;
+    }
+
+    const normalizedLabel = nextLabel.trim();
+    const defaultLabel = getConversationGroupLabel(cwd);
+    updateConversationGroupLabelOverride(
+      groupKey,
+      normalizedLabel && normalizedLabel !== defaultLabel ? normalizedLabel : null,
+    );
+
+    if (normalizedLabel && normalizedLabel !== defaultLabel) {
+      showSidebarNotice('accent', `Workspace renamed to ${normalizedLabel}.`);
+      return;
+    }
+
+    showSidebarNotice('accent', `Workspace name reset to ${defaultLabel}.`);
+  }, [showSidebarNotice, updateConversationGroupLabelOverride]);
+
+  const handleArchiveConversationGroup = useCallback((label: string, sessionIds: readonly string[]) => {
+    const archivedCount = archiveConversationGroupSessions(sessionIds);
+    if (archivedCount === 0) {
+      showSidebarNotice('danger', `No threads to archive in ${label}.`, 4000);
+      return;
+    }
+
+    showSidebarNotice(
+      'accent',
+      archivedCount === 1
+        ? `Archived 1 thread from ${label}.`
+        : `Archived ${archivedCount} threads from ${label}.`,
+    );
+  }, [archiveConversationGroupSessions, showSidebarNotice]);
+
+  const handleRemoveConversationGroup = useCallback((
+    groupKey: string,
+    label: string,
+    cwd: string | null,
+    sessionIds: readonly string[],
+    includesDraft: boolean,
+  ) => {
+    const removedCount = archiveConversationGroupSessions(sessionIds);
+    updateConversationGroupLabelOverride(groupKey, null);
+    clearConversationGroupCollapsedState(groupKey);
+
+    const normalizedCwd = cwd?.trim() ?? '';
+    if (includesDraft && normalizedCwd && readDraftConversationCwd().trim() === normalizedCwd) {
+      clearDraftConversationCwd();
+    }
+
+    if (removedCount === 0 && !includesDraft) {
+      showSidebarNotice('danger', `No threads to remove in ${label}.`, 4000);
+      return;
+    }
+
+    showSidebarNotice('accent', `Removed ${label} from Threads.`);
+  }, [archiveConversationGroupSessions, clearConversationGroupCollapsedState, showSidebarNotice, updateConversationGroupLabelOverride]);
 
   const navigateConversation = useCallback((direction: -1 | 1) => {
     const nextPath = resolveConversationAdjacentPath({
@@ -1239,11 +2134,47 @@ export function Sidebar() {
     }
   }
 
+  function renderConversationRow({ session, section, pinned }: SidebarConversationItem) {
+    const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
+    const canDrag = !isDraftTab;
+    const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
+      ? dropTarget.position
+      : null;
+
+    return (
+      <OpenConversationRow
+        key={session.id}
+        session={session}
+        active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
+        pinned={pinned}
+        canDrag={canDrag}
+        isDragging={canDrag && draggingSessionId === session.id}
+        dropPosition={dropPosition}
+        onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
+        onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
+        onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
+        onArchive={!isDraftTab ? () => {
+          handleArchiveConversation(session.id);
+          return true;
+        } : undefined}
+        onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
+        onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
+        onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}
+        onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
+        onCopyDeeplink={!isDraftTab ? () => handleCopyConversationDeeplink(session.id) : undefined}
+        onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
+        onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
+        onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
+        onDragEnd={canDrag ? () => clearDragState() : undefined}
+      />
+    );
+  }
+
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
 
   return (
     <aside className="flex-1 flex flex-col overflow-hidden">
-      <div className="pt-2 pb-1.5 space-y-0.5">
+      <div className="pt-1.5 pb-1 space-y-px">
         <div className="px-1">
           <button
             onClick={() => handleNewConversation()}
@@ -1261,7 +2192,27 @@ export function Sidebar() {
       </div>
 
       <div className="px-4 pt-1 pb-0.5">
-        <p className="ui-section-label">Threads</p>
+        <div className="flex items-center gap-1">
+          <p className="ui-section-label flex-1">Threads</p>
+          <ThreadsFilterButton
+            organizeMode={threadsOrganizeMode}
+            sortMode={threadsSortMode}
+            onChangeOrganizeMode={handleThreadsOrganizeModeChange}
+            onChangeSortMode={handleThreadsSortModeChange}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              void handleAddWorkspace();
+            }}
+            className="ui-icon-button ui-icon-button-compact -mr-1 shrink-0"
+            title={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
+            aria-label={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
+            disabled={addWorkspaceBusy}
+          >
+            <Ico d={PATH.workspaceAdd} size={12} />
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 pb-3">
@@ -1270,54 +2221,32 @@ export function Sidebar() {
             <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
           ) : null}
 
-          {groupedConversationRows.map((group) => {
-            const collapsed = collapsedConversationGroupKeySet.has(group.key);
+          {threadsOrganizeMode === 'project'
+            ? groupedConversationRows.map((group) => {
+              const collapsed = collapsedConversationGroupKeySet.has(group.key);
+              const groupSessionIds = group.items
+                .map(({ session }) => session.id)
+                .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
+              const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
 
-            return (
-              <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
-                <ConversationCwdGroupHeader
-                  label={group.label}
-                  cwd={group.cwd}
-                  collapsed={collapsed}
-                  onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
-                  onNewConversation={() => handleNewConversation(group.cwd)}
-                />
-                {!collapsed ? group.items.map(({ session, section, pinned }) => {
-                  const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-                  const canDrag = !isDraftTab;
-                  const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
-                    ? dropTarget.position
-                    : null;
-
-                  return (
-                    <OpenConversationRow
-                      key={session.id}
-                      session={session}
-                      active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
-                      pinned={pinned}
-                      canDrag={canDrag}
-                      isDragging={canDrag && draggingSessionId === session.id}
-                      dropPosition={dropPosition}
-                      onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
-                      onUnpin={pinned ? () => handleUnpinConversation(session.id) : undefined}
-                      onClose={isDraftTab ? handleCloseDraftTab : (!pinned ? () => handleCloseConversation(session.id) : undefined)}
-                      onArchive={!isDraftTab ? () => {
-                        handleArchiveConversation(session.id);
-                        return true;
-                      } : undefined}
-                      onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
-                      onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
-                      onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
-                      onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
-                      onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
-                      onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
-                      onDragEnd={canDrag ? () => clearDragState() : undefined}
-                    />
-                  );
-                }) : null}
-              </div>
-            );
-          })}
+              return (
+                <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
+                  <ConversationCwdGroupHeader
+                    label={group.label}
+                    cwd={group.cwd}
+                    collapsed={collapsed}
+                    onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
+                    onNewConversation={() => handleNewConversation(group.cwd)}
+                    onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
+                    onEditName={() => handleRenameConversationGroup(group.key, group.cwd, group.label)}
+                    onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
+                    onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
+                  />
+                  {!collapsed ? group.items.map(renderConversationRow) : null}
+                </div>
+              );
+            })
+            : orderedConversationItems.map(renderConversationRow)}
         </div>
       </div>
 

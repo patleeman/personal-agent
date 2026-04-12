@@ -139,6 +139,8 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
     expect(html).toContain('Automations');
     expect(html).toContain('Threads');
+    expect(html).toContain('aria-label="Organize and sort threads"');
+    expect(html).toContain('aria-label="Add workspace"');
     expect(html).not.toContain('Conversations');
     expect(html).not.toContain('Docs');
     expect(html).not.toContain('Capabilities');
@@ -206,6 +208,8 @@ describe('Sidebar', () => {
     expect(html).toContain('Single-line timestamp row');
     expect(html).toContain('ui-sidebar-session-time');
     expect(html).toContain('30m');
+    expect(html).toContain('pr-[4.5rem]');
+    expect(html).toContain('right-2.5');
   });
 
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
@@ -222,6 +226,7 @@ describe('Sidebar', () => {
     expect((html.match(/alpha-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect((html.match(/beta-worktree/g) ?? []).length).toBeGreaterThanOrEqual(1);
     expect(html).toContain('title="/tmp/alpha-worktree"');
+    expect(html).toContain('title="Workspace actions for /tmp/alpha-worktree"');
     expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
     expect(html).toContain('aria-label="Collapse alpha-worktree"');
     expect(html).toContain('aria-expanded="true"');
@@ -243,6 +248,74 @@ describe('Sidebar', () => {
     expect(html).toContain('aria-label="Expand personal-agent"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('Clarify background run link');
+  });
+
+  it('renders saved custom cwd group labels when present', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
+    storage.setItem(
+      buildSidebarNavSectionStorageKey('threads-cwd-group-label-overrides'),
+      JSON.stringify({ '/Users/patrickc.lee/personal/personal-agent': 'Desktop' }),
+    );
+
+    const html = renderSidebar('/conversations/new');
+
+    expect(html).toContain('Desktop');
+    expect(html).not.toContain('aria-label="Collapse personal-agent"');
+    expect(html).toContain('aria-label="Collapse Desktop"');
+  });
+
+  it('can render a flat chronological thread list sorted by the saved sort mode', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-older', 'conv-newer']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'updated');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-older',
+          title: 'Older thread',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+          lastActivityAt: '2026-03-16T09:35:00.000Z',
+        }),
+        createSession({
+          id: 'conv-newer',
+          title: 'Newer thread',
+          cwd: '/tmp/beta-worktree',
+          cwdSlug: 'beta-worktree',
+          lastActivityAt: '2026-03-16T09:55:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html).not.toContain('aria-label="Collapse alpha-worktree"');
+    expect(html).not.toContain('aria-label="Collapse beta-worktree"');
+    expect(html.indexOf('Newer thread')).toBeLessThan(html.indexOf('Older thread'));
+  });
+
+  it('can sort threads by created time when that preference is saved', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-earlier', 'conv-later']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'created');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-earlier',
+          title: 'Earlier created thread',
+          timestamp: '2026-03-16T09:05:00.000Z',
+          lastActivityAt: '2026-03-16T09:59:00.000Z',
+        }),
+        createSession({
+          id: 'conv-later',
+          title: 'Later created thread',
+          timestamp: '2026-03-16T09:45:00.000Z',
+          lastActivityAt: '2026-03-16T09:10:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html.indexOf('Later created thread')).toBeLessThan(html.indexOf('Earlier created thread'));
   });
 
   it('keeps open conversation rows draggable so sidebar reordering still works', () => {

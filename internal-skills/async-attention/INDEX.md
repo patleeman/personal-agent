@@ -2,9 +2,9 @@
 id: async-attention
 kind: internal-skill
 title: Async Attention and Wakeups
-summary: Built-in routing guide for deferred resume, reminders, owning surfaces, and later attention.
+summary: Built-in routing guide for conversation queueing, reminders, owning surfaces, and later attention.
 tools:
-  - deferred_resume
+  - conversation_queue
   - reminder
   - activity
   - scheduled_task
@@ -18,7 +18,7 @@ The core distinction is:
 
 - **in-app attention** → owning conversations and automations that need attention
 - **stronger delivery** → currently suppressed in the desktop/web UI; do not rely on popup/browser notifications
-- **conversation continuation** → wakeups such as deferred resume
+- **conversation continuation** → queued continuations and wakeups
 
 ## The three layers
 
@@ -51,7 +51,7 @@ A wakeup answers:
 
 > should a conversation continue later, and with what prompt?
 
-Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
+Conversation queue items, reminders, and some scheduled-task callbacks use this layer.
 
 ## Choose the right async surface
 
@@ -60,7 +60,7 @@ Deferred resumes, reminders, and some scheduled-task callbacks use this layer.
 | Passive async summary tied to owned work | surface the owning conversation or automation | passive | conversation/automation + logs |
 | Async result tied to an inactive conversation | surface the conversation | passive by default | conversation + logs |
 | Human reminder that should interrupt | reminder | currently hidden in the desktop/web UI; prefer surfaced conversation attention or OS delivery when visibility matters | wakeup + notification state |
-| Agent should continue this conversation later | deferred resume | usually passive unless paired with notification delivery | wakeup + conversation |
+| Agent should continue this conversation later | conversation_queue | usually passive unless paired with notification delivery | live queue/wakeup + conversation |
 | Scheduled automation completes later | automation-owned run history, optionally callback into a conversation | passive by default | task log + owning thread + optional conversation wakeup |
 | High-signal blocked or failed background work | surfaced conversation attention, optionally with reminder state under the hood | visible on the owning thread | conversation plus logs |
 
@@ -92,21 +92,21 @@ The current desktop/web UI does not render these notifications as standalone row
 
 See [Reminders and Notification Delivery](../alerts/INDEX.md).
 
-## Deferred resume
+## Conversation queue
 
-Use deferred resume when the agent should come back to the same conversation later.
+Use conversation_queue when the agent should come back to the same conversation later.
 
 This is the right fit for:
 
 - continue checking later
 - try again after waiting
 - resume a thread when time has passed
+- queue the next step behind the current turn
 - stage unattended multi-step work that should return here later
 
-Use deferred resume when the user does **not** need a direct reminder. If the user explicitly wants "tell me later," use a reminder instead.
+Use conversation_queue when the user does **not** need a direct reminder. If the user explicitly wants "tell me later," use a reminder instead.
 
-Use deferred resume for conservative background review of a thread when needed — with a high bar and a no-op default.
-The first-pass outcomes should stay narrow: no-op, note update, or linked project update.
+For time-based follow-up, conversation_queue uses wakeup state under the hood. For immediate continuation after the current turn, it uses the live conversation queue.
 
 ## Scheduled-task callbacks
 
@@ -136,7 +136,7 @@ Use these defaults:
 - **standalone async work** should get an owner instead of falling into a shared queue
 - **async work tied to a dormant conversation** surfaces the conversation
 - **user-requested tell-me-later behavior** should usually become surfaced conversation attention unless hidden reminder state is specifically needed
-- **agent-initiated continue-later behavior** becomes deferred resume
+- **agent-initiated continue-later behavior** becomes conversation_queue
 
 
 ## What not to do
@@ -146,7 +146,7 @@ Do not:
 - invent a shared inbox substitute for ordinary async work
 - rely on hidden reminder/callback notification delivery for ordinary passive async summaries
 - store the durable record only in the notification layer
-- use reminders when a scheduled task or deferred resume is the real need
+- use reminders when a scheduled task or conversation_queue item is the real need
 - copy conversation ids into portable durable files
 
 ## Related docs

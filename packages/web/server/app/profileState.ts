@@ -13,7 +13,7 @@ import { createArtifactAgentExtension } from '../extensions/artifactAgentExtensi
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
-import { createDeferredResumeAgentExtension } from '../extensions/deferredResumeAgentExtension.js';
+import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
@@ -120,7 +120,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         getCurrentProfile,
       }),
       createConversationAutoModeAgentExtension(),
-      createDeferredResumeAgentExtension(),
+      createConversationQueueAgentExtension(),
       createReminderAgentExtension(),
     ];
   }

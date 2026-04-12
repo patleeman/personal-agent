@@ -19,7 +19,9 @@ if (!existsSync(desktopMainFile)) {
 
 async function launchMacDevApp() {
   const child = spawn(electronBinary, [desktopMainFile], {
-    stdio: 'inherit',
+    // The detached app outlives the launcher, so inheriting the parent's stdio can
+    // trigger EPIPE once npm exits and Electron later writes to the console.
+    stdio: 'ignore',
     cwd: packageDir,
     env: process.env,
     detached: true,

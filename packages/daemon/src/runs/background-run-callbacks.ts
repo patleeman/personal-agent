@@ -236,10 +236,9 @@ function markBackgroundRunCallbackDelivered(input: {
   });
 }
 
-function isTerminalStatus(status: string | undefined): boolean {
+function shouldDeliverCallbackForStatus(status: string | undefined): boolean {
   return status === 'completed'
     || status === 'failed'
-    || status === 'cancelled'
     || status === 'interrupted';
 }
 
@@ -259,7 +258,7 @@ export async function deliverBackgroundRunCallbackWakeup(input: {
     return { delivered: false };
   }
 
-  if (!isTerminalStatus(run.status?.status)) {
+  if (!shouldDeliverCallbackForStatus(run.status?.status)) {
     return { delivered: false };
   }
 

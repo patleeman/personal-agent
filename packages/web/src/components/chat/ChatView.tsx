@@ -22,6 +22,7 @@ import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { getStreamingThroughputLabel } from '../../streamingThroughput';
+import { getDesktopBridge } from '../../desktopBridge';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -1464,15 +1465,33 @@ function ToolBlock({
         ) : <span className="shrink-0 opacity-30 text-[10px]">{open ? '▲' : '▼'}</span>}
       </button>
 
-      {runIds.length > 0 && (
+      {linkedRuns.runs.length > 0 && (
         <div className="border-t border-border-subtle/70 bg-black/5 px-2.5 py-2 text-[11px] font-sans">
           <p className="mb-1.5 uppercase tracking-[0.14em] opacity-40">
-            {runIds.length === 1 ? 'linked run' : 'linked runs'}
+            {linkedRuns.runs.length === 1
+              ? (linkedRuns.scope === 'listed' ? 'listed run' : 'mentioned run')
+              : (linkedRuns.scope === 'listed' ? 'listed runs' : 'mentioned runs')}
           </p>
+          {hiddenRunCount > 0 && (
+            <div className="mb-2 flex flex-wrap items-center gap-2 rounded-md bg-black/5 px-2 py-1.5 text-[10px] text-secondary/80">
+              <span>
+                {showAllRuns
+                  ? `Showing all ${linkedRuns.runs.length} ${linkedRuns.scope === 'listed' ? 'runs returned by the tool.' : 'runs mentioned in this step.'}`
+                  : `Showing ${MAX_VISIBLE_LINKED_RUNS} of ${linkedRuns.runs.length} ${linkedRuns.scope === 'listed' ? 'runs returned by the tool.' : 'runs mentioned in this step.'}`}
+              </span>
+              <span className="flex-1" />
+              <button
+                type="button"
+                onClick={() => setShowAllRuns((current) => !current)}
+                className="ui-action-button text-[10px]"
+              >
+                {showAllRuns ? 'Show fewer' : 'Show all'}
+              </button>
+            </div>
+          )}
           <div className="space-y-1.5">
-            {runIds.map((runId) => {
-              const isActiveRun = activeRunId === runId;
-              const linkedRun = describeLinkedRun(runId);
+            {visibleRuns.map((linkedRun) => {
+              const isActiveRun = activeRunId === linkedRun.runId;
               const headline = isActiveRun
                 ? `Opened ${linkedRun.title}`
                 : onOpenRun
@@ -1480,9 +1499,9 @@ function ToolBlock({
                   : linkedRun.title;
               return (
                 <button
-                  key={runId}
+                  key={linkedRun.runId}
                   type="button"
-                  onClick={() => { onOpenRun?.(runId); }}
+                  onClick={() => { onOpenRun?.(linkedRun.runId); }}
                   disabled={!onOpenRun}
                   className={cx(
                     'w-full rounded-md px-2 py-1.5 text-left transition-colors',
@@ -3332,6 +3351,26 @@ export const ChatView = memo(function ChatView({
   const mountedMessageCount = visibleChunkRange
     ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
     : messages.length;
+  const handleTranscriptContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    const desktopBridge = getDesktopBridge();
+    if (!desktopBridge?.showSelectionContextMenu || typeof window === 'undefined') {
+      return;
+    }
+
+    const selectionText = window.getSelection()?.toString().trim() ?? '';
+    if (!selectionText) {
+      return;
+    }
+
+    event.preventDefault();
+    void desktopBridge.showSelectionContextMenu({
+      x: event.clientX,
+      y: event.clientY,
+      canCopy: true,
+    }).catch(() => {
+      // Ignore native menu failures.
+    });
+  }, []);
   const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
   const windowingBadge = shouldWindowTranscript ? (
     <div
@@ -3351,7 +3390,11 @@ export const ChatView = memo(function ChatView({
   return (
     <>
       <style>{`@keyframes cursorBlink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
-      <div className={layout === 'compact' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}>
+      <div
+        data-chat-transcript-panel="1"
+        onContextMenu={handleTranscriptContextMenu}
+        className={layout === 'compact' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}
+      >
         {/* Bottom padding (pb-24) keeps the last message clear of the input area
             when the user is scrolled to the bottom and the textarea grows
             while typing (e.g. multi-line input). */}

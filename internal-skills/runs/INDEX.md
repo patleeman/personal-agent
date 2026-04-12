@@ -26,7 +26,7 @@ Good fits:
 Do not use runs for:
 - task-file-based automation — use [Scheduled Tasks](../scheduled-tasks/INDEX.md)
 - direct human reminders — use reminders/alerts
-- pure "continue this conversation later" wakeups with no background job — use `deferred_resume`
+- pure "continue this conversation later" wakeups with no background job — use `conversation_queue`
 
 ## Shell run
 
@@ -160,7 +160,7 @@ Stopped runs are not one-shot anymore:
 - use **rerun** to replay the same detached work from scratch
 - use **follow-up** to continue a stopped background agent run with a new prompt while carrying its prior transcript forward
 
-When a run is launched from a web conversation, completion can wake that originating conversation back up with a ready conversation wakeup.
+When a run is launched from a web conversation, completion only wakes that originating conversation back up when you opt in with `deliverResultToConversation=true`.
 
 In the web UI, runs that belong to a conversation can open that conversation directly with the run inspector selected. Agent runs that created their own transcript prefer that transcript conversation.
 
@@ -177,14 +177,14 @@ If the outcome should eventually drive user attention, pair that behavior with t
 | Tool | Use case | Example |
 |------|----------|----------|
 | `run` | Ad-hoc prompts, now/defer/cron/loop | "check deployment in 1h" |
-| `deferred_resume` | Continue same conversation later | "resume this thread in 30m" |
+| `conversation_queue` | Continue same conversation later | "resume this thread in 30m" |
 | `scheduled_task` | Persistent task definitions | "morning report every weekday" |
 | `reminder` | Direct human reminders | "remind me tomorrow" |
 
 For "run this prompt later," use `run` with `--defer`.
 For "run this every hour," use `run` with `--cron`.
 For "run this and have it loop," use `run` with `--loop`.
-For "continue this conversation later" with no detached job, use `deferred_resume`.
+For "continue this conversation later" with no detached job, use `conversation_queue`.
 For "persistent automation from a file," use `scheduled_task`.
 
 ## Related docs

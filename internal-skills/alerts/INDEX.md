@@ -80,7 +80,7 @@ If async work should remain visible, route it through the owning conversation or
 Use:
 
 - **reminder** only when you specifically need wakeup/alert state semantics under the hood
-- **deferred resume** when the agent should continue later without the user having to remember
+- **conversation_queue** when the agent should continue later without the user having to remember
 - **scheduled task** when unattended automation should run later
 - **conversation attention** for passive async outcomes on an owning thread
 - **conversation attention** when something should remain visible in the current UI

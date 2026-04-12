@@ -42,9 +42,25 @@ const desktopBridge = {
     canArchive?: boolean;
     canDuplicate?: boolean;
     canSummarizeAndNew?: boolean;
+    canCopyWorkingDirectory?: boolean;
     canCopyId?: boolean;
+    canCopyDeeplink?: boolean;
     busyAction?: 'duplicate' | 'summarize' | null;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-conversation-context-menu`, input),
+  showConversationCwdGroupContextMenu: (input: {
+    x: number;
+    y: number;
+    canOpenInFinder?: boolean;
+    canEditName?: boolean;
+    canArchiveThreads?: boolean;
+    canRemove?: boolean;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-conversation-cwd-group-context-menu`, input),
+  showSelectionContextMenu: (input: {
+    x: number;
+    y: number;
+    canCopy?: boolean;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
+  openPath: (targetPath: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-path`, targetPath),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
