@@ -2,6 +2,7 @@ import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEff
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
+import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import {
@@ -30,7 +31,7 @@ import {
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
 } from '../conversationRoutes';
-import { buildSidebarNavSectionStorageKey } from '../localSettings';
+import { buildSidebarNavSectionStorageKey, SAVED_WORKSPACE_PATHS_STORAGE_KEY } from '../localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
 import type { SessionMeta } from '../types';
 
@@ -151,6 +152,217 @@ function useSidebarRowHover<T extends HTMLElement>() {
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
   };
+}
+
+function normalizeWorkspacePaths(values: Iterable<unknown>): string[] {
+  const paths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const normalized = typeof value === 'string' ? value.trim() : '';
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    paths.push(normalized);
+  }
+
+  return paths;
+}
+
+function sameStringLists(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
+function readStoredWorkspacePaths(): string[] {
+  if (typeof localStorage === 'undefined') {
+    return [];
+  }
+
+  try {
+    const raw = localStorage.getItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? normalizeWorkspacePaths(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredWorkspacePaths(workspacePaths: readonly string[]): void {
+  if (typeof localStorage === 'undefined') {
+    return;
+  }
+
+  try {
+    if (workspacePaths.length > 0) {
+      localStorage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(workspacePaths));
+      return;
+    }
+
+    localStorage.removeItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function WorkspaceQuickSelectModal({
+  workspacePaths,
+  choosingNewFolder,
+  onClose,
+  onSelectWorkspace,
+  onChooseNewFolder,
+}: {
+  workspacePaths: string[];
+  choosingNewFolder: boolean;
+  onClose: () => void;
+  onSelectWorkspace: (workspacePath: string) => void;
+  onChooseNewFolder: () => void;
+}) {
+  const [cursor, setCursor] = useState(0);
+  const optionCount = workspacePaths.length + 1;
+
+  useEffect(() => {
+    setCursor(0);
+  }, [workspacePaths]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setCursor((current) => Math.min(current + 1, optionCount - 1));
+        return;
+      }
+
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setCursor((current) => Math.max(current - 1, 0));
+        return;
+      }
+
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        const workspacePath = workspacePaths[cursor];
+        if (workspacePath) {
+          onSelectWorkspace(workspacePath);
+          return;
+        }
+
+        onChooseNewFolder();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [cursor, onChooseNewFolder, onClose, onSelectWorkspace, optionCount, workspacePaths]);
+
+  return (
+    <div
+      className="ui-overlay-backdrop"
+      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Choose workspace"
+        className="ui-dialog-shell"
+        style={{
+          width: 'min(560px, calc(100vw - 2rem))',
+          maxHeight: 'min(560px, calc(100vh - 3.5rem))',
+          background: 'rgb(var(--color-surface) / 0.985)',
+          backdropFilter: 'blur(24px)',
+          boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
+          overscrollBehavior: 'contain',
+        }}
+      >
+        <div className="border-b border-border-subtle px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-semibold text-primary">Open workspace</h2>
+              <p className="mt-1 text-[12px] leading-5 text-secondary">Choose one of the saved workspaces or pick a new folder.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="ui-icon-button ui-icon-button-compact -mr-1 shrink-0"
+              aria-label="Close workspace picker"
+            >
+              <Ico d={PATH.close} size={12} />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto px-2 py-2" style={{ overscrollBehavior: 'contain' }}>
+          {workspacePaths.length > 0 ? (
+            workspacePaths.map((workspacePath, index) => {
+              const selected = cursor === index;
+              return (
+                <button
+                  key={workspacePath}
+                  type="button"
+                  onClick={() => onSelectWorkspace(workspacePath)}
+                  className={[
+                    'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+                    selected ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/70 hover:text-primary',
+                  ].join(' ')}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium">{getConversationGroupLabel(workspacePath)}</p>
+                    <p className="truncate text-[11px] text-dim">{workspacePath}</p>
+                  </div>
+                </button>
+              );
+            })
+          ) : (
+            <p className="px-3 py-4 text-[12px] text-dim">No saved workspaces yet.</p>
+          )}
+
+          <button
+            type="button"
+            onClick={onChooseNewFolder}
+            className={[
+              'mt-1 flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors',
+              cursor === workspacePaths.length
+                ? 'bg-elevated text-primary'
+                : 'text-secondary hover:bg-elevated/70 hover:text-primary',
+            ].join(' ')}
+            disabled={choosingNewFolder}
+          >
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-md bg-elevated text-primary">
+              <Ico d={PATH.workspaceAdd} size={13} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-[13px] font-medium">{choosingNewFolder ? 'Choosing folder…' : 'Choose a new folder'}</p>
+              <p className="text-[11px] text-dim">Use the system picker to add another workspace.</p>
+            </div>
+          </button>
+        </div>
+
+        <div className="border-t border-border-subtle px-4 py-2 text-[10px] text-dim/80">
+          ↑↓ move · ↵ select · esc close
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function readCollapsedConversationGroupKeys(): string[] {
@@ -1326,6 +1538,7 @@ function OpenConversationRow({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { sessions } = useAppData();
   const {
     pinnedIds,
     openIds,
@@ -1347,6 +1560,11 @@ export function Sidebar() {
   } = useConversations();
 
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
+  const [savedWorkspacePaths, setSavedWorkspacePaths] = useState(() => readStoredWorkspacePaths());
+  const [savedWorkspacePathsLoaded, setSavedWorkspacePathsLoaded] = useState(false);
+  const [workspaceBootstrapHasOpenConversations, setWorkspaceBootstrapHasOpenConversations] = useState(false);
+  const [workspaceSyncReady, setWorkspaceSyncReady] = useState(false);
+  const [workspaceQuickSelectOpen, setWorkspaceQuickSelectOpen] = useState(false);
   const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
   const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
@@ -1388,6 +1606,76 @@ export function Sidebar() {
     () => [...pinnedSessions, ...visibleConversationTabs],
     [pinnedSessions, visibleConversationTabs],
   );
+  const openWorkspacePaths = useMemo(() => {
+    const sessionsById = new Map((sessions ?? []).map((session) => [session.id, session] as const));
+    return normalizeWorkspacePaths([
+      draftCwd,
+      ...pinnedIds.map((sessionId) => sessionsById.get(sessionId)?.cwd ?? ''),
+      ...openIds.map((sessionId) => sessionsById.get(sessionId)?.cwd ?? ''),
+    ]);
+  }, [draftCwd, openIds, pinnedIds, sessions]);
+
+  const persistSavedWorkspacePathsState = useCallback((workspacePaths: string[]) => {
+    const normalized = normalizeWorkspacePaths(workspacePaths);
+    writeStoredWorkspacePaths(normalized);
+    setSavedWorkspacePaths(normalized);
+    return normalized;
+  }, []);
+
+  const loadSavedWorkspacePaths = useCallback(async () => {
+    try {
+      const { sessionIds, pinnedSessionIds, workspacePaths } = await api.openConversationTabs();
+      persistSavedWorkspacePathsState(workspacePaths);
+      setWorkspaceBootstrapHasOpenConversations(sessionIds.length > 0 || pinnedSessionIds.length > 0);
+    } finally {
+      setSavedWorkspacePathsLoaded(true);
+    }
+  }, [persistSavedWorkspacePathsState]);
+
+  useEffect(() => {
+    void loadSavedWorkspacePaths().catch(() => {
+      setSavedWorkspacePathsLoaded(true);
+      setWorkspaceBootstrapHasOpenConversations(false);
+    });
+  }, [loadSavedWorkspacePaths]);
+
+  useEffect(() => {
+    if (!workspaceQuickSelectOpen) {
+      return;
+    }
+
+    void loadSavedWorkspacePaths().catch(() => {
+      // Ignore refresh failures and keep the last saved list.
+    });
+  }, [loadSavedWorkspacePaths, workspaceQuickSelectOpen]);
+
+  useEffect(() => {
+    if (workspaceSyncReady || !savedWorkspacePathsLoaded || sessions === null) {
+      return;
+    }
+
+    const hasLocalWorkspaceState = draftCwd.trim().length > 0 || pinnedIds.length > 0 || openIds.length > 0;
+    if (hasLocalWorkspaceState || !workspaceBootstrapHasOpenConversations) {
+      setWorkspaceSyncReady(true);
+    }
+  }, [draftCwd, openIds.length, pinnedIds.length, savedWorkspacePathsLoaded, sessions, workspaceBootstrapHasOpenConversations, workspaceSyncReady]);
+
+  useEffect(() => {
+    if (!workspaceSyncReady || sessions === null) {
+      return;
+    }
+
+    const nextWorkspacePaths = normalizeWorkspacePaths([...savedWorkspacePaths, ...openWorkspacePaths]);
+    if (sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
+      return;
+    }
+
+    persistSavedWorkspacePathsState(nextWorkspacePaths);
+    void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
+      // Ignore best-effort sync failures.
+    });
+  }, [openWorkspacePaths, persistSavedWorkspacePathsState, savedWorkspacePaths, sessions, workspaceSyncReady]);
+
   const orderedConversationItems = useMemo(() => {
     const items: SidebarConversationItem[] = [
       ...pinnedSessions.map((session, originalIndex) => ({ session, section: 'pinned' as const, pinned: true, originalIndex })),
@@ -1427,12 +1715,29 @@ export function Sidebar() {
       return [];
     }
 
-    return groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd).map((group) => ({
+    const groups = groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd);
+    const seenWorkspacePaths = new Set(groups.map((group) => group.cwd).filter((cwd): cwd is string => Boolean(cwd)));
+
+    for (const workspacePath of savedWorkspacePaths) {
+      if (seenWorkspacePaths.has(workspacePath)) {
+        continue;
+      }
+
+      groups.push({
+        key: workspacePath,
+        cwd: workspacePath,
+        label: getConversationGroupLabel(workspacePath),
+        items: [],
+      });
+      seenWorkspacePaths.add(workspacePath);
+    }
+
+    return groups.map((group) => ({
       ...group,
       defaultLabel: group.label,
       label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
     }));
-  }, [conversationGroupLabelOverrides, orderedConversationItems, threadsOrganizeMode]);
+  }, [conversationGroupLabelOverrides, orderedConversationItems, savedWorkspacePaths, threadsOrganizeMode]);
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -1563,6 +1868,7 @@ export function Sidebar() {
 
   useEffect(() => {
     setDraftCwd(readDraftConversationCwd());
+    setWorkspaceQuickSelectOpen(false);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -1584,12 +1890,22 @@ export function Sidebar() {
     const explicitCwd = typeof cwd === 'string' ? cwd.trim() : '';
     if (explicitCwd) {
       persistDraftConversationCwd(explicitCwd);
+      setDraftCwd(explicitCwd);
     }
 
     navigate('/conversations/new');
   }, [navigate]);
 
-  const handleAddWorkspace = useCallback(async () => {
+  const handleAddWorkspace = useCallback(() => {
+    setWorkspaceQuickSelectOpen(true);
+  }, []);
+
+  const handleSelectSavedWorkspace = useCallback((workspacePath: string) => {
+    setWorkspaceQuickSelectOpen(false);
+    handleNewConversation(workspacePath);
+  }, [handleNewConversation]);
+
+  const handleChooseNewWorkspaceFolder = useCallback(async () => {
     if (addWorkspaceBusy) {
       return;
     }
@@ -1604,13 +1920,19 @@ export function Sidebar() {
         return;
       }
 
+      const nextWorkspacePaths = normalizeWorkspacePaths([...savedWorkspacePaths, result.path]);
+      persistSavedWorkspacePathsState(nextWorkspacePaths);
+      void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
+        // Ignore best-effort sync failures.
+      });
+      setWorkspaceQuickSelectOpen(false);
       handleNewConversation(result.path);
     } catch (error) {
       showSidebarNotice('danger', `Add workspace failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
     } finally {
       setAddWorkspaceBusy(false);
     }
-  }, [addWorkspaceBusy, draftCwd, handleNewConversation, showSidebarNotice]);
+  }, [addWorkspaceBusy, draftCwd, handleNewConversation, persistSavedWorkspacePathsState, savedWorkspacePaths, showSidebarNotice]);
 
   const resolveLiveConversationIdForAction = useCallback(async (
     session: Pick<SessionMeta, 'id' | 'isLive'>,
@@ -1827,13 +2149,23 @@ export function Sidebar() {
       clearDraftConversationCwd();
     }
 
-    if (removedCount === 0 && !includesDraft) {
+    if (normalizedCwd) {
+      const nextWorkspacePaths = savedWorkspacePaths.filter((workspacePath) => workspacePath !== normalizedCwd);
+      if (!sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
+        persistSavedWorkspacePathsState(nextWorkspacePaths);
+        void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
+          // Ignore best-effort sync failures.
+        });
+      }
+    }
+
+    if (removedCount === 0 && !includesDraft && !normalizedCwd) {
       showSidebarNotice('danger', `No threads to remove in ${label}.`, 4000);
       return;
     }
 
     showSidebarNotice('accent', `Removed ${label} from Threads.`);
-  }, [archiveConversationGroupSessions, clearConversationGroupCollapsedState, showSidebarNotice, updateConversationGroupLabelOverride]);
+  }, [archiveConversationGroupSessions, clearConversationGroupCollapsedState, persistSavedWorkspacePathsState, savedWorkspacePaths, showSidebarNotice, updateConversationGroupLabelOverride]);
 
   const navigateConversation = useCallback((direction: -1 | 1) => {
     const nextPath = resolveConversationAdjacentPath({
@@ -2173,96 +2505,111 @@ export function Sidebar() {
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
 
   return (
-    <aside className="flex-1 flex flex-col overflow-hidden">
-      <div className="pt-1.5 pb-1 space-y-px">
-        <div className="px-1">
-          <button
-            onClick={() => handleNewConversation()}
-            className={[
-              'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
-              location.pathname.startsWith('/conversations') && 'ui-sidebar-nav-item-active',
-            ].filter(Boolean).join(' ')}
-            title={`Chat (${newConversationHotkeyLabel})`}
-          >
-            <Ico d={PATH.plus} size={15} />
-            <span className="flex-1 text-left">Chat</span>
-          </button>
-        </div>
-        <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
-      </div>
-
-      <div className="px-4 pt-1 pb-0.5">
-        <div className="flex items-center gap-1">
-          <p className="ui-section-label flex-1">Threads</p>
-          <ThreadsFilterButton
-            organizeMode={threadsOrganizeMode}
-            sortMode={threadsSortMode}
-            onChangeOrganizeMode={handleThreadsOrganizeModeChange}
-            onChangeSortMode={handleThreadsSortModeChange}
-          />
-          <button
-            type="button"
-            onClick={() => {
-              void handleAddWorkspace();
-            }}
-            className="ui-icon-button ui-icon-button-compact -mr-1 shrink-0"
-            title={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
-            aria-label={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
-            disabled={addWorkspaceBusy}
-          >
-            <Ico d={PATH.workspaceAdd} size={12} />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto min-h-0 pb-3">
-        <div className="py-0.5 space-y-0.5">
-          {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 ? (
-            <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
-          ) : null}
-
-          {threadsOrganizeMode === 'project'
-            ? groupedConversationRows.map((group) => {
-              const collapsed = collapsedConversationGroupKeySet.has(group.key);
-              const groupSessionIds = group.items
-                .map(({ session }) => session.id)
-                .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
-              const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
-
-              return (
-                <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
-                  <ConversationCwdGroupHeader
-                    label={group.label}
-                    cwd={group.cwd}
-                    collapsed={collapsed}
-                    onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
-                    onNewConversation={() => handleNewConversation(group.cwd)}
-                    onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
-                    onEditName={() => handleRenameConversationGroup(group.key, group.cwd, group.label)}
-                    onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
-                    onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
-                  />
-                  {!collapsed ? group.items.map(renderConversationRow) : null}
-                </div>
-              );
-            })
-            : orderedConversationItems.map(renderConversationRow)}
-        </div>
-      </div>
-
-      <div className="shrink-0">
-        {sidebarNotice ? (
-          <div aria-live="polite" className={[
-            'px-4 pb-2 text-[11px]',
-            sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80',
-          ].join(' ')}>
-            {sidebarNotice.text}
+    <>
+      <aside className="flex-1 flex flex-col overflow-hidden">
+        <div className="pt-1.5 pb-1 space-y-px">
+          <div className="px-1">
+            <button
+              onClick={() => handleNewConversation()}
+              className={[
+                'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
+                location.pathname.startsWith('/conversations') && 'ui-sidebar-nav-item-active',
+              ].filter(Boolean).join(' ')}
+              title={`Chat (${newConversationHotkeyLabel})`}
+            >
+              <Ico d={PATH.plus} size={15} />
+              <span className="flex-1 text-left">Chat</span>
+            </button>
           </div>
-        ) : null}
-        <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
-          <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
+          <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
         </div>
-      </div>
-    </aside>
+
+        <div className="px-4 pt-1 pb-0.5">
+          <div className="flex items-center gap-1">
+            <p className="ui-section-label flex-1">Threads</p>
+            <ThreadsFilterButton
+              organizeMode={threadsOrganizeMode}
+              sortMode={threadsSortMode}
+              onChangeOrganizeMode={handleThreadsOrganizeModeChange}
+              onChangeSortMode={handleThreadsSortModeChange}
+            />
+            <button
+              type="button"
+              onClick={handleAddWorkspace}
+              className="ui-icon-button ui-icon-button-compact -mr-1 shrink-0"
+              title={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
+              aria-label={addWorkspaceBusy ? 'Choosing workspace…' : 'Add workspace'}
+              disabled={addWorkspaceBusy}
+            >
+              <Ico d={PATH.workspaceAdd} size={12} />
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0 pb-3">
+          <div className="py-0.5 space-y-0.5">
+            {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 && !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
+              <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
+            ) : null}
+
+            {threadsOrganizeMode === 'project'
+              ? groupedConversationRows.map((group) => {
+                const collapsed = collapsedConversationGroupKeySet.has(group.key);
+                const groupSessionIds = group.items
+                  .map(({ session }) => session.id)
+                  .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
+                const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
+
+                return (
+                  <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
+                    <ConversationCwdGroupHeader
+                      label={group.label}
+                      cwd={group.cwd}
+                      collapsed={collapsed}
+                      onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
+                      onNewConversation={() => handleNewConversation(group.cwd)}
+                      onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
+                      onEditName={() => handleRenameConversationGroup(group.key, group.cwd, group.label)}
+                      onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
+                      onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
+                    />
+                    {!collapsed ? (
+                      group.items.length > 0
+                        ? group.items.map(renderConversationRow)
+                        : <p className="px-4 pb-1 text-[12px] text-dim">No threads yet.</p>
+                    ) : null}
+                  </div>
+                );
+              })
+              : orderedConversationItems.map(renderConversationRow)}
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          {sidebarNotice ? (
+            <div aria-live="polite" className={[
+              'px-4 pb-2 text-[11px]',
+              sidebarNotice.tone === 'danger' ? 'text-danger/90' : 'text-accent/80',
+            ].join(' ')}>
+              {sidebarNotice.text}
+            </div>
+          ) : null}
+          <div className="border-t border-border-subtle px-2 py-2 space-y-0.5">
+            <TopNavItem to="/settings" icon={PATH.settings} label="Settings" forceActive={settingsRouteActive} />
+          </div>
+        </div>
+      </aside>
+      {workspaceQuickSelectOpen ? (
+        <WorkspaceQuickSelectModal
+          workspacePaths={savedWorkspacePaths}
+          choosingNewFolder={addWorkspaceBusy}
+          onClose={() => setWorkspaceQuickSelectOpen(false)}
+          onSelectWorkspace={handleSelectSavedWorkspace}
+          onChooseNewFolder={() => {
+            void handleChooseNewWorkspaceFolder();
+          }}
+        />
+      ) : null}
+    </>
   );
 }

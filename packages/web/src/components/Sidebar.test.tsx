@@ -9,6 +9,7 @@ import {
   OPEN_SKILL_IDS_STORAGE_KEY,
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
+  SAVED_WORKSPACE_PATHS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
 import type { DurableRunListResult, SessionMeta } from '../types.js';
@@ -248,6 +249,19 @@ describe('Sidebar', () => {
     expect(html).toContain('aria-label="Expand personal-agent"');
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain('Clarify background run link');
+  });
+
+  it('shows saved workspaces even when they have no threads yet', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/alpha-worktree']));
+
+    const html = renderSidebar('/conversations/new', { sessions: [] });
+
+    expect(html).toContain('alpha-worktree');
+    expect(html).toContain('title="New conversation in /tmp/alpha-worktree"');
+    expect(html).toContain('No threads yet.');
+    expect(html).not.toContain('No open conversations yet.');
   });
 
   it('renders saved custom cwd group labels when present', () => {

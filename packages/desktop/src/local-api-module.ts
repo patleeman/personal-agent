@@ -67,6 +67,7 @@ export interface LocalApiModule {
     sessionIds?: string[];
     pinnedSessionIds?: string[];
     archivedSessionIds?: string[];
+    workspacePaths?: string[];
   }): Promise<unknown>;
   readDesktopModelProviders(): Promise<unknown>;
   saveDesktopModelProvider(input: {

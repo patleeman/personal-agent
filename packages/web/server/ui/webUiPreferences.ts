@@ -13,6 +13,7 @@ export interface SavedWebUiPreferences {
   openConversationIds: string[];
   pinnedConversationIds: string[];
   archivedConversationIds: string[];
+  workspacePaths: string[];
   nodeBrowserViews: SavedNodeBrowserViewPreference[];
 }
 
@@ -90,6 +91,7 @@ function normalizeSavedWebUiPreferences(input: {
   openConversationIds?: unknown;
   pinnedConversationIds?: unknown;
   archivedConversationIds?: unknown;
+  workspacePaths?: unknown;
   nodeBrowserViews?: unknown;
 }): SavedWebUiPreferences {
   const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
@@ -103,6 +105,7 @@ function normalizeSavedWebUiPreferences(input: {
     pinnedConversationIds,
     archivedConversationIds: normalizeConversationIds(input.archivedConversationIds)
       .filter((id) => !workspaceIdSet.has(id)),
+    workspacePaths: normalizeConversationIds(input.workspacePaths),
     nodeBrowserViews: normalizeNodeBrowserViews(input.nodeBrowserViews),
   };
 }
@@ -119,6 +122,7 @@ export function readSavedWebUiPreferences(settingsFile: string): SavedWebUiPrefe
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
     archivedConversationIds: webUi.archivedConversationIds,
+    workspacePaths: webUi.workspacePaths,
     nodeBrowserViews: webUi.nodeBrowserViews,
   });
 }
@@ -128,6 +132,7 @@ export function writeSavedWebUiPreferences(
     openConversationIds?: string[] | null;
     pinnedConversationIds?: string[] | null;
     archivedConversationIds?: string[] | null;
+    workspacePaths?: string[] | null;
     nodeBrowserViews?: SavedNodeBrowserViewPreference[] | null;
   },
   settingsFile: string,
@@ -138,6 +143,7 @@ export function writeSavedWebUiPreferences(
     openConversationIds: webUi.openConversationIds,
     pinnedConversationIds: webUi.pinnedConversationIds,
     archivedConversationIds: webUi.archivedConversationIds,
+    workspacePaths: webUi.workspacePaths,
     nodeBrowserViews: webUi.nodeBrowserViews,
   });
 
@@ -145,6 +151,7 @@ export function writeSavedWebUiPreferences(
     openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
     pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
     archivedConversationIds: input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
+    workspacePaths: input.workspacePaths !== undefined ? (input.workspacePaths ?? []) : current.workspacePaths,
     nodeBrowserViews: input.nodeBrowserViews !== undefined ? (input.nodeBrowserViews ?? []) : current.nodeBrowserViews,
   });
 
@@ -164,6 +171,12 @@ export function writeSavedWebUiPreferences(
     webUi.archivedConversationIds = next.archivedConversationIds;
   } else {
     delete webUi.archivedConversationIds;
+  }
+
+  if (next.workspacePaths.length > 0) {
+    webUi.workspacePaths = next.workspacePaths;
+  } else {
+    delete webUi.workspacePaths;
   }
 
   if (next.nodeBrowserViews.length > 0) {

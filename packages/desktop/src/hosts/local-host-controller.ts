@@ -199,7 +199,7 @@ export class LocalHostController implements HostController {
     return module.readDesktopOpenConversationTabs();
   }
 
-  async updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<unknown> {
+  async updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.updateDesktopOpenConversationTabs(input);
   }

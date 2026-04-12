@@ -120,12 +120,23 @@ export interface PersonalAgentDesktopBridge {
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
-  readOpenConversationTabs(): Promise<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>;
-  updateOpenConversationTabs(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<{
+  readOpenConversationTabs(): Promise<{
+    sessionIds: string[];
+    pinnedSessionIds: string[];
+    archivedSessionIds: string[];
+    workspacePaths: string[];
+  }>;
+  updateOpenConversationTabs(input: {
+    sessionIds?: string[];
+    pinnedSessionIds?: string[];
+    archivedSessionIds?: string[];
+    workspacePaths?: string[];
+  }): Promise<{
     ok: true;
     sessionIds: string[];
     pinnedSessionIds: string[];
     archivedSessionIds: string[];
+    workspacePaths: string[];
   }>;
   readModelProviders(): Promise<ModelProviderState>;
   saveModelProvider(input: {

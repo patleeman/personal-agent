@@ -211,12 +211,14 @@ describe('LocalHostController', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
     const updateDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       updateDesktopWebUiConfig,
@@ -262,12 +264,14 @@ describe('LocalHostController', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
-    await expect(controller.updateOpenConversationTabs?.({ sessionIds: ['conversation-4'], pinnedSessionIds: ['conversation-5'], archivedSessionIds: ['conversation-6'] })).resolves.toEqual({
+    await expect(controller.updateOpenConversationTabs?.({ sessionIds: ['conversation-4'], pinnedSessionIds: ['conversation-5'], archivedSessionIds: ['conversation-6'], workspacePaths: ['/tmp/beta'] })).resolves.toEqual({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
 
     expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
@@ -279,6 +283,7 @@ describe('LocalHostController', () => {
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });

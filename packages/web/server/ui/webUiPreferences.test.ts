@@ -24,6 +24,7 @@ describe('readSavedWebUiPreferences', () => {
       openConversationIds: [],
       pinnedConversationIds: [],
       archivedConversationIds: [],
+      workspacePaths: [],
       nodeBrowserViews: [],
     });
   });
@@ -36,6 +37,7 @@ describe('readSavedWebUiPreferences', () => {
         openConversationIds: [' session-1 ', '', 'session-2', null, 'session-1'],
         pinnedConversationIds: ['session-2', ' session-3 ', 'session-3'],
         archivedConversationIds: ['session-3', ' session-4 ', '', 'session-1', 'session-4'],
+        workspacePaths: [' /tmp/alpha ', '', '/tmp/beta', '/tmp/alpha'],
       },
     }));
 
@@ -43,6 +45,7 @@ describe('readSavedWebUiPreferences', () => {
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-2', 'session-3'],
       archivedConversationIds: ['session-4'],
+      workspacePaths: ['/tmp/alpha', '/tmp/beta'],
       nodeBrowserViews: [],
     });
   });
@@ -63,6 +66,7 @@ describe('writeSavedWebUiPreferences', () => {
       openConversationIds: ['session-1', ' session-2 ', 'session-3'],
       pinnedConversationIds: ['session-3', 'session-4', 'session-4'],
       archivedConversationIds: ['session-2', 'session-5', ' session-6 '],
+      workspacePaths: [' /tmp/alpha ', '/tmp/beta', '/tmp/alpha'],
     }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
@@ -72,6 +76,7 @@ describe('writeSavedWebUiPreferences', () => {
         openConversationIds: ['session-1', 'session-2'],
         pinnedConversationIds: ['session-3', 'session-4'],
         archivedConversationIds: ['session-5', 'session-6'],
+        workspacePaths: ['/tmp/alpha', '/tmp/beta'],
       },
     });
   });
@@ -84,6 +89,7 @@ describe('writeSavedWebUiPreferences', () => {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
         archivedConversationIds: ['session-3'],
+        workspacePaths: ['/tmp/alpha'],
       },
     }));
 
@@ -93,6 +99,7 @@ describe('writeSavedWebUiPreferences', () => {
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-4'],
       archivedConversationIds: ['session-3'],
+      workspacePaths: ['/tmp/alpha'],
       nodeBrowserViews: [],
     });
   });
@@ -112,6 +119,7 @@ describe('writeSavedWebUiPreferences', () => {
       openConversationIds: [],
       pinnedConversationIds: [],
       archivedConversationIds: [],
+      workspacePaths: [],
       nodeBrowserViews: [
         { id: 'shared-skills', name: 'Shared skills', search: '?q=type:skill', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:01:00.000Z' },
       ],
@@ -126,10 +134,11 @@ describe('writeSavedWebUiPreferences', () => {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
         archivedConversationIds: ['session-3'],
+        workspacePaths: ['/tmp/alpha'],
       },
     }));
 
-    writeSavedWebUiPreferences({ openConversationIds: [], pinnedConversationIds: [], archivedConversationIds: [] }, file);
+    writeSavedWebUiPreferences({ openConversationIds: [], pinnedConversationIds: [], archivedConversationIds: [], workspacePaths: [] }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({});
   });

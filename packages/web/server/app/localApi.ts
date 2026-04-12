@@ -1532,6 +1532,7 @@ export async function readDesktopOpenConversationTabs() {
     sessionIds: saved.openConversationIds,
     pinnedSessionIds: saved.pinnedConversationIds,
     archivedSessionIds: saved.archivedConversationIds,
+    workspacePaths: saved.workspacePaths,
   };
 }
 
@@ -1539,8 +1540,9 @@ export async function updateDesktopOpenConversationTabs(input: {
   sessionIds?: string[];
   pinnedSessionIds?: string[];
   archivedSessionIds?: string[];
+  workspacePaths?: string[];
 }) {
-  const { sessionIds, pinnedSessionIds, archivedSessionIds } = input;
+  const { sessionIds, pinnedSessionIds, archivedSessionIds, workspacePaths } = input;
 
   if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
     throw new Error('sessionIds must be an array when provided');
@@ -1554,8 +1556,12 @@ export async function updateDesktopOpenConversationTabs(input: {
     throw new Error('archivedSessionIds must be an array when provided');
   }
 
-  if (sessionIds === undefined && pinnedSessionIds === undefined && archivedSessionIds === undefined) {
-    throw new Error('sessionIds, pinnedSessionIds, or archivedSessionIds required');
+  if (workspacePaths !== undefined && !Array.isArray(workspacePaths)) {
+    throw new Error('workspacePaths must be an array when provided');
+  }
+
+  if (sessionIds === undefined && pinnedSessionIds === undefined && archivedSessionIds === undefined && workspacePaths === undefined) {
+    throw new Error('sessionIds, pinnedSessionIds, archivedSessionIds, or workspacePaths required');
   }
 
   const context = await getLocalServerRouteContext();
@@ -1564,16 +1570,23 @@ export async function updateDesktopOpenConversationTabs(input: {
       openConversationIds: sessionIds,
       pinnedConversationIds: pinnedSessionIds,
       archivedConversationIds: archivedSessionIds,
+      workspacePaths,
     }, settingsFile),
     { runtimeSettingsFile: context.getSettingsFile() },
   );
 
-  invalidateAppTopics('sessions');
+  if (sessionIds !== undefined || pinnedSessionIds !== undefined || archivedSessionIds !== undefined) {
+    invalidateAppTopics('sessions');
+  }
+  if (workspacePaths !== undefined) {
+    invalidateAppTopics('workspace');
+  }
   return {
     ok: true as const,
     sessionIds: saved.openConversationIds,
     pinnedSessionIds: saved.pinnedConversationIds,
     archivedSessionIds: saved.archivedConversationIds,
+    workspacePaths: saved.workspacePaths,
   };
 }
 

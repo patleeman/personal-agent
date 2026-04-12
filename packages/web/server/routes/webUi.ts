@@ -24,6 +24,7 @@ function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): 
       sessionIds: saved.openConversationIds,
       pinnedSessionIds: saved.pinnedConversationIds,
       archivedSessionIds: saved.archivedConversationIds,
+      workspacePaths: saved.workspacePaths,
     });
   } catch (err) {
     logError('request handler error', {
@@ -41,11 +42,13 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       pinnedSessionIds,
       archivedConversationIds,
       archivedSessionIds,
+      workspacePaths,
     } = req.body as {
       sessionIds?: unknown;
       pinnedSessionIds?: unknown;
       archivedConversationIds?: unknown;
       archivedSessionIds?: unknown;
+      workspacePaths?: unknown;
     };
 
     if (sessionIds !== undefined && !Array.isArray(sessionIds)) {
@@ -68,8 +71,13 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
       return;
     }
 
-    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedConversationIds === undefined && archivedSessionIds === undefined) {
-      res.status(400).json({ error: 'sessionIds, pinnedSessionIds, or archived conversation ids required' });
+    if (workspacePaths !== undefined && !Array.isArray(workspacePaths)) {
+      res.status(400).json({ error: 'workspacePaths must be an array when provided' });
+      return;
+    }
+
+    if (sessionIds === undefined && pinnedSessionIds === undefined && archivedConversationIds === undefined && archivedSessionIds === undefined && workspacePaths === undefined) {
+      res.status(400).json({ error: 'sessionIds, pinnedSessionIds, archived conversation ids, or workspacePaths required' });
       return;
     }
 
@@ -78,17 +86,24 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
         openConversationIds: sessionIds as string[] | null | undefined,
         pinnedConversationIds: pinnedSessionIds as string[] | null | undefined,
         archivedConversationIds: (archivedConversationIds ?? archivedSessionIds) as string[] | null | undefined,
+        workspacePaths: workspacePaths as string[] | null | undefined,
       }, settingsFile),
       { runtimeSettingsFile: getWebUiSettingsFileFn() },
     );
 
-    invalidateAppTopics('sessions');
+    if (sessionIds !== undefined || pinnedSessionIds !== undefined || archivedConversationIds !== undefined || archivedSessionIds !== undefined) {
+      invalidateAppTopics('sessions');
+    }
+    if (workspacePaths !== undefined) {
+      invalidateAppTopics('workspace');
+    }
 
     res.json({
       ok: true,
       sessionIds: saved.openConversationIds,
       pinnedSessionIds: saved.pinnedConversationIds,
       archivedConversationIds: saved.archivedConversationIds,
+      workspacePaths: saved.workspacePaths,
     });
   } catch (err) {
     logError('request handler error', {

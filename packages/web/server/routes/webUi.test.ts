@@ -99,6 +99,7 @@ describe('web UI routes', () => {
       openConversationIds: ['conversation-1'],
       pinnedConversationIds: ['conversation-2'],
       archivedConversationIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
     readWebUiStateMock.mockReturnValue({
       warnings: [],
@@ -114,6 +115,7 @@ describe('web UI routes', () => {
       openConversationIds: ['conversation-4'],
       pinnedConversationIds: ['conversation-5'],
       archivedConversationIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
     writeWebUiConfigMock.mockReturnValue({
       useTailscaleServe: true,
@@ -162,6 +164,7 @@ describe('web UI routes', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
 
     const invalidSessionIdsRes = createResponse();
@@ -172,7 +175,7 @@ describe('web UI routes', () => {
     const missingBodyRes = createResponse();
     await patchHandler({ body: {} }, missingBodyRes);
     expect(missingBodyRes.status).toHaveBeenCalledWith(400);
-    expect(missingBodyRes.json).toHaveBeenCalledWith({ error: 'sessionIds, pinnedSessionIds, or archived conversation ids required' });
+    expect(missingBodyRes.json).toHaveBeenCalledWith({ error: 'sessionIds, pinnedSessionIds, archived conversation ids, or workspacePaths required' });
 
     const successRes = createResponse();
     await patchHandler({
@@ -180,6 +183,7 @@ describe('web UI routes', () => {
         sessionIds: ['conversation-4'],
         pinnedSessionIds: ['conversation-5'],
         archivedSessionIds: ['conversation-6'],
+        workspacePaths: ['/tmp/beta'],
       },
     }, successRes);
     expect(persistSettingsWriteMock).toHaveBeenCalledWith(expect.any(Function), {
@@ -189,13 +193,16 @@ describe('web UI routes', () => {
       openConversationIds: ['conversation-4'],
       pinnedConversationIds: ['conversation-5'],
       archivedConversationIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     }, '/runtime/desktop-settings.json');
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('workspace');
     expect(successRes.json).toHaveBeenCalledWith({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedConversationIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
 
     persistSettingsWriteMock.mockImplementationOnce(() => {

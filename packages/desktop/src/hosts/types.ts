@@ -285,7 +285,7 @@ export interface HostController {
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;
   readOpenConversationTabs?(): Promise<unknown>;
-  updateOpenConversationTabs?(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }): Promise<unknown>;
+  updateOpenConversationTabs?(input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }): Promise<unknown>;
   readModelProviders?(): Promise<unknown>;
   saveModelProvider?(input: {
     provider: string;

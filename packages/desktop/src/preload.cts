@@ -88,7 +88,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-title-settings`, input),
   readConversationPlansWorkspace: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-plans-workspace`),
   readOpenConversationTabs: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-open-conversation-tabs`),
-  updateOpenConversationTabs: (input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[] }) =>
+  updateOpenConversationTabs: (input: { sessionIds?: string[]; pinnedSessionIds?: string[]; archivedSessionIds?: string[]; workspacePaths?: string[] }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-open-conversation-tabs`, input),
   readModelProviders: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-model-providers`),
   saveModelProvider: (input: {

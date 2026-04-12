@@ -845,12 +845,14 @@ describe('api desktop transport', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
     const updateOpenConversationTabs = vi.fn().mockResolvedValue({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -913,12 +915,14 @@ describe('api desktop transport', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
     expect(savedLayout).toEqual({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
   });
 
@@ -1152,12 +1156,14 @@ describe('api desktop transport', () => {
         sessionIds: ['conversation-1'],
         pinnedSessionIds: ['conversation-2'],
         archivedSessionIds: ['conversation-3'],
+        workspacePaths: ['/tmp/alpha'],
       }))
       .mockResolvedValueOnce(createJsonResponse({
         ok: true,
         sessionIds: ['conversation-4'],
         pinnedSessionIds: ['conversation-5'],
         archivedSessionIds: ['conversation-6'],
+        workspacePaths: ['/tmp/beta'],
       }));
     vi.stubGlobal('fetch', fetchMock);
     const updateWebUiConfig = vi.fn();
@@ -1248,12 +1254,14 @@ describe('api desktop transport', () => {
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
       archivedSessionIds: ['conversation-3'],
+      workspacePaths: ['/tmp/alpha'],
     });
     expect(savedLayout).toEqual({
       ok: true,
       sessionIds: ['conversation-4'],
       pinnedSessionIds: ['conversation-5'],
       archivedSessionIds: ['conversation-6'],
+      workspacePaths: ['/tmp/beta'],
     });
   });
 

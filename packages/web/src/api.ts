@@ -523,15 +523,34 @@ export const api = {
       return desktopBridge.readOpenConversationTabs();
     }
 
-    return get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations');
+    return get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/web-ui/open-conversations');
   },
-  setOpenConversationTabs: async (sessionIds: string[], pinnedSessionIds: string[] = [], archivedSessionIds: string[] = []) => {
+  setOpenConversationTabs: async (
+    sessionIds?: string[] | null,
+    pinnedSessionIds?: string[] | null,
+    archivedSessionIds?: string[] | null,
+    workspacePaths?: string[] | null,
+  ) => {
+    const request = {
+      ...(sessionIds !== undefined ? { sessionIds } : {}),
+      ...(pinnedSessionIds !== undefined ? { pinnedSessionIds } : {}),
+      ...(archivedSessionIds !== undefined ? { archivedSessionIds } : {}),
+      ...(workspacePaths !== undefined ? { workspacePaths } : {}),
+    };
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.updateOpenConversationTabs({ sessionIds, pinnedSessionIds, archivedSessionIds });
+      return desktopBridge.updateOpenConversationTabs(request);
     }
 
-    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[] }>('/web-ui/open-conversations', { sessionIds, pinnedSessionIds, archivedSessionIds });
+    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/web-ui/open-conversations', request);
+  },
+  savedWorkspacePaths: async () => {
+    const { workspacePaths } = await api.openConversationTabs();
+    return workspacePaths;
+  },
+  setSavedWorkspacePaths: async (workspacePaths: string[]) => {
+    const { workspacePaths: savedPaths } = await api.setOpenConversationTabs(undefined, undefined, undefined, workspacePaths);
+    return savedPaths;
   },
 
   // ── Tasks ─────────────────────────────────────────────────────────────────
