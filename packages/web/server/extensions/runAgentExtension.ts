@@ -106,6 +106,12 @@ export function createRunAgentExtension(options: {
                   action: 'list',
                   runCount: result.runs.length,
                   runIds: result.runs.map((run) => run.runId),
+                  runs: result.runs.map((run) => ({
+                    runId: run.runId,
+                    status: run.status?.status ?? 'unknown',
+                    kind: run.manifest?.kind ?? 'unknown',
+                    source: run.manifest?.source?.type ?? 'unknown',
+                  })),
                 },
               };
             }

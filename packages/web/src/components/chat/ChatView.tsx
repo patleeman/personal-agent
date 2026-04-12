@@ -1152,9 +1152,34 @@ function AskUserQuestionToolBlock({
   );
 }
 
+const MAX_VISIBLE_LINKED_RUNS = 5;
+
+type LinkedRunDescriptor = {
+  title: string;
+  detail: string | null;
+  kindLabel: string;
+};
+
+type ListedRunDetails = {
+  runId: string;
+  status: string | null;
+  kind: string | null;
+  source: string | null;
+};
+
+type LinkedRunPresentation = {
+  runId: string;
+  title: string;
+  detail: string | null;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function summarizeLinkedRunTail(value: string): string | null {
   let segments = value
-    .split('-')
+    .split(/[-_]+/)
     .map((segment) => segment.trim())
     .filter((segment) => segment.length > 0);
 
@@ -1185,19 +1210,28 @@ function summarizeLinkedRunTail(value: string): string | null {
   return summary.charAt(0).toUpperCase() + summary.slice(1);
 }
 
-function describeLinkedRun(runId: string): { title: string; detail: string | null } {
+function describeLinkedRun(runId: string): LinkedRunDescriptor {
   if (runId.startsWith('conversation-live-')) {
-    return { title: 'Conversation Run', detail: null };
+    return {
+      title: 'Live Conversation',
+      detail: summarizeLinkedRunTail(runId.slice('conversation-live-'.length)),
+      kindLabel: 'live conversation',
+    };
   }
 
   if (runId.startsWith('conversation-deferred-resume-')) {
-    return { title: 'Wakeup', detail: null };
+    return {
+      title: 'Wakeup',
+      detail: summarizeLinkedRunTail(runId.slice('conversation-deferred-resume-'.length)),
+      kindLabel: 'wakeup',
+    };
   }
 
   if (runId.startsWith('task-')) {
     return {
       title: 'Scheduled Task',
       detail: summarizeLinkedRunTail(runId.slice('task-'.length)),
+      kindLabel: 'scheduled task',
     };
   }
 
@@ -1205,12 +1239,119 @@ function describeLinkedRun(runId: string): { title: string; detail: string | nul
     return {
       title: 'Background Run',
       detail: summarizeLinkedRunTail(runId.slice('run-'.length)),
+      kindLabel: 'background run',
     };
   }
 
   return {
     title: 'Linked Run',
     detail: summarizeLinkedRunTail(runId),
+    kindLabel: 'linked run',
+  };
+}
+
+function normalizeRunLabel(value: string): string {
+  return value.replace(/[-_\s]+/g, ' ').trim().toLowerCase();
+}
+
+function describeListedRunKind(details: ListedRunDetails): string | null {
+  if (details.source === 'deferred-resume') {
+    return 'wakeup';
+  }
+
+  if (details.source === 'web-live-session') {
+    return 'live conversation';
+  }
+
+  if (details.source === 'scheduled-task' || details.kind === 'scheduled-task') {
+    return 'scheduled task';
+  }
+
+  if (details.kind === 'raw-shell') {
+    return 'shell run';
+  }
+
+  if (details.kind === 'workflow') {
+    return 'workflow';
+  }
+
+  if (details.kind === 'background-run') {
+    return 'background run';
+  }
+
+  if (details.kind === 'conversation') {
+    return 'conversation run';
+  }
+
+  return null;
+}
+
+function readListedRuns(block: Extract<MessageBlock, { type: 'tool_use' }>): ListedRunDetails[] | null {
+  if (block.tool !== 'run' || !isRecord(block.details) || block.details.action !== 'list' || !Array.isArray(block.details.runs)) {
+    return null;
+  }
+
+  const next: ListedRunDetails[] = [];
+  const seen = new Set<string>();
+
+  for (const candidate of block.details.runs) {
+    if (!isRecord(candidate)) {
+      continue;
+    }
+
+    const runId = typeof candidate.runId === 'string' ? candidate.runId.trim() : '';
+    if (!runId || seen.has(runId)) {
+      continue;
+    }
+
+    seen.add(runId);
+    next.push({
+      runId,
+      status: typeof candidate.status === 'string' ? candidate.status.trim() : null,
+      kind: typeof candidate.kind === 'string' ? candidate.kind.trim() : null,
+      source: typeof candidate.source === 'string' ? candidate.source.trim() : null,
+    });
+  }
+
+  return next.length > 0 ? next : null;
+}
+
+function presentLinkedRun(runId: string, listed: ListedRunDetails | null = null): LinkedRunPresentation {
+  const descriptor = describeLinkedRun(runId);
+  const title = descriptor.detail ?? descriptor.title;
+  const detailBits: string[] = [];
+  const status = listed?.status && listed.status !== 'unknown'
+    ? normalizeRunLabel(listed.status)
+    : null;
+  const kindLabel = listed ? (describeListedRunKind(listed) ?? descriptor.kindLabel) : descriptor.kindLabel;
+
+  if (status) {
+    detailBits.push(status);
+  }
+
+  if (kindLabel && normalizeRunLabel(kindLabel) !== normalizeRunLabel(title)) {
+    detailBits.push(kindLabel);
+  }
+
+  return {
+    runId,
+    title,
+    detail: detailBits.length > 0 ? detailBits.join(' · ') : null,
+  };
+}
+
+function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }>): { scope: 'listed' | 'mentioned'; runs: LinkedRunPresentation[] } {
+  const listedRuns = readListedRuns(block);
+  if (listedRuns) {
+    return {
+      scope: 'listed',
+      runs: listedRuns.map((run) => presentLinkedRun(run.runId, run)),
+    };
+  }
+
+  return {
+    scope: 'mentioned',
+    runs: extractDurableRunIdsFromBlock(block).map((runId) => presentLinkedRun(runId)),
   };
 }
 
@@ -1244,6 +1385,7 @@ function ToolBlock({
   askUserQuestionDisplayMode?: 'inline' | 'composer';
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
+  const [showAllRuns, setShowAllRuns] = useState(false);
   const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
   const artifact = readArtifactPresentation(block);
@@ -1252,7 +1394,7 @@ function ToolBlock({
     () => describeAskUserQuestionState(messages, messageIndex),
     [messageIndex, messages],
   );
-  const runIds = useMemo(() => extractDurableRunIdsFromBlock(block), [block]);
+  const linkedRuns = useMemo(() => readLinkedRuns(block), [block]);
 
   if (artifact) {
     return (
@@ -1291,6 +1433,10 @@ function ToolBlock({
     : block.input.url   ? String(block.input.url).replace('https://', '').slice(0, 60)
     : block.input.query ? String(block.input.query).slice(0, 60)
     : '';
+  const hiddenRunCount = Math.max(0, linkedRuns.runs.length - MAX_VISIBLE_LINKED_RUNS);
+  const visibleRuns = showAllRuns || hiddenRunCount === 0
+    ? linkedRuns.runs
+    : linkedRuns.runs.slice(0, MAX_VISIBLE_LINKED_RUNS);
 
   return (
     <div className={cx('rounded-lg text-[12px] font-mono overflow-hidden transition-colors', meta.color, isError && 'border border-danger/40 bg-danger/5 text-danger')}>

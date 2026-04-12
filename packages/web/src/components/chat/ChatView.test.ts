@@ -226,7 +226,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('cursor-zoom-in');
   });
 
-  it('renders linked runs as left-aligned action rows instead of inline inspect ids', () => {
+  it('renders mentioned runs as left-aligned action rows with a human-readable title', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
         type: 'tool_use',
@@ -240,10 +240,47 @@ describe('chat view streaming disclosure', () => {
       onOpenRun: () => undefined,
     }));
 
-    expect(html).toContain('Open Background Run');
-    expect(html).toContain('Continuous conversations next chunk ui');
+    expect(html).toContain('Open Continuous conversations next chunk ui');
+    expect(html).toContain('background run');
     expect(html).toContain('text-left');
-    expect(html).toContain('linked run');
+    expect(html).toContain('mentioned run');
+  });
+
+  it('limits listed runs in the transcript to 5 rows by default', () => {
+    const listedRuns = Array.from({ length: 7 }, (_, index) => ({
+      runId: `run-fix-build-${String.fromCharCode(97 + index)}-2026-03-25T00-53-25-347Z-903aa31b`,
+      status: 'queued',
+      kind: 'background-run',
+      source: 'tool',
+    }));
+
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'run',
+        input: { action: 'list' },
+        output: '',
+        status: 'running',
+        details: {
+          action: 'list',
+          runCount: listedRuns.length,
+          runIds: listedRuns.map((run) => run.runId),
+          runs: listedRuns,
+        },
+      }],
+      isStreaming: true,
+      onOpenRun: () => undefined,
+    }));
+
+    expect(html).toContain('listed runs');
+    expect(html).toContain('Showing 5 of 7 runs returned by the tool.');
+    expect(html).toContain('Show all');
+    expect(html).toContain('Open Fix build a');
+    expect(html).toContain('Open Fix build e');
+    expect(html).toContain('queued · background run');
+    expect(html).not.toContain('Open Fix build f');
+    expect(html).not.toContain('Open Fix build g');
   });
 
   it('renders tool input and output as plain text without file path buttons', () => {

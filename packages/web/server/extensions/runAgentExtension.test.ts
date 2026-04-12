@@ -98,6 +98,17 @@ describe('run agent extension', () => {
     expect(result.isError).not.toBe(true);
     expect(result.content[0]?.text).toContain('run-123');
     expect(result.content[0]?.text).toContain('background-run');
+    expect(result.details).toMatchObject({
+      action: 'list',
+      runCount: 1,
+      runIds: ['run-123'],
+      runs: [{
+        runId: 'run-123',
+        status: 'running',
+        kind: 'background-run',
+        source: 'tool',
+      }],
+    });
   });
 
   it('formats durable run details and log output', async () => {
