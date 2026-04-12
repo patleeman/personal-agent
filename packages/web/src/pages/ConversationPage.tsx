@@ -83,7 +83,6 @@ import { appendPendingInitialPromptBlock } from '../pendingQueueMessages';
 import {
   didConversationStopMidTurn,
   didConversationStopWithError,
-  type ConversationResumeState,
   getConversationResumeState,
 } from '../conversationResume';
 import {
@@ -266,48 +265,6 @@ export function shouldShowConversationTakeoverBanner(_input: {
   conversationNeedsTakeover: boolean;
 }): boolean {
   return false;
-}
-
-export function shouldShowConversationResumeBanner(input: {
-  draft: boolean;
-  isLiveSession: boolean;
-  showConversationLoadingState: boolean;
-  renderingStaleTranscript: boolean;
-  canResume: boolean;
-}): boolean {
-  return !input.draft
-    && !input.isLiveSession
-    && !input.showConversationLoadingState
-    && !input.renderingStaleTranscript
-    && input.canResume;
-}
-
-export function resolveConversationResumeBannerCopy(
-  state: Pick<ConversationResumeState, 'reason' | 'title'>,
-): { eyebrow: string; body: string } {
-  switch (state.reason) {
-    case 'failed':
-      return {
-        eyebrow: 'Conversation failed',
-        body: state.title ?? 'This conversation stopped after an error. Resume it to keep going.',
-      };
-    case 'error':
-      return {
-        eyebrow: 'Conversation needs recovery',
-        body: state.title ?? 'This conversation hit an error. Resume it to continue from the latest stable point.',
-      };
-    case 'queued':
-      return {
-        eyebrow: 'Turn waiting to finish',
-        body: state.title ?? 'This conversation has a pending turn waiting to be finished.',
-      };
-    case 'interrupted':
-    default:
-      return {
-        eyebrow: 'Conversation interrupted',
-        body: state.title ?? 'This conversation stopped mid-turn. Resume it to continue.',
-      };
-  }
 }
 
 export function shouldAutoDispatchPendingInitialPrompt(input: {
@@ -5097,16 +5054,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     hasVisibleTranscript: Boolean(visibleTranscriptMessages?.length),
   });
   const showBlockingConversationLoadingState = showConversationLoadingState && !showInlineConversationLoadingState;
-  const showConversationResumeBanner = shouldShowConversationResumeBanner({
-    draft,
-    isLiveSession,
-    showConversationLoadingState,
-    renderingStaleTranscript,
-    canResume: conversationResumeState.canResume,
-  });
-  const conversationResumeBannerCopy = showConversationResumeBanner
-    ? resolveConversationResumeBannerCopy(conversationResumeState)
-    : null;
 
   useEffect(() => {
     if (!id || draft || showConversationLoadingState) {
@@ -5398,30 +5345,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       {/* Messages */}
       {transcriptPane}
-
-      {conversationResumeBannerCopy && (
-        <div className="border-t border-warning/20 bg-warning/10 px-4 py-3">
-          <div className="mx-auto flex w-full max-w-6xl flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <Pill tone="warning">{conversationResumeBannerCopy.eyebrow}</Pill>
-                <span className="text-[11px] text-dim">This run is no longer active.</span>
-              </div>
-              <p className="mt-1 text-[12px] leading-relaxed text-secondary">
-                {conversationResumeBannerCopy.body}
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => { void resumeConversation(); }}
-              disabled={resumeConversationBusy}
-              className="ui-action-button shrink-0 text-[11px]"
-            >
-              {resumeConversationBusy ? 'Continuing…' : 'Continue conversation'}
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Input area */}
       {!keyboardOpen && (

@@ -17,7 +17,6 @@ import {
   resolveConversationAutocompleteCatalogDemand,
   shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
-  shouldShowConversationResumeBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
@@ -40,7 +39,6 @@ import {
   resolveConversationInitialModelPreferenceState,
   resolveConversationInitialDeferredResumeState,
   resolveConversationDraftHydrationState,
-  resolveConversationResumeBannerCopy,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -139,60 +137,6 @@ describe('desktop conversation state fallback', () => {
       desktopMode: 'local',
       desktopError: null,
     })).toBe(false);
-  });
-});
-
-describe('conversation resume banner', () => {
-  it('shows a recovery banner only for non-live interrupted conversations that can be resumed', () => {
-    expect(shouldShowConversationResumeBanner({
-      draft: false,
-      isLiveSession: false,
-      showConversationLoadingState: false,
-      renderingStaleTranscript: false,
-      canResume: true,
-    })).toBe(true);
-
-    expect(shouldShowConversationResumeBanner({
-      draft: false,
-      isLiveSession: true,
-      showConversationLoadingState: false,
-      renderingStaleTranscript: false,
-      canResume: true,
-    })).toBe(false);
-
-    expect(shouldShowConversationResumeBanner({
-      draft: false,
-      isLiveSession: false,
-      showConversationLoadingState: true,
-      renderingStaleTranscript: false,
-      canResume: true,
-    })).toBe(false);
-
-    expect(shouldShowConversationResumeBanner({
-      draft: true,
-      isLiveSession: false,
-      showConversationLoadingState: false,
-      renderingStaleTranscript: false,
-      canResume: true,
-    })).toBe(false);
-  });
-
-  it('uses interruption-specific copy so stopped sessions do not read like a live run', () => {
-    expect(resolveConversationResumeBannerCopy({
-      reason: 'interrupted',
-      title: 'Continue this unfinished conversation. The previous turn cannot be replayed exactly.',
-    })).toEqual({
-      eyebrow: 'Conversation interrupted',
-      body: 'Continue this unfinished conversation. The previous turn cannot be replayed exactly.',
-    });
-
-    expect(resolveConversationResumeBannerCopy({
-      reason: 'failed',
-      title: null,
-    })).toEqual({
-      eyebrow: 'Conversation failed',
-      body: 'This conversation stopped after an error. Resume it to keep going.',
-    });
   });
 });
 
