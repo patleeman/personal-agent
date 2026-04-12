@@ -30,6 +30,7 @@ import {
   hasConversationLoadedHistoricalTailBlocks,
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationBootstrapLoadingState,
+  shouldUseHealthyDesktopConversationState,
   shouldShowConversationInlineLoadingState,
   shouldFetchConversationAttachments,
   resolveConversationVisibleScrollBinding,
@@ -104,6 +105,38 @@ describe('conversation autocomplete catalog demand', () => {
       needsMemoryData: false,
       needsVaultFiles: false,
     });
+  });
+});
+
+describe('desktop conversation state fallback', () => {
+  it('uses the dedicated desktop state only while the local subscription is healthy', () => {
+    expect(shouldUseHealthyDesktopConversationState({
+      draft: false,
+      conversationId: 'conv-123',
+      desktopMode: 'local',
+      desktopError: null,
+    })).toBe(true);
+
+    expect(shouldUseHealthyDesktopConversationState({
+      draft: false,
+      conversationId: 'conv-123',
+      desktopMode: 'local',
+      desktopError: 'Conversation state subscription failed.',
+    })).toBe(false);
+
+    expect(shouldUseHealthyDesktopConversationState({
+      draft: false,
+      conversationId: 'conv-123',
+      desktopMode: 'checking',
+      desktopError: null,
+    })).toBe(false);
+
+    expect(shouldUseHealthyDesktopConversationState({
+      draft: true,
+      conversationId: 'conv-123',
+      desktopMode: 'local',
+      desktopError: null,
+    })).toBe(false);
   });
 });
 

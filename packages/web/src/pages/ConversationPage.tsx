@@ -517,6 +517,18 @@ export function shouldShowConversationBootstrapLoadingState(input: {
     && !input.hasVisibleSessionDetail;
 }
 
+export function shouldUseHealthyDesktopConversationState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  desktopMode: 'checking' | 'local' | 'inactive';
+  desktopError: string | null;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.desktopMode === 'local'
+    && !input.desktopError;
+}
+
 export function shouldShowConversationInlineLoadingState(input: {
   showConversationLoadingState: boolean;
   hasVisibleTranscript: boolean;
@@ -1326,7 +1338,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     enabled: !draft,
   });
   const desktopConversationChecking = !draft && Boolean(id) && desktopConversation.mode === 'checking';
-  const useDesktopConversation = !draft && Boolean(id) && desktopConversation.active;
+  const useDesktopConversation = shouldUseHealthyDesktopConversationState({
+    draft,
+    conversationId: id,
+    desktopMode: desktopConversation.mode,
+    desktopError: desktopConversation.error,
+  });
   const visibleDesktopConversationState = useDesktopConversation && id && desktopConversation.state?.conversationId === id
     ? desktopConversation.state
     : null;
