@@ -1963,24 +1963,14 @@ export function Sidebar() {
 
   const handleDuplicateConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
     try {
-      const liveConversationId = await resolveLiveConversationIdForAction(session, 'be duplicated');
-      const entries = await api.forkEntries(liveConversationId);
-      const entry = entries[entries.length - 1];
-      if (!entry) {
-        throw new Error('No forkable messages yet.');
-      }
-
-      const { newSessionId } = await retryLiveSessionActionAfterTakeover({
-        attemptAction: () => api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, conversationSurfaceId),
-        takeOverSessionControl: () => api.takeoverLiveSession(liveConversationId, conversationSurfaceId),
-      });
-      openCreatedConversation(newSessionId, entry.text);
+      const { newSessionId } = await api.duplicateConversation(session.id);
+      openCreatedConversation(newSessionId);
       return true;
     } catch (error) {
       showSidebarNotice('danger', `Duplicate failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
       return false;
     }
-  }, [conversationSurfaceId, openCreatedConversation, resolveLiveConversationIdForAction, showSidebarNotice]);
+  }, [openCreatedConversation, showSidebarNotice]);
 
   const handleSummarizeConversation = useCallback(async (session: Pick<SessionMeta, 'id' | 'isLive'>) => {
     try {

@@ -83,6 +83,23 @@ function initializeConversationStateRoutesContext(
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 }
 
+function resolveConversationSource(conversationId: string) {
+  const liveEntry = liveRegistry.get(conversationId);
+  const sessionDetail = readSessionBlocks(conversationId);
+  const cwd = liveEntry?.cwd ?? sessionDetail?.meta.cwd;
+  const sessionFile = liveEntry?.session.sessionFile ?? sessionDetail?.meta.file;
+
+  if (!cwd || !sessionFile) {
+    return null;
+  }
+
+  return {
+    cwd,
+    sessionFile,
+    liveEntry,
+  };
+}
+
 function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
   const parsed = typeof candidate === 'string'
@@ -501,27 +518,49 @@ export function registerConversationStateRoutes(
     }
   });
 
-  router.post('/api/conversations/:id/cwd', async (req, res) => {
+  router.post('/api/conversations/:id/duplicate', async (req, res) => {
     try {
-      const { cwd: requestedCwd } = req.body as { cwd?: string };
       const conversationId = req.params.id;
+      const source = resolveConversationSource(conversationId);
 
-      const liveEntry = liveRegistry.get(conversationId);
-      const sessionDetail = readSessionBlocks(conversationId);
-      const currentCwd = liveEntry?.cwd ?? sessionDetail?.meta.cwd;
-      const sourceSessionFile = liveEntry?.session.sessionFile ?? sessionDetail?.meta.file;
-
-      if (!currentCwd || !sourceSessionFile) {
+      if (!source) {
         res.status(404).json({ error: 'Conversation not found.' });
         return;
       }
 
-      if (liveEntry?.session.isStreaming) {
+      const result = await createSessionFromExisting(source.sessionFile, source.cwd, {
+        ...buildLiveSessionResourceOptionsFn(),
+        extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+      });
+
+      publishConversationSessionMetaChanged(conversationId, result.id);
+      res.json({ newSessionId: result.id, sessionFile: result.sessionFile });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/conversations/:id/cwd', async (req, res) => {
+    try {
+      const { cwd: requestedCwd } = req.body as { cwd?: string };
+      const conversationId = req.params.id;
+      const source = resolveConversationSource(conversationId);
+
+      if (!source) {
+        res.status(404).json({ error: 'Conversation not found.' });
+        return;
+      }
+
+      if (source.liveEntry?.session.isStreaming) {
         res.status(409).json({ error: 'Stop the current response before changing the working directory.' });
         return;
       }
 
-      const nextCwd = resolveRequestedCwd(requestedCwd, currentCwd);
+      const nextCwd = resolveRequestedCwd(requestedCwd, source.cwd);
       if (!nextCwd) {
         res.status(400).json({ error: 'cwd required' });
         return;
@@ -537,17 +576,17 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      if (nextCwd === currentCwd) {
-        res.json({ id: conversationId, sessionFile: sourceSessionFile, cwd: currentCwd, changed: false });
+      if (nextCwd === source.cwd) {
+        res.json({ id: conversationId, sessionFile: source.sessionFile, cwd: source.cwd, changed: false });
         return;
       }
 
-      const result = await createSessionFromExisting(sourceSessionFile, nextCwd, {
+      const result = await createSessionFromExisting(source.sessionFile, nextCwd, {
         ...buildLiveSessionResourceOptionsFn(),
         extensionFactories: buildLiveSessionExtensionFactoriesFn(),
       });
 
-      if (liveEntry) {
+      if (source.liveEntry) {
         destroySession(conversationId);
       }
 

@@ -822,6 +822,58 @@ describe('registerConversationStateRoutes', () => {
     expect(controlRes.json).toHaveBeenCalledWith({ error: 'surface locked' });
   });
 
+  it('duplicates conversations from their full saved session state', async () => {
+    const { postHandler } = createHarness({
+      buildLiveSessionResourceOptions: () => ({ additionalExtensionPaths: ['extensions'] }),
+      buildLiveSessionExtensionFactories: () => ['factory'],
+    });
+    const handler = postHandler('/api/conversations/:id/duplicate');
+
+    const missingRes = createResponse();
+    await handler({ params: { id: 'missing' }, body: {} }, missingRes);
+    expect(missingRes.status).toHaveBeenCalledWith(404);
+    expect(missingRes.json).toHaveBeenCalledWith({ error: 'Conversation not found.' });
+
+    liveRegistry.set('conversation-1', {
+      cwd: '/repo/source',
+      session: { sessionFile: '/sessions/conversation-1.json', isStreaming: false },
+    });
+    createSessionFromExistingMock.mockResolvedValueOnce({ id: 'conversation-2', sessionFile: '/sessions/conversation-2.json' });
+
+    const liveRes = createResponse();
+    await handler({ params: { id: 'conversation-1' }, body: {} }, liveRes);
+    expect(createSessionFromExistingMock).toHaveBeenCalledWith('/sessions/conversation-1.json', '/repo/source', {
+      additionalExtensionPaths: ['extensions'],
+      extensionFactories: ['factory'],
+    });
+    expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-1', 'conversation-2');
+    expect(liveRes.json).toHaveBeenCalledWith({
+      newSessionId: 'conversation-2',
+      sessionFile: '/sessions/conversation-2.json',
+    });
+
+    liveRegistry.clear();
+    readSessionBlocksMock.mockReturnValueOnce({
+      meta: {
+        cwd: '/repo/stored',
+        file: '/sessions/conversation-3.json',
+      },
+    });
+    createSessionFromExistingMock.mockResolvedValueOnce({ id: 'conversation-4', sessionFile: '/sessions/conversation-4.json' });
+
+    const storedRes = createResponse();
+    await handler({ params: { id: 'conversation-3' }, body: {} }, storedRes);
+    expect(createSessionFromExistingMock).toHaveBeenCalledWith('/sessions/conversation-3.json', '/repo/stored', {
+      additionalExtensionPaths: ['extensions'],
+      extensionFactories: ['factory'],
+    });
+    expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-3', 'conversation-4');
+    expect(storedRes.json).toHaveBeenCalledWith({
+      newSessionId: 'conversation-4',
+      sessionFile: '/sessions/conversation-4.json',
+    });
+  });
+
   it('validates cwd changes and recreates sessions when the cwd changes', async () => {
     const { postHandler } = createHarness({
       buildLiveSessionResourceOptions: () => ({ additionalExtensionPaths: ['extensions'] }),
