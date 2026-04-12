@@ -36,9 +36,9 @@ npm run desktop:dist
 
 Behavior to expect:
 
-- closing the main window hides it instead of quitting the app
+- closing the main window hides it instead of quitting the app, so the menubar app keeps running
 - the app keeps a standard application menu while its windows are focused, even though it runs as a menu bar app
-- quitting from the tray or app menu shuts down the desktop-owned local backend
+- quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 
 ## Desktop shortcuts

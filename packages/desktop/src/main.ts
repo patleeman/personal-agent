@@ -11,12 +11,14 @@ import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
+import { confirmDesktopQuit } from './quit.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
+let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
 
 app.setName('Personal Agent');
@@ -258,7 +260,7 @@ async function bootstrapDesktopApp(): Promise<void> {
       void openDesktopLogs();
     },
     onQuit: () => {
-      void shutdownAndQuit();
+      void requestAppQuit();
     },
   };
 
@@ -311,13 +313,44 @@ async function shutdownAndQuit(): Promise<void> {
   app.quit();
 }
 
+async function requestAppQuit(): Promise<void> {
+  if (quitting) {
+    if (quitRequestPromise) {
+      await quitRequestPromise;
+    }
+    return;
+  }
+
+  if (quitRequestPromise) {
+    await quitRequestPromise;
+    return;
+  }
+
+  quitRequestPromise = (async () => {
+    try {
+      const confirmed = await confirmDesktopQuit(dialog, app.name);
+      if (!confirmed) {
+        return;
+      }
+
+      await shutdownAndQuit();
+    } finally {
+      if (!quitting) {
+        quitRequestPromise = null;
+      }
+    }
+  })();
+
+  await quitRequestPromise;
+}
+
 app.on('before-quit', (event) => {
   if (quitting) {
     return;
   }
 
   event.preventDefault();
-  void shutdownAndQuit();
+  void requestAppQuit();
 });
 
 app.on('window-all-closed', () => {
