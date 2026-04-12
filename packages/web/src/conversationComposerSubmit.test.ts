@@ -2,7 +2,20 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
+  shouldShowQuestionSubmitAsPrimaryComposerAction,
 } from './conversationComposerSubmit.js';
+
+describe('shouldShowQuestionSubmitAsPrimaryComposerAction', () => {
+  it('uses the primary composer slot for questionnaire submission while the composer is otherwise empty', () => {
+    expect(shouldShowQuestionSubmitAsPrimaryComposerAction(true, false, false)).toBe(true);
+  });
+
+  it('keeps the normal composer action when there is no pending question, content is present, or the session is streaming', () => {
+    expect(shouldShowQuestionSubmitAsPrimaryComposerAction(false, false, false)).toBe(false);
+    expect(shouldShowQuestionSubmitAsPrimaryComposerAction(true, true, false)).toBe(false);
+    expect(shouldShowQuestionSubmitAsPrimaryComposerAction(true, false, true)).toBe(false);
+  });
+});
 
 describe('normalizeConversationComposerBehavior', () => {
   it('drops queued behaviors when queued prompts are not allowed', () => {

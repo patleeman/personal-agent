@@ -3,6 +3,14 @@ export interface ConversationComposerSubmitState {
   behavior?: 'followUp';
 }
 
+export function shouldShowQuestionSubmitAsPrimaryComposerAction(
+  hasPendingQuestion: boolean,
+  composerHasContent: boolean,
+  isStreaming: boolean,
+): boolean {
+  return hasPendingQuestion && !composerHasContent && !isStreaming;
+}
+
 export function normalizeConversationComposerBehavior(
   behavior: 'steer' | 'followUp' | undefined,
   allowQueuedPrompts: boolean,

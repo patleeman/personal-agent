@@ -89,6 +89,7 @@ import {
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
+  shouldShowQuestionSubmitAsPrimaryComposerAction,
 } from '../conversationComposerSubmit';
 import { insertReplyQuoteIntoComposer } from '../conversationReplyQuote';
 import { useReloadState } from '../reloadState';
@@ -5042,6 +5043,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0;
+  const composerShowsQuestionSubmit = shouldShowQuestionSubmitAsPrimaryComposerAction(
+    Boolean(pendingAskUserQuestion),
+    composerHasContent,
+    stream.isStreaming,
+  );
   const composerSubmit = resolveConversationComposerSubmitState(
     stream.isStreaming,
     composerAltHeld,
@@ -5722,16 +5728,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                       <span className="ui-section-label">Answer below</span>
                       <Pill tone="warning">{composerQuestionAnsweredCount}/{pendingAskUserQuestion.presentation.questions.length}</Pill>
-                      {composerQuestionCanSubmit && (
-                        <button
-                          type="button"
-                          onClick={() => { void submitComposerQuestionIfReady(); }}
-                          disabled={composerQuestionSubmitting}
-                          className="ui-action-button px-1 py-0.5 text-[10px] text-accent disabled:opacity-40"
-                        >
-                          {composerQuestionSubmitting ? 'Submitting…' : '✓ Submit →'}
-                        </button>
-                      )}
                     </div>
 
                     {pendingAskUserQuestion.presentation.questions.length > 1 && (
@@ -5952,6 +5948,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             </svg>
                           </button>
                         </>
+                      ) : composerShowsQuestionSubmit ? (
+                        <button
+                          type="button"
+                          onClick={() => { void submitComposerQuestionIfReady(); }}
+                          disabled={composerDisabled || !composerQuestionCanSubmit || composerQuestionSubmitting}
+                          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-[11px] font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-default disabled:opacity-40"
+                          title={composerQuestionCanSubmit ? 'Submit answers' : 'Answer all questions to submit'}
+                          aria-label="Submit answers"
+                        >
+                          <span aria-hidden="true">✓</span>
+                          <span>{composerQuestionSubmitting ? 'Submitting…' : 'Submit'}</span>
+                        </button>
                       ) : composerHasContent ? (
                         <button
                           type="button"
