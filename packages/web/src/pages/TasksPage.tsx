@@ -114,7 +114,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', paddingTop: 0 }}
+      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -127,10 +127,11 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
         aria-label="Create automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '1120px',
-          height: 'min(700px, calc(100vh - 4.5rem))',
-          background: 'rgb(var(--color-surface) / 0.96)',
-          backdropFilter: 'blur(22px)',
+          maxWidth: '1080px',
+          height: 'min(860px, calc(100vh - 3.5rem))',
+          background: 'rgb(var(--color-surface) / 0.985)',
+          backdropFilter: 'blur(28px)',
+          boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
           overscrollBehavior: 'contain',
         }}
       >
@@ -155,7 +156,7 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   return (
     <div
       className="ui-overlay-backdrop"
-      style={{ background: 'rgb(0 0 0 / 0.52)', backdropFilter: 'blur(8px)', alignItems: 'center', justifyContent: 'center', paddingTop: 0 }}
+      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
           onClose();
@@ -168,10 +169,11 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
         aria-label="Edit automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '1120px',
-          height: 'min(700px, calc(100vh - 4.5rem))',
-          background: 'rgb(var(--color-surface) / 0.96)',
-          backdropFilter: 'blur(22px)',
+          maxWidth: '1080px',
+          height: 'min(860px, calc(100vh - 3.5rem))',
+          background: 'rgb(var(--color-surface) / 0.985)',
+          backdropFilter: 'blur(28px)',
+          boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
           overscrollBehavior: 'contain',
         }}
       >
@@ -181,31 +183,57 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-function AutomationTableRow({ task }: { task: ScheduledTaskSummary }) {
+function AutomationOverviewStat({
+  label,
+  value,
+  meta,
+}: {
+  label: string;
+  value: string;
+  meta: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</p>
+      <p className="text-[30px] font-semibold tracking-[-0.04em] text-primary">{value}</p>
+      <p className="text-[12px] leading-5 text-secondary">{meta}</p>
+    </div>
+  );
+}
+
+function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
   const { text, cls } = statusText(task);
   const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
-  const modelLabel = task.model?.split('/').pop() ?? 'Default';
-  const lastRunLabel = task.lastRunAt ? timeAgo(task.lastRunAt) : '—';
+  const modelLabel = task.model?.split('/').pop() ?? 'Default model';
+  const lastRunLabel = task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Never run';
   const summary = summarizePrompt(task.prompt) || 'No prompt yet.';
 
   return (
-    <tr className="border-t border-border-subtle/80 transition-colors hover:bg-surface/80">
-      <td className="px-4 py-3 align-top">
-        <Link to={`/automations/${encodeURIComponent(task.id)}`} className="block min-w-0">
-          <p className="text-[14px] font-medium text-primary">{formatTaskName(task)}</p>
-          <p className="mt-1 line-clamp-1 text-[12px] text-secondary">{summary}</p>
-        </Link>
-      </td>
-      <td className="px-4 py-3 align-top text-[12px] text-secondary">{scheduleLabel}</td>
-      <td className="px-4 py-3 align-top text-[12px] text-secondary">{lastRunLabel}</td>
-      <td className="px-4 py-3 align-top text-[12px] text-secondary">{modelLabel}</td>
-      <td className="px-4 py-3 align-top">
-        <span className={`inline-flex items-center gap-2 text-[12px] ${cls}`}>
-          <span className={`h-2 w-2 rounded-full ${statusDotClass(task)}`} />
-          {text}
-        </span>
-      </td>
-    </tr>
+    <Link
+      to={`/automations/${encodeURIComponent(task.id)}`}
+      className="group block border-t border-border-subtle py-5 first:border-t-0"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className={`inline-flex items-center gap-2 text-[12px] ${cls}`}>
+              <span className={`h-2 w-2 rounded-full ${statusDotClass(task)}`} />
+              {text}
+            </span>
+            <span className="text-[12px] text-secondary">{scheduleLabel}</span>
+          </div>
+          <p className="mt-2 break-words text-[18px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
+            {formatTaskName(task)}
+          </p>
+          <p className="mt-1 max-w-3xl text-[14px] leading-6 text-secondary">{summary}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-secondary">
+            <span>{lastRunLabel}</span>
+            <span>{modelLabel}</span>
+          </div>
+        </div>
+        <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
+      </div>
+    </Link>
   );
 }
 
@@ -503,44 +531,60 @@ function AutomationsOverview({
   onCreate: () => void;
 }) {
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
+  const runningCount = tasks.filter((task) => task.running).length;
+  const attentionCount = tasks.filter((task) => task.lastStatus === 'failure').length;
+  const enabledCount = tasks.filter((task) => task.enabled).length;
+  const disabledCount = tasks.length - enabledCount;
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-8">
-      <div className="mx-auto max-w-6xl space-y-8">
-        <div className="flex items-start justify-between gap-6">
-          <div className="max-w-2xl space-y-2">
-            <h1 className="text-[40px] font-semibold tracking-[-0.04em] text-primary">Automations</h1>
-            <p className="text-[15px] leading-6 text-secondary">
-              Scheduled prompts for recurring work.
-            </p>
+    <div className="h-full overflow-y-auto px-8 py-10">
+      <div className="mx-auto max-w-5xl space-y-10">
+        <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Scheduled work</p>
+            <div className="space-y-2">
+              <h1 className="text-[46px] font-semibold tracking-[-0.05em] text-primary">Automations</h1>
+              <p className="text-[15px] leading-7 text-secondary">
+                Scheduled prompts for recurring work.
+              </p>
+            </div>
           </div>
           <ToolbarButton className="rounded-full px-4 py-2 text-[13px] text-primary" onClick={onCreate}>+ New automation</ToolbarButton>
-        </div>
+        </header>
 
         {tasks.length === 0 ? (
-          <div className="max-w-xl space-y-2 py-6">
-            <h2 className="text-[22px] font-semibold tracking-tight text-primary">No automations yet.</h2>
-            <p className="text-[14px] leading-6 text-secondary">Use New automation to create one.</p>
-          </div>
+          <section className="max-w-2xl border-t border-border-subtle pt-10">
+            <h2 className="text-[24px] font-semibold tracking-tight text-primary">No automations yet.</h2>
+            <p className="mt-2 text-[15px] leading-7 text-secondary">Use New automation to create one.</p>
+            <div className="mt-5">
+              <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
+            </div>
+          </section>
         ) : (
-          <div className="overflow-x-auto rounded-[22px] border border-border-subtle bg-surface/35">
-            <table className="min-w-[760px] w-full border-collapse">
-              <thead>
-                <tr className="border-b border-border-subtle bg-surface/35 text-left">
-                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Automation</th>
-                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Schedule</th>
-                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Last run</th>
-                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Model</th>
-                  <th className="px-4 py-3 text-[11px] font-medium uppercase tracking-[0.14em] text-dim">Status</th>
-                </tr>
-              </thead>
-              <tbody>
+          <>
+            <section className="grid gap-8 border-t border-border-subtle pt-8 sm:grid-cols-2 xl:grid-cols-4">
+              <AutomationOverviewStat label="Automations" value={String(tasks.length)} meta="scheduled prompts in this workspace" />
+              <AutomationOverviewStat label="Running" value={String(runningCount)} meta="currently executing through the daemon" />
+              <AutomationOverviewStat label="Needs attention" value={String(attentionCount)} meta="last run failed or needs review" />
+              <AutomationOverviewStat label="Disabled" value={String(disabledCount)} meta={enabledCount === 0 ? 'no enabled schedules right now' : `${enabledCount} enabled right now`} />
+            </section>
+
+            <section className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">All automations</p>
+                  <p className="mt-1 text-[14px] leading-6 text-secondary">Open one to inspect its prompt, schedule, and run history.</p>
+                </div>
+                <p className="text-[12px] text-secondary">{rows.length} total</p>
+              </div>
+
+              <div className="border-t border-border-subtle">
                 {rows.map((task) => (
-                  <AutomationTableRow key={task.id} task={task} />
+                  <AutomationListRow key={task.id} task={task} />
                 ))}
-              </tbody>
-            </table>
-          </div>
+              </div>
+            </section>
+          </>
         )}
       </div>
     </div>

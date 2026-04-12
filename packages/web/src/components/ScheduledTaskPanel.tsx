@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
@@ -23,13 +23,10 @@ import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
-const INPUT_CLASS = 'w-full rounded-xl border border-border-default bg-base px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 focus:outline-none focus:border-accent/60';
+const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-base/80 px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base';
 const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
-const ACTION_BUTTON_CLASS = 'rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors';
-const COMPOSER_INSET_STYLE = {
-  background: 'rgb(var(--color-base) / 0.78)',
-  boxShadow: 'inset 0 1px 1px rgb(255 255 255 / 0.18), inset 0 0 0 1px rgb(0 0 0 / 0.035)',
-} as const;
+const FIELD_LABEL_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-dim';
+const FIELD_HELP_CLASS = 'text-[12px] leading-relaxed text-secondary';
 
 interface TaskFormState {
   title: string;
@@ -79,20 +76,15 @@ function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
 }
 
 function scheduleModeButtonClass(active: boolean): string {
-  return cx(
-    ACTION_BUTTON_CLASS,
-    active
-      ? 'border-accent/30 bg-accent/10 text-accent'
-      : 'border-border-subtle bg-base text-dim hover:border-border-default hover:text-primary',
-  );
+  return cx('ui-segmented-button', active && 'ui-segmented-button-active');
 }
 
 function dayButtonClass(active: boolean): string {
   return cx(
-    ACTION_BUTTON_CLASS,
+    'inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
     active
-      ? 'border-accent/20 bg-surface text-primary'
-      : 'border-border-subtle bg-base text-dim hover:border-border-default hover:text-primary',
+      ? 'border-border-default bg-elevated text-primary'
+      : 'border-border-subtle bg-base/70 text-secondary hover:border-border-default hover:bg-elevated/70 hover:text-primary',
   );
 }
 
@@ -143,10 +135,10 @@ async function refreshTaskSnapshot(setTasks: (tasks: ScheduledTaskSummary[]) => 
 function PromptText({ value }: { value: string }) {
   const lines = value.split('\n');
   return (
-    <div className="text-[12px] leading-relaxed text-secondary space-y-1 whitespace-pre-wrap break-words">
+    <div className="space-y-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">
       {lines.map((line, index) => {
         if (line.startsWith('## ') || line.startsWith('# ')) {
-          return <p key={index} className="text-primary font-semibold text-[13px] mt-2">{line.replace(/^#+\s/, '')}</p>;
+          return <p key={index} className="mt-2 text-[13px] font-semibold text-primary">{line.replace(/^#+\s/, '')}</p>;
         }
         if (line.startsWith('- ') || line.match(/^\d+\. /)) {
           return <p key={index} className="pl-2">{line}</p>;
@@ -200,33 +192,35 @@ function CronBuilderEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="ui-segmented-control" role="group" aria-label="Cron editor mode">
         <button
           type="button"
           onClick={() => onChange({ ...value, mode: 'builder' })}
           className={scheduleModeButtonClass(value.mode === 'builder')}
+          aria-pressed={value.mode === 'builder'}
         >
-          simple
+          Simple
         </button>
         <button
           type="button"
           onClick={() => onChange({ ...value, mode: 'raw' })}
           className={scheduleModeButtonClass(value.mode === 'raw')}
+          aria-pressed={value.mode === 'raw'}
         >
-          raw cron
+          Raw cron
         </button>
       </div>
 
       {!value.supported && value.mode === 'raw' && (
-        <p className="text-[11px] text-dim">
+        <p className="text-[12px] leading-relaxed text-secondary">
           This cron pattern is outside the simple editor. Keep editing raw cron, or switch to a simpler recurring pattern.
         </p>
       )}
 
       {value.mode === 'builder' ? (
         <div className="space-y-4">
-          <div className="space-y-1.5">
-            <label className="ui-card-meta">Pattern</label>
+          <label className="block space-y-1.5">
+            <span className={FIELD_LABEL_CLASS}>Pattern</span>
             <select
               value={value.builder.cadence}
               onChange={(event) => updateBuilder({ cadence: event.target.value as EasyTaskCadence })}
@@ -239,11 +233,11 @@ function CronBuilderEditor({
               <option value="weekly">Specific weekdays</option>
               <option value="monthly">Day of month</option>
             </select>
-          </div>
+          </label>
 
           {value.builder.cadence === 'hourly' && (
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Minute past the hour</label>
+            <label className="block space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Minute past the hour</span>
               <input
                 type="number"
                 min={0}
@@ -251,14 +245,15 @@ function CronBuilderEditor({
                 value={value.builder.minute}
                 onChange={(event) => updateBuilder({ minute: Number.parseInt(event.target.value || '0', 10) || 0 })}
                 className={INPUT_CLASS}
+                name="cronMinute"
               />
-            </div>
+            </label>
           )}
 
           {value.builder.cadence === 'interval' && (
             <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Every N hours</label>
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Every N hours</span>
                 <input
                   type="number"
                   min={1}
@@ -266,10 +261,11 @@ function CronBuilderEditor({
                   value={value.builder.intervalHours}
                   onChange={(event) => updateBuilder({ intervalHours: Number.parseInt(event.target.value || '1', 10) || 1 })}
                   className={INPUT_CLASS}
+                  name="cronIntervalHours"
                 />
-              </div>
-              <div className="space-y-1.5">
-                <label className="ui-card-meta">Minute past the hour</label>
+              </label>
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Minute past the hour</span>
                 <input
                   type="number"
                   min={0}
@@ -277,26 +273,28 @@ function CronBuilderEditor({
                   value={value.builder.minute}
                   onChange={(event) => updateBuilder({ minute: Number.parseInt(event.target.value || '0', 10) || 0 })}
                   className={INPUT_CLASS}
+                  name="cronIntervalMinute"
                 />
-              </div>
+              </label>
             </div>
           )}
 
           {(value.builder.cadence === 'daily' || value.builder.cadence === 'weekdays' || value.builder.cadence === 'weekly' || value.builder.cadence === 'monthly') && (
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Time</label>
+            <label className="block space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Time</span>
               <input
                 type="time"
                 value={formatTimeInputValue(value.builder.hour, value.builder.minute)}
                 onChange={(event) => handleTimeChange(event.target.value)}
                 className={INPUT_CLASS}
+                name="cronTime"
               />
-            </div>
+            </label>
           )}
 
           {value.builder.cadence === 'weekly' && (
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Days</label>
+            <div className="space-y-2">
+              <p className={FIELD_LABEL_CLASS}>Days</p>
               <div className="flex flex-wrap gap-2">
                 {WEEKDAY_OPTIONS.map((option) => (
                   <button
@@ -304,6 +302,7 @@ function CronBuilderEditor({
                     type="button"
                     onClick={() => toggleWeekday(option.value)}
                     className={dayButtonClass(value.builder.weekdays.includes(option.value))}
+                    aria-pressed={value.builder.weekdays.includes(option.value)}
                   >
                     {option.shortLabel}
                   </button>
@@ -313,8 +312,8 @@ function CronBuilderEditor({
           )}
 
           {value.builder.cadence === 'monthly' && (
-            <div className="space-y-1.5">
-              <label className="ui-card-meta">Day of month</label>
+            <label className="block space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Day of month</span>
               <input
                 type="number"
                 min={1}
@@ -322,26 +321,30 @@ function CronBuilderEditor({
                 value={value.builder.dayOfMonth}
                 onChange={(event) => updateBuilder({ dayOfMonth: Number.parseInt(event.target.value || '1', 10) || 1 })}
                 className={INPUT_CLASS}
+                name="cronDayOfMonth"
               />
-            </div>
+            </label>
           )}
 
-          <div className="space-y-1">
-            <p className="ui-card-meta">Preview</p>
-            <p className="text-[12px] text-secondary">{formatTaskSchedule({ cron: previewCron })}</p>
-            <p className="text-[11px] font-mono text-dim">{previewCron}</p>
+          <div className="space-y-1.5 border-t border-border-subtle pt-4">
+            <p className={FIELD_LABEL_CLASS}>Preview</p>
+            <p className="text-[13px] text-primary">{formatTaskSchedule({ cron: previewCron })}</p>
+            <p className="break-all font-mono text-[11px] text-dim">{previewCron}</p>
           </div>
         </div>
       ) : (
-        <div className="space-y-1.5">
-          <label className="ui-card-meta">Cron expression</label>
+        <label className="block space-y-1.5">
+          <span className={FIELD_LABEL_CLASS}>Cron expression</span>
           <input
             value={value.rawCron}
             onChange={(event) => onChange({ ...value, rawCron: event.target.value })}
             className={`${INPUT_CLASS} font-mono`}
             placeholder="0 9 * * 1-5"
+            name="cron"
+            autoComplete="off"
+            spellCheck={false}
           />
-        </div>
+        </label>
       )}
     </div>
   );
@@ -357,15 +360,6 @@ function summarizePathLabel(path: string): string {
   return segments[segments.length - 1] ?? trimmed;
 }
 
-function footerPickerButtonClass(active: boolean): string {
-  return cx(
-    'inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-[13px] text-primary transition-colors',
-    active
-      ? 'border-border-default bg-surface'
-      : 'border-border-subtle bg-base/70 hover:border-border-default hover:bg-surface',
-  );
-}
-
 function formatScheduleButtonLabel(state: TaskFormState): string {
   if (state.scheduleMode === 'at') {
     return state.atValue ? formatTaskSchedule({ at: fromDateTimeLocalValue(state.atValue) ?? undefined }) : 'One time';
@@ -373,6 +367,15 @@ function formatScheduleButtonLabel(state: TaskFormState): string {
 
   const cron = resolveCronExpression(state);
   return cron ? formatTaskSchedule({ cron }) : 'Schedule';
+}
+
+function EditorSummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-[13px] leading-relaxed">
+      <span className="text-secondary">{label}</span>
+      <span className="max-w-[12rem] text-right text-primary">{value}</span>
+    </div>
+  );
 }
 
 function TaskEditorForm({
@@ -394,27 +397,21 @@ function TaskEditorForm({
 }) {
   const { projects } = useAppData();
   const validationError = useMemo(() => validateTaskForm(value, mode), [mode, value]);
-  const [openMenu, setOpenMenu] = useState<'runIn' | 'project' | 'schedule' | 'more' | null>(null);
-  const menuRootRef = useRef<HTMLDivElement | null>(null);
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const { data: cwdState } = useApi(async () => api.defaultCwd(), 'task-editor-default-cwd');
   const { data: modelState } = useApi(async () => api.models(), 'task-editor-models');
-
-  useEffect(() => {
-    function handlePointerDown(event: MouseEvent) {
-      if (!menuRootRef.current?.contains(event.target as Node)) {
-        setOpenMenu(null);
-      }
-    }
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, []);
 
   useEffect(() => {
     if (value.runIn === 'worktree' && !value.projectPath.trim() && cwdState?.effectiveCwd) {
       onChange({ projectPath: cwdState.effectiveCwd });
     }
   }, [cwdState?.effectiveCwd, onChange, value.projectPath, value.runIn]);
+
+  useEffect(() => {
+    if (error) {
+      setSubmitAttempted(true);
+    }
+  }, [error]);
 
   const projectOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -446,158 +443,230 @@ function TaskEditorForm({
 
   const selectedProjectLabel = projectOptions.find((entry) => entry.path === value.projectPath.trim())?.label
     ?? summarizePathLabel(value.projectPath);
+  const scheduleSummary = formatScheduleButtonLabel(value);
+  const visibleError = error ?? (submitAttempted ? validationError : null);
+  const locationSummary = value.runIn === 'local'
+    ? 'Local workspace'
+    : value.projectPath.trim()
+      ? selectedProjectLabel
+      : 'Select project';
+  const projectHelp = value.runIn === 'local'
+    ? 'Runs from the local profile workspace without a repo-specific working directory.'
+    : value.projectPath.trim()
+      ? value.projectPath.trim()
+      : projectOptions.length === 0
+        ? 'No known worktrees yet. The current workspace will show up here when available.'
+        : 'Choose the working directory for this automation.';
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-        <div className="space-y-3">
-          <div className="rounded-[24px] px-5 py-4" style={COMPOSER_INSET_STYLE}>
-            <input
-              value={value.title}
-              onChange={(event) => onChange({ title: event.target.value })}
-              className="w-full bg-transparent text-[30px] font-semibold tracking-[-0.035em] text-primary outline-none placeholder:text-dim"
-              placeholder="Automation title"
-            />
+    <form
+      className="flex h-full min-h-0 flex-col"
+      onSubmit={(event) => {
+        event.preventDefault();
+        setSubmitAttempted(true);
+        if (validationError) {
+          return;
+        }
+        onSubmit();
+      }}
+    >
+      <div className="border-b border-border-subtle px-6 py-5">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-1.5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{mode === 'create' ? 'New automation' : 'Edit automation'}</p>
+            <h2 className="text-[24px] font-semibold tracking-tight text-primary">
+              {mode === 'create' ? 'Create a scheduled automation' : 'Update this automation'}
+            </h2>
+            <p className="text-[14px] leading-6 text-secondary">
+              Title, prompt, working directory, and schedule. Results stay attached to the automation.
+            </p>
+          </div>
+          <p className="text-[13px] text-secondary">{scheduleSummary}</p>
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+        <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0 space-y-8">
+            <section className="space-y-4">
+              <div className="space-y-1.5">
+                <p className={FIELD_LABEL_CLASS}>What to run</p>
+                <h3 className="text-[20px] font-semibold tracking-tight text-primary">Prompt</h3>
+                <p className={FIELD_HELP_CLASS}>Use the prompt body exactly like a normal conversation instruction. Mention nodes with @ when helpful.</p>
+              </div>
+
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Title</span>
+                <input
+                  value={value.title}
+                  onChange={(event) => onChange({ title: event.target.value })}
+                  className={INPUT_CLASS}
+                  placeholder="Automation title"
+                  name="title"
+                  autoComplete="off"
+                />
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Prompt</span>
+                <MentionTextarea
+                  value={value.prompt}
+                  onValueChange={(prompt) => onChange({ prompt })}
+                  className={`${INPUT_CLASS} min-h-[22rem] resize-y bg-base/60`}
+                  placeholder="Add prompt…"
+                  name="prompt"
+                />
+              </label>
+            </section>
           </div>
 
-          <div className="rounded-[24px] px-5 py-4" style={COMPOSER_INSET_STYLE}>
-            <MentionTextarea
-              value={value.prompt}
-              onValueChange={(prompt) => onChange({ prompt })}
-              className="min-h-[18rem] w-full resize-none bg-transparent text-[15px] leading-7 text-primary outline-none placeholder:text-dim"
-              placeholder="Add prompt…"
-            />
+          <div className="space-y-6 lg:border-l lg:border-border-subtle lg:pl-8">
+            <section className="space-y-4">
+              <div className="space-y-1.5">
+                <p className={FIELD_LABEL_CLASS}>When it runs</p>
+                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Schedule</h3>
+                <p className={FIELD_HELP_CLASS}>Choose a recurring schedule or set a one-time run.</p>
+              </div>
+
+              <div className="ui-segmented-control" role="group" aria-label="Schedule type">
+                <button
+                  type="button"
+                  onClick={() => onChange({ scheduleMode: 'cron' })}
+                  className={scheduleModeButtonClass(value.scheduleMode === 'cron')}
+                  aria-pressed={value.scheduleMode === 'cron'}
+                >
+                  Recurring
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ scheduleMode: 'at' })}
+                  className={scheduleModeButtonClass(value.scheduleMode === 'at')}
+                  aria-pressed={value.scheduleMode === 'at'}
+                >
+                  One time
+                </button>
+              </div>
+
+              {value.scheduleMode === 'cron' ? (
+                <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
+              ) : (
+                <label className="block space-y-1.5">
+                  <span className={FIELD_LABEL_CLASS}>Run at</span>
+                  <input
+                    type="datetime-local"
+                    value={value.atValue}
+                    onChange={(event) => onChange({ atValue: event.target.value })}
+                    className={INPUT_CLASS}
+                    name="runAt"
+                  />
+                </label>
+              )}
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <div className="space-y-1.5">
+                <p className={FIELD_LABEL_CLASS}>Where it runs</p>
+                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Working directory</h3>
+                <p className={FIELD_HELP_CLASS}>Use the local workspace root or bind the automation to a worktree.</p>
+              </div>
+
+              <div className="ui-segmented-control" role="group" aria-label="Run location">
+                <button
+                  type="button"
+                  onClick={() => onChange({ runIn: 'local' })}
+                  className={scheduleModeButtonClass(value.runIn === 'local')}
+                  aria-pressed={value.runIn === 'local'}
+                >
+                  Local
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onChange({ runIn: 'worktree' })}
+                  className={scheduleModeButtonClass(value.runIn === 'worktree')}
+                  aria-pressed={value.runIn === 'worktree'}
+                >
+                  Worktree
+                </button>
+              </div>
+
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Project</span>
+                <select
+                  value={value.projectPath.trim()}
+                  onChange={(event) => onChange({ projectPath: event.target.value, runIn: 'worktree' })}
+                  className={SELECT_CLASS}
+                  name="projectPath"
+                  disabled={value.runIn !== 'worktree'}
+                >
+                  <option value="">Select project</option>
+                  {projectOptions.map((entry) => (
+                    <option key={entry.path} value={entry.path}>{entry.label}</option>
+                  ))}
+                </select>
+              </label>
+              <p className={`${FIELD_HELP_CLASS} break-all`}>{projectHelp}</p>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <div className="space-y-1.5">
+                <p className={FIELD_LABEL_CLASS}>Runtime</p>
+                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Model</h3>
+                <p className={FIELD_HELP_CLASS}>Leave these on the defaults unless this automation needs something specific.</p>
+              </div>
+
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Model</span>
+                <select value={value.model} onChange={(event) => onChange({ model: event.target.value })} className={SELECT_CLASS} name="model">
+                  <option value="">Default</option>
+                  {(modelState?.models ?? []).map((model) => (
+                    <option key={model.id} value={model.id}>{model.id}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-1.5">
+                <span className={FIELD_LABEL_CLASS}>Reasoning</span>
+                <select value={value.thinkingLevel} onChange={(event) => onChange({ thinkingLevel: event.target.value })} className={SELECT_CLASS} name="thinkingLevel">
+                  {THINKING_LEVEL_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </label>
+            </section>
+
+            <section className="space-y-3 border-t border-border-subtle pt-6">
+              <p className={FIELD_LABEL_CLASS}>Summary</p>
+              <div className="space-y-3">
+                <EditorSummaryRow label="Schedule" value={scheduleSummary} />
+                <EditorSummaryRow label="Location" value={locationSummary} />
+                <EditorSummaryRow label="Model" value={value.model || 'Default'} />
+                <EditorSummaryRow label="Reasoning" value={value.thinkingLevel || 'Default'} />
+              </div>
+            </section>
           </div>
         </div>
       </div>
 
-      <div className="border-t border-border-subtle px-5 py-4" ref={menuRootRef}>
-        {(validationError || error) && (
-          <p className="mb-3 text-[12px] text-danger">{validationError ?? error}</p>
-        )}
-
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <button type="button" onClick={() => setOpenMenu((current) => current === 'runIn' ? null : 'runIn')} className={footerPickerButtonClass(openMenu === 'runIn')}>
-                <span>{value.runIn === 'local' ? 'Local' : 'Worktree'}</span>
-              </button>
-              {openMenu === 'runIn' && (
-                <div className="ui-menu-shell left-0 right-auto min-w-[170px] px-2 py-2">
-                  {(['local', 'worktree'] as const).map((option) => (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => {
-                        onChange({ runIn: option });
-                        setOpenMenu(null);
-                      }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-elevated"
-                    >
-                      <span>{option === 'local' ? 'Local' : 'Worktree'}</span>
-                      {value.runIn === option ? <span>✓</span> : null}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <button type="button" onClick={() => setOpenMenu((current) => current === 'project' ? null : 'project')} className={footerPickerButtonClass(openMenu === 'project')}>
-                <span>{value.projectPath.trim() ? selectedProjectLabel : 'Select project'}</span>
-              </button>
-              {openMenu === 'project' && (
-                <div className="ui-menu-shell left-0 right-auto min-w-[220px] px-2 py-2">
-                  {projectOptions.length === 0 ? (
-                    <p className="px-3 py-2 text-[12px] text-dim">No projects available.</p>
-                  ) : projectOptions.map((entry) => (
-                    <button
-                      key={entry.path}
-                      type="button"
-                      onClick={() => {
-                        onChange({ projectPath: entry.path, runIn: 'worktree' });
-                        setOpenMenu(null);
-                      }}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-[13px] text-primary hover:bg-elevated"
-                    >
-                      <span className="truncate">{entry.label}</span>
-                      {value.projectPath.trim() === entry.path ? <span>✓</span> : null}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <button type="button" onClick={() => setOpenMenu((current) => current === 'schedule' ? null : 'schedule')} className={footerPickerButtonClass(openMenu === 'schedule')}>
-                <span>{formatScheduleButtonLabel(value)}</span>
-              </button>
-              {openMenu === 'schedule' && (
-                <div className="ui-menu-shell left-0 right-auto w-[340px] px-3 py-3">
-                  <div className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => onChange({ scheduleMode: 'cron' })} className={scheduleModeButtonClass(value.scheduleMode === 'cron')}>Recurring</button>
-                      <button type="button" onClick={() => onChange({ scheduleMode: 'at' })} className={scheduleModeButtonClass(value.scheduleMode === 'at')}>One time</button>
-                    </div>
-                    {value.scheduleMode === 'cron' ? (
-                      <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
-                    ) : (
-                      <div className="space-y-1.5">
-                        <label className="ui-card-meta">Run at</label>
-                        <input
-                          type="datetime-local"
-                          value={value.atValue}
-                          onChange={(event) => onChange({ atValue: event.target.value })}
-                          className={INPUT_CLASS}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="relative">
-              <button type="button" onClick={() => setOpenMenu((current) => current === 'more' ? null : 'more')} className={footerPickerButtonClass(openMenu === 'more')}>
-                <span>…</span>
-              </button>
-              {openMenu === 'more' && (
-                <div className="ui-menu-shell left-0 right-auto w-[280px] px-3 py-3">
-                  <div className="space-y-3">
-                    <div className="space-y-1.5">
-                      <label className="ui-card-meta">Model</label>
-                      <select value={value.model} onChange={(event) => onChange({ model: event.target.value })} className={SELECT_CLASS}>
-                        <option value="">Default</option>
-                        {(modelState?.models ?? []).map((model) => (
-                          <option key={model.id} value={model.id}>{model.id}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <label className="ui-card-meta">Reasoning</label>
-                      <select value={value.thinkingLevel} onChange={(event) => onChange({ thinkingLevel: event.target.value })} className={SELECT_CLASS}>
-                        {THINKING_LEVEL_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>{option.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+      <div className="border-t border-border-subtle px-6 py-4">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            {visibleError ? (
+              <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>
+            ) : (
+              <p className="text-[12px] leading-relaxed text-secondary">Automations run through the daemon and keep their run history attached here.</p>
+            )}
           </div>
-
           <div className="flex items-center gap-3">
-            <button type="button" onClick={onCancel} className="text-[13px] text-secondary hover:text-primary transition-colors">
+            <button type="button" onClick={onCancel} className="text-[13px] text-secondary transition-colors hover:text-primary">
               Cancel
             </button>
-            <ToolbarButton onClick={onSubmit} disabled={saving || Boolean(validationError)}>
+            <ToolbarButton type="submit" disabled={saving}>
               {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create' : 'Save')}
             </ToolbarButton>
           </div>
         </div>
       </div>
-    </div>
+    </form>
   );
 }
 
