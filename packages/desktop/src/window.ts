@@ -5,6 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { loadDesktopConfig, updateDesktopWindowState } from './state/desktop-config.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
+import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
 
@@ -114,6 +115,18 @@ export class DesktopWindowController {
 
   async openAbsoluteUrl(url: string): Promise<void> {
     await this.openHostAbsoluteUrl(this.hostManager.getActiveHostId(), url);
+  }
+
+  async openStartupErrorWindow(input: {
+    message: string;
+    logsDir: string;
+  }): Promise<void> {
+    const hostId = this.hostManager.getActiveHostId();
+    const host = this.hostManager.getHostRecord(hostId);
+    const partition = getHostBrowserPartition(host.id);
+    const window = this.ensureWindow(host, partition, 'main');
+    const dataUrl = buildDesktopStartupErrorPageDataUrl(input);
+    await this.loadRawWindowUrl(window, dataUrl);
   }
 
   async openHostAbsoluteUrl(hostId: string, url: string): Promise<void> {
@@ -360,6 +373,16 @@ export class DesktopWindowController {
 
     if (currentUrl !== targetUrl) {
       await window.loadURL(targetUrl);
+    }
+
+    this.focusWindow(window);
+  }
+
+  private async loadRawWindowUrl(window: BrowserWindow, url: string): Promise<void> {
+    const currentUrl = window.webContents.getURL();
+
+    if (currentUrl !== url) {
+      await window.loadURL(url);
     }
 
     this.focusWindow(window);

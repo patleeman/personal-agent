@@ -45,6 +45,20 @@ function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop') !== null;
 }
 
+export function resolveRouteContentBoundaryErrorMessage(error: unknown): string | null {
+  if (error instanceof Error) {
+    const message = error.message.trim();
+    return message.length > 0 ? message : null;
+  }
+
+  if (typeof error === 'string') {
+    const message = error.trim();
+    return message.length > 0 ? message : null;
+  }
+
+  return null;
+}
+
 // ── Resize hook ───────────────────────────────────────────────────────────────
 
 interface ResizeOptions {
@@ -163,16 +177,29 @@ class RouteContentBoundary extends Component<{
   children: ReactNode;
 }, {
   hasError: boolean;
+  errorMessage: string | null;
 }> {
-  state = { hasError: false };
+  state = {
+    hasError: false,
+    errorMessage: null,
+  };
 
-  static getDerivedStateFromError(): { hasError: boolean } {
-    return { hasError: true };
+  static getDerivedStateFromError(error: unknown): {
+    hasError: boolean;
+    errorMessage: string | null;
+  } {
+    return {
+      hasError: true,
+      errorMessage: resolveRouteContentBoundaryErrorMessage(error),
+    };
   }
 
   componentDidUpdate(prevProps: Readonly<{ resetKey: string }>) {
     if (this.state.hasError && prevProps.resetKey !== this.props.resetKey) {
-      this.setState({ hasError: false });
+      this.setState({
+        hasError: false,
+        errorMessage: null,
+      });
     }
   }
 
@@ -186,6 +213,7 @@ class RouteContentBoundary extends Component<{
     const body = isConversationRoute
       ? 'This conversation may be stale, missing, or temporarily broken. Open another conversation or start a new one.'
       : 'Try another page, then come back if needed.';
+    const errorMessage = this.state.errorMessage;
 
     return (
       <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
@@ -194,6 +222,12 @@ class RouteContentBoundary extends Component<{
             <p className="text-[11px] uppercase tracking-[0.18em] text-dim">Recovered from render error</p>
             <h1 className="mt-2 text-[22px] font-semibold text-primary">{title}</h1>
             <p className="mt-2 text-[13px] leading-6 text-secondary">{body}</p>
+            {errorMessage ? (
+              <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-dim">Error details</p>
+                <p className="mt-2 whitespace-pre-wrap break-words font-mono text-[12px] leading-5 text-primary">{errorMessage}</p>
+              </div>
+            ) : null}
             <div className="mt-5 flex flex-wrap gap-2">
               <Link to="/conversations/new" className="ui-action-button">New conversation</Link>
             </div>

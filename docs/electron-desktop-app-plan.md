@@ -40,6 +40,8 @@ Behavior to expect:
 - the app keeps a standard application menu while its windows are focused, even though it runs as a menu bar app
 - quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
+- if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path
+- if the renderer recovers from a route-level crash inside the normal shell, the fallback card shows the thrown error message under **Error details**
 
 ## Desktop shortcuts
 

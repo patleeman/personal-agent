@@ -54,6 +54,12 @@ function reportDesktopError(error: unknown): void {
 
   try {
     const { desktopLogsDir } = resolveDesktopRuntimePaths();
+    void windowController?.openStartupErrorWindow({
+      message,
+      logsDir: desktopLogsDir,
+    }).catch((windowError) => {
+      logBootstrapError(windowError);
+    });
     dialog.showErrorBox('Personal Agent error', `${message}\n\nSee desktop logs in:\n${desktopLogsDir}`);
   } catch {
     dialog.showErrorBox('Personal Agent error', message);

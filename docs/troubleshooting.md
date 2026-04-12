@@ -138,6 +138,11 @@ The local desktop backend intentionally refuses to start if:
 
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 
+Recent desktop builds also try to surface the failure inside the main window:
+
+- startup/bootstrap failures open a dedicated error page in Electron with the error message and a shortcut to the desktop logs
+- renderer recoveries inside the normal app shell keep the **Conversation unavailable** card, but now include the thrown error message in an **Error details** section
+
 Desktop logs live under:
 
 ```text
