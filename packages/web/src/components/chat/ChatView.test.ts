@@ -734,7 +734,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('Fifth item.');
   });
 
-  it('renders a resume action for the tail internal-work cluster when recovery is available', () => {
+  it('renders a continue action for the tail internal-work cluster when recovery is available', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
         type: 'tool_use',
@@ -745,14 +745,14 @@ describe('chat view streaming disclosure', () => {
         status: 'error',
       }],
       onResumeConversation: () => undefined,
-      resumeConversationTitle: 'Resume the interrupted turn.',
+      resumeConversationTitle: 'Continue the interrupted turn.',
     }));
 
-    expect(html).toContain('resume');
+    expect(html).toContain('continue');
     expect(html).toContain('Internal work');
   });
 
-  it('renders a resume action for a tail error trace when recovery is available', () => {
+  it('renders a continue action for a tail error trace when recovery is available', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
         type: 'error',
@@ -763,7 +763,7 @@ describe('chat view streaming disclosure', () => {
       resumeConversationTitle: 'Ask the agent to continue from the last error.',
     }));
 
-    expect(html).toContain('resume');
+    expect(html).toContain('continue');
     expect(html).toContain('Internal work');
     expect(html).toContain('ui-pill-danger');
   });

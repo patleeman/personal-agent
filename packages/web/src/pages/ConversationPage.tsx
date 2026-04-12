@@ -4162,10 +4162,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showNotice(
         'accent',
         result.replayedPendingOperation
-          ? 'Resuming interrupted turn…'
+          ? 'Continuing interrupted turn…'
           : result.usedFallbackPrompt
-            ? 'Resuming with a follow-up prompt…'
-            : 'Conversation resumed.',
+            ? 'Continuing with a follow-up prompt…'
+            : 'Conversation ready to continue.',
       );
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -5175,7 +5175,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}
               resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
               resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
-              resumeConversationLabel={conversationResumeState.actionLabel ?? 'resume'}
+              resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
               windowingBadgeTopOffset={visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
             />
           </>
@@ -5417,7 +5417,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               disabled={resumeConversationBusy}
               className="ui-action-button shrink-0 text-[11px]"
             >
-              {resumeConversationBusy ? 'Resuming…' : 'Resume conversation'}
+              {resumeConversationBusy ? 'Continuing…' : 'Continue conversation'}
             </button>
           </div>
         </div>

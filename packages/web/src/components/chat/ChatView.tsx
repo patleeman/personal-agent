@@ -1974,7 +1974,7 @@ function ResumeConversationAction({
   onResume,
   busy = false,
   title,
-  label = 'resume',
+  label = 'continue',
   variant = 'compact',
 }: {
   onResume?: () => Promise<void> | void;
@@ -2735,7 +2735,7 @@ export const ChatView = memo(function ChatView({
   onResumeConversation,
   resumeConversationBusy = false,
   resumeConversationTitle,
-  resumeConversationLabel = 'resume',
+  resumeConversationLabel = 'continue',
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);

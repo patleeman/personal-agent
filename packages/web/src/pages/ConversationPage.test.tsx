@@ -180,10 +180,10 @@ describe('conversation resume banner', () => {
   it('uses interruption-specific copy so stopped sessions do not read like a live run', () => {
     expect(resolveConversationResumeBannerCopy({
       reason: 'interrupted',
-      title: 'Resume this unfinished conversation. The previous turn cannot be replayed exactly.',
+      title: 'Continue this unfinished conversation. The previous turn cannot be replayed exactly.',
     })).toEqual({
       eyebrow: 'Conversation interrupted',
-      body: 'Resume this unfinished conversation. The previous turn cannot be replayed exactly.',
+      body: 'Continue this unfinished conversation. The previous turn cannot be replayed exactly.',
     });
 
     expect(resolveConversationResumeBannerCopy({

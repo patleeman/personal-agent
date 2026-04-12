@@ -84,11 +84,11 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'replay',
       reason: 'interrupted',
-      actionLabel: 'resume',
+      actionLabel: 'continue',
     });
   });
 
-  it('keeps the resume label when replay is not available', () => {
+  it('keeps the continue label when replay is not available', () => {
     const state = getConversationResumeState({
       run: createRun({ status: 'interrupted', pendingOperation: null }),
       isLiveSession: false,
@@ -98,7 +98,7 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'interrupted',
-      actionLabel: 'resume',
+      actionLabel: 'continue',
     });
   });
 
@@ -119,7 +119,7 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'error',
-      actionLabel: 'resume',
+      actionLabel: 'continue',
     });
   });
 
@@ -164,7 +164,7 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'interrupted',
-      actionLabel: 'resume',
+      actionLabel: 'continue',
     });
   });
 
@@ -177,7 +177,7 @@ describe('conversation resume helpers', () => {
     expect(state.canResume).toBe(false);
   });
 
-  it('offers resume for a live conversation that ended with an error', () => {
+  it('offers continue for a live conversation that ended with an error', () => {
     const state = getConversationResumeState({
       run: createRun({ status: 'waiting' }),
       isLiveSession: true,
@@ -192,7 +192,7 @@ describe('conversation resume helpers', () => {
       canResume: true,
       mode: 'continue',
       reason: 'error',
-      actionLabel: 'resume',
+      actionLabel: 'continue',
     });
   });
 });
