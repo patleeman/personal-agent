@@ -30,6 +30,7 @@ function createTempDir(prefix: string): string {
 
 beforeEach(() => {
   process.env = { ...originalEnv };
+  delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
   spawnMock.mockReset();
   getWebUiServiceStatusMock.mockReset();
 });

@@ -90,6 +90,7 @@ function createStatus(overrides: Record<string, unknown> = {}) {
 describe('web UI config', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
     delete process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE;
 
     filterSystemLogTailLinesMock.mockReset();

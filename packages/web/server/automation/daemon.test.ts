@@ -82,6 +82,8 @@ describe('automation daemon', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
+    delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
+    delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE;
     getDaemonStatusMock.mockReset();
     getManagedDaemonServiceStatusMock.mockReset();
     installManagedDaemonServiceMock.mockReset();
