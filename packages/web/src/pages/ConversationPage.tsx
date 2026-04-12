@@ -1151,9 +1151,15 @@ interface ConversationInitialDeferredResumeState {
   resumes: DeferredResumeSummary[];
 }
 
+interface ConversationDraftHydrationState {
+  conversationId: string;
+  enableAutoModeOnLoad?: boolean;
+}
+
 interface ConversationLocationState {
   initialModelPreferenceState?: ConversationInitialModelPreferenceState;
   initialDeferredResumeState?: ConversationInitialDeferredResumeState;
+  draftHydrationState?: ConversationDraftHydrationState;
 }
 
 export function buildConversationInitialModelPreferenceState(input: {
@@ -1210,6 +1216,26 @@ export function resolveConversationInitialDeferredResumeState(input: {
   }
 
   return Array.isArray(candidate.resumes) ? candidate.resumes : [];
+}
+
+export function resolveConversationDraftHydrationState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  locationState: unknown;
+}): ConversationDraftHydrationState | null {
+  if (input.draft || !input.conversationId || !input.locationState || typeof input.locationState !== 'object') {
+    return null;
+  }
+
+  const candidate = (input.locationState as ConversationLocationState).draftHydrationState;
+  if (!candidate || typeof candidate !== 'object' || candidate.conversationId !== input.conversationId) {
+    return null;
+  }
+
+  return {
+    conversationId: candidate.conversationId,
+    ...(candidate.enableAutoModeOnLoad === true ? { enableAutoModeOnLoad: true } : {}),
+  };
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
@@ -1859,8 +1885,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     conversationId: id,
     locationState: location.state,
   }), [draft, id, location.state]);
+  const initialDraftHydrationState = useMemo(() => resolveConversationDraftHydrationState({
+    draft,
+    conversationId: id,
+    locationState: location.state,
+  }), [draft, id, location.state]);
   const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
   const skippedInitialDeferredResumeLocationKeyRef = useRef<string | null>(null);
+  const appliedInitialDraftHydrationLocationKeyRef = useRef<string | null>(null);
+  const appliedDraftAutoModeLocationKeyRef = useRef<string | null>(null);
   const [draftCwdValue, setDraftCwdValue] = useState('');
   const [draftCwdEditorOpen, setDraftCwdEditorOpen] = useState(false);
   const [draftCwdDraft, setDraftCwdDraft] = useState('');
@@ -1978,6 +2011,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationEventVersion, draft, id]);
 
+  useEffect(() => {
+    if (draft || !id || !initialDraftHydrationState) {
+      return;
+    }
+
+    if (appliedInitialDraftHydrationLocationKeyRef.current === location.key) {
+      return;
+    }
+
+    appliedInitialDraftHydrationLocationKeyRef.current = location.key;
+    const storedAttachments = readDraftConversationAttachments();
+    if (storedAttachments.images.length > 0) {
+      setAttachments(storedAttachments.images.map((image, index) => {
+        const extension = fileExtensionForMimeType(image.mimeType);
+        const name = image.name?.trim() || `draft-image-${index + 1}.${extension}`;
+        return base64ToFile(image.data, image.mimeType, name);
+      }));
+    }
+    if (storedAttachments.drawings.length > 0) {
+      setDrawingAttachments(storedAttachments.drawings);
+    }
+    clearDraftConversationAttachments();
+  }, [draft, id, initialDraftHydrationState, location.key]);
+
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
 
@@ -2019,6 +2076,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
+
+  useEffect(() => {
+    if (draft || !id || !initialDraftHydrationState?.enableAutoModeOnLoad) {
+      return;
+    }
+
+    if (appliedDraftAutoModeLocationKeyRef.current === location.key) {
+      return;
+    }
+
+    appliedDraftAutoModeLocationKeyRef.current = location.key;
+    setConversationAutoModeBusy(true);
+    api.updateConversationAutoMode(id, { enabled: true }, currentSurfaceId)
+      .then((nextState) => {
+        setConversationAutoModeState(nextState);
+      })
+      .catch((error) => {
+        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      })
+      .finally(() => {
+        setConversationAutoModeBusy(false);
+      });
+  }, [currentSurfaceId, draft, id, initialDraftHydrationState, location.key, showNotice]);
+
   const ensureConversationCanControl = useCallback((_action: string): boolean => {
     return true;
   }, []);
@@ -3435,8 +3516,62 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return recovered.conversationId;
   }, [id, isLiveSession, streamReconnect, streamTakeover]);
 
+  const materializeDraftConversation = useCallback(async (options: { enableAutoModeOnLoad?: boolean } = {}) => {
+    if (!draft) {
+      if (!id) {
+        throw new Error('Conversation unavailable.');
+      }
+
+      return id;
+    }
+
+    const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+      ...(currentModel ? { model: currentModel } : {}),
+      ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+    });
+    primeCreatedConversationOpenCaches(created, {
+      tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+      bootstrapVersionKey: conversationVersionKey,
+      sessionDetailVersion: conversationEventVersion,
+    });
+
+    const newId = created.id;
+    if (input.length > 0) {
+      persistForkPromptDraft(newId, input);
+    }
+
+    clearDraftConversationComposer();
+    clearDraftConversationCwd();
+    clearDraftConversationModel();
+    clearDraftConversationThinkingLevel();
+
+    ensureConversationTabOpen(newId);
+    navigate(`/conversations/${newId}`, {
+      replace: true,
+      state: {
+        initialModelPreferenceState: buildConversationInitialModelPreferenceState({
+          conversationId: newId,
+          currentModel,
+          currentThinkingLevel,
+          defaultModel,
+          defaultThinkingLevel,
+        }),
+        initialDeferredResumeState: {
+          conversationId: newId,
+          resumes: [],
+        },
+        draftHydrationState: {
+          conversationId: newId,
+          ...(options.enableAutoModeOnLoad ? { enableAutoModeOnLoad: true } : {}),
+        },
+      } satisfies ConversationLocationState,
+    });
+
+    return newId;
+  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, defaultModel, defaultThinkingLevel, draft, draftCwdValue, id, input, navigate]);
+
   const toggleConversationAutoMode = useCallback(async () => {
-    if (draft || !id || conversationAutoModeBusy) {
+    if (conversationAutoModeBusy) {
       return;
     }
 
@@ -3444,6 +3579,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationAutoModeBusy(true);
 
     try {
+      if (draft) {
+        if (!nextEnabled) {
+          return;
+        }
+
+        await materializeDraftConversation({ enableAutoModeOnLoad: true });
+        return;
+      }
+
+      if (!id) {
+        return;
+      }
+
       const targetConversationId = nextEnabled
         ? await ensureConversationIsLive('enable auto mode')
         : id;
@@ -3461,7 +3609,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationAutoModeBusy(false);
     }
-  }, [conversationAutoModeBusy, conversationAutoModeEnabled, currentSurfaceId, draft, ensureConversationIsLive, id, showNotice]);
+  }, [conversationAutoModeBusy, conversationAutoModeEnabled, currentSurfaceId, draft, ensureConversationIsLive, id, materializeDraftConversation, showNotice]);
 
   const rewindConversationFromMessage = useCallback(async (messageIndex: number) => {
     if (!id || !realMessages) {
@@ -5157,7 +5305,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <ConversationWorkspaceShell contextRailEnabled={!draft}>
+    <ConversationWorkspaceShell>
       {() => (
         <div className="flex h-full flex-col overflow-hidden">
           <PageHeader className="min-h-[44px] gap-2 py-2">
@@ -5685,7 +5833,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
                       />
-                      {!draft && id && (
+                      {(draft || id) && (
                         <ConversationAutoModeToggle
                           enabled={conversationAutoModeEnabled}
                           busy={conversationAutoModeBusy}

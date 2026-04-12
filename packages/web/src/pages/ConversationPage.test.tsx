@@ -37,6 +37,7 @@ import {
   resolveConversationComposerShellStateClassName,
   resolveConversationInitialModelPreferenceState,
   resolveConversationInitialDeferredResumeState,
+  resolveConversationDraftHydrationState,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -137,6 +138,46 @@ describe('conversation initial deferred resume state', () => {
         initialDeferredResumeState: {
           conversationId: 'conv-123',
           resumes: [],
+        },
+      },
+    })).toBeNull();
+  });
+});
+
+describe('conversation draft hydration state', () => {
+  it('only reuses carried draft hydration state for the matching non-draft conversation route', () => {
+    expect(resolveConversationDraftHydrationState({
+      draft: false,
+      conversationId: 'conv-123',
+      locationState: {
+        draftHydrationState: {
+          conversationId: 'conv-123',
+          enableAutoModeOnLoad: true,
+        },
+      },
+    })).toEqual({
+      conversationId: 'conv-123',
+      enableAutoModeOnLoad: true,
+    });
+
+    expect(resolveConversationDraftHydrationState({
+      draft: true,
+      conversationId: 'conv-123',
+      locationState: {
+        draftHydrationState: {
+          conversationId: 'conv-123',
+          enableAutoModeOnLoad: true,
+        },
+      },
+    })).toBeNull();
+
+    expect(resolveConversationDraftHydrationState({
+      draft: false,
+      conversationId: 'conv-456',
+      locationState: {
+        draftHydrationState: {
+          conversationId: 'conv-123',
+          enableAutoModeOnLoad: true,
         },
       },
     })).toBeNull();
@@ -945,7 +986,7 @@ describe('ConversationPage', () => {
     )).not.toThrow();
   });
 
-  it('keeps the new conversation page full-width and shows inline cwd controls', () => {
+  it('shows the auto mode toggle on the new conversation page and keeps inline cwd controls', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <ConversationPage draft />
@@ -956,6 +997,7 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('Show right sidebar');
     expect(html).toContain('set working directory');
     expect(html).toContain('Choose the initial working directory for this draft conversation');
+    expect(html).toContain('Turn on conversation auto mode');
     expect(html).not.toContain('>draft<');
     expect(html).not.toContain('right rail');
   });
