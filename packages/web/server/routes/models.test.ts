@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +11,7 @@ const {
   getProviderOAuthLoginStateMock,
   getVaultRootMock,
   readMachineInstructionFilesMock,
+  readMachineSkillDirsMock,
   invalidateAppTopicsMock,
   logErrorMock,
   normalizeSavedModelPreferencesMock,
@@ -32,6 +33,7 @@ const {
   updateMachineConfigMock,
   upsertModelProviderMock,
   writeMachineInstructionFilesMock,
+  writeMachineSkillDirsMock,
   upsertModelProviderModelMock,
   writeSavedDefaultCwdPreferenceMock,
   writeSavedModelPreferencesMock,
@@ -43,6 +45,7 @@ const {
   getProviderOAuthLoginStateMock: vi.fn(),
   getVaultRootMock: vi.fn(),
   readMachineInstructionFilesMock: vi.fn(),
+  readMachineSkillDirsMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   logErrorMock: vi.fn(),
   normalizeSavedModelPreferencesMock: vi.fn(),
@@ -64,6 +67,7 @@ const {
   updateMachineConfigMock: vi.fn(),
   upsertModelProviderMock: vi.fn(),
   writeMachineInstructionFilesMock: vi.fn(),
+  writeMachineSkillDirsMock: vi.fn(),
   upsertModelProviderModelMock: vi.fn(),
   writeSavedDefaultCwdPreferenceMock: vi.fn(),
   writeSavedModelPreferencesMock: vi.fn(),
@@ -75,8 +79,10 @@ vi.mock('@personal-agent/core', () => ({
   getVaultRoot: getVaultRootMock,
   readMachineConfig: readMachineConfigMock,
   readMachineInstructionFiles: readMachineInstructionFilesMock,
+  readMachineSkillDirs: readMachineSkillDirsMock,
   updateMachineConfig: updateMachineConfigMock,
   writeMachineInstructionFiles: writeMachineInstructionFilesMock,
+  writeMachineSkillDirs: writeMachineSkillDirsMock,
 }));
 
 vi.mock('../models/modelPreferences.js', () => ({
@@ -247,6 +253,7 @@ describe('model routes', () => {
     getProviderOAuthLoginStateMock.mockReset();
     getVaultRootMock.mockReset();
     readMachineInstructionFilesMock.mockReset();
+    readMachineSkillDirsMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     logErrorMock.mockReset();
     normalizeSavedModelPreferencesMock.mockReset();
@@ -269,6 +276,7 @@ describe('model routes', () => {
     upsertModelProviderMock.mockReset();
     upsertModelProviderModelMock.mockReset();
     writeMachineInstructionFilesMock.mockReset();
+    writeMachineSkillDirsMock.mockReset();
     writeSavedDefaultCwdPreferenceMock.mockReset();
     writeSavedModelPreferencesMock.mockReset();
 
@@ -278,6 +286,7 @@ describe('model routes', () => {
     getProviderOAuthLoginStateMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     getVaultRootMock.mockReturnValue('/effective-vault');
     readMachineInstructionFilesMock.mockImplementation(() => [...((machineConfig.instructionFiles as string[] | undefined) ?? [])]);
+    readMachineSkillDirsMock.mockImplementation(() => [...((machineConfig.skillDirs as string[] | undefined) ?? [])]);
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'model-a',
       currentThinkingLevel: 'high',
@@ -299,6 +308,14 @@ describe('model routes', () => {
       machineConfig = instructionFiles.length > 0 ? { ...machineConfig, instructionFiles: [...instructionFiles] } : (() => {
         const next = { ...machineConfig };
         delete next.instructionFiles;
+        return next;
+      })();
+      return machineConfig;
+    });
+    writeMachineSkillDirsMock.mockImplementation((skillDirs: string[]) => {
+      machineConfig = skillDirs.length > 0 ? { ...machineConfig, skillDirs: [...skillDirs] } : (() => {
+        const next = { ...machineConfig };
+        delete next.skillDirs;
         return next;
       })();
       return machineConfig;
@@ -459,6 +476,50 @@ describe('model routes', () => {
       effectiveRoot: validDir,
       defaultRoot: '/default-vault',
       source: 'config',
+    });
+  });
+
+  it('reads and writes skill folder state with filesystem validation', () => {
+    const { patchHandler, getHandler, materializeWebProfile } = createDesktopHarness(allocateFiles());
+    const validDir = mkdtempSync(join(tmpdir(), 'pa-skill-folders-'));
+    const skillDirA = join(validDir, 'skills-a');
+    const skillDirB = join(validDir, 'skills-b');
+    const missingDir = join(validDir, 'missing');
+    const invalidFile = join(validDir, 'not-a-dir.txt');
+    mkdirSync(skillDirA, { recursive: true });
+    mkdirSync(skillDirB, { recursive: true });
+    writeFileSync(invalidFile, 'nope');
+
+    machineConfig.skillDirs = [skillDirA];
+    const readRes = createResponse();
+    getHandler('/api/skill-folders')(createRequest(), readRes);
+    expect(readRes.json).toHaveBeenCalledWith({
+      configFile: '/config/config.json',
+      skillDirs: [skillDirA],
+    });
+
+    const invalidRes = createResponse();
+    patchHandler('/api/skill-folders')(createRequest({ body: { skillDirs: 'bad' } }), invalidRes);
+    expect(invalidRes.status).toHaveBeenCalledWith(400);
+    expect(invalidRes.json).toHaveBeenCalledWith({ error: 'skillDirs must be an array of strings' });
+
+    const missingRes = createResponse();
+    patchHandler('/api/skill-folders')(createRequest({ body: { skillDirs: [missingDir] } }), missingRes);
+    expect(missingRes.status).toHaveBeenCalledWith(400);
+    expect(missingRes.json).toHaveBeenCalledWith({ error: `Directory does not exist: ${missingDir}` });
+
+    const fileRes = createResponse();
+    patchHandler('/api/skill-folders')(createRequest({ body: { skillDirs: [invalidFile] } }), fileRes);
+    expect(fileRes.status).toHaveBeenCalledWith(400);
+    expect(fileRes.json).toHaveBeenCalledWith({ error: `Not a directory: ${invalidFile}` });
+
+    const saveRes = createResponse();
+    patchHandler('/api/skill-folders')(createRequest({ body: { skillDirs: [skillDirA, skillDirB] } }), saveRes);
+    expect(writeMachineSkillDirsMock).toHaveBeenCalledWith([skillDirA, skillDirB]);
+    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(saveRes.json).toHaveBeenCalledWith({
+      configFile: '/config/config.json',
+      skillDirs: [skillDirA, skillDirB],
     });
   });
 

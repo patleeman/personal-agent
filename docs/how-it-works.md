@@ -63,7 +63,7 @@ This state is durable on one machine, but it is not the portable vault.
 When you start Pi through `pa`, `personal-agent` resolves layered runtime resources:
 
 1. repo defaults from `defaults/agent`
-2. vault root `AGENTS.md` and any machine-selected `instructionFiles`
+2. vault root `AGENTS.md`, vault skills, and any machine-selected `instructionFiles` / `skillDirs`
 3. machine-local overlay from `~/.local/state/personal-agent/config/local`
 4. built-in repo extensions/themes and any discovered package sources
 
@@ -108,6 +108,7 @@ The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable
 - durable knowledge belongs in the vault
 - scheduled task files stay machine-local
 - durable behavior belongs in `AGENTS.md` and machine-selected instruction files, not in random notes
+- machine-selected extra skill folders belong in `skillDirs`, not mixed into unrelated config
 - if a feature needs later attention, attach it to the owning conversation, automation, reminder, deferred resume, run, or scheduled task explicitly
 
 ## Related docs

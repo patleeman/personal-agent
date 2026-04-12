@@ -149,6 +149,34 @@ describe('resources profile loader', () => {
     ]);
   });
 
+  it('includes configured machine skill directories alongside durable skills', () => {
+    const repo = createTempRepo();
+    const profilesRoot = createTempProfilesRoot();
+    const syncRoot = join(profilesRoot, '..');
+    const configRoot = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
+    const externalSkillsDir = mkdtempSync(join(tmpdir(), 'personal-agent-extra-skills-'));
+    tempDirs.push(configRoot, externalSkillsDir);
+
+    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
+    writeFile(join(syncRoot, 'skills', 'vault-skill', 'SKILL.md'), '---\nname: vault-skill\ndescription: Vault skill\n---\n# Vault Skill\n');
+    writeFile(join(externalSkillsDir, 'machine-skill', 'SKILL.md'), '---\nname: machine-skill\ndescription: Machine skill\n---\n# Machine Skill\n');
+    writeFile(join(configRoot, 'config.json'), JSON.stringify({
+      skillDirs: [externalSkillsDir],
+    }));
+    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configRoot, 'config.json');
+
+    const resolved = resolveResourceProfile('shared', {
+      repoRoot: repo,
+      profilesRoot,
+      localProfileDir: join(repo, '.local-profile'),
+    });
+
+    expect(resolved.skillDirs).toEqual([
+      join(syncRoot, 'skills', 'vault-skill'),
+      join(externalSkillsDir, 'machine-skill'),
+    ]);
+  });
+
   it('merges json files in layer order', () => {
     const repo = createTempRepo();
     const fileA = join(repo, 'a.json');

@@ -124,6 +124,13 @@ describe('SettingsPage', () => {
     });
 
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
+      if (fetcher === api.skillFolders) {
+        return buildUseApiResult({
+          configFile: '/tmp/config.json',
+          skillDirs: ['/Users/patrick/Documents/personal-agent/skills'],
+        });
+      }
+
       if (fetcher === api.instructions) {
         return buildUseApiResult({
           configFile: '/tmp/config.json',
@@ -260,14 +267,16 @@ describe('SettingsPage', () => {
     expect(html).toContain('>Settings<');
     expect(html).toContain('href="#settings-general"');
     expect(html).toContain('Theme');
-    expect(html).toContain('Instruction files');
+    expect(html).toContain('Skill folders');
+    expect(html).toContain('AGENTS.md files');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');
     expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
-    expect(html).toContain('Append AGENTS-style files to the runtime prompt.');
+    expect(html).toContain('Load extra skill folders alongside the vault skills directory.');
+    expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
     expect(html).toContain('aria-label="Choose knowledge vault root"');
     expect(html).toContain('aria-label="Choose default working directory"');

@@ -21,6 +21,8 @@ Common top-level keys:
 
 - `defaultProfile`
 - `vaultRoot`
+- `instructionFiles`
+- `skillDirs`
 - `daemon`
 - `webUi`
 
@@ -30,6 +32,13 @@ Example:
 {
   "defaultProfile": "shared",
   "vaultRoot": "~/Documents/personal-agent",
+  "instructionFiles": [
+    "~/Documents/shared-agent-prompts/AGENTS.md"
+  ],
+  "skillDirs": [
+    "~/Documents/personal-agent/skills",
+    "~/Documents/shared-agent-skills"
+  ],
   "daemon": {
     "logLevel": "info",
     "modules": {
@@ -84,9 +93,15 @@ The canonical shared instruction file now lives at:
 
 - `AGENTS.md`
 
-The Settings page can also append extra machine-local instruction files through `config.json` → `instructionFiles`.
+The Settings page can also append extra machine-local AGENTS files through `config.json` → `instructionFiles`.
 
 Legacy `_profiles/` content may still be read when it exists, but new setups should use the root `AGENTS.md` plus local instruction-file selection instead.
+
+## Extra skill folders
+
+The canonical shared skills live under the vault `skills/` directory.
+
+If you want to load additional machine-local skill folders, add them in Settings or write them directly to `config.json` → `skillDirs`.
 
 ## Local overlay
 
@@ -163,6 +178,7 @@ Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL
 | runtime defaults | local `settings.json` |
 | model provider defs | local `models.json` |
 | portable knowledge | vault `notes/`, `skills/`, `projects/` |
+| machine-local extra skills | machine `skillDirs` |
 | machine-local deployment settings | machine `config.json` |
 | machine-local one-off tweaks | local overlay |
 

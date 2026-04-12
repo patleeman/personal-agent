@@ -13,6 +13,7 @@ import {
   getVaultRoot,
   listUnifiedSkillNodeDirs,
   readMachineInstructionFiles,
+  readMachineSkillDirs,
 } from '@personal-agent/core';
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
@@ -608,6 +609,31 @@ function resolveConfiguredInstructionFiles(): string[] {
   }));
 }
 
+function collectConfiguredSkillDirs(rootDir: string): string[] {
+  const directSkillFiles = [existingFile(join(rootDir, 'SKILL.md')), existingFile(join(rootDir, 'INDEX.md'))]
+    .filter((value): value is string => value !== undefined);
+  if (directSkillFiles.length > 0) {
+    return [rootDir];
+  }
+
+  if (!existsSync(rootDir) || !statSync(rootDir).isDirectory()) {
+    return [];
+  }
+
+  return readdirSync(rootDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(rootDir, entry.name))
+    .filter((dir) => existingFile(join(dir, 'SKILL.md')) !== undefined || existingFile(join(dir, 'INDEX.md')) !== undefined)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function resolveConfiguredSkillDirs(): string[] {
+  return dedupe(readMachineSkillDirs().flatMap((path) => {
+    const dir = existingDir(path);
+    return dir ? collectConfiguredSkillDirs(dir) : [];
+  }));
+}
+
 function isScopeAlias(value: string): boolean {
   return value === 'shared' || value === 'global';
 }
@@ -866,6 +892,7 @@ export function resolveResourceProfile(
 
   const durableAgentFiles = resolveDurableAgentFiles(profileName, options);
   const configuredInstructionFiles = resolveConfiguredInstructionFiles();
+  const configuredSkillDirs = resolveConfiguredSkillDirs();
   const durableSettingsFiles = resolveDurableSettingsFiles(profileName, knownProfiles, options);
   const durableModelsFiles = resolveDurableModelsFiles(profileName, knownProfiles, options);
   const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { profilesRoot });
@@ -910,6 +937,7 @@ export function resolveResourceProfile(
   ]);
   const skillDirs = dedupe([
     ...durableSkillDirs,
+    ...configuredSkillDirs,
     ...collectLayerDirs(localLayers, 'skills'),
   ]);
   const promptDirs = collectLayerDirs(localLayers, 'prompts');

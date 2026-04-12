@@ -7,10 +7,12 @@ import {
   getMachineConfigFilePath,
   readMachineConfigSection,
   readMachineInstructionFiles,
+  readMachineSkillDirs,
   readMachineVaultRoot,
   updateMachineConfigSection,
   writeMachineDefaultProfile,
   writeMachineInstructionFiles,
+  writeMachineSkillDirs,
   writeMachineVaultRoot,
 } from './machine-config.js';
 
@@ -105,6 +107,32 @@ describe('machine config', () => {
 
     writeMachineInstructionFiles([], { configRoot: configDir });
     expect(readMachineInstructionFiles({ configRoot: configDir })).toEqual([]);
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
+  });
+
+  it('reads and writes skill directories in config.json', () => {
+    const configDir = createTempDir('pa-machine-config-');
+
+    writeMachineSkillDirs([
+      '/Users/patrick/Documents/personal-agent/skills',
+      '  /Users/patrick/Documents/shared-skills  ',
+      '/Users/patrick/Documents/personal-agent/skills',
+      '',
+    ], { configRoot: configDir });
+
+    expect(readMachineSkillDirs({ configRoot: configDir })).toEqual([
+      '/Users/patrick/Documents/personal-agent/skills',
+      '/Users/patrick/Documents/shared-skills',
+    ]);
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({
+      skillDirs: [
+        '/Users/patrick/Documents/personal-agent/skills',
+        '/Users/patrick/Documents/shared-skills',
+      ],
+    });
+
+    writeMachineSkillDirs([], { configRoot: configDir });
+    expect(readMachineSkillDirs({ configRoot: configDir })).toEqual([]);
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
   });
 });

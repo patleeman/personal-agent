@@ -965,6 +965,11 @@ export interface VaultRootState {
   source: 'env' | 'config' | 'default';
 }
 
+export interface SkillFoldersState {
+  configFile: string;
+  skillDirs: string[];
+}
+
 export interface InstructionFilesState {
   configFile: string;
   instructionFiles: string[];

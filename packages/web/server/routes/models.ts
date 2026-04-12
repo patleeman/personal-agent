@@ -8,7 +8,7 @@ import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Express } from 'express';
-import { getDefaultVaultRoot, getMachineConfigFilePath, getVaultRoot, readMachineConfig, readMachineInstructionFiles, updateMachineConfig, writeMachineInstructionFiles } from '@personal-agent/core';
+import { getDefaultVaultRoot, getMachineConfigFilePath, getVaultRoot, readMachineConfig, readMachineInstructionFiles, readMachineSkillDirs, updateMachineConfig, writeMachineInstructionFiles, writeMachineSkillDirs } from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
 import {
   writeSavedModelPreferences,
@@ -80,6 +80,13 @@ function readInstructionFilesState() {
   return {
     configFile: getMachineConfigFilePath(),
     instructionFiles: readMachineInstructionFiles(),
+  };
+}
+
+function readSkillFoldersState() {
+  return {
+    configFile: getMachineConfigFilePath(),
+    skillDirs: readMachineSkillDirs(),
   };
 }
 
@@ -175,6 +182,51 @@ export function registerModelRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/skill-folders', (_req, res) => {
+    try {
+      res.json(readSkillFoldersState());
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/skill-folders', (req, res) => {
+    try {
+      const { skillDirs } = req.body as { skillDirs?: unknown };
+      if (!Array.isArray(skillDirs) || !skillDirs.every((entry) => typeof entry === 'string')) {
+        res.status(400).json({ error: 'skillDirs must be an array of strings' });
+        return;
+      }
+
+      for (const rawDir of skillDirs) {
+        const dirPath = rawDir.trim();
+        if (!dirPath) {
+          continue;
+        }
+        if (!existsSync(dirPath)) {
+          res.status(400).json({ error: `Directory does not exist: ${dirPath}` });
+          return;
+        }
+        if (!statSync(dirPath).isDirectory()) {
+          res.status(400).json({ error: `Not a directory: ${dirPath}` });
+          return;
+        }
+      }
+
+      writeMachineSkillDirs(skillDirs);
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(readSkillFoldersState());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const status = message.includes('does not exist') || message.includes('Not a directory') ? 400 : 500;
+      res.status(status).json({ error: message });
     }
   });
 

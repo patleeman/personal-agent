@@ -12,6 +12,7 @@ export interface MachineConfigDocument {
   defaultProfile?: string;
   vaultRoot?: string;
   instructionFiles?: string[];
+  skillDirs?: string[];
   daemon?: Record<string, unknown>;
   webUi?: Record<string, unknown>;
 }
@@ -114,6 +115,7 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
     ? document.vaultRoot.trim()
     : undefined;
   const instructionFiles = normalizeStringArray(document.instructionFiles);
+  const skillDirs = normalizeStringArray(document.skillDirs);
   const daemon = normalizeSection(document.daemon);
   const webUi = normalizeSection(document.webUi);
 
@@ -121,6 +123,7 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
     ...(defaultProfile ? { defaultProfile } : {}),
     ...(vaultRoot ? { vaultRoot } : {}),
     ...(instructionFiles ? { instructionFiles } : {}),
+    ...(skillDirs ? { skillDirs } : {}),
     ...(daemon ? { daemon } : {}),
     ...(webUi ? { webUi } : {}),
   };
@@ -336,6 +339,23 @@ export function writeMachineInstructionFiles(instructionFiles: string[], options
       next.instructionFiles = normalizedInstructionFiles;
     } else {
       delete next.instructionFiles;
+    }
+    return next;
+  }, options);
+}
+
+export function readMachineSkillDirs(options: MachineConfigOptions = {}): string[] {
+  return [...(readMachineConfig(options).skillDirs ?? [])];
+}
+
+export function writeMachineSkillDirs(skillDirs: string[], options: MachineConfigOptions = {}): MachineConfigDocument {
+  const normalizedSkillDirs = [...new Set(skillDirs.map((value) => value.trim()).filter((value) => value.length > 0))];
+  return updateMachineConfig((current) => {
+    const next: MachineConfigDocument = { ...current };
+    if (normalizedSkillDirs.length > 0) {
+      next.skillDirs = normalizedSkillDirs;
+    } else {
+      delete next.skillDirs;
     }
     return next;
   }, options);
