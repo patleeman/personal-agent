@@ -1917,6 +1917,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [draftCwdError, setDraftCwdError] = useState<string | null>(null);
   const [conversationCwdEditorOpen, setConversationCwdEditorOpen] = useState(false);
   const [conversationCwdDraft, setConversationCwdDraft] = useState('');
+  const [, setConversationCwdPickBusy] = useState(false);
   const [conversationCwdBusy, setConversationCwdBusy] = useState(false);
   const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
 
