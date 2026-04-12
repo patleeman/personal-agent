@@ -1,8 +1,11 @@
 import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron';
 
+export type SelectionContextMenuAction = 'reply' | 'copy';
+
 export interface SelectionContextMenuInput {
   x?: number;
   y?: number;
+  canReply?: boolean;
   canCopy?: boolean;
 }
 
@@ -15,35 +18,65 @@ function normalizeCoordinate(value: number | undefined): number {
   return Math.max(0, Math.round(numericValue));
 }
 
-export function buildSelectionContextMenuTemplate(input: SelectionContextMenuInput): MenuItemConstructorOptions[] {
-  if (!input.canCopy) {
-    return [];
+export function buildSelectionContextMenuTemplate(
+  input: SelectionContextMenuInput,
+  onSelect: (action: SelectionContextMenuAction) => void,
+): MenuItemConstructorOptions[] {
+  const items: MenuItemConstructorOptions[] = [];
+
+  if (input.canReply) {
+    items.push({
+      label: 'Reply with Selection',
+      click: () => onSelect('reply'),
+    });
   }
 
-  return [{
-    label: 'Copy',
-    role: 'copy',
-  }];
+  if (input.canCopy) {
+    if (items.length > 0) {
+      items.push({ type: 'separator' });
+    }
+
+    items.push({
+      label: 'Copy',
+      click: () => onSelect('copy'),
+    });
+  }
+
+  return items;
 }
 
 export async function showSelectionContextMenu(
   sender: WebContents,
   input: SelectionContextMenuInput,
-): Promise<{ shown: boolean }> {
-  const template = buildSelectionContextMenuTemplate(input);
+): Promise<{ action: SelectionContextMenuAction | null }> {
+  let selectedAction: SelectionContextMenuAction | null = null;
+  const template = buildSelectionContextMenuTemplate(input, (nextAction) => {
+    selectedAction = nextAction;
+  });
+
   if (template.length === 0) {
-    return { shown: false };
+    return { action: null };
   }
 
   const targetWindow = BrowserWindow.fromWebContents(sender) ?? undefined;
   const menu = Menu.buildFromTemplate(template);
 
   return new Promise((resolve) => {
+    let resolved = false;
+    const finish = () => {
+      if (resolved) {
+        return;
+      }
+
+      resolved = true;
+      resolve({ action: selectedAction });
+    };
+
     menu.popup({
       ...(targetWindow ? { window: targetWindow } : {}),
       x: normalizeCoordinate(input.x),
       y: normalizeCoordinate(input.y),
-      callback: () => resolve({ shown: true }),
+      callback: finish,
     });
   });
 }

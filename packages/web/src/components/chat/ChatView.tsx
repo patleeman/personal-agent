@@ -2029,7 +2029,6 @@ function ErrorBlock({
   resumeLabel,
   onOpenFilePath: _onOpenFilePath,
   onSelectionGesture,
-  replySelectionActions,
 }: {
   block: Extract<MessageBlock, { type: 'error' }>;
   messageIndex?: number;
@@ -2039,7 +2038,6 @@ function ErrorBlock({
   resumeLabel?: string;
   onOpenFilePath?: (path: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
-  replySelectionActions?: ReplySelectionActions;
 }) {
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
@@ -2053,7 +2051,6 @@ function ErrorBlock({
           <span className="text-danger/85 leading-relaxed">{block.message}</span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {replySelectionActions && <ReplySelectionInlineActions onReply={replySelectionActions.onReply} onCopy={replySelectionActions.onCopy} />}
           <span className="flex-1" />
           <ResumeConversationAction
             onResume={onResume}
@@ -2076,9 +2073,11 @@ interface ReplySelectionState {
   blockId?: string;
 }
 
-interface ReplySelectionActions {
-  onReply: () => void;
-  onCopy: () => void;
+interface ReplySelectionContextMenuState {
+  x: number;
+  y: number;
+  text: string;
+  replySelection: ReplySelectionState | null;
 }
 
 function clearWindowSelection() {
@@ -2087,54 +2086,6 @@ function clearWindowSelection() {
   }
 
   window.getSelection()?.removeAllRanges();
-}
-
-function hasActiveReplySelection(
-  replySelection: ReplySelectionState | null,
-  messageIndex?: number,
-  blockId?: string,
-): replySelection is ReplySelectionState {
-  return Boolean(
-    replySelection
-      && typeof messageIndex === 'number'
-      && replySelection.messageIndex === messageIndex
-      && replySelection.blockId === blockId,
-  );
-}
-
-function ReplySelectionInlineActions({ onReply, onCopy }: ReplySelectionActions) {
-  const suppressPointerDown = (event: React.MouseEvent<HTMLButtonElement> | React.PointerEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-  };
-
-  return (
-    <div
-      className="flex flex-wrap items-center gap-1.5"
-      role="toolbar"
-      aria-label="Selected text actions"
-      data-reply-selection-actions="true"
-    >
-      <button
-        type="button"
-        onMouseDown={suppressPointerDown}
-        onPointerDown={suppressPointerDown}
-        onClick={onReply}
-        className="ui-message-action-button text-accent"
-      >
-        ↩ reply selection
-      </button>
-      <button
-        type="button"
-        onMouseDown={suppressPointerDown}
-        onPointerDown={suppressPointerDown}
-        onClick={onCopy}
-        className="ui-message-action-button"
-      >
-        ⎘ copy selection
-      </button>
-    </div>
-  );
 }
 
 function MsgActions({
@@ -2332,7 +2283,6 @@ function AssistantMessage({
   onRewind,
   onOpenFilePath,
   onSelectionGesture,
-  replySelectionActions,
   showCursor = false,
   layout = 'default',
 }: {
@@ -2342,7 +2292,6 @@ function AssistantMessage({
   onRewind?: () => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
-  replySelectionActions?: ReplySelectionActions;
   showCursor?: boolean;
   layout?: ChatViewLayout;
 }) {
@@ -2371,7 +2320,6 @@ function AssistantMessage({
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
           <span className="flex-1" />
-          {replySelectionActions && <ReplySelectionInlineActions onReply={replySelectionActions.onReply} onCopy={replySelectionActions.onCopy} />}
           <MsgActions copyText={block.text} onRewind={onRewind} onFork={onFork} />
         </div>
       </div>
@@ -2384,13 +2332,11 @@ function ContextMessage({
   messageIndex,
   onOpenFilePath,
   onSelectionGesture,
-  replySelectionActions,
 }: {
   block: Extract<MessageBlock, { type: 'context' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
-  replySelectionActions?: ReplySelectionActions;
 }) {
   const label = formatInjectedContextLabel(block.customType);
   const blockId = block.id?.trim() || undefined;
@@ -2410,12 +2356,6 @@ function ContextMessage({
         <div {...replySelectionScopeProps} className="pt-2 text-primary">
           {renderText(block.text, { onOpenFilePath })}
         </div>
-        {replySelectionActions && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="flex-1" />
-            <ReplySelectionInlineActions onReply={replySelectionActions.onReply} onCopy={replySelectionActions.onCopy} />
-          </div>
-        )}
       </div>
     </div>
   );
@@ -2448,13 +2388,11 @@ function SummaryMessage({
   messageIndex,
   onOpenFilePath,
   onSelectionGesture,
-  replySelectionActions,
 }: {
   block: Extract<MessageBlock, { type: 'summary' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
-  replySelectionActions?: ReplySelectionActions;
 }) {
   const isCompaction = block.kind === 'compaction';
   const label = isCompaction ? resolveCompactionSummaryLabel(block.title) : block.title || 'Branch summary';
@@ -2513,7 +2451,6 @@ function SummaryMessage({
                 </button>
               )}
               <span className="flex-1" />
-              {replySelectionActions && <ReplySelectionInlineActions onReply={replySelectionActions.onReply} onCopy={replySelectionActions.onCopy} />}
               <MsgActions />
             </div>
           </div>
@@ -2779,6 +2716,7 @@ export const ChatView = memo(function ChatView({
   const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
   const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
   const [replySelection, setReplySelection] = useState<ReplySelectionState | null>(null);
+  const [selectionContextMenu, setSelectionContextMenu] = useState<ReplySelectionContextMenuState | null>(null);
   const [selectedImage, setSelectedImage] = useState<InspectableImage | null>(null);
   const replySelectionSyncFrameRef = useRef<number | null>(null);
   const replySelectionSyncTimeoutRefs = useRef<number[]>([]);
@@ -2884,6 +2822,8 @@ export const ChatView = memo(function ChatView({
     setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
   }, []);
 
+  const selectionContextMenuRef = useRef<HTMLDivElement | null>(null);
+
   const clearScheduledReplySelectionSync = useCallback(() => {
     if (typeof window === 'undefined') {
       return;
@@ -2915,6 +2855,10 @@ export const ChatView = memo(function ChatView({
 
   const lastReplySelectionScopeRef = useRef<HTMLElement | null>(null);
 
+  const closeSelectionContextMenu = useCallback(() => {
+    setSelectionContextMenu((current) => (current ? null : current));
+  }, []);
+
   const clearReplySelection = useCallback(() => {
     lastReplySelectionScopeRef.current = null;
     setReplySelection((current) => (current ? null : current));
@@ -2937,52 +2881,14 @@ export const ChatView = memo(function ChatView({
     }, 140);
   }, [cancelReplySelectionClear, clearReplySelection]);
 
-  const applyReplySelectionForScope = useCallback((scopeElement: HTMLElement | null, selectionRange?: Range | null) => {
-    if (!scopeElement) {
-      scheduleReplySelectionClear();
-      return;
-    }
-
-    const text = readSelectedTextWithinElement(scopeElement, selectionRange);
-    if (!text) {
-      scheduleReplySelectionClear();
-      return;
-    }
-
-    const messageIndex = Number.parseInt(scopeElement.dataset.messageIndex ?? '', 10);
-    if (!Number.isFinite(messageIndex)) {
-      scheduleReplySelectionClear();
-      return;
-    }
-
-    cancelReplySelectionClear();
-    lastReplySelectionScopeRef.current = scopeElement;
-
-    const blockId = scopeElement.dataset.blockId?.trim() || undefined;
-    setReplySelection((current) => {
-      if (
-        current
-        && current.text === text
-        && current.messageIndex === messageIndex
-        && current.blockId === blockId
-      ) {
-        return current;
-      }
-
-      return { text, messageIndex, blockId };
-    });
-  }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
-
-  const syncReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null) => {
+  const resolveReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null): { scopeElement: HTMLElement; selection: ReplySelectionState } | null => {
     if (typeof window === 'undefined') {
-      scheduleReplySelectionClear();
-      return;
+      return null;
     }
 
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      scheduleReplySelectionClear();
-      return;
+      return null;
     }
 
     const range = selection.getRangeAt(0);
@@ -2994,12 +2900,56 @@ export const ChatView = memo(function ChatView({
 
     const matches = candidates.filter((scope) => readSelectedTextWithinElement(scope, range).length > 0);
     if (matches.length !== 1) {
+      return null;
+    }
+
+    const scopeElement = matches[0];
+    const text = readSelectedTextWithinElement(scopeElement, range);
+    if (!text) {
+      return null;
+    }
+
+    const messageIndex = Number.parseInt(scopeElement.dataset.messageIndex ?? '', 10);
+    if (!Number.isFinite(messageIndex)) {
+      return null;
+    }
+
+    return {
+      scopeElement,
+      selection: {
+        text,
+        messageIndex,
+        blockId: scopeElement.dataset.blockId?.trim() || undefined,
+      },
+    };
+  }, []);
+
+  const applyResolvedReplySelection = useCallback((resolvedSelection: { scopeElement: HTMLElement; selection: ReplySelectionState } | null) => {
+    if (!resolvedSelection) {
       scheduleReplySelectionClear();
       return;
     }
 
-    applyReplySelectionForScope(matches[0], range);
-  }, [applyReplySelectionForScope, scheduleReplySelectionClear]);
+    cancelReplySelectionClear();
+    lastReplySelectionScopeRef.current = resolvedSelection.scopeElement;
+
+    setReplySelection((current) => {
+      if (
+        current
+        && current.text === resolvedSelection.selection.text
+        && current.messageIndex === resolvedSelection.selection.messageIndex
+        && current.blockId === resolvedSelection.selection.blockId
+      ) {
+        return current;
+      }
+
+      return resolvedSelection.selection;
+    });
+  }, [cancelReplySelectionClear, scheduleReplySelectionClear]);
+
+  const syncReplySelectionFromSelection = useCallback((scopeHint?: HTMLElement | null) => {
+    applyResolvedReplySelection(resolveReplySelectionFromSelection(scopeHint));
+  }, [applyResolvedReplySelection, resolveReplySelectionFromSelection]);
 
   const scheduleReplySelectionSync = useCallback((scopeElement?: HTMLElement | null) => {
     if (typeof window === 'undefined' || !onReplyToSelection) {
@@ -3089,7 +3039,7 @@ export const ChatView = memo(function ChatView({
 
       const element = target instanceof HTMLElement ? target : target.parentElement;
       if (
-        element?.closest('[data-reply-selection-actions="true"]')
+        element?.closest('[data-selection-context-menu="true"]')
         || element?.closest('[data-selection-reply-scope="assistant-message"]')
       ) {
         return;
@@ -3118,34 +3068,126 @@ export const ChatView = memo(function ChatView({
     };
   }, [cancelReplySelectionClear, clearReplySelection, replySelection]);
 
-  const handleReplySelection = useCallback(async () => {
-    if (!replySelection || !onReplyToSelection) {
+  useEffect(() => {
+    if (!selectionContextMenu || typeof document === 'undefined' || typeof window === 'undefined') {
       return;
     }
 
+    const closeMenu = () => {
+      closeSelectionContextMenu();
+    };
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) {
+        closeMenu();
+        return;
+      }
+
+      const element = target instanceof HTMLElement ? target : target.parentElement;
+      if (element?.closest('[data-selection-context-menu="true"]')) {
+        return;
+      }
+
+      closeMenu();
+    };
+    const handleSelectionChange = () => {
+      const selectionText = window.getSelection()?.toString().trim() ?? '';
+      if (!selectionText) {
+        closeMenu();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeMenu();
+      }
+    };
+    const scrollEl = scrollContainerRef?.current;
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('selectionchange', handleSelectionChange);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('blur', closeMenu);
+    window.addEventListener('resize', closeMenu);
+    scrollEl?.addEventListener('scroll', closeMenu, { passive: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('blur', closeMenu);
+      window.removeEventListener('resize', closeMenu);
+      scrollEl?.removeEventListener('scroll', closeMenu);
+    };
+  }, [closeSelectionContextMenu, scrollContainerRef, selectionContextMenu]);
+
+  const handleReplySelection = useCallback(async (selectionOverride?: ReplySelectionState | null) => {
+    const activeSelection = selectionOverride ?? replySelection;
+    if (!activeSelection || !onReplyToSelection) {
+      return;
+    }
+
+    closeSelectionContextMenu();
     clearReplySelection();
     clearWindowSelection();
     await onReplyToSelection({
-      text: replySelection.text,
-      messageIndex: replySelection.messageIndex,
-      blockId: replySelection.blockId,
+      text: activeSelection.text,
+      messageIndex: activeSelection.messageIndex,
+      blockId: activeSelection.blockId,
     });
-  }, [clearReplySelection, onReplyToSelection, replySelection]);
+  }, [clearReplySelection, closeSelectionContextMenu, onReplyToSelection, replySelection]);
 
-  const handleCopyReplySelection = useCallback(async () => {
-    if (!replySelection || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+  const copySelectedTranscriptText = useCallback(async (text: string | null | undefined) => {
+    const nextText = typeof text === 'string' ? text.trim() : '';
+
+    closeSelectionContextMenu();
+    if (!nextText || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
       clearReplySelection();
       clearWindowSelection();
       return;
     }
 
     try {
-      await navigator.clipboard.writeText(replySelection.text);
+      await navigator.clipboard.writeText(nextText);
     } finally {
       clearWindowSelection();
       clearReplySelection();
     }
-  }, [clearReplySelection, replySelection]);
+  }, [clearReplySelection, closeSelectionContextMenu]);
+
+  const openDomSelectionContextMenu = useCallback((menuState: ReplySelectionContextMenuState) => {
+    const menuWidth = 224;
+    const menuItemCount = 1 + Number(Boolean(menuState.replySelection));
+    const menuHeight = menuItemCount * 33 + (menuItemCount > 1 ? 11 : 10);
+    const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
+    const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
+    const edgePadding = 12;
+
+    setSelectionContextMenu({
+      ...menuState,
+      x: Math.max(edgePadding, Math.min(menuState.x, viewportWidth - menuWidth - edgePadding)),
+      y: Math.max(edgePadding, Math.min(menuState.y, viewportHeight - menuHeight - edgePadding)),
+    });
+  }, []);
+
+  const runSelectionContextMenuAction = useCallback(async (
+    action: 'reply' | 'copy' | null,
+    menuState?: ReplySelectionContextMenuState | null,
+  ) => {
+    const activeMenuState = menuState ?? selectionContextMenu;
+    if (!action || !activeMenuState) {
+      closeSelectionContextMenu();
+      return;
+    }
+
+    switch (action) {
+      case 'reply':
+        await handleReplySelection(activeMenuState.replySelection);
+        return;
+      case 'copy':
+        await copySelectedTranscriptText(activeMenuState.text);
+        return;
+    }
+  }, [closeSelectionContextMenu, copySelectedTranscriptText, handleReplySelection, selectionContextMenu]);
 
   const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
     const isTailItem = itemIndex === renderItems.length - 1;
@@ -3186,13 +3228,6 @@ export const ChatView = memo(function ChatView({
     const absoluteIndex = messageIndexOffset + item.index;
     const autoOpen = shouldAutoOpenConversationBlock(block, item.index, messages.length, isStreaming);
     const showStreamingCursor = isStreaming && block.type === 'text' && item.index === messages.length - 1;
-    const replySelectionBlockId = block.id?.trim() || undefined;
-    const replySelectionActions = hasActiveReplySelection(replySelection, absoluteIndex, replySelectionBlockId)
-      ? {
-          onReply: () => { void handleReplySelection(); },
-          onCopy: () => { void handleCopyReplySelection(); },
-        }
-      : undefined;
 
     const el = (() => {
       switch (block.type) {
@@ -3218,14 +3253,13 @@ export const ChatView = memo(function ChatView({
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
               onOpenFilePath={onOpenFilePath}
               onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
-              replySelectionActions={replySelectionActions}
               layout={layout}
             />
           );
         case 'context':
-          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} replySelectionActions={replySelectionActions} />;
+          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
         case 'summary':
-          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} replySelectionActions={replySelectionActions} />;
+          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
         case 'thinking':
           return <ThinkingBlock block={block} autoOpen={autoOpen} />;
         case 'tool_use':
@@ -3261,7 +3295,6 @@ export const ChatView = memo(function ChatView({
               resumeLabel={resumeConversationLabel}
               onOpenFilePath={onOpenFilePath}
               onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
-              replySelectionActions={replySelectionActions}
             />
           );
         default:
@@ -3280,7 +3313,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, handleCopyReplySelection, handleReplySelection, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, replySelection, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync]);
+  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {
@@ -3352,26 +3385,50 @@ export const ChatView = memo(function ChatView({
     ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
     : messages.length;
   const handleTranscriptContextMenu = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
-    const desktopBridge = getDesktopBridge();
-    if (!desktopBridge?.showSelectionContextMenu || typeof window === 'undefined') {
+    if (typeof window === 'undefined') {
       return;
     }
 
-    const selectionText = window.getSelection()?.toString().trim() ?? '';
+    const scopeHint = event.target instanceof Node ? findSelectionReplyScopeElement(event.target) : null;
+    const resolvedReplySelection = onReplyToSelection ? resolveReplySelectionFromSelection(scopeHint) : null;
+    if (onReplyToSelection) {
+      applyResolvedReplySelection(resolvedReplySelection);
+    }
+
+    const selectionText = resolvedReplySelection?.selection.text ?? window.getSelection()?.toString().trim() ?? '';
     if (!selectionText) {
+      closeSelectionContextMenu();
       return;
     }
 
     event.preventDefault();
-    void desktopBridge.showSelectionContextMenu({
+    const menuState: ReplySelectionContextMenuState = {
       x: event.clientX,
       y: event.clientY,
-      canCopy: true,
-    }).catch(() => {
-      // Ignore native menu failures.
-    });
-  }, []);
+      text: selectionText,
+      replySelection: resolvedReplySelection?.selection ?? null,
+    };
+    const desktopBridge = getDesktopBridge();
+
+    if (desktopBridge?.showSelectionContextMenu) {
+      closeSelectionContextMenu();
+      void desktopBridge.showSelectionContextMenu({
+        x: menuState.x,
+        y: menuState.y,
+        canReply: Boolean(menuState.replySelection),
+        canCopy: true,
+      })
+        .then(({ action }) => runSelectionContextMenuAction(action, menuState))
+        .catch(() => {
+          openDomSelectionContextMenu(menuState);
+        });
+      return;
+    }
+
+    openDomSelectionContextMenu(menuState);
+  }, [applyResolvedReplySelection, closeSelectionContextMenu, onReplyToSelection, openDomSelectionContextMenu, resolveReplySelectionFromSelection, runSelectionContextMenuAction]);
   const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
+  const selectionContextMenuItemClass = 'ui-context-menu-item';
   const windowingBadge = shouldWindowTranscript ? (
     <div
       className="sticky z-10 mb-3 flex justify-end pointer-events-none"
@@ -3406,6 +3463,56 @@ export const ChatView = memo(function ChatView({
           </div>
         )}
       </div>
+      {selectionContextMenu ? (
+        <div
+          ref={selectionContextMenuRef}
+          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
+          style={{ left: selectionContextMenu.x, top: selectionContextMenu.y }}
+          role="menu"
+          aria-label="Selected transcript text actions"
+          data-selection-context-menu="true"
+        >
+          <div className="space-y-px">
+            {selectionContextMenu.replySelection ? (
+              <>
+                <button
+                  type="button"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={() => { void runSelectionContextMenuAction('reply'); }}
+                  className={selectionContextMenuItemClass}
+                  role="menuitem"
+                >
+                  Reply with Selection
+                </button>
+                <div className="mx-1 my-1 h-px bg-border-subtle" role="separator" />
+              </>
+            ) : null}
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => { void runSelectionContextMenuAction('copy'); }}
+              className={selectionContextMenuItemClass}
+              role="menuitem"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      ) : null}
       {selectedImage && <ImageInspectModal image={selectedImage} onClose={() => setSelectedImage(null)} />}
     </>
   );

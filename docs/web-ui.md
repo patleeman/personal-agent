@@ -59,6 +59,7 @@ Important behaviors:
 - auto-generated conversation titles are tuned for that narrow single-line Threads layout and default to the dedicated title model `openai-codex/gpt-5.4-mini` unless you pin another title model in Settings
 - the Threads header includes a filter action for organize/sort controls and an add-workspace action that opens a quick-select modal for saved workspaces, with a fallback to choose a new folder and seed a new draft conversation in that cwd; project and chronological views use created-time sorting by default unless you switch them to updated, and there is also a manual order mode that drag-and-drop switches to automatically
 - the Threads sidebar exposes per-conversation actions from a row-level right-click menu instead of the main header, including pin-to-top, archive, duplicate, summarize and open new, and copy actions for the working directory, session ID, and deeplink
+- selected transcript text now uses a context menu for reply and copy actions instead of inline buttons, and replying with a selection appends the quoted text to the current composer draft
 - the desktop shell keeps open conversation tabs warm by prefetching transcript bootstrap state and keeping background live threads subscribed, so switching tabs can reuse hot cache instead of cold-loading the thread again
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode

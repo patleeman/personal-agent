@@ -49,6 +49,14 @@ describe('insertReplyQuoteIntoComposer', () => {
     });
   });
 
+  it('appends the quote after an existing draft when no insertion range is provided', () => {
+    expect(insertReplyQuoteIntoComposer('Existing draft', 'Important line')).toEqual({
+      text: 'Existing draft\n\n> Important line\n\n',
+      selectionStart: 34,
+      selectionEnd: 34,
+    });
+  });
+
   it('inserts a quote at the requested caret position', () => {
     expect(insertReplyQuoteIntoComposer('Intro\n\nOutro', 'Important line', { start: 7, end: 7 })).toEqual({
       text: 'Intro\n\n> Important line\n\nOutro',

@@ -66,6 +66,8 @@ export type DesktopConversationCwdGroupContextMenuAction =
   | 'archive-threads'
   | 'remove';
 
+export type DesktopSelectionContextMenuAction = 'reply' | 'copy';
+
 export interface DesktopConversationContextMenuRequest {
   x: number;
   y: number;
@@ -101,7 +103,7 @@ export interface PersonalAgentDesktopBridge {
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
-  showSelectionContextMenu(input: { x: number; y: number; canCopy?: boolean }): Promise<{ shown: boolean }>;
+  showSelectionContextMenu(input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;

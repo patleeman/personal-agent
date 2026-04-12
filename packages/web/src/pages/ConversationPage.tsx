@@ -4489,15 +4489,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const textarea = textareaRef.current;
-    const activeElement = typeof document === 'undefined' ? null : document.activeElement;
-    const insertionRange = textarea && activeElement === textarea
-      ? {
-          start: textarea.selectionStart ?? input.length,
-          end: textarea.selectionEnd ?? input.length,
-        }
-      : composerSelectionRef.current;
-    const next = insertReplyQuoteIntoComposer(input, selection.text, insertionRange);
+    const next = insertReplyQuoteIntoComposer(input, selection.text);
 
     setInput(next.text);
     setSlashIdx(0);
