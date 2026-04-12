@@ -58,6 +58,7 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
 const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] font-mono text-[11px] leading-5`;
+const COMPACT_META_INPUT_CLASS = `${INPUT_CLASS} px-2.5 py-1.5 text-[12px]`;
 
 interface ProviderEditorDraft {
   id: string;
@@ -2645,13 +2646,13 @@ export function SettingsPage() {
                                 />
                               </div>
 
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-context">Context window</label>
                                 <input
                                   id="settings-provider-model-context"
                                   value={modelDraft.contextWindow}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, contextWindow: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="numeric"
                                   autoComplete="off"
                                   spellCheck={false}
@@ -2659,13 +2660,13 @@ export function SettingsPage() {
                                 />
                               </div>
 
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-max-tokens">Max tokens</label>
                                 <input
                                   id="settings-provider-model-max-tokens"
                                   value={modelDraft.maxTokens}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, maxTokens: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="numeric"
                                   autoComplete="off"
                                   spellCheck={false}
@@ -2701,13 +2702,13 @@ export function SettingsPage() {
                             </div>
 
                             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">Input cost / 1M</label>
                                 <input
                                   id="settings-provider-model-cost-input"
                                   value={modelDraft.costInput}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, costInput: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="decimal"
                                   autoComplete="off"
                                   spellCheck={false}
@@ -2715,13 +2716,13 @@ export function SettingsPage() {
                                 />
                               </div>
 
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-cost-output">Output cost / 1M</label>
                                 <input
                                   id="settings-provider-model-cost-output"
                                   value={modelDraft.costOutput}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, costOutput: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="decimal"
                                   autoComplete="off"
                                   spellCheck={false}
@@ -2729,13 +2730,13 @@ export function SettingsPage() {
                                 />
                               </div>
 
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-read">Cache read / 1M</label>
                                 <input
                                   id="settings-provider-model-cost-cache-read"
                                   value={modelDraft.costCacheRead}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, costCacheRead: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="decimal"
                                   autoComplete="off"
                                   spellCheck={false}
@@ -2743,13 +2744,13 @@ export function SettingsPage() {
                                 />
                               </div>
 
-                              <div className="space-y-2 min-w-0">
+                              <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-cost-cache-write">Cache write / 1M</label>
                                 <input
                                   id="settings-provider-model-cost-cache-write"
                                   value={modelDraft.costCacheWrite}
                                   onChange={(event) => { setModelDraft((current) => ({ ...current, costCacheWrite: event.target.value })); }}
-                                  className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                  className={`${COMPACT_META_INPUT_CLASS} font-mono`}
                                   inputMode="decimal"
                                   autoComplete="off"
                                   spellCheck={false}
