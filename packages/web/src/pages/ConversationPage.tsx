@@ -25,7 +25,6 @@ import {
   shouldShowScrollToBottomControl,
 } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
-import { getConversationGroupLabel } from '../conversationCwdGroups';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
@@ -676,12 +675,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
 }
 
 const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
-const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-9 w-full rounded-lg border border-border-default/70 bg-surface/90 px-3 pr-8 text-[12px] font-medium text-primary shadow-sm outline-none transition-colors hover:border-border-default hover:bg-elevated focus-visible:border-accent/70 focus-visible:ring-2 focus-visible:ring-accent/15 disabled:cursor-default disabled:opacity-40';
-
-function formatSavedWorkspaceOptionLabel(workspacePath: string): string {
-  const label = getConversationGroupLabel(workspacePath);
-  return label === workspacePath ? workspacePath : `${label} — ${workspacePath}`;
-}
+const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
 function FolderIcon({ className }: { className?: string }) {
   return (
@@ -1903,8 +1897,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [savedWorkspacePaths, setSavedWorkspacePaths] = useState<string[]>(() => readStoredWorkspacePaths());
   const [savedWorkspacePathsLoading, setSavedWorkspacePathsLoading] = useState(false);
   const [draftCwdValue, setDraftCwdValue] = useState('');
-  const [draftCwdEditorOpen, setDraftCwdEditorOpen] = useState(false);
-  const [draftCwdDraft, setDraftCwdDraft] = useState('');
   const [draftCwdPickBusy, setDraftCwdPickBusy] = useState(false);
   const [draftCwdError, setDraftCwdError] = useState<string | null>(null);
   const [conversationCwdEditorOpen, setConversationCwdEditorOpen] = useState(false);
@@ -1934,18 +1926,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   useEffect(() => {
     if (!draft) {
-      setDraftCwdEditorOpen(false);
-      setDraftCwdDraft('');
       setDraftCwdPickBusy(false);
       setDraftCwdError(null);
-      return;
     }
-
-    if (!draftCwdEditorOpen) {
-      setDraftCwdDraft(draftCwdValue);
-    }
-  }, [draft, draftCwdEditorOpen, draftCwdValue]);
-
+  }, [draft]);
 
   useEffect(() => {
     if (draft) {
@@ -2589,6 +2573,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
   );
   const hasDraftCwd = draftCwdValue.length > 0;
+  const availableDraftWorkspacePaths = useMemo(
+    () => normalizeWorkspacePaths(draftCwdValue ? [draftCwdValue, ...savedWorkspacePaths] : savedWorkspacePaths),
+    [draftCwdValue, savedWorkspacePaths],
+  );
   const branchLabel = liveSessionContext?.branch ?? null;
 
   useEffect(() => {
@@ -4195,8 +4183,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setDraftCwdValue('');
-    setDraftCwdDraft('');
-    setDraftCwdEditorOpen(false);
     setDraftCwdPickBusy(false);
     setDraftCwdError(null);
     setInput('');
@@ -4244,32 +4230,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         // Ignore best-effort sync failures.
       });
       setDraftConversationCwd(result.path);
-      setDraftCwdDraft(result.path);
-      setDraftCwdEditorOpen(false);
     } catch (error) {
       setDraftCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
     } finally {
       setDraftCwdPickBusy(false);
     }
   }, [draft, draftCwdPickBusy, draftCwdValue, savedWorkspacePaths, setDraftConversationCwd, syncSavedWorkspacePaths]);
-
-  const startEditingDraftConversationCwd = useCallback(() => {
-    setDraftCwdDraft(draftCwdValue);
-    setDraftCwdError(null);
-    setDraftCwdEditorOpen(true);
-  }, [draftCwdValue]);
-
-  const cancelEditingDraftConversationCwd = useCallback(() => {
-    setDraftCwdDraft(draftCwdValue);
-    setDraftCwdError(null);
-    setDraftCwdEditorOpen(false);
-  }, [draftCwdValue]);
-
-  const saveDraftConversationCwd = useCallback(() => {
-    setDraftConversationCwd(draftCwdDraft);
-    setDraftCwdError(null);
-    setDraftCwdEditorOpen(false);
-  }, [draftCwdDraft, setDraftConversationCwd]);
 
   const selectDraftConversationWorkspace = useCallback((workspacePath: string) => {
     const normalizedWorkspacePath = workspacePath.trim();
@@ -4278,16 +4244,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     setDraftConversationCwd(normalizedWorkspacePath);
-    setDraftCwdDraft(normalizedWorkspacePath);
     setDraftCwdError(null);
-    setDraftCwdEditorOpen(false);
   }, [setDraftConversationCwd]);
 
   const clearDraftConversationCwdSelection = useCallback(() => {
     clearDraftConversationCwd();
     setDraftCwdValue('');
-    setDraftCwdDraft('');
-    setDraftCwdEditorOpen(false);
     setDraftCwdError(null);
   }, []);
 
@@ -4325,7 +4287,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           return;
         }
 
-        startEditingDraftConversationCwd();
+        void pickDraftConversationCwd();
         return;
       }
 
@@ -4334,7 +4296,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
     return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [beginConversationCwdEdit, beginTitleEdit, draft, draftCwdPickBusy, startEditingDraftConversationCwd]);
+  }, [beginConversationCwdEdit, beginTitleEdit, draft, draftCwdPickBusy, pickDraftConversationCwd]);
 
   function showSessionSummary() {
     const cwd = draft
@@ -5185,116 +5147,67 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             )}
             title={draft ? NEW_CONVERSATION_TITLE : title}
             body={draft
-              ? 'Start typing to create a conversation. Pick a workspace here, or let the saved default from Settings apply.'
+              ? undefined
               : isLiveSession
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
             action={draft ? (
-              <div className="mx-auto mt-5 w-full max-w-[34rem] space-y-3">
-                <div className="flex flex-col items-center gap-2 text-center">
-                  <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
-                    <FolderIcon className="text-accent" />
-                    <span>Workspace</span>
-                  </div>
-                  <p
-                    className={cx(
-                      'max-w-[32rem] break-all text-[12px]',
-                      hasDraftCwd ? 'font-mono text-primary' : 'text-secondary',
-                    )}
-                    title={hasDraftCwd
-                      ? draftCwdValue
-                      : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
-                  >
-                    {hasDraftCwd
-                      ? draftCwdValue
-                      : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
-                  </p>
+              <div className="mx-auto mt-4 w-full max-w-[30rem] space-y-2.5">
+                <div className="flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
+                  <FolderIcon className="text-accent" />
+                  <span>Workspace</span>
                 </div>
-
-                {!draftCwdEditorOpen ? (
-                  <>
-                    <label className="relative mx-auto block w-full max-w-[18rem]">
-                      <span className="sr-only">Saved workspace</span>
-                      <select
-                        value={savedWorkspacePaths.includes(draftCwdValue) ? draftCwdValue : ''}
-                        onChange={(event) => {
-                          if (!event.target.value) {
-                            return;
-                          }
-
-                          selectDraftConversationWorkspace(event.target.value);
-                        }}
-                        className={cx(EMPTY_STATE_WORKSPACE_SELECT_CLASS, 'appearance-none')}
-                        aria-label="Saved workspace"
-                        disabled={draftCwdPickBusy || savedWorkspacePaths.length === 0}
-                      >
-                        <option value="">
-                          {savedWorkspacePathsLoading
-                            ? 'Loading saved workspaces…'
-                            : savedWorkspacePaths.length > 0
-                              ? 'Choose saved workspace…'
-                              : 'No saved workspaces yet'}
-                        </option>
-                        {savedWorkspacePaths.map((workspacePath) => (
-                          <option key={workspacePath} value={workspacePath}>
-                            {formatSavedWorkspaceOptionLabel(workspacePath)}
-                          </option>
-                        ))}
-                      </select>
-                      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-dim/70">
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </label>
-
-                    <div className="flex flex-wrap items-center justify-center gap-1.5">
-                      <button type="button" onClick={() => { void pickDraftConversationCwd(); }} disabled={draftCwdPickBusy} className="ui-action-button text-accent">
-                        {draftCwdPickBusy ? 'Choosing…' : 'Choose folder…'}
-                      </button>
-                      <button type="button" onClick={startEditingDraftConversationCwd} disabled={draftCwdPickBusy} className="ui-action-button">
-                        Edit path
-                      </button>
-                      {hasDraftCwd && (
-                        <button type="button" onClick={clearDraftConversationCwdSelection} disabled={draftCwdPickBusy} className="ui-action-button text-danger">
-                          Clear
-                        </button>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <form
-                    className="mx-auto w-full max-w-[28rem] space-y-2 text-left"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      saveDraftConversationCwd();
-                    }}
-                  >
-                    <input
-                      autoFocus
-                      value={draftCwdDraft}
+                <div className="flex w-full flex-wrap items-center justify-center gap-1.5">
+                  <label className="relative min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+                    <span className="sr-only">Saved workspace</span>
+                    <select
+                      value={draftCwdValue}
                       onChange={(event) => {
-                        setDraftCwdDraft(event.target.value);
-                        if (draftCwdError) {
-                          setDraftCwdError(null);
+                        const nextWorkspacePath = event.target.value.trim();
+                        if (!nextWorkspacePath) {
+                          clearDraftConversationCwdSelection();
+                          return;
                         }
+
+                        selectDraftConversationWorkspace(nextWorkspacePath);
                       }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelEditingDraftConversationCwd();
-                        }
-                      }}
-                      placeholder="~/workingdir/repo"
-                      spellCheck={false}
-                      aria-label="Draft conversation working directory"
-                      className="w-full rounded-lg border border-border-default bg-surface px-3 py-2 text-[12px] font-mono text-primary outline-none transition-colors focus:border-accent/60"
-                      disabled={draftCwdPickBusy}
-                    />
-                    <div className="flex flex-wrap items-center justify-center gap-1.5">
-                      <button type="button" className="ui-action-button" onClick={cancelEditingDraftConversationCwd} disabled={draftCwdPickBusy}>Cancel</button>
-                      <button type="submit" className="ui-action-button text-accent" disabled={draftCwdPickBusy}>Save path</button>
-                    </div>
-                  </form>
-                )}
+                      className={cx(
+                        EMPTY_STATE_WORKSPACE_SELECT_CLASS,
+                        hasDraftCwd ? 'font-mono text-primary' : 'text-secondary',
+                      )}
+                      aria-label="Saved workspace"
+                      title={hasDraftCwd
+                        ? draftCwdValue
+                        : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
+                      disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
+                    >
+                      <option value="">
+                        {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0
+                          ? 'Loading workspaces…'
+                          : 'Use saved default workspace'}
+                      </option>
+                      {availableDraftWorkspacePaths.map((workspacePath) => (
+                        <option key={workspacePath} value={workspacePath}>
+                          {workspacePath}
+                        </option>
+                      ))}
+                    </select>
+                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => { void pickDraftConversationCwd(); }}
+                    disabled={draftCwdPickBusy}
+                    className="ui-action-button shrink-0 px-2.5 py-1.5 text-[11px]"
+                    title={draftCwdPickBusy ? 'Choosing workspace…' : 'Choose workspace folder'}
+                    aria-label="Choose workspace folder"
+                  >
+                    {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
+                  </button>
+                </div>
 
                 {draftCwdError && (
                   <p className="text-center text-[11px] text-danger/80">{draftCwdError}</p>
@@ -5336,8 +5249,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     conversationResumeState.canResume,
     conversationResumeState.title,
     draft,
-    draftCwdDraft,
-    draftCwdEditorOpen,
     draftCwdError,
     draftCwdPickBusy,
     draftCwdValue,
@@ -5369,15 +5280,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     stream.isStreaming,
     submitAskUserQuestion,
     historicalTotalBlocks,
+    availableDraftWorkspacePaths,
     hasDraftCwd,
-    cancelEditingDraftConversationCwd,
     clearDraftConversationCwdSelection,
     pickDraftConversationCwd,
-    saveDraftConversationCwd,
-    savedWorkspacePaths,
     savedWorkspacePathsLoading,
     selectDraftConversationWorkspace,
-    startEditingDraftConversationCwd,
     title,
     visibleTranscriptHasOlderBlocks,
     visibleTranscriptMessageIndexOffset,

@@ -1029,8 +1029,10 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('aria-label="Conversation context"');
     expect(html).not.toContain('Show right sidebar');
     expect(html).toContain('Saved workspace');
-    expect(html).toContain('Choose folder…');
-    expect(html).toContain('Edit path');
+    expect(html).toContain('Use saved default workspace');
+    expect(html).toContain('Browse…');
+    expect(html).not.toContain('Start typing to create a conversation.');
+    expect(html).not.toContain('Edit path');
     expect(html).not.toContain('set working directory');
     expect(html).not.toContain('Choose the initial working directory for this draft conversation');
     expect(html).toContain('Turn on conversation auto mode');
