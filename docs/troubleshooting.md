@@ -94,6 +94,11 @@ pa daemon logs
 
 If you need to act on the run, use the built-in `run` tool rather than a CLI subcommand.
 
+For interrupted conversations in the web UI:
+
+- if the last turn is recoverable but no longer active, the conversation page should show a recovery strip above the composer instead of silently looking live
+- startup recovery now only auto-resumes conversations that still have a real pending turn to replay; interrupted sessions without replayable work stay non-live so the explicit resume affordance remains visible
+
 ## Pairing code or remote browser access fails
 
 Remember the current rules:
