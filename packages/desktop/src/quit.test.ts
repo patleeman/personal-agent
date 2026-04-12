@@ -13,6 +13,19 @@ describe('buildDesktopQuitConfirmationOptions', () => {
       detail: 'Closing the window only hides it. Quitting closes the menu bar app and stops the local runtime until you reopen it.',
     });
   });
+
+  it('includes the app icon when one is provided', () => {
+    expect(buildDesktopQuitConfirmationOptions('Personal Agent', '/tmp/personal-agent-icon.png')).toEqual({
+      type: 'question',
+      buttons: ['Cancel', 'Quit Personal Agent'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      message: 'Quit Personal Agent?',
+      detail: 'Closing the window only hides it. Quitting closes the menu bar app and stops the local runtime until you reopen it.',
+      icon: '/tmp/personal-agent-icon.png',
+    });
+  });
 });
 
 describe('confirmDesktopQuit', () => {
@@ -21,8 +34,8 @@ describe('confirmDesktopQuit', () => {
       showMessageBox: vi.fn().mockResolvedValue({ response: 1 }),
     };
 
-    await expect(confirmDesktopQuit(dialogLike, 'Personal Agent')).resolves.toBe(true);
-    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent'));
+    await expect(confirmDesktopQuit(dialogLike, 'Personal Agent', '/tmp/personal-agent-icon.png')).resolves.toBe(true);
+    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent', '/tmp/personal-agent-icon.png'));
   });
 
   it('returns false when the user cancels the quit action', async () => {

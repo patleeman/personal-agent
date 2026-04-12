@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
 import { app, dialog, shell } from 'electron';
+import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
@@ -343,7 +344,7 @@ async function requestAppQuit(): Promise<void> {
 
   quitRequestPromise = (async () => {
     try {
-      const confirmed = await confirmDesktopQuit(dialog, app.name);
+      const confirmed = await confirmDesktopQuit(dialog, app.name, resolveDesktopRuntimePaths().colorIconFile);
       if (!confirmed) {
         return;
       }
@@ -378,6 +379,7 @@ app.on('activate', () => {
 
 app.whenReady()
   .then(async () => {
+    applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);
     applyDesktopShellAppMode(process.platform, app);
     await bootstrapDesktopApp();
   })
