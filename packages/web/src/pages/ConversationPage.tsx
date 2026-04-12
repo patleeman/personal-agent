@@ -4489,7 +4489,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const next = insertReplyQuoteIntoComposer(input, selection.text);
+    const currentInput = textareaRef.current?.value ?? input;
+    const next = insertReplyQuoteIntoComposer(currentInput, selection.text);
 
     setInput(next.text);
     setSlashIdx(0);
