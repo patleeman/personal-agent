@@ -4,6 +4,7 @@ import { buildDesktopApplicationMenuTemplate } from './menu.js';
 function createActions() {
   return {
     onOpen: vi.fn(),
+    onNewWindow: vi.fn(),
     onNewConversation: vi.fn(),
     onCloseConversation: vi.fn(),
     onReopenClosedConversation: vi.fn(),
@@ -51,6 +52,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
 
     const fileMenu = template[1];
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'New Window' }),
       expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
       expect.objectContaining({ label: 'Reopen Closed Conversation', accelerator: 'CommandOrControl+Shift+N' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
@@ -96,6 +98,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     const fileMenu = template[0];
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Show Personal Agent', accelerator: 'CommandOrControl+Shift+A' }),
+      expect.objectContaining({ label: 'New Window' }),
       expect.objectContaining({ label: 'New Conversation', accelerator: 'CommandOrControl+N' }),
       expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
       expect.objectContaining({ label: 'Reopen Closed Conversation', accelerator: 'CommandOrControl+Shift+N' }),

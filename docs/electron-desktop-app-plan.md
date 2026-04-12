@@ -10,7 +10,7 @@ On macOS, the desktop shell is the intended local product surface. Background be
 
 ## What the desktop app does today
 
-- ships as a macOS menu bar app with an always-available menubar icon and no dock icon
+- ships as a macOS menu bar app with an always-available menubar icon, then promotes itself to a normal foreground app while any window is open
 - keeps a tray app alive after the main window closes
 - shows the 10 most recent conversations directly in the tray menu for quick reopen
 - loads the packaged web UI inside Electron windows
@@ -37,7 +37,9 @@ npm run desktop:dist
 Behavior to expect:
 
 - closing the main window hides it instead of quitting the app, so the menubar app keeps running
-- the app keeps a standard application menu while its windows are focused, even though it runs as a menu bar app
+- showing or focusing a window promotes the app into normal macOS app mode, including the standard application menu and Dock presence
+- File → New Window opens another desktop window for the current host and route
+- hiding every window drops the app back to a menubar-only background mode
 - quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 - if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path

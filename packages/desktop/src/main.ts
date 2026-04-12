@@ -137,6 +137,12 @@ async function openMainRoute(pathname = '/'): Promise<void> {
   });
 }
 
+async function openNewWindow(): Promise<void> {
+  await withDesktopBackend(async () => {
+    await windowController!.openNewWindow();
+  });
+}
+
 async function openNewConversation(): Promise<void> {
   await withDesktopBackend(async () => {
     const url = await hostManager!.openNewConversation();
@@ -207,6 +213,9 @@ async function bootstrapDesktopApp(): Promise<void> {
   const shellActions = {
     onOpen: () => {
       void openMainRoute('/');
+    },
+    onNewWindow: () => {
+      void openNewWindow();
     },
     onNewConversation: () => {
       void openNewConversation();

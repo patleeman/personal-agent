@@ -134,7 +134,7 @@ The environment variable wins over machine config.
 
 ## Electron desktop shell will not launch
 
-The desktop shell is a menu bar app on macOS, so the first thing to look for is the status item in the menu bar, not a dock icon.
+The desktop shell is a menu bar app on macOS. When no window is open, look for the status item in the menu bar; the Dock icon only appears while a desktop window is visible.
 
 The local desktop backend intentionally refuses to start if:
 

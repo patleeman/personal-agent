@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { app, BrowserWindow } from 'electron';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -8,6 +8,7 @@ import { getHostBrowserPartition } from './state/browser-partitions.js';
 import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
+import { syncDesktopShellAppModeForWindows } from './app-mode.js';
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -97,6 +98,7 @@ export class DesktopWindowController {
     role: ManagedWindowRole;
     window: BrowserWindow;
   }>();
+  private hasVisibleWindowsInAppMode: boolean | null = null;
 
   constructor(private readonly hostManager: HostManager) {}
 
@@ -115,6 +117,14 @@ export class DesktopWindowController {
 
   async openAbsoluteUrl(url: string): Promise<void> {
     await this.openHostAbsoluteUrl(this.hostManager.getActiveHostId(), url);
+  }
+
+  async openNewWindow(): Promise<void> {
+    const focusedWindow = BrowserWindow.getFocusedWindow();
+    const trackedWindow = focusedWindow ? this.trackedWindows.get(focusedWindow.webContents.id) : undefined;
+    const hostId = trackedWindow?.hostId ?? this.hostManager.getActiveHostId();
+    const route = this.getWindowRoute(trackedWindow?.window ?? this.mainWindow);
+    await this.openWindowForHost(hostId, route, 'remote');
   }
 
   async openStartupErrorWindow(input: {
@@ -158,19 +168,7 @@ export class DesktopWindowController {
   }
 
   getMainWindowRoute(): string {
-    const currentUrl = this.mainWindow?.webContents.getURL();
-    if (!currentUrl) {
-      return '/';
-    }
-
-    try {
-      const parsed = new URL(currentUrl);
-      parsed.searchParams.delete('desktop-shell');
-      const route = `${parsed.pathname}${parsed.search}${parsed.hash}`;
-      return route || '/';
-    } catch {
-      return '/';
-    }
+    return this.getWindowRoute(this.mainWindow);
   }
 
   getHostIdForWebContentsId(webContentsId: number): string | null {
@@ -212,6 +210,22 @@ export class DesktopWindowController {
     const partition = getHostBrowserPartition(host.id);
     const window = this.ensureWindow(host, partition, role);
     await this.loadWindowUrl(window, url);
+  }
+
+  private getWindowRoute(window?: BrowserWindow): string {
+    const currentUrl = window?.webContents.getURL();
+    if (!currentUrl) {
+      return '/';
+    }
+
+    try {
+      const parsed = new URL(currentUrl);
+      parsed.searchParams.delete('desktop-shell');
+      const route = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      return route || '/';
+    } catch {
+      return '/';
+    }
   }
 
   private getNavigationState(window = this.mainWindow): DesktopNavigationState {
@@ -325,6 +339,14 @@ export class DesktopWindowController {
       });
     }
 
+    window.on('show', () => {
+      this.syncAppModeForVisibleWindows();
+    });
+
+    window.on('hide', () => {
+      this.syncAppModeForVisibleWindows();
+    });
+
     window.once('ready-to-show', () => {
       window.show();
     });
@@ -345,6 +367,7 @@ export class DesktopWindowController {
       if (role === 'remote' && this.remoteWindows.get(hostId) === window) {
         this.remoteWindows.delete(hostId);
       }
+      this.syncAppModeForVisibleWindows();
     });
   }
 
@@ -389,15 +412,39 @@ export class DesktopWindowController {
   }
 
   private focusWindow(window: BrowserWindow): void {
-    if (!window.isVisible()) {
+    let willBeVisible = window.isVisible();
+
+    if (!willBeVisible) {
       window.show();
+      willBeVisible = true;
     }
 
     if (window.isMinimized()) {
       window.restore();
     }
 
+    this.syncAppModeForVisibleWindows(willBeVisible);
     window.focus();
+  }
+
+  private syncAppModeForVisibleWindows(visibleWindowHint?: boolean): void {
+    const hasVisibleWindows = visibleWindowHint || this.anyTrackedWindowIsVisible();
+    if (this.hasVisibleWindowsInAppMode === hasVisibleWindows) {
+      return;
+    }
+
+    this.hasVisibleWindowsInAppMode = hasVisibleWindows;
+    syncDesktopShellAppModeForWindows(process.platform, app, hasVisibleWindows);
+  }
+
+  private anyTrackedWindowIsVisible(): boolean {
+    for (const trackedWindow of this.trackedWindows.values()) {
+      if (!trackedWindow.window.isDestroyed() && trackedWindow.window.isVisible()) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   private persistWindowBounds(window: BrowserWindow): void {

@@ -2,6 +2,7 @@ import { Menu, app, type MenuItemConstructorOptions } from 'electron';
 
 export interface DesktopApplicationMenuActions {
   onOpen: () => void;
+  onNewWindow: () => void;
   onNewConversation: () => void;
   onCloseConversation: () => void;
   onReopenClosedConversation: () => void;
@@ -43,6 +44,10 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Show Personal Agent',
         accelerator: 'CommandOrControl+Shift+A',
         click: actions.onOpen,
+      },
+      {
+        label: 'New Window',
+        click: actions.onNewWindow,
       },
       {
         label: 'New Conversation',

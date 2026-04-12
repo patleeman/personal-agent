@@ -1,7 +1,20 @@
 import { describe, expect, it, vi } from 'vitest';
 
+const { getFocusedWindow } = vi.hoisted(() => ({
+  getFocusedWindow: vi.fn(() => null),
+}));
+
 vi.mock('electron', () => ({
-  BrowserWindow: class BrowserWindow {},
+  BrowserWindow: class BrowserWindow {
+    static getFocusedWindow = getFocusedWindow;
+  },
+  app: {
+    setActivationPolicy: vi.fn(() => true),
+    dock: {
+      show: vi.fn(),
+      hide: vi.fn(),
+    },
+  },
 }));
 
 import {
@@ -13,6 +26,8 @@ import {
 } from './window.js';
 
 function createWindowDouble(currentUrl = '') {
+  let visible = true;
+
   return {
     webContents: {
       getURL: vi.fn(() => currentUrl),
@@ -20,8 +35,11 @@ function createWindowDouble(currentUrl = '') {
       send: vi.fn(),
     },
     loadURL: vi.fn().mockResolvedValue(undefined),
-    isVisible: vi.fn(() => true),
-    show: vi.fn(),
+    isVisible: vi.fn(() => visible),
+    isDestroyed: vi.fn(() => false),
+    show: vi.fn(() => {
+      visible = true;
+    }),
     isMinimized: vi.fn(() => false),
     restore: vi.fn(),
     focus: vi.fn(),
@@ -92,5 +110,22 @@ describe('DesktopWindowController', () => {
 
     expect(window.webContents.send).not.toHaveBeenCalled();
     expect(window.loadURL).toHaveBeenCalledWith('https://desktop.example.ts.net/conversations/new?desktop-shell=1');
+  });
+
+  it('opens an additional window for the current route', async () => {
+    getFocusedWindow.mockReturnValue(null);
+
+    const controller = new DesktopWindowController({
+      getActiveHostId: () => 'local-host',
+    } as never);
+    const openWindowForHost = vi.fn().mockResolvedValue(undefined);
+    const mainWindow = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1&view=wide#tail');
+
+    (controller as unknown as { openWindowForHost: typeof openWindowForHost }).openWindowForHost = openWindowForHost;
+    (controller as unknown as { mainWindow: typeof mainWindow }).mainWindow = mainWindow;
+
+    await controller.openNewWindow();
+
+    expect(openWindowForHost).toHaveBeenCalledWith('local-host', '/conversations/abc?view=wide#tail', 'remote');
   });
 });
