@@ -2207,7 +2207,7 @@ export function SettingsPage() {
                       disabled={savingConversationTitle !== null || modelState.models.length === 0}
                       className={INPUT_CLASS}
                     >
-                      <option value="">Use default runtime model ({conversationTitleState.effectiveModel})</option>
+                      <option value="">Use default title model ({conversationTitleState.effectiveModel})</option>
                       {groupedModels.map(([provider, models]) => (
                         <optgroup key={provider} label={provider}>
                           {models.map((model) => (
@@ -2223,7 +2223,7 @@ export function SettingsPage() {
                         ? 'Saving title model…'
                         : conversationTitleState.currentModel
                           ? `Pinned title model: ${formatModelSummary(selectedConversationTitleModel, conversationTitleState.currentModel)}`
-                          : `Using runtime default: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
+                          : `Using default title model: ${formatModelSummary(effectiveConversationTitleModel, conversationTitleState.effectiveModel)}`}
                     </p>
                   </>
                 ) : null}

@@ -3,7 +3,7 @@ import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mario
 import { requirePromptCatalogEntry } from '@personal-agent/resources';
 
 const DEFAULT_PROVIDER = 'openai-codex';
-const DEFAULT_MODEL = 'gpt-5.1-codex-mini';
+const DEFAULT_MODEL = 'gpt-5.4-mini';
 const DEFAULT_REASONING: ThinkingLevel = 'minimal';
 const DEFAULT_MAX_MESSAGES = 8;
 const DEFAULT_MAX_TITLE_LENGTH = 80;
@@ -87,17 +87,9 @@ function readConversationTitleSettingsObject(settings: Record<string, unknown>):
   return isRecord(webUi.conversationTitles) ? { ...webUi.conversationTitles } : {};
 }
 
-function readDefaultModelSettings(settings: Record<string, unknown>): { provider: string; model: string } {
-  return {
-    provider: readNonEmptyString(settings.defaultProvider),
-    model: readNonEmptyString(settings.defaultModel),
-  };
-}
-
 export function readConversationAutoTitleSettings(settingsFile: string): ConversationAutoTitleSettings {
   const settings = readSettingsObject(settingsFile);
   const conversationTitles = readConversationTitleSettingsObject(settings);
-  const defaultModelSettings = readDefaultModelSettings(settings);
   const configuredModel = readNonEmptyString(conversationTitles.model);
   const slashMatches = configuredModel.match(/\//g) ?? [];
   const slashIndex = configuredModel.indexOf('/');
@@ -105,11 +97,13 @@ export function readConversationAutoTitleSettings(settingsFile: string): Convers
     ? configuredModel.slice(0, slashIndex)
     : '';
   const modelId = providerFromModel ? configuredModel.slice(slashIndex + 1) : configuredModel;
+  const explicitProvider = readNonEmptyString(conversationTitles.provider) || providerFromModel;
+  const hasExplicitModel = modelId.length > 0;
 
   return {
     enabled: readBoolean(conversationTitles.enabled, true),
-    provider: readNonEmptyString(conversationTitles.provider) || providerFromModel || defaultModelSettings.provider || DEFAULT_PROVIDER,
-    model: modelId || defaultModelSettings.model || DEFAULT_MODEL,
+    provider: hasExplicitModel ? (explicitProvider || DEFAULT_PROVIDER) : DEFAULT_PROVIDER,
+    model: hasExplicitModel ? modelId : DEFAULT_MODEL,
     reasoning: normalizeThinkingLevel(conversationTitles.reasoning),
     maxMessages: readPositiveInteger(conversationTitles.maxMessages, DEFAULT_MAX_MESSAGES),
     maxTitleLength: readPositiveInteger(conversationTitles.maxTitleLength, DEFAULT_MAX_TITLE_LENGTH),
@@ -319,8 +313,10 @@ export async function generateConversationTitle(options: {
               type: 'text',
               text: [
                 'Write a short, scan-friendly title for this conversation.',
-                `Keep it specific, topic-first, and under ${settings.maxTitleLength} characters.`,
-                'Prefer titles like "Area: change" over vague action-first phrasing when possible.',
+                `Optimize for a narrow one-line sidebar where only the first 24-32 characters may be visible. Put the most distinguishing words first and keep it under ${settings.maxTitleLength} characters.`,
+                'Prefer a compact label, not a sentence fragment.',
+                'Action-first is fine when it is clear and specific.',
+                'Avoid filler prefixes like "Page:", "Screen:", "Header:", or "When we...".',
                 'Focus on the main thread, not the latest micro-step or temporary status.',
                 'Return only the title.',
                 '',

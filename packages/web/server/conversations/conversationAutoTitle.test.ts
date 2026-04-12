@@ -40,25 +40,25 @@ describe('readConversationAutoTitleSettings', () => {
     expect(readConversationAutoTitleSettings(join(createTempDir('pa-conversation-title-'), 'settings.json'))).toEqual({
       enabled: true,
       provider: 'openai-codex',
-      model: 'gpt-5.1-codex-mini',
+      model: 'gpt-5.4-mini',
       reasoning: 'minimal',
       maxMessages: 8,
       maxTitleLength: 80,
     });
   });
 
-  it('falls back to the saved runtime model defaults when no title model is configured', () => {
+  it('uses the built-in title model when no explicit title model is configured', () => {
     const dir = createTempDir('pa-conversation-title-');
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      defaultProvider: 'openai-codex',
-      defaultModel: 'gpt-5.4',
+      defaultProvider: 'anthropic',
+      defaultModel: 'claude-sonnet-4-6',
     }));
 
     expect(readConversationAutoTitleSettings(file)).toEqual({
       enabled: true,
       provider: 'openai-codex',
-      model: 'gpt-5.4',
+      model: 'gpt-5.4-mini',
       reasoning: 'minimal',
       maxMessages: 8,
       maxTitleLength: 80,
@@ -183,7 +183,7 @@ describe('generateConversationTitle', () => {
             content: [
               expect.objectContaining({
                 type: 'text',
-                text: expect.stringMatching(/Keep it specific, topic-first, and under 80 characters\.[\s\S]*User: Make conversation names easier to scan\.\nAssistant: I can generate a better title after the first reply\./),
+                text: expect.stringMatching(/Optimize for a narrow one-line sidebar where only the first 24-32 characters may be visible\.[\s\S]*Put the most distinguishing words first and keep it under 80 characters\.[\s\S]*User: Make conversation names easier to scan\.\nAssistant: I can generate a better title after the first reply\./),
               }),
             ],
           }),

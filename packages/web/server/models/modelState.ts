@@ -6,6 +6,7 @@ const BUILT_IN_MODELS = [
   { id: 'claude-sonnet-4-6', provider: 'anthropic', name: 'Claude Sonnet 4.6', context: 200_000 },
   { id: 'claude-haiku-4-6', provider: 'anthropic', name: 'Claude Haiku 4.6', context: 200_000 },
   { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 128_000 },
+  { id: 'gpt-5.4-mini', provider: 'openai-codex', name: 'GPT-5.4 Mini', context: 128_000 },
   { id: 'gpt-5.2', provider: 'openai-codex', name: 'GPT-5.2', context: 128_000 },
   { id: 'gpt-5.1-codex-mini', provider: 'openai-codex', name: 'GPT-5.1 Codex Mini', context: 128_000 },
   { id: 'gpt-4o', provider: 'openai', name: 'GPT-4o', context: 128_000 },

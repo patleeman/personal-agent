@@ -23,7 +23,7 @@ describe('readSavedConversationTitlePreferences', () => {
     expect(readSavedConversationTitlePreferences(join(dir, 'settings.json'))).toEqual({
       enabled: true,
       currentModel: '',
-      effectiveModel: 'openai-codex/gpt-5.1-codex-mini',
+      effectiveModel: 'openai-codex/gpt-5.4-mini',
     });
   });
 
@@ -106,7 +106,7 @@ describe('writeSavedConversationTitlePreferences', () => {
     expect(readSavedConversationTitlePreferences(file)).toEqual({
       enabled: false,
       currentModel: '',
-      effectiveModel: 'openai-codex/gpt-5.4',
+      effectiveModel: 'openai-codex/gpt-5.4-mini',
     });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openai-codex',
