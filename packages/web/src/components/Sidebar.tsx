@@ -5,7 +5,6 @@ import { api } from '../api';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../sessionIndicators';
 import {
-  buildDraftConversationSessionMeta,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
@@ -13,12 +12,8 @@ import {
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
-  DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
-  hasDraftConversationAttachments,
   persistDraftConversationCwd,
-  readDraftConversationComposer,
   readDraftConversationCwd,
-  shouldShowDraftConversationTab,
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { timeAgoCompact } from '../utils';
@@ -695,9 +690,7 @@ export function Sidebar() {
     refetch,
   } = useConversations();
 
-  const [draftComposer, setDraftComposer] = useState(() => readDraftConversationComposer());
   const [draftCwd, setDraftCwd] = useState(() => readDraftConversationCwd());
-  const [draftHasAttachments, setDraftHasAttachments] = useState(() => hasDraftConversationAttachments());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
@@ -727,17 +720,9 @@ export function Sidebar() {
     }
   }, []);
 
-  const draftTab = useMemo(() => {
-    if (!shouldShowDraftConversationTab(location.pathname, draftComposer, draftCwd, draftHasAttachments)) {
-      return null;
-    }
-
-    return buildDraftConversationSessionMeta(undefined, draftCwd);
-  }, [draftComposer, draftCwd, draftHasAttachments, location.pathname]);
-
   const visibleConversationTabs = useMemo(
-    () => draftTab ? [...tabs, draftTab] : tabs,
-    [draftTab, tabs],
+    () => tabs,
+    [tabs],
   );
   const workspaceConversationTabs = useMemo(
     () => [...pinnedSessions, ...visibleConversationTabs],
@@ -851,15 +836,7 @@ export function Sidebar() {
   }
 
   useEffect(() => {
-    function syncDraftState() {
-      setDraftComposer(readDraftConversationComposer());
-      setDraftCwd(readDraftConversationCwd());
-      setDraftHasAttachments(hasDraftConversationAttachments());
-    }
-
-    syncDraftState();
-    window.addEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftState);
-    return () => window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftState);
+    setDraftCwd(readDraftConversationCwd());
   }, [location.pathname]);
 
   useEffect(() => {
@@ -1067,9 +1044,7 @@ export function Sidebar() {
       clearDraftConversationCwd();
       clearDraftConversationModel();
       clearDraftConversationThinkingLevel();
-      setDraftComposer('');
       setDraftCwd('');
-      setDraftHasAttachments(false);
     };
 
     if (draggingSessionId === DRAFT_CONVERSATION_ID) {
@@ -1077,7 +1052,12 @@ export function Sidebar() {
     }
 
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
-      navigate(resolveCloseRedirectPath(DRAFT_CONVERSATION_ID));
+      const nextPath = resolveConversationAdjacentPath({
+        orderedIds: workspaceConversationTabs.map((session) => session.id),
+        activeId: null,
+        direction: 1,
+      }) ?? DRAFT_CONVERSATION_ROUTE;
+      navigate(nextPath);
       window.setTimeout(closeDraft, 0);
       return;
     }
