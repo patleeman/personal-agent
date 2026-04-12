@@ -31,8 +31,9 @@ import {
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
 } from '../conversationRoutes';
-import { buildSidebarNavSectionStorageKey, SAVED_WORKSPACE_PATHS_STORAGE_KEY } from '../localSettings';
+import { buildSidebarNavSectionStorageKey } from '../localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
+import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
 import type { SessionMeta } from '../types';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
@@ -154,64 +155,12 @@ function useSidebarRowHover<T extends HTMLElement>() {
   };
 }
 
-function normalizeWorkspacePaths(values: Iterable<unknown>): string[] {
-  const paths: string[] = [];
-  const seen = new Set<string>();
-
-  for (const value of values) {
-    const normalized = typeof value === 'string' ? value.trim() : '';
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    paths.push(normalized);
-  }
-
-  return paths;
-}
-
 function sameStringLists(left: readonly string[], right: readonly string[]): boolean {
   if (left.length !== right.length) {
     return false;
   }
 
   return left.every((value, index) => value === right[index]);
-}
-
-function readStoredWorkspacePaths(): string[] {
-  if (typeof localStorage === 'undefined') {
-    return [];
-  }
-
-  try {
-    const raw = localStorage.getItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? normalizeWorkspacePaths(parsed) : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeStoredWorkspacePaths(workspacePaths: readonly string[]): void {
-  if (typeof localStorage === 'undefined') {
-    return;
-  }
-
-  try {
-    if (workspacePaths.length > 0) {
-      localStorage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(workspacePaths));
-      return;
-    }
-
-    localStorage.removeItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY);
-  } catch {
-    // Ignore storage failures.
-  }
 }
 
 function WorkspaceQuickSelectModal({

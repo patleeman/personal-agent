@@ -63,6 +63,7 @@ Important behaviors:
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
+- the new-conversation empty state owns the draft workspace picker, including saved workspace selection, folder picking, and manual path entry; the draft header stays title-only
 - saved conversation headers keep the top bar title-only; working directory still stays attached to the conversation instead of rendering inline there
 - working directory and model preferences stay attached to the conversation
 - desktop and remote browser sessions can watch the same live conversation
