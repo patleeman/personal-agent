@@ -260,12 +260,14 @@ describe('SettingsPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the condensed single-page settings view', () => {
+  it('renders the reorganized single-page settings view', () => {
     const html = renderPage('/settings');
 
     expect(html).toContain('ui-page-title');
     expect(html).toContain('>Settings<');
-    expect(html).toContain('href="#settings-general"');
+    expect(html).toContain('aria-label="Settings sections"');
+    expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-general"'));
+    expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
     expect(html).toContain('Skill folders');
     expect(html).toContain('AGENTS.md files');
@@ -275,6 +277,7 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
+    expect(html).toContain('Theme and other visual preferences for the web UI.');
     expect(html).toContain('Load extra skill folders alongside the vault skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');

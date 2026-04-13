@@ -22,17 +22,17 @@ import type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../types';
-import { SectionLabel, ToolbarButton, cx } from '../components/ui';
+import { ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
-  { id: 'settings-general', label: 'General' },
-  { id: 'settings-appearance', label: 'Appearance' },
-  { id: 'settings-providers', label: 'Providers' },
-  { id: 'settings-desktop', label: 'Desktop' },
-  { id: 'settings-interface', label: 'Interface' },
+  { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
+  { id: 'settings-general', label: 'General', summary: 'Defaults, prompt sources, and roots' },
+  { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
+  { id: 'settings-desktop', label: 'Desktop', summary: 'Local and remote desktop hosts' },
+  { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
 type SettingsQuickLinkId = (typeof SETTINGS_QUICK_LINKS)[number]['id'];
@@ -300,12 +300,14 @@ function SettingsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-20 space-y-2', className)}>
-      <div className="space-y-0.5">
-        <SectionLabel label={label} />
-        {description ? <p className="max-w-2xl text-[11px] leading-5 text-secondary">{description}</p> : null}
+    <section id={id} className={cx('scroll-mt-24 space-y-4', className)}>
+      <div className="space-y-1.5">
+        <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-primary">{label}</h2>
+        {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
       </div>
-      {children}
+      <div className="overflow-hidden rounded-[24px] bg-surface/45 px-4 py-4 ring-1 ring-border-subtle/70 sm:px-5 sm:py-5">
+        {children}
+      </div>
     </section>
   );
 }
@@ -324,15 +326,15 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-2.5 border-t border-border-subtle/60 pt-3 lg:grid-cols-[minmax(0,10.5rem)_minmax(0,1fr)] lg:gap-4', className)}>
-      <div className="min-w-0 space-y-1.5">
-        <div className="space-y-1">
-          <h2 className="text-[15px] font-medium tracking-tight text-primary">{title}</h2>
-          {description ? <p className="max-w-xs text-[11px] leading-5 text-secondary">{description}</p> : null}
+    <section className={cx('grid gap-3 border-t border-border-subtle/70 pt-5 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] lg:gap-6', className)}>
+      <div className="min-w-0 space-y-2">
+        <div className="space-y-1.5">
+          <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
+          {description ? <p className="max-w-sm text-[12px] leading-5 text-secondary">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
       </div>
-      <div className="min-w-0 space-y-3">{children}</div>
+      <div className="min-w-0 space-y-3.5">{children}</div>
     </section>
   );
 }
@@ -399,6 +401,49 @@ function formatDesktopHostDetails(host: DesktopHostRecord): string {
   return [host.sshTarget, host.remoteRepoRoot || null, host.remotePort ? `port ${host.remotePort}` : null]
     .filter(Boolean)
     .join(' · ');
+}
+
+function SettingsTableOfContents({
+  items,
+  activeId,
+  onNavigate,
+}: {
+  items: typeof SETTINGS_QUICK_LINKS;
+  activeId: SettingsQuickLinkId;
+  onNavigate: (sectionId: SettingsQuickLinkId) => void;
+}) {
+  return (
+    <aside className="hidden lg:block lg:sticky lg:top-5 lg:self-start">
+      <nav aria-label="Settings sections" className="rounded-[20px] border border-border-subtle/70 bg-surface/75 p-3 backdrop-blur-sm">
+        <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">On this page</p>
+        <div className="mt-2 space-y-1">
+          {items.map((item) => {
+            const active = item.id === activeId;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onNavigate(item.id);
+                }}
+                className={cx(
+                  'block rounded-xl px-3 py-2 transition-colors',
+                  active ? 'bg-accent/10 text-primary ring-1 ring-accent/15' : 'text-secondary hover:bg-steel/10 hover:text-primary',
+                )}
+                aria-current={active ? 'location' : undefined}
+              >
+                <span className="block text-[13px] font-medium">{item.label}</span>
+                <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
+                  {item.summary}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      </nav>
+    </aside>
+  );
 }
 
 function DesktopConnectionsSettingsPanel() {
@@ -718,7 +763,7 @@ function DesktopConnectionsSettingsPanel() {
       id="settings-desktop"
       label="Desktop"
       description="Manage local and remote desktop hosts."
-      className="scroll-mt-24"
+      className="order-4"
     >
       <SettingsPanel
         title="Connections"
@@ -2093,52 +2138,48 @@ export function SettingsPage() {
     }
   }
 
+  function navigateToSection(sectionId: SettingsQuickLinkId) {
+    setActiveQuickLinkId(sectionId);
+    const section = settingsScrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
+    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }
+
   return (
-    <div ref={settingsScrollRef} className="h-full overflow-y-auto px-4 py-4">
-      <div className="mx-auto w-full max-w-[68rem] space-y-4 pb-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="max-w-2xl space-y-1">
-            <h1 className="ui-page-title text-[30px] font-semibold tracking-[-0.035em] text-primary">Settings</h1>
-            <p className="ui-page-meta text-[12px]">{pageMeta}</p>
-          </div>
-          <ToolbarButton
-            className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-            onClick={() => {
-              void Promise.all([
-                refetchSkillFolders({ resetLoading: false }),
-                refetchInstructions({ resetLoading: false }),
-                refetchModels({ resetLoading: false }),
-                refetchModelProviders({ resetLoading: false }),
-                refetchVaultRoot({ resetLoading: false }),
-                refetchDefaultCwd({ resetLoading: false }),
-                refetchConversationTitleSettings({ resetLoading: false }),
-                refetchProviderAuth({ resetLoading: false }),
-                oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-              ]);
-            }}
-          >
-            ↻ Refresh
-          </ToolbarButton>
-        </div>
+    <div ref={settingsScrollRef} className="h-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-[90rem] px-4 py-5 pb-8 sm:px-6">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start lg:gap-10">
+          <div className="min-w-0 flex flex-col gap-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="max-w-2xl space-y-1.5">
+                <h1 className="ui-page-title text-[30px] font-semibold tracking-[-0.035em] text-primary">Settings</h1>
+                <p className="ui-page-meta text-[12px]">{pageMeta}</p>
+              </div>
+              <ToolbarButton
+                className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                onClick={() => {
+                  void Promise.all([
+                    refetchSkillFolders({ resetLoading: false }),
+                    refetchInstructions({ resetLoading: false }),
+                    refetchModels({ resetLoading: false }),
+                    refetchModelProviders({ resetLoading: false }),
+                    refetchVaultRoot({ resetLoading: false }),
+                    refetchDefaultCwd({ resetLoading: false }),
+                    refetchConversationTitleSettings({ resetLoading: false }),
+                    refetchProviderAuth({ resetLoading: false }),
+                    oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
+                  ]);
+                }}
+              >
+                ↻ Refresh
+              </ToolbarButton>
+            </div>
 
-        <nav className="ui-settings-quick-links">
-          {SETTINGS_QUICK_LINKS.map((item) => (
-            <a
-              key={item.id}
-              href={`#${item.id}`}
-              onClick={() => setActiveQuickLinkId(item.id)}
-              className={cx('ui-settings-quick-link', activeQuickLinkId === item.id && 'ui-settings-quick-link-active')}
-              aria-current={activeQuickLinkId === item.id ? 'location' : undefined}
+            <SettingsSection
+              id="settings-general"
+              label="General"
+              description="Workspace defaults, prompt inputs, and other runtime-wide preferences."
+              className="order-2"
             >
-              {item.label}
-            </a>
-          ))}
-        </nav>
-
-          <SettingsSection
-            id="settings-general"
-            label="General"
-          >
             <div className="space-y-0">
               <SettingsPanel
                 title="Skill folders"
@@ -2580,6 +2621,8 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-appearance"
             label="Appearance"
+            description="Theme and other visual preferences for the web UI."
+            className="order-1"
           >
             <div className="space-y-0">
               <SettingsPanel
@@ -2602,8 +2645,9 @@ export function SettingsPage() {
 
           <SettingsSection
             id="settings-providers"
-            label="Providers & models"
-            className="space-y-4"
+            label="Providers"
+            description="Provider definitions, model overrides, and credential management."
+            className="order-3"
           >
             <div className="space-y-0">
               <SettingsPanel
@@ -2759,7 +2803,7 @@ export function SettingsPage() {
                         <span>Add <span className="font-mono text-[11px]">Authorization: Bearer</span> from the provider API key</span>
                       </label>
 
-                      <div className="grid gap-4 lg:grid-cols-3">
+                      <div className="grid gap-4 xl:grid-cols-2">
                         <div className="space-y-2 min-w-0">
                           <label className="ui-card-meta" htmlFor="settings-model-provider-headers">Headers (JSON)</label>
                           <textarea
@@ -2786,7 +2830,7 @@ export function SettingsPage() {
                           />
                         </div>
 
-                        <div className="space-y-2 min-w-0">
+                        <div className="space-y-2 min-w-0 xl:col-span-2">
                           <label className="ui-card-meta" htmlFor="settings-model-provider-overrides">Model overrides (JSON)</label>
                           <textarea
                             id="settings-model-provider-overrides"
@@ -2908,7 +2952,7 @@ export function SettingsPage() {
                               </p>
                             </div>
 
-                            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
                               <div className="space-y-2 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-id">Model id</label>
                                 <input
@@ -3022,7 +3066,7 @@ export function SettingsPage() {
                               </label>
                             </div>
 
-                            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                            <div className="grid gap-4 sm:grid-cols-2 2xl:grid-cols-4">
                               <div className="space-y-1.5 min-w-0">
                                 <label className="ui-card-meta" htmlFor="settings-provider-model-cost-input">Input cost / 1M</label>
                                 <input
@@ -3359,6 +3403,8 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-interface"
             label="Interface"
+            description="Browser-local UI state, saved layout preferences, and reset tools."
+            className="order-5"
           >
             <SettingsPanel
               title="Reset saved UI preferences"
@@ -3399,7 +3445,14 @@ export function SettingsPage() {
               </div>
             </SettingsPanel>
           </SettingsSection>
+          </div>
 
+          <SettingsTableOfContents
+            items={SETTINGS_QUICK_LINKS}
+            activeId={activeQuickLinkId}
+            onNavigate={navigateToSection}
+          />
+        </div>
       </div>
     </div>
   );
