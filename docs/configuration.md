@@ -169,6 +169,8 @@ The Codex/OpenAI compaction extension only applies to direct OpenAI Responses an
 
 Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL_AGENT_WEB_CONFIG_FILE` are still honored for compatibility.
 
+On macOS, the desktop app and managed services may start from GUI or `launchd` contexts with a minimal inherited `PATH`. Child shell commands, live conversation bash calls, durable runs, and daemon-spawned Pi subprocesses now rehydrate environment variables from the user's interactive shell before launch so Homebrew and repo-local toolchains remain available.
+
 ## What belongs where
 
 | Setting type | Best home |

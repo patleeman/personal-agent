@@ -14,6 +14,7 @@ const {
   publishAppEventMock,
   readSessionBlocksByFileMock,
   readSessionMetaByFileMock,
+  resolveChildProcessEnvMock,
   sessionManagerCreateMock,
   sessionManagerForkFromMock,
   sessionManagerInMemoryMock,
@@ -41,6 +42,7 @@ const {
     publishAppEventMock: vi.fn(),
     readSessionBlocksByFileMock: vi.fn(),
     readSessionMetaByFileMock: vi.fn(),
+    resolveChildProcessEnvMock: vi.fn(),
     sessionManagerCreateMock: vi.fn(),
     sessionManagerForkFromMock: vi.fn(),
     sessionManagerInMemoryMock: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock('@personal-agent/core', async (importOriginal) => {
     ...actual,
     getDurableSessionsDir: () => '/tmp/durable-sessions',
     getPiAgentRuntimeDir: () => '/tmp/agent-runtime',
+    resolveChildProcessEnv: resolveChildProcessEnvMock,
   };
 });
 
@@ -258,6 +261,7 @@ describe('liveSessions bootstrap helpers', () => {
     publishAppEventMock.mockReset();
     readSessionBlocksByFileMock.mockReset();
     readSessionMetaByFileMock.mockReset();
+    resolveChildProcessEnvMock.mockReset();
     registry.clear();
     clearPrewarmedLiveSessionLoaders();
     sessionManagerCreateMock.mockReset();
@@ -277,6 +281,11 @@ describe('liveSessions bootstrap helpers', () => {
     hasAssistantTitleSourceMessageMock.mockReturnValue(false);
     readSessionBlocksByFileMock.mockReturnValue(null);
     readSessionMetaByFileMock.mockReturnValue(null);
+    resolveChildProcessEnvMock.mockImplementation((overrides: Record<string, string>, baseEnv: Record<string, string>) => ({
+      ...baseEnv,
+      ...overrides,
+      PATH: '/interactive/bin:/usr/bin',
+    }));
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
   });
 
@@ -419,6 +428,25 @@ describe('liveSessions bootstrap helpers', () => {
       commandPrefix: 'PREFIX',
       spawnHook: expect.any(Function),
     }));
+    const bashToolOptions = createBashToolMock.mock.calls.at(-1)?.[1] as { spawnHook: (context: { env: Record<string, string>; cwd: string; command: string }) => { env: Record<string, string> } };
+    const spawned = bashToolOptions.spawnHook({
+      command: 'echo hello',
+      cwd: '/tmp/workspace',
+      env: { PATH: '/usr/bin', BASE: '1' },
+    });
+    expect(resolveChildProcessEnvMock).toHaveBeenCalledWith({
+      PERSONAL_AGENT_SOURCE_CONVERSATION_ID: 'session-created',
+      PERSONAL_AGENT_SOURCE_SESSION_FILE: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
+    }, {
+      PATH: '/usr/bin',
+      BASE: '1',
+    });
+    expect(spawned.env).toEqual({
+      PATH: '/interactive/bin:/usr/bin',
+      BASE: '1',
+      PERSONAL_AGENT_SOURCE_CONVERSATION_ID: 'session-created',
+      PERSONAL_AGENT_SOURCE_SESSION_FILE: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
+    });
     expect(createdSession.session._baseToolRegistry.get('bash')).toEqual({ name: 'bash-tool' });
     expect(createdSession.session._refreshToolRegistry).toHaveBeenCalledWith({
       activeToolNames: [],

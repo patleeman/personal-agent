@@ -65,6 +65,9 @@ export * from './projects.js';
 // CLI binary inspection exports
 export * from './cli-binary.js';
 
+// Child-process environment helpers
+export * from './shell-env.js';
+
 // Native MCP integration exports
 export * from './mcp.js';
 

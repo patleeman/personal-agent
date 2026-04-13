@@ -1,4 +1,5 @@
 import { type ChildProcess } from 'node:child_process';
+import { resolveChildProcessEnv } from '@personal-agent/core';
 import { pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { waitForDaemonHealthy } from './health.js';
@@ -77,12 +78,11 @@ export class LocalBackendProcesses {
     }
 
     const runtime = resolveDesktopRuntimePaths();
-    const childBaseEnv = {
-      ...process.env,
+    const childBaseEnv = resolveChildProcessEnv({
       ...(runtime.useElectronRunAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
       PERSONAL_AGENT_DESKTOP_RUNTIME: '1',
       PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE: `${runtime.desktopLogsDir}/daemon.log`,
-    };
+    });
 
     this.daemonProcess = spawnLoggedChild({
       command: runtime.nodeCommand,

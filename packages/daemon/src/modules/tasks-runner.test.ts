@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   resolveResourceProfile: vi.fn(),
   bootstrapStateOrThrow: vi.fn(),
   preparePiAgentDir: vi.fn(),
+  resolveChildProcessEnv: vi.fn(),
   resolveStatePaths: vi.fn(),
   validateStatePathsOutsideRepo: vi.fn(),
 }));
@@ -30,6 +31,7 @@ vi.mock('@personal-agent/resources', () => ({
 vi.mock('@personal-agent/core', () => ({
   bootstrapStateOrThrow: mocks.bootstrapStateOrThrow,
   preparePiAgentDir: mocks.preparePiAgentDir,
+  resolveChildProcessEnv: mocks.resolveChildProcessEnv,
   resolveStatePaths: mocks.resolveStatePaths,
   validateStatePathsOutsideRepo: mocks.validateStatePathsOutsideRepo,
 }));
@@ -106,6 +108,11 @@ beforeEach(() => {
   });
   mocks.bootstrapStateOrThrow.mockResolvedValue(undefined);
   mocks.preparePiAgentDir.mockResolvedValue({ agentDir: '/tmp/pi-agent' });
+  mocks.resolveChildProcessEnv.mockImplementation((overrides: Record<string, string>) => ({
+    ...process.env,
+    ...overrides,
+    PATH: '/interactive/bin:/usr/bin',
+  }));
   mocks.materializeProfileToAgentDir.mockReturnValue(undefined);
   mocks.buildPiResourceArgs.mockReturnValue(['--profile', 'shared']);
 });
@@ -206,9 +213,15 @@ describe('runTaskInIsolatedPi', () => {
           PI_CODING_AGENT_DIR: '/tmp/pi-agent',
           PERSONAL_AGENT_ACTIVE_PROFILE: 'shared',
           PERSONAL_AGENT_REPO_ROOT: repoRoot,
+          PATH: '/interactive/bin:/usr/bin',
         }),
       }),
     );
+    expect(mocks.resolveChildProcessEnv).toHaveBeenCalledWith({
+      PI_CODING_AGENT_DIR: '/tmp/pi-agent',
+      PERSONAL_AGENT_ACTIVE_PROFILE: 'shared',
+      PERSONAL_AGENT_REPO_ROOT: repoRoot,
+    });
 
     expect(mocks.validateStatePathsOutsideRepo).toHaveBeenCalledWith(
       expect.anything(),

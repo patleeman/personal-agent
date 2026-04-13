@@ -10,6 +10,7 @@ import { join } from 'path';
 import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
+  resolveChildProcessEnv,
   resolveStatePaths,
   validateStatePathsOutsideRepo,
 } from '@personal-agent/core';
@@ -343,10 +344,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       command: piCommand.command,
       args: [...piCommand.argsPrefix, ...args],
       cwd: request.task.cwd ?? process.cwd(),
-      env: {
-        ...process.env,
-        ...envOverrides,
-      },
+      env: resolveChildProcessEnv(envOverrides),
     };
 
     writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''}${request.task.thinkingLevel ? ` --thinking ${request.task.thinkingLevel}` : ''} -p <task prompt>`);

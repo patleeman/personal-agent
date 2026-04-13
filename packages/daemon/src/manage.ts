@@ -1,6 +1,7 @@
 import { existsSync, openSync, readFileSync } from 'fs';
 import { spawn } from 'child_process';
 import { dirname, resolve } from 'path';
+import { resolveChildProcessEnv } from '@personal-agent/core';
 import { fileURLToPath } from 'url';
 import { loadDaemonConfig } from './config.js';
 import { stopDaemon, pingDaemon, getDaemonStatus } from './client.js';
@@ -38,6 +39,7 @@ export async function startDaemonDetached(): Promise<void> {
 
   const child = spawn(process.execPath, [entryFile, '--foreground'], {
     detached: true,
+    env: resolveChildProcessEnv(),
     stdio: ['ignore', logFd, logFd],
   });
 

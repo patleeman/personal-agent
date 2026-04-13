@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { getStateRoot } from '@personal-agent/core';
+import { getStateRoot, resolveChildProcessEnv } from '@personal-agent/core';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import {
   ensureActiveWebUiRelease,
@@ -132,6 +132,7 @@ function getWebUiLogFile(): string {
 }
 
 function buildDaemonServiceEnvironment(): Record<string, string> {
+  const resolvedEnv = resolveChildProcessEnv();
   const environment: Record<string, string> = {};
 
   const passthroughKeys = [
@@ -143,7 +144,7 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
   ] as const;
 
   for (const key of passthroughKeys) {
-    const value = process.env[key];
+    const value = resolvedEnv[key];
     if (typeof value === 'string' && value.trim().length > 0) {
       environment[key] = value;
     }
@@ -156,6 +157,7 @@ function buildWebUiServiceEnvironment(
   options: Required<WebUiServiceOptions>,
   release: { distDir: string; revision?: string },
 ): Record<string, string> {
+  const resolvedEnv = resolveChildProcessEnv();
   const environment: Record<string, string> = {
     PERSONAL_AGENT_REPO_ROOT: resolve(options.repoRoot),
     PA_WEB_PORT: String(options.port),
@@ -179,7 +181,7 @@ function buildWebUiServiceEnvironment(
   ] as const;
 
   for (const key of passthroughKeys) {
-    const value = process.env[key];
+    const value = resolvedEnv[key];
     if (typeof value === 'string' && value.trim().length > 0) {
       environment[key] = value;
     }

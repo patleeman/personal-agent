@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import {
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
+  resolveChildProcessEnv,
 } from '@personal-agent/core';
 import {
   AgentSession,
@@ -299,11 +300,10 @@ function patchConversationBashTool(session: AgentSession, cwd: string, conversat
     commandPrefix: session.settingsManager.getShellCommandPrefix(),
     spawnHook: (context) => ({
       ...context,
-      env: {
-        ...context.env,
+      env: resolveChildProcessEnv({
         PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
         ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
-      },
+      }, context.env),
     }),
   }));
 

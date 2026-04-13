@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
 import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { resolveChildProcessEnv } from '@personal-agent/core';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
@@ -748,8 +749,7 @@ export class PersonalAgentDaemon {
       continueSession: input.continueSession,
     }, record.runId);
 
-    const childEnv = {
-      ...process.env,
+    const childEnv = resolveChildProcessEnv({
       PERSONAL_AGENT_RUN_ID: record.runId,
       PERSONAL_AGENT_RUN_ROOT: record.paths.root,
       PERSONAL_AGENT_RUN_MANIFEST_PATH: record.paths.manifestPath,
@@ -758,7 +758,7 @@ export class PersonalAgentDaemon {
       PERSONAL_AGENT_RUN_EVENTS_PATH: record.paths.eventsPath,
       PERSONAL_AGENT_RUN_OUTPUT_LOG_PATH: record.paths.outputLogPath,
       PERSONAL_AGENT_RUN_RESULT_PATH: record.paths.resultPath,
-    };
+    });
 
     const child = spawnInput.argv
       ? spawn(spawnInput.argv[0] as string, spawnInput.argv.slice(1), {
