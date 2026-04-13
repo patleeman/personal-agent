@@ -135,6 +135,9 @@ export function DesktopTopBar({
   const topBarClassName = environment?.activeHostKind && environment.activeHostKind !== 'local'
     ? 'ui-desktop-top-bar ui-desktop-top-bar--remote'
     : 'ui-desktop-top-bar';
+  const launchBadgeLabel = environment?.launchMode === 'testing'
+    ? environment.launchLabel?.trim() || 'Testing'
+    : null;
 
   return (
     <>
@@ -158,6 +161,11 @@ export function DesktopTopBar({
               <LeftSidebarToggleIcon open={sidebarOpen} />
             </ToolbarButton>
           </div>
+          {launchBadgeLabel ? (
+            <div className="ui-desktop-top-bar__mode-badge" title="Launched from the command line">
+              {launchBadgeLabel}
+            </div>
+          ) : null}
         </div>
         <div className="ui-desktop-top-bar__center" />
         <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>

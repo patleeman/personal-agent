@@ -6,11 +6,11 @@ import { DesktopTopBar } from './DesktopTopBar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-function renderTopBar(): string {
+function renderTopBar(environment: React.ComponentProps<typeof DesktopTopBar>['environment'] = null): string {
   return renderToString(
     <MemoryRouter>
       <DesktopTopBar
-        environment={null}
+        environment={environment}
         sidebarOpen
         onToggleSidebar={() => {}}
         showRailToggle={false}
@@ -44,6 +44,22 @@ describe('DesktopTopBar', () => {
     const html = renderTopBar();
 
     expect(html).toContain('>Connect<');
+  });
+
+  it('renders a testing badge for command-line desktop launches', () => {
+    const html = renderTopBar({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local runtime is healthy.',
+      launchMode: 'testing',
+      launchLabel: 'Testing',
+      canManageConnections: true,
+    });
+
+    expect(html).toContain('>Testing<');
+    expect(html).toContain('Launched from the command line');
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {

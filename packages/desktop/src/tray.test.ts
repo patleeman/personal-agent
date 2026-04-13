@@ -112,4 +112,18 @@ describe('buildDesktopTrayMenuTemplate', () => {
       expect.objectContaining({ label: 'Open Desktop Logs' }),
     ]));
   });
+
+  it('uses the current app name for testing launches', () => {
+    const template = buildDesktopTrayMenuTemplate({
+      appName: 'Personal Agent Testing',
+      activeHostLabel: 'Local',
+      startupState: { kind: 'ready' },
+      actions: createActions(),
+    });
+
+    expect(template).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Show Personal Agent Testing', enabled: true }),
+      expect.objectContaining({ label: 'Quit Personal Agent Testing' }),
+    ]));
+  });
 });

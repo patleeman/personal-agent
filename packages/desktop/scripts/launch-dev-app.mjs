@@ -23,6 +23,8 @@ const desktopIconFile = resolve(packageDir, 'assets', 'icon.icns');
 const electronBinary = resolve(repoRoot, 'node_modules', '.bin', 'electron');
 const sourceMacAppBundle = resolve(repoRoot, 'node_modules', 'electron', 'dist', 'Electron.app');
 const macDevAppDir = resolve(repoRoot, 'dist', 'dev-desktop');
+const desktopVariant = 'testing';
+const testingProductSuffix = ' Testing';
 
 if (!existsSync(desktopMainFile)) {
   console.error(`Missing desktop entrypoint: ${desktopMainFile}`);
@@ -80,9 +82,10 @@ function ensureMacDevAppBundle() {
   }
 
   const desktopPackage = readJson(desktopPackageJson);
-  const productName = typeof desktopPackage.productName === 'string' && desktopPackage.productName.trim().length > 0
+  const baseProductName = typeof desktopPackage.productName === 'string' && desktopPackage.productName.trim().length > 0
     ? desktopPackage.productName.trim()
     : 'Personal Agent';
+  const productName = `${baseProductName}${testingProductSuffix}`;
   const appVersion = typeof desktopPackage.version === 'string' && desktopPackage.version.trim().length > 0
     ? desktopPackage.version.trim()
     : '0.0.0';
@@ -172,6 +175,7 @@ async function launchMacDevApp() {
     env: {
       ...process.env,
       PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
+      PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
     },
     detached: true,
   });
@@ -186,7 +190,10 @@ if (process.platform === 'darwin') {
 const result = spawnSync(electronBinary, [desktopMainFile], {
   stdio: 'inherit',
   cwd: packageDir,
-  env: process.env,
+  env: {
+    ...process.env,
+    PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
+  },
 });
 
 process.exit(result.status ?? 1);

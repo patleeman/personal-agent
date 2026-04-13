@@ -97,13 +97,17 @@ export function canNavigateWindowInApp(currentUrl: string, targetUrl: string): b
   }
 }
 
-function buildWindowTitle(host: DesktopHostRecord): string {
+export function buildWindowTitle(host: DesktopHostRecord): string {
+  const appName = typeof app.name === 'string' && app.name.trim().length > 0
+    ? app.name.trim()
+    : 'Personal Agent';
+
   if (host.kind === 'local') {
-    return 'Personal Agent';
+    return appName;
   }
 
   const kindLabel = host.kind === 'web' ? 'Web remote' : 'SSH remote';
-  return `Personal Agent — ${host.label} (${kindLabel})`;
+  return `${appName} — ${host.label} (${kindLabel})`;
 }
 
 function intersectRectangleArea(left: DesktopRectangle, right: DesktopRectangle): number {

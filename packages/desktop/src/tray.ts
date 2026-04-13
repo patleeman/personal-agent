@@ -1,5 +1,5 @@
 import { basename } from 'node:path';
-import { Menu, Tray, nativeImage, type MenuItemConstructorOptions, type NativeImage } from 'electron';
+import { Menu, Tray, app, nativeImage, type MenuItemConstructorOptions, type NativeImage } from 'electron';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { HostManager } from './hosts/host-manager.js';
 
@@ -45,16 +45,16 @@ function createTrayIcon(): string | NativeImage {
   return nativeImage.createFromPath(runtime.colorIconFile).resize({ width: 18, height: 18 });
 }
 
-function buildTrayToolTip(activeHostLabel: string, startupState: DesktopTrayStartupState): string {
+function buildTrayToolTip(appName: string, activeHostLabel: string, startupState: DesktopTrayStartupState): string {
   if (startupState.kind === 'ready') {
-    return `Personal Agent — ${activeHostLabel}`;
+    return `${appName} — ${activeHostLabel}`;
   }
 
   if (startupState.kind === 'starting') {
-    return `Personal Agent — starting ${activeHostLabel}`;
+    return `${appName} — starting ${activeHostLabel}`;
   }
 
-  return `Personal Agent — startup failed (${activeHostLabel})`;
+  return `${appName} — startup failed (${activeHostLabel})`;
 }
 
 function truncateMenuLabel(value: string, maxLength = 90): string {
@@ -163,12 +163,14 @@ function sameRecentConversations(
 }
 
 export function buildDesktopTrayMenuTemplate(options: {
+  appName?: string;
   activeHostLabel: string;
   startupState: DesktopTrayStartupState;
   recentConversationsState?: DesktopTrayRecentConversationsState;
   actions: DesktopTrayActions;
 }): MenuItemConstructorOptions[] {
   const {
+    appName = 'Personal Agent',
     activeHostLabel,
     startupState,
     actions,
@@ -244,7 +246,7 @@ export function buildDesktopTrayMenuTemplate(options: {
   template.push(
     { type: 'separator' },
     {
-      label: startupState.kind === 'error' ? 'Retry Personal Agent' : 'Show Personal Agent',
+      label: startupState.kind === 'error' ? `Retry ${appName}` : `Show ${appName}`,
       click: actions.onOpen,
       enabled: canRetry,
     },
@@ -279,7 +281,7 @@ export function buildDesktopTrayMenuTemplate(options: {
   template.push(
     { type: 'separator' },
     {
-      label: 'Quit Personal Agent',
+      label: `Quit ${appName}`,
       click: actions.onQuit,
     },
   );
@@ -339,8 +341,12 @@ export class DesktopTrayController {
 
   private renderMenu(): void {
     const activeHost = this.options.hostManager.getActiveHostRecord();
-    this.tray.setToolTip(buildTrayToolTip(activeHost.label, this.startupState));
+    const appName = typeof app.name === 'string' && app.name.trim().length > 0
+      ? app.name.trim()
+      : 'Personal Agent';
+    this.tray.setToolTip(buildTrayToolTip(appName, activeHost.label, this.startupState));
     const menu = Menu.buildFromTemplate(buildDesktopTrayMenuTemplate({
+      appName,
       activeHostLabel: activeHost.label,
       startupState: this.startupState,
       recentConversationsState: this.getRecentConversationsState(),

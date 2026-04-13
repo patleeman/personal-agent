@@ -1,14 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const { getFocusedWindow } = vi.hoisted(() => ({
-  getFocusedWindow: vi.fn(() => null),
-}));
-
-vi.mock('electron', () => ({
-  BrowserWindow: class BrowserWindow {
-    static getFocusedWindow = getFocusedWindow;
-  },
-  app: {
+const { electronApp, getFocusedWindow } = vi.hoisted(() => ({
+  electronApp: {
+    name: 'Personal Agent',
     isPackaged: false,
     getAppPath: vi.fn(() => '/tmp/app'),
     setActivationPolicy: vi.fn(() => true),
@@ -17,6 +11,14 @@ vi.mock('electron', () => ({
       hide: vi.fn(),
     },
   },
+  getFocusedWindow: vi.fn(() => null),
+}));
+
+vi.mock('electron', () => ({
+  BrowserWindow: class BrowserWindow {
+    static getFocusedWindow = getFocusedWindow;
+  },
+  app: electronApp,
   protocol: {
     registerSchemesAsPrivileged: vi.fn(),
   },
@@ -35,6 +37,7 @@ vi.mock('electron', () => ({
 
 import {
   DesktopWindowController,
+  buildWindowTitle,
   canNavigateWindowInApp,
   constrainDesktopWindowBounds,
   getDesktopWindowChromeOptions,
@@ -95,6 +98,17 @@ describe('window desktop navigation helpers', () => {
       'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
       'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
     )).toBe(false);
+  });
+
+  it('includes the current app name in window titles so testing launches stand out', () => {
+    electronApp.name = 'Personal Agent Testing';
+
+    expect(buildWindowTitle({ id: 'local', label: 'Local', kind: 'local' })).toBe('Personal Agent Testing');
+    expect(buildWindowTitle({ id: 'web-1', label: 'Tailnet', kind: 'web', baseUrl: 'https://tailnet.example.ts.net' })).toBe(
+      'Personal Agent Testing — Tailnet (Web remote)',
+    );
+
+    electronApp.name = 'Personal Agent';
   });
 
   it('re-centers saved off-screen bounds onto the available display', () => {

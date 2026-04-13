@@ -8,6 +8,7 @@ import { applyDesktopAboutPanelOptions } from './about.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
+import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
@@ -23,7 +24,7 @@ let backendStartupPromise: Promise<boolean> | undefined;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
 
-app.setName('Personal Agent');
+app.setName(resolveDesktopLaunchPresentation().appName);
 
 function renderDesktopErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim().length > 0) {
@@ -62,9 +63,9 @@ function reportDesktopError(error: unknown): void {
     }).catch((windowError) => {
       logBootstrapError(windowError);
     });
-    dialog.showErrorBox('Personal Agent error', `${message}\n\nSee desktop logs in:\n${desktopLogsDir}`);
+    dialog.showErrorBox(`${app.name} error`, `${message}\n\nSee desktop logs in:\n${desktopLogsDir}`);
   } catch {
-    dialog.showErrorBox('Personal Agent error', message);
+    dialog.showErrorBox(`${app.name} error`, message);
   }
 }
 

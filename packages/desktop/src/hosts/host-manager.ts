@@ -14,6 +14,7 @@ import type {
 import { LocalHostController } from './local-host-controller.js';
 import { SshHostController } from './ssh-host-controller.js';
 import { WebHostController } from './web-host-controller.js';
+import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 
 export class HostManager {
   private config: DesktopConfig;
@@ -274,12 +275,15 @@ export class HostManager {
   async getDesktopEnvironmentForHost(hostId: string): Promise<DesktopEnvironmentState> {
     const controller = this.getHostController(hostId);
     const status = await controller.getStatus();
+    const launchPresentation = resolveDesktopLaunchPresentation();
     return {
       isElectron: true,
       activeHostId: controller.id,
       activeHostLabel: controller.label,
       activeHostKind: controller.kind,
       activeHostSummary: status.summary,
+      launchMode: launchPresentation.mode,
+      launchLabel: launchPresentation.launchLabel,
       canManageConnections: true,
     };
   }

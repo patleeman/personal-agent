@@ -41,7 +41,7 @@ export function buildDesktopApplicationMenuTemplate(
     label: 'File',
     submenu: [
       {
-        label: 'Show Personal Agent',
+        label: `Show ${appName}`,
         accelerator: 'CommandOrControl+Shift+A',
         click: actions.onOpen,
       },

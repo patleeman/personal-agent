@@ -128,4 +128,17 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Hide Window', accelerator: 'CommandOrControl+Shift+W' }),
     ]));
   });
+
+  it('uses the launch-specific app name in menu labels', () => {
+    const template = buildDesktopApplicationMenuTemplate(createActions(), {
+      platform: 'linux',
+      appName: 'Personal Agent Testing',
+    });
+
+    const fileMenu = template[0];
+    expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Show Personal Agent Testing', accelerator: 'CommandOrControl+Shift+A' }),
+      expect.objectContaining({ label: 'Quit Personal Agent Testing', accelerator: 'Alt+F4' }),
+    ]));
+  });
 });
