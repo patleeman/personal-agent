@@ -50,6 +50,7 @@ function readElectronVersion() {
 
 function createMacDevAppStamp(productName, appVersion) {
   return {
+    bundleLayoutVersion: 3,
     productName,
     appVersion,
     electronVersion: readElectronVersion(),
@@ -103,7 +104,7 @@ function ensureMacDevAppBundle() {
 
   rmSync(macDevAppDir, { recursive: true, force: true });
   mkdirSync(macDevAppDir, { recursive: true });
-  cpSync(sourceMacAppBundle, appBundlePath, { recursive: true });
+  runChecked('ditto', [sourceMacAppBundle, appBundlePath]);
 
   const originalExecutablePath = resolve(appBundlePath, 'Contents', 'MacOS', 'Electron');
   renameSync(originalExecutablePath, executablePath);

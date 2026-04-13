@@ -154,6 +154,8 @@ Desktop logs live under:
 ~/.local/state/personal-agent/desktop/logs/
 ```
 
+If a macOS dev launch opens a white window or spinner and the Electron helpers crash with `icudtl.dat not found in bundle`, the generated dev app bundle is usually stale or was copied incorrectly. Remove `dist/dev-desktop/` and relaunch so the desktop script rebuilds the app bundle with the expected framework links intact.
+
 ## Direct web remote desktop host will not connect
 
 Check:
