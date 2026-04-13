@@ -95,7 +95,10 @@ function ensureMacDevAppBundle() {
     existsSync(executablePath)
     && JSON.stringify(existingStamp) === JSON.stringify(desiredStamp)
   ) {
-    return executablePath;
+    return {
+      appBundlePath,
+      executablePath,
+    };
   }
 
   rmSync(macDevAppDir, { recursive: true, force: true });
