@@ -107,7 +107,7 @@ The top-level section order is:
 - desktop connections when running inside Electron
 - interface reset tools
 
-The current layout intentionally gives each top-level section its own visual container while still keeping the individual settings rows lightweight instead of turning the page into nested cards.
+The current layout keeps those top-level sections visually distinct with spacing, dividers, and a sticky right-side table of contents instead of stacking nested cards inside larger cards.
 
 ## Remote browser access
 

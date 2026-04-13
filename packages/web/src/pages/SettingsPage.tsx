@@ -305,7 +305,9 @@ function SettingsSection({
         <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-primary">{label}</h2>
         {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
       </div>
-      <div className="overflow-hidden rounded-[24px] bg-surface/45 px-4 py-4 ring-1 ring-border-subtle/70 sm:px-5 sm:py-5">
+      <div className="h-px bg-gradient-to-r from-border-default/70 via-border-subtle/45 to-transparent" />
+      <div className="relative pl-5 sm:pl-6">
+        <div className="pointer-events-none absolute bottom-1 left-0 top-1 w-px bg-gradient-to-b from-accent/35 via-steel/35 to-transparent" />
         {children}
       </div>
     </section>
@@ -326,11 +328,11 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-3 border-t border-border-subtle/70 pt-5 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,13rem)_minmax(0,1fr)] lg:gap-6', className)}>
+    <section className={cx('grid gap-4 border-t border-border-subtle/60 pt-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
       <div className="min-w-0 space-y-2">
         <div className="space-y-1.5">
           <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
-          {description ? <p className="max-w-sm text-[12px] leading-5 text-secondary">{description}</p> : null}
+          {description ? <p className="max-w-xs text-[12px] leading-5 text-secondary">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
       </div>
@@ -414,9 +416,9 @@ function SettingsTableOfContents({
 }) {
   return (
     <aside className="hidden lg:block lg:sticky lg:top-5 lg:self-start">
-      <nav aria-label="Settings sections" className="rounded-[20px] border border-border-subtle/70 bg-surface/75 p-3 backdrop-blur-sm">
-        <p className="px-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">On this page</p>
-        <div className="mt-2 space-y-1">
+      <nav aria-label="Settings sections" className="space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">On this page</p>
+        <div className="space-y-2">
           {items.map((item) => {
             const active = item.id === activeId;
             return (
@@ -428,8 +430,8 @@ function SettingsTableOfContents({
                   onNavigate(item.id);
                 }}
                 className={cx(
-                  'block rounded-xl px-3 py-2 transition-colors',
-                  active ? 'bg-accent/10 text-primary ring-1 ring-accent/15' : 'text-secondary hover:bg-steel/10 hover:text-primary',
+                  'block border-l pl-4 pr-1 py-1 transition-colors',
+                  active ? 'border-accent text-primary' : 'border-border-subtle/60 text-secondary hover:border-border-default hover:text-primary',
                 )}
                 aria-current={active ? 'location' : undefined}
               >
