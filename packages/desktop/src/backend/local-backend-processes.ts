@@ -22,7 +22,7 @@ export class LocalBackendProcesses {
       return;
     }
 
-    await this.restart();
+    await this.start({ allowExistingDaemon: true });
   }
 
   async getStatus(): Promise<LocalBackendStatus> {
@@ -53,12 +53,12 @@ export class LocalBackendProcesses {
     return Boolean(managed && managed.child.exitCode === null && !managed.child.killed);
   }
 
-  private async start(): Promise<void> {
+  private async start(options: { allowExistingDaemon?: boolean } = {}): Promise<void> {
     if (this.startPromise) {
       return this.startPromise;
     }
 
-    this.startPromise = this.startInternal();
+    this.startPromise = this.startInternal(options);
 
     try {
       await this.startPromise;
@@ -67,8 +67,12 @@ export class LocalBackendProcesses {
     }
   }
 
-  private async startInternal(): Promise<void> {
+  private async startInternal(options: { allowExistingDaemon?: boolean } = {}): Promise<void> {
     if (await pingDaemon()) {
+      if (options.allowExistingDaemon) {
+        return;
+      }
+
       throw new Error('A daemon is already running outside the desktop app. Stop it before launching the desktop shell.');
     }
 

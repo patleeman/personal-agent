@@ -111,7 +111,7 @@ pa ui install
 npm run desktop:start
 ```
 
-The desktop shell owns its own local backend while it is running. If a daemon or web UI is already running separately on the same machine, stop those first.
+The desktop shell owns its own local backend while it is running. If a separate daemon is already healthy on the same machine, the desktop shell reuses it instead of failing startup. A separately managed web UI still is not reused.
 
 ## Create your first durable instructions
 

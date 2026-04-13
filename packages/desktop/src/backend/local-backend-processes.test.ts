@@ -82,6 +82,19 @@ describe('LocalBackendProcesses', () => {
     expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
   });
 
+  it('adopts a daemon that becomes reachable during startup instead of failing bootstrap', async () => {
+    mocks.pingDaemon
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true);
+
+    const backend = new LocalBackendProcesses();
+
+    await expect(backend.ensureStarted()).resolves.toBeUndefined();
+
+    expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
+    expect(mocks.waitForDaemonHealthy).not.toHaveBeenCalled();
+  });
+
   it('clears owned child references on exit so the next ensureStarted can recover', async () => {
     const backend = new LocalBackendProcesses();
 

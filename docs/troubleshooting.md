@@ -138,8 +138,9 @@ The desktop shell is a menu bar app on macOS. When no window is open, look for t
 
 The local desktop backend intentionally refuses to start if:
 
-- another daemon is already running outside the desktop app
 - port `3741` is already in use
+
+If a separate daemon is already healthy, the desktop shell now reuses it instead of treating that as a startup failure.
 
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 

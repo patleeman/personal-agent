@@ -129,7 +129,7 @@ That means:
 - the desktop-owned local backend intentionally does not expose any separate companion/mobile surface
 - remote browser access still requires a separately managed web UI
 - direct remote hosts still rely on the remote web UI being up so they can expose the app-server WebSocket surface
-- the desktop shell does not reuse an already-running external local daemon/web UI pair
+- the desktop shell can reuse an already-running external local daemon when it is already healthy, but it still does not reuse a separately managed local web UI
 
 ## Related docs
 
