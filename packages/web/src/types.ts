@@ -884,6 +884,7 @@ export interface MemoryData {
 
 export interface VaultFileSummary {
   id: string;
+  kind: 'file' | 'folder';
   name: string;
   path: string;
   sizeBytes: number;

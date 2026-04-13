@@ -279,10 +279,10 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
     expect(html).toContain('Theme and other visual preferences for the web UI.');
-    expect(html).toContain('Load extra skill folders alongside the vault skills directory.');
+    expect(html).toContain('Load extra skill folders alongside the root skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
-    expect(html).toContain('aria-label="Choose knowledge vault root"');
+    expect(html).toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
   });

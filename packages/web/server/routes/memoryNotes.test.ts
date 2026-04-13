@@ -248,12 +248,18 @@ describe('registerMemoryNotesRoutes', () => {
     const { getHandler } = createHarness();
     const handler = getHandler('/api/vault-files');
 
-    listVaultFilesMock.mockReturnValueOnce(['notes/a.md', 'notes/b.md']);
+    listVaultFilesMock.mockReturnValueOnce([
+      { id: 'notes/', kind: 'folder', name: 'notes', path: '/vault/notes', sizeBytes: 0, updatedAt: '2026-04-18T12:00:00.000Z' },
+      { id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' },
+    ]);
     const successRes = createResponse();
     handler({}, successRes);
     expect(successRes.json).toHaveBeenCalledWith({
       root: '/vault',
-      files: ['notes/a.md', 'notes/b.md'],
+      files: [
+        { id: 'notes/', kind: 'folder', name: 'notes', path: '/vault/notes', sizeBytes: 0, updatedAt: '2026-04-18T12:00:00.000Z' },
+        { id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' },
+      ],
     });
 
     listVaultFilesMock.mockImplementationOnce(() => {

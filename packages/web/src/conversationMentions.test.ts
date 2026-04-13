@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems } from './conversationMentions';
 
 describe('conversationMentions', () => {
-  it('builds task, note, and vault-file mentions without skills or profiles', () => {
+  it('builds task, note, folder, and file mentions without skills or profiles', () => {
     const items = buildMentionItems({
       tasks: [{
         id: 'daily-review',
@@ -20,7 +20,15 @@ describe('conversationMentions', () => {
         path: '/tmp/project-state-model.md',
       }],
       vaultFiles: [{
+        id: '_profiles/datadog/',
+        kind: 'folder',
+        name: 'datadog',
+        path: '/tmp/_profiles/datadog',
+        sizeBytes: 0,
+        updatedAt: '2026-03-11T11:59:00.000Z',
+      }, {
         id: '_profiles/datadog/AGENTS.md',
+        kind: 'file',
         name: 'AGENTS.md',
         path: '/tmp/_profiles/datadog/AGENTS.md',
         sizeBytes: 42,
@@ -31,6 +39,7 @@ describe('conversationMentions', () => {
     expect(items.map((item) => `${item.kind}:${item.id}`)).toEqual([
       'task:@daily-review',
       'note:@project-state-model',
+      'folder:@_profiles/datadog/',
       'file:@_profiles/datadog/AGENTS.md',
     ]);
   });
@@ -54,6 +63,7 @@ describe('conversationMentions', () => {
       }],
       vaultFiles: [{
         id: '_profiles/datadog/AGENTS.md',
+        kind: 'file',
         name: 'AGENTS.md',
         path: '/tmp/_profiles/datadog/AGENTS.md',
         sizeBytes: 42,
@@ -86,7 +96,7 @@ describe('conversationMentions', () => {
     expect(filterMentionItems(items, '@', { limit: 5 }).map((item) => item.id)).toHaveLength(5);
   });
 
-  it('resolves mentioned items in encounter order for path-style file references', () => {
+  it('resolves mentioned items in encounter order for path-style file and folder references', () => {
     const items = buildMentionItems({
       tasks: [{
         id: 'daily-review',
@@ -104,7 +114,15 @@ describe('conversationMentions', () => {
         path: '/tmp/project-state-model.md',
       }],
       vaultFiles: [{
+        id: '_profiles/datadog/',
+        kind: 'folder',
+        name: 'datadog',
+        path: '/tmp/_profiles/datadog',
+        sizeBytes: 0,
+        updatedAt: '2026-03-11T11:59:00.000Z',
+      }, {
         id: '_profiles/datadog/AGENTS.md',
+        kind: 'file',
         name: 'AGENTS.md',
         path: '/tmp/_profiles/datadog/AGENTS.md',
         sizeBytes: 42,
@@ -112,7 +130,8 @@ describe('conversationMentions', () => {
       }],
     });
 
-    expect(resolveMentionItems('Use @_profiles/datadog/AGENTS.md with @project-state-model.', items).map((item) => item.id)).toEqual([
+    expect(resolveMentionItems('Use @_profiles/datadog/ with @_profiles/datadog/AGENTS.md and @project-state-model.', items).map((item) => item.id)).toEqual([
+      '@_profiles/datadog/',
       '@_profiles/datadog/AGENTS.md',
       '@project-state-model',
     ]);

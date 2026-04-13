@@ -715,16 +715,26 @@ interface TokenCounts {
   segments?: ContextUsageSegment[];
 }
 
-function buildGitLineSummary(git: LiveSessionContext['git']): string | null {
+export function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):
+  | { kind: 'none' }
+  | { kind: 'summary'; text: string }
+  | { kind: 'diff'; added: string; deleted: string } {
   if (!git) {
-    return null;
+    return { kind: 'none' };
   }
 
   if (git.linesAdded === 0 && git.linesDeleted === 0) {
-    return git.changeCount > 0 ? `${git.changeCount} files` : 'clean';
+    return {
+      kind: 'summary',
+      text: git.changeCount > 0 ? `${git.changeCount} files` : 'clean',
+    };
   }
 
-  return `+${git.linesAdded.toLocaleString()} / -${git.linesDeleted.toLocaleString()}`;
+  return {
+    kind: 'diff',
+    added: `+${git.linesAdded.toLocaleString()}`,
+    deleted: `-${git.linesDeleted.toLocaleString()}`,
+  };
 }
 
 function ConversationPreferencesRow({
@@ -2594,10 +2604,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConversationCwdDraft(currentCwd ?? '');
     }
   }, [conversationCwdEditorOpen, currentCwd, draft]);
-  const gitLineSummary = useMemo(
-    () => buildGitLineSummary(liveSessionContext?.git ?? null),
+  const gitSummaryPresentation = useMemo(
+    () => resolveConversationGitSummaryPresentation(liveSessionContext?.git ?? null),
     [liveSessionContext?.git],
   );
+  const hasGitSummary = gitSummaryPresentation.kind !== 'none';
 
   useEffect(() => {
     const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
@@ -5826,7 +5837,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       className="w-full resize-none bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
                       placeholder={pendingAskUserQuestion
                         ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference notes, tasks, and vault files)'}
+                        : 'Message… (/ for commands, @ to reference notes, tasks, and indexed folders/files)'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                         : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
@@ -5989,7 +6000,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </div>
           </div>
 
-          {draft || ((!draft && (branchLabel || gitLineSummary)) || sessionTokens) ? (
+          {draft || ((!draft && (branchLabel || hasGitSummary)) || sessionTokens) ? (
             <div
               className="conversation-composer-meta mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim"
               aria-hidden={draft && !sessionTokens ? true : undefined}
@@ -6003,8 +6014,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 {!draft && branchLabel && (
                   <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
                 )}
-                {!draft && gitLineSummary && (
-                  <span className="font-mono tabular-nums">{gitLineSummary}</span>
+                {!draft && hasGitSummary && (
+                  gitSummaryPresentation.kind === 'diff' ? (
+                    <span className="font-mono tabular-nums">
+                      <span className="text-success">{gitSummaryPresentation.added}</span>
+                      <span className="text-dim"> / </span>
+                      <span className="text-danger">{gitSummaryPresentation.deleted}</span>
+                    </span>
+                  ) : (
+                    <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
+                  )
                 )}
               </div>
             </div>

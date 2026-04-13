@@ -663,7 +663,10 @@ describe('api desktop transport', () => {
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
-    const readVaultFiles = vi.fn().mockResolvedValue({ root: '/vault', files: [{ id: 'notes/a.md', path: '/vault/notes/a.md' }] });
+    const readVaultFiles = vi.fn().mockResolvedValue({
+      root: '/vault',
+      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+    });
     const updateVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     const readConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
@@ -717,7 +720,7 @@ describe('api desktop transport', () => {
     vi.stubGlobal('fetch', fetchMock);
     const readVaultFiles = vi.fn().mockResolvedValue({
       root: '/vault',
-      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -744,7 +747,7 @@ describe('api desktop transport', () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(vaultFiles).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });
@@ -768,9 +771,9 @@ describe('api desktop transport', () => {
     });
 
     const { api } = await import('./api');
-    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
+    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose indexed root' });
 
-    expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
+    expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo', prompt: 'Choose indexed root' });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(pickedFolder).toEqual({ path: '/picked/vault', cancelled: false });
   });
@@ -1058,7 +1061,7 @@ describe('api desktop transport', () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({
         root: '/vault',
-        files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+        files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
       }))
       .mockResolvedValueOnce(createJsonResponse({ path: '/picked/repo', cancelled: false }));
     vi.stubGlobal('fetch', fetchMock);
@@ -1081,7 +1084,7 @@ describe('api desktop transport', () => {
 
     const { api } = await import('./api');
     const vaultFiles = await api.vaultFiles();
-    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose knowledge vault root' });
+    const pickedFolder = await api.pickFolder({ cwd: '/repo', prompt: 'Choose indexed root' });
 
     expect(readVaultFiles).not.toHaveBeenCalled();
     expect(pickFolder).not.toHaveBeenCalled();
@@ -1089,11 +1092,11 @@ describe('api desktop transport', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/folder-picker', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cwd: '/repo', prompt: 'Choose knowledge vault root' }),
+      body: JSON.stringify({ cwd: '/repo', prompt: 'Choose indexed root' }),
     });
     expect(vaultFiles).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
+      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(pickedFolder).toEqual({ path: '/picked/repo', cancelled: false });
   });

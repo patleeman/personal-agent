@@ -30,7 +30,7 @@ beforeEach(() => {
   pickFolderMock.mockReset();
 
   getVaultRootMock.mockReturnValue('/vault');
-  listVaultFilesMock.mockReturnValue([{ id: 'notes/a.md' }]);
+  listVaultFilesMock.mockReturnValue([{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }]);
   pickFolderMock.mockReturnValue({ path: '/workspace/selected', cancelled: false });
 });
 
@@ -38,7 +38,7 @@ describe('workspaceDesktopCapability', () => {
   it('reads vault files from the current vault root', () => {
     expect(readVaultFilesCapability()).toEqual({
       root: '/vault',
-      files: [{ id: 'notes/a.md' }],
+      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
     });
     expect(listVaultFilesMock).toHaveBeenCalledWith('/vault');
   });

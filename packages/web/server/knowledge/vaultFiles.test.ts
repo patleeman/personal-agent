@@ -30,36 +30,46 @@ afterEach(() => {
 });
 
 describe('vaultFiles', () => {
-  it('lists root-relative files and skips ignored directories', () => {
+  it('lists root-relative folders and files and skips ignored directories', () => {
     const root = createVaultFixture();
 
-    expect(listVaultFiles(root).map((file) => file.id)).toEqual([
-      '_profiles/datadog/AGENTS.md',
-      'notes/daily.md',
+    expect(listVaultFiles(root).map((file) => `${file.kind}:${file.id}`)).toEqual([
+      'folder:_profiles/',
+      'folder:_profiles/datadog/',
+      'file:_profiles/datadog/AGENTS.md',
+      'folder:notes/',
+      'file:notes/daily.md',
     ]);
   });
 
-  it('resolves mentioned vault files in encounter order and ignores unsafe paths', () => {
+  it('resolves mentioned folders and files in encounter order and ignores unsafe paths', () => {
     const root = createVaultFixture();
 
     expect(resolveMentionedVaultFiles(
-      'Review @notes/daily.md and then @_profiles/datadog/AGENTS.md but ignore @../secrets.txt.',
+      'Review @notes/ and @notes/daily.md and then @_profiles/datadog/AGENTS.md but ignore @../secrets.txt.',
       root,
-    ).map((file) => file.id)).toEqual([
-      'notes/daily.md',
-      '_profiles/datadog/AGENTS.md',
+    ).map((file) => `${file.kind}:${file.id}`)).toEqual([
+      'folder:notes/',
+      'file:notes/daily.md',
+      'file:_profiles/datadog/AGENTS.md',
     ]);
 
     expect(resolveVaultFileById('../secrets.txt', root)).toBeNull();
+    expect(resolveVaultFileById('notes/', root)?.kind).toBe('folder');
   });
 
-  it('builds file reference context with absolute paths', () => {
+  it('builds indexed path context for folders and files', () => {
     const root = createVaultFixture();
+    const folder = resolveVaultFileById('notes/', root);
     const file = resolveVaultFileById('notes/daily.md', root);
+    expect(folder).not.toBeNull();
     expect(file).not.toBeNull();
 
-    const context = buildReferencedVaultFilesContext([file!]);
-    expect(context).toContain('Referenced vault files:');
+    const context = buildReferencedVaultFilesContext([folder!, file!]);
+    expect(context).toContain('Referenced indexed paths:');
+    expect(context).toContain('@notes/');
+    expect(context).toContain('kind: folder');
+    expect(context).toContain('children (1):');
     expect(context).toContain('@notes/daily.md');
     expect(context).toContain(join(root, 'notes', 'daily.md'));
   });

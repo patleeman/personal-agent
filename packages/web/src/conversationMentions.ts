@@ -2,7 +2,7 @@ import type { MemoryDocItem, ScheduledTaskSummary, VaultFileSummary } from './ty
 
 export const MAX_MENTION_MENU_ITEMS = 12;
 
-export type MentionKind = 'task' | 'note' | 'skill' | 'profile' | 'file';
+export type MentionKind = 'task' | 'note' | 'folder' | 'file' | 'skill' | 'profile';
 
 export interface MentionItem {
   id: string;
@@ -16,9 +16,10 @@ function compareMentionItems(left: MentionItem, right: MentionItem): number {
   const kindOrder: Record<MentionKind, number> = {
     task: 0,
     note: 1,
-    file: 2,
-    skill: 3,
-    profile: 4,
+    folder: 2,
+    file: 3,
+    skill: 4,
+    profile: 5,
   };
 
   return kindOrder[left.kind] - kindOrder[right.kind]
@@ -79,7 +80,7 @@ export function buildMentionItems(input: {
     ...input.vaultFiles.map((file) => ({
       id: `@${file.id}`,
       label: file.id,
-      kind: 'file' as const,
+      kind: (file.kind === 'folder' ? 'folder' : 'file') as const,
       title: file.name,
       summary: file.path,
     })),

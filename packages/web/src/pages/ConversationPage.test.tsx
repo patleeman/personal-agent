@@ -39,6 +39,7 @@ import {
   resolveConversationInitialModelPreferenceState,
   resolveConversationInitialDeferredResumeState,
   resolveConversationDraftHydrationState,
+  resolveConversationGitSummaryPresentation,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -954,6 +955,31 @@ describe('conversation live state helpers', () => {
     expect(formatQueuedPromptImageSummary(0)).toBeNull();
     expect(formatQueuedPromptImageSummary(1)).toBe('1 image attached');
     expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
+  });
+});
+
+describe('conversation git summary presentation', () => {
+  it('returns a plain summary when the tree is clean or only has file counts', () => {
+    expect(resolveConversationGitSummaryPresentation(null)).toEqual({ kind: 'none' });
+    expect(resolveConversationGitSummaryPresentation({
+      changeCount: 3,
+      linesAdded: 0,
+      linesDeleted: 0,
+      changes: [],
+    })).toEqual({ kind: 'summary', text: '3 files' });
+  });
+
+  it('returns split diff labels for added and deleted lines', () => {
+    expect(resolveConversationGitSummaryPresentation({
+      changeCount: 2,
+      linesAdded: 1234,
+      linesDeleted: 56,
+      changes: [],
+    })).toEqual({
+      kind: 'diff',
+      added: '+1,234',
+      deleted: '-56',
+    });
   });
 });
 

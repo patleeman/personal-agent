@@ -1703,7 +1703,7 @@ export function SettingsPage() {
     try {
       const result = await api.pickFolder({
         cwd: vaultRootDraft.trim() || vaultRootState.effectiveRoot,
-        prompt: 'Choose knowledge vault root',
+        prompt: 'Choose indexed root',
       });
       if (result.cancelled || !result.path) {
         return;
@@ -2211,7 +2211,7 @@ export function SettingsPage() {
             <div className="space-y-0">
               <SettingsPanel
                 title="Skill folders"
-                description="Load extra skill folders alongside the vault skills directory."
+                description="Load extra skill folders alongside the root skills directory."
               >
                 {skillFoldersLoading && !skillFoldersState ? (
                   <p className="ui-card-meta">Loading skill folders…</p>
@@ -2277,7 +2277,7 @@ export function SettingsPage() {
                         {savingSkillFolders ? 'Saving…' : 'Save'}
                       </button>
                     </div>
-                    <p className="ui-card-meta">Folders load in the saved order after the vault skills directory.</p>
+                    <p className="ui-card-meta">Folders load in the saved order after the root skills directory.</p>
                   </div>
                 ) : null}
 
@@ -2352,7 +2352,7 @@ export function SettingsPage() {
                         {savingInstructionFiles ? 'Saving…' : 'Save'}
                       </button>
                     </div>
-                    <p className="ui-card-meta">Files append in the saved order after the vault root AGENTS.md.</p>
+                    <p className="ui-card-meta">Files append in the saved order after the root AGENTS.md.</p>
                   </div>
                 ) : null}
 
@@ -2422,13 +2422,13 @@ export function SettingsPage() {
               </SettingsPanel>
 
               <SettingsPanel
-                title="Vault root"
-                description="Base path for notes, skills, and root instructions."
+                title="Indexed root"
+                description="Base path for notes, skills, root instructions, and folder-aware @ paths."
               >
                 {vaultRootLoading && !vaultRootState ? (
-                  <p className="ui-card-meta">Loading knowledge vault root…</p>
+                  <p className="ui-card-meta">Loading indexed root…</p>
                 ) : vaultRootLoadError && !vaultRootState ? (
-                  <p className="text-[12px] text-danger">Failed to load knowledge vault root: {vaultRootLoadError}</p>
+                  <p className="text-[12px] text-danger">Failed to load indexed root: {vaultRootLoadError}</p>
                 ) : vaultRootState ? (
                   <form
                     className="space-y-3"
@@ -2459,15 +2459,15 @@ export function SettingsPage() {
                         onClick={() => { void handleVaultRootPick(); }}
                         disabled={savingVaultRoot || pickingVaultRoot}
                         className="shrink-0 text-accent"
-                        title="Choose knowledge vault root"
-                        aria-label="Choose knowledge vault root"
+                        title="Choose indexed root"
+                        aria-label="Choose indexed root"
                       >
                         {pickingVaultRoot ? 'Choosing…' : 'Choose…'}
                       </ToolbarButton>
                     </div>
                     <p className="ui-card-meta break-all">
                       {savingVaultRoot
-                        ? 'Saving knowledge vault root…'
+                        ? 'Saving indexed root…'
                         : vaultRootState.source === 'env'
                           ? `Env override active · ${vaultRootState.effectiveRoot}`
                           : vaultRootState.currentRoot
@@ -2480,7 +2480,7 @@ export function SettingsPage() {
                         disabled={savingVaultRoot || pickingVaultRoot || !vaultRootDirty}
                         className={ACTION_BUTTON_CLASS}
                       >
-                        {savingVaultRoot ? 'Saving…' : 'Save vault root'}
+                        {savingVaultRoot ? 'Saving…' : 'Save root'}
                       </button>
                       <button
                         type="button"
@@ -2492,7 +2492,7 @@ export function SettingsPage() {
                       </button>
                     </div>
                     <p className="ui-card-meta">
-                      Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.
+                      Sets the base path for indexed folders &amp; files. Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.
                     </p>
                   </form>
                 ) : null}
