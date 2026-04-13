@@ -715,6 +715,23 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('interrupted turn could retry automatically');
   });
 
+  it('renders Codex compaction detail when the summary metadata provides it', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'summary',
+        ts: '2026-03-11T18:00:00.000Z',
+        kind: 'compaction',
+        title: 'Overflow recovery compaction',
+        text: '## Goal\nRetry after compaction.',
+        detail: 'This used Codex compaction under the hood. Pi kept the text summary for display and portability.',
+      }],
+    }));
+
+    expect(html).toContain('Overflow recovery compaction');
+    expect(html).toContain('interrupted turn could retry automatically');
+    expect(html).toContain('This used Codex compaction under the hood.');
+  });
+
   it('collapses long compaction summaries to a short preview by default', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

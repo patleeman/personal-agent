@@ -28,4 +28,4 @@ extensions/
 - Support files without `index.ts` can live in helper dirs like `_shared/`.
 - Shared lightweight dependencies live in `extensions/package.json`.
 - Heavier extension-specific dependencies should live beside that extension (for example `web-tools/package.json`).
-- `openai-native-compaction` is enabled by default for direct OpenAI Responses and ChatGPT/Codex responses models; set `PI_OPENAI_NATIVE_COMPACTION=0` to disable it or `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` to surface UI notices.
+- `openai-native-compaction` is enabled by default for direct OpenAI Responses and ChatGPT/Codex responses models; set `PI_OPENAI_NATIVE_COMPACTION=0` to disable it or `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` to surface Codex/OpenAI compaction UI notices.

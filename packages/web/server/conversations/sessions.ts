@@ -117,6 +117,7 @@ interface RawCompaction {
   summary: string;
   firstKeptEntryId: string;
   tokensBefore: number;
+  details?: unknown;
 }
 
 interface RawBranchSummary {
@@ -208,7 +209,7 @@ export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'context';  id: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
+  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
@@ -360,6 +361,7 @@ function buildDisplayMessageEntryFromRawLine(line: RawDisplayLine): DisplayMessa
         role: 'compactionSummary',
         summary: line.summary,
         tokensBefore: line.tokensBefore,
+        details: line.details,
       },
     };
   }
@@ -595,6 +597,42 @@ function extractUserContent(content: unknown): { text: string; images: DisplayIm
   return { text, images };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function resolveProviderCompactionLabel(details: unknown): string | undefined {
+  if (!isRecord(details)) {
+    return undefined;
+  }
+
+  const nativeDetails = isRecord(details.nativeCompaction)
+    ? details.nativeCompaction
+    : details;
+  if (!isRecord(nativeDetails) || nativeDetails.provider !== 'openai-responses-compact') {
+    return undefined;
+  }
+
+  const modelKey = typeof nativeDetails.modelKey === 'string'
+    ? nativeDetails.modelKey.trim()
+    : '';
+  if (modelKey.startsWith('openai-codex:')) {
+    return 'Codex compaction';
+  }
+  if (modelKey.startsWith('openai:')) {
+    return 'OpenAI compaction';
+  }
+
+  return 'Provider compaction';
+}
+
+function resolveCompactionSummarySupplement(details: unknown): string | undefined {
+  const label = resolveProviderCompactionLabel(details);
+  return label
+    ? `This used ${label} under the hood. Pi kept the text summary for display and portability.`
+    : undefined;
+}
+
 export function getAssistantErrorDisplayMessage(message: {
   stopReason?: string;
   errorMessage?: string;
@@ -751,6 +789,9 @@ function buildDisplayBlocksInternal(
     if (role === 'compactionSummary' || role === 'branchSummary') {
       const normalizedSummary = summary?.trim();
       if (normalizedSummary) {
+        const detail = role === 'compactionSummary'
+          ? resolveCompactionSummarySupplement(details)
+          : undefined;
         recordAnchor();
         blocks.push({
           type: 'summary',
@@ -759,6 +800,7 @@ function buildDisplayBlocksInternal(
           kind: role === 'compactionSummary' ? 'compaction' : 'branch',
           title: role === 'compactionSummary' ? 'Compaction summary' : 'Branch summary',
           text: normalizedSummary,
+          ...(detail ? { detail } : {}),
         });
       }
       continue;
@@ -1463,6 +1505,7 @@ export function buildDisplayMessageEntriesFromSessionEntries(entries: SessionEnt
           role: 'compactionSummary',
           summary: entry.summary,
           tokensBefore: entry.tokensBefore,
+          details: (entry as { details?: unknown }).details,
         },
       });
       continue;

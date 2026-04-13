@@ -1196,6 +1196,62 @@ describe('sessions', () => {
     ]);
   });
 
+  it('surfaces Codex compaction metadata on persisted compaction summaries', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    const filePath = join(dir, '2026-03-11T13-00-00-000Z_session-codex-compact.jsonl');
+    writeFileSync(filePath, [
+      JSON.stringify({ type: 'session', version: 3, id: 'session-codex-compact', timestamp: '2026-03-11T13:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', id: 'session-codex-compact-model', parentId: null, timestamp: '2026-03-11T13:00:00.000Z', modelId: 'gpt-5.4' }),
+      JSON.stringify({
+        type: 'compaction',
+        id: 'session-codex-compact-compaction-1',
+        parentId: null,
+        timestamp: '2026-03-11T13:00:01.000Z',
+        summary: '## Goal\nKeep only the latest summary.',
+        firstKeptEntryId: 'session-codex-compact-user-1',
+        tokensBefore: 1234,
+        details: {
+          nativeCompaction: {
+            version: 1,
+            provider: 'openai-responses-compact',
+            modelKey: 'openai-codex:openai-codex-responses:gpt-5.4',
+            replacementHistory: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Prompt after compaction' }] }],
+          },
+        },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-codex-compact-user-1',
+        parentId: 'session-codex-compact-compaction-1',
+        timestamp: '2026-03-11T13:00:02.000Z',
+        message: { role: 'user', content: 'Continue after compaction' },
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-codex-compact');
+    expect(detail?.blocks).toEqual([
+      {
+        type: 'summary',
+        id: 'session-codex-compact-compaction-1',
+        ts: '2026-03-11T13:00:01.000Z',
+        kind: 'compaction',
+        title: 'Compaction summary',
+        text: '## Goal\nKeep only the latest summary.',
+        detail: 'This used Codex compaction under the hood. Pi kept the text summary for display and portability.',
+      },
+      {
+        type: 'user',
+        id: 'session-codex-compact-user-1',
+        ts: '2026-03-11T13:00:02.000Z',
+        text: 'Continue after compaction',
+      },
+    ]);
+  });
+
   it('removes deleted session files from the cache and persistent index', () => {
     const sessionsDir = createTempSessionsDir();
     const indexFile = configureSessionEnv(sessionsDir);

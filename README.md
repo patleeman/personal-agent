@@ -137,7 +137,7 @@ The repo currently ships these built-in Pi extensions:
 - `note-policy` — injects profile/vault context and available notes/skills/internal skills into the runtime prompt
 - `web-tools` — `web_search` and `web_fetch`
 - `daemon-run-orchestration-prompt` — extra system-prompt guidance for durable background orchestration
-- `openai-native-compaction` — uses OpenAI/Codex native compaction replay for direct Responses API sessions while preserving Pi's normal portable text summary
+- `openai-native-compaction` — uses Codex/OpenAI compaction replay for direct Responses API sessions while preserving Pi's normal portable text summary
 
 ## Release flow
 

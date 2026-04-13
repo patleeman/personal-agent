@@ -118,6 +118,10 @@ function supportsNativeCompaction(model: unknown): model is ModelLike {
   return isDirectOpenAIResponsesModel(model) || isCodexResponsesModel(model);
 }
 
+function describeProviderCompaction(model: ModelLike): string {
+  return isCodexResponsesModel(model) ? 'Codex compaction' : 'OpenAI compaction';
+}
+
 function normalizeBaseUrl(baseUrl: unknown, fallback: string): string {
   return typeof baseUrl === 'string' && baseUrl.trim() ? baseUrl.trim().replace(/\/+$/, '') : fallback;
 }
@@ -554,7 +558,7 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
     delete rewritten.messages;
     delete rewritten.previous_response_id;
 
-    notify(ctx, `Native OpenAI compaction replay active for ${String(model.provider)}/${String(model.id)}`);
+    notify(ctx, `Using ${describeProviderCompaction(model)} for ${String(model.provider)}/${String(model.id)}`);
     return rewritten;
   });
 
@@ -598,17 +602,17 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
 
     if (remoteCompaction.status !== 'fulfilled') {
       if (localSummary.status === 'fulfilled') {
-        notify(ctx, 'Native compaction failed; using normal Pi compaction', 'warning');
+        notify(ctx, `${describeProviderCompaction(model)} failed; using normal Pi compaction`, 'warning');
         return { compaction: localSummary.value };
       }
       if (ctx.hasUI) {
         const message = remoteCompaction.reason instanceof Error ? remoteCompaction.reason.message : String(remoteCompaction.reason);
-        ctx.ui.notify(`Native compaction failed; using normal Pi behavior. ${message}`, 'warning');
+        ctx.ui.notify(`${describeProviderCompaction(model)} failed; using normal Pi behavior. ${message}`, 'warning');
       }
       return undefined;
     }
 
-    const fallbackSummary = `Native OpenAI compaction applied for ${String(model.provider)}/${String(model.id)}. Pi keeps this text summary for portability; supported future turns use provider-native replay from compaction details.`;
+    const fallbackSummary = `${describeProviderCompaction(model)} applied for ${String(model.provider)}/${String(model.id)}. Pi keeps this text summary for display and portability; supported future turns reuse the provider's compacted history.`;
     const summary = localSummary.status === 'fulfilled'
       ? localSummary.value
       : {

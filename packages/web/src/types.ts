@@ -89,7 +89,7 @@ export type MessageBlock =
   | { type: 'user';      id?: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';      id?: string; ts: string; text: string; streaming?: boolean }
   | { type: 'context';   id?: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
+  | { type: 'summary';   id?: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string; detail?: string }
   | { type: 'thinking';  id?: string; ts: string; text: string }
   | { type: 'tool_use';  id?: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; running?: boolean; status?: 'running' | 'ok' | 'error'; error?: boolean; _toolCallId?: string; details?: unknown; outputDeferred?: boolean }
   | { type: 'subagent';  id?: string; ts: string; name: string; prompt: string; status: 'running' | 'complete' | 'failed'; summary?: string }
@@ -467,7 +467,7 @@ export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'context';  id: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string }
+  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }

@@ -11,7 +11,7 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
     case 'thinking':
       return { type: 'thinking', id: block.id, text: block.text, ts: block.ts };
     case 'summary':
-      return { type: 'summary', id: block.id, kind: block.kind, title: block.title, text: block.text, ts: block.ts };
+      return { type: 'summary', id: block.id, kind: block.kind, title: block.title, text: block.text, detail: block.detail, ts: block.ts };
     case 'tool_use':
       return {
         type: 'tool_use',
