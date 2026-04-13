@@ -9,6 +9,7 @@ const repoRoot = process.cwd();
 const packageJsonPath = resolve(repoRoot, 'package.json');
 const releaseDir = resolve(repoRoot, 'dist', 'release');
 const defaultEnvPath = resolve(homedir(), 'workingdir', 'familiar', '.env');
+const defaultReleaseRepo = 'patleeman/personal-agent-releases';
 
 function fail(message) {
   console.error(message);
@@ -117,6 +118,10 @@ function loadReleaseEnv() {
     env.APPLE_APP_SPECIFIC_PASSWORD = env.APPLE_PASSWORD;
   }
 
+  if (!env.PERSONAL_AGENT_RELEASE_REPO) {
+    env.PERSONAL_AGENT_RELEASE_REPO = defaultReleaseRepo;
+  }
+
   return env;
 }
 
@@ -208,6 +213,19 @@ function ensureGhAuth() {
   run('gh', ['auth', 'status']);
 }
 
+function ensureReleaseRepoExists(releaseRepo) {
+  const repoView = tryCapture('gh', ['repo', 'view', releaseRepo, '--json', 'name,visibility,url']);
+  if (repoView.status !== 0) {
+    const rendered = `${repoView.stderr}${repoView.stdout}`.trim();
+    fail(rendered || `Release repo ${releaseRepo} not found. Create it before publishing.`);
+  }
+
+  const details = JSON.parse(repoView.stdout || '{}');
+  if (details.visibility !== 'PUBLIC') {
+    fail(`Release repo ${releaseRepo} must be public for desktop auto-updates to work.`);
+  }
+}
+
 function getDefaultRemoteBranch() {
   const value = capture('git', ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD']);
   return value.replace(/^refs\/remotes\/origin\//u, '');
@@ -232,13 +250,21 @@ function collectReleaseFiles(version) {
   }
 
   const files = readdirSync(releaseDir)
-    .filter((name) => name.includes(`-${version}-`))
-    .filter((name) => name.endsWith('.dmg') || name.endsWith('.zip'))
+    .filter((name) => (
+      name === 'latest-mac.yml'
+      || (name.includes(`-${version}-`) && (
+        name.endsWith('.dmg')
+        || name.endsWith('.zip')
+        || name.endsWith('.blockmap')
+      ))
+    ))
     .sort()
     .map((name) => resolve(releaseDir, name));
 
-  if (files.length === 0) {
-    fail(`No .dmg or .zip release artifacts found in ${releaseDir}`);
+  const hasLatestMac = files.some((file) => file.endsWith('/latest-mac.yml'));
+  const hasZip = files.some((file) => file.endsWith('.zip'));
+  if (!hasLatestMac || !hasZip) {
+    fail(`Expected latest-mac.yml and at least one .zip artifact in ${releaseDir}`);
   }
 
   return files;
@@ -282,6 +308,7 @@ const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
 const version = packageJson.version;
 const tag = `v${version}`;
 const env = loadReleaseEnv();
+const releaseRepo = env.PERSONAL_AGENT_RELEASE_REPO;
 
 rmSync(releaseDir, { recursive: true, force: true });
 
@@ -290,6 +317,7 @@ ensureTagAtHead(tag);
 ensureSigningIdentity(env);
 ensureNotarizationCredentials(env);
 ensureGhAuth();
+ensureReleaseRepoExists(releaseRepo);
 
 console.log(`Building signed desktop artifacts for ${tag}...`);
 run('npm', ['run', 'desktop:dist'], { env });
@@ -300,21 +328,29 @@ notarizeDistributionContainers(env, files);
 console.log(`Pushing ${tag} to GitHub...`);
 pushReleaseRef(tag);
 
-const releaseView = tryCapture('gh', ['release', 'view', tag, '--json', 'url']);
+const releaseNotes = [
+  `Signed desktop release artifacts for Personal Agent ${version}.`,
+  '',
+  'This repo intentionally only hosts release assets and update metadata.',
+  'Source history stays in the private development repo.',
+].join('\n');
+
+const releaseView = tryCapture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url']);
 if (releaseView.status === 0) {
-  console.log(`Updating existing GitHub release ${tag}...`);
-  run('gh', ['release', 'upload', tag, ...files, '--clobber']);
+  console.log(`Updating existing GitHub release ${tag} in ${releaseRepo}...`);
+  run('gh', ['release', 'edit', tag, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes]);
+  run('gh', ['release', 'upload', tag, ...files, '--repo', releaseRepo, '--clobber']);
 } else if (`${releaseView.stderr}${releaseView.stdout}`.includes('release not found')) {
-  console.log(`Creating GitHub release ${tag}...`);
-  const args = ['release', 'create', tag, ...files, '--generate-notes'];
+  console.log(`Creating GitHub release ${tag} in ${releaseRepo}...`);
+  const args = ['release', 'create', tag, ...files, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes];
   if (version.includes('-')) {
     args.push('--prerelease');
   }
   run('gh', args);
 } else {
   const rendered = `${releaseView.stderr}${releaseView.stdout}`.trim();
-  fail(rendered || `Unable to inspect GitHub release ${tag}`);
+  fail(rendered || `Unable to inspect GitHub release ${tag} in ${releaseRepo}`);
 }
 
-const releaseUrl = capture('gh', ['release', 'view', tag, '--json', 'url', '--jq', '.url']);
-console.log(`Published ${tag}: ${releaseUrl}`);
+const releaseUrl = capture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url', '--jq', '.url']);
+console.log(`Published ${tag} to ${releaseRepo}: ${releaseUrl}`);

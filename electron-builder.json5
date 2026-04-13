@@ -65,6 +65,6 @@
         arch: ['arm64'],
       },
     ],
-    artifactName: '${productName}-${version}-mac-${arch}.${ext}',
+    artifactName: 'Personal-Agent-${version}-mac-${arch}.${ext}',
   },
 }

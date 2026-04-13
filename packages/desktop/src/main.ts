@@ -210,7 +210,11 @@ async function bootstrapDesktopApp(): Promise<void> {
   hostManager = new HostManager();
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
-  updateManager = new DesktopUpdateManager();
+  updateManager = new DesktopUpdateManager({
+    onBeforeQuitForUpdate: async () => {
+      await prepareForQuit();
+    },
+  });
   applyDesktopAboutPanelOptions();
 
   const shellActions = {

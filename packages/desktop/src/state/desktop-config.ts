@@ -46,13 +46,6 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
           height: typeof input.windowState.height === 'number' ? input.windowState.height : DEFAULT_WINDOW_STATE.height,
         }
       : { ...DEFAULT_WINDOW_STATE },
-    updates: input.updates && typeof input.updates === 'object'
-      ? {
-          dismissedVersion: typeof input.updates.dismissedVersion === 'string' && input.updates.dismissedVersion.trim().length > 0
-            ? input.updates.dismissedVersion.trim()
-            : undefined,
-        }
-      : undefined,
     hosts,
   };
 }

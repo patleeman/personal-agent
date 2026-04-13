@@ -19,6 +19,7 @@
     "@personal-agent/resources": "*",
     "@personal-agent/services": "*",
     "@personal-agent/web": "*",
+    "electron-updater": "^6.8.3",
     "ws": "^8.18.3"
   },
   "devDependencies": {

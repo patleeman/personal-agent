@@ -7,7 +7,7 @@ The release path is intentionally simple:
 1. bump the repo version with `npm version` at the repo root
 2. let the version hook sync every `packages/*/package.json` version and refresh `package-lock.json`
 3. build and notarize the macOS desktop app locally with Patrick's Keychain signing identity
-4. push the commit and tag to GitHub and create or update the GitHub release with the generated `.dmg` and `.zip`
+4. push the commit and tag to the private source repo, then create or update the matching GitHub release in the public `patleeman/personal-agent-releases` repo with the generated updater assets
 
 ## Local commands
 
@@ -22,7 +22,7 @@ Those commands:
 - create the version bump commit and `v<version>` tag through `npm version`
 - build signed desktop artifacts locally
 - push the commit and tag
-- create or update the matching GitHub release
+- create or update the matching GitHub release in `patleeman/personal-agent-releases`
 
 If the version bump already happened and you just need to retry the signed publish step, run:
 
@@ -55,18 +55,32 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 - notarizes the packaged app and staples it
 - notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
+- emits Electron updater metadata including `latest-mac.yml`
 
 GitHub Actions no longer publishes shipped release artifacts automatically. `.github/workflows/release.yml` is now only a manual smoke-build workflow for unsigned CI packaging checks.
 
+## Public release repo
+
+Desktop release assets live in the public `patleeman/personal-agent-releases` repo by default.
+
+Override the target release repo by setting `PERSONAL_AGENT_RELEASE_REPO` before running the publish step.
+
+That repo is intentionally boring:
+
+- it exists only to host signed desktop artifacts and Electron updater metadata
+- it should not contain source history from the private development repo
+- each release should include `latest-mac.yml`, the macOS `.zip`, the `.zip.blockmap`, and optionally the `.dmg` and `.dmg.blockmap`
+- release notes should stay generic so private commit history does not leak into the public feed
+
 ## Desktop update checks
 
-The packaged desktop app checks GitHub Releases for newer versions:
+The packaged desktop app uses `electron-updater` against the public release repo:
 
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check
-- for this private repo, it prefers the local GitHub CLI (`gh`) for authenticated release checks and installer downloads
-- when `gh` is available and authenticated, it downloads the signed installer locally and opens it automatically
-- if `gh` is unavailable, it falls back to the public GitHub Releases API, which only works for public repos
+- available updates download in the background
+- once the download finishes, the app prompts to restart and install the update
+- quitting after an update download should also install the update on the next app exit path
 - unpackaged development runs keep update checks disabled
 
 ## Packaged desktop runtime layout
@@ -82,7 +96,7 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 This release flow currently targets macOS arm64 only.
 
-Shipped binaries are published through GitHub releases from Patrick's local signed build path.
+Shipped binaries and updater metadata are published through GitHub releases in `patleeman/personal-agent-releases` from Patrick's local signed build path.
 
 ## Related docs
 
