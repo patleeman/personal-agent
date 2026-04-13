@@ -164,6 +164,7 @@ export interface ForkLiveSessionCapabilityInput {
   conversationId: string;
   entryId: string;
   preserveSource?: boolean;
+  beforeEntry?: boolean;
 }
 
 export interface SummarizeAndForkLiveSessionCapabilityInput {
@@ -706,6 +707,7 @@ export async function forkLiveSessionCapability(
 
   return forkLiveSession(conversationId, entryId, {
     preserveSource: input.preserveSource,
+    beforeEntry: input.beforeEntry,
     ...buildLiveSessionOptions(context),
   });
 }

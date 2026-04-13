@@ -845,12 +845,13 @@ describe('live session routes', () => {
     const forkRes = createResponse();
     await postHandler('/api/live-sessions/:id/fork')(createRequest({
       params: { id: 'live-1' },
-      body: { entryId: 'entry-2', preserveSource: true, surfaceId: 'surface-1' },
+      body: { entryId: 'entry-2', preserveSource: true, beforeEntry: true, surfaceId: 'surface-1' },
     }), forkRes);
     expect(forkSessionMock).toHaveBeenCalledWith('live-1', 'entry-2', {
       additionalExtensionPaths: ['extensions'],
       extensionFactories: ['factory'],
       preserveSource: true,
+      beforeEntry: true,
     });
     expect(forkRes.json).toHaveBeenCalledWith({ id: 'fork-1' });
 

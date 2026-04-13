@@ -262,6 +262,7 @@ export interface DesktopLiveSessionForkRequest {
   conversationId: string;
   entryId: string;
   preserveSource?: boolean;
+  beforeEntry?: boolean;
 }
 
 export interface HostController {

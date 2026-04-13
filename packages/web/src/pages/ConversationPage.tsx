@@ -3606,9 +3606,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, currentSurfaceId);
-      // Pi forks before the selected user turn, so prefill that prompt in the
-      // destination composer and let the user edit or resend it manually.
+      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, {
+        preserveSource: true,
+        beforeEntry: true,
+      }, currentSurfaceId);
+      // Rewind lands before the selected user turn, so prefill that prompt in
+      // the destination composer and let the user edit or resend it manually.
       persistForkPromptDraft(newSessionId, entry.text);
       ensureConversationTabOpen(newSessionId);
       navigate(`/conversations/${newSessionId}`);
@@ -4427,7 +4430,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             return { kind: 'handled' };
           }
 
-          const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, { preserveSource: true }, currentSurfaceId);
+          const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, {
+            preserveSource: true,
+            beforeEntry: true,
+          }, currentSurfaceId);
           persistForkPromptDraft(newSessionId, entry.text);
           ensureConversationTabOpen(newSessionId);
           navigate(`/conversations/${newSessionId}`);

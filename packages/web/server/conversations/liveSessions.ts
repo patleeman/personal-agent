@@ -3049,11 +3049,18 @@ export async function branchSession(
 export async function forkSession(
   sessionId: string,
   entryId: string,
-  options: LiveSessionLoaderOptions & { preserveSource?: boolean } = {},
+  options: LiveSessionLoaderOptions & { preserveSource?: boolean; beforeEntry?: boolean } = {},
 ): Promise<{ newSessionId: string; sessionFile: string }> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  if (entry.session.isStreaming && !options.preserveSource) {
+
+  const {
+    preserveSource,
+    beforeEntry,
+    ...loaderOptions
+  } = options;
+
+  if (entry.session.isStreaming && !preserveSource) {
     throw new Error('Cannot replace a running conversation while forking. Keep the source conversation open instead.');
   }
 
@@ -3065,18 +3072,40 @@ export async function forkSession(
   }
 
   const sourceManager = SessionManager.open(sourceSessionFile);
-  if (!sourceManager.getEntry(entryId)) {
+  const sourceEntry = sourceManager.getEntry(entryId);
+  if (!sourceEntry) {
     throw new Error(`Session entry not found: ${entryId}`);
   }
 
-  const forkedSessionFile = sourceManager.createBranchedSession(entryId);
+  if (beforeEntry && !sourceEntry.parentId) {
+    const created = await createSession(entry.cwd, {
+      ...loaderOptions,
+      initialModel: loaderOptions.initialModel === undefined ? entry.session.model?.id ?? null : loaderOptions.initialModel,
+      initialThinkingLevel: loaderOptions.initialThinkingLevel === undefined
+        ? entry.session.thinkingLevel ?? null
+        : loaderOptions.initialThinkingLevel,
+    });
+
+    if (!preserveSource) {
+      destroySession(sessionId);
+    }
+
+    return { newSessionId: created.id, sessionFile: created.sessionFile };
+  }
+
+  const targetEntryId = beforeEntry ? sourceEntry.parentId : entryId;
+  if (!targetEntryId) {
+    throw new Error(`Session entry not found: ${entryId}`);
+  }
+
+  const forkedSessionFile = sourceManager.createBranchedSession(targetEntryId);
   if (!forkedSessionFile) {
     throw new Error('Unable to create a forked session file.');
   }
 
-  const resumed = await resumeSession(forkedSessionFile, options);
+  const resumed = await resumeSession(forkedSessionFile, loaderOptions);
 
-  if (!options.preserveSource) {
+  if (!preserveSource) {
     destroySession(sessionId);
   }
 

@@ -596,12 +596,18 @@ export function registerLiveSessionRoutes(
   router.post('/api/live-sessions/:id/fork', async (req, res) => {
     try {
       ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
-      const { entryId, preserveSource } = req.body as { entryId: string; preserveSource?: boolean; surfaceId?: string };
+      const { entryId, preserveSource, beforeEntry } = req.body as {
+        entryId: string;
+        preserveSource?: boolean;
+        beforeEntry?: boolean;
+        surfaceId?: string;
+      };
       if (!entryId) { res.status(400).json({ error: 'entryId required' }); return; }
       res.json(await forkLiveSessionCapability({
         conversationId: req.params.id,
         entryId,
         preserveSource,
+        beforeEntry,
       }, getLiveSessionCapabilityContext()));
     } catch (err) {
       logError('request handler error', {

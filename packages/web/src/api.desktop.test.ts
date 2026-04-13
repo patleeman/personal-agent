@@ -315,7 +315,7 @@ describe('api desktop transport', () => {
     const exported = await api.exportSession('live-1', '/tmp/live-1.html');
     const reloaded = await api.reloadSession('live-1', 'surface-1');
     const branched = await api.branchSession('live-1', 'entry-1', 'surface-1');
-    const forked = await api.forkSession('live-1', 'entry-1', { preserveSource: true }, 'surface-1');
+    const forked = await api.forkSession('live-1', 'entry-1', { preserveSource: true, beforeEntry: true }, 'surface-1');
     const summaryFork = await api.summarizeAndForkSession('live-1', 'surface-1');
     const aborted = await api.abortSession('live-1', 'surface-1');
     const destroyed = await api.destroySession('conversation-1', 'surface-1');
@@ -402,7 +402,12 @@ describe('api desktop transport', () => {
     expect(exportLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', outputPath: '/tmp/live-1.html' });
     expect(reloadLiveSession).toHaveBeenCalledWith('live-1');
     expect(branchLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1' });
-    expect(forkLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true });
+    expect(forkLiveSession).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      entryId: 'entry-1',
+      preserveSource: true,
+      beforeEntry: true,
+    });
     expect(summarizeAndForkLiveSession).toHaveBeenCalledWith('live-1');
     expect(abortLiveSession).toHaveBeenCalledWith('live-1');
     expect(destroyLiveSession).toHaveBeenCalledWith('conversation-1');

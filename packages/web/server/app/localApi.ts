@@ -2326,6 +2326,7 @@ export async function forkDesktopLiveSession(input: {
   conversationId: string;
   entryId: string;
   preserveSource?: boolean;
+  beforeEntry?: boolean;
 }) {
   return forkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }

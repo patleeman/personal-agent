@@ -821,7 +821,7 @@ describe('LocalHostController', () => {
     await expect(controller.reloadLiveSession?.('live-1')).resolves.toEqual({ ok: true });
     await expect(controller.destroyLiveSession?.('live-1')).resolves.toEqual({ ok: true });
     await expect(controller.branchLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1' })).resolves.toEqual({ newSessionId: 'branch-1', sessionFile: '/tmp/branch-1.jsonl' });
-    await expect(controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true })).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
+    await expect(controller.forkLiveSession?.({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true, beforeEntry: true })).resolves.toEqual({ newSessionId: 'fork-1', sessionFile: '/tmp/fork-1.jsonl' });
     await expect(controller.summarizeAndForkLiveSession?.('live-1')).resolves.toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     await expect(controller.abortLiveSession?.('live-1')).resolves.toEqual({ ok: true });
 
@@ -856,7 +856,12 @@ describe('LocalHostController', () => {
     expect(reloadDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
     expect(destroyDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(branchDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1' });
-    expect(forkDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', entryId: 'entry-1', preserveSource: true });
+    expect(forkDesktopLiveSession).toHaveBeenCalledWith({
+      conversationId: 'live-1',
+      entryId: 'entry-1',
+      preserveSource: true,
+      beforeEntry: true,
+    });
     expect(summarizeAndForkDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1' });
     expect(abortDesktopLiveSession).toHaveBeenCalledWith('live-1');
     expect(backend.ensureStarted).not.toHaveBeenCalled();

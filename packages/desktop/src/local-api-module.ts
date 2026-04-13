@@ -287,6 +287,7 @@ export interface LocalApiModule {
     conversationId: string;
     entryId: string;
     preserveSource?: boolean;
+    beforeEntry?: boolean;
   }): Promise<{ newSessionId: string; sessionFile: string }>;
   summarizeAndForkDesktopLiveSession(input: {
     conversationId: string;

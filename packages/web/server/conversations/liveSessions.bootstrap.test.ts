@@ -585,7 +585,7 @@ describe('liveSessions bootstrap helpers', () => {
       tools: [],
     });
     const forkSourceManager = createMockManager({
-      getEntry: vi.fn(() => ({ id: 'entry-2' })),
+      getEntry: vi.fn(() => ({ id: 'entry-2', parentId: 'entry-1' })),
       createBranchedSession: vi.fn(() => '/tmp/fork-session.jsonl'),
     });
     const forkResumeManager = createMockManager({
@@ -656,7 +656,7 @@ describe('liveSessions bootstrap helpers', () => {
       newSessionId: 'session-branch-live',
       sessionFile: '/tmp/branch-session.jsonl',
     });
-    await expect(forkSession('session-fork-source', 'entry-2')).resolves.toEqual({
+    await expect(forkSession('session-fork-source', 'entry-2', { beforeEntry: true })).resolves.toEqual({
       newSessionId: 'session-fork-live',
       sessionFile: '/tmp/fork-session.jsonl',
     });
@@ -667,7 +667,64 @@ describe('liveSessions bootstrap helpers', () => {
 
     expect(branchSourceManager.getEntry).toHaveBeenCalledWith('entry-1');
     expect(forkSourceManager.getEntry).toHaveBeenCalledWith('entry-2');
+    expect(forkSourceManager.createBranchedSession).toHaveBeenCalledWith('entry-1');
     expect(summarySession.session.compact).toHaveBeenCalledTimes(1);
     expect(registry.has('session-fork-source')).toBe(false);
+  });
+
+  it('rewinds to a blank session when the selected entry is the first turn', async () => {
+    const createdManager = createMockManager({
+      sessionFile: '/tmp/rewind-root-session.jsonl',
+      getCwd: vi.fn(() => '/tmp/source-workspace'),
+    });
+    const createdSession = createMockSession({
+      sessionId: 'session-rewind-live',
+      cwd: '/tmp/source-workspace',
+      manager: createdManager,
+      sessionFile: '/tmp/rewind-root-session.jsonl',
+      model: { id: 'gpt-5', provider: 'openai' },
+      thinkingLevel: 'high',
+      tools: [],
+    });
+    const sourceManager = createMockManager({
+      getEntry: vi.fn(() => ({ id: 'entry-1', parentId: null })),
+      createBranchedSession: vi.fn(() => '/tmp/unused.jsonl'),
+    });
+
+    sessionManagerOpenMock.mockReturnValue(sourceManager);
+    sessionManagerCreateMock.mockReturnValue(createdManager);
+    createAgentSessionMock.mockResolvedValue({ session: createdSession.session });
+
+    setLiveEntry('session-rewind-source', {
+      cwd: '/tmp/source-workspace',
+      title: 'Rewind source',
+      session: {
+        dispose: vi.fn(),
+        isStreaming: false,
+        sessionFile: '/tmp/source-session.jsonl',
+        model: { id: 'gpt-5', provider: 'openai' },
+        thinkingLevel: 'high',
+      },
+    });
+
+    await expect(forkSession('session-rewind-source', 'entry-1', {
+      beforeEntry: true,
+      preserveSource: true,
+    })).resolves.toEqual({
+      newSessionId: 'session-rewind-live',
+      sessionFile: '/tmp/rewind-root-session.jsonl',
+    });
+
+    expect(sourceManager.createBranchedSession).not.toHaveBeenCalled();
+    expect(sessionManagerCreateMock).toHaveBeenCalledWith(
+      '/tmp/source-workspace',
+      '/tmp/durable-sessions/--tmp-source-workspace--',
+    );
+    expect(applyConversationModelPreferencesMock).toHaveBeenCalledWith(
+      createdSession.session,
+      { model: 'gpt-5', thinkingLevel: 'high' },
+      { currentModel: 'gpt-5', currentThinkingLevel: 'high' },
+      [],
+    );
   });
 });

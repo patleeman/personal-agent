@@ -1149,15 +1149,21 @@ export const api = {
 
     return post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/branch`, { entryId, ...(surfaceId ? { surfaceId } : {}) });
   },
-  forkSession: async (id: string, entryId: string, options?: { preserveSource?: boolean }, surfaceId?: string) => {
+  forkSession: async (id: string, entryId: string, options?: { preserveSource?: boolean; beforeEntry?: boolean }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.forkLiveSession({ conversationId: id, entryId, preserveSource: options?.preserveSource });
+      return desktopBridge.forkLiveSession({
+        conversationId: id,
+        entryId,
+        preserveSource: options?.preserveSource,
+        beforeEntry: options?.beforeEntry,
+      });
     }
 
     return post<{ newSessionId: string; sessionFile: string }>(`/live-sessions/${id}/fork`, {
       entryId,
       preserveSource: options?.preserveSource,
+      beforeEntry: options?.beforeEntry,
       ...(surfaceId ? { surfaceId } : {}),
     });
   },

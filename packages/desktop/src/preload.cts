@@ -254,7 +254,7 @@ const desktopBridge = {
   destroyLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:destroy-live-session`, conversationId),
   branchLiveSession: (input: { conversationId: string; entryId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:branch-live-session`, input),
-  forkLiveSession: (input: { conversationId: string; entryId: string; preserveSource?: boolean }) =>
+  forkLiveSession: (input: { conversationId: string; entryId: string; preserveSource?: boolean; beforeEntry?: boolean }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:fork-live-session`, input),
   summarizeAndForkLiveSession: (conversationId: string) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:summarize-and-fork-live-session`, conversationId),

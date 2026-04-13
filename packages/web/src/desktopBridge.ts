@@ -301,7 +301,7 @@ export interface PersonalAgentDesktopBridge {
   reloadLiveSession(conversationId: string): Promise<{ ok: true }>;
   destroyLiveSession(conversationId: string): Promise<{ ok: true }>;
   branchLiveSession(input: { conversationId: string; entryId: string }): Promise<{ newSessionId: string; sessionFile: string }>;
-  forkLiveSession(input: { conversationId: string; entryId: string; preserveSource?: boolean }): Promise<{ newSessionId: string; sessionFile: string }>;
+  forkLiveSession(input: { conversationId: string; entryId: string; preserveSource?: boolean; beforeEntry?: boolean }): Promise<{ newSessionId: string; sessionFile: string }>;
   summarizeAndForkLiveSession(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt(input: {
     conversationId: string;
