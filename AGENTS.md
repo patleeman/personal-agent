@@ -26,11 +26,12 @@ This is personal software, built for Patrick by Patrick.
 If the goal is to publish a downloadable installable macOS app on GitHub Releases, use the local signed release flow.
 
 1. From the repo root, run `npm run release:desktop:patch`, `npm run release:desktop:minor`, or `npm run release:desktop:major`.
-2. That flow bumps the version, uses the local `Developer ID Application` certificate from Keychain, notarizes with local Apple credentials, pushes the commit and tag, and creates or updates the GitHub release with the generated `.dmg` and `.zip` artifacts.
+2. That flow bumps the version, uses the local `Developer ID Application` certificate from Keychain, notarizes with local Apple credentials, pushes the commit and tag to the private source repo, and creates or updates the matching release in the public `patleeman/personal-agent-releases` repo.
 3. `npm run release:publish` is the standalone publish step if the version bump already happened and you just need to rebuild/retry the signed release.
-4. The publish script auto-loads Apple credentials from `~/workingdir/familiar/.env` when present and maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for notarization.
+4. The publish script auto-loads Apple credentials from `~/workingdir/familiar/.env` when present, maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for notarization, and can target another public release repo with `PERSONAL_AGENT_RELEASE_REPO`.
+5. Release assets must include the Electron updater metadata (`latest-mac.yml`) plus the signed macOS `.zip` / `.zip.blockmap`, and optionally the `.dmg` / `.dmg.blockmap`.
 
-Important: pushing commits or tags to `master` does not create a GitHub release by itself anymore. Release artifacts are now built and uploaded locally so they can use Patrick's Keychain signing identity.
+Important: pushing commits or tags to `master` does not create a GitHub release by itself anymore. Release artifacts are built locally so they can use Patrick's Keychain signing identity, then uploaded to the public release-only repo for in-app auto-updates.
 
 See `docs/release-cycle.md` for the fuller release notes.
 
