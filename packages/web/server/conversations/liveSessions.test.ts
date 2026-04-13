@@ -2351,7 +2351,7 @@ describe('conversation auto mode', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamingMessage: null },
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'previous reply' }] }], streamingMessage: null },
         sessionManager: {
           getEntries: () => entries,
           appendCustomEntry,
@@ -2382,6 +2382,39 @@ describe('conversation auto mode', () => {
     });
   });
 
+  it('does not queue an auto review turn on a brand new conversation with no assistant history yet', async () => {
+    setLiveEntry('session-auto-mode-empty', {
+      sessionId: 'session-auto-mode-empty',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Auto mode empty',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: { messages: [], streamingMessage: null },
+        sessionManager: {
+          getEntries: () => [{
+            type: 'custom',
+            customType: 'conversation-auto-mode',
+            data: {
+              enabled: true,
+              updatedAt: '2026-04-12T15:09:00.000Z',
+            },
+          }],
+          appendCustomEntry: vi.fn(),
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: false,
+        sendCustomMessage: vi.fn(async () => undefined),
+      },
+    });
+
+    await expect(requestConversationAutoModeTurn('session-auto-mode-empty')).resolves.toBe(false);
+  });
+
   it('does not queue another hidden review turn while work is already streaming', async () => {
     setLiveEntry('session-auto-mode-busy', {
       sessionId: 'session-auto-mode-busy',
@@ -2392,7 +2425,7 @@ describe('conversation auto mode', () => {
       lastContextUsageJson: null,
       lastQueueStateJson: null,
       session: {
-        state: { messages: [], streamingMessage: null },
+        state: { messages: [{ role: 'assistant', content: [{ type: 'text', text: 'done' }] }], streamingMessage: null },
         sessionManager: {
           getEntries: () => [{
             type: 'custom',

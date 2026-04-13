@@ -2364,6 +2364,12 @@ export async function requestConversationAutoModeTurn(sessionId: string): Promis
     return false;
   }
 
+  const hasCompletedAssistantTurn = Array.isArray(entry.session.state?.messages)
+    && entry.session.state.messages.some((message) => message?.role === 'assistant');
+  if (!hasCompletedAssistantTurn) {
+    return false;
+  }
+
   if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
     return false;
   }
