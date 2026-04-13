@@ -98,7 +98,8 @@ export function DesktopTopBar({
   }, [location.key, location.pathname, location.search]);
 
   const bridge = getDesktopBridge();
-  const showDesktopChrome = bridge !== null || environment !== null || isDesktopShell();
+  const desktopShell = isDesktopShell();
+  const showDesktopChrome = bridge !== null || environment !== null || desktopShell;
 
   if (!showDesktopChrome) {
     return null;
@@ -170,7 +171,7 @@ export function DesktopTopBar({
               <RightRailToggleIcon open={railOpen} />
             </ToolbarButton>
           ) : null}
-          {bridge ? (
+          {showDesktopChrome ? (
             <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => setShowConnectionsModal(true)}>
               Connect
             </ToolbarButton>

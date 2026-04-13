@@ -5,7 +5,7 @@ import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
-import { getDesktopBridge, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
+import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
 import { createDesktopAwareEventSource } from '../desktopEventSource';
 import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
@@ -533,7 +533,10 @@ function DesktopConnectionsSettingsPanel() {
     };
   }, [connections, selectedHostId]);
 
-  if (!loading && !environment?.isElectron) {
+  const bridge = getDesktopBridge();
+  const desktopShell = isDesktopShell();
+
+  if (!loading && !environment?.isElectron && !desktopShell) {
     return null;
   }
 
@@ -786,6 +789,11 @@ function DesktopConnectionsSettingsPanel() {
         )}
       >
         {loading ? <p className="ui-card-meta">Loading desktop connections…</p> : null}
+        {!bridge && desktopShell ? (
+          <p className="text-[12px] text-danger">
+            Desktop bridge unavailable. Restart the desktop app and try again.
+          </p>
+        ) : null}
         {environment ? (
           <p className="ui-card-meta">
             Active host: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}

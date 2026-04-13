@@ -258,6 +258,7 @@ describe('SettingsPage', () => {
   afterEach(() => {
     consoleErrorSpy.mockRestore();
     vi.clearAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it('renders the reorganized single-page settings view', () => {
@@ -296,5 +297,26 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Restart daemon');
     expect(html).toContain('Provider credentials');
     expect(html).not.toContain('Related Views');
+  });
+
+  it('shows a desktop bridge warning instead of hiding desktop connections when preload is unavailable', () => {
+    vi.stubGlobal('window', {
+      personalAgentDesktop: undefined,
+      location: { search: '' },
+      sessionStorage: {
+        getItem: () => null,
+      },
+    });
+    vi.stubGlobal('document', {
+      documentElement: { dataset: {} },
+    });
+    vi.stubGlobal('navigator', {
+      userAgent: 'Mozilla/5.0 Electron/31.0.2',
+    });
+
+    const html = renderPage('/settings');
+
+    expect(html).toContain('Desktop');
+    expect(html).toContain('Desktop bridge unavailable. Restart the desktop app and try again.');
   });
 });

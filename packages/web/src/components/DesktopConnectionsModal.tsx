@@ -94,6 +94,13 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setError('Desktop bridge unavailable. Restart the desktop app and try again.');
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
 
     Promise.all([readDesktopEnvironment(), readDesktopConnections()])
@@ -439,6 +446,14 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
           {loading ? <p className="ui-card-meta">Loading desktop connections…</p> : null}
+          {!connections && !loading ? (
+            <div className="rounded-2xl border border-border-subtle bg-surface px-4 py-4">
+              <p className="text-[13px] font-medium text-primary">Desktop connections unavailable</p>
+              <p className="ui-card-meta mt-1">
+                The desktop shell loaded without its IPC bridge, so remote host management is unavailable in this window.
+              </p>
+            </div>
+          ) : null}
           {connections ? (
             <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
               <section className="min-w-0 space-y-3">
