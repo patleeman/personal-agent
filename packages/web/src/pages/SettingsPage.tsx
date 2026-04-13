@@ -6,6 +6,7 @@ import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferenc
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
+import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
 import { createDesktopAwareEventSource } from '../desktopEventSource';
 import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
@@ -452,8 +453,11 @@ function DesktopConnectionsSettingsPanel() {
   const [environment, setEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
   const [selectedHostId, setSelectedHostId] = useState<string>('');
+  const [editorMode, setEditorMode] = useState<DesktopHostEditorMode>('new');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
   const [selectedHostAuth, setSelectedHostAuth] = useState<DesktopRemoteHostAuthState | null>(null);
+  const [pairingCodeDraft, setPairingCodeDraft] = useState('');
+  const [deviceLabelDraft, setDeviceLabelDraft] = useState('Desktop app');
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'pair' | 'clear-auth' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -487,25 +491,19 @@ function DesktopConnectionsSettingsPanel() {
   }, []);
 
   useEffect(() => {
-    if (!connections) {
+    const resolved = resolveDesktopHostEditorSelection(connections, selectedHostId, editorMode);
+    if (!resolved) {
       return;
     }
 
-    const currentRemote = connections.hosts.find((host) => host.id === selectedHostId && host.kind !== 'local');
-    if (currentRemote) {
-      return;
+    if (resolved.editorMode !== editorMode) {
+      setEditorMode(resolved.editorMode);
     }
-
-    const firstRemote = connections.hosts.find((host) => host.kind !== 'local');
-    if (firstRemote && firstRemote.kind !== 'local') {
-      setSelectedHostId(firstRemote.id);
-      setDraft(createDesktopHostDraft(firstRemote));
-      return;
+    if (resolved.selectedHostId !== selectedHostId) {
+      setSelectedHostId(resolved.selectedHostId);
     }
-
-    setSelectedHostId('');
-    setDraft(createDesktopHostDraft());
-  }, [connections, selectedHostId]);
+    setDraft(createDesktopHostDraft(resolved.selectedHost ?? undefined));
+  }, [connections, editorMode, selectedHostId]);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -549,15 +547,27 @@ function DesktopConnectionsSettingsPanel() {
     setConnections(nextConnections);
   }
 
+  function startNewHostDraft() {
+    setEditorMode('new');
+    setSelectedHostId('');
+    setDraft(createDesktopHostDraft());
+    setSelectedHostAuth(null);
+    setPairingCodeDraft('');
+    setDeviceLabelDraft('Desktop app');
+    setError(null);
+    setNotice(null);
+  }
+
   function selectHost(host: DesktopHostRecord) {
     if (host.kind === 'local') {
-      setSelectedHostId('');
-      setDraft(createDesktopHostDraft());
+      startNewHostDraft();
       return;
     }
 
+    setEditorMode('existing');
     setSelectedHostId(host.id);
     setDraft(createDesktopHostDraft(host));
+    setPairingCodeDraft('');
     setError(null);
     setNotice(null);
   }
@@ -574,8 +584,14 @@ function DesktopConnectionsSettingsPanel() {
 
     try {
       await bridge.switchHost(hostId);
+      await refreshDesktopState();
+      const host = connections?.hosts.find((entry) => entry.id === hostId);
+      if (host) {
+        setNotice(`Switched to ${host.label}.`);
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
       setAction(null);
     }
   }
@@ -654,6 +670,7 @@ function DesktopConnectionsSettingsPanel() {
       const nextConnections = await bridge.saveHost(host);
       setConnections(nextConnections);
       await refreshDesktopState();
+      setEditorMode('existing');
       setSelectedHostId(host.id);
       setDraft(createDesktopHostDraft(host));
       setNotice(draft.kind === 'ssh'
@@ -672,11 +689,6 @@ function DesktopConnectionsSettingsPanel() {
       return;
     }
 
-    const confirmed = window.confirm('Delete this saved host?');
-    if (!confirmed) {
-      return;
-    }
-
     setAction('delete');
     setError(null);
     setNotice(null);
@@ -685,8 +697,7 @@ function DesktopConnectionsSettingsPanel() {
       const nextConnections = await bridge.deleteHost(hostId);
       setConnections(nextConnections);
       await refreshDesktopState();
-      setSelectedHostId('');
-      setDraft(createDesktopHostDraft());
+      startNewHostDraft();
       setNotice('Remote host deleted.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -701,18 +712,11 @@ function DesktopConnectionsSettingsPanel() {
       return;
     }
 
-    const code = window.prompt('Enter pairing code from the remote host');
-    if (code === null) {
-      return;
-    }
-
-    const normalizedCode = code.trim();
+    const normalizedCode = pairingCodeDraft.trim();
     if (!normalizedCode) {
       setError('Pairing code is required.');
       return;
     }
-
-    const deviceLabel = window.prompt('Optional device label', 'Desktop app') ?? undefined;
 
     setAction('pair');
     setError(null);
@@ -722,11 +726,12 @@ function DesktopConnectionsSettingsPanel() {
       const authState = await bridge.pairHost({
         hostId,
         code: normalizedCode,
-        ...(typeof deviceLabel === 'string' && deviceLabel.trim().length > 0
-          ? { deviceLabel: deviceLabel.trim() }
+        ...(deviceLabelDraft.trim().length > 0
+          ? { deviceLabel: deviceLabelDraft.trim() }
           : {}),
       });
       setSelectedHostAuth(authState);
+      setPairingCodeDraft('');
       setNotice(authState.deviceLabel
         ? `Stored bearer token for ${authState.deviceLabel}.`
         : 'Stored bearer token for this remote host.');
@@ -740,11 +745,6 @@ function DesktopConnectionsSettingsPanel() {
   async function handleClearHostAuth(hostId: string) {
     const bridge = getDesktopBridge();
     if (!bridge) {
-      return;
-    }
-
-    const confirmed = window.confirm('Clear the stored bearer token for this host?');
-    if (!confirmed) {
       return;
     }
 
@@ -776,12 +776,7 @@ function DesktopConnectionsSettingsPanel() {
         actions={(
           <button
             type="button"
-            onClick={() => {
-              setSelectedHostId('');
-              setDraft(createDesktopHostDraft());
-              setError(null);
-              setNotice(null);
-            }}
+            onClick={startNewHostDraft}
             className={ACTION_BUTTON_CLASS}
           >
             New remote host
@@ -864,7 +859,7 @@ function DesktopConnectionsSettingsPanel() {
 
             <div className="space-y-4 border-t border-border-subtle pt-6">
               <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-primary">{selectedHostId ? 'Edit remote host' : 'New remote host'}</h3>
+                <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit remote host' : 'New remote host'}</h3>
                 <p className="ui-card-meta">Saved hosts stay machine-local to this desktop app.</p>
               </div>
 
@@ -875,7 +870,7 @@ function DesktopConnectionsSettingsPanel() {
                     id="desktop-host-id"
                     value={draft.id}
                     onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
-                    disabled={action !== null || Boolean(selectedHostId)}
+                    disabled={action !== null || editorMode === 'existing'}
                     className={`${INPUT_CLASS} font-mono text-[13px]`}
                     autoComplete="off"
                     spellCheck={false}
@@ -983,7 +978,7 @@ function DesktopConnectionsSettingsPanel() {
                 The active host controls this window right now. The default host controls which host opens the next time the desktop app launches.
               </p>
 
-              {selectedHostId && draft.kind === 'web' ? (
+              {editorMode === 'existing' && selectedHostId && draft.kind === 'web' ? (
                 <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
                   <p className="text-[13px] font-medium text-primary">Direct remote auth</p>
                   <p className="ui-card-meta">
@@ -994,11 +989,39 @@ function DesktopConnectionsSettingsPanel() {
                       ? `Stored token${selectedHostAuth.deviceLabel ? ` for ${selectedHostAuth.deviceLabel}` : ''}${selectedHostAuth.expiresAt ? ` · expires ${new Date(selectedHostAuth.expiresAt).toLocaleString()}` : ''}`
                       : 'No stored bearer token for this host.'}
                   </p>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-host-pairing-code">Pairing code</label>
+                      <input
+                        id="desktop-host-pairing-code"
+                        value={pairingCodeDraft}
+                        onChange={(event) => setPairingCodeDraft(event.target.value)}
+                        disabled={action !== null}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="ABCD-EFGH-JKLM"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-host-device-label">Device label</label>
+                      <input
+                        id="desktop-host-device-label"
+                        value={deviceLabelDraft}
+                        onChange={(event) => setDeviceLabelDraft(event.target.value)}
+                        disabled={action !== null}
+                        className={INPUT_CLASS}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Desktop app"
+                      />
+                    </div>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       onClick={() => { void handlePairHost(selectedHostId); }}
-                      disabled={action !== null}
+                      disabled={action !== null || pairingCodeDraft.trim().length === 0}
                       className={ACTION_BUTTON_CLASS}
                     >
                       {action === 'pair' ? 'Pairing…' : selectedHostAuth?.hasBearerToken ? 'Replace token' : 'Pair with code'}
@@ -1024,17 +1047,12 @@ function DesktopConnectionsSettingsPanel() {
                   disabled={action !== null}
                   className={ACTION_BUTTON_CLASS}
                 >
-                  {action === 'save' ? 'Saving…' : selectedHostId ? 'Save host' : 'Add host'}
+                  {action === 'save' ? 'Saving…' : editorMode === 'existing' ? 'Save host' : 'Add host'}
                 </button>
-                {selectedHostId ? (
+                {editorMode === 'existing' ? (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSelectedHostId('');
-                      setDraft(createDesktopHostDraft());
-                      setError(null);
-                      setNotice(null);
-                    }}
+                    onClick={startNewHostDraft}
                     disabled={action !== null}
                     className={ACTION_BUTTON_CLASS}
                   >

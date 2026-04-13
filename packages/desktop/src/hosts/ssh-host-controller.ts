@@ -180,14 +180,10 @@ export class SshHostController implements HostController {
   }
 
   private async bootstrapRemoteHost(remotePort: number): Promise<void> {
-    const repoRoot = this.record.remoteRepoRoot?.trim() || '~/workingdir/personal-agent';
-    const bootstrapCommand = [
-      `cd ${renderRemotePathForShell(repoRoot)}`,
-      '&&',
-      'nohup pa daemon start >/tmp/personal-agentd.desktop.log 2>&1 &',
-      '&&',
-      `nohup env PA_WEB_PORT=${String(remotePort)} PA_WEB_DISABLE_COMPANION=1 pa ui >/tmp/personal-agent-web.desktop.log 2>&1 &`,
-    ].join(' ');
+    const bootstrapCommand = buildSshBootstrapCommand({
+      repoRoot: this.record.remoteRepoRoot,
+      remotePort,
+    });
 
     await new Promise<void>((resolve, reject) => {
       const child = spawn('ssh', [this.record.sshTarget, bootstrapCommand], {
@@ -272,4 +268,15 @@ function renderRemotePathForShell(value: string): string {
   }
 
   return quoteForShell(value);
+}
+
+export function buildSshBootstrapCommand(input: { repoRoot?: string; remotePort: number }): string {
+  const repoRoot = input.repoRoot?.trim() || '~/workingdir/personal-agent';
+  return [
+    `cd ${renderRemotePathForShell(repoRoot)}`,
+    '&&',
+    'nohup pa daemon start >/tmp/personal-agentd.desktop.log 2>&1 &',
+    '&&',
+    `nohup env PA_WEB_DISABLE_COMPANION=1 pa ui foreground --port ${String(input.remotePort)} >/tmp/personal-agent-web.desktop.log 2>&1 &`,
+  ].join(' ');
 }
