@@ -1316,6 +1316,35 @@ describe('sessions', () => {
     ]);
   });
 
+  it('renders bash execution messages as bash tool blocks', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'bash-1',
+        timestamp: '2026-03-12T16:02:00.000Z',
+        message: {
+          role: 'bashExecution',
+          command: 'git status --short',
+          output: ' M src/index.ts',
+          exitCode: 0,
+          excludeFromContext: true,
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'tool_use',
+        tool: 'bash',
+        input: { command: 'git status --short' },
+        output: ' M src/index.ts',
+        details: expect.objectContaining({
+          exitCode: 0,
+          excludeFromContext: true,
+        }),
+      }),
+    ]);
+  });
+
   it('surfaces assistant error messages as error blocks', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {

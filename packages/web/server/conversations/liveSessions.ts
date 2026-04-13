@@ -209,6 +209,7 @@ export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => 
 
 export const registry = new Map<string, LiveEntry>();
 const toolTimings = new Map<string, number>(); // toolCallId → start ms
+let syntheticBashExecutionCounter = 0;
 const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
 const pendingConversationWorkingDirectoryChanges = new Map<string, PendingConversationWorkingDirectoryChange>();
 
@@ -820,6 +821,13 @@ function buildLiveStateBlocks(session: AgentSession, options: { omitStreamMessag
       fromId: (message as { fromId?: string }).fromId,
       customType: (message as { customType?: string }).customType,
       display: (message as { display?: boolean }).display,
+      command: (message as { command?: string }).command,
+      output: (message as { output?: string }).output,
+      exitCode: (message as { exitCode?: number }).exitCode,
+      cancelled: (message as { cancelled?: boolean }).cancelled,
+      truncated: (message as { truncated?: boolean }).truncated,
+      fullOutputPath: (message as { fullOutputPath?: string }).fullOutputPath,
+      excludeFromContext: (message as { excludeFromContext?: boolean }).excludeFromContext,
     },
   })));
 }
@@ -2699,6 +2707,114 @@ export async function submitPromptSession(
     acceptedAs: 'started',
     completion,
   };
+}
+
+export async function executeSessionBash(
+  sessionId: string,
+  command: string,
+  options: { excludeFromContext?: boolean } = {},
+): Promise<unknown> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const normalizedCommand = command.trim();
+  if (!normalizedCommand) {
+    throw new Error('command required');
+  }
+  if (entry.session.isBashRunning) {
+    throw new Error('A bash command is already running.');
+  }
+
+  const toolCallId = `user-bash-${sessionId}-${Date.now()}-${++syntheticBashExecutionCounter}`;
+  const startedAtMs = Date.now();
+  const eventArgs: Record<string, unknown> = {
+    command: normalizedCommand,
+    ...(options.excludeFromContext ? { excludeFromContext: true } : {}),
+  };
+
+  broadcast(entry, { type: 'tool_start', toolCallId, toolName: 'bash', args: eventArgs });
+
+  let streamedOutput = '';
+  try {
+    const result = await entry.session.executeBash(
+      normalizedCommand,
+      (chunk) => {
+        if (!chunk) {
+          return;
+        }
+
+        streamedOutput += chunk;
+        broadcast(entry, { type: 'tool_update', toolCallId, partialResult: chunk });
+      },
+      { excludeFromContext: options.excludeFromContext === true },
+    );
+
+    const bashResult = result as {
+      output?: unknown;
+      exitCode?: unknown;
+      cancelled?: unknown;
+      truncated?: unknown;
+      fullOutputPath?: unknown;
+    };
+    const details = {
+      ...(typeof bashResult.exitCode === 'number' ? { exitCode: bashResult.exitCode } : {}),
+      ...(bashResult.cancelled === true ? { cancelled: true } : {}),
+      ...(bashResult.truncated === true ? { truncated: true } : {}),
+      ...(typeof bashResult.fullOutputPath === 'string' && bashResult.fullOutputPath.trim().length > 0
+        ? { fullOutputPath: bashResult.fullOutputPath }
+        : {}),
+      ...(options.excludeFromContext ? { excludeFromContext: true } : {}),
+    };
+    const output = typeof bashResult.output === 'string' ? bashResult.output : streamedOutput;
+
+    broadcast(entry, {
+      type: 'tool_end',
+      toolCallId,
+      toolName: 'bash',
+      isError: false,
+      durationMs: Date.now() - startedAtMs,
+      output,
+      ...(Object.keys(details).length > 0 ? { details } : {}),
+    });
+
+    if (!entry.session.isStreaming) {
+      if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
+        const fallbackTitle = buildFallbackTitleFromContent([{ type: 'text', text: normalizedCommand }]);
+        if (fallbackTitle) {
+          entry.title = fallbackTitle;
+          broadcastTitle(entry);
+        }
+      }
+
+      try {
+        const stats = entry.session.getSessionStats();
+        broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
+      } catch {
+        // ignore stats errors for bash-only updates
+      }
+
+      clearContextUsageTimer(entry);
+      broadcastContextUsage(entry, true);
+      broadcastSnapshot(entry);
+      publishSessionMetaChanged(entry.sessionId);
+    }
+
+    return result;
+  } catch (error) {
+    const details = options.excludeFromContext ? { excludeFromContext: true } : undefined;
+    broadcast(entry, {
+      type: 'tool_end',
+      toolCallId,
+      toolName: 'bash',
+      isError: true,
+      durationMs: Date.now() - startedAtMs,
+      output: error instanceof Error ? error.message : String(error),
+      ...(details ? { details } : {}),
+    });
+    throw error;
+  }
 }
 
 export async function restoreQueuedMessage(

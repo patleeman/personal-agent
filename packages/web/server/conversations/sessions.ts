@@ -546,6 +546,13 @@ export interface DisplayMessageEntryLike {
     fromId?: string;
     customType?: string;
     display?: boolean;
+    command?: string;
+    output?: string;
+    exitCode?: number;
+    cancelled?: boolean;
+    truncated?: boolean;
+    fullOutputPath?: string;
+    excludeFromContext?: boolean;
   };
 }
 
@@ -860,6 +867,33 @@ function buildDisplayBlocksInternal(
     }
 
     if (role === 'custom' && msg.message.display === false) {
+      continue;
+    }
+
+    if (role === 'bashExecution') {
+      const commandText = typeof msg.message.command === 'string' ? msg.message.command : '';
+      const outputText = typeof msg.message.output === 'string' ? msg.message.output : '';
+      const bashDetails = {
+        ...(typeof msg.message.exitCode === 'number' ? { exitCode: msg.message.exitCode } : {}),
+        ...(msg.message.cancelled === true ? { cancelled: true } : {}),
+        ...(msg.message.truncated === true ? { truncated: true } : {}),
+        ...(typeof msg.message.fullOutputPath === 'string' && msg.message.fullOutputPath.trim().length > 0
+          ? { fullOutputPath: msg.message.fullOutputPath }
+          : {}),
+        ...(msg.message.excludeFromContext === true ? { excludeFromContext: true } : {}),
+      };
+
+      recordAnchor();
+      blocks.push({
+        type: 'tool_use',
+        id: `${baseId}-c${blocks.length}`,
+        ts,
+        tool: 'bash',
+        input: { command: commandText },
+        output: outputText.slice(0, 8000),
+        toolCallId: baseId,
+        ...(Object.keys(bashDetails).length > 0 ? { details: bashDetails } : {}),
+      });
       continue;
     }
 

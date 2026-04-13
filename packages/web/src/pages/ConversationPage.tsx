@@ -30,6 +30,7 @@ import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferenc
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
+import { parseWholeLineBashCommand } from '../conversationBashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversationMentions';
@@ -4511,6 +4512,74 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
   }, [input, setInput]);
 
+  async function runWholeLineBashCommand(inputSnapshot: string, command: { command: string; excludeFromContext: boolean }) {
+    const normalizedCommand = command.command.trim();
+    if (!normalizedCommand) {
+      showNotice('danger', 'Usage: !<command>', 4000);
+      return;
+    }
+
+    setPendingAssistantStatusLabel('Running bash…');
+    setInput('');
+    rememberComposerInput(inputSnapshot);
+
+    try {
+      let conversationId = id ?? null;
+
+      if (!conversationId) {
+        const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+          ...(currentModel ? { model: currentModel } : {}),
+          ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+        });
+        conversationId = created.id;
+      } else {
+        conversationId = await ensureConversationIsLive('run bash commands');
+      }
+
+      await api.executeLiveSessionBash(conversationId, normalizedCommand, {
+        excludeFromContext: command.excludeFromContext,
+      });
+
+      if (draft) {
+        clearDraftConversationComposer();
+        clearDraftConversationAttachments();
+        clearDraftConversationCwd();
+        clearDraftConversationModel();
+        clearDraftConversationThinkingLevel();
+      }
+
+      if (conversationId !== id) {
+        ensureConversationTabOpen(conversationId);
+        navigate(`/conversations/${conversationId}`, {
+          replace: draft,
+          state: {
+            initialModelPreferenceState: buildConversationInitialModelPreferenceState({
+              conversationId,
+              currentModel,
+              currentThinkingLevel,
+              defaultModel,
+              defaultThinkingLevel,
+            }),
+            initialDeferredResumeState: {
+              conversationId,
+              resumes: [],
+            },
+          },
+        });
+        return;
+      }
+
+      window.setTimeout(() => {
+        scrollToBottom();
+      }, 50);
+    } catch (error) {
+      setInput(inputSnapshot);
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setPendingAssistantStatusLabel(null);
+    }
+  }
+
   async function submitComposer(behavior?: 'steer' | 'followUp') {
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
@@ -4522,6 +4591,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     let slashTextToSend: string | null = null;
     if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
+      const wholeLineBash = parseWholeLineBashCommand(text);
+      if (wholeLineBash) {
+        await runWholeLineBashCommand(inputSnapshot, wholeLineBash);
+        return;
+      }
+
       const deferredResumeSlash = parseDeferredResumeSlashCommand(text);
       if (deferredResumeSlash) {
         if (deferredResumeSlash.kind === 'invalid') {

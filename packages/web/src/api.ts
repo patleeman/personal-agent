@@ -1048,6 +1048,12 @@ export const api = {
       })),
     });
   },
+  executeLiveSessionBash: async (id: string, command: string, options?: { excludeFromContext?: boolean }) => {
+    return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/bash`, {
+      command,
+      excludeFromContext: options?.excludeFromContext === true,
+    });
+  },
   restoreQueuedMessage: async (
     id: string,
     input: { behavior: 'steer' | 'followUp'; index: number; previewId?: string },

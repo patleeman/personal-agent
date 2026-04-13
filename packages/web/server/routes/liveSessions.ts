@@ -4,6 +4,7 @@ import type { ServerRouteContext } from './context.js';
 import {
   prewarmLiveSessionLoader,
   exportSessionHtml,
+  executeSessionBash,
   getLiveSessions as getLocalLiveSessions,
   getLiveSessionForkEntries,
   isLive as isLocalLive,
@@ -360,6 +361,29 @@ export function registerLiveSessionRoutes(
   });
 
   router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
+
+  router.post('/api/live-sessions/:id/bash', async (req, res) => {
+    try {
+      const command = typeof req.body?.command === 'string' ? req.body.command.trim() : '';
+      if (!command) {
+        res.status(400).json({ error: 'command required' });
+        return;
+      }
+
+      const result = await executeSessionBash(req.params.id, command, {
+        excludeFromContext: req.body?.excludeFromContext === true,
+      });
+      res.json({ ok: true, result });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      logError('request handler error', {
+        message,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      const status = message.includes('already running') ? 409 : 500;
+      res.status(status).json({ error: message });
+    }
+  });
 
   router.post('/api/live-sessions/:id/dequeue', async (req, res) => {
     try {
