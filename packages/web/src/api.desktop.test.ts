@@ -28,6 +28,53 @@ describe('api desktop transport', () => {
     });
   });
 
+  it('falls back to app-protocol API routes when the local desktop bridge omits memory and tools readers', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({
+        profile: 'assistant',
+        agentsMd: [],
+        skills: [{ source: 'global', name: 'checkpoint', description: 'Commit and push the agent\'s current work.', path: '/vault/skills/checkpoint/SKILL.md' }],
+        memoryDocs: [],
+      }))
+      .mockResolvedValueOnce(createJsonResponse({
+        profile: 'assistant',
+        cwd: '/repo',
+        activeTools: [],
+        tools: [],
+        newSessionSystemPrompt: '',
+        newSessionInjectedMessages: [],
+        newSessionToolDefinitions: [],
+        dependentCliTools: [],
+        mcp: { servers: [], missingCli: [] },
+        packageInstall: { available: false, managers: [] },
+      }));
+    vi.stubGlobal('fetch', fetchMock);
+    const getEnvironment = vi.fn().mockResolvedValue({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local backend is healthy.',
+      canManageConnections: true,
+    });
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment,
+      },
+    });
+
+    const { api } = await import('./api');
+    const memory = await api.memory();
+    const tools = await api.tools({ profile: 'assistant' });
+
+    expect(getEnvironment).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/memory');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/tools?viewProfile=assistant');
+    expect(memory.skills[0]?.name).toBe('checkpoint');
+    expect(tools.profile).toBe('assistant');
+  });
+
   it('uses dedicated desktop capability bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);

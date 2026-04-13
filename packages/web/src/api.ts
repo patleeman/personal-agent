@@ -123,7 +123,7 @@ async function getMemoryData(options?: { profile?: string }): Promise<MemoryData
 
   const request = (async () => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities() && typeof desktopBridge.readMemory === 'function') {
       return desktopBridge.readMemory(options);
     }
 
@@ -409,7 +409,7 @@ export const api = {
   },
   tools: async (options?: { profile?: string }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities() && typeof desktopBridge.readTools === 'function') {
       return desktopBridge.readTools(options);
     }
 

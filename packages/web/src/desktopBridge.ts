@@ -38,10 +38,12 @@ import type {
   LiveSessionPresenceState,
   DeferredResumeSummary,
   FolderPickerResult,
+  MemoryData,
   PromptAttachmentRefInput,
   PromptImageInput,
   SessionDetailResult,
   SessionMeta,
+  ToolsState,
   VaultFileListResult,
 } from './types';
 
@@ -121,6 +123,8 @@ export interface PersonalAgentDesktopBridge {
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
   readVaultRoot(): Promise<VaultRootState>;
   readVaultFiles(): Promise<VaultFileListResult>;
+  readMemory?(options?: { profile?: string }): Promise<MemoryData>;
+  readTools?(options?: { profile?: string }): Promise<ToolsState>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
   pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
