@@ -253,8 +253,6 @@
     box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
   }
 
-  .ui-sidebar-nav-item-active::before,
-  .ui-sidebar-session-row-active::before,
   .ui-browser-entry-selected::before,
   .ui-list-row-selected::before {
     content: '';
