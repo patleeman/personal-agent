@@ -41,7 +41,7 @@ Behavior to expect:
 - showing or focusing a window promotes the app into normal macOS app mode, including the standard application menu and Dock presence
 - File → New Window opens another desktop window for the current host and route
 - hiding every window drops the app back to a menubar-only background mode
-- the About window shows the Personal Agent icon plus the current Personal Agent and pinned Pi versions
+- the native macOS About panel shows the Personal Agent icon plus the current Personal Agent and pinned Pi versions
 - quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 - if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path

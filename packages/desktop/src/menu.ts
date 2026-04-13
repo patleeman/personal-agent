@@ -1,7 +1,6 @@
 import { Menu, app, type MenuItemConstructorOptions } from 'electron';
 
 export interface DesktopApplicationMenuActions {
-  onAbout: () => void;
   onOpen: () => void;
   onNewWindow: () => void;
   onNewConversation: () => void;
@@ -222,10 +221,7 @@ export function buildDesktopApplicationMenuTemplate(
   const appMenu: MenuItemConstructorOptions = {
     label: appName,
     submenu: [
-      {
-        label: `About ${appName}`,
-        click: actions.onAbout,
-      },
+      { role: 'about' },
       { type: 'separator' },
       {
         label: 'Check for Updates…',

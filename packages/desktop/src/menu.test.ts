@@ -3,7 +3,6 @@ import { buildDesktopApplicationMenuTemplate } from './menu.js';
 
 function createActions() {
   return {
-    onAbout: vi.fn(),
     onOpen: vi.fn(),
     onNewWindow: vi.fn(),
     onNewConversation: vi.fn(),
@@ -45,7 +44,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
 
     const appMenu = template[0];
     expect(appMenu?.submenu).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'About Personal Agent' }),
+      expect.objectContaining({ role: 'about' }),
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Settings…', accelerator: 'CommandOrControl+,' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'CommandOrControl+Q' }),

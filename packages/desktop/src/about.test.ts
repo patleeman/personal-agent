@@ -2,14 +2,11 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildDesktopAboutPageHtml, resolveDesktopAboutVersionsForPaths } from './about.js';
+import { buildDesktopAboutPanelOptions, resolveDesktopAboutVersionsForPaths } from './about.js';
 
 const tempDirs: string[] = [];
 
-function createTempDesktopLayout(): {
-  currentDir: string;
-  cleanup: () => void;
-} {
+function createTempDesktopLayout(): { currentDir: string } {
   const root = mkdtempSync(join(tmpdir(), 'pa-desktop-about-'));
   tempDirs.push(root);
 
@@ -24,10 +21,7 @@ function createTempDesktopLayout(): {
   writeFileSync(join(packageDir, 'package.json'), JSON.stringify({ version: '0.1.11' }));
   writeFileSync(join(piPackageDir, 'package.json'), JSON.stringify({ version: '0.66.0' }));
 
-  return {
-    currentDir,
-    cleanup: () => rmSync(root, { recursive: true, force: true }),
-  };
+  return { currentDir };
 }
 
 afterEach(() => {
@@ -63,33 +57,16 @@ describe('resolveDesktopAboutVersionsForPaths', () => {
   });
 });
 
-describe('buildDesktopAboutPageHtml', () => {
-  it('renders the branded logo and version rows', () => {
-    const html = buildDesktopAboutPageHtml({
+describe('buildDesktopAboutPanelOptions', () => {
+  it('uses the app version and Pi version in native about panel metadata', () => {
+    expect(buildDesktopAboutPanelOptions({
       applicationName: 'Personal Agent',
       applicationVersion: '0.1.11',
       piVersion: '0.66.0',
-      iconDataUrl: 'data:image/png;base64,ZmFrZQ==',
-    });
-
-    expect(html).toContain('About Personal Agent');
-    expect(html).toContain('alt="Personal Agent logo"');
-    expect(html).toContain('Personal Agent</dt>');
-    expect(html).toContain('>0.1.11<');
-    expect(html).toContain('>Pi<');
-    expect(html).toContain('>0.66.0<');
-  });
-
-  it('escapes version text before injecting it into the page', () => {
-    const html = buildDesktopAboutPageHtml({
+    })).toEqual({
       applicationName: 'Personal Agent',
-      applicationVersion: '<0.1.11>',
-      piVersion: '0.66.0 & dev',
-      iconDataUrl: 'data:image/png;base64,ZmFrZQ==',
+      applicationVersion: '0.1.11',
+      credits: 'Pi 0.66.0',
     });
-
-    expect(html).toContain('&lt;0.1.11&gt;');
-    expect(html).toContain('0.66.0 &amp; dev');
-    expect(html).not.toContain('<0.1.11>');
   });
 });
