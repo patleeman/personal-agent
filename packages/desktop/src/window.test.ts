@@ -25,6 +25,9 @@ vi.mock('electron', () => ({
   screen: {
     getAllDisplays: vi.fn(() => []),
   },
+  shell: {
+    openExternal: vi.fn(),
+  },
   session: {
     fromPartition: vi.fn(() => ({
       protocol: {
@@ -41,6 +44,8 @@ import {
   canNavigateWindowInApp,
   constrainDesktopWindowBounds,
   getDesktopWindowChromeOptions,
+  shouldOpenNavigationExternally,
+  shouldOpenWindowExternally,
   toDesktopShellRoute,
   toDesktopShellUrl,
 } from './window.js';
@@ -97,6 +102,24 @@ describe('window desktop navigation helpers', () => {
     expect(canNavigateWindowInApp(
       'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
       'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
+    )).toBe(false);
+  });
+
+  it('opens target-blank web links in the system browser instead of a new desktop window', () => {
+    expect(shouldOpenWindowExternally('https://example.com/docs')).toBe(true);
+    expect(shouldOpenWindowExternally('mailto:patrick@example.com')).toBe(true);
+    expect(shouldOpenWindowExternally('personal-agent://app/conversations/new')).toBe(false);
+  });
+
+  it('redirects cross-origin navigations to the system browser while keeping in-app routes local', () => {
+    expect(shouldOpenNavigationExternally(
+      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
+      'https://example.com/docs',
+    )).toBe(true);
+
+    expect(shouldOpenNavigationExternally(
+      'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
+      'http://127.0.0.1:3741/settings?desktop-shell=1',
     )).toBe(false);
   });
 

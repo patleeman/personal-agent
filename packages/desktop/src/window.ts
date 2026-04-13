@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen } from 'electron';
+import { app, BrowserWindow, screen, shell } from 'electron';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -40,6 +40,7 @@ const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
 const DEFAULT_WINDOW_WIDTH = 1440;
 const DEFAULT_WINDOW_HEIGHT = 960;
 const WINDOW_SHOW_FALLBACK_MS = 1500;
+const EXTERNAL_WINDOW_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
 interface DesktopRectangle {
   x: number;
@@ -95,6 +96,22 @@ export function canNavigateWindowInApp(currentUrl: string, targetUrl: string): b
   } catch {
     return false;
   }
+}
+
+export function shouldOpenWindowExternally(targetUrl: string): boolean {
+  if (!targetUrl) {
+    return false;
+  }
+
+  try {
+    return EXTERNAL_WINDOW_PROTOCOLS.has(new URL(targetUrl).protocol);
+  } catch {
+    return false;
+  }
+}
+
+export function shouldOpenNavigationExternally(currentUrl: string, targetUrl: string): boolean {
+  return shouldOpenWindowExternally(targetUrl) && !canNavigateWindowInApp(currentUrl, targetUrl);
 }
 
 export function buildWindowTitle(host: DesktopHostRecord): string {
@@ -415,6 +432,8 @@ export class DesktopWindowController {
       },
     });
 
+    this.configureExternalNavigation(window);
+
     if (role === 'main') {
       window.on('close', (event) => {
         if (this.quitting) {
@@ -458,6 +477,27 @@ export class DesktopWindowController {
     });
 
     return window;
+  }
+
+  private configureExternalNavigation(window: BrowserWindow): void {
+    window.webContents.setWindowOpenHandler(({ url }) => {
+      if (shouldOpenWindowExternally(url)) {
+        void shell.openExternal(url);
+        return { action: 'deny' };
+      }
+
+      return { action: 'allow' };
+    });
+
+    window.webContents.on('will-navigate', (event, navigationUrl) => {
+      const currentUrl = window.webContents.getURL();
+      if (!shouldOpenNavigationExternally(currentUrl, navigationUrl)) {
+        return;
+      }
+
+      event.preventDefault();
+      void shell.openExternal(navigationUrl);
+    });
   }
 
   private registerWindow(window: BrowserWindow, hostId: string, role: ManagedWindowRole): void {
