@@ -13,7 +13,7 @@ import {
   buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
 import type { DurableRunListResult, SessionMeta } from '../types.js';
-import { Sidebar } from './Sidebar.js';
+import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -51,6 +51,35 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     ...overrides,
   };
 }
+
+describe('resolveSidebarConversationHotkeyOrder', () => {
+  it('keeps manual and chronological shortcuts aligned with the ordered conversation list', () => {
+    expect(resolveSidebarConversationHotkeyOrder({
+      organizeMode: 'manual',
+      orderedItems: ['pinned-1', 'open-2', 'open-3'],
+      groupedRows: [],
+    })).toEqual(['pinned-1', 'open-2', 'open-3']);
+
+    expect(resolveSidebarConversationHotkeyOrder({
+      organizeMode: 'chronological',
+      orderedItems: ['pinned-1', 'updated-2', 'updated-3'],
+      groupedRows: [],
+    })).toEqual(['pinned-1', 'updated-2', 'updated-3']);
+  });
+
+  it('uses the visible grouped sidebar order for numbered conversation shortcuts', () => {
+    expect(resolveSidebarConversationHotkeyOrder({
+      organizeMode: 'project',
+      orderedItems: ['tab-a', 'tab-b', 'tab-c'],
+      groupedRows: [
+        { key: '/tmp/beta', items: ['tab-b'] },
+        { key: '/tmp/alpha', items: ['tab-a', 'tab-c'] },
+        { key: '/tmp/hidden', items: ['tab-hidden'] },
+      ],
+      collapsedGroupKeys: new Set(['/tmp/hidden']),
+    })).toEqual(['tab-b', 'tab-a', 'tab-c']);
+  });
+});
 
 describe('Sidebar', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;

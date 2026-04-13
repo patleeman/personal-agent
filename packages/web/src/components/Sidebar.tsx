@@ -489,6 +489,21 @@ function resolveConversationNumberHotkey(event: KeyboardEvent): number {
   return /^[1-9]$/.test(key) ? Number(key) - 1 : -1;
 }
 
+export function resolveSidebarConversationHotkeyOrder<T,>(input: {
+  organizeMode: 'project' | 'chronological' | 'manual';
+  orderedItems: readonly T[];
+  groupedRows: ReadonlyArray<{ key: string; items: readonly T[] }>;
+  collapsedGroupKeys?: ReadonlySet<string>;
+}): T[] {
+  if (input.organizeMode !== 'project') {
+    return [...input.orderedItems];
+  }
+
+  return input.groupedRows.flatMap((group) => (
+    input.collapsedGroupKeys?.has(group.key) ? [] : [...group.items]
+  ));
+}
+
 function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string): boolean {
   return event.code === code || normalizeHotkeyKey(event.key) === letter;
 }
@@ -1730,6 +1745,15 @@ export function Sidebar() {
       : orderedConversationItems),
     [groupedConversationRows, orderedConversationItems, threadsOrganizeMode],
   );
+  const hotkeyConversationItems = useMemo(
+    () => resolveSidebarConversationHotkeyOrder({
+      organizeMode: threadsOrganizeMode,
+      orderedItems: orderedConversationItems,
+      groupedRows: groupedConversationRows,
+      collapsedGroupKeys: collapsedConversationGroupKeySet,
+    }),
+    [collapsedConversationGroupKeySet, groupedConversationRows, orderedConversationItems, threadsOrganizeMode],
+  );
 
   const toggleConversationGroupCollapsed = useCallback((groupKey: string) => {
     const normalizedGroupKey = groupKey.trim();
@@ -2171,12 +2195,12 @@ export function Sidebar() {
   }, [activeConversationSurfaceId, navigate, workspaceConversationTabs]);
 
   const jumpToConversation = useCallback((index: number) => {
-    if (index < 0 || index >= workspaceConversationTabs.length) {
+    if (index < 0 || index >= hotkeyConversationItems.length) {
       return;
     }
 
-    navigate(buildConversationSurfacePath(workspaceConversationTabs[index].id));
-  }, [navigate, workspaceConversationTabs]);
+    navigate(buildConversationSurfacePath(hotkeyConversationItems[index].session.id));
+  }, [hotkeyConversationItems, navigate]);
 
   const shiftActiveConversation = useCallback((direction: -1 | 1) => {
     if (!activeConversationId) {
