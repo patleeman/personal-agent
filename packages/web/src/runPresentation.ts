@@ -41,6 +41,11 @@ export function isRunInProgress(run: DurableRunRecord): boolean {
   return status === 'running' || status === 'recovering';
 }
 
+export function isRunActive(run: DurableRunRecord | null | undefined): boolean {
+  const status = run?.status?.status;
+  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
+}
+
 export function runNeedsAttention(run: DurableRunRecord, options?: { includeDismissed?: boolean }): boolean {
   const status = run.status?.status;
   const needsAttention = run.problems.length > 0
@@ -572,6 +577,41 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
   }
 
   return connections;
+}
+
+export function listConnectedConversationBackgroundRuns(input: {
+  conversationId: string;
+  runs?: DurableRunListResult | null;
+  lookups?: RunPresentationLookups;
+  excludeConversationRunId?: string | null;
+}): DurableRunRecord[] {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    return [];
+  }
+
+  const excludedRunId = input.excludeConversationRunId?.trim() || null;
+  const lookups = input.lookups ?? {};
+
+  return [...(input.runs?.runs ?? [])]
+    .filter((run) => run.runId !== excludedRunId)
+    .filter((run) => getRunCategory(run) === 'background')
+    .filter((run) => {
+      if (run.manifest?.source?.type === 'tool' && run.manifest.source.id === conversationId) {
+        return true;
+      }
+
+      return getRunConnections(run, lookups).some((connection) => connection.key === `conversation:${conversationId}`);
+    })
+    .sort((left, right) => {
+      const leftActive = isRunActive(left) ? 1 : 0;
+      const rightActive = isRunActive(right) ? 1 : 0;
+      if (leftActive !== rightActive) {
+        return rightActive - leftActive;
+      }
+
+      return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
+    });
 }
 
 export function getRunConversationConnection(

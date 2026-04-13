@@ -87,6 +87,12 @@ import {
   getConversationResumeState,
 } from '../conversationResume';
 import {
+  getRunHeadline,
+  isRunActive,
+  listConnectedConversationBackgroundRuns,
+  type RunPresentationLookups,
+} from '../runPresentation';
+import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
   shouldShowQuestionSubmitAsPrimaryComposerAction,
@@ -452,6 +458,31 @@ export function mergeConversationSessionMeta(
   }
 
   return detailMeta ?? sessionSnapshot ?? null;
+}
+
+export function formatConversationBackgroundRunStatusLabel(status: string | undefined): string {
+  if (status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering') {
+    return status;
+  }
+
+  return typeof status === 'string' && status.trim().length > 0 ? status : 'active';
+}
+
+export function buildConversationBackgroundRunIndicatorText(
+  runs: DurableRunRecord[],
+  lookups: RunPresentationLookups = {},
+): string {
+  if (runs.length === 0) {
+    return '';
+  }
+
+  const latestRun = runs[0]!;
+  const latestTitle = getRunHeadline(latestRun, lookups).title;
+  if (runs.length === 1) {
+    return `${formatConversationBackgroundRunStatusLabel(latestRun.status?.status)} · ${latestTitle}`;
+  }
+
+  return `${runs.length} active · latest ${latestTitle}`;
 }
 
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
@@ -1254,7 +1285,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const { versions } = useAppEvents();
-  const { tasks, sessions, setSessions } = useAppData();
+  const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
   const conversationEventVersion = useConversationEventVersion(id);
   const openArtifact = useCallback((artifactId: string) => {
     if (selectedArtifactId === artifactId) {
@@ -2328,9 +2359,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
+  const [showBackgroundRunDetails, setShowBackgroundRunDetails] = useState(false);
 
   useEffect(() => {
     setPendingAssistantStatusLabel(null);
+    setShowBackgroundRunDetails(false);
   }, [id]);
 
   useEffect(() => {
@@ -2359,6 +2392,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [deferredResumesBusy, setDeferredResumesBusy] = useState(false);
   const [showDeferredResumeDetails, setShowDeferredResumeDetails] = useState(false);
   const [deferredResumeNowMs, setDeferredResumeNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (draft || runs !== null) {
+      return;
+    }
+
+    let cancelled = false;
+    void api.runs()
+      .then((result) => {
+        if (!cancelled) {
+          setRuns(result);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, runs, setRuns]);
 
   useEffect(() => {
     if (autocompleteCatalogDemand.needsMemoryData) {
@@ -2577,6 +2629,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
   );
+  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const currentCwd = useMemo(
     () => draft
       ? (draftCwdValue || null)
@@ -2635,6 +2688,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
   );
+  const connectedBackgroundRuns = useMemo(() => {
+    if (!id) {
+      return [];
+    }
+
+    return listConnectedConversationBackgroundRuns({
+      conversationId: id,
+      runs,
+      lookups: runLookups,
+      excludeConversationRunId: conversationRunId,
+    });
+  }, [conversationRunId, id, runLookups, runs]);
+  const activeConversationBackgroundRuns = useMemo(
+    () => connectedBackgroundRuns.filter((run) => isRunActive(run)),
+    [connectedBackgroundRuns],
+  );
+  const backgroundRunIndicatorText = useMemo(
+    () => buildConversationBackgroundRunIndicatorText(activeConversationBackgroundRuns, runLookups),
+    [activeConversationBackgroundRuns, runLookups],
+  );
+  const showActiveBackgroundRunDetails = showBackgroundRunDetails
+    || activeConversationBackgroundRuns.some((run) => run.runId === selectedRunId);
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
   const deferredResumeIndicatorText = useMemo(
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
@@ -5632,6 +5707,70 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       </div>
                     ))}
                   </div>
+                )}
+
+                {!draft && activeConversationBackgroundRuns.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-accent" aria-hidden="true">
+                          <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                        </span>
+                        <span className="shrink-0 text-secondary">Background Work</span>
+                        <span className="truncate text-dim">{backgroundRunIndicatorText}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => { setShowBackgroundRunDetails((open) => !open); }}
+                          className="text-dim transition-colors hover:text-primary"
+                        >
+                          {showActiveBackgroundRunDetails ? 'hide' : 'details'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {showActiveBackgroundRunDetails && (
+                      <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
+                        {activeConversationBackgroundRuns.map((run) => {
+                          const headline = getRunHeadline(run, runLookups);
+                          const selected = selectedRunId === run.runId;
+                          const summary = headline.summary === 'Background run'
+                            ? `Run ${run.runId}`
+                            : headline.summary;
+                          const statusLabel = formatConversationBackgroundRunStatusLabel(run.status?.status);
+                          const statusClass = run.status?.status === 'recovering'
+                            ? 'text-warning'
+                            : run.status?.status === 'queued' || run.status?.status === 'waiting'
+                              ? 'text-dim'
+                              : 'text-accent';
+
+                          return (
+                            <div key={run.runId} className="flex items-start gap-3 text-[12px]">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 items-center gap-2">
+                                  <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
+                                  <span className="truncate text-primary">{headline.title}</span>
+                                </div>
+                                <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => openRun(run.runId)}
+                                disabled={selected}
+                                className={cx(
+                                  'shrink-0 text-[11px] transition-colors disabled:cursor-default disabled:opacity-50',
+                                  selected ? 'text-primary' : 'text-accent hover:text-accent/80',
+                                )}
+                              >
+                                {selected ? 'showing' : 'open'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {/* Deferred resume indicator */}

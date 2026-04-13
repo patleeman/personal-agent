@@ -9,6 +9,8 @@ import {
   getRunPrimaryConnection,
   getRunSortTimestamp,
   getRunTimeline,
+  isRunActive,
+  listConnectedConversationBackgroundRuns,
   runNeedsAttention,
   summarizeActiveRuns,
 } from './runPresentation';
@@ -347,6 +349,92 @@ describe('runPresentation', () => {
       to: '/conversations/subagent-456',
     });
     expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
+  });
+
+  it('finds connected conversation background runs before session metadata has loaded', () => {
+    const queuedBackgroundRun = createRun({
+      runId: 'run-background-newer',
+      manifest: {
+        version: 1,
+        id: 'run-background-newer',
+        kind: 'raw-shell',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:32:00.000Z',
+        spec: {
+          shellCommand: 'sleep 120',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+      status: {
+        version: 1,
+        runId: 'run-background-newer',
+        status: 'queued',
+        createdAt: '2026-03-12T20:32:00.000Z',
+        updatedAt: '2026-03-12T20:36:00.000Z',
+        activeAttempt: 0,
+      },
+    });
+
+    const completedBackgroundRun = createRun({
+      runId: 'run-background-older',
+      manifest: {
+        version: 1,
+        id: 'run-background-older',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          taskSlug: 'deploy-check',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+    });
+
+    const unrelatedBackgroundRun = createRun({
+      runId: 'run-background-other',
+      manifest: {
+        version: 1,
+        id: 'run-background-other',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:33:00.000Z',
+        spec: {
+          taskSlug: 'other-task',
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-999',
+        },
+      },
+    });
+
+    const connected = listConnectedConversationBackgroundRuns({
+      conversationId: 'conv-123',
+      runs: {
+        scannedAt: '2026-03-12T20:36:00.000Z',
+        runsRoot: '/tmp/runs',
+        summary: {
+          total: 3,
+          recoveryActions: {},
+          statuses: { queued: 1, completed: 2 },
+        },
+        runs: [completedBackgroundRun, unrelatedBackgroundRun, queuedBackgroundRun],
+      },
+      excludeConversationRunId: 'conversation-live-conv-123',
+    });
+
+    expect(connected.map((run) => run.runId)).toEqual([
+      'run-background-newer',
+      'run-background-older',
+    ]);
+    expect(isRunActive(connected[0])).toBe(true);
+    expect(isRunActive(connected[1])).toBe(false);
   });
 
   it('strips leading environment wrappers from background shell headlines', () => {

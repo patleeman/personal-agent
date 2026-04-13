@@ -17,8 +17,9 @@ import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
   getRunHeadline,
-  getRunSortTimestamp,
   getRunTimeline,
+  isRunActive,
+  listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
 } from '../runPresentation';
 import { useApi } from '../hooks';
@@ -266,8 +267,7 @@ function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
 }
 
 function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefined): boolean {
-  const status = detail?.status?.status;
-  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
+  return isRunActive(detail);
 }
 
 function RunContextPanel({
@@ -766,21 +766,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const currentConversationRunId = createConversationLiveRunId(id);
-  const connectedBackgroundRuns = useMemo(() => {
-    return [...runRecordsById.values()]
-      .filter((run) => run.runId !== currentConversationRunId)
-      .filter((run) => run.manifest?.kind === 'background-run')
-      .filter((run) => getRunConnections(run, runLookups).some((connection) => connection.key === `conversation:${id}`))
-      .sort((left, right) => {
-        const leftActive = isRefreshingRun(left) ? 1 : 0;
-        const rightActive = isRefreshingRun(right) ? 1 : 0;
-        if (leftActive !== rightActive) {
-          return rightActive - leftActive;
-        }
-
-        return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
-      });
-  }, [currentConversationRunId, id, runLookups, runRecordsById]);
+  const connectedBackgroundRuns = useMemo(() => listConnectedConversationBackgroundRuns({
+    conversationId: id,
+    runs,
+    lookups: runLookups,
+    excludeConversationRunId: currentConversationRunId,
+  }), [currentConversationRunId, id, runLookups, runs]);
   const visibleRunMentions = useMemo(() => {
     const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();

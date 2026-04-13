@@ -3,9 +3,11 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock, SessionMeta } from '../types.js';
+import type { DurableRunRecord, MessageBlock, SessionMeta } from '../types.js';
 import {
   ConversationPage,
+  buildConversationBackgroundRunIndicatorText,
+  formatConversationBackgroundRunStatusLabel,
   mergeConversationSessionMeta,
   replaceConversationTitleInSessionList,
   isConversationSessionNotLiveError,
@@ -80,6 +82,55 @@ function hasAncestorWithClass(node: ParsedNode | null | undefined, className: st
     current = current.parentNode ?? null;
   }
   return false;
+}
+
+function createBackgroundRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
+  return {
+    runId: 'run-background-123',
+    paths: {
+      root: '/tmp/run-background-123',
+      manifestPath: '/tmp/run-background-123/manifest.json',
+      statusPath: '/tmp/run-background-123/status.json',
+      checkpointPath: '/tmp/run-background-123/checkpoint.json',
+      eventsPath: '/tmp/run-background-123/events.jsonl',
+      outputLogPath: '/tmp/run-background-123/output.log',
+      resultPath: '/tmp/run-background-123/result.json',
+    },
+    manifest: {
+      version: 1,
+      id: 'run-background-123',
+      kind: 'background-run',
+      resumePolicy: 'manual',
+      createdAt: '2026-03-29T00:00:00.000Z',
+      spec: {
+        taskSlug: 'deploy-check',
+        shellCommand: 'npm run deploy:check',
+      },
+      source: {
+        type: 'tool',
+        id: 'conv-123',
+      },
+    },
+    status: {
+      version: 1,
+      runId: 'run-background-123',
+      status: 'running',
+      createdAt: '2026-03-29T00:00:00.000Z',
+      updatedAt: '2026-03-29T00:01:00.000Z',
+      activeAttempt: 1,
+      startedAt: '2026-03-29T00:00:10.000Z',
+    },
+    checkpoint: {
+      version: 1,
+      runId: 'run-background-123',
+      updatedAt: '2026-03-29T00:01:00.000Z',
+      step: 'running',
+      payload: {},
+    },
+    problems: [],
+    recoveryAction: 'none',
+    ...overrides,
+  };
 }
 
 describe('conversation autocomplete catalog demand', () => {
@@ -933,6 +984,52 @@ describe('conversation live state helpers', () => {
     expect(merged?.deferredResumes).toEqual(snapshot.deferredResumes);
     expect(merged?.title).toBe('Detail title');
     expect(merged?.file).toBe(snapshot.file);
+  });
+
+  it('formats background run indicator labels', () => {
+    expect(formatConversationBackgroundRunStatusLabel('running')).toBe('running');
+    expect(formatConversationBackgroundRunStatusLabel(undefined)).toBe('active');
+  });
+
+  it('summarizes active background runs for the conversation shelf', () => {
+    const lookups = {
+      sessions: [{
+        id: 'conv-123',
+        file: '/tmp/conv-123.jsonl',
+        timestamp: '2026-03-29T00:00:00.000Z',
+        cwd: '/tmp',
+        cwdSlug: 'tmp',
+        model: 'gpt-test',
+        title: 'Bloodhounds',
+        messageCount: 12,
+      } as SessionMeta],
+    };
+
+    expect(buildConversationBackgroundRunIndicatorText([
+      createBackgroundRun(),
+    ], lookups)).toBe('running · npm run deploy:check');
+
+    expect(buildConversationBackgroundRunIndicatorText([
+      createBackgroundRun({ runId: 'run-background-456' }),
+      createBackgroundRun({
+        runId: 'run-background-789',
+        manifest: {
+          version: 1,
+          id: 'run-background-789',
+          kind: 'background-run',
+          resumePolicy: 'manual',
+          createdAt: '2026-03-29T00:02:00.000Z',
+          spec: {
+            taskSlug: 'review-deploy',
+            shellCommand: 'npm run review:deploy',
+          },
+          source: {
+            type: 'tool',
+            id: 'conv-123',
+          },
+        },
+      }),
+    ], lookups)).toBe('2 active · latest npm run deploy:check');
   });
 
   it('truncates oversized queued prompt previews by line count', () => {
