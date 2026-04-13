@@ -42,6 +42,7 @@ import { readSessionBlocks } from './sessions.js';
 import { resolveConversationCwd } from './conversationCwd.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
+import { buildRelatedConversationContext } from './relatedConversationContext.js';
 
 export interface LiveSessionCapabilityContext {
   getCurrentProfile: () => string;
@@ -127,6 +128,7 @@ export interface SubmitLiveSessionPromptCapabilityInput {
   behavior?: 'steer' | 'followUp';
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
+  contextMessages?: unknown;
   surfaceId?: string;
 }
 
@@ -169,6 +171,11 @@ export interface ForkLiveSessionCapabilityInput {
 
 export interface SummarizeAndForkLiveSessionCapabilityInput {
   conversationId: string;
+}
+
+export interface RelatedConversationContextCapabilityInput {
+  sessionIds?: unknown;
+  prompt?: unknown;
 }
 
 export class LiveSessionCapabilityInputError extends Error {}
@@ -249,6 +256,41 @@ function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput
   }
 
   return refs;
+}
+
+function normalizePromptContextMessages(value: unknown): Array<{ customType: string; content: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const messages: Array<{ customType: string; content: string }> = [];
+  const seen = new Set<string>();
+
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== 'object') {
+      continue;
+    }
+
+    const customType = typeof (candidate as { customType?: unknown }).customType === 'string'
+      ? (candidate as { customType: string }).customType.trim()
+      : '';
+    const content = typeof (candidate as { content?: unknown }).content === 'string'
+      ? (candidate as { content: string }).content.trim()
+      : '';
+    if (!customType || !content) {
+      continue;
+    }
+
+    const dedupeKey = `${customType}\n${content}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    messages.push({ customType, content });
+  }
+
+  return messages;
 }
 
 function buildConversationAttachmentsContext(
@@ -403,6 +445,7 @@ export async function submitLiveSessionPromptCapability(
 
   const text = typeof input.text === 'string' ? input.text : '';
   const normalizedAttachmentRefs = normalizePromptAttachmentRefs(input.attachmentRefs);
+  const promptContextMessages = normalizePromptContextMessages(input.contextMessages);
   if (!text && (!input.images || input.images.length === 0) && normalizedAttachmentRefs.length === 0) {
     throw new LiveSessionCapabilityInputError('text, images, or attachmentRefs required');
   }
@@ -492,11 +535,20 @@ export async function submitLiveSessionPromptCapability(
   ].filter(Boolean);
 
   const hiddenContext = queuedContextBlocks.join('\n\n');
+  const normalizedContextMessages = [
+    ...promptContextMessages,
+    ...(queuedContextBlocks.length > 0
+      ? [{
+          customType: 'referenced_context',
+          content: hiddenContext,
+        }]
+      : []),
+  ];
   const liveConversationId = await ensureConversationPromptTargetLive(conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
 
-  if (queuedContextBlocks.length > 0) {
-    await queuePromptContext(liveConversationId, 'referenced_context', hiddenContext);
+  for (const message of normalizedContextMessages) {
+    await queuePromptContext(liveConversationId, message.customType, message.content);
   }
 
   if (recoveredLiveEntry?.session.sessionFile) {
@@ -521,12 +573,9 @@ export async function submitLiveSessionPromptCapability(
               })),
             }
           : {}),
-        ...(queuedContextBlocks.length > 0
+        ...(normalizedContextMessages.length > 0
           ? {
-              contextMessages: [{
-                customType: 'referenced_context',
-                content: hiddenContext,
-              }],
+              contextMessages: normalizedContextMessages,
             }
           : {}),
         enqueuedAt: new Date().toISOString(),
@@ -722,6 +771,21 @@ export async function summarizeAndForkLiveSessionCapability(
   }
 
   return summarizeAndForkLiveSession(conversationId, buildLiveSessionOptions(context));
+}
+
+export async function relatedConversationContextCapability(
+  input: RelatedConversationContextCapabilityInput,
+  context: LiveSessionCapabilityContext,
+) {
+  try {
+    return await buildRelatedConversationContext({
+      sessionIds: input.sessionIds,
+      prompt: input.prompt,
+      loaderOptions: buildLiveSessionOptions(context),
+    });
+  } catch (error) {
+    throw new LiveSessionCapabilityInputError(error instanceof Error ? error.message : String(error));
+  }
 }
 
 export async function abortLiveSessionCapability(input: {

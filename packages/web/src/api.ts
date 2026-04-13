@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -1019,6 +1019,7 @@ export const api = {
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     surfaceId?: string,
+    contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>,
   ) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -1029,6 +1030,7 @@ export const api = {
         ...(surfaceId ? { surfaceId } : {}),
         images,
         attachmentRefs,
+        contextMessages,
       });
     }
 
@@ -1046,7 +1048,17 @@ export const api = {
         attachmentId: attachmentRef.attachmentId,
         ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
       })),
+      contextMessages: contextMessages?.map((message) => ({
+        customType: message.customType,
+        content: message.content,
+      })),
     });
+  },
+  relatedConversationContext: async (sessionIds: string[], prompt: string) => {
+    return post<{ contextMessages: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> }>(
+      '/live-sessions/related-context',
+      { sessionIds, prompt },
+    );
   },
   executeLiveSessionBash: async (id: string, command: string, options?: { excludeFromContext?: boolean }) => {
     return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/bash`, {

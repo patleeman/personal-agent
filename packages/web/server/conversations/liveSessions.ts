@@ -3,7 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -2162,6 +2162,78 @@ export async function createSessionFromExisting(
   wireSession(id, session, cwd);
   queuePrewarmLiveSessionLoader(cwd, options);
   return { id, sessionFile: session.sessionFile ?? '' };
+}
+
+function buildRelatedConversationCompactionInstructions(prompt: string): string {
+  return [
+    'You are preparing a compact handoff from an older conversation for reuse in a brand new conversation.',
+    'Focus only on context that still helps with the user\'s next prompt.',
+    '',
+    'The next prompt is:',
+    prompt.trim(),
+    '',
+    'Include only the most relevant goals, decisions, file paths, commands, errors, and unresolved work.',
+    'Drop unrelated history and repetition. If the conversation is not directly relevant, say so briefly.',
+  ].join('\n');
+}
+
+function extractLatestCompactionSummaryText(detail: ReturnType<typeof readSessionBlocksByFile>): string | null {
+  const blocks = detail?.blocks ?? [];
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (block?.type === 'summary' && block.kind === 'compaction' && block.text.trim().length > 0) {
+      return block.text.trim();
+    }
+  }
+
+  return null;
+}
+
+export async function summarizeSessionFileForPrompt(
+  sessionFile: string,
+  cwd: string,
+  prompt: string,
+  options: LiveSessionLoaderOptions = {},
+): Promise<string> {
+  const auth = makeAuth();
+  const modelRegistry = makeRegistry(auth);
+  const resourceLoader = await makeLoader(cwd, options);
+  const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
+  const { session } = await createAgentSession({
+    cwd,
+    agentDir: options.agentDir ?? AGENT_DIR,
+    authStorage: auth,
+    modelRegistry,
+    resourceLoader,
+    sessionManager,
+  });
+
+  ensureSessionFileExists(session.sessionManager);
+  await repairSessionModelProvider(session, modelRegistry.getAvailable());
+
+  const temporarySessionFile = session.sessionFile ?? '';
+
+  try {
+    await session.compact(buildRelatedConversationCompactionInstructions(prompt));
+    const detail = temporarySessionFile
+      ? readSessionBlocksByFile(temporarySessionFile)
+      : null;
+    const summary = extractLatestCompactionSummaryText(detail);
+    if (!summary) {
+      throw new Error('Compaction did not produce a reusable summary.');
+    }
+
+    return summary;
+  } finally {
+    session.dispose();
+    if (temporarySessionFile && existsSync(temporarySessionFile)) {
+      try {
+        unlinkSync(temporarySessionFile);
+      } catch {
+        // Ignore temp session cleanup failures.
+      }
+    }
+  }
 }
 
 export async function requestConversationWorkingDirectoryChange(

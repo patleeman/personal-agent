@@ -222,6 +222,7 @@ export interface DesktopLiveSessionPromptRequest {
   behavior?: 'steer' | 'followUp';
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
+  contextMessages?: Array<{ customType: string; content: string }>;
   surfaceId?: string;
 }
 

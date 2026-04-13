@@ -3,8 +3,9 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
-import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
+import { ConversationWorkspaceShell, type ConversationWorkspaceShellControls } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
+import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
@@ -102,6 +103,7 @@ import { useReloadState } from '../reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
+import { rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
@@ -114,6 +116,8 @@ const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+const MAX_RELATED_THREAD_SELECTIONS = 3;
+const MAX_VISIBLE_RELATED_THREAD_RESULTS = 6;
 
 type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
 
@@ -1282,6 +1286,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const id = draft ? undefined : routeId;
   const location = useLocation();
   const navigate = useNavigate();
+  const workspaceShellControlsRef = useRef<ConversationWorkspaceShellControls | null>(null);
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const { versions } = useAppEvents();
@@ -1304,6 +1309,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [location.pathname, location.search, navigate, selectedArtifactId]);
 
   const openRun = useCallback((runId: string) => {
+    const shellControls = workspaceShellControlsRef.current;
+    if (shellControls && !shellControls.railOpen) {
+      shellControls.toggleRail();
+    }
+
     if (selectedRunId === runId) {
       return;
     }
@@ -2158,6 +2168,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setInputState(next);
   }, [draft, id, setInputState]);
+  const [debouncedRelatedThreadsQuery, setDebouncedRelatedThreadsQuery] = useState(() => input.trim());
+  const [relatedThreadSearchIndex, setRelatedThreadSearchIndex] = useState<Record<string, string>>({});
+  const [relatedThreadSearchLoading, setRelatedThreadSearchLoading] = useState(false);
+  const [relatedThreadSearchError, setRelatedThreadSearchError] = useState<string | null>(null);
+  const [selectedRelatedThreadIds, setSelectedRelatedThreadIds] = useState<string[]>([]);
+  const [preparingRelatedThreadContext, setPreparingRelatedThreadContext] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
   const [keyboardInset, setKeyboardInset] = useState(0);
@@ -2641,7 +2657,160 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => normalizeWorkspacePaths(draftCwdValue ? [draftCwdValue, ...savedWorkspacePaths] : savedWorkspacePaths),
     [draftCwdValue, savedWorkspacePaths],
   );
+  const relatedThreadCandidates = useMemo(
+    () => draft
+      ? selectRecentConversationCandidates(sessions, {
+          workspaceCwd: draftCwdValue || null,
+        })
+      : [],
+    [draft, draftCwdValue, sessions],
+  );
+  const relatedThreadCandidateById = useMemo(
+    () => new Map(relatedThreadCandidates.map((session) => [session.id, session] as const)),
+    [relatedThreadCandidates],
+  );
+  const relatedThreadCandidateIds = useMemo(
+    () => relatedThreadCandidates.map((session) => session.id),
+    [relatedThreadCandidates],
+  );
+  const relatedThreadSearchResults = useMemo(
+    () => rankRelatedConversationSessions({
+      sessions: relatedThreadCandidates,
+      searchIndex: relatedThreadSearchIndex,
+      query: debouncedRelatedThreadsQuery,
+      workspaceCwd: draftCwdValue || null,
+      limit: MAX_VISIBLE_RELATED_THREAD_RESULTS,
+    }),
+    [debouncedRelatedThreadsQuery, draftCwdValue, relatedThreadCandidates, relatedThreadSearchIndex],
+  );
+  const visibleRelatedThreadResults = useMemo<RelatedConversationSearchResult[]>(() => {
+    const results: RelatedConversationSearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const sessionId of selectedRelatedThreadIds) {
+      if (seen.has(sessionId)) {
+        continue;
+      }
+
+      const existing = relatedThreadSearchResults.find((result) => result.sessionId === sessionId);
+      if (existing) {
+        results.push(existing);
+        seen.add(sessionId);
+        continue;
+      }
+
+      const session = relatedThreadCandidateById.get(sessionId);
+      if (!session) {
+        continue;
+      }
+
+      const normalizedSnippet = (relatedThreadSearchIndex[sessionId] ?? '').replace(/\s+/g, ' ').trim();
+      const snippet = normalizedSnippet.length > 140
+        ? `${normalizedSnippet.slice(0, 139).trimEnd()}…`
+        : normalizedSnippet;
+      results.push({
+        sessionId,
+        title: session.title,
+        cwd: session.cwd,
+        timestamp: session.lastActivityAt ?? session.timestamp,
+        snippet,
+        matchedTerms: [],
+        score: Number.MAX_SAFE_INTEGER - results.length,
+        sameWorkspace: Boolean(draftCwdValue && session.cwd === draftCwdValue),
+      });
+      seen.add(sessionId);
+    }
+
+    for (const result of relatedThreadSearchResults) {
+      if (seen.has(result.sessionId)) {
+        continue;
+      }
+
+      results.push(result);
+      seen.add(result.sessionId);
+      if (results.length >= MAX_VISIBLE_RELATED_THREAD_RESULTS) {
+        break;
+      }
+    }
+
+    return results.slice(0, MAX_VISIBLE_RELATED_THREAD_RESULTS);
+  }, [draftCwdValue, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, selectedRelatedThreadIds]);
+  const toggleRelatedThreadSelection = useCallback((sessionId: string) => {
+    setSelectedRelatedThreadIds((current) => {
+      if (current.includes(sessionId)) {
+        return current.filter((candidate) => candidate !== sessionId);
+      }
+
+      if (current.length >= MAX_RELATED_THREAD_SELECTIONS) {
+        showNotice('danger', `Choose up to ${MAX_RELATED_THREAD_SELECTIONS} related threads.`, 2500);
+        return current;
+      }
+
+      return [...current, sessionId];
+    });
+  }, [showNotice]);
   const branchLabel = liveSessionContext?.branch ?? null;
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedRelatedThreadsQuery(input.trim());
+    }, 180);
+
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [input]);
+
+  useEffect(() => {
+    setSelectedRelatedThreadIds((current) => current.filter((sessionId) => relatedThreadCandidateById.has(sessionId)));
+  }, [relatedThreadCandidateById]);
+
+  useEffect(() => {
+    if (!draft || (input.trim().length === 0 && selectedRelatedThreadIds.length === 0) || relatedThreadCandidateIds.length === 0) {
+      setRelatedThreadSearchLoading(false);
+      setRelatedThreadSearchError(null);
+      return;
+    }
+
+    const missingSessionIds = relatedThreadCandidateIds.filter((sessionId) => relatedThreadSearchIndex[sessionId] === undefined);
+    if (missingSessionIds.length === 0) {
+      setRelatedThreadSearchLoading(false);
+      setRelatedThreadSearchError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setRelatedThreadSearchLoading(true);
+    setRelatedThreadSearchError(null);
+
+    api.sessionSearchIndex(missingSessionIds)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setRelatedThreadSearchIndex((current) => ({
+          ...current,
+          ...result.index,
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setRelatedThreadSearchError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setRelatedThreadSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, input, relatedThreadCandidateIds, relatedThreadSearchIndex, selectedRelatedThreadIds.length]);
 
   useEffect(() => {
     if (draft) {
@@ -4673,6 +4842,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   async function submitComposer(behavior?: 'steer' | 'followUp') {
+    if (preparingRelatedThreadContext) {
+      return;
+    }
+
     const inputSnapshot = input;
     const text = inputSnapshot.trim();
     const pendingImageAttachments = attachments;
@@ -4755,6 +4928,77 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       };
 
       if (!id && !visibleSessionDetail) {
+        const selectedRelatedThreadIdsSnapshot = [...selectedRelatedThreadIds];
+
+        if (selectedRelatedThreadIdsSnapshot.length > 0) {
+          let createdSessionId: string | null = null;
+          setPreparingRelatedThreadContext(true);
+          setPendingAssistantStatusLabel(`Summarizing ${selectedRelatedThreadIdsSnapshot.length} related thread${selectedRelatedThreadIdsSnapshot.length === 1 ? '' : 's'}…`);
+
+          try {
+            const relatedContext = await api.relatedConversationContext(selectedRelatedThreadIdsSnapshot, textToSend);
+            const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+              ...(currentModel ? { model: currentModel } : {}),
+              ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+            });
+            createdSessionId = created.id;
+            primeCreatedConversationOpenCaches(created, {
+              tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+              bootstrapVersionKey: conversationVersionKey,
+              sessionDetailVersion: conversationEventVersion,
+            });
+            const attachmentRefs = await persistPromptDrawings(created.id);
+
+            rememberComposerInput(inputSnapshot, created.id);
+            setPendingAssistantStatusLabel('Working…');
+            await api.promptSession(
+              created.id,
+              textToSend,
+              queuedBehavior,
+              promptImages,
+              attachmentRefs,
+              undefined,
+              relatedContext.contextMessages,
+            );
+
+            clearDraftConversationAttachments();
+            clearDraftConversationCwd();
+            clearDraftConversationModel();
+            clearDraftConversationThinkingLevel();
+            setSelectedRelatedThreadIds([]);
+
+            ensureConversationTabOpen(created.id);
+            navigate(`/conversations/${created.id}`, {
+              replace: true,
+              state: {
+                initialModelPreferenceState: buildConversationInitialModelPreferenceState({
+                  conversationId: created.id,
+                  currentModel,
+                  currentThinkingLevel,
+                  defaultModel,
+                  defaultThinkingLevel,
+                }),
+                initialDeferredResumeState: {
+                  conversationId: created.id,
+                  resumes: [],
+                },
+              },
+            });
+          } catch (error) {
+            if (createdSessionId) {
+              await api.destroySession(createdSessionId).catch(() => {});
+            }
+            showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+            setInput(inputSnapshot);
+            setAttachments(pendingImageAttachments);
+            setDrawingAttachments(pendingDrawingAttachments);
+          } finally {
+            setPreparingRelatedThreadContext(false);
+            setPendingAssistantStatusLabel(null);
+          }
+          return;
+        }
+
         rememberComposerInput(inputSnapshot);
         setDraftPendingPrompt({
           text: textToSend,
@@ -5007,6 +5251,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    const relatedThreadHotkeyIndex = e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.nativeEvent.isComposing
+      ? Number.parseInt(e.key, 10) - 1
+      : -1;
+    if (
+      draft
+      && !preparingRelatedThreadContext
+      && relatedThreadHotkeyIndex >= 0
+      && relatedThreadHotkeyIndex < Math.min(visibleRelatedThreadResults.length, MAX_VISIBLE_RELATED_THREAD_RESULTS)
+    ) {
+      e.preventDefault();
+      const result = visibleRelatedThreadResults[relatedThreadHotkeyIndex];
+      if (result) {
+        toggleRelatedThreadSelection(result.sessionId);
+      }
+      return;
+    }
+
     if (showModelPicker) {
       if (e.key === 'Escape')    { e.preventDefault(); setInput(''); return; }
       if (modelItems.length === 0) {
@@ -5176,7 +5437,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     liveSessionHasPendingHiddenTurn,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
-  const composerDisabled = conversationNeedsTakeover;
+  const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext;
   const renameConversationDisabled = conversationNeedsTakeover
     || conversationCwdEditorOpen
     || conversationCwdBusy;
@@ -5372,6 +5633,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 {draftCwdError && (
                   <p className="text-center text-[11px] text-danger/80">{draftCwdError}</p>
                 )}
+
+                <DraftRelatedThreadsPanel
+                  query={debouncedRelatedThreadsQuery}
+                  results={visibleRelatedThreadResults}
+                  selectedSessionIds={selectedRelatedThreadIds}
+                  selectedCount={selectedRelatedThreadIds.length}
+                  loading={relatedThreadSearchLoading}
+                  busy={preparingRelatedThreadContext}
+                  error={relatedThreadSearchError}
+                  maxSelections={MAX_RELATED_THREAD_SELECTIONS}
+                  onToggle={toggleRelatedThreadSelection}
+                />
               </div>
             ) : undefined}
           />
@@ -5412,6 +5685,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draftCwdError,
     draftCwdPickBusy,
     draftCwdValue,
+    debouncedRelatedThreadsQuery,
     forkConversationFromMessage,
     hasRenderableMessages,
     hydrateHistoricalBlock,
@@ -5451,6 +5725,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     visibleTranscriptMessageIndexOffset,
     visibleTranscriptMessages,
     visibleTranscriptState?.conversationId,
+    relatedThreadSearchError,
+    relatedThreadSearchLoading,
+    preparingRelatedThreadContext,
+    selectedRelatedThreadIds,
+    toggleRelatedThreadSelection,
+    visibleRelatedThreadResults,
   ]);
 
   const missingConversation = shouldShowMissingConversationState({
@@ -5488,7 +5768,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   return (
     <ConversationWorkspaceShell>
-      {() => (
+      {(shellControls) => {
+        workspaceShellControlsRef.current = shellControls;
+        return (
         <div className="flex h-full flex-col overflow-hidden">
           <PageHeader className="min-h-[44px] gap-2 py-2">
             <div className="flex-1 min-w-0">
@@ -6210,7 +6492,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </Suspense>
       )}
       </div>
-      )}
+        );
+      }}
     </ConversationWorkspaceShell>
   );
 }

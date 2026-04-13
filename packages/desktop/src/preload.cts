@@ -264,6 +264,7 @@ const desktopBridge = {
     behavior?: 'steer' | 'followUp';
     images?: Array<{ data: string; mimeType: string; name?: string }>;
     attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
+    contextMessages?: Array<{ customType: string; content: string }>;
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
   abortLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:abort-live-session`, conversationId),

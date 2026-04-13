@@ -2254,6 +2254,7 @@ export async function submitDesktopLiveSessionPrompt(input: {
   behavior?: 'steer' | 'followUp';
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
+  contextMessages?: Array<{ customType: string; content: string }>;
   surfaceId?: string;
 }): Promise<{
   ok: true;

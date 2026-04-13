@@ -43,6 +43,7 @@ const {
   submitLocalPromptSessionMock,
   subscribeLocalMock,
   summarizeAndForkSessionMock,
+  summarizeSessionFileForPromptMock,
   syncWebLiveConversationRunMock,
   takeOverSessionControlMock,
   buildReferencedMemoryDocsContextMock,
@@ -94,6 +95,7 @@ const {
   submitLocalPromptSessionMock: vi.fn(),
   subscribeLocalMock: vi.fn(),
   summarizeAndForkSessionMock: vi.fn(),
+  summarizeSessionFileForPromptMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
   takeOverSessionControlMock: vi.fn(),
   buildReferencedMemoryDocsContextMock: vi.fn(),
@@ -141,6 +143,7 @@ vi.mock('../conversations/liveSessions.js', () => ({
   submitPromptSession: submitLocalPromptSessionMock,
   subscribe: subscribeLocalMock,
   summarizeAndForkSession: summarizeAndForkSessionMock,
+  summarizeSessionFileForPrompt: summarizeSessionFileForPromptMock,
   takeOverSessionControl: takeOverSessionControlMock,
 }));
 
@@ -385,6 +388,7 @@ describe('live session routes', () => {
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
     subscribeLocalMock.mockImplementation(() => createSessionListenerUnsubscribeMock);
     summarizeAndForkSessionMock.mockResolvedValue({ id: 'summary-fork-1' });
+    summarizeSessionFileForPromptMock.mockResolvedValue('Relevant summary');
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
     takeOverSessionControlMock.mockReturnValue({ ok: true, surfaceId: 'surface-1' });
     buildReferencedMemoryDocsContextMock.mockReturnValue('Memory docs context');
@@ -487,6 +491,10 @@ describe('live session routes', () => {
       body: {
         attachmentRefs: [{ attachmentId: 'att-1', revision: 2 }],
         behavior: 'followUp',
+        contextMessages: [{
+          customType: 'related_threads_context',
+          content: 'Summaries from selected threads.',
+        }],
         surfaceId: 'surface-1',
         text: 'Please continue.',
       },
@@ -495,6 +503,11 @@ describe('live session routes', () => {
     await Promise.resolve();
 
     expect(flushLiveDeferredResumes).toHaveBeenCalled();
+    expect(queuePromptContextMock).toHaveBeenCalledWith(
+      'live-resumed',
+      'related_threads_context',
+      'Summaries from selected threads.',
+    );
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'live-resumed',
       'referenced_context',
@@ -509,6 +522,12 @@ describe('live session routes', () => {
       conversationId: 'live-resumed',
       pendingOperation: expect.objectContaining({
         behavior: 'followUp',
+        contextMessages: expect.arrayContaining([
+          expect.objectContaining({
+            customType: 'related_threads_context',
+            content: 'Summaries from selected threads.',
+          }),
+        ]),
         text: 'Please continue.',
       }),
       profile: 'assistant',

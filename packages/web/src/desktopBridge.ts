@@ -39,6 +39,7 @@ import type {
   DeferredResumeSummary,
   FolderPickerResult,
   MemoryData,
+  InjectedPromptMessage,
   PromptAttachmentRefInput,
   PromptImageInput,
   SessionDetailResult,
@@ -309,6 +310,7 @@ export interface PersonalAgentDesktopBridge {
     behavior?: 'steer' | 'followUp';
     images?: PromptImageInput[];
     attachmentRefs?: PromptAttachmentRefInput[];
+    contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>;
     surfaceId?: string;
   }): Promise<{
     ok: true;
