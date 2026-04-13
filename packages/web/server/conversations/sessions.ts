@@ -670,7 +670,6 @@ function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number):
 const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set([
   'conversation_automation_item',
   'conversation_automation_review',
-  'conversation_automation_post_turn_review',
 ]);
 
 function shouldHideTranscriptDescendants(message: DisplayMessageEntryLike['message']): boolean {
@@ -899,15 +898,6 @@ function buildDisplayBlocksInternal(
 
 export function buildDisplayBlocksFromEntries(messages: DisplayMessageEntryLike[]): DisplayBlock[] {
   return buildDisplayBlocksInternal(messages);
-}
-
-function buildDisplayBlocksWithEntryAnchors(messages: DisplayMessageEntryLike[]): {
-  blocks: DisplayBlock[];
-  entryAnchorIndexById: Map<string, number>;
-} {
-  const entryAnchorIndexById = new Map<string, number>();
-  const blocks = buildDisplayBlocksInternal(messages, entryAnchorIndexById);
-  return { blocks, entryAnchorIndexById };
 }
 
 function buildSessionUserImagePath(sessionId: string, blockId: string, imageIndex: number): string {

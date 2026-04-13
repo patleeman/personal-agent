@@ -333,7 +333,7 @@ describe('sessions', () => {
       JSON.stringify({ type: 'model_change', id: 'session-tail-hidden-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
       JSON.stringify({ type: 'message', id: 'h-user-1', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', message: { role: 'user', content: 'Visible prompt' } }),
       JSON.stringify({ type: 'message', id: 'h-assistant-1', parentId: 'h-user-1', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'h-hidden-1', parentId: 'h-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'custom_message', id: 'h-hidden-1', parentId: 'h-assistant-1', timestamp: '2026-03-11T12:00:02.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
       JSON.stringify({ type: 'message', id: 'h-assistant-2', parentId: 'h-hidden-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
       JSON.stringify({ type: 'message', id: 'h-tool-1', parentId: 'h-assistant-2', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'bash', content: [{ type: 'text', text: 'ls' }] } }),
     ].join('\n') + '\n');
@@ -359,7 +359,7 @@ describe('sessions', () => {
       JSON.stringify({ type: 'model_change', id: 'uah-model', parentId: null, timestamp: '2026-03-11T12:00:00.000Z', modelId: 'test-model' }),
       JSON.stringify({ type: 'message', id: 'uah-user-1', parentId: 'uah-model', timestamp: '2026-03-11T12:00:01.000Z', message: { role: 'user', content: 'First prompt' } }),
       JSON.stringify({ type: 'message', id: 'uah-assistant-1', parentId: 'uah-user-1', timestamp: '2026-03-11T12:00:02.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'uah-hidden-1', parentId: 'uah-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'custom_message', id: 'uah-hidden-1', parentId: 'uah-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
       JSON.stringify({ type: 'message', id: 'uah-assistant-2', parentId: 'uah-hidden-1', timestamp: '2026-03-11T12:00:04.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden automation reply' }] } }),
       JSON.stringify({ type: 'message', id: 'uah-tool-1', parentId: 'uah-assistant-2', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'toolResult', toolCallId: 'call-1', toolName: 'wait_for_user', content: [{ type: 'text', text: 'Waiting for user.' }] } }),
       JSON.stringify({ type: 'message', id: 'uah-assistant-3', parentId: 'uah-tool-1', timestamp: '2026-03-11T12:00:06.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Still hidden automation summary.' }] } }),
@@ -393,7 +393,7 @@ describe('sessions', () => {
       JSON.stringify({ type: 'message', id: 'lineage-user-2', parentId: 'lineage-assistant-1', timestamp: '2026-03-11T12:00:03.000Z', message: { role: 'user', content: 'Second prompt' } }),
       JSON.stringify({ type: 'session_info', id: 'lineage-session-info', parentId: 'lineage-user-2', timestamp: '2026-03-11T12:00:04.000Z', name: 'Renamed session' }),
       JSON.stringify({ type: 'message', id: 'lineage-assistant-2', parentId: 'lineage-session-info', timestamp: '2026-03-11T12:00:05.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Second answer' }] } }),
-      JSON.stringify({ type: 'custom_message', id: 'lineage-hidden-1', parentId: 'lineage-assistant-2', timestamp: '2026-03-11T12:00:06.000Z', customType: 'conversation_automation_post_turn_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
+      JSON.stringify({ type: 'custom_message', id: 'lineage-hidden-1', parentId: 'lineage-assistant-2', timestamp: '2026-03-11T12:00:06.000Z', customType: 'conversation_automation_review', content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }], display: false }),
       JSON.stringify({ type: 'message', id: 'lineage-hidden-assistant-1', parentId: 'lineage-hidden-1', timestamp: '2026-03-11T12:00:07.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Hidden assistant reply' }] } }),
     ].join('\n') + '\n');
 
@@ -649,7 +649,7 @@ describe('sessions', () => {
     expect(blocks).toEqual([]);
   });
 
-  it('keeps assistant replies from hidden custom turns out of the visible transcript', () => {
+  it('keeps assistant replies from generic hidden custom turns out of the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'user-1',
@@ -665,7 +665,7 @@ describe('sessions', () => {
         timestamp: '2026-03-12T16:00:01.000Z',
         message: {
           role: 'custom',
-          customType: 'conversation_automation_post_turn_review',
+          customType: 'conversation_automation_review',
           display: false,
           content: [{ type: 'text', text: 'Hidden bookkeeping prompt.' }],
         },
@@ -700,7 +700,7 @@ describe('sessions', () => {
     ]);
   });
 
-  it('shows later user turns after hidden automation descendants', () => {
+  it('shows auto review descendants in the visible transcript as internal work', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'user-1',
@@ -736,7 +736,10 @@ describe('sessions', () => {
         timestamp: '2026-03-12T16:00:03.000Z',
         message: {
           role: 'assistant',
-          content: [{ type: 'text', text: 'Hidden automation reply.' }],
+          content: [
+            { type: 'thinking', thinking: 'Reviewing whether auto mode should keep going.' },
+            { type: 'toolCall', id: 'call-1', name: 'conversation_auto_control', arguments: { action: 'stop', reason: 'done' } },
+          ],
         },
       },
       {
@@ -746,32 +749,23 @@ describe('sessions', () => {
         message: {
           role: 'toolResult',
           toolCallId: 'call-1',
-          toolName: 'wait_for_user',
-          content: [{ type: 'text', text: 'Waiting for user.' }],
-        },
-      },
-      {
-        id: 'assistant-3',
-        parentId: 'tool-1',
-        timestamp: '2026-03-12T16:00:05.000Z',
-        message: {
-          role: 'assistant',
-          content: [{ type: 'text', text: 'Still hidden automation summary.' }],
+          toolName: 'conversation_auto_control',
+          content: [{ type: 'text', text: 'Stopped auto mode: done.' }],
         },
       },
       {
         id: 'user-2',
-        parentId: 'assistant-3',
-        timestamp: '2026-03-12T16:00:06.000Z',
+        parentId: 'tool-1',
+        timestamp: '2026-03-12T16:00:05.000Z',
         message: {
           role: 'user',
           content: [{ type: 'text', text: 'Second visible user message.' }],
         },
       },
       {
-        id: 'assistant-4',
+        id: 'assistant-3',
         parentId: 'user-2',
-        timestamp: '2026-03-12T16:00:07.000Z',
+        timestamp: '2026-03-12T16:00:06.000Z',
         message: {
           role: 'assistant',
           content: [{ type: 'text', text: 'Second visible assistant reply.' }],
@@ -787,6 +781,16 @@ describe('sessions', () => {
       expect.objectContaining({
         type: 'text',
         text: 'First visible assistant reply.',
+      }),
+      expect.objectContaining({
+        type: 'thinking',
+        text: 'Reviewing whether auto mode should keep going.',
+      }),
+      expect.objectContaining({
+        type: 'tool_use',
+        tool: 'conversation_auto_control',
+        input: { action: 'stop', reason: 'done' },
+        output: 'Stopped auto mode: done.',
       }),
       expect.objectContaining({
         type: 'user',

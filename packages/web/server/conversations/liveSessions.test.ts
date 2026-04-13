@@ -598,7 +598,7 @@ describe('live session subscriptions', () => {
     expect(events[4]).toEqual({ type: 'agent_start' });
   });
 
-  it('does not replay agent_start while a hidden turn is active', () => {
+  it('does not replay agent_start while a generic hidden turn is active', () => {
     const events: SseEvent[] = [];
 
     setLiveEntry('session-hidden-streaming', {
@@ -609,7 +609,7 @@ describe('live session subscriptions', () => {
       autoTitleRequested: false,
       lastContextUsageJson: null,
       lastQueueStateJson: null,
-      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      activeHiddenTurnCustomType: 'conversation_automation_review',
       session: {
         state: {
           messages: [],
@@ -627,6 +627,37 @@ describe('live session subscriptions', () => {
     });
 
     expect(events).not.toContainEqual({ type: 'agent_start' });
+  });
+
+  it('replays agent_start while an auto-mode hidden turn is active so internal work stays visible', () => {
+    const events: SseEvent[] = [];
+
+    setLiveEntry('session-auto-hidden-streaming', {
+      sessionId: 'session-auto-hidden-streaming',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Auto hidden streaming',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      session: {
+        state: {
+          messages: [],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        isStreaming: true,
+      },
+    });
+
+    subscribe('session-auto-hidden-streaming', (event) => {
+      events.push(event);
+    });
+
+    expect(events).toContainEqual({ type: 'agent_start' });
   });
 
   it('tracks mirrored surfaces and explicit takeover', () => {

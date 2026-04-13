@@ -1316,9 +1316,18 @@ function broadcastAutoModeState(entry: LiveEntry, force = false): void {
   broadcast(entry, { type: 'auto_mode_state', state });
 }
 
+function shouldExposeHiddenTurnInTranscript(customType: string | null | undefined): boolean {
+  return customType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE
+    || customType === CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE;
+}
+
 function shouldSuppressLiveEventForHiddenTurn(entry: LiveEntry, event: AgentSessionEvent): boolean {
   ensureHiddenTurnState(entry);
   if (!entry.activeHiddenTurnCustomType) {
+    return false;
+  }
+
+  if (shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType)) {
     return false;
   }
 
@@ -2320,7 +2329,8 @@ export function subscribe(
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     listener({ type: 'presence_state', state: buildPresenceState(entry) });
   }
-  if (entry.session.isStreaming && !entry.activeHiddenTurnCustomType) {
+  if (entry.session.isStreaming
+    && (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))) {
     listener({ type: 'agent_start' });
   }
 
