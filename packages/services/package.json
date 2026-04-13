@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/services",
-  "version": "0.1.14",
+  "version": "0.1.16",
   "description": "Managed daemon and web UI services for personal agent",
   "type": "module",
   "exports": {

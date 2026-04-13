@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/web",
-  "version": "0.1.14",
+  "version": "0.1.16",
   "description": "Personal agent web UI",
   "type": "module",
   "scripts": {
