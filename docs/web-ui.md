@@ -38,7 +38,7 @@ Current desktop routes/operators surfaces are:
 
 - **Conversations** — draft, saved, open, pinned, archived, and live thread work
 - **Automations** — scheduled tasks and task detail/editing
-- **Settings** — appearance, providers, desktop connections, runtime services, workspace info
+- **Settings** — appearance, general defaults, providers, desktop connections, and interface reset tools
 
 A few older routes now redirect instead of acting as first-class destinations:
 
@@ -97,19 +97,17 @@ The **Settings** route now carries most of what used to be spread across separat
 
 It is also the fallback destination for the removed standalone **Tools** and **Instructions** pages.
 
-The page is intentionally compact: terse section copy, tight two-column settings rows, and shared dividers instead of roomy card stacks.
+The page is now organized as one long settings document with distinct top-level sections and a sticky table of contents on the right side.
 
-It includes sections for:
+The top-level section order is:
 
-- general defaults
 - appearance
-- model providers and provider auth
+- general defaults
+- providers and provider auth
 - desktop connections when running inside Electron
 - interface reset tools
-- runtime services and health
-- workspace / vault information
 
-When the web UI is running inside the Electron shell on the local desktop host, the runtime section is framed as the app-owned local runtime rather than as separately managed OS services. When a remote host is active inside Electron, the runtime section still shows that remote host’s daemon and web UI state.
+The current layout intentionally gives each top-level section its own visual container while still keeping the individual settings rows lightweight instead of turning the page into nested cards.
 
 ## Remote browser access
 
