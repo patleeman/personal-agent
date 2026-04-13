@@ -4,6 +4,9 @@ import type { SessionMeta } from './types';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;
 const DEFAULT_CANDIDATE_LIMIT = 48;
+const COMMON_QUERY_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'do', 'for', 'from', 'help', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'me', 'my', 'of', 'on', 'or', 'out', 'please', 'should', 'that', 'the', 'this', 'to', 'want', 'what', 'why', 'with', 'you', 'your',
+]);
 
 export interface RelatedConversationSearchResult {
   sessionId: string;
@@ -17,11 +20,17 @@ export interface RelatedConversationSearchResult {
 }
 
 function normalizeQueryTokens(query: string): string[] {
-  return query
+  const cleanedTokens = query
     .trim()
     .toLowerCase()
+    .replace(/[^a-z0-9_./-]+/g, ' ')
     .split(/\s+/)
     .filter((token) => token.length > 0);
+
+  const meaningfulTokens = cleanedTokens.filter((token) => token.length > 1 && !COMMON_QUERY_STOPWORDS.has(token));
+  const tokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanedTokens;
+
+  return [...new Set(tokens)].slice(0, 8);
 }
 
 function normalizePath(value: string | null | undefined): string {
@@ -64,6 +73,26 @@ function scoreRecency(timestamp: string, nowMs: number): number {
 
   const ageDays = Math.max(0, (nowMs - parsed) / DAY_MS);
   return Math.max(0, Math.round(42 - ageDays * 5));
+}
+
+function scorePhrase(query: string, value: string | undefined, weight: number): number {
+  const normalizedValue = normalizeField(value);
+  const normalizedQuery = normalizeField(query).toLowerCase();
+  if (!normalizedValue || !normalizedQuery) {
+    return 0;
+  }
+
+  const lowerValue = normalizedValue.toLowerCase();
+  const index = lowerValue.indexOf(normalizedQuery);
+  if (index === -1) {
+    return 0;
+  }
+
+  return weight + Math.max(0, 28 - index);
+}
+
+function minimumMatchedTokenCount(tokenCount: number): number {
+  return tokenCount >= 4 ? 2 : 1;
 }
 
 function findSnippetStart(text: string, tokens: string[]): number {
@@ -179,6 +208,9 @@ export function rankRelatedConversationSessions(input: {
       let totalScore = 0;
       const matchedTerms: string[] = [];
 
+      totalScore += scorePhrase(input.query, fields[0], 150);
+      totalScore += scorePhrase(input.query, fields[2], 120);
+
       for (const token of tokens) {
         let bestTokenScore: number | null = null;
 
@@ -198,12 +230,18 @@ export function rankRelatedConversationSessions(input: {
         }
 
         if (bestTokenScore === null) {
-          return null;
+          continue;
         }
 
         totalScore += bestTokenScore;
         matchedTerms.push(token);
       }
+
+      if (matchedTerms.length < minimumMatchedTokenCount(tokens.length)) {
+        return null;
+      }
+
+      totalScore += matchedTerms.length * 24;
 
       const timestamp = session.lastActivityAt ?? session.timestamp;
       const sameWorkspace = workspaceCwd.length > 0 && normalizePath(session.cwd) === workspaceCwd;

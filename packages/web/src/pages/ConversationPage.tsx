@@ -117,7 +117,7 @@ const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
-const MAX_VISIBLE_RELATED_THREAD_RESULTS = 6;
+const MAX_VISIBLE_RELATED_THREAD_RESULTS = 5;
 
 type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
 

@@ -106,6 +106,30 @@ describe('rankRelatedConversationSessions', () => {
     expect(result?.snippet.length).toBeGreaterThan(20);
   });
 
+  it('keeps matching when the draft query contains extra filler words', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'long-query',
+        title: 'Release signing flow',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+    ];
+
+    const [result] = rankRelatedConversationSessions({
+      sessions,
+      searchIndex: {
+        'long-query': 'Investigated why release signing kept failing during macOS notarization and retried the release flow.',
+      },
+      query: 'can you help figure out why release signing keeps failing on mac',
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+    });
+
+    expect(result?.sessionId).toBe('long-query');
+    expect(result?.matchedTerms).toEqual(expect.arrayContaining(['release', 'signing', 'failing']));
+  });
+
   it('returns no matches for a blank query', () => {
     const sessions: SessionMeta[] = [buildSession({ id: 'one', title: 'Thread one', cwd: '/repo/current' })];
 

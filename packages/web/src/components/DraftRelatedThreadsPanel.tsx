@@ -3,6 +3,12 @@ import type { RelatedConversationSearchResult } from '../relatedConversationSear
 import { timeAgo } from '../utils';
 import { cx } from './ui';
 
+function formatMatchedTerms(result: RelatedConversationSearchResult): string {
+  return result.matchedTerms
+    .slice(0, 3)
+    .join(', ');
+}
+
 export function DraftRelatedThreadsPanel({
   query,
   results,
@@ -28,35 +34,39 @@ export function DraftRelatedThreadsPanel({
     return null;
   }
 
-  const subtitle = busy
-    ? `Summarizing ${selectedCount} selected thread${selectedCount === 1 ? '' : 's'} before the new conversation starts.`
-    : `Select up to ${maxSelections} recent threads to summarize into this conversation.`;
+  const statusText = busy
+    ? `Summarizing ${selectedCount}…`
+    : loading
+      ? 'Searching…'
+      : error
+        ? error
+        : selectedCount > 0
+          ? `${selectedCount}/${maxSelections} selected`
+          : '⌃1–9';
 
   return (
-    <section className="mx-auto mt-4 w-full max-w-[42rem] text-left">
-      <div className="flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/80">Related past threads</p>
-          <p className="mt-1 text-[12px] text-secondary">{subtitle}</p>
-        </div>
-        <p className="shrink-0 text-[11px] text-dim">
-          {selectedCount > 0 ? `${selectedCount}/${maxSelections} selected` : '⌃1–9 toggles results'}
+    <section className="mx-auto mt-3 w-full max-w-[38rem] text-left">
+      <div className="flex items-center justify-between gap-3 text-[11px] text-dim/85">
+        <p className="min-w-0 truncate">
+          <span className="font-semibold uppercase tracking-[0.14em] text-dim/80">Recent threads</span>
+          <span className="ml-2 text-secondary">Select up to {maxSelections} to reuse context.</span>
         </p>
+        <p className="shrink-0" aria-live="polite">{statusText}</p>
       </div>
 
       {results.length > 0 ? (
-        <div className="mt-2 divide-y divide-border-subtle/60 border-y border-border-subtle/60">
+        <div className="mt-2 space-y-0.5">
           {results.map((result) => {
             const checked = selectedSessionIds.includes(result.sessionId);
             const inputId = `draft-related-thread-${result.sessionId}`;
-            const matchedTerms = result.matchedTerms.slice(0, 3).join(' · ');
+            const matchedTerms = formatMatchedTerms(result);
             return (
               <label
                 key={result.sessionId}
                 htmlFor={inputId}
                 className={cx(
-                  'flex cursor-pointer items-center gap-2.5 px-1 py-2 transition-colors hover:bg-elevated/35 focus-within:bg-elevated/45',
-                  checked && 'bg-accent/7',
+                  'flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-elevated/30 focus-within:bg-elevated/40',
+                  checked && 'bg-accent/7 text-accent',
                 )}
               >
                 <input
@@ -64,15 +74,15 @@ export function DraftRelatedThreadsPanel({
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(result.sessionId)}
-                  className="h-4 w-4 shrink-0 rounded border-border-default text-accent focus:ring-2 focus:ring-accent/40"
+                  className="h-3.5 w-3.5 shrink-0 rounded border-border-default text-accent focus:ring-2 focus:ring-accent/40"
                   aria-label={`Reuse context from ${result.title}`}
                   disabled={busy}
                 />
-                <span className="min-w-0 flex-1 truncate text-[13px] text-primary">
+                <span className="min-w-0 flex-1 truncate text-[12px] text-primary">
                   <span className="font-medium">{result.title}</span>
-                  <span className="text-secondary">{` — ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
+                  <span className="text-dim">{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
                   {matchedTerms && (
-                    <span className="text-dim">{` · matches `}<span className="font-mono text-[11px] text-accent/85">{matchedTerms}</span></span>
+                    <span className="text-accent/80">{` · ${matchedTerms}`}</span>
                   )}
                 </span>
               </label>
@@ -80,29 +90,10 @@ export function DraftRelatedThreadsPanel({
           })}
         </div>
       ) : (
-        <div className="mt-2 py-2 text-[12px] text-secondary">
-          {query.trim().length > 0
-            ? `No recent threads match “${query.trim()}”.`
-            : 'Continue typing to search recent threads.'}
-        </div>
+        <p className="mt-2 px-1.5 text-[12px] text-secondary">
+          {query.trim().length > 0 ? `No recent threads match “${query.trim()}”.` : 'Type to search recent threads.'}
+        </p>
       )}
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-dim">
-        <span>
-          {selectedCount > 0
-            ? 'The selected threads will be summarized before your first prompt is sent.'
-            : 'Only recent threads from roughly the last 7 days are searched right now.'}
-        </span>
-        <span aria-live="polite">
-          {busy
-            ? 'Summarizing…'
-            : loading
-              ? 'Searching…'
-              : error
-                ? error
-                : '⌃1–9 toggles results'}
-        </span>
-      </div>
     </section>
   );
 }
