@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 const repoRoot = process.cwd();
 const packageJsonPath = resolve(repoRoot, 'package.json');
 const releaseDir = resolve(repoRoot, 'dist', 'release');
+const repoEnvPath = resolve(repoRoot, '.env');
 const defaultEnvPath = resolve(homedir(), 'workingdir', 'familiar', '.env');
 const defaultReleaseRepo = 'patleeman/personal-agent-releases';
 
@@ -102,9 +103,15 @@ function parseEnvFile(content) {
 
 function loadReleaseEnv() {
   const env = { ...process.env };
-  const envPath = process.env.PERSONAL_AGENT_RELEASE_ENV ?? defaultEnvPath;
+  const envPaths = process.env.PERSONAL_AGENT_RELEASE_ENV
+    ? [process.env.PERSONAL_AGENT_RELEASE_ENV]
+    : [repoEnvPath, defaultEnvPath];
 
-  if (existsSync(envPath)) {
+  for (const envPath of envPaths) {
+    if (!envPath || !existsSync(envPath)) {
+      continue;
+    }
+
     const parsed = parseEnvFile(readFileSync(envPath, 'utf8'));
     for (const [key, value] of Object.entries(parsed)) {
       if (!env[key]) {
@@ -112,6 +119,7 @@ function loadReleaseEnv() {
       }
     }
     console.log(`Loaded release env defaults from ${envPath}`);
+    break;
   }
 
   if (!env.APPLE_APP_SPECIFIC_PASSWORD && env.APPLE_PASSWORD) {

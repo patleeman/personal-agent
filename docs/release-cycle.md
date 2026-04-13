@@ -37,8 +37,9 @@ npm run release:publish
 It also needs Apple notarization credentials. The script will use whichever is available first:
 
 - environment variables already exported in the shell
-- `~/workingdir/familiar/.env`
 - the file pointed to by `PERSONAL_AGENT_RELEASE_ENV`
+- `.env` in the repo root
+- `~/workingdir/familiar/.env`
 
 When loading from env, the script accepts standard `APPLE_ID`, `APPLE_TEAM_ID`, and `APPLE_APP_SPECIFIC_PASSWORD`. It also maps `APPLE_PASSWORD` to `APPLE_APP_SPECIFIC_PASSWORD` for compatibility with Patrick's existing local `.env`.
 
