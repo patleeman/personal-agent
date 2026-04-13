@@ -2477,18 +2477,6 @@ export async function setLiveSessionAutoModeState(
   publishSessionMetaChanged(sessionId);
   publishAppEvent({ type: 'session_file_changed', sessionId });
 
-  if (nextState.enabled) {
-    queueMicrotask(() => {
-      void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch((error) => {
-        logWarn('conversation auto mode turn request failed', {
-          sessionId,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      });
-    });
-  }
-
   return nextState;
 }
 

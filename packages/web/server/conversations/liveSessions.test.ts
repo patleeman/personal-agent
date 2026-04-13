@@ -1511,6 +1511,63 @@ describe('live session subscriptions', () => {
     });
   });
 
+  it('surfaces Codex compaction detail on live compaction summaries', () => {
+    setLiveEntry('session-summary-codex', {
+      sessionId: 'session-summary-codex',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Compacted conversation',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      lastCompactionSummaryTitle: 'Overflow recovery compaction',
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'compactionSummary',
+              summary: '## Goal\nRetry after compaction.',
+              timestamp: 1,
+              details: {
+                nativeCompaction: {
+                  version: 1,
+                  provider: 'openai-responses-compact',
+                  modelKey: 'openai-codex:openai-codex-responses:gpt-5.4',
+                  replacementHistory: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Prompt after compaction' }] }],
+                },
+              },
+            },
+          ],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-summary-codex', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 1,
+      blocks: [
+        {
+          type: 'summary',
+          id: 'live-0',
+          ts: new Date(1).toISOString(),
+          kind: 'compaction',
+          title: 'Overflow recovery compaction',
+          text: '## Goal\nRetry after compaction.',
+          detail: 'This used Codex compaction under the hood. Pi kept the text summary for display and portability.',
+        },
+      ],
+    });
+  });
+
   it('uses the persisted transcript for idle live sessions', () => {
     const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
     tempDirs.push(dir);
@@ -2365,7 +2422,7 @@ describe('queuePromptContext', () => {
 });
 
 describe('conversation auto mode', () => {
-  it('persists live auto mode state and can request a hidden review turn when idle', async () => {
+  it('persists live auto mode state without immediately running a hidden review turn', async () => {
     const entries: unknown[] = [];
     const appendCustomEntry = vi.fn((customType: string, data: unknown) => {
       entries.push({ type: 'custom', customType, data });
@@ -2404,6 +2461,9 @@ describe('conversation auto mode', () => {
     });
     expect(readLiveSessionAutoModeState('session-auto-mode')).toEqual(state);
     expect(appendCustomEntry).toHaveBeenCalledWith('conversation-auto-mode', state);
+    expect(sendCustomMessage).not.toHaveBeenCalled();
+
+    await expect(requestConversationAutoModeTurn('session-auto-mode')).resolves.toBe(true);
     expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
       customType: 'conversation_automation_post_turn_review',
       display: false,
