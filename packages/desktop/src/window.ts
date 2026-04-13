@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, screen } from 'electron';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -37,6 +37,23 @@ export type DesktopRendererShortcutAction =
 type ManagedWindowRole = 'main' | 'remote';
 
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
+const DEFAULT_WINDOW_WIDTH = 1440;
+const DEFAULT_WINDOW_HEIGHT = 960;
+const WINDOW_SHOW_FALLBACK_MS = 1500;
+
+interface DesktopRectangle {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+interface DesktopWindowBounds {
+  x?: number;
+  y?: number;
+  width: number;
+  height: number;
+}
 
 export function getDesktopWindowChromeOptions(platform = process.platform): {
   titleBarStyle: 'hidden' | 'hiddenInset';
@@ -87,6 +104,76 @@ function buildWindowTitle(host: DesktopHostRecord): string {
 
   const kindLabel = host.kind === 'web' ? 'Web remote' : 'SSH remote';
   return `Personal Agent — ${host.label} (${kindLabel})`;
+}
+
+function intersectRectangleArea(left: DesktopRectangle, right: DesktopRectangle): number {
+  const width = Math.max(0, Math.min(left.x + left.width, right.x + right.width) - Math.max(left.x, right.x));
+  const height = Math.max(0, Math.min(left.y + left.height, right.y + right.height) - Math.max(left.y, right.y));
+  return width * height;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
+function centerBoundsInArea(bounds: DesktopWindowBounds, area: DesktopRectangle): DesktopWindowBounds {
+  return {
+    width: bounds.width,
+    height: bounds.height,
+    x: area.x + Math.max(0, Math.floor((area.width - bounds.width) / 2)),
+    y: area.y + Math.max(0, Math.floor((area.height - bounds.height) / 2)),
+  };
+}
+
+export function constrainDesktopWindowBounds(
+  windowState: DesktopWindowBounds | undefined,
+  displayAreas: DesktopRectangle[],
+  remoteOffset = 0,
+): DesktopWindowBounds {
+  const normalizedWidth = Math.max(720, Math.round(windowState?.width ?? DEFAULT_WINDOW_WIDTH));
+  const normalizedHeight = Math.max(520, Math.round(windowState?.height ?? DEFAULT_WINDOW_HEIGHT));
+  const fallbackArea = displayAreas[0];
+  if (!fallbackArea) {
+    return {
+      width: normalizedWidth,
+      height: normalizedHeight,
+      ...(typeof windowState?.x === 'number' ? { x: Math.round(windowState.x) + remoteOffset } : {}),
+      ...(typeof windowState?.y === 'number' ? { y: Math.round(windowState.y) + remoteOffset } : {}),
+    };
+  }
+
+  const hasSavedPosition = typeof windowState?.x === 'number' && typeof windowState.y === 'number';
+  if (!hasSavedPosition) {
+    const width = Math.min(normalizedWidth, fallbackArea.width);
+    const height = Math.min(normalizedHeight, fallbackArea.height);
+    return centerBoundsInArea({ width, height }, fallbackArea);
+  }
+
+  const savedWindowState = windowState as DesktopWindowBounds & { x: number; y: number };
+  const savedX = Math.round(savedWindowState.x);
+  const savedY = Math.round(savedWindowState.y);
+  const desiredBounds: DesktopRectangle = {
+    x: savedX + remoteOffset,
+    y: savedY + remoteOffset,
+    width: normalizedWidth,
+    height: normalizedHeight,
+  };
+  const targetArea = displayAreas.reduce<DesktopRectangle>((bestArea, area) => (
+    intersectRectangleArea(desiredBounds, area) > intersectRectangleArea(desiredBounds, bestArea)
+      ? area
+      : bestArea
+  ), fallbackArea);
+  const width = Math.min(normalizedWidth, targetArea.width);
+  const height = Math.min(normalizedHeight, targetArea.height);
+  const maxX = targetArea.x + Math.max(0, targetArea.width - width);
+  const maxY = targetArea.y + Math.max(0, targetArea.height - height);
+
+  return {
+    width,
+    height,
+    x: clamp(desiredBounds.x, targetArea.x, maxX),
+    y: clamp(desiredBounds.y, targetArea.y, maxY),
+  };
 }
 
 export class DesktopWindowController {
@@ -298,18 +385,19 @@ export class DesktopWindowController {
     ensureDesktopAppProtocolForHost(this.hostManager, host.id);
 
     const config = loadDesktopConfig();
-    const savedWindowState = config.windowState ?? { width: 1440, height: 960 };
-    const runtime = resolveDesktopRuntimePaths();
     const remoteOffset = role === 'remote'
       ? (this.remoteWindows.size + 1) * 28
       : 0;
+    const savedWindowState = constrainDesktopWindowBounds(
+      config.windowState ?? { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT },
+      screen.getAllDisplays().map((display) => display.workArea),
+      remoteOffset,
+    );
+    const runtime = resolveDesktopRuntimePaths();
 
     const window = new BrowserWindow({
       show: false,
-      width: savedWindowState.width,
-      height: savedWindowState.height,
-      ...(typeof savedWindowState.x === 'number' ? { x: savedWindowState.x + remoteOffset } : {}),
-      ...(typeof savedWindowState.y === 'number' ? { y: savedWindowState.y + remoteOffset } : {}),
+      ...savedWindowState,
       title: buildWindowTitle(host),
       icon: runtime.colorIconFile,
       autoHideMenuBar: true,
@@ -350,8 +438,19 @@ export class DesktopWindowController {
       this.syncAppModeForVisibleWindows();
     });
 
+    const showFallbackTimer = setTimeout(() => {
+      if (!window.isDestroyed() && !window.isVisible()) {
+        window.show();
+      }
+    }, WINDOW_SHOW_FALLBACK_MS);
+
     window.once('ready-to-show', () => {
+      clearTimeout(showFallbackTimer);
       window.show();
+    });
+
+    window.once('closed', () => {
+      clearTimeout(showFallbackTimer);
     });
 
     return window;

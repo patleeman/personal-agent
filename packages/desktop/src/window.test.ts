@@ -9,17 +9,34 @@ vi.mock('electron', () => ({
     static getFocusedWindow = getFocusedWindow;
   },
   app: {
+    isPackaged: false,
+    getAppPath: vi.fn(() => '/tmp/app'),
     setActivationPolicy: vi.fn(() => true),
     dock: {
       show: vi.fn(),
       hide: vi.fn(),
     },
   },
+  protocol: {
+    registerSchemesAsPrivileged: vi.fn(),
+  },
+  screen: {
+    getAllDisplays: vi.fn(() => []),
+  },
+  session: {
+    fromPartition: vi.fn(() => ({
+      protocol: {
+        handle: vi.fn(),
+        unhandle: vi.fn(),
+      },
+    })),
+  },
 }));
 
 import {
   DesktopWindowController,
   canNavigateWindowInApp,
+  constrainDesktopWindowBounds,
   getDesktopWindowChromeOptions,
   toDesktopShellRoute,
   toDesktopShellUrl,
@@ -78,6 +95,55 @@ describe('window desktop navigation helpers', () => {
       'http://127.0.0.1:3741/conversations/abc?desktop-shell=1',
       'https://desktop.example.ts.net/conversations/new?desktop-shell=1',
     )).toBe(false);
+  });
+
+  it('re-centers saved off-screen bounds onto the available display', () => {
+    expect(constrainDesktopWindowBounds(
+      {
+        x: 2052,
+        y: 749,
+        width: 1788,
+        height: 1411,
+      },
+      [
+        {
+          x: 0,
+          y: 0,
+          width: 1512,
+          height: 982,
+        },
+      ],
+    )).toEqual({
+      x: 0,
+      y: 0,
+      width: 1512,
+      height: 982,
+    });
+  });
+
+  it('preserves visible bounds and offsets remote windows without leaving the display', () => {
+    expect(constrainDesktopWindowBounds(
+      {
+        x: 120,
+        y: 80,
+        width: 1100,
+        height: 780,
+      },
+      [
+        {
+          x: 0,
+          y: 0,
+          width: 1512,
+          height: 982,
+        },
+      ],
+      28,
+    )).toEqual({
+      x: 148,
+      y: 108,
+      width: 1100,
+      height: 780,
+    });
   });
 });
 

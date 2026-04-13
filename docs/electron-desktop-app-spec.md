@@ -66,6 +66,8 @@ That means:
 
 The renderer should still feel like one product across local desktop and remote browser use. Desktop-only capabilities should improve responsiveness and host integration, not fork the information architecture.
 
+Desktop window restoration should be resilient to monitor changes. If the saved bounds are now off-screen or larger than the active display work area, Electron should clamp them back onto a visible display before showing the window.
+
 ## Related docs
 
 - [Web UI Guide](./web-ui.md)
