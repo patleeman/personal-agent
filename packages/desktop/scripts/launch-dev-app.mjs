@@ -116,7 +116,10 @@ function ensureMacDevAppBundle() {
   replacePlistString(infoPlistPath, 'CFBundleVersion', appVersion);
 
   writeFileSync(stampPath, `${JSON.stringify(desiredStamp, null, 2)}\n`);
-  return executablePath;
+  return {
+    appBundlePath,
+    executablePath,
+  };
 }
 
 async function waitForDetachedLaunch(child) {
@@ -158,10 +161,8 @@ async function waitForDetachedLaunch(child) {
 }
 
 async function launchMacDevApp() {
-  const macExecutable = ensureMacDevAppBundle();
-  const child = spawn(macExecutable, [desktopMainFile], {
-    // The detached app outlives the launcher, so inheriting the parent's stdio can
-    // trigger EPIPE once npm exits and Electron later writes to the console.
+  const { appBundlePath } = ensureMacDevAppBundle();
+  const child = spawn('open', ['-n', appBundlePath, '--args', desktopMainFile], {
     stdio: 'ignore',
     cwd: packageDir,
     env: {
