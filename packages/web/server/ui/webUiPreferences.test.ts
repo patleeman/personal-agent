@@ -37,7 +37,7 @@ describe('readSavedWebUiPreferences', () => {
         openConversationIds: [' session-1 ', '', 'session-2', null, 'session-1'],
         pinnedConversationIds: ['session-2', ' session-3 ', 'session-3'],
         archivedConversationIds: ['session-3', ' session-4 ', '', 'session-1', 'session-4'],
-        workspacePaths: [' /tmp/alpha ', '', '/tmp/beta', '/tmp/alpha'],
+        workspacePaths: [' /tmp/alpha/ ', '', '/tmp/beta', '/tmp/alpha'],
       },
     }));
 
@@ -66,7 +66,7 @@ describe('writeSavedWebUiPreferences', () => {
       openConversationIds: ['session-1', ' session-2 ', 'session-3'],
       pinnedConversationIds: ['session-3', 'session-4', 'session-4'],
       archivedConversationIds: ['session-2', 'session-5', ' session-6 '],
-      workspacePaths: [' /tmp/alpha ', '/tmp/beta', '/tmp/alpha'],
+      workspacePaths: [' /tmp/alpha/ ', '/tmp/beta', '/tmp/alpha'],
     }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({

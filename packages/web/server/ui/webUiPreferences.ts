@@ -59,6 +59,44 @@ function normalizeConversationIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizePathSeparators(path: string): string {
+  return path.replace(/\\/g, '/');
+}
+
+function trimTrailingPathSeparators(path: string): string {
+  if (path === '/' || /^[A-Za-z]:\/$/.test(path)) {
+    return path;
+  }
+
+  return path.replace(/\/+$/, '');
+}
+
+function normalizeWorkspacePaths(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const paths: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value) {
+    const trimmed = readNonEmptyString(entry);
+    if (!trimmed) {
+      continue;
+    }
+
+    const normalized = trimTrailingPathSeparators(normalizePathSeparators(trimmed)) || normalizePathSeparators(trimmed);
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    paths.push(normalized);
+  }
+
+  return paths;
+}
+
 function normalizeNodeBrowserView(entry: unknown): SavedNodeBrowserViewPreference | null {
   if (!isRecord(entry)) {
     return null;
@@ -105,7 +143,7 @@ function normalizeSavedWebUiPreferences(input: {
     pinnedConversationIds,
     archivedConversationIds: normalizeConversationIds(input.archivedConversationIds)
       .filter((id) => !workspaceIdSet.has(id)),
-    workspacePaths: normalizeConversationIds(input.workspacePaths),
+    workspacePaths: normalizeWorkspacePaths(input.workspacePaths),
     nodeBrowserViews: normalizeNodeBrowserViews(input.nodeBrowserViews),
   };
 }

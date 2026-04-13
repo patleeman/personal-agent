@@ -1,3 +1,4 @@
+import { normalizeConversationGroupCwd } from './conversationCwdGroups';
 import { SAVED_WORKSPACE_PATHS_STORAGE_KEY } from './localSettings';
 
 export function normalizeWorkspacePaths(values: Iterable<unknown>): string[] {
@@ -5,7 +6,7 @@ export function normalizeWorkspacePaths(values: Iterable<unknown>): string[] {
   const seen = new Set<string>();
 
   for (const value of values) {
-    const normalized = typeof value === 'string' ? value.trim() : '';
+    const normalized = normalizeConversationGroupCwd(typeof value === 'string' ? value : null);
     if (!normalized || seen.has(normalized)) {
       continue;
     }

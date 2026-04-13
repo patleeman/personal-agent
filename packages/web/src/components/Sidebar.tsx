@@ -19,7 +19,12 @@ import {
 import { persistForkPromptDraft } from '../forking';
 import { timeAgoCompact } from '../utils';
 import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../sessionTabs';
-import { getConversationGroupLabel, groupConversationItemsByCwd } from '../conversationCwdGroups';
+import {
+  buildConversationGroupLabels,
+  getConversationGroupLabel,
+  groupConversationItemsByCwd,
+  normalizeConversationGroupCwd,
+} from '../conversationCwdGroups';
 import {
   getDesktopBridge,
   type DesktopConversationContextMenuAction,
@@ -179,6 +184,7 @@ function WorkspaceQuickSelectModal({
 }) {
   const [cursor, setCursor] = useState(0);
   const optionCount = workspacePaths.length + 1;
+  const workspaceLabels = useMemo(() => buildConversationGroupLabels(workspacePaths), [workspacePaths]);
 
   useEffect(() => {
     setCursor(0);
@@ -276,7 +282,7 @@ function WorkspaceQuickSelectModal({
                   ].join(' ')}
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-[13px] font-medium">{getConversationGroupLabel(workspacePath)}</p>
+                    <p className="truncate text-[13px] font-medium">{getConversationGroupLabel(workspacePath, { labelsByCwd: workspaceLabels })}</p>
                     <p className="truncate text-[11px] text-dim">{workspacePath}</p>
                   </div>
                 </button>
@@ -1682,6 +1688,13 @@ export function Sidebar() {
     () => normalizeWorkspacePaths([...pinnedWorkspacePaths, ...savedWorkspacePaths, ...openWorkspacePaths]),
     [openWorkspacePaths, pinnedWorkspacePaths, savedWorkspacePaths],
   );
+  const conversationGroupLabels = useMemo(
+    () => buildConversationGroupLabels([
+      ...workspaceOrder,
+      ...orderedConversationItems.map((item) => item.session.cwd),
+    ]),
+    [orderedConversationItems, workspaceOrder],
+  );
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -1709,13 +1722,15 @@ export function Sidebar() {
     }
 
     const groupsByKey = new Map(
-      groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd)
+      groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd, {
+        labelsByCwd: conversationGroupLabels,
+      })
         .map((group) => [group.key, group] as const),
     );
     const groups = workspaceOrder.map((workspacePath) => groupsByKey.get(workspacePath) ?? {
       key: workspacePath,
       cwd: workspacePath,
-      label: getConversationGroupLabel(workspacePath),
+      label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
       items: [],
     });
     const seenGroupKeys = new Set(groups.map((group) => group.key));
@@ -1734,7 +1749,7 @@ export function Sidebar() {
       defaultLabel: group.label,
       label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
     }));
-  }, [conversationGroupLabelOverrides, orderedConversationItems, threadsOrganizeMode, workspaceOrder]);
+  }, [conversationGroupLabelOverrides, conversationGroupLabels, orderedConversationItems, threadsOrganizeMode, workspaceOrder]);
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -1912,7 +1927,7 @@ export function Sidebar() {
   }, [activeConversationId, archivedSessions, pinnedSessions, tabs]);
 
   const handleNewConversation = useCallback((cwd?: string | null) => {
-    const explicitCwd = typeof cwd === 'string' ? cwd.trim() : '';
+    const explicitCwd = normalizeConversationGroupCwd(cwd);
     if (explicitCwd) {
       persistDraftConversationCwd(explicitCwd);
       setDraftCwd(explicitCwd);
@@ -2090,7 +2105,7 @@ export function Sidebar() {
   }, [activeConversationSurfaceId, archivedConversationIds, navigate, openIds, pinnedIds, resolveConversationGroupRedirectPath]);
 
   const handleOpenConversationGroupInFinder = useCallback(async (cwd: string | null, label: string) => {
-    const normalizedCwd = cwd?.trim() ?? '';
+    const normalizedCwd = normalizeConversationGroupCwd(cwd);
     if (!normalizedCwd) {
       showSidebarNotice('danger', `No working directory is saved for ${label}.`, 4000);
       return;
@@ -2108,7 +2123,7 @@ export function Sidebar() {
     }
   }, [showSidebarNotice]);
 
-  const handleRenameConversationGroup = useCallback((groupKey: string, cwd: string | null, currentLabel: string) => {
+  const handleRenameConversationGroup = useCallback((groupKey: string, defaultLabel: string, currentLabel: string) => {
     if (typeof window === 'undefined') {
       return;
     }
@@ -2119,7 +2134,6 @@ export function Sidebar() {
     }
 
     const normalizedLabel = nextLabel.trim();
-    const defaultLabel = getConversationGroupLabel(cwd);
     updateConversationGroupLabelOverride(
       groupKey,
       normalizedLabel && normalizedLabel !== defaultLabel ? normalizedLabel : null,
@@ -2159,8 +2173,8 @@ export function Sidebar() {
     updateConversationGroupLabelOverride(groupKey, null);
     clearConversationGroupCollapsedState(groupKey);
 
-    const normalizedCwd = cwd?.trim() ?? '';
-    if (includesDraft && normalizedCwd && readDraftConversationCwd().trim() === normalizedCwd) {
+    const normalizedCwd = normalizeConversationGroupCwd(cwd);
+    if (includesDraft && normalizedCwd && normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd) {
       clearDraftConversationCwd();
     }
 
@@ -2584,7 +2598,7 @@ export function Sidebar() {
                       onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
                       onNewConversation={() => handleNewConversation(group.cwd)}
                       onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
-                      onEditName={() => handleRenameConversationGroup(group.key, group.cwd, group.label)}
+                      onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
                       onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
                       onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
                     />

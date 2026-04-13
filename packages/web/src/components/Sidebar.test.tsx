@@ -293,6 +293,39 @@ describe('Sidebar', () => {
     expect(html).not.toContain('No open conversations yet.');
   });
 
+  it('disambiguates saved workspaces that share the same basename', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([
+      '/Users/patrickc.lee/personal/personal-agent',
+      '/Users/patrickc.lee/Documents/personal-agent',
+    ]));
+
+    const html = renderSidebar('/conversations/new', { sessions: [] });
+
+    expect(html).toContain('personal/personal-agent');
+    expect(html).toContain('Documents/personal-agent');
+    expect(html).not.toContain('aria-label="Collapse personal-agent"');
+  });
+
+  it('coalesces saved workspaces and threads that only differ by trailing slashes', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-alpha']));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/alpha-worktree/']));
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-alpha',
+          title: 'Alpha thread',
+          cwd: '/tmp/alpha-worktree',
+          cwdSlug: 'alpha-worktree',
+        }),
+      ],
+    });
+
+    expect(html.match(/aria-label="Collapse alpha-worktree"/g) ?? []).toHaveLength(1);
+  });
+
   it('renders saved custom cwd group labels when present', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(
