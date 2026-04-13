@@ -121,19 +121,23 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
 }
 
 export function resolveDesktopRuntimePaths(): DesktopRuntimePaths {
+  const forceDevBundle = process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE === '1';
+
   return resolveDesktopRuntimePathsForContext({
     currentDir: dirname(fileURLToPath(import.meta.url)),
     cwd: process.cwd(),
     env: process.env,
     execPath: process.execPath,
-    isPackaged: app.isPackaged,
-    appRoot: (() => {
-      try {
-        return app.getAppPath();
-      } catch {
-        return undefined;
-      }
-    })(),
-    resourcesPath: process.resourcesPath,
+    isPackaged: forceDevBundle ? false : app.isPackaged,
+    appRoot: forceDevBundle
+      ? undefined
+      : (() => {
+          try {
+            return app.getAppPath();
+          } catch {
+            return undefined;
+          }
+        })(),
+    resourcesPath: forceDevBundle ? undefined : process.resourcesPath,
   });
 }

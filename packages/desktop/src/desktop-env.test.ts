@@ -99,4 +99,29 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'iconTemplate.png'));
     expect(result.colorIconFile).toBe(join(appRoot, 'assets', 'icon.png'));
   });
+
+  it('can force dev-path resolution from a generated mac dev app bundle', () => {
+    const repoRoot = createTempDir('pa-desktop-dev-bundle-');
+    const stateRoot = createTempDir('pa-desktop-state-');
+    seedDevRepo(repoRoot);
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const result = resolveDesktopRuntimePathsForContext({
+      currentDir: join(repoRoot, 'packages', 'desktop', 'dist'),
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
+        PERSONAL_AGENT_REPO_ROOT: repoRoot,
+      },
+      execPath: '/Applications/Personal Agent.app/Contents/MacOS/Personal Agent',
+      isPackaged: false,
+    });
+
+    expect(result.repoRoot).toBe(repoRoot);
+    expect(result.nodeCommand).toBe('node');
+    expect(result.useElectronRunAsNode).toBe(false);
+    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
+  });
 });

@@ -36,10 +36,12 @@ npm run desktop:dist
 
 Behavior to expect:
 
+- on macOS, `npm run desktop:start` launches through a generated dev app bundle so the menu bar app name and About window use Personal Agent branding instead of the stock Electron shell metadata
 - closing the main window hides it instead of quitting the app, so the menubar app keeps running
 - showing or focusing a window promotes the app into normal macOS app mode, including the standard application menu and Dock presence
 - File → New Window opens another desktop window for the current host and route
 - hiding every window drops the app back to a menubar-only background mode
+- the About window shows the Personal Agent icon plus the current Personal Agent and pinned Pi versions
 - quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend
 - the desktop shell uses the same web UI, not a separate native renderer
 - if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path

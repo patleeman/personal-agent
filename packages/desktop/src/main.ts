@@ -4,6 +4,7 @@ import { getStateRoot } from '@personal-agent/core';
 import { app, dialog, shell } from 'electron';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
+import { DesktopAboutWindowController } from './about.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
@@ -18,6 +19,7 @@ let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
 let trayController: DesktopTrayController | undefined;
 let updateManager: DesktopUpdateManager | undefined;
+let aboutWindowController: DesktopAboutWindowController | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
@@ -210,8 +212,12 @@ async function bootstrapDesktopApp(): Promise<void> {
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
   updateManager = new DesktopUpdateManager();
+  aboutWindowController = new DesktopAboutWindowController();
 
   const shellActions = {
+    onAbout: () => {
+      aboutWindowController?.show();
+    },
     onOpen: () => {
       void openMainRoute('/');
     },
@@ -321,6 +327,7 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
+  aboutWindowController = undefined;
   await hostManager?.dispose();
 }
 
