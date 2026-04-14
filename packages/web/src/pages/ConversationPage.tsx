@@ -6387,10 +6387,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           }}
                           disabled={composerDisabled}
                           className={cx(
-                            'flex h-9 shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+                            'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
                             composerSubmit.label === 'Send'
-                              ? 'w-8 bg-accent text-white hover:bg-accent/90'
-                              : 'px-3 text-[11px] font-medium',
+                              ? 'h-8 w-8 bg-accent text-white hover:bg-accent/90'
+                              : 'h-9 px-3 text-[11px] font-medium',
                             composerSubmit.label === 'Steer'
                               ? 'bg-warning/15 text-warning hover:bg-warning/25'
                               : composerSubmit.label === 'Follow up'
