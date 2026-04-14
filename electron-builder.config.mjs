@@ -1,4 +1,26 @@
-{
+const DEFAULT_DESKTOP_RELEASE_REPO_SLUG = 'patleeman/personal-agent-releases';
+
+function resolveDesktopReleaseRepoSlug(value = process.env.PERSONAL_AGENT_RELEASE_REPO) {
+  const normalizedValue = value?.trim() || DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
+  const parts = normalizedValue.split('/').map((part) => part.trim()).filter((part) => part.length > 0);
+  if (parts.length !== 2) {
+    return DEFAULT_DESKTOP_RELEASE_REPO_SLUG;
+  }
+
+  return `${parts[0]}/${parts[1]}`;
+}
+
+export const DESKTOP_RELEASE_REPO_SLUG = resolveDesktopReleaseRepoSlug();
+const [DESKTOP_RELEASE_REPO_OWNER, DESKTOP_RELEASE_REPO_NAME] = DESKTOP_RELEASE_REPO_SLUG.split('/', 2);
+
+export const desktopReleasePublishConfig = {
+  provider: 'github',
+  owner: DESKTOP_RELEASE_REPO_OWNER,
+  repo: DESKTOP_RELEASE_REPO_NAME,
+  releaseType: 'release',
+};
+
+const electronBuilderConfig = {
   appId: 'nyc.patricklee.personal-agent',
   productName: 'Personal Agent',
   directories: {
@@ -27,6 +49,7 @@
     main: './dist/main.js',
   },
   electronUpdaterCompatibility: '>=2.16',
+  publish: desktopReleasePublishConfig,
   icon: 'packages/desktop/assets/icon.png',
   extraResources: [
     {
@@ -67,4 +90,6 @@
     ],
     artifactName: 'Personal-Agent-${version}-mac-${arch}.${ext}',
   },
-}
+};
+
+export default electronBuilderConfig;

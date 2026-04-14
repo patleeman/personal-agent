@@ -75,7 +75,8 @@ That repo is intentionally boring:
 
 ## Desktop update checks
 
-The packaged desktop app uses `electron-updater` against the public release repo:
+The packaged desktop app uses `electron-updater` against the public release repo.
+`electron-builder.config.mjs` embeds that feed into the packaged app's `app-update.yml`, and `scripts/publish-desktop-release.mjs` now validates that the packaged updater feed matches the repo being published.
 
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check

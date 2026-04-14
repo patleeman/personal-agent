@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest';
+// @ts-expect-error electron-builder config is plain ESM, not typed TS.
+import { desktopReleasePublishConfig } from '../../../../electron-builder.config.mjs';
 import {
   buildDesktopReleaseAssetName,
   buildDesktopReleasePageUrl,
   buildDesktopReleaseTag,
+  DESKTOP_RELEASE_REPO_NAME,
+  DESKTOP_RELEASE_REPO_OWNER,
   DESKTOP_RELEASE_REPO_SLUG,
 } from './release-config.js';
 
@@ -10,6 +14,15 @@ describe('desktop release config', () => {
   it('uses the public release-only repository', () => {
     expect(DESKTOP_RELEASE_REPO_SLUG).toBe('patleeman/personal-agent-releases');
     expect(buildDesktopReleasePageUrl('0.1.14')).toBe('https://github.com/patleeman/personal-agent-releases/releases/tag/v0.1.14');
+  });
+
+  it('keeps the packaged updater feed pointed at the same release repo', () => {
+    expect(desktopReleasePublishConfig).toMatchObject({
+      provider: 'github',
+      owner: DESKTOP_RELEASE_REPO_OWNER,
+      repo: DESKTOP_RELEASE_REPO_NAME,
+      releaseType: 'release',
+    });
   });
 
   it('normalizes version tags and asset names for updater artifacts', () => {

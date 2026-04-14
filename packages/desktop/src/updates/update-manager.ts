@@ -2,11 +2,6 @@ import { appendFileSync } from 'node:fs';
 import { app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import {
-  DESKTOP_RELEASE_REPO_NAME,
-  DESKTOP_RELEASE_REPO_OWNER,
-  DESKTOP_RELEASE_REPO_SLUG,
-} from './release-config.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
@@ -21,11 +16,7 @@ function logUpdateMessage(message: string): void {
 }
 
 function createDesktopUpdater(currentVersion: string): AppUpdater {
-  const updater = new MacUpdater({
-    provider: 'github',
-    owner: DESKTOP_RELEASE_REPO_OWNER,
-    repo: DESKTOP_RELEASE_REPO_NAME,
-  });
+  const updater = new MacUpdater();
   updater.autoDownload = true;
   updater.autoInstallOnAppQuit = true;
   updater.allowPrerelease = currentVersion.includes('-');
@@ -146,7 +137,7 @@ export class DesktopUpdateManager {
     }
 
     this.updater.on('checking-for-update', () => {
-      logUpdateMessage(`checking ${DESKTOP_RELEASE_REPO_SLUG} for updates`);
+      logUpdateMessage('checking configured desktop update feed for updates');
     });
 
     this.updater.on('update-available', (info: UpdateInfo) => {

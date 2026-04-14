@@ -290,6 +290,32 @@ function collectPackagedAppPath() {
   return appName ? resolve(macOutputDir, appName) : null;
 }
 
+function validatePackagedAutoUpdateConfig(releaseRepo) {
+  const appPath = collectPackagedAppPath();
+  if (!appPath) {
+    fail(`Packaged desktop app not found under ${releaseDir}; cannot validate auto-update feed config.`);
+  }
+
+  const appUpdatePath = resolve(appPath, 'Contents', 'Resources', 'app-update.yml');
+  if (!existsSync(appUpdatePath)) {
+    fail(`Packaged auto-update config not found: ${appUpdatePath}`);
+  }
+
+  const config = readFileSync(appUpdatePath, 'utf8');
+  const owner = config.match(/^owner:\s*(.+)$/mu)?.[1]?.trim() ?? '';
+  const repo = config.match(/^repo:\s*(.+)$/mu)?.[1]?.trim() ?? '';
+  const [expectedOwner, expectedRepo] = releaseRepo.split('/', 2);
+
+  if (owner !== expectedOwner || repo !== expectedRepo) {
+    fail([
+      'Packaged app-update.yml points at the wrong GitHub repo.',
+      `Expected: ${releaseRepo}`,
+      `Actual: ${owner}/${repo}`,
+      `Path: ${appUpdatePath}`,
+    ].join('\n'));
+  }
+}
+
 function stapleAndValidate(pathname) {
   run('xcrun', ['stapler', 'staple', pathname]);
   run('xcrun', ['stapler', 'validate', pathname]);
@@ -329,6 +355,7 @@ ensureReleaseRepoExists(releaseRepo);
 
 console.log(`Building signed desktop artifacts for ${tag}...`);
 run('npm', ['run', 'desktop:dist'], { env });
+validatePackagedAutoUpdateConfig(releaseRepo);
 
 const files = collectReleaseFiles(version);
 notarizeDistributionContainers(env, files);
