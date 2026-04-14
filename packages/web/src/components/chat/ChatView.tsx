@@ -2600,45 +2600,66 @@ function SummaryMessage({
   onOpenFilePath?: (path: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
 }) {
-  const isCompaction = block.kind === 'compaction';
-  const label = isCompaction ? resolveCompactionSummaryLabel(block.title) : block.title || 'Branch summary';
-  const detail = isCompaction
-    ? resolveCompactionSummaryDetail(block.title, block.detail)
-    : 'Context from another branch was summarized while preserving the current path.';
-  const accentClass = isCompaction
-    ? 'border-warning/25 bg-warning/5'
-    : 'border-teal/20 bg-teal/5';
-  const markerClass = isCompaction
-    ? 'border-warning/25 bg-warning/10 text-warning'
-    : 'border-teal/25 bg-teal/10 text-teal';
-  const labelClass = isCompaction ? 'text-warning' : 'text-teal';
+  const summaryPresentation = (() => {
+    switch (block.kind) {
+      case 'compaction':
+        return {
+          label: resolveCompactionSummaryLabel(block.title),
+          detail: resolveCompactionSummaryDetail(block.title, block.detail),
+          accentClass: 'border-warning/25 bg-warning/5',
+          markerClass: 'border-warning/25 bg-warning/10 text-warning',
+          labelClass: 'text-warning',
+          marker: '≋',
+          shouldCollapse: true,
+        };
+      case 'related':
+        return {
+          label: block.title || 'Reused thread summaries',
+          detail: block.detail?.trim() || 'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
+          accentClass: 'border-accent/20 bg-accent/5',
+          markerClass: 'border-accent/25 bg-accent/10 text-accent',
+          labelClass: 'text-accent',
+          marker: '⟲',
+          shouldCollapse: true,
+        };
+      default:
+        return {
+          label: block.title || 'Branch summary',
+          detail: block.detail?.trim() || 'Context from another branch was summarized while preserving the current path.',
+          accentClass: 'border-teal/20 bg-teal/5',
+          markerClass: 'border-teal/25 bg-teal/10 text-teal',
+          labelClass: 'text-teal',
+          marker: '⑂',
+          shouldCollapse: false,
+        };
+    }
+  })();
   const previewLineCount = 4;
-  const shouldCollapse = isCompaction;
   const previewText = useMemo(
-    () => (isCompaction ? buildSummaryPreview(block.text, previewLineCount) : ''),
-    [block.text, isCompaction],
+    () => (summaryPresentation.shouldCollapse ? buildSummaryPreview(block.text, previewLineCount) : ''),
+    [block.text, summaryPresentation.shouldCollapse],
   );
-  const [expanded, setExpanded] = useState(() => !isCompaction);
+  const [expanded, setExpanded] = useState(() => !summaryPresentation.shouldCollapse);
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
 
   return (
     <div className="group">
-      <SurfacePanel muted className={cx('px-3.5 py-3.5', accentClass)} data-summary-kind={block.kind}>
+      <SurfacePanel muted className={cx('px-3.5 py-3.5', summaryPresentation.accentClass)} data-summary-kind={block.kind}>
         <div className="flex items-start gap-3">
-          <div className={cx('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold', markerClass)}>
-            <span aria-hidden="true">{isCompaction ? '≋' : '⑂'}</span>
+          <div className={cx('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border text-[11px] font-semibold', summaryPresentation.markerClass)}>
+            <span aria-hidden="true">{summaryPresentation.marker}</span>
           </div>
           <div className="min-w-0 flex-1 space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', labelClass)}>{label}</p>
+              <p className={cx('text-[10px] font-semibold uppercase tracking-[0.18em]', summaryPresentation.labelClass)}>{summaryPresentation.label}</p>
               <span className="flex-1" />
               <p className="ui-message-meta">{timeAgo(block.ts)}</p>
             </div>
             <div {...replySelectionScopeProps} className="space-y-3">
-              <p className="text-[12px] leading-relaxed text-secondary">{detail}</p>
+              <p className="text-[12px] leading-relaxed text-secondary">{summaryPresentation.detail}</p>
               <div className="text-primary">
-                {shouldCollapse && !expanded ? (
+                {summaryPresentation.shouldCollapse && !expanded ? (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
                 ) : (
                   renderText(block.text, { onOpenFilePath })
@@ -2646,7 +2667,7 @@ function SummaryMessage({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              {shouldCollapse && (
+              {summaryPresentation.shouldCollapse && (
                 <button
                   type="button"
                   className="ui-action-button text-[11px]"

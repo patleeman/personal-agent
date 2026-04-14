@@ -26,7 +26,7 @@ export interface DesktopConversationMessageBlock {
     deferred?: boolean;
   }>;
   customType?: string;
-  kind?: 'compaction' | 'branch';
+  kind?: 'compaction' | 'branch' | 'related';
   title?: string;
   detail?: string;
   tool?: string;
@@ -136,7 +136,7 @@ function displayBlockToMessageBlock(block: {
   text?: string;
   images?: unknown;
   customType?: string;
-  kind?: 'compaction' | 'branch';
+  kind?: 'compaction' | 'branch' | 'related';
   title?: string;
   detail?: string;
   tool?: string;

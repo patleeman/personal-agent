@@ -1452,6 +1452,85 @@ describe('live session subscriptions', () => {
     });
   });
 
+  it('includes reused related thread summaries in the live snapshot', () => {
+    setLiveEntry('session-related-summary', {
+      sessionId: 'session-related-summary',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Reused conversation context',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state: {
+          messages: [
+            {
+              role: 'custom',
+              customType: 'related_threads_context',
+              display: false,
+              content: [{
+                type: 'text',
+                text: [
+                  'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
+                  'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
+                  '',
+                  'Conversation 1 — Release signing',
+                  'Workspace: /repo/a',
+                  'Created: 2026-04-10T10:00:00.000Z',
+                  '',
+                  'Keep the notarization mapping fix.',
+                ].join('\n'),
+              }],
+              timestamp: 1,
+            },
+            {
+              role: 'user',
+              content: [{ type: 'text', text: 'Ship the release flow fix.' }],
+              timestamp: 2,
+            },
+          ],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+      },
+    });
+
+    const events: SseEvent[] = [];
+    subscribe('session-related-summary', (event) => {
+      events.push(event);
+    });
+
+    expect(events[0]).toEqual({
+      type: 'snapshot',
+      blockOffset: 0,
+      totalBlocks: 2,
+      blocks: [
+        {
+          type: 'summary',
+          id: 'live-0',
+          ts: new Date(1).toISOString(),
+          kind: 'related',
+          title: 'Reused thread summaries',
+          detail: '1 selected conversation was summarized and injected before this prompt so this thread could start with reused context.',
+          text: [
+            '### Conversation 1 — Release signing',
+            '- Workspace: `/repo/a`',
+            '- Created: 2026-04-10T10:00:00.000Z',
+            '',
+            'Keep the notarization mapping fix.',
+          ].join('\n'),
+        },
+        {
+          type: 'user',
+          id: 'live-1',
+          ts: new Date(2).toISOString(),
+          text: 'Ship the release flow fix.',
+        },
+      ],
+    });
+  });
+
   it('labels the latest live compaction summary with the compaction kind when available', () => {
     setLiveEntry('session-summary-labeled', {
       sessionId: 'session-summary-labeled',

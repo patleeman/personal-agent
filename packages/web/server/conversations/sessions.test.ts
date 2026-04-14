@@ -649,6 +649,53 @@ describe('sessions', () => {
     expect(blocks).toEqual([]);
   });
 
+  it('renders hidden related thread context as a visible summary event', () => {
+    const blocks = buildDisplayBlocksFromEntries([
+      {
+        id: 'related-1',
+        timestamp: '2026-03-12T16:00:00.000Z',
+        message: {
+          role: 'custom',
+          customType: 'related_threads_context',
+          display: false,
+          content: [{
+            type: 'text',
+            text: [
+              'The user explicitly selected previous conversations to reuse as background context for the next prompt.',
+              'Use only the parts that still help. Prefer the current prompt and current repo state over stale historical details.',
+              '',
+              'Conversation 1 — Release signing',
+              'Workspace: /repo/a',
+              'Created: 2026-04-10T10:00:00.000Z',
+              '',
+              'Keep the notarization mapping fix.',
+              '',
+              'Conversation 2 — Auto mode wakeups',
+              'Workspace: /repo/b',
+              'Created: 2026-04-11T10:00:00.000Z',
+              '',
+              'Wakeups use durable run callbacks.',
+            ].join('\n'),
+          }],
+        },
+      },
+    ]);
+
+    expect(blocks).toEqual([
+      expect.objectContaining({
+        type: 'summary',
+        kind: 'related',
+        title: 'Reused thread summaries',
+        detail: '2 selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
+      }),
+    ]);
+    expect(blocks[0]).toMatchObject({
+      text: expect.stringContaining('### Conversation 1 — Release signing'),
+    });
+    expect((blocks[0] as Extract<(typeof blocks)[number], { type: 'summary' }>).text).toContain('- Workspace: `/repo/a`');
+    expect((blocks[0] as Extract<(typeof blocks)[number], { type: 'summary' }>).text).toContain('Wakeups use durable run callbacks.');
+  });
+
   it('keeps assistant replies from generic hidden custom turns out of the visible transcript', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {

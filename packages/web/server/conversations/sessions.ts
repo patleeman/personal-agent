@@ -209,7 +209,7 @@ export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: DisplayImage[] }
   | { type: 'text';     id: string; ts: string; text: string }
   | { type: 'context';  id: string; ts: string; text: string; customType?: string }
-  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch'; title: string; text: string; detail?: string }
+  | { type: 'summary';  id: string; ts: string; kind: 'compaction' | 'branch' | 'related'; title: string; text: string; detail?: string }
   | { type: 'thinking'; id: string; ts: string; text: string }
   | { type: 'tool_use'; id: string; ts: string; tool: string; input: Record<string, unknown>; output: string; durationMs?: number; toolCallId: string; details?: unknown; outputDeferred?: boolean }
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
@@ -654,8 +654,36 @@ export function getAssistantErrorDisplayMessage(message: {
     : 'The model returned an error before completing its response.';
 }
 
+const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
+
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
   return message.role === 'custom' && message.display === true && message.customType === 'referenced_context';
+}
+
+function formatRelatedThreadsSummaryText(text: string): string {
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  const firstConversationIndex = normalized.search(/^Conversation\s+\d+\s+—\s+/m);
+  const displayText = firstConversationIndex >= 0
+    ? normalized.slice(firstConversationIndex).trim()
+    : normalized;
+
+  return displayText
+    .replace(/^Conversation\s+(\d+)\s+—\s+(.+)$/gm, '### Conversation $1 — $2')
+    .replace(/^Workspace:\s*(.+)$/gm, '- Workspace: `$1`')
+    .replace(/^Created:\s*(.+)$/gm, '- Created: $1');
+}
+
+function resolveRelatedThreadsSummaryDetail(text: string): string {
+  const conversationCount = (text.match(/^#{0,3}\s*Conversation\s+\d+\s+—\s+/gm) ?? []).length;
+  if (conversationCount <= 0) {
+    return 'Selected conversations were summarized and injected before this prompt so this thread could start with reused context.';
+  }
+
+  return `${conversationCount} selected conversation${conversationCount === 1 ? '' : 's'} ${conversationCount === 1 ? 'was' : 'were'} summarized and injected before this prompt so this thread could start with reused context.`;
 }
 
 function normalizeSearchSegment(text: string, maxLength = 360): string {
@@ -823,6 +851,29 @@ function buildDisplayBlocksInternal(
           ts,
           text,
           ...(images.length > 0 ? { images } : {}),
+        });
+      }
+      continue;
+    }
+
+    if (role === 'custom' && msg.message.customType === RELATED_THREADS_CONTEXT_CUSTOM_TYPE) {
+      const relatedSummaryText = formatRelatedThreadsSummaryText(contentBlocks
+        .flatMap((block) => (
+          block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0
+            ? [block.text.trim()]
+            : []
+        ))
+        .join('\n\n'));
+      if (relatedSummaryText) {
+        recordAnchor();
+        blocks.push({
+          type: 'summary',
+          id: baseId,
+          ts,
+          kind: 'related',
+          title: 'Reused thread summaries',
+          text: relatedSummaryText,
+          detail: resolveRelatedThreadsSummaryDetail(relatedSummaryText),
         });
       }
       continue;

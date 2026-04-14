@@ -846,6 +846,27 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('Fifth item.');
   });
 
+  it('renders reused thread summaries as collapsed transcript events', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'summary',
+        ts: '2026-03-11T18:00:00.000Z',
+        kind: 'related',
+        title: 'Reused thread summaries',
+        detail: '2 selected conversations were summarized and injected before this prompt so this thread could start with reused context.',
+        text: '### Conversation 1 — Release signing\n- Workspace: `/repo/a`\n- Created: 2026-04-10T10:00:00.000Z\nKeep the notarization mapping fix.\n\n### Conversation 2 — Auto mode wakeups\n- Workspace: `/repo/b`\n- Created: 2026-04-11T10:00:00.000Z\nWakeups use durable run callbacks.',
+      }],
+    }));
+
+    expect(html).toContain('data-summary-kind="related"');
+    expect(html).toContain('Reused thread summaries');
+    expect(html).toContain('2 selected conversations were summarized and injected before this prompt');
+    expect(html).toContain('Show summary');
+    expect(html).toContain('Conversation 1 — Release signing');
+    expect(html).toContain('Workspace: `/repo/a`');
+    expect(html).not.toContain('Conversation 2 — Auto mode wakeups');
+  });
+
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{
