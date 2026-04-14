@@ -4,6 +4,7 @@ import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversationArtifacts';
+import { readCheckpointPresentation } from '../../conversationCheckpoints';
 import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
 import { normalizeReplyQuoteSelection } from '../../conversationReplyQuote';
 import {
@@ -451,6 +452,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success bg-success/5',   tone: 'success' },
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary bg-elevated',  tone: 'muted' },
   artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent bg-accent/5',     tone: 'accent' },
+  checkpoint:  { icon: '✓',  label: 'checkpoint',      color: 'text-success bg-success/5',   tone: 'success' },
   ask_user_question: { icon: '?', label: 'question',   color: 'text-warning bg-warning/5',   tone: 'warning' },
   change_working_directory: { icon: '↗', label: 'cwd', color: 'text-teal bg-teal/5', tone: 'teal' },
   deferred_resume: { icon: '⏰', label: 'deferred_resume', color: 'text-warning bg-warning/5', tone: 'warning' },
@@ -588,6 +590,77 @@ function ArtifactToolBlock({
               </button>
             )}
             {artifact.updatedAt && <span className="text-dim">updated {timeAgo(artifact.updatedAt)}</span>}
+          </div>
+        </div>
+      </div>
+    </SurfacePanel>
+  );
+}
+
+function CheckpointToolBlock({
+  block,
+  checkpoint,
+  onOpenCheckpoint,
+  activeCheckpointId,
+}: {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  checkpoint: NonNullable<ReturnType<typeof readCheckpointPresentation>>;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+  activeCheckpointId?: string | null;
+}) {
+  const isRunning = block.status === 'running' || !!block.running;
+  const isError = block.status === 'error' || !!block.error;
+  const isActive = activeCheckpointId === checkpoint.checkpointId;
+  const actionLabel = isActive ? 'opened' : 'open review';
+
+  return (
+    <SurfacePanel
+      muted
+      className={cx(
+        'px-3.5 py-3 text-[12px] transition-colors',
+        isError && 'border-danger/30 bg-danger/5',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="ui-chat-avatar mt-0.5">
+          <span className="ui-chat-avatar-mark">✓</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-primary">{checkpoint.subject}</span>
+            <Pill tone={isError ? 'danger' : 'success'} mono>{checkpoint.shortSha}</Pill>
+            {typeof checkpoint.fileCount === 'number' ? <span className="text-[10px] text-dim">{checkpoint.fileCount} files</span> : null}
+          </div>
+          <p className="mt-1 break-all font-mono text-[11px] text-secondary">{checkpoint.commitSha}</p>
+          {block.output && !isError && (
+            <p className="mt-2 text-[12px] leading-relaxed text-secondary">{block.output}</p>
+          )}
+          {isError && block.output && (
+            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
+            {isRunning ? (
+              <span className="inline-flex items-center gap-1.5 text-dim">
+                <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                saving checkpoint…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenCheckpoint?.(checkpoint.checkpointId)}
+                disabled={!onOpenCheckpoint}
+                className={cx(
+                  'text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim',
+                  isActive && 'text-dim hover:text-dim',
+                )}
+              >
+                {actionLabel}
+              </button>
+            )}
+            {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
+              <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
+            ) : null}
+            {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
           </div>
         </div>
       </div>
@@ -1559,6 +1632,8 @@ function ToolBlock({
   autoOpen,
   onOpenArtifact,
   activeArtifactId,
+  onOpenCheckpoint,
+  activeCheckpointId,
   onOpenRun,
   activeRunId,
   onOpenFilePath: _onOpenFilePath,
@@ -1573,6 +1648,8 @@ function ToolBlock({
   autoOpen: boolean;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+  activeCheckpointId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
@@ -1588,6 +1665,7 @@ function ToolBlock({
   const open = resolveDisclosureOpen(autoOpen, preference);
   const meta = toolMeta(block.tool);
   const artifact = readArtifactPresentation(block);
+  const checkpoint = readCheckpointPresentation(block);
   const askUserQuestion = readAskUserQuestionPresentation(block);
   const askUserQuestionState = useMemo(
     () => describeAskUserQuestionState(messages, messageIndex),
@@ -1602,6 +1680,17 @@ function ToolBlock({
         artifact={artifact}
         onOpenArtifact={onOpenArtifact}
         activeArtifactId={activeArtifactId}
+      />
+    );
+  }
+
+  if (checkpoint) {
+    return (
+      <CheckpointToolBlock
+        block={block}
+        checkpoint={checkpoint}
+        onOpenCheckpoint={onOpenCheckpoint}
+        activeCheckpointId={activeCheckpointId}
       />
     );
   }
@@ -1848,6 +1937,8 @@ function TraceClusterBlock({
   live,
   onOpenArtifact,
   activeArtifactId,
+  onOpenCheckpoint,
+  activeCheckpointId,
   onOpenRun,
   activeRunId,
   onOpenFilePath,
@@ -1861,6 +1952,8 @@ function TraceClusterBlock({
   live: boolean;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+  activeCheckpointId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
@@ -1976,6 +2069,8 @@ function TraceClusterBlock({
                     autoOpen={autoOpen}
                     onOpenArtifact={onOpenArtifact}
                     activeArtifactId={activeArtifactId}
+                    onOpenCheckpoint={onOpenCheckpoint}
+                    activeCheckpointId={activeCheckpointId}
                     onOpenRun={onOpenRun}
                     activeRunId={activeRunId}
                     onOpenFilePath={onOpenFilePath}
@@ -2862,6 +2957,8 @@ interface ChatViewProps {
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenArtifact?: (artifactId: string) => void;
   activeArtifactId?: string | null;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+  activeCheckpointId?: string | null;
   onOpenRun?: (runId: string) => void;
   activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
@@ -2891,6 +2988,8 @@ export const ChatView = memo(function ChatView({
   hydratingMessageBlockIds,
   onOpenArtifact,
   activeArtifactId,
+  onOpenCheckpoint,
+  activeCheckpointId,
   onOpenRun,
   activeRunId,
   onOpenFilePath,
@@ -3438,6 +3537,8 @@ export const ChatView = memo(function ChatView({
             live={live}
             onOpenArtifact={onOpenArtifact}
             activeArtifactId={activeArtifactId}
+            onOpenCheckpoint={onOpenCheckpoint}
+            activeCheckpointId={activeCheckpointId}
             onOpenRun={onOpenRun}
             activeRunId={activeRunId}
             onOpenFilePath={onOpenFilePath}
@@ -3500,6 +3601,8 @@ export const ChatView = memo(function ChatView({
               autoOpen={autoOpen}
               onOpenArtifact={onOpenArtifact}
               activeArtifactId={activeArtifactId}
+              onOpenCheckpoint={onOpenCheckpoint}
+              activeCheckpointId={activeCheckpointId}
               onOpenRun={onOpenRun}
               activeRunId={activeRunId}
               onOpenFilePath={onOpenFilePath}
@@ -3545,7 +3648,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync]);
+  }, [activeArtifactId, activeCheckpointId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenCheckpoint, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {

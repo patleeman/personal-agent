@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from './types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from './desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -795,6 +795,22 @@ export const api = {
     }
 
     return get<{ conversationId: string; artifact: ConversationArtifactRecord }>(`/conversations/${encodeURIComponent(id)}/artifacts/${encodeURIComponent(artifactId)}`);
+  },
+  conversationCheckpoints: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationCheckpoints(id);
+    }
+
+    return get<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>(`/conversations/${encodeURIComponent(id)}/checkpoints`);
+  },
+  conversationCheckpoint: async (id: string, checkpointId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.readConversationCheckpoint({ conversationId: id, checkpointId });
+    }
+
+    return get<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}`);
   },
   conversationAttachments: async (id: string) => {
     const desktopBridge = getDesktopBridge();

@@ -77,6 +77,7 @@ export function registerTaskRoutes(
 
       const tasks = loaded.tasks.map((task) => {
         const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
+        const threadDetail = buildScheduledTaskThreadDetail(task);
         return {
           id: task.id,
           title: task.title,
@@ -90,6 +91,8 @@ export function registerTaskRoutes(
           model: task.modelRef,
           thinkingLevel: task.thinkingLevel,
           cwd: task.cwd,
+          threadConversationId: threadDetail.threadConversationId,
+          threadTitle: threadDetail.threadTitle,
           lastStatus: runtime?.lastStatus,
           lastRunAt: runtime?.lastRunAt,
           lastSuccessAt: runtime?.lastSuccessAt,

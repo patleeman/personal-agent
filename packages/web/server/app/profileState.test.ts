@@ -4,11 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   getProfilesRootMock,
   getStateRootMock,
+  writeMergedMcpConfigFileMock,
   listProfilesMock,
   materializeProfileToAgentDirMock,
   resolveProfileSettingsFilePathMock,
   resolveResourceProfileMock,
   createArtifactAgentExtensionMock,
+  createCheckpointAgentExtensionMock,
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
   createConversationAutoModeAgentExtensionMock,
@@ -30,7 +32,9 @@ const {
   materializeProfileToAgentDirMock: vi.fn(),
   resolveProfileSettingsFilePathMock: vi.fn((profile: string) => `/profiles/${profile}/settings.json`),
   resolveResourceProfileMock: vi.fn(),
+  writeMergedMcpConfigFileMock: vi.fn(() => ({ bundledServerCount: 0 })),
   createArtifactAgentExtensionMock: vi.fn(() => 'artifact-extension'),
+  createCheckpointAgentExtensionMock: vi.fn(() => 'checkpoint-extension'),
   createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
   createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
   createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
@@ -50,6 +54,7 @@ const {
 vi.mock('@personal-agent/core', () => ({
   getProfilesRoot: getProfilesRootMock,
   getStateRoot: getStateRootMock,
+  writeMergedMcpConfigFile: writeMergedMcpConfigFileMock,
 }));
 
 vi.mock('@personal-agent/resources', () => ({
@@ -61,6 +66,10 @@ vi.mock('@personal-agent/resources', () => ({
 
 vi.mock('../extensions/artifactAgentExtension.js', () => ({
   createArtifactAgentExtension: createArtifactAgentExtensionMock,
+}));
+
+vi.mock('../extensions/checkpointAgentExtension.js', () => ({
+  createCheckpointAgentExtension: createCheckpointAgentExtensionMock,
 }));
 
 vi.mock('../extensions/askUserQuestionAgentExtension.js', () => ({
@@ -215,6 +224,7 @@ describe('createProfileState', () => {
       'change-working-directory-extension',
       'run-extension',
       'artifact-extension',
+      'checkpoint-extension',
       'conversation-auto-mode-extension',
       'conversation-queue-extension',
       'reminder-extension',
@@ -255,6 +265,7 @@ describe('createProfileState', () => {
         'change-working-directory-extension',
         'run-extension',
         'artifact-extension',
+        'checkpoint-extension',
         'conversation-auto-mode-extension',
         'conversation-queue-extension',
         'reminder-extension',

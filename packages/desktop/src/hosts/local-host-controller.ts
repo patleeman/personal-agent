@@ -447,6 +447,16 @@ export class LocalHostController implements HostController {
     return module.readDesktopConversationArtifact(input);
   }
 
+  async readConversationCheckpoints(conversationId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationCheckpoints(conversationId);
+  }
+
+  async readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.readDesktopConversationCheckpoint(input);
+  }
+
   async readConversationAttachments(conversationId: string): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationAttachments(conversationId);

@@ -840,6 +840,28 @@ export function registerDesktopIpc(options: {
     return controller.readConversationArtifact(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-checkpoints`, async (event, conversationId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationCheckpoints) {
+      throw new Error('Dedicated desktop conversation checkpoint list reads are only available for the local host.');
+    }
+
+    return controller.readConversationCheckpoints(conversationId);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-checkpoint`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readConversationCheckpoint) {
+      throw new Error('Dedicated desktop conversation checkpoint reads are only available for the local host.');
+    }
+
+    return controller.readConversationCheckpoint(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-attachments`, async (event, conversationId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

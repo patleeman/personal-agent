@@ -1,0 +1,103 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname, join, resolve } from 'path';
+import { resolveMcpConfig } from './mcp.js';
+
+interface McpServersDocument {
+  mcpServers: Record<string, unknown>;
+}
+
+export interface BundledMcpConfigBuildResult {
+  baseConfigPath: string;
+  baseConfigExists: boolean;
+  bundledServerCount: number;
+  manifestPaths: string[];
+  document: McpServersDocument;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readRawMcpServersRecord(path: string): Record<string, unknown> {
+  if (!existsSync(path)) {
+    return {};
+  }
+
+  const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+  if (!isRecord(parsed)) {
+    return {};
+  }
+
+  const servers = isRecord(parsed.mcpServers)
+    ? parsed.mcpServers
+    : isRecord(parsed.servers)
+      ? parsed.servers
+      : {};
+
+  return { ...servers };
+}
+
+export function readBundledSkillMcpServers(skillDirs: readonly string[]): {
+  servers: Record<string, unknown>;
+  manifestPaths: string[];
+} {
+  const servers: Record<string, unknown> = {};
+  const manifestPaths: string[] = [];
+
+  for (const skillDir of skillDirs) {
+    const manifestPath = join(resolve(skillDir), 'mcp.json');
+    if (!existsSync(manifestPath)) {
+      continue;
+    }
+
+    const entries = readRawMcpServersRecord(manifestPath);
+    manifestPaths.push(manifestPath);
+
+    for (const [serverName, serverConfig] of Object.entries(entries)) {
+      servers[serverName] = serverConfig;
+    }
+  }
+
+  return {
+    servers,
+    manifestPaths,
+  };
+}
+
+export function buildMergedMcpConfigDocument(options: {
+  cwd?: string;
+  configPath?: string;
+  env?: NodeJS.ProcessEnv;
+  skillDirs?: readonly string[];
+}): BundledMcpConfigBuildResult {
+  const resolved = resolveMcpConfig({ cwd: options.cwd, configPath: options.configPath, env: options.env });
+  const baseServers = resolved.exists ? readRawMcpServersRecord(resolved.path) : {};
+  const bundled = readBundledSkillMcpServers(options.skillDirs ?? []);
+
+  return {
+    baseConfigPath: resolved.path,
+    baseConfigExists: resolved.exists,
+    bundledServerCount: Object.keys(bundled.servers).length,
+    manifestPaths: bundled.manifestPaths,
+    document: {
+      mcpServers: {
+        ...bundled.servers,
+        ...baseServers,
+      },
+    },
+  };
+}
+
+export function writeMergedMcpConfigFile(options: {
+  outputPath: string;
+  cwd?: string;
+  configPath?: string;
+  env?: NodeJS.ProcessEnv;
+  skillDirs?: readonly string[];
+}): BundledMcpConfigBuildResult {
+  const result = buildMergedMcpConfigDocument(options);
+  const outputPath = resolve(options.outputPath);
+  mkdirSync(dirname(outputPath), { recursive: true });
+  writeFileSync(outputPath, `${JSON.stringify(result.document, null, 2)}\n`);
+  return result;
+}

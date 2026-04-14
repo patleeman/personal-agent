@@ -50,6 +50,57 @@ export interface ConversationArtifactToolDetails {
   deleted?: boolean;
 }
 
+export interface ConversationCommitCheckpointFile {
+  path: string;
+  previousPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'unmerged' | 'unknown';
+  additions: number;
+  deletions: number;
+  patch: string;
+}
+
+export interface ConversationCommitCheckpointSummary {
+  id: string;
+  conversationId: string;
+  title: string;
+  cwd: string;
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  body?: string;
+  authorName: string;
+  authorEmail?: string;
+  committedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  fileCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+}
+
+export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
+  files: ConversationCommitCheckpointFile[];
+}
+
+export interface ConversationCheckpointToolDetails {
+  action: 'save' | 'get' | 'list';
+  conversationId: string;
+  checkpointId?: string;
+  commitSha?: string;
+  shortSha?: string;
+  title?: string;
+  subject?: string;
+  fileCount?: number;
+  linesAdded?: number;
+  linesDeleted?: number;
+  cwd?: string;
+  updatedAt?: string;
+  openRequested?: boolean;
+  checkpointCount?: number;
+  checkpointIds?: string[];
+  paths?: string[];
+}
+
 export type ConversationAttachmentKind = 'excalidraw';
 
 export interface ConversationAttachmentRevision {
@@ -266,6 +317,8 @@ export interface ScheduledTaskSummary {
   model?: string;
   thinkingLevel?: string;
   cwd?: string;
+  threadConversationId?: string;
+  threadTitle?: string;
   lastStatus?: string;
   lastRunAt?: string;
   lastSuccessAt?: string;
@@ -445,6 +498,14 @@ export interface WebUiState {
 
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
+export interface ConversationContextDocRef {
+  path: string;
+  title: string;
+  kind: 'doc' | 'file';
+  mentionId?: string;
+  summary?: string;
+}
+
 export interface SessionMeta {
   id: string;
   file: string;
@@ -460,12 +521,15 @@ export interface SessionMeta {
   parentSessionFile?: string;
   parentSessionId?: string;
   sourceRunId?: string;
+  automationTaskId?: string;
+  automationTitle?: string;
   needsAttention?: boolean;
   attentionUpdatedAt?: string;
   attentionUnreadMessageCount?: number;
   attentionUnreadActivityCount?: number;
   attentionActivityIds?: string[];
   deferredResumes?: DeferredResumeSummary[];
+  attachedContextDocs?: ConversationContextDocRef[];
 }
 
 export type DisplayBlock =
@@ -525,6 +589,7 @@ export type AppEventTopic =
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
+  | 'checkpoints'
   | 'attachments'
   | 'tasks'
   | 'runs'

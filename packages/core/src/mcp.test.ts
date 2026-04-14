@@ -11,6 +11,7 @@ import {
   readMcpConfig,
   resolveMcpConfig,
 } from './mcp.js';
+import { buildMergedMcpConfigDocument } from './mcp-bundled-config.js';
 
 function makeTempDir(prefix: string): string {
   const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -94,6 +95,49 @@ describe('mcp config helpers', () => {
     const catalog = await listMcpCatalog({ cwd });
     expect(catalog.probed).toBe(false);
     expect(catalog.servers).toEqual([{ name: 'broken' }]);
+  });
+
+  it('merges skill-bundled mcp manifests ahead of explicit config discovery', () => {
+    const cwd = makeTempDir('pa-mcp-bundled');
+    const skillDir = join(cwd, 'skills', 'jira-helper');
+    mkdirSync(skillDir, { recursive: true });
+
+    writeFileSync(join(skillDir, 'mcp.json'), JSON.stringify({
+      mcpServers: {
+        atlassian: {
+          command: 'pa',
+          args: ['mcp', 'serve', 'atlassian'],
+        },
+      },
+    }, null, 2));
+    writeFileSync(join(cwd, 'mcp_servers.json'), JSON.stringify({
+      mcpServers: {
+        github: {
+          command: 'gh',
+          args: ['mcp', 'serve'],
+        },
+        atlassian: {
+          command: 'override',
+          args: ['explicit'],
+        },
+      },
+    }, null, 2));
+
+    const merged = buildMergedMcpConfigDocument({ cwd, skillDirs: [skillDir] });
+    expect(merged.bundledServerCount).toBe(1);
+    expect(merged.manifestPaths).toEqual([join(skillDir, 'mcp.json')]);
+    expect(merged.document).toEqual({
+      mcpServers: {
+        atlassian: {
+          command: 'override',
+          args: ['explicit'],
+        },
+        github: {
+          command: 'gh',
+          args: ['mcp', 'serve'],
+        },
+      },
+    });
   });
 });
 

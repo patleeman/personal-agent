@@ -18,6 +18,7 @@ import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSes
 import { api } from '../api';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversationCheckpoints';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
 import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import {
@@ -107,6 +108,7 @@ import { rankRelatedConversationSessions, selectRecentConversationCandidates, ty
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
+const ConversationCheckpointModal = lazy(() => import('../components/ConversationCheckpointModal').then((module) => ({ default: module.ConversationCheckpointModal })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
 const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
@@ -1303,6 +1305,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const workspaceShellControlsRef = useRef<ConversationWorkspaceShellControls | null>(null);
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
+  const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
@@ -1313,7 +1316,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     const nextSearch = setConversationRunIdInSearch(
-      setConversationArtifactIdInSearch(location.search, artifactId),
+      setConversationCheckpointIdInSearch(
+        setConversationArtifactIdInSearch(location.search, artifactId),
+        null,
+      ),
       null,
     );
 
@@ -1322,6 +1328,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedArtifactId]);
+
+  const openCheckpoint = useCallback((checkpointId: string) => {
+    if (selectedCheckpointId === checkpointId) {
+      return;
+    }
+
+    const nextSearch = setConversationRunIdInSearch(
+      setConversationArtifactIdInSearch(
+        setConversationCheckpointIdInSearch(location.search, checkpointId),
+        null,
+      ),
+      null,
+    );
+
+    navigate({
+      pathname: location.pathname,
+      search: nextSearch,
+    });
+  }, [location.pathname, location.search, navigate, selectedCheckpointId]);
 
   const openRun = useCallback((runId: string) => {
     const shellControls = workspaceShellControlsRef.current;
@@ -1334,7 +1359,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     const nextSearch = setConversationRunIdInSearch(
-      setConversationArtifactIdInSearch(location.search, null),
+      setConversationCheckpointIdInSearch(
+        setConversationArtifactIdInSearch(location.search, null),
+        null,
+      ),
       runId,
     );
 
@@ -1803,11 +1831,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const artifactAutoOpenSeededRef = useRef(false);
   const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
   const processedArtifactAutoOpenIdsRef = useRef<Set<string>>(new Set());
+  const checkpointAutoOpenSeededRef = useRef(false);
+  const checkpointAutoOpenStartedAtRef = useRef(new Date().toISOString());
+  const processedCheckpointAutoOpenIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     artifactAutoOpenSeededRef.current = false;
     artifactAutoOpenStartedAtRef.current = new Date().toISOString();
     processedArtifactAutoOpenIdsRef.current = new Set();
+    checkpointAutoOpenSeededRef.current = false;
+    checkpointAutoOpenStartedAtRef.current = new Date().toISOString();
+    processedCheckpointAutoOpenIdsRef.current = new Set();
   }, [id]);
 
   useEffect(() => {
@@ -1862,6 +1896,59 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       break;
     }
   }, [openArtifact, realMessages]);
+
+  useEffect(() => {
+    if (!realMessages) {
+      return;
+    }
+
+    if (!checkpointAutoOpenSeededRef.current) {
+      const completedCheckpointIds = new Set<string>();
+      for (const [index, block] of realMessages.entries()) {
+        if (block.type !== 'tool_use') {
+          continue;
+        }
+
+        const checkpoint = readCheckpointPresentation(block);
+        const blockKey = block._toolCallId ?? block.id ?? `checkpoint-${index}`;
+        if (checkpoint && block.status !== 'running' && !block.running) {
+          completedCheckpointIds.add(blockKey);
+        }
+      }
+
+      processedCheckpointAutoOpenIdsRef.current = completedCheckpointIds;
+      checkpointAutoOpenSeededRef.current = true;
+      return;
+    }
+
+    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
+      const block = realMessages[index];
+      if (block?.type !== 'tool_use') {
+        continue;
+      }
+
+      const checkpoint = readCheckpointPresentation(block);
+      if (!checkpoint || !checkpoint.openRequested || block.status === 'running' || block.running) {
+        continue;
+      }
+
+      const blockKey = block._toolCallId ?? block.id ?? `checkpoint-${index}`;
+      if (processedCheckpointAutoOpenIdsRef.current.has(blockKey)) {
+        continue;
+      }
+
+      processedCheckpointAutoOpenIdsRef.current.add(blockKey);
+
+      const checkpointCreatedAt = Date.parse(block.ts);
+      const autoOpenStartedAt = Date.parse(checkpointAutoOpenStartedAtRef.current);
+      if (!Number.isFinite(checkpointCreatedAt) || !Number.isFinite(autoOpenStartedAt) || checkpointCreatedAt < autoOpenStartedAt) {
+        continue;
+      }
+
+      openCheckpoint(checkpoint.checkpointId);
+      break;
+    }
+  }, [openCheckpoint, realMessages]);
 
   const { titles, setTitle: pushTitle } = useLiveTitles();
 
@@ -5573,6 +5660,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               hydratingMessageBlockIds={renderingStaleTranscript ? undefined : hydratingHistoricalBlockIdSet}
               onOpenArtifact={renderingStaleTranscript ? undefined : openArtifact}
               activeArtifactId={renderingStaleTranscript ? null : selectedArtifactId}
+              onOpenCheckpoint={renderingStaleTranscript ? undefined : openCheckpoint}
+              activeCheckpointId={renderingStaleTranscript ? null : selectedCheckpointId}
               onOpenRun={renderingStaleTranscript ? undefined : openRun}
               activeRunId={renderingStaleTranscript ? null : selectedRunId}
               onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
@@ -5724,6 +5813,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     jumpToMessage,
     loadOlderMessages,
     openArtifact,
+    openCheckpoint,
     openRun,
     displayedPendingAssistantStatusLabel,
     realMessages,
@@ -5733,6 +5823,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     resumeConversationBusy,
     rewindConversationFromMessage,
     selectedArtifactId,
+    selectedCheckpointId,
     selectedRunId,
     sessionLoading,
     shouldRenderConversationRail,
@@ -6491,6 +6582,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {selectedArtifactId && id && (
         <Suspense fallback={null}>
           <ConversationArtifactModal conversationId={id} artifactId={selectedArtifactId} />
+        </Suspense>
+      )}
+
+      {selectedCheckpointId && id && (
+        <Suspense fallback={null}>
+          <ConversationCheckpointModal conversationId={id} checkpointId={selectedCheckpointId} />
         </Suspense>
       )}
 

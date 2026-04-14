@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import { getProfilesRoot, getStateRoot } from '@personal-agent/core';
+import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import {
   listProfiles,
   materializeProfileToAgentDir,
@@ -11,6 +11,7 @@ import {
 } from '@personal-agent/resources';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
+import { createCheckpointAgentExtension } from '../extensions/checkpointAgentExtension.js';
 import { createChangeWorkingDirectoryAgentExtension } from '../extensions/changeWorkingDirectoryAgentExtension.js';
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
@@ -56,19 +57,33 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     });
   }
 
-  function applyProfileEnvironment(profile: string): void {
+  function applyProfileEnvironment(profile: string, mcpConfigPath?: string | null): void {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
     process.env.PERSONAL_AGENT_PROFILE = profile;
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
+
+    if (mcpConfigPath) {
+      process.env.MCP_CONFIG_PATH = mcpConfigPath;
+      return;
+    }
+
+    delete process.env.MCP_CONFIG_PATH;
   }
 
   function materializeWebProfile(profile: string): void {
-    applyProfileEnvironment(profile);
     const resolved = resolveResourceProfile(profile, {
       repoRoot,
       profilesRoot: getProfilesRoot(),
     });
     materializeProfileToAgentDir(resolved, agentDir);
+    const materializedMcpConfigPath = join(agentDir, 'mcp_servers.json');
+    const mergedMcpConfig = writeMergedMcpConfigFile({
+      outputPath: materializedMcpConfigPath,
+      cwd: process.cwd(),
+      env: process.env,
+      skillDirs: resolved.skillDirs,
+    });
+    applyProfileEnvironment(profile, mergedMcpConfig.bundledServerCount > 0 ? materializedMcpConfigPath : null);
   }
 
   let currentProfile = resolveActiveProfile({
@@ -117,6 +132,10 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
         repoRoot,
+        getCurrentProfile,
+      }),
+      createCheckpointAgentExtension({
+        stateRoot: getStateRoot(),
         getCurrentProfile,
       }),
       createConversationAutoModeAgentExtension(),

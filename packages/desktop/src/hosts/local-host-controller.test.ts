@@ -86,6 +86,8 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     updateDesktopConversationModelPreferences: vi.fn(),
     readDesktopConversationArtifacts: vi.fn(),
     readDesktopConversationArtifact: vi.fn(),
+    readDesktopConversationCheckpoints: vi.fn(),
+    readDesktopConversationCheckpoint: vi.fn(),
     readDesktopConversationAttachments: vi.fn(),
     readDesktopConversationAttachment: vi.fn(),
     createDesktopConversationAttachment: vi.fn(),

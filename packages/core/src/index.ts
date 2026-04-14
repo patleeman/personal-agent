@@ -53,6 +53,9 @@ export * from './conversation-attachments.js';
 // Conversation checkpoint exports
 export * from './conversation-checkpoints.js';
 
+// Conversation commit checkpoint exports
+export * from './conversation-commit-checkpoints.js';
+
 // Project artifact exports
 export * from './project-artifacts.js';
 
@@ -70,6 +73,7 @@ export * from './shell-env.js';
 
 // Native MCP integration exports
 export * from './mcp.js';
+export * from './mcp-bundled-config.js';
 
 // Memory package path + migration exports
 export * from './memory-docs.js';

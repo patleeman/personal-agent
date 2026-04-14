@@ -5,6 +5,7 @@ import {
   readConversationSessionSignature,
   readSessionDetailForRoute,
   parseTailBlocksQuery,
+  publishConversationSessionMetaChanged,
   toggleConversationAttention,
 } from '../conversations/conversationService.js';
 import {
@@ -35,6 +36,8 @@ import {
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
+  readConversationCommitCheckpointCapability,
+  readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
 import {
@@ -42,6 +45,10 @@ import {
   readConversationSessionSearchIndexCapability,
   readConversationSessionsCapability,
 } from '../conversations/conversationSessionCapability.js';
+import {
+  readConversationContextDocs,
+  writeConversationContextDocs,
+} from '../conversations/conversationContextDocs.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
@@ -419,6 +426,39 @@ export function registerConversationRoutes(
     }
   });
 
+  router.get('/api/conversations/:id/checkpoints', (req, res) => {
+    try {
+      res.json(readConversationCommitCheckpointsCapability(getCurrentProfileFn(), req.params.id));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/conversations/:id/checkpoints/:checkpointId', (req, res) => {
+    try {
+      res.json(readConversationCommitCheckpointCapability(getCurrentProfileFn(), {
+        conversationId: req.params.id,
+        checkpointId: req.params.checkpointId,
+      }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   router.get('/api/conversations/:id/attachments', (req, res) => {
     try {
       res.json(readConversationAttachmentsCapability(getCurrentProfileFn(), req.params.id));
@@ -544,6 +584,42 @@ export function registerConversationRoutes(
       }
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });
+    }
+  });
+
+  router.get('/api/conversations/:id/context-docs', (req, res) => {
+    try {
+      res.json({
+        conversationId: req.params.id,
+        attachedContextDocs: readConversationContextDocs(req.params.id),
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/conversations/:id/context-docs', (req, res) => {
+    try {
+      const body = req.body as { docs?: unknown };
+      const attachedContextDocs = writeConversationContextDocs({
+        conversationId: req.params.id,
+        attachedContextDocs: body.docs,
+      });
+      publishConversationSessionMetaChanged(req.params.id);
+      res.json({
+        conversationId: req.params.id,
+        attachedContextDocs,
+      });
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

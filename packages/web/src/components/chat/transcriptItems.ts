@@ -42,7 +42,7 @@ export function isTraceConversationBlock(block: MessageBlock): block is TraceCon
     case 'error':
       return true;
     case 'tool_use':
-      return block.tool !== 'artifact' && block.tool !== 'ask_user_question';
+      return block.tool !== 'artifact' && block.tool !== 'checkpoint' && block.tool !== 'ask_user_question';
     default:
       return false;
   }

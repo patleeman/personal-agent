@@ -12,7 +12,7 @@ import {
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
-import type { DurableRunListResult, SessionMeta } from '../types.js';
+import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types.js';
 import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -109,6 +109,7 @@ describe('Sidebar', () => {
     pathname = '/conversations/new',
     options?: {
       sessions?: SessionMeta[];
+      tasks?: ScheduledTaskSummary[];
       liveTitles?: Map<string, string>;
       runs?: DurableRunListResult;
     },
@@ -132,7 +133,7 @@ describe('Sidebar', () => {
               profile: 'assistant',
             }],
             sessions: options?.sessions ?? [createSession()],
-            tasks: null,
+            tasks: options?.tasks ?? null,
             runs: options?.runs ?? null,
             setProjects: () => {},
             setSessions: () => {},
@@ -234,6 +235,47 @@ describe('Sidebar', () => {
     expect(html).toContain('30m');
     expect(html).toContain('pr-[4.5rem]');
     expect(html).toContain('right-2.5');
+  });
+
+  it('marks automation-owned threads and can filter the thread list to automation rows', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-auto', 'conv-human']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-filter'), 'automation');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({ id: 'conv-auto', title: 'Daily release brief' }),
+        createSession({ id: 'conv-human', title: 'Human thread' }),
+      ],
+      tasks: [
+        {
+          id: 'daily-release-brief',
+          title: 'Daily release brief',
+          scheduleType: 'cron',
+          running: false,
+          enabled: true,
+          prompt: 'Summarize releases.',
+          threadConversationId: 'conv-auto',
+        },
+      ],
+    });
+
+    expect(html).toContain('Daily release brief');
+    expect(html).toContain('>auto<');
+    expect(html).not.toContain('Human thread');
+    expect(html).not.toContain('No automation threads yet.');
+  });
+
+  it('shows an automation-specific empty state when the automation filter has no matches', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-human']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-filter'), 'automation');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [createSession({ id: 'conv-human', title: 'Human thread' })],
+      tasks: [],
+    });
+
+    expect(html).toContain('No automation threads yet.');
+    expect(html).not.toContain('Human thread');
   });
 
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {

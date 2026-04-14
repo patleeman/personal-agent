@@ -372,6 +372,8 @@ export interface HostController {
   updateConversationModelPreferences?(input: DesktopConversationModelPreferencesUpdateRequest): Promise<unknown>;
   readConversationArtifacts?(conversationId: string): Promise<unknown>;
   readConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  readConversationCheckpoints?(conversationId: string): Promise<unknown>;
+  readConversationCheckpoint?(input: { conversationId: string; checkpointId: string }): Promise<unknown>;
   readConversationAttachments?(conversationId: string): Promise<unknown>;
   readConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createConversationAttachment?(input: {

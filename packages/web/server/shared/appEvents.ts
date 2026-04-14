@@ -11,6 +11,7 @@ import {
   resolveProfileActivityConversationLinksDir,
   resolveProfileActivityStateDir,
   resolveProfileConversationArtifactsDir,
+  resolveProfileConversationCommitCheckpointsDir,
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
@@ -20,6 +21,7 @@ export type AppEventTopic =
   | 'sessions'
   | 'sessionFiles'
   | 'artifacts'
+  | 'checkpoints'
   | 'attachments'
   | 'tasks'
   | 'runs'
@@ -69,6 +71,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'sessions',
   'sessionFiles',
   'artifacts',
+  'checkpoints',
   'attachments',
   'tasks',
   'runs',
@@ -176,6 +179,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     resolveProfileActivityConversationLinksDir({ stateRoot: daemonRoot, profile }),
   ];
   const conversationArtifactsDir = resolveProfileConversationArtifactsDir({ profile });
+  const conversationCommitCheckpointsDir = resolveProfileConversationCommitCheckpointsDir({ profile });
   const conversationAttachmentsDir = resolveProfileConversationAttachmentsDir({ profile });
   const tasksDir = getDurableTasksDir();
   const runsRoot = resolveDurableRunsRoot(dirname(options.taskStateFile));
@@ -201,6 +205,9 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     ],
     artifacts: [
       { path: conversationArtifactsDir, kind: 'directory' },
+    ],
+    checkpoints: [
+      { path: conversationCommitCheckpointsDir, kind: 'directory' },
     ],
     attachments: [
       { path: conversationAttachmentsDir, kind: 'directory' },

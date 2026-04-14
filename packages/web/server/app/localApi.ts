@@ -156,6 +156,8 @@ import {
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
+  readConversationCommitCheckpointCapability,
+  readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
 import {
@@ -1946,6 +1948,19 @@ export async function readDesktopConversationArtifact(input: {
 }) {
   const context = await getLocalServerRouteContext();
   return readConversationArtifactCapability(context.getCurrentProfile(), input);
+}
+
+export async function readDesktopConversationCheckpoints(conversationId: string) {
+  const context = await getLocalServerRouteContext();
+  return readConversationCommitCheckpointsCapability(context.getCurrentProfile(), conversationId);
+}
+
+export async function readDesktopConversationCheckpoint(input: {
+  conversationId: string;
+  checkpointId: string;
+}) {
+  const context = await getLocalServerRouteContext();
+  return readConversationCommitCheckpointCapability(context.getCurrentProfile(), input);
 }
 
 export async function readDesktopConversationAttachments(conversationId: string) {

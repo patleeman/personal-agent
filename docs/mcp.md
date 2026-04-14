@@ -32,6 +32,8 @@ By default, MCP config is searched in this order:
 
 You can also pass an explicit config path with `-c` / `--config`.
 
+When `pa` launches Pi with a resolved profile, and when `pa mcp` runs without an explicit `--config`, the runtime also merges any skill-bundled `mcp.json` manifests from the active profile's resolved skill directories. Explicit config entries win when the same server name appears in both places.
+
 ## CLI commands
 
 ```bash
@@ -55,6 +57,33 @@ Remote MCP servers can use OAuth.
 - `pa mcp logout <server>` clears stored OAuth state for that server
 
 Auth state is machine-local, not part of the shared vault.
+
+## Skill-bundled MCP manifests
+
+A skill package can keep its MCP wrapper config next to `SKILL.md`.
+
+Example:
+
+```text
+_skills/dd-atlassian-mcp/
+├── SKILL.md
+└── mcp.json
+```
+
+Use the same server shape as `mcp_servers.json`:
+
+```json
+{
+  "mcpServers": {
+    "atlassian": {
+      "command": "pa",
+      "args": ["mcp", "serve", "atlassian"]
+    }
+  }
+}
+```
+
+That keeps the workflow instructions and MCP wrapper definition together in one skill package while still letting explicit user config override server details when needed.
 
 ## Practical flow
 

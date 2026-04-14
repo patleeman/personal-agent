@@ -1,13 +1,20 @@
 import {
   authenticateMcpServer,
+  buildMergedMcpConfigDocument,
   callMcpTool,
   clearMcpServerAuth,
   grepMcpTools,
   inspectMcpServer,
   inspectMcpTool,
   listMcpCatalog,
+  readMachineDefaultProfile,
+  writeMergedMcpConfigFile,
   type McpServerConfig,
 } from '@personal-agent/core';
+import { resolveResourceProfile } from '@personal-agent/resources';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { stdin as input } from 'node:process';
 import { bullet, dim, keyValue, printDenseCommandList, printDenseLines, printDenseUsage, section, success, warning as warningText } from './ui.js';
 
@@ -141,6 +148,42 @@ async function readToolInput(raw: string | undefined): Promise<unknown> {
   return JSON.parse(content);
 }
 
+async function withEffectiveMcpConfigPath<T>(
+  configPath: string | undefined,
+  run: (effectiveConfigPath: string | undefined) => Promise<T>,
+): Promise<T> {
+  if (configPath?.trim()) {
+    return run(configPath.trim());
+  }
+
+  const profile = process.env.PERSONAL_AGENT_ACTIVE_PROFILE?.trim() || readMachineDefaultProfile();
+  const resolvedProfile = resolveResourceProfile(profile);
+  const merged = buildMergedMcpConfigDocument({
+    cwd: process.cwd(),
+    env: process.env,
+    skillDirs: resolvedProfile.skillDirs,
+  });
+
+  if (merged.bundledServerCount === 0) {
+    return run(undefined);
+  }
+
+  const tempDir = mkdtempSync(join(tmpdir(), 'personal-agent-mcp-config-'));
+  const materializedPath = join(tempDir, 'mcp_servers.json');
+  writeMergedMcpConfigFile({
+    outputPath: materializedPath,
+    cwd: process.cwd(),
+    env: process.env,
+    skillDirs: resolvedProfile.skillDirs,
+  });
+
+  try {
+    return await run(materializedPath);
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
+}
+
 function printConfiguredServers(configPath: string, servers: McpServerConfig[]): void {
   console.log(keyValue('Config', configPath));
   console.log(keyValue('Servers', servers.length));
@@ -180,12 +223,12 @@ export async function mcpCommand(args: string[]): Promise<number> {
       throw new Error(mcpUsageText());
     }
 
-    const catalog = await listMcpCatalog({
-      configPath: options.configPath,
+    const catalog = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => listMcpCatalog({
+      configPath: effectiveConfigPath,
       withDescriptions: options.withDescriptions,
       probe: options.probe || options.withDescriptions,
       log: (message) => console.error(message),
-    });
+    }));
 
     if (options.json) {
       console.log(JSON.stringify(catalog, null, 2));
@@ -230,10 +273,11 @@ export async function mcpCommand(args: string[]): Promise<number> {
 
     const target = splitServerTool(options.positional[0] as string, options.positional[1]);
     if (target.tool) {
-      const result = await inspectMcpTool(target.server, target.tool, {
-        configPath: options.configPath,
+      const toolName = target.tool;
+      const result = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => inspectMcpTool(target.server, toolName, {
+        configPath: effectiveConfigPath,
         log: (message) => console.error(message),
-      });
+      }));
 
       if (options.json) {
         console.log(JSON.stringify(result.data ?? { error: result.error, stderr: result.stderr }, null, 2));
@@ -248,11 +292,11 @@ export async function mcpCommand(args: string[]): Promise<number> {
       return 0;
     }
 
-    const result = await inspectMcpServer(target.server, {
-      configPath: options.configPath,
+    const result = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => inspectMcpServer(target.server, {
+      configPath: effectiveConfigPath,
       withDescriptions: options.withDescriptions,
       log: (message) => console.error(message),
-    });
+    }));
 
     if (options.json) {
       console.log(JSON.stringify(result.data ?? { error: result.error, stderr: result.stderr }, null, 2));
@@ -273,11 +317,11 @@ export async function mcpCommand(args: string[]): Promise<number> {
       throw new Error('Usage: pa mcp grep <pattern> [-d|--with-descriptions] [-c|--config <path>] [--json]');
     }
 
-    const result = await grepMcpTools(options.positional[0] as string, {
-      configPath: options.configPath,
+    const result = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => grepMcpTools(options.positional[0] as string, {
+      configPath: effectiveConfigPath,
       withDescriptions: options.withDescriptions,
       log: (message) => console.error(message),
-    });
+    }));
 
     if (options.json) {
       console.log(JSON.stringify(result, null, 2));
@@ -314,11 +358,12 @@ export async function mcpCommand(args: string[]): Promise<number> {
       throw new Error('Usage: pa mcp call <server> <tool> [json] [-c|--config <path>] [--json]');
     }
 
+    const toolName = target.tool;
     const parsedInput = await readToolInput(jsonInput as string | undefined);
-    const result = await callMcpTool(target.server, target.tool, parsedInput, {
-      configPath: options.configPath,
+    const result = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => callMcpTool(target.server, toolName, parsedInput, {
+      configPath: effectiveConfigPath,
       log: (message) => console.error(message),
-    });
+    }));
 
     if (options.json || result.data) {
       process.stdout.write(result.data?.rawOutput ?? `${JSON.stringify({ error: result.error, stderr: result.stderr }, null, 2)}\n`);
@@ -333,10 +378,10 @@ export async function mcpCommand(args: string[]): Promise<number> {
       throw new Error('Usage: pa mcp auth <server> [-c|--config <path>] [--json]');
     }
 
-    const result = await authenticateMcpServer(options.positional[0] as string, {
-      configPath: options.configPath,
+    const result = await withEffectiveMcpConfigPath(options.configPath, (effectiveConfigPath) => authenticateMcpServer(options.positional[0] as string, {
+      configPath: effectiveConfigPath,
       log: (message) => console.error(message),
-    });
+    }));
 
     if (options.json) {
       console.log(JSON.stringify(result.data ?? { error: result.error, stderr: result.stderr }, null, 2));
@@ -357,8 +402,11 @@ export async function mcpCommand(args: string[]): Promise<number> {
       throw new Error('Usage: pa mcp logout <server> [-c|--config <path>]');
     }
 
-    await clearMcpServerAuth(options.positional[0] as string, {
-      configPath: options.configPath,
+    await withEffectiveMcpConfigPath(options.configPath, async (effectiveConfigPath) => {
+      await clearMcpServerAuth(options.positional[0] as string, {
+        configPath: effectiveConfigPath,
+      });
+      return undefined;
     });
     console.log(success('Cleared MCP auth', options.positional[0] as string));
     return 0;

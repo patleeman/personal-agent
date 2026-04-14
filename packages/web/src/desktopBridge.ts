@@ -4,6 +4,8 @@ import type {
   RemoteAccessPairingCodeResult,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
+  ConversationCommitCheckpointRecord,
+  ConversationCommitCheckpointSummary,
   ConversationAttachmentAssetData,
   ConversationAttachmentRecord,
   ConversationAttachmentSummary,
@@ -256,6 +258,8 @@ export interface PersonalAgentDesktopBridge {
   updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
   readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
+  readConversationCheckpoints(conversationId: string): Promise<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>;
+  readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>;
   readConversationAttachments(conversationId: string): Promise<{ conversationId: string; attachments: ConversationAttachmentSummary[] }>;
   readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<{ conversationId: string; attachment: ConversationAttachmentRecord }>;
   createConversationAttachment(input: {

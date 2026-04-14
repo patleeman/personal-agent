@@ -74,6 +74,7 @@ const PATH = {
 const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
 const THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-cwd-group-label-overrides');
 const THREADS_ORGANIZE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-organize');
+const THREADS_FILTER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-filter');
 const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
@@ -89,6 +90,7 @@ type DesktopConversationShortcutAction =
   | 'toggle-conversation-archive';
 
 type ThreadsOrganizeMode = 'project' | 'chronological';
+type ThreadsFilterMode = 'all' | 'human' | 'automation';
 type ThreadsSortMode = 'created' | 'updated' | 'manual';
 
 type SidebarConversationItem = {
@@ -431,6 +433,23 @@ function writeThreadsOrganizeMode(value: ThreadsOrganizeMode): void {
   }
 }
 
+function readThreadsFilterMode(): ThreadsFilterMode {
+  try {
+    const raw = localStorage.getItem(THREADS_FILTER_STORAGE_KEY);
+    return raw === 'human' || raw === 'automation' ? raw : 'all';
+  } catch {
+    return 'all';
+  }
+}
+
+function writeThreadsFilterMode(value: ThreadsFilterMode): void {
+  try {
+    localStorage.setItem(THREADS_FILTER_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function readThreadsSortMode(): ThreadsSortMode {
   try {
     if (localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY) === 'manual') {
@@ -577,13 +596,17 @@ function TopNavItem({
 
 function ThreadsFilterButton({
   organizeMode,
+  filterMode,
   sortMode,
   onChangeOrganizeMode,
+  onChangeFilterMode,
   onChangeSortMode,
 }: {
   organizeMode: ThreadsOrganizeMode;
+  filterMode: ThreadsFilterMode;
   sortMode: ThreadsSortMode;
   onChangeOrganizeMode: (value: ThreadsOrganizeMode) => void;
+  onChangeFilterMode: (value: ThreadsFilterMode) => void;
   onChangeSortMode: (value: ThreadsSortMode) => void;
 }) {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -631,7 +654,7 @@ function ThreadsFilterButton({
     }
 
     const menuWidth = 172;
-    const menuHeight = 240;
+    const menuHeight = 320;
     const edgePadding = 12;
     const viewportWidth = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerWidth;
     const viewportHeight = typeof window === 'undefined' ? Number.POSITIVE_INFINITY : window.innerHeight;
@@ -717,7 +740,27 @@ function ThreadsFilterButton({
           aria-label="Threads organization options"
         >
           <div className="space-y-px">
-            <div className="px-2.5 pt-2 pb-1 text-[12px] font-medium text-dim">Organize</div>
+            <div className="px-2.5 pt-2 pb-1 text-[12px] font-medium text-dim">Show</div>
+            {renderMenuItem({
+              label: 'All threads',
+              icon: PATH.list,
+              checked: filterMode === 'all',
+              onClick: () => onChangeFilterMode('all'),
+            })}
+            {renderMenuItem({
+              label: 'Human threads',
+              icon: PATH.conversations,
+              checked: filterMode === 'human',
+              onClick: () => onChangeFilterMode('human'),
+            })}
+            {renderMenuItem({
+              label: 'Automation threads',
+              icon: PATH.automations,
+              checked: filterMode === 'automation',
+              onClick: () => onChangeFilterMode('automation'),
+            })}
+            <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+            <div className="px-2.5 pt-1 pb-1 text-[12px] font-medium text-dim">Organize</div>
             {renderMenuItem({
               label: 'By project',
               icon: PATH.workspace,
@@ -1037,6 +1080,8 @@ function OpenConversationRow({
   onCopyWorkingDirectory,
   onCopyId,
   onCopyDeeplink,
+  isAutomation = false,
+  automationTitle,
   onDragStart,
   onDragOver,
   onDrop,
@@ -1057,6 +1102,8 @@ function OpenConversationRow({
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
   onCopyDeeplink?: () => boolean | Promise<boolean>;
+  isAutomation?: boolean;
+  automationTitle?: string;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
   onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onDrop?: (event: DragEvent<HTMLDivElement>) => void;
@@ -1339,7 +1386,14 @@ function OpenConversationRow({
           ) : null}
         </div>
         <div className="min-w-0 flex-1 pr-[4.5rem]">
-          <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            {isAutomation ? (
+              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75" title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}>
+                auto
+              </span>
+            ) : null}
+            <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>
+          </div>
         </div>
       </Link>
       <div className="pointer-events-none absolute inset-y-0 right-2.5 flex w-[3.75rem] items-center justify-end pr-1">
@@ -1519,7 +1573,7 @@ function OpenConversationRow({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { sessions } = useAppData();
+  const { sessions, tasks } = useAppData();
   const {
     pinnedIds,
     openIds,
@@ -1547,6 +1601,7 @@ export function Sidebar() {
   const [workspaceSyncReady, setWorkspaceSyncReady] = useState(false);
   const [workspaceQuickSelectOpen, setWorkspaceQuickSelectOpen] = useState(false);
   const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
+  const [threadsFilterMode, setThreadsFilterMode] = useState<ThreadsFilterMode>(() => readThreadsFilterMode());
   const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [conversationGroupLabelOverrides, setConversationGroupLabelOverrides] = useState(() => readConversationGroupLabelOverrides());
@@ -1697,6 +1752,24 @@ export function Sidebar() {
       ...[...openItems].sort((left, right) => compareConversationItems(left, right, threadsSortMode)),
     ];
   }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
+  const automationThreadTitleByConversationId = useMemo(
+    () => new Map((tasks ?? []).flatMap((task) => task.threadConversationId ? [[task.threadConversationId, task.title ?? task.id] as const] : [])),
+    [tasks],
+  );
+  const automationConversationIdSet = useMemo(
+    () => new Set(automationThreadTitleByConversationId.keys()),
+    [automationThreadTitleByConversationId],
+  );
+  const filteredConversationItems = useMemo(() => orderedConversationItems.filter((item) => {
+    const isAutomation = automationConversationIdSet.has(item.session.id);
+    if (threadsFilterMode === 'automation') {
+      return isAutomation;
+    }
+    if (threadsFilterMode === 'human') {
+      return !isAutomation;
+    }
+    return true;
+  }), [automationConversationIdSet, orderedConversationItems, threadsFilterMode]);
   const workspaceOrder = useMemo(
     () => normalizeWorkspacePaths([...pinnedWorkspacePaths, ...savedWorkspacePaths, ...openWorkspacePaths]),
     [openWorkspacePaths, pinnedWorkspacePaths, savedWorkspacePaths],
@@ -1704,9 +1777,9 @@ export function Sidebar() {
   const conversationGroupLabels = useMemo(
     () => buildConversationGroupLabels([
       ...workspaceOrder,
-      ...orderedConversationItems.map((item) => item.session.cwd),
+      ...filteredConversationItems.map((item) => item.session.cwd),
     ]),
-    [orderedConversationItems, workspaceOrder],
+    [filteredConversationItems, workspaceOrder],
   );
 
   const activeConversationId = useMemo(() => {
@@ -1735,17 +1808,20 @@ export function Sidebar() {
     }
 
     const groupsByKey = new Map(
-      groupConversationItemsByCwd(orderedConversationItems, (item) => item.session.cwd, {
+      groupConversationItemsByCwd(filteredConversationItems, (item) => item.session.cwd, {
         labelsByCwd: conversationGroupLabels,
       })
         .map((group) => [group.key, group] as const),
     );
-    const groups = workspaceOrder.map((workspacePath) => groupsByKey.get(workspacePath) ?? {
-      key: workspacePath,
-      cwd: workspacePath,
-      label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
-      items: [],
-    });
+    const baseGroups = threadsFilterMode === 'all'
+      ? workspaceOrder.map((workspacePath) => groupsByKey.get(workspacePath) ?? {
+          key: workspacePath,
+          cwd: workspacePath,
+          label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
+          items: [],
+        })
+      : [];
+    const groups = [...baseGroups];
     const seenGroupKeys = new Set(groups.map((group) => group.key));
 
     for (const group of groupsByKey.values()) {
@@ -1762,7 +1838,7 @@ export function Sidebar() {
       defaultLabel: group.label,
       label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
     }));
-  }, [conversationGroupLabelOverrides, conversationGroupLabels, orderedConversationItems, threadsOrganizeMode, workspaceOrder]);
+  }, [conversationGroupLabelOverrides, conversationGroupLabels, filteredConversationItems, threadsFilterMode, threadsOrganizeMode, workspaceOrder]);
   const conversationGroupKeyBySessionId = useMemo(
     () => new Map(groupedConversationRows.flatMap((group) => group.items.map(({ session }) => [session.id, group.key] as const))),
     [groupedConversationRows],
@@ -1774,17 +1850,18 @@ export function Sidebar() {
   const renderedConversationItems = useMemo(
     () => (threadsOrganizeMode === 'project'
       ? groupedConversationRows.flatMap((group) => group.items)
-      : orderedConversationItems),
-    [groupedConversationRows, orderedConversationItems, threadsOrganizeMode],
+      : filteredConversationItems),
+    [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
+  const canReorderConversationRows = threadsFilterMode === 'all';
   const hotkeyConversationItems = useMemo(
     () => resolveSidebarConversationHotkeyOrder({
       organizeMode: threadsOrganizeMode,
-      orderedItems: orderedConversationItems,
+      orderedItems: filteredConversationItems,
       groupedRows: groupedConversationRows,
       collapsedGroupKeys: collapsedConversationGroupKeySet,
     }),
-    [collapsedConversationGroupKeySet, groupedConversationRows, orderedConversationItems, threadsOrganizeMode],
+    [collapsedConversationGroupKeySet, filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
 
   const toggleConversationGroupCollapsed = useCallback((groupKey: string) => {
@@ -1841,6 +1918,11 @@ export function Sidebar() {
   const handleThreadsOrganizeModeChange = useCallback((value: ThreadsOrganizeMode) => {
     setThreadsOrganizeMode(value);
     writeThreadsOrganizeMode(value);
+  }, []);
+
+  const handleThreadsFilterModeChange = useCallback((value: ThreadsFilterMode) => {
+    setThreadsFilterMode(value);
+    writeThreadsFilterMode(value);
   }, []);
 
   const handleThreadsSortModeChange = useCallback((value: ThreadsSortMode) => {
@@ -2534,10 +2616,12 @@ export function Sidebar() {
 
   function renderConversationRow({ session, section, pinned }: SidebarConversationItem) {
     const isDraftTab = session.id === DRAFT_CONVERSATION_ID;
-    const canDrag = !isDraftTab;
+    const canDrag = canReorderConversationRows && !isDraftTab;
     const dropPosition = canDrag && dropTarget?.section === section && dropTarget.sessionId === session.id && draggingSessionId !== session.id
       ? dropTarget.position
       : null;
+
+    const isAutomation = automationConversationIdSet.has(session.id);
 
     return (
       <OpenConversationRow
@@ -2546,6 +2630,8 @@ export function Sidebar() {
         active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
         pinned={pinned}
         canDrag={canDrag}
+        isAutomation={isAutomation}
+        automationTitle={automationThreadTitleByConversationId.get(session.id)}
         isDragging={canDrag && draggingSessionId === session.id}
         dropPosition={dropPosition}
         onPin={!pinned && !isDraftTab ? () => handlePinConversation(session.id) : undefined}
@@ -2597,8 +2683,10 @@ export function Sidebar() {
             <p className="ui-section-label flex-1">Threads</p>
             <ThreadsFilterButton
               organizeMode={threadsOrganizeMode}
+              filterMode={threadsFilterMode}
               sortMode={threadsSortMode}
               onChangeOrganizeMode={handleThreadsOrganizeModeChange}
+              onChangeFilterMode={handleThreadsFilterModeChange}
               onChangeSortMode={handleThreadsSortModeChange}
             />
             <button
@@ -2616,8 +2704,8 @@ export function Sidebar() {
 
         <div className="flex-1 overflow-y-auto min-h-0 pb-3">
           <div className="py-0.5 space-y-0.5">
-            {!loading && pinnedSessions.length === 0 && visibleConversationTabs.length === 0 && !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
-              <p className="px-4 py-2 text-[12px] text-dim">No open conversations yet.</p>
+            {!loading && renderedConversationItems.length === 0 && !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
+              <p className="px-4 py-2 text-[12px] text-dim">{threadsFilterMode === 'automation' ? 'No automation threads yet.' : threadsFilterMode === 'human' ? 'No human threads yet.' : 'No open conversations yet.'}</p>
             ) : null}
 
             {threadsOrganizeMode === 'project'
@@ -2649,7 +2737,7 @@ export function Sidebar() {
                   </div>
                 );
               })
-              : orderedConversationItems.map(renderConversationRow)}
+              : filteredConversationItems.map(renderConversationRow)}
           </div>
         </div>
 

@@ -195,6 +195,9 @@ const desktopBridge = {
   readConversationArtifacts: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
   readConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifact`, input),
+  readConversationCheckpoints: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-checkpoints`, conversationId),
+  readConversationCheckpoint: (input: { conversationId: string; checkpointId: string }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-checkpoint`, input),
   readConversationAttachments: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachments`, conversationId),
   readConversationAttachment: (input: { conversationId: string; attachmentId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-attachment`, input),

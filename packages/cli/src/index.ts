@@ -15,6 +15,7 @@ import {
   preparePiAgentDir,
   readMachineWebUiConfig,
   resolveStatePaths,
+  writeMergedMcpConfigFile,
   validateStatePathsOutsideRepo,
   writeMachineWebUiConfig,
 } from '@personal-agent/core';
@@ -605,6 +606,13 @@ async function preparePiLaunch(
 
   const resourceArgs = buildPiResourceArgs(resolvedProfile);
   const withDefaults = await applyDefaultModelArgs(piArgs, settings, runtime.agentDir);
+  const materializedMcpConfigPath = join(runtime.agentDir, 'mcp_servers.json');
+  const mergedMcpConfig = writeMergedMcpConfigFile({
+    outputPath: materializedMcpConfigPath,
+    cwd: process.cwd(),
+    env: process.env,
+    skillDirs: resolvedProfile.skillDirs,
+  });
 
   return {
     args: [...resourceArgs, ...withDefaults],
@@ -613,6 +621,7 @@ async function preparePiLaunch(
       PI_CODING_AGENT_DIR: runtime.agentDir,
       PERSONAL_AGENT_ACTIVE_PROFILE: resolvedProfile.name,
       PERSONAL_AGENT_REPO_ROOT: resolvedProfile.repoRoot,
+      ...(mergedMcpConfig.bundledServerCount > 0 ? { MCP_CONFIG_PATH: materializedMcpConfigPath } : {}),
     },
   };
 }

@@ -3,8 +3,10 @@ import {
   deleteConversationAttachment,
   getConversationArtifact,
   getConversationAttachment,
+  getConversationCommitCheckpoint,
   listConversationArtifacts,
   listConversationAttachments,
+  listConversationCommitCheckpoints,
   readConversationAttachmentDownload,
   saveConversationAttachment,
 } from '@personal-agent/core';
@@ -21,6 +23,11 @@ interface ConversationArtifactMutationInput {
 interface ConversationAttachmentMutationInput {
   conversationId: string;
   attachmentId: string;
+}
+
+interface ConversationCheckpointMutationInput {
+  conversationId: string;
+  checkpointId: string;
 }
 
 interface ConversationAttachmentSaveInput {
@@ -55,6 +62,13 @@ function buildArtifactListResult(profile: string, conversationId: string) {
   return {
     conversationId,
     artifacts: listConversationArtifacts({ profile, conversationId }),
+  };
+}
+
+function buildCheckpointListResult(profile: string, conversationId: string) {
+  return {
+    conversationId,
+    checkpoints: listConversationCommitCheckpoints({ profile, conversationId }),
   };
 }
 
@@ -129,6 +143,28 @@ export function readConversationArtifactCapability(
   return {
     conversationId,
     artifact,
+  };
+}
+
+export function readConversationCommitCheckpointsCapability(profile: string, conversationIdInput: string) {
+  const conversationId = normalizeRequiredId(conversationIdInput, 'conversationId');
+  return buildCheckpointListResult(profile, conversationId);
+}
+
+export function readConversationCommitCheckpointCapability(
+  profile: string,
+  input: ConversationCheckpointMutationInput,
+) {
+  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
+  const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
+  const checkpoint = getConversationCommitCheckpoint({ profile, conversationId, checkpointId });
+  if (!checkpoint) {
+    throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
+  }
+
+  return {
+    conversationId,
+    checkpoint,
   };
 }
 
