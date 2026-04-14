@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type SelectHTMLAttributes } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
@@ -23,8 +23,11 @@ import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
-const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-base/80 px-3 py-2.5 text-[13px] leading-relaxed text-primary placeholder:text-dim/75 transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus:border-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base';
-const SELECT_CLASS = `${INPUT_CLASS} pr-10`;
+const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[15px] font-medium text-primary placeholder:text-dim/75 outline-none';
+const PROMPT_INPUT_CLASS = 'min-h-[16rem] w-full resize-y bg-transparent px-4 py-4 text-[15px] leading-7 text-primary placeholder:text-dim/75 outline-none';
+const INLINE_FIELD_CLASS = 'h-8 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[12px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+const INLINE_INPUT_CLASS = INLINE_FIELD_CLASS;
+const INLINE_SELECT_CLASS = `${INLINE_FIELD_CLASS} appearance-none pr-6`;
 const FIELD_LABEL_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-dim';
 const FIELD_HELP_CLASS = 'text-[12px] leading-relaxed text-secondary';
 
@@ -35,6 +38,8 @@ interface TaskFormState {
   atValue: string;
   runIn: 'local' | 'worktree';
   projectPath: string;
+  threadMode: 'dedicated' | 'existing' | 'none';
+  threadConversationId: string;
   model: string;
   thinkingLevel: string;
   prompt: string;
@@ -55,6 +60,8 @@ function createDefaultTaskFormState(): TaskFormState {
     atValue: '',
     runIn: 'worktree',
     projectPath: '',
+    threadMode: 'dedicated',
+    threadConversationId: '',
     model: '',
     thinkingLevel: '',
     prompt: '',
@@ -69,22 +76,57 @@ function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
     atValue: toDateTimeLocalValue(task.at),
     runIn: task.cwd ? 'worktree' : 'local',
     projectPath: task.cwd ?? '',
+    threadMode: task.threadMode,
+    threadConversationId: task.threadConversationId ?? '',
     model: task.model ?? '',
     thinkingLevel: task.thinkingLevel ?? '',
     prompt: task.prompt,
   };
 }
 
-function scheduleModeButtonClass(active: boolean): string {
-  return cx('ui-segmented-button', active && 'ui-segmented-button-active');
+function toggleButtonClass(active: boolean): string {
+  return cx(
+    'inline-flex h-8 items-center rounded-md px-2 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
+    active
+      ? 'bg-surface/55 text-primary'
+      : 'text-secondary hover:bg-surface/45 hover:text-primary',
+  );
 }
 
 function dayButtonClass(active: boolean): string {
   return cx(
-    'inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
+    'inline-flex items-center justify-center rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
     active
-      ? 'border-border-default bg-elevated text-primary'
-      : 'border-border-subtle bg-base/70 text-secondary hover:border-border-default hover:bg-elevated/70 hover:text-primary',
+      ? 'border-border-default bg-surface/65 text-primary'
+      : 'border-border-subtle bg-base/60 text-secondary hover:border-border-default hover:bg-surface/55 hover:text-primary',
+  );
+}
+
+function InlineSelect({
+  className,
+  children,
+  ...props
+}: SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <label className="relative inline-flex min-w-0 items-center">
+      <select {...props} className={cx(INLINE_SELECT_CLASS, className)}>
+        {children}
+      </select>
+      <svg
+        aria-hidden="true"
+        width="11"
+        height="11"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="pointer-events-none absolute right-2.5 text-dim/70"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </label>
   );
 }
 
@@ -111,6 +153,10 @@ function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): strin
     return 'Choose when this one-time task should run.';
   }
 
+  if (state.threadMode === 'existing' && !state.threadConversationId.trim()) {
+    return 'Choose an existing thread.';
+  }
+
   return null;
 }
 
@@ -123,6 +169,8 @@ function createTaskMutationPayload(state: TaskFormState) {
     thinkingLevel: state.thinkingLevel.trim() || null,
     cwd: state.runIn === 'worktree' ? (state.projectPath.trim() || null) : null,
     prompt: state.prompt,
+    threadMode: state.threadMode,
+    threadConversationId: state.threadMode === 'existing' ? (state.threadConversationId.trim() || null) : null,
   };
 }
 
@@ -191,40 +239,16 @@ function CronBuilderEditor({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="ui-segmented-control" role="group" aria-label="Cron editor mode">
-        <button
-          type="button"
-          onClick={() => onChange({ ...value, mode: 'builder' })}
-          className={scheduleModeButtonClass(value.mode === 'builder')}
-          aria-pressed={value.mode === 'builder'}
-        >
-          Simple
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange({ ...value, mode: 'raw' })}
-          className={scheduleModeButtonClass(value.mode === 'raw')}
-          aria-pressed={value.mode === 'raw'}
-        >
-          Raw cron
-        </button>
-      </div>
-
-      {!value.supported && value.mode === 'raw' && (
-        <p className="text-[12px] leading-relaxed text-secondary">
-          This cron pattern is outside the simple editor. Keep editing raw cron, or switch to a simpler recurring pattern.
-        </p>
-      )}
-
-      {value.mode === 'builder' ? (
-        <div className="space-y-4">
-          <label className="block space-y-1.5">
-            <span className={FIELD_LABEL_CLASS}>Pattern</span>
-            <select
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        {value.mode === 'builder' ? (
+          <>
+            <InlineSelect
               value={value.builder.cadence}
               onChange={(event) => updateBuilder({ cadence: event.target.value as EasyTaskCadence })}
-              className={SELECT_CLASS}
+              className="min-w-[10rem]"
+              name="cronCadence"
+              aria-label="Recurring schedule pattern"
             >
               <option value="hourly">Every hour</option>
               <option value="interval">Every few hours</option>
@@ -232,120 +256,129 @@ function CronBuilderEditor({
               <option value="weekdays">Weekdays</option>
               <option value="weekly">Specific weekdays</option>
               <option value="monthly">Day of month</option>
-            </select>
-          </label>
+            </InlineSelect>
 
-          {value.builder.cadence === 'hourly' && (
-            <label className="block space-y-1.5">
-              <span className={FIELD_LABEL_CLASS}>Minute past the hour</span>
+            {value.builder.cadence === 'hourly' && (
               <input
                 type="number"
                 min={0}
                 max={59}
                 value={value.builder.minute}
                 onChange={(event) => updateBuilder({ minute: Number.parseInt(event.target.value || '0', 10) || 0 })}
-                className={INPUT_CLASS}
+                className={cx(INLINE_INPUT_CLASS, 'w-[5rem]')}
                 name="cronMinute"
+                inputMode="numeric"
+                aria-label="Minute past the hour"
               />
-            </label>
-          )}
+            )}
 
-          {value.builder.cadence === 'interval' && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Every N hours</span>
+            {value.builder.cadence === 'interval' && (
+              <>
                 <input
                   type="number"
                   min={1}
                   max={23}
                   value={value.builder.intervalHours}
                   onChange={(event) => updateBuilder({ intervalHours: Number.parseInt(event.target.value || '1', 10) || 1 })}
-                  className={INPUT_CLASS}
+                  className={cx(INLINE_INPUT_CLASS, 'w-[5rem]')}
                   name="cronIntervalHours"
+                  inputMode="numeric"
+                  aria-label="Every N hours"
                 />
-              </label>
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Minute past the hour</span>
                 <input
                   type="number"
                   min={0}
                   max={59}
                   value={value.builder.minute}
                   onChange={(event) => updateBuilder({ minute: Number.parseInt(event.target.value || '0', 10) || 0 })}
-                  className={INPUT_CLASS}
+                  className={cx(INLINE_INPUT_CLASS, 'w-[5rem]')}
                   name="cronIntervalMinute"
+                  inputMode="numeric"
+                  aria-label="Minute past the hour"
                 />
-              </label>
-            </div>
-          )}
+              </>
+            )}
 
-          {(value.builder.cadence === 'daily' || value.builder.cadence === 'weekdays' || value.builder.cadence === 'weekly' || value.builder.cadence === 'monthly') && (
-            <label className="block space-y-1.5">
-              <span className={FIELD_LABEL_CLASS}>Time</span>
+            {(value.builder.cadence === 'daily' || value.builder.cadence === 'weekdays' || value.builder.cadence === 'weekly' || value.builder.cadence === 'monthly') && (
               <input
                 type="time"
                 value={formatTimeInputValue(value.builder.hour, value.builder.minute)}
                 onChange={(event) => handleTimeChange(event.target.value)}
-                className={INPUT_CLASS}
+                className={cx(INLINE_INPUT_CLASS, 'w-[8.5rem]')}
                 name="cronTime"
+                aria-label="Recurring schedule time"
               />
-            </label>
-          )}
+            )}
 
-          {value.builder.cadence === 'weekly' && (
-            <div className="space-y-2">
-              <p className={FIELD_LABEL_CLASS}>Days</p>
-              <div className="flex flex-wrap gap-2">
-                {WEEKDAY_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => toggleWeekday(option.value)}
-                    className={dayButtonClass(value.builder.weekdays.includes(option.value))}
-                    aria-pressed={value.builder.weekdays.includes(option.value)}
-                  >
-                    {option.shortLabel}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {value.builder.cadence === 'monthly' && (
-            <label className="block space-y-1.5">
-              <span className={FIELD_LABEL_CLASS}>Day of month</span>
+            {value.builder.cadence === 'monthly' && (
               <input
                 type="number"
                 min={1}
                 max={31}
                 value={value.builder.dayOfMonth}
                 onChange={(event) => updateBuilder({ dayOfMonth: Number.parseInt(event.target.value || '1', 10) || 1 })}
-                className={INPUT_CLASS}
+                className={cx(INLINE_INPUT_CLASS, 'w-[5rem]')}
                 name="cronDayOfMonth"
+                inputMode="numeric"
+                aria-label="Day of month"
               />
-            </label>
-          )}
-
-          <div className="space-y-1.5 border-t border-border-subtle pt-4">
-            <p className={FIELD_LABEL_CLASS}>Preview</p>
-            <p className="text-[13px] text-primary">{formatTaskSchedule({ cron: previewCron })}</p>
-            <p className="break-all font-mono text-[11px] text-dim">{previewCron}</p>
-          </div>
-        </div>
-      ) : (
-        <label className="block space-y-1.5">
-          <span className={FIELD_LABEL_CLASS}>Cron expression</span>
+            )}
+          </>
+        ) : (
           <input
             value={value.rawCron}
             onChange={(event) => onChange({ ...value, rawCron: event.target.value })}
-            className={`${INPUT_CLASS} font-mono`}
+            className={cx(INLINE_INPUT_CLASS, 'w-full max-w-[18rem] font-mono')}
             placeholder="0 9 * * 1-5"
             name="cron"
+            aria-label="Cron expression"
             autoComplete="off"
             spellCheck={false}
           />
-        </label>
+        )}
+
+        <button
+          type="button"
+          onClick={() => onChange({ ...value, mode: value.mode === 'builder' ? 'raw' : 'builder' })}
+          className={toggleButtonClass(value.mode === 'raw')}
+          aria-pressed={value.mode === 'raw'}
+        >
+          {value.mode === 'builder' ? 'Raw cron' : 'Simple schedule'}
+        </button>
+      </div>
+
+      {!value.supported && value.mode === 'raw' && (
+        <p className="text-[12px] leading-relaxed text-secondary">
+          This cron pattern is outside the simple editor. Keep editing raw cron, or switch back to the simpler builder.
+        </p>
       )}
+
+      {value.mode === 'builder' && value.builder.cadence === 'weekly' && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={FIELD_LABEL_CLASS}>Days</span>
+          {WEEKDAY_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => toggleWeekday(option.value)}
+              className={dayButtonClass(value.builder.weekdays.includes(option.value))}
+              aria-pressed={value.builder.weekdays.includes(option.value)}
+            >
+              {option.shortLabel}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-secondary">
+        <span>{previewCron ? formatTaskSchedule({ cron: previewCron }) : 'Recurring schedule'}</span>
+        {previewCron && (
+          <>
+            <span className="text-dim">·</span>
+            <span className="font-mono text-dim">{previewCron}</span>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -369,11 +402,88 @@ function formatScheduleButtonLabel(state: TaskFormState): string {
   return cron ? formatTaskSchedule({ cron }) : 'Schedule';
 }
 
-function EditorSummaryRow({ label, value }: { label: string; value: string }) {
+function InlineSwitch({
+  checked,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  label: string;
+  onCheckedChange: (checked: boolean) => void;
+}) {
   return (
-    <div className="flex items-start justify-between gap-4 text-[13px] leading-relaxed">
-      <span className="text-secondary">{label}</span>
-      <span className="max-w-[12rem] text-right text-primary">{value}</span>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onCheckedChange(!checked)}
+      className="group inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-1.5 text-[12px] font-medium text-secondary transition-colors hover:bg-surface/45 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
+          checked
+            ? 'border-accent/55 bg-accent/75 shadow-sm'
+            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+        )}
+      >
+        <span className={cx('h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform', checked ? 'translate-x-[14px]' : 'translate-x-0')} />
+      </span>
+      <span className={cx('leading-none', checked && 'text-primary')}>{label}</span>
+    </button>
+  );
+}
+
+function TaskAdvancedMenu({
+  value,
+  modelOptions,
+  onChange,
+}: {
+  value: TaskFormState;
+  modelOptions: Array<{ id: string }>;
+  onChange: (patch: Partial<TaskFormState>) => void;
+}) {
+  return (
+    <div className="absolute top-full right-0 z-20 mt-2 w-[20rem] rounded-xl border border-border-default bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
+      <div className="space-y-3">
+        <div className="space-y-1">
+          <p className={FIELD_LABEL_CLASS}>More options</p>
+          <p className={FIELD_HELP_CLASS}>Leave these alone unless this automation needs something weird.</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className={FIELD_LABEL_CLASS}>Model</span>
+          <InlineSelect
+            value={value.model}
+            onChange={(event) => onChange({ model: event.target.value })}
+            className="w-full"
+            name="model"
+            aria-label="Automation model"
+          >
+            <option value="">Default</option>
+            {modelOptions.map((model) => (
+              <option key={model.id} value={model.id}>{model.id}</option>
+            ))}
+          </InlineSelect>
+        </div>
+
+        <div className="space-y-1.5">
+          <span className={FIELD_LABEL_CLASS}>Reasoning</span>
+          <InlineSelect
+            value={value.thinkingLevel}
+            onChange={(event) => onChange({ thinkingLevel: event.target.value })}
+            className="w-full"
+            name="thinkingLevel"
+            aria-label="Automation reasoning level"
+          >
+            {THINKING_LEVEL_OPTIONS.map((option) => (
+              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+            ))}
+          </InlineSelect>
+        </div>
+      </div>
     </div>
   );
 }
@@ -398,6 +508,8 @@ function TaskEditorForm({
   const { projects } = useAppData();
   const validationError = useMemo(() => validateTaskForm(value, mode), [mode, value]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const { data: cwdState } = useApi(async () => api.defaultCwd(), 'task-editor-default-cwd');
   const { data: modelState } = useApi(async () => api.models(), 'task-editor-models');
 
@@ -412,6 +524,33 @@ function TaskEditorForm({
       setSubmitAttempted(true);
     }
   }, [error]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (moreMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setMoreMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setMoreMenuOpen(false);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [moreMenuOpen]);
 
   const projectOptions = useMemo(() => {
     const seen = new Set<string>();
@@ -441,22 +580,24 @@ function TaskEditorForm({
     return entries;
   }, [cwdState?.effectiveCwd, projects, value.projectPath]);
 
-  const selectedProjectLabel = projectOptions.find((entry) => entry.path === value.projectPath.trim())?.label
-    ?? summarizePathLabel(value.projectPath);
   const scheduleSummary = formatScheduleButtonLabel(value);
   const visibleError = error ?? (submitAttempted ? validationError : null);
-  const locationSummary = value.runIn === 'local'
-    ? 'Local workspace'
-    : value.projectPath.trim()
-      ? selectedProjectLabel
-      : 'Select project';
   const projectHelp = value.runIn === 'local'
-    ? 'Runs from the local profile workspace without a repo-specific working directory.'
+    ? 'Runs from the local workspace.'
     : value.projectPath.trim()
       ? value.projectPath.trim()
       : projectOptions.length === 0
         ? 'No known worktrees yet. The current workspace will show up here when available.'
         : 'Choose the working directory for this automation.';
+  const oneTimeSummary = value.atValue
+    ? formatTaskSchedule({ at: fromDateTimeLocalValue(value.atValue) ?? undefined })
+    : 'Choose when this one-time run should fire.';
+  const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
+  const runtimeSummaryParts = [
+    value.model.trim() || null,
+    value.thinkingLevel.trim() ? thinkingLabel : null,
+  ].filter((entry): entry is string => Boolean(entry));
+  const runtimeSummary = runtimeSummaryParts.length > 0 ? runtimeSummaryParts.join(' · ') : 'Defaults';
 
   return (
     <form
@@ -470,185 +611,142 @@ function TaskEditorForm({
         onSubmit();
       }}
     >
-      <div className="border-b border-border-subtle px-6 py-5">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{mode === 'create' ? 'New automation' : 'Edit automation'}</p>
-            <h2 className="text-[24px] font-semibold tracking-tight text-primary">
-              {mode === 'create' ? 'Create a scheduled automation' : 'Update this automation'}
-            </h2>
-            <p className="text-[14px] leading-6 text-secondary">
-              Title, prompt, working directory, and schedule. Results stay attached to the automation.
-            </p>
-          </div>
-          <p className="text-[13px] text-secondary">{scheduleSummary}</p>
-        </div>
-      </div>
-
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto grid max-w-5xl gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 space-y-8">
-            <section className="space-y-4">
-              <div className="space-y-1.5">
-                <p className={FIELD_LABEL_CLASS}>What to run</p>
-                <h3 className="text-[20px] font-semibold tracking-tight text-primary">Prompt</h3>
-                <p className={FIELD_HELP_CLASS}>Use the prompt body exactly like a normal conversation instruction. Mention nodes with @ when helpful.</p>
+        <div className="mx-auto max-w-4xl space-y-5">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{mode === 'create' ? 'New automation' : 'Edit automation'}</p>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div className="max-w-2xl space-y-1.5">
+                <h2 className="text-[24px] font-semibold tracking-tight text-primary">
+                  {mode === 'create' ? 'Create a scheduled automation' : 'Update this automation'}
+                </h2>
+                <p className="text-[14px] leading-6 text-secondary">
+                  Use the prompt like a normal conversation instruction. Schedule, project, and runtime live inline below it.
+                </p>
               </div>
-
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Title</span>
-                <input
-                  value={value.title}
-                  onChange={(event) => onChange({ title: event.target.value })}
-                  className={INPUT_CLASS}
-                  placeholder="Automation title"
-                  name="title"
-                  autoComplete="off"
-                />
-              </label>
-
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Prompt</span>
-                <MentionTextarea
-                  value={value.prompt}
-                  onValueChange={(prompt) => onChange({ prompt })}
-                  className={`${INPUT_CLASS} min-h-[22rem] resize-y bg-base/60`}
-                  placeholder="Add prompt…"
-                  name="prompt"
-                />
-              </label>
-            </section>
+              <p className="text-[13px] text-secondary sm:text-right">{scheduleSummary}</p>
+            </div>
           </div>
 
-          <div className="space-y-6 lg:border-l lg:border-border-subtle lg:pl-8">
-            <section className="space-y-4">
-              <div className="space-y-1.5">
-                <p className={FIELD_LABEL_CLASS}>When it runs</p>
-                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Schedule</h3>
-                <p className={FIELD_HELP_CLASS}>Choose a recurring schedule or set a one-time run.</p>
-              </div>
-
-              <div className="ui-segmented-control" role="group" aria-label="Schedule type">
-                <button
-                  type="button"
-                  onClick={() => onChange({ scheduleMode: 'cron' })}
-                  className={scheduleModeButtonClass(value.scheduleMode === 'cron')}
-                  aria-pressed={value.scheduleMode === 'cron'}
-                >
-                  Recurring
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ scheduleMode: 'at' })}
-                  className={scheduleModeButtonClass(value.scheduleMode === 'at')}
-                  aria-pressed={value.scheduleMode === 'at'}
-                >
-                  One time
-                </button>
-              </div>
-
-              {value.scheduleMode === 'cron' ? (
-                <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
-              ) : (
-                <label className="block space-y-1.5">
-                  <span className={FIELD_LABEL_CLASS}>Run at</span>
+          <section className="ui-input-shell overflow-visible bg-base/70 focus-within:border-accent/40 focus-within:ring-1 focus-within:ring-accent/15">
+            <div className="border-b border-border-subtle px-4 py-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="flex min-w-0 flex-1 items-center gap-3">
+                  <span className={FIELD_LABEL_CLASS}>Title</span>
                   <input
-                    type="datetime-local"
-                    value={value.atValue}
-                    onChange={(event) => onChange({ atValue: event.target.value })}
-                    className={INPUT_CLASS}
-                    name="runAt"
+                    value={value.title}
+                    onChange={(event) => onChange({ title: event.target.value })}
+                    className={TITLE_INPUT_CLASS}
+                    placeholder="Automation title"
+                    name="title"
+                    aria-label="Automation title"
+                    autoComplete="off"
                   />
                 </label>
-              )}
-            </section>
-
-            <section className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="space-y-1.5">
-                <p className={FIELD_LABEL_CLASS}>Where it runs</p>
-                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Working directory</h3>
-                <p className={FIELD_HELP_CLASS}>Use the local workspace root or bind the automation to a worktree.</p>
+                <div ref={moreMenuRef} className="relative flex shrink-0 items-center gap-2 self-end sm:self-auto">
+                  {runtimeSummary !== 'Defaults' && (
+                    <span className="max-w-[12rem] truncate text-[12px] text-secondary">{runtimeSummary}</span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setMoreMenuOpen((current) => !current)}
+                    className={toggleButtonClass(moreMenuOpen)}
+                    aria-label="More automation options"
+                    aria-expanded={moreMenuOpen}
+                    aria-haspopup="dialog"
+                  >
+                    ⋯
+                  </button>
+                  {moreMenuOpen && (
+                    <TaskAdvancedMenu
+                      value={value}
+                      modelOptions={modelState?.models ?? []}
+                      onChange={onChange}
+                    />
+                  )}
+                </div>
               </div>
+            </div>
 
-              <div className="ui-segmented-control" role="group" aria-label="Run location">
-                <button
-                  type="button"
-                  onClick={() => onChange({ runIn: 'local' })}
-                  className={scheduleModeButtonClass(value.runIn === 'local')}
-                  aria-pressed={value.runIn === 'local'}
-                >
-                  Local
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onChange({ runIn: 'worktree' })}
-                  className={scheduleModeButtonClass(value.runIn === 'worktree')}
-                  aria-pressed={value.runIn === 'worktree'}
-                >
-                  Worktree
-                </button>
+            <MentionTextarea
+              value={value.prompt}
+              onValueChange={(prompt) => onChange({ prompt })}
+              className={PROMPT_INPUT_CLASS}
+              placeholder="Add prompt…"
+              name="prompt"
+              aria-label="Prompt"
+            />
+
+            <div className="border-t border-border-subtle px-4 py-3">
+              <div className="space-y-4">
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
+                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Schedule</p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                      <InlineSwitch
+                        checked={value.scheduleMode === 'at'}
+                        label="One time"
+                        onCheckedChange={(checked) => onChange({ scheduleMode: checked ? 'at' : 'cron' })}
+                      />
+                      <div className="min-w-0 flex-1">
+                        {value.scheduleMode === 'cron' ? (
+                          <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
+                        ) : (
+                          <div className="space-y-2">
+                            <input
+                              type="datetime-local"
+                              value={value.atValue}
+                              onChange={(event) => onChange({ atValue: event.target.value })}
+                              className={cx(INLINE_INPUT_CLASS, 'w-full max-w-[18rem]')}
+                              name="runAt"
+                              aria-label="Run at"
+                            />
+                            <p className="text-[12px] text-secondary">{oneTimeSummary}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
+                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Location</p>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                      <InlineSwitch
+                        checked={value.runIn === 'worktree'}
+                        label="Worktree"
+                        onCheckedChange={(checked) => onChange({ runIn: checked ? 'worktree' : 'local' })}
+                      />
+                      {value.runIn === 'worktree' ? (
+                        <InlineSelect
+                          value={value.projectPath.trim()}
+                          onChange={(event) => onChange({ projectPath: event.target.value, runIn: 'worktree' })}
+                          className="w-full min-w-[12rem] max-w-[20rem]"
+                          name="projectPath"
+                          aria-label="Automation project"
+                        >
+                          <option value="">Select project</option>
+                          {projectOptions.map((entry) => (
+                            <option key={entry.path} value={entry.path}>{entry.label}</option>
+                          ))}
+                        </InlineSelect>
+                      ) : (
+                        <span className="text-[12px] text-secondary">Local workspace</span>
+                      )}
+                    </div>
+                    <p className={`${FIELD_HELP_CLASS} break-all`}>{projectHelp}</p>
+                  </div>
+                </div>
+
               </div>
-
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Project</span>
-                <select
-                  value={value.projectPath.trim()}
-                  onChange={(event) => onChange({ projectPath: event.target.value, runIn: 'worktree' })}
-                  className={SELECT_CLASS}
-                  name="projectPath"
-                  disabled={value.runIn !== 'worktree'}
-                >
-                  <option value="">Select project</option>
-                  {projectOptions.map((entry) => (
-                    <option key={entry.path} value={entry.path}>{entry.label}</option>
-                  ))}
-                </select>
-              </label>
-              <p className={`${FIELD_HELP_CLASS} break-all`}>{projectHelp}</p>
-            </section>
-
-            <section className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="space-y-1.5">
-                <p className={FIELD_LABEL_CLASS}>Runtime</p>
-                <h3 className="text-[18px] font-semibold tracking-tight text-primary">Model</h3>
-                <p className={FIELD_HELP_CLASS}>Leave these on the defaults unless this automation needs something specific.</p>
-              </div>
-
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Model</span>
-                <select value={value.model} onChange={(event) => onChange({ model: event.target.value })} className={SELECT_CLASS} name="model">
-                  <option value="">Default</option>
-                  {(modelState?.models ?? []).map((model) => (
-                    <option key={model.id} value={model.id}>{model.id}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block space-y-1.5">
-                <span className={FIELD_LABEL_CLASS}>Reasoning</span>
-                <select value={value.thinkingLevel} onChange={(event) => onChange({ thinkingLevel: event.target.value })} className={SELECT_CLASS} name="thinkingLevel">
-                  {THINKING_LEVEL_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </label>
-            </section>
-
-            <section className="space-y-3 border-t border-border-subtle pt-6">
-              <p className={FIELD_LABEL_CLASS}>Summary</p>
-              <div className="space-y-3">
-                <EditorSummaryRow label="Schedule" value={scheduleSummary} />
-                <EditorSummaryRow label="Location" value={locationSummary} />
-                <EditorSummaryRow label="Model" value={value.model || 'Default'} />
-                <EditorSummaryRow label="Reasoning" value={value.thinkingLevel || 'Default'} />
-              </div>
-            </section>
-          </div>
+            </div>
+          </section>
         </div>
       </div>
 
       <div className="border-t border-border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             {visibleError ? (
               <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>

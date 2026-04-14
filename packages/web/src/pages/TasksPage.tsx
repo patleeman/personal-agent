@@ -127,7 +127,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
         aria-label="Create automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '1080px',
+          maxWidth: '960px',
           height: 'min(860px, calc(100vh - 3.5rem))',
           background: 'rgb(var(--color-surface) / 0.985)',
           backdropFilter: 'blur(28px)',
@@ -169,7 +169,7 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
         aria-label="Edit automation"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '1080px',
+          maxWidth: '960px',
           height: 'min(860px, calc(100vh - 3.5rem))',
           background: 'rgb(var(--color-surface) / 0.985)',
           backdropFilter: 'blur(28px)',
