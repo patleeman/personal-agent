@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/resources",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Resource management for personal agent",
   "type": "module",
   "exports": {
