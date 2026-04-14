@@ -32,4 +32,17 @@ describe('ConversationWorkspaceShell', () => {
     expect(html).toContain('closed');
     expect(html).not.toContain('aria-label="Conversation context"');
   });
+
+  it('auto-opens the right rail when a run is selected in the conversation route', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/conv-123?run=run-fix-build-2026-03-25-903aa31b']}>
+        <ConversationWorkspaceShell>
+          {({ railOpen }) => <div>{railOpen ? 'open' : 'closed'}</div>}
+        </ConversationWorkspaceShell>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('open');
+    expect(html).toContain('aria-label="Conversation context"');
+  });
 });

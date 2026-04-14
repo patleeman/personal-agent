@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import { getConversationRunIdFromSearch } from '../conversationRuns';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
 import { useDesktopChrome } from '../desktopChromeContext';
 import { ContextRail } from './ContextRail';
@@ -143,12 +144,25 @@ export function ConversationWorkspaceShell({
     storageKey: railPrefs.storageKey,
     side: 'right',
   });
-  const [railOpen, setRailOpen] = useState(false);
+  const hasSelectedRun = contextRailEnabled && getConversationRunIdFromSearch(location.search) !== null;
+  const [railOpen, setRailOpen] = useState(() => hasSelectedRun);
+
+  const previousPathnameRef = useRef(location.pathname);
 
   useEffect(() => {
-    setRailOpen(false);
-  }, [location.pathname]);
+    if (previousPathnameRef.current === location.pathname) {
+      return;
+    }
 
+    previousPathnameRef.current = location.pathname;
+    setRailOpen(hasSelectedRun);
+  }, [hasSelectedRun, location.pathname]);
+
+  useEffect(() => {
+    if (hasSelectedRun) {
+      setRailOpen(true);
+    }
+  }, [hasSelectedRun]);
 
   const toggleRail = useCallback(() => {
     if (contextRailEnabled) {

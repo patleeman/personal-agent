@@ -1255,6 +1255,108 @@ function normalizeRunLabel(value: string): string {
   return value.replace(/[-_\s]+/g, ' ').trim().toLowerCase();
 }
 
+function readRunField(record: Record<string, unknown> | null | undefined, key: string): string | null {
+  const value = record?.[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function excerptLinkedRunText(value: string | null | undefined, maxLength = 72): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const preview = buildSummaryPreview(value, 1).replace(/\s+/g, ' ').trim();
+  if (!preview) {
+    return null;
+  }
+
+  return preview.length <= maxLength
+    ? preview
+    : `${preview.slice(0, maxLength - 1).trimEnd()}…`;
+}
+
+function summarizeWorkspaceTail(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.replace(/[\\/]+$/g, '').trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const segments = normalized.split(/[\\/]+/).filter((segment) => segment.length > 0);
+  return segments.at(-1) ?? normalized;
+}
+
+function pushRunDetail(target: string[], value: string | null | undefined): void {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return;
+  }
+
+  const normalized = normalizeRunLabel(trimmed);
+  if (target.some((item) => normalizeRunLabel(item) === normalized)) {
+    return;
+  }
+
+  target.push(trimmed);
+}
+
+function buildRunToolPreview(block: Extract<MessageBlock, { type: 'tool_use' }>): string {
+  const details = isRecord(block.details) ? block.details : null;
+  const input = isRecord(block.input) ? block.input : null;
+  const action = readRunField(details, 'action') ?? readRunField(input, 'action');
+
+  if (!action) {
+    return '';
+  }
+
+  const runId = readRunField(details, 'runId') ?? readRunField(input, 'runId');
+  const sourceRunId = readRunField(details, 'sourceRunId');
+  const taskSlug = readRunField(details, 'taskSlug') ?? readRunField(input, 'taskSlug');
+  const prompt = excerptLinkedRunText(readRunField(details, 'prompt') ?? readRunField(input, 'prompt'));
+  const command = excerptLinkedRunText(readRunField(details, 'command') ?? readRunField(input, 'command'));
+  const runLabel = summarizeLinkedRunTail((runId ?? sourceRunId ?? '').replace(/^(?:run|task)-/, ''));
+
+  switch (action) {
+    case 'list':
+      return 'list durable runs';
+    case 'get':
+      return `get ${runLabel ?? runId ?? 'run'}`;
+    case 'logs':
+      return `logs ${runLabel ?? runId ?? 'run'}`;
+    case 'cancel':
+      return `cancel ${runLabel ?? runId ?? 'run'}`;
+    case 'rerun':
+      return `rerun ${summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'run'}`;
+    case 'follow_up':
+      return `follow_up ${prompt ?? summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'run'}`;
+    case 'start_agent':
+      return `start_agent ${prompt ?? taskSlug ?? runLabel ?? 'agent run'}`;
+    case 'start':
+      return `start ${command ?? taskSlug ?? runLabel ?? 'background run'}`;
+    default:
+      return `${action} ${prompt ?? command ?? taskSlug ?? runLabel ?? 'run'}`.trim();
+  }
+}
+
+function buildToolPreview(block: Extract<MessageBlock, { type: 'tool_use' }>): string {
+  if (block.tool === 'run') {
+    const preview = buildRunToolPreview(block);
+    if (preview) {
+      return preview;
+    }
+  }
+
+  return block.input.command
+    ? String(block.input.command).split('\n')[0].slice(0, 64)
+    : block.input.path ? String(block.input.path)
+    : block.input.url ? String(block.input.url).replace('https://', '').slice(0, 60)
+    : block.input.query ? String(block.input.query).slice(0, 60)
+    : '';
+}
+
 function describeListedRunKind(details: ListedRunDetails): string | null {
   if (details.source === 'deferred-resume') {
     return 'wakeup';
@@ -1341,12 +1443,101 @@ function presentLinkedRun(runId: string, listed: ListedRunDetails | null = null)
   };
 }
 
+function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>): LinkedRunPresentation | null {
+  if (block.tool !== 'run' || !isRecord(block.details) || block.details.action === 'list') {
+    return null;
+  }
+
+  const details = block.details;
+  const input = isRecord(block.input) ? block.input : null;
+  const action = readRunField(details, 'action') ?? readRunField(input, 'action');
+  const runId = readRunField(details, 'runId');
+  if (!action || !runId) {
+    return null;
+  }
+
+  const descriptor = describeLinkedRun(runId);
+  const taskSlug = readRunField(details, 'taskSlug') ?? readRunField(input, 'taskSlug');
+  const prompt = excerptLinkedRunText(readRunField(details, 'prompt') ?? readRunField(input, 'prompt'));
+  const command = excerptLinkedRunText(readRunField(details, 'command') ?? readRunField(input, 'command'));
+  const cwd = summarizeWorkspaceTail(readRunField(details, 'cwd') ?? readRunField(input, 'cwd'));
+  const model = readRunField(details, 'model') ?? readRunField(input, 'model');
+  const sourceRunId = readRunField(details, 'sourceRunId');
+  const status = readRunField(details, 'status');
+  const title = prompt ?? command ?? taskSlug ?? descriptor.detail ?? descriptor.title;
+  const detailBits: string[] = [];
+
+  if (status && status !== 'unknown') {
+    pushRunDetail(detailBits, normalizeRunLabel(status));
+  }
+
+  switch (action) {
+    case 'start_agent':
+      pushRunDetail(detailBits, 'agent run');
+      break;
+    case 'start':
+      pushRunDetail(detailBits, 'shell run');
+      break;
+    case 'follow_up':
+      pushRunDetail(detailBits, 'follow-up run');
+      break;
+    case 'rerun':
+      pushRunDetail(detailBits, 'rerun');
+      break;
+    case 'logs':
+      pushRunDetail(detailBits, 'log view');
+      break;
+    case 'get':
+      pushRunDetail(detailBits, 'run details');
+      break;
+    case 'cancel':
+      pushRunDetail(detailBits, 'cancelled');
+      break;
+    default:
+      pushRunDetail(detailBits, action.replace(/_/g, ' '));
+      break;
+  }
+
+  if (taskSlug && normalizeRunLabel(taskSlug) !== normalizeRunLabel(title)) {
+    pushRunDetail(detailBits, taskSlug);
+  }
+
+  if (cwd) {
+    pushRunDetail(detailBits, `cwd ${cwd}`);
+  }
+
+  if (model) {
+    pushRunDetail(detailBits, model.split('/').pop() ?? model);
+  }
+
+  if (sourceRunId) {
+    pushRunDetail(
+      detailBits,
+      `from ${summarizeLinkedRunTail(sourceRunId.replace(/^(?:run|task)-/, '')) ?? sourceRunId}`,
+    );
+  }
+
+  return {
+    runId,
+    title,
+    detail: detailBits.length > 0 ? detailBits.join(' · ') : null,
+  };
+}
+
 function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }>): { scope: 'listed' | 'mentioned'; runs: LinkedRunPresentation[] } {
   const listedRuns = readListedRuns(block);
   if (listedRuns) {
     return {
       scope: 'listed',
       runs: listedRuns.map((run) => presentLinkedRun(run.runId, run)),
+    };
+  }
+
+  const runToolLinkedRun = readRunToolLinkedRun(block);
+  if (runToolLinkedRun) {
+    return {
+      scope: 'mentioned',
+      runs: [runToolLinkedRun],
     };
   }
 
@@ -1428,12 +1619,7 @@ function ToolBlock({
   const outputDeferred = Boolean(block.outputDeferred && blockId && onHydrateMessage);
   const hydratingDeferredOutput = Boolean(blockId && hydratingMessageBlockIds?.has(blockId));
 
-  const preview = block.input.command
-    ? String(block.input.command).split('\n')[0].slice(0, 64)
-    : block.input.path  ? String(block.input.path)
-    : block.input.url   ? String(block.input.url).replace('https://', '').slice(0, 60)
-    : block.input.query ? String(block.input.query).slice(0, 60)
-    : '';
+  const preview = buildToolPreview(block);
   const hiddenRunCount = Math.max(0, linkedRuns.runs.length - MAX_VISIBLE_LINKED_RUNS);
   const visibleRuns = showAllRuns || hiddenRunCount === 0
     ? linkedRuns.runs

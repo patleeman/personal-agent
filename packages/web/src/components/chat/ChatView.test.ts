@@ -246,6 +246,40 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('mentioned run');
   });
 
+  it('shows run tool previews and linked run metadata for started agent runs', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'run',
+        input: {
+          action: 'start_agent',
+          taskSlug: 'ui-polish',
+          prompt: 'Inspect git diff',
+          cwd: '/Users/patrick/workingdir/personal-agent',
+        },
+        output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
+        status: 'running',
+        details: {
+          action: 'start_agent',
+          runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
+          taskSlug: 'ui-polish',
+          cwd: '/Users/patrick/workingdir/personal-agent',
+          model: 'openai-codex/gpt-5.4',
+        },
+      }],
+      isStreaming: true,
+      onOpenRun: () => undefined,
+    }));
+
+    expect(html).toContain('start_agent Inspect git diff');
+    expect(html).toContain('Open Inspect git diff');
+    expect(html).toContain('agent run');
+    expect(html).toContain('ui-polish');
+    expect(html).toContain('cwd personal-agent');
+    expect(html).toContain('gpt-5.4');
+  });
+
   it('limits listed runs in the transcript to 5 rows by default', () => {
     const listedRuns = Array.from({ length: 7 }, (_, index) => ({
       runId: `run-fix-build-${String.fromCharCode(97 + index)}-2026-03-25T00-53-25-347Z-903aa31b`,
