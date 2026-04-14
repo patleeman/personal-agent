@@ -88,8 +88,8 @@ type DesktopConversationShortcutAction =
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive';
 
-type ThreadsOrganizeMode = 'project' | 'chronological' | 'manual';
-type ThreadsSortMode = 'created' | 'updated';
+type ThreadsOrganizeMode = 'project' | 'chronological';
+type ThreadsSortMode = 'created' | 'updated' | 'manual';
 
 type SidebarConversationItem = {
   session: SessionMeta;
@@ -417,11 +417,7 @@ function writeConversationGroupLabelOverrides(overrides: Record<string, string>)
 function readThreadsOrganizeMode(): ThreadsOrganizeMode {
   try {
     const raw = localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY);
-    if (raw === 'chronological' || raw === 'manual') {
-      return raw;
-    }
-
-    return 'project';
+    return raw === 'chronological' || raw === 'manual' ? 'chronological' : 'project';
   } catch {
     return 'project';
   }
@@ -437,8 +433,12 @@ function writeThreadsOrganizeMode(value: ThreadsOrganizeMode): void {
 
 function readThreadsSortMode(): ThreadsSortMode {
   try {
+    if (localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY) === 'manual') {
+      return 'manual';
+    }
+
     const raw = localStorage.getItem(THREADS_SORT_BY_STORAGE_KEY);
-    return raw === 'updated' ? 'updated' : 'created';
+    return raw === 'updated' || raw === 'manual' ? raw : 'created';
   } catch {
     return 'created';
   }
@@ -496,7 +496,7 @@ function resolveConversationNumberHotkey(event: KeyboardEvent): number {
 }
 
 export function resolveSidebarConversationHotkeyOrder<T,>(input: {
-  organizeMode: 'project' | 'chronological' | 'manual';
+  organizeMode: 'project' | 'chronological';
   orderedItems: readonly T[];
   groupedRows: ReadonlyArray<{ key: string; items: readonly T[] }>;
   collapsedGroupKeys?: ReadonlySet<string>;
@@ -730,14 +730,8 @@ function ThreadsFilterButton({
               checked: organizeMode === 'chronological',
               onClick: () => onChangeOrganizeMode('chronological'),
             })}
-            {renderMenuItem({
-              label: 'Manual order',
-              icon: PATH.grip,
-              checked: organizeMode === 'manual',
-              onClick: () => onChangeOrganizeMode('manual'),
-            })}
             <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
-            <div className="px-2.5 pt-1 pb-1 text-[12px] font-medium text-dim">Sort by</div>
+            <div className="px-2.5 pt-1 pb-1 text-[12px] font-medium text-dim">Order</div>
             {renderMenuItem({
               label: 'Created',
               icon: PATH.clock,
@@ -749,6 +743,12 @@ function ThreadsFilterButton({
               icon: PATH.sparkles,
               checked: sortMode === 'updated',
               onClick: () => onChangeSortMode('updated'),
+            })}
+            {renderMenuItem({
+              label: 'Manual order',
+              icon: PATH.grip,
+              checked: sortMode === 'manual',
+              onClick: () => onChangeSortMode('manual'),
             })}
           </div>
         </div>
@@ -1562,6 +1562,19 @@ export function Sidebar() {
   const [sidebarNotice, setSidebarNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
   const [addWorkspaceBusy, setAddWorkspaceBusy] = useState(false);
 
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(THREADS_ORGANIZE_STORAGE_KEY) !== 'manual') {
+        return;
+      }
+    } catch {
+      return;
+    }
+
+    writeThreadsOrganizeMode('chronological');
+    writeThreadsSortMode('manual');
+  }, []);
+
   const showSidebarNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
     setSidebarNotice({ tone, text });
     if (sidebarNoticeTimeoutRef.current !== null) {
@@ -1675,7 +1688,7 @@ export function Sidebar() {
       originalIndex,
     }));
 
-    if (threadsOrganizeMode === 'manual') {
+    if (threadsSortMode === 'manual') {
       return [...pinnedItems, ...openItems];
     }
 
@@ -1683,7 +1696,7 @@ export function Sidebar() {
       ...pinnedItems,
       ...[...openItems].sort((left, right) => compareConversationItems(left, right, threadsSortMode)),
     ];
-  }, [pinnedSessions, threadsOrganizeMode, threadsSortMode, visibleConversationTabs]);
+  }, [pinnedSessions, threadsSortMode, visibleConversationTabs]);
   const workspaceOrder = useMemo(
     () => normalizeWorkspacePaths([...pinnedWorkspacePaths, ...savedWorkspacePaths, ...openWorkspacePaths]),
     [openWorkspacePaths, pinnedWorkspacePaths, savedWorkspacePaths],
@@ -1750,6 +1763,10 @@ export function Sidebar() {
       label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
     }));
   }, [conversationGroupLabelOverrides, conversationGroupLabels, orderedConversationItems, threadsOrganizeMode, workspaceOrder]);
+  const conversationGroupKeyBySessionId = useMemo(
+    () => new Map(groupedConversationRows.flatMap((group) => group.items.map(({ session }) => [session.id, group.key] as const))),
+    [groupedConversationRows],
+  );
   const collapsedConversationGroupKeySet = useMemo(
     () => new Set(collapsedConversationGroupKeys),
     [collapsedConversationGroupKeys],
@@ -1842,6 +1859,16 @@ export function Sidebar() {
     return event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after';
   }
 
+  function canDropConversationOnSession(draggedSessionId: string, targetSessionId: string): boolean {
+    if (threadsOrganizeMode !== 'project') {
+      return true;
+    }
+
+    const draggedGroupKey = conversationGroupKeyBySessionId.get(draggedSessionId);
+    const targetGroupKey = conversationGroupKeyBySessionId.get(targetSessionId);
+    return Boolean(draggedGroupKey && targetGroupKey && draggedGroupKey === targetGroupKey);
+  }
+
   function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     setDraggingSessionId(sessionId);
     setDraggingSection(section);
@@ -1853,6 +1880,11 @@ export function Sidebar() {
   function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
     if (!draggedId || !draggingSection || draggingSection !== section) {
+      return;
+    }
+
+    if (!canDropConversationOnSession(draggedId, sessionId)) {
+      setDropTarget(null);
       return;
     }
 
@@ -1883,7 +1915,12 @@ export function Sidebar() {
       return;
     }
 
-    if (threadsOrganizeMode !== 'manual') {
+    if (targetSessionId && !canDropConversationOnSession(draggingSessionId, targetSessionId)) {
+      clearDragState();
+      return;
+    }
+
+    if (threadsSortMode !== 'manual') {
       replaceConversationLayout({
         sessionIds: renderedConversationItems
           .filter((item) => item.section === 'open')
@@ -1893,8 +1930,8 @@ export function Sidebar() {
           .map((item) => item.session.id),
         archivedSessionIds: archivedConversationIds,
       });
-      setThreadsOrganizeMode('manual');
-      writeThreadsOrganizeMode('manual');
+      setThreadsSortMode('manual');
+      writeThreadsSortMode('manual');
     }
 
     moveSession(draggingSessionId, targetSection, targetSessionId, position);
