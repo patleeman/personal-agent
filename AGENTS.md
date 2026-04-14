@@ -7,6 +7,7 @@ This is personal software, built for Patrick by Patrick.
 - Prefer correct full implementations over backwards-compatibility layers. I don't want to implement the fastest smallest improvement most of the time.
 - For web UI work, prefer server-pushed updates (SSE + POST) over client polling when the backend can publish change events.
 - I often work on multiple features at the same time. Check other active runs and coordinate your work if you start seeing unintended changes to files you're editing.
+- If the worktree already has unrelated changes, I always want targeted commits that stage only the files for the task at hand.
 
 ## Always validate your work!
 
