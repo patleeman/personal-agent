@@ -2532,6 +2532,7 @@ export function Sidebar() {
   }
 
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
+  const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
 
   return (
     <>
@@ -2539,10 +2540,11 @@ export function Sidebar() {
         <div className="pt-1.5 pb-1 space-y-px">
           <div className="px-1">
             <button
+              type="button"
               onClick={() => handleNewConversation()}
               className={[
                 'ui-sidebar-nav-item mx-0 flex w-full text-secondary',
-                location.pathname.startsWith('/conversations') && 'ui-sidebar-nav-item-active',
+                chatButtonActive && 'ui-sidebar-nav-item-active',
               ].filter(Boolean).join(' ')}
               title={`Chat (${newConversationHotkeyLabel})`}
             >

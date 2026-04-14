@@ -554,11 +554,20 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Vault');
   });
 
-  it('marks Chat as the active nav on conversation routes and keeps row actions off the default row chrome', () => {
-    const html = renderSidebar('/conversations/conv-123');
+  it('highlights Chat on the new conversation route', () => {
+    const html = renderSidebar('/conversations/new');
 
     expect(html).toContain('Chat');
     expect(html).toContain('ui-sidebar-nav-item-active');
+    expect(html).not.toContain('ui-sidebar-session-row-active');
+  });
+
+  it('keeps Chat neutral on conversation routes while the selected thread owns the active chrome', () => {
+    const html = renderSidebar('/conversations/conv-123');
+
+    expect(html).toContain('Chat');
+    expect(html).not.toContain('ui-sidebar-nav-item-active');
+    expect(html).toContain('ui-sidebar-session-row-active');
     expect(html).toContain('ui-sidebar-session-time');
     expect(html).toContain('30m');
     expect(html).not.toContain('aria-label="Conversation actions: Clarify background run link"');

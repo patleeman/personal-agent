@@ -247,7 +247,7 @@
   }
 
   .ui-sidebar-nav-item {
-    @apply relative flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-steel/10 hover:text-primary;
+    @apply relative flex items-center gap-2 px-2.5 py-1.5 mx-1 rounded-md text-[13px] font-medium text-secondary transition-colors hover:bg-steel/10 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-steel/25 focus-visible:bg-steel/10 focus-visible:text-primary active:bg-steel/10 active:text-primary;
   }
 
   .ui-sidebar-nav-item-active {
