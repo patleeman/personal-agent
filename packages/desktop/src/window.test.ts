@@ -127,8 +127,8 @@ describe('window desktop navigation helpers', () => {
     electronApp.name = 'Personal Agent Testing';
 
     expect(buildWindowTitle({ id: 'local', label: 'Local', kind: 'local' })).toBe('Personal Agent Testing');
-    expect(buildWindowTitle({ id: 'web-1', label: 'Tailnet', kind: 'web', baseUrl: 'https://tailnet.example.ts.net' })).toBe(
-      'Personal Agent Testing — Tailnet (Web remote)',
+    expect(buildWindowTitle({ id: 'web-1', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://tailnet.example.ts.net/codex' })).toBe(
+      'Personal Agent Testing — Tailnet (WebSocket workspace)',
     );
 
     electronApp.name = 'Personal Agent';

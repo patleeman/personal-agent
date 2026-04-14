@@ -1,7 +1,7 @@
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
-import { readDesktopRemoteHostBearerToken } from '../state/remote-host-auth.js';
 import { parseApiDispatchResult } from './api-dispatch.js';
-import { RemoteAppServerClient } from './remote-app-server-client.js';
+import { CodexAppServerClient } from './codex-app-server-client.js';
+import { CodexWorkspaceApiAdapter } from './codex-workspace-api.js';
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
@@ -9,23 +9,17 @@ import type {
   HostStatus,
 } from './types.js';
 
-function normalizeBaseUrl(value: string): string {
+function normalizeWebsocketUrl(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
-    throw new Error('Remote web host base URL is required.');
+    throw new Error('Remote workspace websocket URL is required.');
   }
 
   const url = new URL(trimmed);
-  return url.toString().replace(/\/$/, '');
-}
-
-async function probeRemoteWebUi(baseUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(new URL('/api/status', baseUrl));
-    return response.ok || response.status === 401 || response.status === 403;
-  } catch {
-    return false;
+  if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
+    throw new Error(`Unsupported websocket protocol: ${url.protocol}`);
   }
+  return url.toString();
 }
 
 export class WebHostController implements HostController {
@@ -33,29 +27,22 @@ export class WebHostController implements HostController {
   readonly label: string;
   readonly kind = 'web' as const;
 
-  private readonly baseUrl: string;
-  private readonly appServerClient: RemoteAppServerClient;
+  private readonly websocketUrl: string;
+  private readonly codexClient: CodexAppServerClient;
+  private readonly apiAdapter: CodexWorkspaceApiAdapter;
 
   constructor(private readonly record: Extract<DesktopHostRecord, { kind: 'web' }>) {
     this.id = record.id;
     this.label = record.label;
-    this.baseUrl = normalizeBaseUrl(this.record.baseUrl);
-    const bearerToken = readDesktopRemoteHostBearerToken(record.id);
-    this.appServerClient = new RemoteAppServerClient({
-      baseUrl: this.baseUrl,
-      headers: bearerToken
-        ? { Authorization: `Bearer ${bearerToken}` }
-        : undefined,
+    this.websocketUrl = normalizeWebsocketUrl(this.record.websocketUrl);
+    this.codexClient = new CodexAppServerClient({ websocketUrl: this.websocketUrl });
+    this.apiAdapter = new CodexWorkspaceApiAdapter(this.codexClient, {
+      workspaceRoot: this.record.workspaceRoot,
     });
   }
 
   async ensureRunning(): Promise<void> {
-    const reachable = await probeRemoteWebUi(this.baseUrl);
-    if (!reachable) {
-      throw new Error(`Could not reach remote web host at ${this.baseUrl}.`);
-    }
-
-    await this.appServerClient.ensureConnected();
+    await this.codexClient.ensureConnected();
   }
 
   async getBaseUrl(): Promise<string> {
@@ -64,17 +51,23 @@ export class WebHostController implements HostController {
   }
 
   async getStatus(): Promise<HostStatus> {
-    const reachable = await probeRemoteWebUi(this.baseUrl);
-    return {
-      reachable,
-      mode: 'web-remote',
-      summary: reachable
-        ? `Remote web host reachable at ${this.baseUrl}.`
-        : `Remote web host unreachable at ${this.baseUrl}.`,
-      webUrl: this.baseUrl,
-      webHealthy: reachable,
-      lastError: reachable ? undefined : 'Remote web host is not currently reachable.',
-    };
+    try {
+      await this.ensureRunning();
+      return {
+        reachable: true,
+        mode: 'ws-remote',
+        summary: `Remote workspace reachable over ${this.websocketUrl}${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
+        webUrl: this.websocketUrl,
+      };
+    } catch (error) {
+      return {
+        reachable: false,
+        mode: 'ws-remote',
+        summary: `Remote workspace unreachable at ${this.websocketUrl}${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
+        webUrl: this.websocketUrl,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+    }
   }
 
   async openNewConversation(): Promise<string> {
@@ -89,7 +82,7 @@ export class WebHostController implements HostController {
     headers?: Record<string, string>;
   }) {
     await this.ensureRunning();
-    return this.appServerClient.dispatchApiRequest(input);
+    return this.apiAdapter.dispatchApiRequest(input);
   }
 
   async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
@@ -99,19 +92,19 @@ export class WebHostController implements HostController {
 
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
     await this.ensureRunning();
-    return this.appServerClient.subscribeApiStream(path, onEvent);
+    return this.apiAdapter.subscribeApiStream(path, onEvent);
   }
 
   async restart(): Promise<void> {
-    this.appServerClient.dispose();
+    this.codexClient.dispose();
     await this.ensureRunning();
   }
 
   async stop(): Promise<void> {
-    this.appServerClient.dispose();
+    this.codexClient.dispose();
   }
 
   async dispose(): Promise<void> {
-    this.appServerClient.dispose();
+    this.codexClient.dispose();
   }
 }

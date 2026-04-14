@@ -3,8 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   loadDesktopConfig: vi.fn(),
   saveDesktopConfig: vi.fn(),
-  readDesktopRemoteHostAuthState: vi.fn((hostId: string) => ({ hostId, hasBearerToken: false })),
-  writeDesktopRemoteHostAuth: vi.fn(),
   clearDesktopRemoteHostAuth: vi.fn((hostId: string) => ({ hostId, hasBearerToken: false })),
   LocalHostController: vi.fn(),
   SshHostController: vi.fn(),
@@ -17,8 +15,6 @@ vi.mock('../state/desktop-config.js', () => ({
 }));
 
 vi.mock('../state/remote-host-auth.js', () => ({
-  readDesktopRemoteHostAuthState: mocks.readDesktopRemoteHostAuthState,
-  writeDesktopRemoteHostAuth: mocks.writeDesktopRemoteHostAuth,
   clearDesktopRemoteHostAuth: mocks.clearDesktopRemoteHostAuth,
 }));
 
@@ -45,7 +41,7 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' 
     getBaseUrl: vi.fn().mockResolvedValue(`http://${id}.example.test`),
     getStatus: vi.fn().mockResolvedValue({
       reachable: true,
-      mode: kind === 'local' ? 'local-child-process' : kind === 'ssh' ? 'ssh-tunnel' : 'web-remote',
+      mode: kind === 'local' ? 'local-child-process' : kind === 'ssh' ? 'ssh-tunnel' : 'ws-remote',
       summary: `${label} ready`,
     }),
     openNewConversation: vi.fn().mockResolvedValue(`http://${id}.example.test/conversations/new`),
@@ -71,14 +67,11 @@ describe('HostManager', () => {
       windowState: { width: 1440, height: 960 },
       hosts: [
         { id: 'local', label: 'Local', kind: 'local' },
-        { id: 'web-1', label: 'Tailnet', kind: 'web', baseUrl: 'https://tailnet.example.ts.net', autoConnect: true },
+        { id: 'web-1', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://tailnet.example.ts.net/codex', workspaceRoot: '/workspace/home', autoConnect: true },
         { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' },
       ],
     });
 
-    mocks.readDesktopRemoteHostAuthState.mockImplementation((hostId: string) => ({ hostId, hasBearerToken: false }));
-    mocks.writeDesktopRemoteHostAuth.mockReset();
-    mocks.writeDesktopRemoteHostAuth.mockImplementation(({ hostId }: { hostId: string }) => ({ hostId, hasBearerToken: true }));
     mocks.clearDesktopRemoteHostAuth.mockImplementation((hostId: string) => ({ hostId, hasBearerToken: false }));
 
     mocks.LocalHostController.mockImplementation(function LocalHostController(record) {
@@ -149,38 +142,42 @@ describe('HostManager', () => {
     ]));
   });
 
-  it('pairs direct web hosts by exchanging a pairing code for a bearer token', async () => {
+  it('reports direct workspace hosts as unauthenticated legacy-free connections', () => {
     const manager = new HostManager();
-    mocks.readDesktopRemoteHostAuthState.mockImplementation((hostId: string) => ({
-      hostId,
-      hasBearerToken: true,
-      deviceLabel: 'Patrick desktop',
-      sessionId: 'session-1',
-    }));
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
-      ok: true,
-      json: vi.fn().mockResolvedValue({
-        bearerToken: 'desktop-token',
-        session: {
-          id: 'session-1',
-          deviceLabel: 'Patrick desktop',
-        },
-      }),
-    }));
-
-    await expect(manager.pairHost('web-1', { code: 'PAIR-1234', deviceLabel: 'Patrick desktop' })).resolves.toEqual({
-      hostId: 'web-1',
-      hasBearerToken: true,
-      deviceLabel: 'Patrick desktop',
-      sessionId: 'session-1',
-    });
-    expect(mocks.writeDesktopRemoteHostAuth).toHaveBeenCalledWith({
-      hostId: 'web-1',
-      bearerToken: 'desktop-token',
-      session: {
-        id: 'session-1',
-        deviceLabel: 'Patrick desktop',
-      },
-    });
+    expect(manager.readHostAuthState('web-1')).toEqual({ hostId: 'web-1', hasBearerToken: false });
   });
+
+  it('rejects bearer-token pairing for direct workspace hosts', async () => {
+    const manager = new HostManager();
+    await expect(manager.pairHost('web-1', { code: 'PAIR-1234' })).rejects.toThrow('Bearer-token pairing is no longer supported for remote workspaces.');
+  });
+
+  it('clears remote auth state as a no-op compatibility path', async () => {
+    const manager = new HostManager();
+    await expect(manager.clearHostAuth('web-1')).resolves.toEqual({ hostId: 'web-1', hasBearerToken: false });
+    expect(mocks.clearDesktopRemoteHostAuth).toHaveBeenCalledWith('web-1');
+  });
+
+  it('disposes active controllers when deleting a host', async () => {
+    const manager = new HostManager();
+    await manager.switchHost('ssh-1');
+    await manager.deleteHost('ssh-1');
+    expect(manager.getConnectionsState().hosts.some((host) => host.id === 'ssh-1')).toBe(false);
+  });
+
+  it('keeps saving websocket workspace connections', async () => {
+    const manager = new HostManager();
+    await manager.saveHost({
+      id: 'ws-1',
+      label: 'Studio',
+      kind: 'web',
+      websocketUrl: 'wss://studio.example/codex',
+      workspaceRoot: '/workspace/studio',
+    });
+    const savedConfig = mocks.saveDesktopConfig.mock.calls.at(-1)?.[0];
+    expect(savedConfig.hosts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'ws-1', websocketUrl: 'wss://studio.example/codex', workspaceRoot: '/workspace/studio' }),
+    ]));
+  });
+
 });

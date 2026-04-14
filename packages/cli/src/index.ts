@@ -60,6 +60,7 @@ import {
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { mcpCommand } from './mcp-command.js';
+import { codexCommand } from './codex-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
@@ -2740,6 +2741,14 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect and call MCP servers',
       disableBuiltInHelp: true,
       run: mcpCommand,
+    },
+    {
+      name: 'codex',
+      category: 'system',
+      usage: 'codex [app-server|help] [args...]',
+      description: 'Run Codex-compatible app-server helpers',
+      disableBuiltInHelp: true,
+      run: codexCommand,
     },
   ];
 

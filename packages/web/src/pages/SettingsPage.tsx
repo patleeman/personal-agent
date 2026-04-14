@@ -13,7 +13,6 @@ import type {
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
-  DesktopRemoteHostAuthState,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,
@@ -353,7 +352,8 @@ interface DesktopHostDraft {
   id: string;
   label: string;
   kind: 'web' | 'ssh';
-  baseUrl: string;
+  websocketUrl: string;
+  workspaceRoot: string;
   sshTarget: string;
   remoteRepoRoot: string;
   remotePort: string;
@@ -366,7 +366,8 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
       id: '',
       label: '',
       kind: 'web',
-      baseUrl: '',
+      websocketUrl: '',
+      workspaceRoot: '',
       sshTarget: '',
       remoteRepoRoot: '',
       remotePort: '3741',
@@ -379,7 +380,8 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
       id: host.id,
       label: host.label,
       kind: 'web',
-      baseUrl: host.baseUrl,
+      websocketUrl: host.websocketUrl,
+      workspaceRoot: host.workspaceRoot ?? '',
       sshTarget: '',
       remoteRepoRoot: '',
       remotePort: '3741',
@@ -391,7 +393,8 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
     id: host.id,
     label: host.label,
     kind: 'ssh',
-    baseUrl: '',
+    websocketUrl: '',
+    workspaceRoot: host.workspaceRoot ?? '',
     sshTarget: host.sshTarget,
     remoteRepoRoot: host.remoteRepoRoot ?? '',
     remotePort: host.remotePort ? String(host.remotePort) : '3741',
@@ -405,10 +408,10 @@ function formatDesktopHostDetails(host: DesktopHostRecord): string {
   }
 
   if (host.kind === 'web') {
-    return host.baseUrl;
+    return [host.websocketUrl, host.workspaceRoot || null].filter(Boolean).join(' · ');
   }
 
-  return [host.sshTarget, host.remoteRepoRoot || null, host.remotePort ? `port ${host.remotePort}` : null]
+  return [host.sshTarget, host.workspaceRoot || null, host.remoteRepoRoot || null, host.remotePort ? `port ${host.remotePort}` : null]
     .filter(Boolean)
     .join(' · ');
 }
@@ -462,11 +465,9 @@ function DesktopConnectionsSettingsPanel() {
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [editorMode, setEditorMode] = useState<DesktopHostEditorMode>('new');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
-  const [selectedHostAuth, setSelectedHostAuth] = useState<DesktopRemoteHostAuthState | null>(null);
-  const [pairingCodeDraft, setPairingCodeDraft] = useState('');
-  const [deviceLabelDraft, setDeviceLabelDraft] = useState('Desktop app');
+  const [litterShimState, setLitterShimState] = useState<{ installed: boolean; shimPath: string; command: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'pair' | 'clear-auth' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'pair' | 'clear-auth' | 'install-shim' | 'uninstall-shim' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -514,29 +515,28 @@ function DesktopConnectionsSettingsPanel() {
 
   useEffect(() => {
     const bridge = getDesktopBridge();
-    const selectedHost = connections?.hosts.find((host) => host.id === selectedHostId) ?? null;
-    if (!bridge || !selectedHost || selectedHost.kind !== 'web') {
-      setSelectedHostAuth(null);
+    if (!bridge) {
+      setLitterShimState(null);
       return;
     }
 
     let cancelled = false;
-    void bridge.readHostAuthState(selectedHost.id)
+    void bridge.readLitterShimState()
       .then((state) => {
         if (!cancelled) {
-          setSelectedHostAuth(state);
+          setLitterShimState(state);
         }
       })
       .catch(() => {
         if (!cancelled) {
-          setSelectedHostAuth(null);
+          setLitterShimState(null);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [connections, selectedHostId]);
+  }, []);
 
   const bridge = getDesktopBridge();
   const desktopShell = isDesktopShell();
@@ -558,9 +558,6 @@ function DesktopConnectionsSettingsPanel() {
     setEditorMode('new');
     setSelectedHostId('');
     setDraft(createDesktopHostDraft());
-    setSelectedHostAuth(null);
-    setPairingCodeDraft('');
-    setDeviceLabelDraft('Desktop app');
     setError(null);
     setNotice(null);
   }
@@ -574,7 +571,6 @@ function DesktopConnectionsSettingsPanel() {
     setEditorMode('existing');
     setSelectedHostId(host.id);
     setDraft(createDesktopHostDraft(host));
-    setPairingCodeDraft('');
     setError(null);
     setNotice(null);
   }
@@ -639,8 +635,8 @@ function DesktopConnectionsSettingsPanel() {
 
     let host: Extract<DesktopHostRecord, { kind: 'web' | 'ssh' }>;
     if (draft.kind === 'web') {
-      if (!draft.baseUrl.trim()) {
-        setError('Base URL is required for web hosts.');
+      if (!draft.websocketUrl.trim()) {
+        setError('WebSocket URL is required for remote workspaces.');
         return;
       }
 
@@ -648,7 +644,8 @@ function DesktopConnectionsSettingsPanel() {
         id: draft.id.trim(),
         label: draft.label.trim(),
         kind: 'web',
-        baseUrl: draft.baseUrl.trim(),
+        websocketUrl: draft.websocketUrl.trim(),
+        ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
         autoConnect: draft.autoConnect,
       };
     } else {
@@ -663,6 +660,7 @@ function DesktopConnectionsSettingsPanel() {
         label: draft.label.trim(),
         kind: 'ssh',
         sshTarget: draft.sshTarget.trim(),
+        ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
         remoteRepoRoot: draft.remoteRepoRoot.trim() || undefined,
         remotePort: Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : undefined,
         autoConnect: draft.autoConnect,
@@ -681,8 +679,8 @@ function DesktopConnectionsSettingsPanel() {
       setSelectedHostId(host.id);
       setDraft(createDesktopHostDraft(host));
       setNotice(draft.kind === 'ssh'
-        ? 'SSH host saved.'
-        : 'Remote web host saved.');
+        ? 'SSH workspace saved.'
+        : 'Remote workspace saved.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -705,7 +703,7 @@ function DesktopConnectionsSettingsPanel() {
       setConnections(nextConnections);
       await refreshDesktopState();
       startNewHostDraft();
-      setNotice('Remote host deleted.');
+      setNotice('Remote workspace deleted.');
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -713,35 +711,20 @@ function DesktopConnectionsSettingsPanel() {
     }
   }
 
-  async function handlePairHost(hostId: string) {
+  async function handleInstallLitterShim() {
     const bridge = getDesktopBridge();
     if (!bridge) {
       return;
     }
 
-    const normalizedCode = pairingCodeDraft.trim();
-    if (!normalizedCode) {
-      setError('Pairing code is required.');
-      return;
-    }
-
-    setAction('pair');
+    setAction('install-shim');
     setError(null);
     setNotice(null);
 
     try {
-      const authState = await bridge.pairHost({
-        hostId,
-        code: normalizedCode,
-        ...(deviceLabelDraft.trim().length > 0
-          ? { deviceLabel: deviceLabelDraft.trim() }
-          : {}),
-      });
-      setSelectedHostAuth(authState);
-      setPairingCodeDraft('');
-      setNotice(authState.deviceLabel
-        ? `Stored bearer token for ${authState.deviceLabel}.`
-        : 'Stored bearer token for this remote host.');
+      const state = await bridge.installLitterShim();
+      setLitterShimState(state);
+      setNotice(`Installed Litter Codex shim at ${state.shimPath}.`);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -749,20 +732,20 @@ function DesktopConnectionsSettingsPanel() {
     }
   }
 
-  async function handleClearHostAuth(hostId: string) {
+  async function handleUninstallLitterShim() {
     const bridge = getDesktopBridge();
     if (!bridge) {
       return;
     }
 
-    setAction('clear-auth');
+    setAction('uninstall-shim');
     setError(null);
     setNotice(null);
 
     try {
-      const authState = await bridge.clearHostAuth(hostId);
-      setSelectedHostAuth(authState);
-      setNotice('Cleared stored bearer token.');
+      const state = await bridge.uninstallLitterShim();
+      setLitterShimState(state);
+      setNotice(`Removed Litter Codex shim from ${state.shimPath}.`);
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
     } finally {
@@ -774,19 +757,19 @@ function DesktopConnectionsSettingsPanel() {
     <SettingsSection
       id="settings-desktop"
       label="Desktop"
-      description="Manage local and remote desktop hosts."
+      description="Manage local and remote workspace connections."
       className="order-4"
     >
       <SettingsPanel
         title="Connections"
-        description="Switch hosts for the Electron app. Web uses direct URLs; SSH uses the desktop tunnel."
+        description="Switch workspace connections for the Electron app. WebSocket uses direct Codex URLs; SSH tunnels into a remote workspace helper."
         actions={(
           <button
             type="button"
             onClick={startNewHostDraft}
             className={ACTION_BUTTON_CLASS}
           >
-            New remote host
+            New remote workspace
           </button>
         )}
       >
@@ -798,7 +781,7 @@ function DesktopConnectionsSettingsPanel() {
         ) : null}
         {environment ? (
           <p className="ui-card-meta">
-            Active host: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
+            Active workspace: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
           </p>
         ) : null}
         {connections ? (
@@ -813,7 +796,7 @@ function DesktopConnectionsSettingsPanel() {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="text-[13px] font-medium text-primary">{host.label}</span>
-                        <span className="ui-card-meta">{host.kind === 'local' ? 'local' : host.kind === 'web' ? 'web' : 'ssh'}</span>
+                        <span className="ui-card-meta">{host.kind === 'local' ? 'local' : host.kind === 'web' ? 'websocket' : 'ssh'}</span>
                         {active ? <span className="ui-card-meta">active</span> : null}
                         {isDefault ? <span className="ui-card-meta">default on launch</span> : null}
                       </div>
@@ -866,8 +849,8 @@ function DesktopConnectionsSettingsPanel() {
 
             <div className="space-y-4 border-t border-border-subtle pt-6">
               <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit remote host' : 'New remote host'}</h3>
-                <p className="ui-card-meta">Saved hosts stay machine-local to this desktop app.</p>
+                <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit remote workspace' : 'New remote workspace'}</h3>
+                <p className="ui-card-meta">Saved workspace connections stay machine-local to this desktop app.</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -906,24 +889,39 @@ function DesktopConnectionsSettingsPanel() {
                     disabled={action !== null}
                     className={INPUT_CLASS}
                   >
-                    <option value="web">Web / Tailscale</option>
+                    <option value="web">WebSocket</option>
                     <option value="ssh">SSH</option>
                   </select>
                 </div>
                 {draft.kind === 'web' ? (
-                  <div className="space-y-2 min-w-0 md:col-span-2">
-                    <label className="ui-card-meta" htmlFor="desktop-host-base-url">Base URL</label>
-                    <input
-                      id="desktop-host-base-url"
-                      value={draft.baseUrl}
-                      onChange={(event) => setDraft((current) => ({ ...current, baseUrl: event.target.value }))}
-                      disabled={action !== null}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="https://my-machine.ts.net"
-                    />
-                  </div>
+                  <>
+                    <div className="space-y-2 min-w-0 md:col-span-2">
+                      <label className="ui-card-meta" htmlFor="desktop-host-base-url">WebSocket URL</label>
+                      <input
+                        id="desktop-host-base-url"
+                        value={draft.websocketUrl}
+                        onChange={(event) => setDraft((current) => ({ ...current, websocketUrl: event.target.value }))}
+                        disabled={action !== null}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="wss://my-machine.example/codex"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0 md:col-span-2">
+                      <label className="ui-card-meta" htmlFor="desktop-host-web-workspace-root">Workspace root</label>
+                      <input
+                        id="desktop-host-web-workspace-root"
+                        value={draft.workspaceRoot}
+                        onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
+                        disabled={action !== null}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="/workspace/project"
+                      />
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="space-y-2 min-w-0">
@@ -940,7 +938,20 @@ function DesktopConnectionsSettingsPanel() {
                       />
                     </div>
                     <div className="space-y-2 min-w-0">
-                      <label className="ui-card-meta" htmlFor="desktop-host-remote-port">Remote web UI port</label>
+                      <label className="ui-card-meta" htmlFor="desktop-host-workspace-root">Workspace root</label>
+                      <input
+                        id="desktop-host-workspace-root"
+                        value={draft.workspaceRoot}
+                        onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
+                        disabled={action !== null}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="~/workingdir/project"
+                      />
+                    </div>
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-host-remote-port">Remote codex port</label>
                       <input
                         id="desktop-host-remote-port"
                         value={draft.remotePort}
@@ -949,7 +960,7 @@ function DesktopConnectionsSettingsPanel() {
                         className={`${INPUT_CLASS} font-mono text-[13px]`}
                         autoComplete="off"
                         spellCheck={false}
-                        placeholder="3741"
+                        placeholder="8390"
                       />
                     </div>
                     <div className="space-y-2 min-w-0 md:col-span-2">
@@ -978,74 +989,47 @@ function DesktopConnectionsSettingsPanel() {
                   disabled={action !== null}
                   className={CHECKBOX_CLASS}
                 />
-                <span>Use as default host on launch</span>
+                <span>Use as default workspace on launch</span>
               </label>
 
               <p className="ui-card-meta">
-                The active host controls this window right now. The default host controls which host opens the next time the desktop app launches.
+                The active workspace controls this window right now. The default workspace controls which connection opens the next time the desktop app launches.
               </p>
 
-              {editorMode === 'existing' && selectedHostId && draft.kind === 'web' ? (
-                <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
-                  <p className="text-[13px] font-medium text-primary">Direct remote auth</p>
-                  <p className="ui-card-meta">
-                    Direct web remotes use a stored bearer token for the app-server WebSocket. Generate a short-lived pairing code on the remote host, then pair this saved host once.
-                  </p>
-                  <p className="ui-card-meta">
-                    {selectedHostAuth?.hasBearerToken
-                      ? `Stored token${selectedHostAuth.deviceLabel ? ` for ${selectedHostAuth.deviceLabel}` : ''}${selectedHostAuth.expiresAt ? ` · expires ${new Date(selectedHostAuth.expiresAt).toLocaleString()}` : ''}`
-                      : 'No stored bearer token for this host.'}
-                  </p>
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="space-y-2 min-w-0">
-                      <label className="ui-card-meta" htmlFor="desktop-host-pairing-code">Pairing code</label>
-                      <input
-                        id="desktop-host-pairing-code"
-                        value={pairingCodeDraft}
-                        onChange={(event) => setPairingCodeDraft(event.target.value)}
-                        disabled={action !== null}
-                        className={`${INPUT_CLASS} font-mono text-[13px]`}
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="ABCD-EFGH-JKLM"
-                      />
-                    </div>
-                    <div className="space-y-2 min-w-0">
-                      <label className="ui-card-meta" htmlFor="desktop-host-device-label">Device label</label>
-                      <input
-                        id="desktop-host-device-label"
-                        value={deviceLabelDraft}
-                        onChange={(event) => setDeviceLabelDraft(event.target.value)}
-                        disabled={action !== null}
-                        className={INPUT_CLASS}
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="Desktop app"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+              <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
+                <p className="text-[13px] font-medium text-primary">Litter SSH shim</p>
+                <p className="ui-card-meta">
+                  Install a machine-local <span className="font-mono text-[11px]">~/.litter/bin/codex</span> shim so Litter can SSH in and launch the desktop app's Codex-compatible server.
+                </p>
+                <p className="ui-card-meta break-all">
+                  {litterShimState?.installed
+                    ? `Installed at ${litterShimState.shimPath}`
+                    : `Not installed. Expected path: ${litterShimState?.shimPath ?? '~/.litter/bin/codex'}`}
+                </p>
+                {litterShimState?.command ? (
+                  <p className="ui-card-meta break-all">Command: <span className="font-mono text-[11px]">{litterShimState.command}</span></p>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { void handleInstallLitterShim(); }}
+                    disabled={action !== null}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    {action === 'install-shim' ? 'Installing…' : litterShimState?.installed ? 'Reinstall shim' : 'Install shim'}
+                  </button>
+                  {litterShimState?.installed ? (
                     <button
                       type="button"
-                      onClick={() => { void handlePairHost(selectedHostId); }}
-                      disabled={action !== null || pairingCodeDraft.trim().length === 0}
+                      onClick={() => { void handleUninstallLitterShim(); }}
+                      disabled={action !== null}
                       className={ACTION_BUTTON_CLASS}
                     >
-                      {action === 'pair' ? 'Pairing…' : selectedHostAuth?.hasBearerToken ? 'Replace token' : 'Pair with code'}
+                      {action === 'uninstall-shim' ? 'Removing…' : 'Remove shim'}
                     </button>
-                    {selectedHostAuth?.hasBearerToken ? (
-                      <button
-                        type="button"
-                        onClick={() => { void handleClearHostAuth(selectedHostId); }}
-                        disabled={action !== null}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {action === 'clear-auth' ? 'Clearing…' : 'Clear token'}
-                      </button>
-                    ) : null}
-                  </div>
+                  ) : null}
                 </div>
-              ) : null}
+              </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <button

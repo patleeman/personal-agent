@@ -28,9 +28,9 @@ vi.mock('electron', () => ({
 import { buildSshBootstrapCommand } from './ssh-host-controller.js';
 
 describe('buildSshBootstrapCommand', () => {
-  it('boots the remote web UI with the foreground subcommand instead of bare pa ui', () => {
-    expect(buildSshBootstrapCommand({ remotePort: 4741 })).toContain('pa ui foreground --port 4741');
-    expect(buildSshBootstrapCommand({ remotePort: 4741 })).not.toContain(' PA_WEB_PORT=4741 PA_WEB_DISABLE_COMPANION=1 pa ui ');
+  it('boots the remote codex server via pa codex app-server', () => {
+    expect(buildSshBootstrapCommand({ remotePort: 4741 })).toContain('pa codex app-server --listen ws://127.0.0.1:4741');
+    expect(buildSshBootstrapCommand({ remotePort: 4741 })).not.toContain('pa ui foreground');
   });
 
   it('quotes custom repo roots safely', () => {

@@ -37,6 +37,9 @@ const desktopBridge = {
   readHostAuthState: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-host-auth-state`, hostId),
   pairHost: (input: { hostId: string; code: string; deviceLabel?: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:pair-host`, input),
   clearHostAuth: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:clear-host-auth`, hostId),
+  readLitterShimState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-litter-shim-state`),
+  installLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:install-litter-shim`),
+  uninstallLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:uninstall-litter-shim`),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
   showConversationContextMenu: (input: {
     x: number;

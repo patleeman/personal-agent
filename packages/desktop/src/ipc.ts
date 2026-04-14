@@ -4,6 +4,7 @@ import { showConversationCwdGroupContextMenu } from './conversation-cwd-group-co
 import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
+import { installLitterShim, readLitterShimState, uninstallLitterShim } from './litter-shim.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
@@ -136,6 +137,10 @@ export function registerDesktopIpc(options: {
     options.onHostStateChanged?.();
     return result;
   });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-litter-shim-state`, async () => readLitterShimState());
+  ipcMain.handle(`${CHANNEL_PREFIX}:install-litter-shim`, async () => installLitterShim());
+  ipcMain.handle(`${CHANNEL_PREFIX}:uninstall-litter-shim`, async () => uninstallLitterShim());
 
   ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)

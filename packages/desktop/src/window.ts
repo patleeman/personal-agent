@@ -123,7 +123,7 @@ export function buildWindowTitle(host: DesktopHostRecord): string {
     return appName;
   }
 
-  const kindLabel = host.kind === 'web' ? 'Web remote' : 'SSH remote';
+  const kindLabel = host.kind === 'web' ? 'WebSocket workspace' : 'SSH workspace';
   return `${appName} — ${host.label} (${kindLabel})`;
 }
 

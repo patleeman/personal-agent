@@ -103,6 +103,9 @@ export interface PersonalAgentDesktopBridge {
   readHostAuthState(hostId: string): Promise<DesktopRemoteHostAuthState>;
   pairHost(input: { hostId: string; code: string; deviceLabel?: string }): Promise<DesktopRemoteHostAuthState>;
   clearHostAuth(hostId: string): Promise<DesktopRemoteHostAuthState>;
+  readLitterShimState(): Promise<{ installed: boolean; shimPath: string; command: string }>;
+  installLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;
+  uninstallLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;

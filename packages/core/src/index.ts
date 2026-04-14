@@ -80,3 +80,6 @@ export * from './memory-store.js';
 // Unified durable nodes
 export * from './nodes.js';
 
+// Codex compatibility transport helpers
+export * from './codex-compat.js';
+

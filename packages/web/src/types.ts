@@ -702,6 +702,7 @@ export type DesktopHostRecord =
       label: string;
       kind: 'ssh';
       sshTarget: string;
+      workspaceRoot?: string;
       remoteRepoRoot?: string;
       remotePort?: number;
       autoConnect?: boolean;
@@ -710,7 +711,8 @@ export type DesktopHostRecord =
       id: string;
       label: string;
       kind: 'web';
-      baseUrl: string;
+      websocketUrl: string;
+      workspaceRoot?: string;
       autoConnect?: boolean;
     };
 

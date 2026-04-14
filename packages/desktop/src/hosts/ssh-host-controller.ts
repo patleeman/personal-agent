@@ -4,7 +4,8 @@ import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { getAvailableTcpPort } from '../backend/ports.js';
 import { parseApiDispatchResult } from './api-dispatch.js';
-import { RemoteAppServerClient } from './remote-app-server-client.js';
+import { CodexAppServerClient } from './codex-app-server-client.js';
+import { CodexWorkspaceApiAdapter } from './codex-workspace-api.js';
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
@@ -13,30 +14,25 @@ import type {
 } from './types.js';
 
 function getRemoteBaseUrl(port: number): string {
-  return `http://127.0.0.1:${String(port)}`;
+  return `ws://127.0.0.1:${String(port)}`;
 }
 
-async function probeRemoteWebUi(baseUrl: string): Promise<boolean> {
-  try {
-    const response = await fetch(new URL('/api/status', baseUrl));
-    return response.ok || response.status === 401 || response.status === 403;
-  } catch {
-    return false;
-  }
-}
-
-async function waitForRemoteWebUi(baseUrl: string, timeoutMs = 15_000): Promise<void> {
+async function waitForCodexServer(client: CodexAppServerClient, timeoutMs = 15_000): Promise<void> {
   const startedAt = Date.now();
+  let lastError: Error | null = null;
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (await probeRemoteWebUi(baseUrl)) {
+    try {
+      await client.ensureConnected();
       return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
     }
 
     await delay(300);
   }
 
-  throw new Error(`Timed out waiting for SSH remote web UI at ${baseUrl}.`);
+  throw new Error(`Timed out waiting for SSH remote codex server.${lastError ? ` ${lastError.message}` : ''}`);
 }
 
 export class SshHostController implements HostController {
@@ -46,7 +42,8 @@ export class SshHostController implements HostController {
 
   private tunnelProcess?: ChildProcess;
   private forwardedPort?: number;
-  private appServerClient?: RemoteAppServerClient;
+  private codexClient?: CodexAppServerClient;
+  private apiAdapter?: CodexWorkspaceApiAdapter;
 
   constructor(private readonly record: Extract<DesktopHostRecord, { kind: 'ssh' }>) {
     this.id = record.id;
@@ -54,32 +51,30 @@ export class SshHostController implements HostController {
   }
 
   async ensureRunning(): Promise<void> {
-    let baseUrl: string | null = null;
-
-    if (this.forwardedPort) {
-      const currentBaseUrl = getRemoteBaseUrl(this.forwardedPort);
-      const healthy = await probeRemoteWebUi(currentBaseUrl);
-      if (healthy) {
-        baseUrl = currentBaseUrl;
+    if (this.codexClient && this.forwardedPort) {
+      try {
+        await this.codexClient.ensureConnected();
+        return;
+      } catch {
+        await this.disposeTunnel();
       }
     }
 
-    if (!baseUrl) {
-      await this.disposeTunnel();
+    const forwardedPort = await getAvailableTcpPort();
+    const remotePort = this.record.remotePort ?? 8390;
+    await this.startTunnel(forwardedPort, remotePort);
+    this.forwardedPort = forwardedPort;
+    this.codexClient = new CodexAppServerClient({ websocketUrl: getRemoteBaseUrl(forwardedPort) });
+    this.apiAdapter = new CodexWorkspaceApiAdapter(this.codexClient, {
+      workspaceRoot: this.record.workspaceRoot,
+    });
 
-      const forwardedPort = await getAvailableTcpPort();
-      const remotePort = this.record.remotePort ?? 3741;
-      await this.startTunnel(forwardedPort, remotePort);
-      this.forwardedPort = forwardedPort;
-
-      baseUrl = getRemoteBaseUrl(forwardedPort);
-      if (!(await probeRemoteWebUi(baseUrl))) {
-        await this.bootstrapRemoteHost(remotePort);
-        await waitForRemoteWebUi(baseUrl);
-      }
+    try {
+      await waitForCodexServer(this.codexClient);
+    } catch {
+      await this.bootstrapRemoteHost(remotePort);
+      await waitForCodexServer(this.codexClient);
     }
-
-    await this.getAppServerClient().ensureConnected();
   }
 
   async getBaseUrl(): Promise<string> {
@@ -88,18 +83,33 @@ export class SshHostController implements HostController {
   }
 
   async getStatus(): Promise<HostStatus> {
-    const baseUrl = this.forwardedPort ? getRemoteBaseUrl(this.forwardedPort) : undefined;
-    const reachable = baseUrl ? await probeRemoteWebUi(baseUrl) : false;
+    const webUrl = this.forwardedPort ? getRemoteBaseUrl(this.forwardedPort) : undefined;
+    try {
+      if (this.codexClient) {
+        await this.codexClient.ensureConnected();
+        return {
+          reachable: true,
+          mode: 'ssh-tunnel',
+          summary: `SSH workspace tunnel active via ${this.record.sshTarget}${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
+          webUrl,
+        };
+      }
+    } catch (error) {
+      return {
+        reachable: false,
+        mode: 'ssh-tunnel',
+        summary: `SSH workspace ${this.record.sshTarget} is configured but not currently reachable${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
+        webUrl,
+        lastError: error instanceof Error ? error.message : String(error),
+      };
+    }
 
     return {
-      reachable,
+      reachable: false,
       mode: 'ssh-tunnel',
-      summary: reachable
-        ? `SSH tunnel active via ${this.record.sshTarget}.`
-        : `SSH host ${this.record.sshTarget} is configured${this.forwardedPort ? ' but not currently reachable.' : ' and not connected yet.'}`,
-      webUrl: baseUrl,
-      webHealthy: reachable,
-      lastError: reachable ? undefined : 'SSH remote is not currently reachable.',
+      summary: `SSH workspace ${this.record.sshTarget} is configured and not connected yet${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
+      webUrl,
+      lastError: 'SSH workspace is not currently reachable.',
     };
   }
 
@@ -115,7 +125,10 @@ export class SshHostController implements HostController {
     headers?: Record<string, string>;
   }) {
     await this.ensureRunning();
-    return this.getAppServerClient().dispatchApiRequest(input);
+    if (!this.apiAdapter) {
+      throw new Error('SSH workspace codex adapter is unavailable.');
+    }
+    return this.apiAdapter.dispatchApiRequest(input);
   }
 
   async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
@@ -125,7 +138,10 @@ export class SshHostController implements HostController {
 
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
     await this.ensureRunning();
-    return this.getAppServerClient().subscribeApiStream(path, onEvent);
+    if (!this.apiAdapter) {
+      throw new Error('SSH workspace codex adapter is unavailable.');
+    }
+    return this.apiAdapter.subscribeApiStream(path, onEvent);
   }
 
   async restart(): Promise<void> {
@@ -203,23 +219,10 @@ export class SshHostController implements HostController {
     });
   }
 
-  private getAppServerClient(): RemoteAppServerClient {
-    if (!this.forwardedPort) {
-      throw new Error('SSH tunnel did not start correctly.');
-    }
-
-    if (!this.appServerClient) {
-      this.appServerClient = new RemoteAppServerClient({
-        baseUrl: getRemoteBaseUrl(this.forwardedPort),
-      });
-    }
-
-    return this.appServerClient;
-  }
-
   private async disposeTunnel(): Promise<void> {
-    this.appServerClient?.dispose();
-    this.appServerClient = undefined;
+    this.apiAdapter = undefined;
+    this.codexClient?.dispose();
+    this.codexClient = undefined;
 
     const tunnel = this.tunnelProcess;
     this.tunnelProcess = undefined;
@@ -275,8 +278,6 @@ export function buildSshBootstrapCommand(input: { repoRoot?: string; remotePort:
   return [
     `cd ${renderRemotePathForShell(repoRoot)}`,
     '&&',
-    'nohup pa daemon start >/tmp/personal-agentd.desktop.log 2>&1 &',
-    '&&',
-    `nohup env PA_WEB_DISABLE_COMPANION=1 pa ui foreground --port ${String(input.remotePort)} >/tmp/personal-agent-web.desktop.log 2>&1 &`,
+    `nohup pa codex app-server --listen ws://127.0.0.1:${String(input.remotePort)} >/tmp/personal-agent-codex.desktop.log 2>&1 &`,
   ].join(' ');
 }

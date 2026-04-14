@@ -20,6 +20,51 @@ function ensureLocalHost(hosts: DesktopHostRecord[]): DesktopHostRecord[] {
   return [createDefaultLocalHost(), ...nextHosts];
 }
 
+function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
+  if (!host || typeof host !== 'object') {
+    return null;
+  }
+
+  const candidate = host as Record<string, unknown>;
+  const id = typeof candidate.id === 'string' ? candidate.id.trim() : '';
+  const label = typeof candidate.label === 'string' ? candidate.label.trim() : '';
+  const kind = candidate.kind;
+  if (!id || !label || (kind !== 'local' && kind !== 'ssh' && kind !== 'web')) {
+    return null;
+  }
+
+  if (kind === 'local') {
+    return { id, label, kind: 'local' };
+  }
+
+  if (kind === 'ssh') {
+    return {
+      id,
+      label,
+      kind: 'ssh',
+      sshTarget: typeof candidate.sshTarget === 'string' ? candidate.sshTarget : '',
+      workspaceRoot: typeof candidate.workspaceRoot === 'string' ? candidate.workspaceRoot : undefined,
+      remoteRepoRoot: typeof candidate.remoteRepoRoot === 'string' ? candidate.remoteRepoRoot : undefined,
+      remotePort: typeof candidate.remotePort === 'number' ? candidate.remotePort : undefined,
+      autoConnect: candidate.autoConnect === true,
+    };
+  }
+
+  const websocketUrl = typeof candidate.websocketUrl === 'string'
+    ? candidate.websocketUrl
+    : typeof candidate.baseUrl === 'string'
+      ? candidate.baseUrl
+      : '';
+  return {
+    id,
+    label,
+    kind: 'web',
+    websocketUrl,
+    workspaceRoot: typeof candidate.workspaceRoot === 'string' ? candidate.workspaceRoot : undefined,
+    autoConnect: candidate.autoConnect === true,
+  };
+}
+
 function normalizeDesktopConfig(value: unknown): DesktopConfig {
   if (!value || typeof value !== 'object') {
     return createDefaultDesktopConfig();
@@ -27,7 +72,7 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
 
   const input = value as Partial<DesktopConfig>;
   const hosts = Array.isArray(input.hosts)
-    ? ensureLocalHost(input.hosts.filter((host): host is DesktopHostRecord => Boolean(host && typeof host === 'object' && typeof (host as { id?: unknown }).id === 'string')))
+    ? ensureLocalHost(input.hosts.map((host) => normalizeHostRecord(host)).filter((host): host is DesktopHostRecord => host !== null))
     : [createDefaultLocalHost()];
 
   const defaultHostId = typeof input.defaultHostId === 'string' && hosts.some((host) => host.id === input.defaultHostId)

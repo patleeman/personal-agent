@@ -53,14 +53,23 @@ Otherwise, prefer the shared server route/API surface.
 
 ## Remote mode
 
-Remote hosts still use the web/server API surface, but the transport is now an app-server WebSocket owned by Electron main instead of loading a remote browser origin directly.
+Remote desktop connections are workspace-scoped and use a Codex-compatible app-server protocol instead of the old `pa-app-server-v1` desktop bridge.
 
 That means:
 
-- Electron windows still render the packaged `personal-agent://app/` UI for remote hosts
-- remote `/api/*` requests and SSE-style streams are forwarded through the main process over app-server
-- direct web remotes authenticate app-server with a stored bearer token minted from a one-time pairing-code exchange
-- the preload bridge remains the renderer boundary; app-server replaces the old remote transport, not desktop IPC
+- Electron windows still render the packaged `personal-agent://app/` UI for remote workspaces
+- remote `/api/*` requests and SSE-style streams are adapted in Electron main onto Codex app-server requests and notifications
+- direct remote workspaces connect to a `ws://` / `wss://` Codex-compatible endpoint
+- SSH remote workspaces tunnel a remote `pa codex app-server --listen ...` process
+- the preload bridge remains the renderer boundary; the remote transport is now the Codex protocol, not a custom desktop-only websocket surface
++
++## Litter compatibility
++
++The desktop app owns installation of the local Litter SSH shim at `~/.litter/bin/codex`.
++
++- the shim delegates `codex app-server ...` to the desktop app's headless Codex-compatible server mode
++- the same server implementation also backs direct websocket remotes and SSH-bootstrapped remote workspaces
++- local Litter connectivity should not require replacing the system `codex` binary globally
 
 ## UI shape
 

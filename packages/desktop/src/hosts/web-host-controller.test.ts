@@ -1,19 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  ensureConnected: vi.fn().mockResolvedValue(undefined),
-  dispatchApiRequest: vi.fn(),
-  subscribeApiStream: vi.fn(),
-  dispose: vi.fn(),
-  readDesktopRemoteHostBearerToken: vi.fn(() => ''),
+const electronMocks = vi.hoisted(() => ({
   registerSchemesAsPrivileged: vi.fn(),
   protocolHandle: vi.fn(),
   partitionProtocolHandle: vi.fn(),
   fromPartition: vi.fn(() => ({
     protocol: {
-      handle: mocks.partitionProtocolHandle,
+      handle: electronMocks.partitionProtocolHandle,
     },
   })),
+}));
+
+const mocks = vi.hoisted(() => ({
+  ensureConnected: vi.fn().mockResolvedValue(undefined),
+  dispose: vi.fn(),
+  adapterDispatch: vi.fn(),
+  adapterSubscribe: vi.fn(),
 }));
 
 vi.mock('electron', () => ({
@@ -22,24 +24,25 @@ vi.mock('electron', () => ({
     getAppPath: vi.fn(),
   },
   protocol: {
-    registerSchemesAsPrivileged: mocks.registerSchemesAsPrivileged,
-    handle: mocks.protocolHandle,
+    registerSchemesAsPrivileged: electronMocks.registerSchemesAsPrivileged,
+    handle: electronMocks.protocolHandle,
   },
   session: {
-    fromPartition: mocks.fromPartition,
+    fromPartition: electronMocks.fromPartition,
   },
 }));
 
-vi.mock('../state/remote-host-auth.js', () => ({
-  readDesktopRemoteHostBearerToken: mocks.readDesktopRemoteHostBearerToken,
+vi.mock('./codex-app-server-client.js', () => ({
+  CodexAppServerClient: class CodexAppServerClient {
+    ensureConnected = mocks.ensureConnected;
+    dispose = mocks.dispose;
+  },
 }));
 
-vi.mock('./remote-app-server-client.js', () => ({
-  RemoteAppServerClient: class RemoteAppServerClient {
-    ensureConnected = mocks.ensureConnected;
-    dispatchApiRequest = mocks.dispatchApiRequest;
-    subscribeApiStream = mocks.subscribeApiStream;
-    dispose = mocks.dispose;
+vi.mock('./codex-workspace-api.js', () => ({
+  CodexWorkspaceApiAdapter: class CodexWorkspaceApiAdapter {
+    dispatchApiRequest = mocks.adapterDispatch;
+    subscribeApiStream = mocks.adapterSubscribe;
   },
 }));
 
@@ -47,18 +50,16 @@ import { WebHostController } from './web-host-controller.js';
 
 describe('WebHostController', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
-  it('reports reachable when the remote status endpoint is healthy', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
-
+  it('reports reachable when the codex server connects', async () => {
     const controller = new WebHostController({
       id: 'tailnet',
-      label: 'Tailnet desktop',
+      label: 'Tailnet workspace',
       kind: 'web',
-      baseUrl: 'https://desktop.example.ts.net',
+      websocketUrl: 'wss://desktop.example.ts.net/codex',
+      workspaceRoot: '/workspace/home',
     });
 
     await expect(controller.getBaseUrl()).resolves.toBe('personal-agent://app/');
@@ -66,37 +67,45 @@ describe('WebHostController', () => {
 
     const status = await controller.getStatus();
     expect(status.reachable).toBe(true);
-    expect(status.mode).toBe('web-remote');
+    expect(status.mode).toBe('ws-remote');
+    expect(status.summary).toContain('/workspace/home');
   });
 
-  it('treats auth-protected remotes as reachable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401 }));
+  it('delegates API requests and subscriptions to the codex workspace adapter', async () => {
+    mocks.adapterDispatch.mockResolvedValueOnce({
+      statusCode: 200,
+      headers: { 'content-type': 'application/json' },
+      body: Uint8Array.from(Buffer.from('{"ok":true}', 'utf-8')),
+    });
+    mocks.adapterSubscribe.mockResolvedValueOnce(() => {});
 
     const controller = new WebHostController({
-      id: 'protected',
-      label: 'Protected remote',
+      id: 'remote',
+      label: 'Remote workspace',
       kind: 'web',
-      baseUrl: 'https://protected.example.ts.net/',
+      websocketUrl: 'ws://127.0.0.1:8390',
     });
 
-    await expect(controller.ensureRunning()).resolves.toBeUndefined();
-    await expect(controller.getBaseUrl()).resolves.toBe('personal-agent://app/');
+    await expect(controller.dispatchApiRequest({ method: 'GET', path: '/api/status' })).resolves.toEqual({
+      statusCode: 200,
+      headers: { 'content-type': 'application/json' },
+      body: Uint8Array.from(Buffer.from('{"ok":true}', 'utf-8')),
+    });
+    await expect(controller.subscribeApiStream('/api/live-sessions/live-1/events', vi.fn())).resolves.toBeTypeOf('function');
   });
 
-  it('fails cleanly when the remote host is unreachable', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network down')));
+  it('reports the connection failure in host status', async () => {
+    mocks.ensureConnected.mockRejectedValueOnce(new Error('network down'));
 
     const controller = new WebHostController({
       id: 'offline',
-      label: 'Offline remote',
+      label: 'Offline workspace',
       kind: 'web',
-      baseUrl: 'https://offline.example.ts.net',
+      websocketUrl: 'ws://offline.example.invalid:8390',
     });
-
-    await expect(controller.ensureRunning()).rejects.toThrow('Could not reach remote web host');
 
     const status = await controller.getStatus();
     expect(status.reachable).toBe(false);
-    expect(status.lastError).toContain('not currently reachable');
+    expect(status.lastError).toContain('network down');
   });
 });

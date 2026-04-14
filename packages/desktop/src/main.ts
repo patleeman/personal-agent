@@ -15,6 +15,7 @@ import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
+import { loadCodexServerModule } from './codex-server-module.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
@@ -23,6 +24,17 @@ let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
+
+function readCommandLineOption(name: string): string | null {
+  const index = process.argv.indexOf(name);
+  if (index === -1) {
+    return null;
+  }
+
+  return typeof process.argv[index + 1] === 'string' ? process.argv[index + 1] : '';
+}
+
+const codexAppServerMode = process.argv.includes('--codex-app-server');
 
 app.setName(resolveDesktopLaunchPresentation().appName);
 
@@ -386,6 +398,26 @@ app.on('activate', () => {
 
 app.whenReady()
   .then(async () => {
+    configureDesktopRuntimeEnvironment();
+
+    if (codexAppServerMode) {
+      const listenUrl = readCommandLineOption('--listen') || 'ws://127.0.0.1:8390';
+      const module = await loadCodexServerModule();
+      const handle = await module.startCodexAppServer({ listenUrl });
+      console.log(`personal-agent codex app-server listening on ${handle.websocketUrl}`);
+      const shutdown = async () => {
+        await handle.close();
+        app.exit(0);
+      };
+      process.once('SIGINT', () => {
+        void shutdown();
+      });
+      process.once('SIGTERM', () => {
+        void shutdown();
+      });
+      return;
+    }
+
     applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);
     applyDesktopShellAppMode(process.platform, app);
     await bootstrapDesktopApp();

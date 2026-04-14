@@ -8,7 +8,7 @@ function createConnectionsState(): DesktopConnectionsState {
     defaultHostId: 'local',
     hosts: [
       { id: 'local', label: 'Local', kind: 'local' },
-      { id: 'web-1', label: 'Web', kind: 'web', baseUrl: 'https://example.ts.net' },
+      { id: 'web-1', label: 'Web', kind: 'web', websocketUrl: 'wss://example.ts.net/codex', workspaceRoot: '/workspace/example' },
       { id: 'ssh-1', label: 'SSH', kind: 'ssh', sshTarget: 'patrick@example' },
     ],
   };
@@ -44,7 +44,8 @@ describe('resolveDesktopHostEditorSelection', () => {
         id: 'web-1',
         label: 'Web',
         kind: 'web',
-        baseUrl: 'https://example.ts.net',
+        websocketUrl: 'wss://example.ts.net/codex',
+        workspaceRoot: '/workspace/example',
       },
     });
   });

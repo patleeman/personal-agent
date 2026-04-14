@@ -6,8 +6,8 @@ function formatHostLabel(environment: DesktopEnvironmentState): string {
     return `Desktop app · Local host · ${environment.activeHostLabel}`;
   }
 
-  const kindLabel = environment.activeHostKind === 'web' ? 'Web' : 'SSH';
-  return `Desktop app · Remote host · ${environment.activeHostLabel} (${kindLabel})`;
+  const kindLabel = environment.activeHostKind === 'web' ? 'WebSocket workspace' : 'SSH workspace';
+  return `Desktop app · Remote workspace · ${environment.activeHostLabel} (${kindLabel})`;
 }
 
 export function DesktopHostIndicator({ environment }: { environment: DesktopEnvironmentState | null }) {
