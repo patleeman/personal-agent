@@ -6,7 +6,10 @@ import { DesktopTopBar } from './DesktopTopBar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
-function renderTopBar(environment: React.ComponentProps<typeof DesktopTopBar>['environment'] = null): string {
+function renderTopBar(
+  environment: React.ComponentProps<typeof DesktopTopBar>['environment'] = null,
+  overrides: Partial<React.ComponentProps<typeof DesktopTopBar>> = {},
+): string {
   return renderToString(
     <MemoryRouter>
       <DesktopTopBar
@@ -16,6 +19,7 @@ function renderTopBar(environment: React.ComponentProps<typeof DesktopTopBar>['e
         showRailToggle={false}
         railOpen={false}
         onToggleRail={() => {}}
+        {...overrides}
       />
     </MemoryRouter>,
   );
@@ -60,6 +64,23 @@ describe('DesktopTopBar', () => {
 
     expect(html).toContain('>Testing<');
     expect(html).toContain('Launched from the command line');
+  });
+
+  it('keeps the panel toggles on the outside edges of the top bar controls', () => {
+    const html = renderTopBar({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local runtime is healthy.',
+      launchMode: 'normal',
+      launchLabel: null,
+      canManageConnections: true,
+    }, { showRailToggle: true, railOpen: true });
+
+    expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
+    expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
+    expect(html.indexOf('>Connect<')).toBeLessThan(html.indexOf('Hide right sidebar'));
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {

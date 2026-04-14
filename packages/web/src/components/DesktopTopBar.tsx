@@ -146,12 +146,6 @@ export function DesktopTopBar({
         <div className="ui-desktop-top-bar__leading">
           <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
           <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
-              ←
-            </ToolbarButton>
-            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
-              →
-            </ToolbarButton>
             <ToolbarButton
               className="ui-desktop-top-bar__icon-button"
               onClick={onToggleSidebar}
@@ -159,6 +153,12 @@ export function DesktopTopBar({
               title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
             >
               <LeftSidebarToggleIcon open={sidebarOpen} />
+            </ToolbarButton>
+            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
+              ←
+            </ToolbarButton>
+            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
+              →
             </ToolbarButton>
           </div>
           {launchBadgeLabel ? (
@@ -169,6 +169,11 @@ export function DesktopTopBar({
         </div>
         <div className="ui-desktop-top-bar__center" />
         <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+          {showDesktopChrome ? (
+            <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => setShowConnectionsModal(true)}>
+              Connect
+            </ToolbarButton>
+          ) : null}
           {showRailToggle ? (
             <ToolbarButton
               className="ui-desktop-top-bar__icon-button"
@@ -177,11 +182,6 @@ export function DesktopTopBar({
               title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
             >
               <RightRailToggleIcon open={railOpen} />
-            </ToolbarButton>
-          ) : null}
-          {showDesktopChrome ? (
-            <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => setShowConnectionsModal(true)}>
-              Connect
             </ToolbarButton>
           ) : null}
         </div>
