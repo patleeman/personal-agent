@@ -48,7 +48,7 @@
     "node": ">=20.0.0"
   },
   "dependencies": {
-    "@mariozechner/pi-coding-agent": "^0.66.0"
+    "@mariozechner/pi-coding-agent": "^0.67.2"
   },
   "overrides": {
     "form-data": "^2.5.5",
