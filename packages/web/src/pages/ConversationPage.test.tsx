@@ -42,6 +42,7 @@ import {
   resolveConversationInitialDeferredResumeState,
   resolveConversationDraftHydrationState,
   resolveConversationGitSummaryPresentation,
+  resolveRelatedThreadHotkeyIndex,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -132,6 +133,64 @@ function createBackgroundRun(overrides: Partial<DurableRunRecord> = {}): Durable
     ...overrides,
   };
 }
+
+describe('related thread hotkeys', () => {
+  it('accepts Ctrl+digit via event.code for the first 9 threads', () => {
+    expect(resolveRelatedThreadHotkeyIndex({
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      key: '1',
+      code: 'Digit1',
+      isComposing: false,
+    })).toBe(0);
+
+    expect(resolveRelatedThreadHotkeyIndex({
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      key: '9',
+      code: 'Digit9',
+      isComposing: false,
+    })).toBe(8);
+  });
+
+  it('falls back to the raw key when event.code is unavailable', () => {
+    expect(resolveRelatedThreadHotkeyIndex({
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      key: '4',
+      code: '',
+      isComposing: false,
+    })).toBe(3);
+  });
+
+  it('ignores non-Ctrl and modified key combinations', () => {
+    expect(resolveRelatedThreadHotkeyIndex({
+      ctrlKey: false,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      key: '1',
+      code: 'Digit1',
+      isComposing: false,
+    })).toBe(-1);
+
+    expect(resolveRelatedThreadHotkeyIndex({
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: true,
+      key: '!',
+      code: 'Digit1',
+      isComposing: false,
+    })).toBe(-1);
+  });
+});
 
 describe('conversation autocomplete catalog demand', () => {
   it('skips memory and vault catalog reads for plain prompts', () => {

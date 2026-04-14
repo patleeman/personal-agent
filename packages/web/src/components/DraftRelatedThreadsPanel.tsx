@@ -3,14 +3,16 @@ import type { RelatedConversationSearchResult } from '../relatedConversationSear
 import { timeAgo } from '../utils';
 import { Keycap, cx } from './ui';
 
+const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;
+
 function formatMatchedTerms(result: RelatedConversationSearchResult): string {
   return result.matchedTerms
     .slice(0, 3)
     .join(', ');
 }
 
-function formatRowHotkey(index: number): string | null {
-  return index >= 0 && index < 9
+function formatRowHotkey(index: number, limit: number): string | null {
+  return index >= 0 && index < limit
     ? `Ctrl+${index + 1}`
     : null;
 }
@@ -24,6 +26,7 @@ export function DraftRelatedThreadsPanel({
   busy,
   error,
   maxSelections,
+  hotkeyLimit = DEFAULT_RELATED_THREAD_HOTKEY_LIMIT,
   onToggle,
 }: {
   query: string;
@@ -34,6 +37,7 @@ export function DraftRelatedThreadsPanel({
   busy: boolean;
   error: string | null;
   maxSelections: number;
+  hotkeyLimit?: number;
   onToggle: (sessionId: string) => void;
 }) {
   if (!query.trim() && results.length === 0 && selectedCount === 0 && !loading && !busy && !error) {
@@ -48,7 +52,9 @@ export function DraftRelatedThreadsPanel({
         ? error
         : selectedCount > 0
           ? `${selectedCount}/${maxSelections} selected`
-          : '⌃1–9';
+          : hotkeyLimit > 1
+            ? `⌃1–${hotkeyLimit}`
+            : '⌃1';
 
   return (
     <section className="mx-auto mt-3 w-full max-w-[38rem] text-left">
@@ -66,7 +72,7 @@ export function DraftRelatedThreadsPanel({
             const checked = selectedSessionIds.includes(result.sessionId);
             const inputId = `draft-related-thread-${result.sessionId}`;
             const matchedTerms = formatMatchedTerms(result);
-            const hotkey = formatRowHotkey(index);
+            const hotkey = formatRowHotkey(index, hotkeyLimit);
             return (
               <label
                 key={result.sessionId}

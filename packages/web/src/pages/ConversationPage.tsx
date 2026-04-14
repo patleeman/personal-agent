@@ -117,12 +117,27 @@ const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
-const MAX_VISIBLE_RELATED_THREAD_RESULTS = 5;
+const MAX_RELATED_THREAD_HOTKEYS = 9;
+const MAX_VISIBLE_RELATED_THREAD_RESULTS = MAX_RELATED_THREAD_HOTKEYS;
 
 type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
+type RelatedThreadHotkeyEvent = Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'key' | 'code' | 'isComposing'>;
 
 function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
   return value === 'focus-composer' || value === 'edit-working-directory' || value === 'rename-conversation';
+}
+
+export function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent): number {
+  if (event.isComposing || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
+    return -1;
+  }
+
+  const codeMatch = event.code.match(/^Digit([1-9])$/);
+  if (codeMatch) {
+    return Number(codeMatch[1]) - 1;
+  }
+
+  return /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : -1;
 }
 
 export function resolveConversationAutocompleteCatalogDemand(input: string): {
@@ -2766,6 +2781,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [relatedThreadCandidateById]);
 
   useEffect(() => {
+    if (!draft || preparingRelatedThreadContext || visibleRelatedThreadResults.length === 0) {
+      return;
+    }
+
+    function handleRelatedThreadHotkey(event: KeyboardEvent) {
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      const hotkeyIndex = resolveRelatedThreadHotkeyIndex(event);
+      if (hotkeyIndex < 0 || hotkeyIndex >= Math.min(visibleRelatedThreadResults.length, MAX_RELATED_THREAD_HOTKEYS)) {
+        return;
+      }
+
+      const result = visibleRelatedThreadResults[hotkeyIndex];
+      if (!result) {
+        return;
+      }
+
+      event.preventDefault();
+      toggleRelatedThreadSelection(result.sessionId);
+    }
+
+    window.addEventListener('keydown', handleRelatedThreadHotkey);
+    return () => {
+      window.removeEventListener('keydown', handleRelatedThreadHotkey);
+    };
+  }, [draft, preparingRelatedThreadContext, toggleRelatedThreadSelection, visibleRelatedThreadResults]);
+
+  useEffect(() => {
     if (!draft || (input.trim().length === 0 && selectedRelatedThreadIds.length === 0) || relatedThreadCandidateIds.length === 0) {
       setRelatedThreadSearchLoading(false);
       setRelatedThreadSearchError(null);
@@ -5251,23 +5296,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const relatedThreadHotkeyIndex = e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.nativeEvent.isComposing
-      ? Number.parseInt(e.key, 10) - 1
-      : -1;
-    if (
-      draft
-      && !preparingRelatedThreadContext
-      && relatedThreadHotkeyIndex >= 0
-      && relatedThreadHotkeyIndex < Math.min(visibleRelatedThreadResults.length, MAX_VISIBLE_RELATED_THREAD_RESULTS)
-    ) {
-      e.preventDefault();
-      const result = visibleRelatedThreadResults[relatedThreadHotkeyIndex];
-      if (result) {
-        toggleRelatedThreadSelection(result.sessionId);
-      }
-      return;
-    }
-
     if (showModelPicker) {
       if (e.key === 'Escape')    { e.preventDefault(); setInput(''); return; }
       if (modelItems.length === 0) {
@@ -5643,6 +5671,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   busy={preparingRelatedThreadContext}
                   error={relatedThreadSearchError}
                   maxSelections={MAX_RELATED_THREAD_SELECTIONS}
+                  hotkeyLimit={MAX_RELATED_THREAD_HOTKEYS}
                   onToggle={toggleRelatedThreadSelection}
                 />
               </div>
