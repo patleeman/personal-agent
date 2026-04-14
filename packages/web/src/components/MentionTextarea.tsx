@@ -13,6 +13,7 @@ export type MentionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaEleme
   value: string;
   onValueChange: (value: string) => void;
   mentionItems?: MentionItem[];
+  containerClassName?: string;
 };
 
 function findMentionMatch(value: string, caret: number, selectionEnd: number): MentionMatch | null {
@@ -39,6 +40,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
   onValueChange,
   mentionItems,
   className,
+  containerClassName,
   disabled,
   onKeyDown,
   onClick,
@@ -128,7 +130,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
   };
 
   return (
-    <div className="relative">
+    <div className={cx('relative', containerClassName)}>
       {showMentionMenu && (
         <div className="ui-menu-shell absolute inset-x-0 bottom-full z-20 mb-2 max-h-72 overflow-y-auto">
           <div className="px-3 pt-2 pb-1">

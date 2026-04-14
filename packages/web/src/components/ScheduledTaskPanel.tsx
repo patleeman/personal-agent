@@ -23,8 +23,8 @@ import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 
-const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[15px] font-medium text-primary placeholder:text-dim/75 outline-none';
-const PROMPT_INPUT_CLASS = 'min-h-[16rem] w-full resize-y bg-transparent px-4 py-4 text-[15px] leading-7 text-primary placeholder:text-dim/75 outline-none';
+const TITLE_INPUT_CLASS = 'w-full min-w-0 bg-transparent text-[16px] font-medium text-primary placeholder:text-dim/75 outline-none';
+const PROMPT_INPUT_CLASS = 'min-h-0 flex-1 w-full resize-none overflow-y-auto bg-transparent px-1 pb-3 pt-2 text-[15px] leading-7 text-primary placeholder:text-dim/75 outline-none';
 const INLINE_FIELD_CLASS = 'h-8 min-w-0 rounded-md border border-transparent bg-transparent px-1.5 text-[12px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
 const INLINE_INPUT_CLASS = INLINE_FIELD_CLASS;
 const INLINE_SELECT_CLASS = `${INLINE_FIELD_CLASS} appearance-none pr-6`;
@@ -207,9 +207,6 @@ function CronBuilderEditor({
   value: CronEditorState;
   onChange: (next: CronEditorState) => void;
 }) {
-  const previewCron = value.mode === 'builder'
-    ? buildCronFromEasyTaskSchedule(value.builder)
-    : value.rawCron.trim();
 
   function updateBuilder(patch: Partial<EasyTaskSchedule>) {
     onChange({
@@ -337,25 +334,16 @@ function CronBuilderEditor({
           />
         )}
 
-        <button
-          type="button"
-          onClick={() => onChange({ ...value, mode: value.mode === 'builder' ? 'raw' : 'builder' })}
-          className={toggleButtonClass(value.mode === 'raw')}
-          aria-pressed={value.mode === 'raw'}
-        >
-          {value.mode === 'builder' ? 'Raw cron' : 'Simple schedule'}
-        </button>
       </div>
 
       {!value.supported && value.mode === 'raw' && (
         <p className="text-[12px] leading-relaxed text-secondary">
-          This cron pattern is outside the simple editor. Keep editing raw cron, or switch back to the simpler builder.
+          This cron pattern is outside the simple editor. Switch back to Simple schedule in the menu if you want the builder.
         </p>
       )}
 
       {value.mode === 'builder' && value.builder.cadence === 'weekly' && (
         <div className="flex flex-wrap items-center gap-2">
-          <span className={FIELD_LABEL_CLASS}>Days</span>
           {WEEKDAY_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -369,16 +357,6 @@ function CronBuilderEditor({
           ))}
         </div>
       )}
-
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-secondary">
-        <span>{previewCron ? formatTaskSchedule({ cron: previewCron }) : 'Recurring schedule'}</span>
-        {previewCron && (
-          <>
-            <span className="text-dim">·</span>
-            <span className="font-mono text-dim">{previewCron}</span>
-          </>
-        )}
-      </div>
     </div>
   );
 }
@@ -391,15 +369,6 @@ function summarizePathLabel(path: string): string {
 
   const segments = trimmed.split('/').filter(Boolean);
   return segments[segments.length - 1] ?? trimmed;
-}
-
-function formatScheduleButtonLabel(state: TaskFormState): string {
-  if (state.scheduleMode === 'at') {
-    return state.atValue ? formatTaskSchedule({ at: fromDateTimeLocalValue(state.atValue) ?? undefined }) : 'One time';
-  }
-
-  const cron = resolveCronExpression(state);
-  return cron ? formatTaskSchedule({ cron }) : 'Schedule';
 }
 
 function formatThreadModeLabel(mode: TaskFormState['threadMode']): string {
@@ -451,18 +420,68 @@ function InlineSwitch({
 function TaskAdvancedMenu({
   value,
   modelOptions,
+  existingThreadOptions,
   onChange,
 }: {
   value: TaskFormState;
   modelOptions: Array<{ id: string }>;
+  existingThreadOptions: Array<{ id: string; label: string; cwd?: string }>;
   onChange: (patch: Partial<TaskFormState>) => void;
 }) {
   return (
     <div className="absolute top-full right-0 z-20 mt-2 w-[20rem] rounded-xl border border-border-default bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
       <div className="space-y-3">
-        <div className="space-y-1">
-          <p className={FIELD_LABEL_CLASS}>More options</p>
-          <p className={FIELD_HELP_CLASS}>Leave these alone unless this automation needs something weird.</p>
+        <p className={FIELD_LABEL_CLASS}>More options</p>
+
+        {value.scheduleMode === 'cron' && (
+          <div className="space-y-1.5">
+            <span className={FIELD_LABEL_CLASS}>Schedule editor</span>
+            <InlineSelect
+              value={value.cronEditor.mode}
+              onChange={(event) => onChange({ cronEditor: { ...value.cronEditor, mode: event.target.value as CronEditorState['mode'] } })}
+              className="w-full"
+              name="cronEditorMode"
+              aria-label="Schedule editor mode"
+            >
+              <option value="builder">Simple schedule</option>
+              <option value="raw">Raw cron</option>
+            </InlineSelect>
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <span className={FIELD_LABEL_CLASS}>Thread</span>
+          <InlineSelect
+            value={value.threadMode}
+            onChange={(event) => onChange({
+              threadMode: event.target.value as TaskFormState['threadMode'],
+              ...(event.target.value !== 'existing' ? { threadConversationId: '' } : {}),
+            })}
+            className="w-full"
+            name="threadMode"
+            aria-label="Automation thread mode"
+          >
+            <option value="dedicated">Dedicated thread</option>
+            <option value="existing">Existing thread</option>
+            <option value="none">No thread</option>
+          </InlineSelect>
+          {value.threadMode === 'existing' && (
+            <InlineSelect
+              value={value.threadConversationId}
+              onChange={(event) => onChange({ threadConversationId: event.target.value })}
+              className="w-full"
+              name="threadConversationId"
+              aria-label="Existing automation thread"
+            >
+              <option value="">Choose thread</option>
+              {existingThreadOptions.map((entry) => (
+                <option key={entry.id} value={entry.id}>{entry.label}</option>
+              ))}
+            </InlineSelect>
+          )}
+          {value.threadMode === 'existing' && existingThreadOptions.length === 0 && (
+            <p className={FIELD_HELP_CLASS}>No saved threads match this working directory yet.</p>
+          )}
         </div>
 
         <div className="space-y-1.5">
@@ -592,7 +611,6 @@ function TaskEditorForm({
     return entries;
   }, [cwdState?.effectiveCwd, projects, value.projectPath]);
 
-  const scheduleSummary = formatScheduleButtonLabel(value);
   const effectiveThreadCwd = value.runIn === 'worktree'
     ? value.projectPath.trim()
     : (cwdState?.effectiveCwd?.trim() || '');
@@ -608,26 +626,28 @@ function TaskEditorForm({
     return entries.sort((left, right) => left.label.localeCompare(right.label));
   }, [effectiveThreadCwd, sessions]);
   const selectedExistingThread = existingThreadOptions.find((option) => option.id === value.threadConversationId);
-  const threadSummary = value.threadMode === 'existing'
-    ? (selectedExistingThread?.label ?? 'Choose thread')
-    : formatThreadModeLabel(value.threadMode);
-  const visibleError = error ?? (submitAttempted ? validationError : null);
-  const projectHelp = value.runIn === 'local'
-    ? 'Runs from the local workspace.'
-    : value.projectPath.trim()
-      ? value.projectPath.trim()
-      : projectOptions.length === 0
-        ? 'No known worktrees yet. The current workspace will show up here when available.'
-        : 'Choose the working directory for this automation.';
-  const oneTimeSummary = value.atValue
-    ? formatTaskSchedule({ at: fromDateTimeLocalValue(value.atValue) ?? undefined })
-    : 'Choose when this one-time run should fire.';
   const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
-  const runtimeSummaryParts = [
-    value.model.trim() || null,
+  const advancedSummaryParts = [
+    value.threadMode === 'existing'
+      ? (selectedExistingThread?.label ?? 'Existing thread')
+      : (value.threadMode === 'none' ? 'No thread' : null),
+    value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
     value.thinkingLevel.trim() ? thinkingLabel : null,
   ].filter((entry): entry is string => Boolean(entry));
-  const runtimeSummary = runtimeSummaryParts.length > 0 ? runtimeSummaryParts.join(' · ') : 'Defaults';
+  const advancedSummary = advancedSummaryParts.length > 0 ? advancedSummaryParts.join(' · ') : null;
+  const visibleError = error ?? (submitAttempted ? validationError : null);
+
+  useEffect(() => {
+    if (value.threadMode !== 'existing' || !value.threadConversationId.trim()) {
+      return;
+    }
+
+    if (existingThreadOptions.some((option) => option.id === value.threadConversationId)) {
+      return;
+    }
+
+    onChange({ threadConversationId: '' });
+  }, [existingThreadOptions, onChange, value.threadConversationId, value.threadMode]);
 
   return (
     <form
@@ -641,200 +661,122 @@ function TaskEditorForm({
         onSubmit();
       }}
     >
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        <div className="mx-auto max-w-4xl space-y-5">
-          <div className="space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">{mode === 'create' ? 'New automation' : 'Edit automation'}</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div className="max-w-2xl space-y-1.5">
-                <h2 className="text-[24px] font-semibold tracking-tight text-primary">
-                  {mode === 'create' ? 'Create a scheduled automation' : 'Update this automation'}
-                </h2>
-                <p className="text-[14px] leading-6 text-secondary">
-                  Use the prompt like a normal conversation instruction. Schedule, project, and runtime live inline below it.
-                </p>
-              </div>
-              <p className="text-[13px] text-secondary sm:text-right">{scheduleSummary}</p>
+      <div className="min-h-0 flex-1 px-6 pb-2 pt-5">
+        <div className="mx-auto flex h-full min-h-0 max-w-4xl flex-col">
+          <div className="flex items-start justify-between gap-3 px-1">
+            <input
+              value={value.title}
+              onChange={(event) => onChange({ title: event.target.value })}
+              className={TITLE_INPUT_CLASS}
+              placeholder="Automation title"
+              name="title"
+              aria-label="Automation title"
+              autoComplete="off"
+              autoFocus
+            />
+            <div ref={moreMenuRef} className="relative flex shrink-0 items-center gap-2">
+              {advancedSummary && (
+                <span className="max-w-[16rem] truncate text-[12px] text-secondary">{advancedSummary}</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen((current) => !current)}
+                className={toggleButtonClass(moreMenuOpen)}
+                aria-label="More automation options"
+                aria-expanded={moreMenuOpen}
+                aria-haspopup="dialog"
+              >
+                ⋯
+              </button>
+              {moreMenuOpen && (
+                <TaskAdvancedMenu
+                  value={value}
+                  modelOptions={modelState?.models ?? []}
+                  existingThreadOptions={existingThreadOptions}
+                  onChange={onChange}
+                />
+              )}
             </div>
           </div>
 
-          <section className="ui-input-shell overflow-visible bg-base/70 focus-within:border-accent/40 focus-within:ring-1 focus-within:ring-accent/15">
-            <div className="border-b border-border-subtle px-4 py-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <label className="flex min-w-0 flex-1 items-center gap-3">
-                  <span className={FIELD_LABEL_CLASS}>Title</span>
-                  <input
-                    value={value.title}
-                    onChange={(event) => onChange({ title: event.target.value })}
-                    className={TITLE_INPUT_CLASS}
-                    placeholder="Automation title"
-                    name="title"
-                    aria-label="Automation title"
-                    autoComplete="off"
-                  />
-                </label>
-                <div ref={moreMenuRef} className="relative flex shrink-0 items-center gap-2 self-end sm:self-auto">
-                  {runtimeSummary !== 'Defaults' && (
-                    <span className="max-w-[12rem] truncate text-[12px] text-secondary">{runtimeSummary}</span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setMoreMenuOpen((current) => !current)}
-                    className={toggleButtonClass(moreMenuOpen)}
-                    aria-label="More automation options"
-                    aria-expanded={moreMenuOpen}
-                    aria-haspopup="dialog"
-                  >
-                    ⋯
-                  </button>
-                  {moreMenuOpen && (
-                    <TaskAdvancedMenu
-                      value={value}
-                      modelOptions={modelState?.models ?? []}
-                      onChange={onChange}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <MentionTextarea
-              value={value.prompt}
-              onValueChange={(prompt) => onChange({ prompt })}
-              className={PROMPT_INPUT_CLASS}
-              placeholder="Add prompt…"
-              name="prompt"
-              aria-label="Prompt"
-            />
-
-            <div className="border-t border-border-subtle px-4 py-3">
-              <div className="space-y-4">
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Schedule</p>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-                      <InlineSwitch
-                        checked={value.scheduleMode === 'at'}
-                        label="One time"
-                        onCheckedChange={(checked) => onChange({ scheduleMode: checked ? 'at' : 'cron' })}
-                      />
-                      <div className="min-w-0 flex-1">
-                        {value.scheduleMode === 'cron' ? (
-                          <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
-                        ) : (
-                          <div className="space-y-2">
-                            <input
-                              type="datetime-local"
-                              value={value.atValue}
-                              onChange={(event) => onChange({ atValue: event.target.value })}
-                              className={cx(INLINE_INPUT_CLASS, 'w-full max-w-[18rem]')}
-                              name="runAt"
-                              aria-label="Run at"
-                            />
-                            <p className="text-[12px] text-secondary">{oneTimeSummary}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Location</p>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                      <InlineSwitch
-                        checked={value.runIn === 'worktree'}
-                        label="Worktree"
-                        onCheckedChange={(checked) => onChange({ runIn: checked ? 'worktree' : 'local' })}
-                      />
-                      {value.runIn === 'worktree' ? (
-                        <InlineSelect
-                          value={value.projectPath.trim()}
-                          onChange={(event) => onChange({ projectPath: event.target.value, runIn: 'worktree' })}
-                          className="w-full min-w-[12rem] max-w-[20rem]"
-                          name="projectPath"
-                          aria-label="Automation project"
-                        >
-                          <option value="">Select project</option>
-                          {projectOptions.map((entry) => (
-                            <option key={entry.path} value={entry.path}>{entry.label}</option>
-                          ))}
-                        </InlineSelect>
-                      ) : (
-                        <span className="text-[12px] text-secondary">Local workspace</span>
-                      )}
-                    </div>
-                    <p className={`${FIELD_HELP_CLASS} break-all`}>{projectHelp}</p>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
-                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Thread</p>
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
-                      <InlineSelect
-                        value={value.threadMode}
-                        onChange={(event) => onChange({ threadMode: event.target.value as TaskFormState['threadMode'] })}
-                        className="w-full min-w-[12rem] max-w-[14rem]"
-                        name="threadMode"
-                        aria-label="Automation thread mode"
-                      >
-                        <option value="dedicated">Dedicated thread</option>
-                        <option value="existing">Existing thread</option>
-                        <option value="none">No thread</option>
-                      </InlineSelect>
-                      {value.threadMode === 'existing' ? (
-                        <InlineSelect
-                          value={value.threadConversationId}
-                          onChange={(event) => onChange({ threadConversationId: event.target.value })}
-                          className="w-full min-w-[14rem] max-w-[20rem]"
-                          name="threadConversationId"
-                          aria-label="Existing automation thread"
-                        >
-                          <option value="">Choose thread</option>
-                          {existingThreadOptions.map((entry) => (
-                            <option key={entry.id} value={entry.id}>{entry.label}</option>
-                          ))}
-                        </InlineSelect>
-                      ) : (
-                        <span className="text-[12px] text-secondary">{threadSummary}</span>
-                      )}
-                    </div>
-                    <p className={FIELD_HELP_CLASS}>
-                      {value.threadMode === 'dedicated'
-                        ? 'Recommended. This automation keeps one thread and appends each run there.'
-                        : value.threadMode === 'existing'
-                          ? (existingThreadOptions.length > 0
-                            ? 'Use a saved thread in the same working directory.'
-                            : 'No saved threads match this working directory yet.')
-                          : 'Runs without a thread. You only get automation history and logs.'}
-                    </p>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-          </section>
+          <MentionTextarea
+            value={value.prompt}
+            onValueChange={(prompt) => onChange({ prompt })}
+            containerClassName="flex min-h-0 flex-1"
+            className={PROMPT_INPUT_CLASS}
+            placeholder="Add prompt…"
+            name="prompt"
+            aria-label="Prompt"
+          />
         </div>
       </div>
 
-      <div className="border-t border-border-subtle px-6 py-4">
-        <div className="mx-auto flex max-w-4xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            {visibleError ? (
-              <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>
-            ) : (
-              <p className="text-[12px] leading-relaxed text-secondary">Automations run through the daemon and can keep a dedicated thread for each run.</p>
-            )}
-          </div>
-          <div className="flex items-center gap-3">
-            <button type="button" onClick={onCancel} className="text-[13px] text-secondary transition-colors hover:text-primary">
-              Cancel
-            </button>
-            <ToolbarButton type="submit" disabled={saving}>
-              {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create' : 'Save')}
-            </ToolbarButton>
+      <div className="px-6 pb-4 pt-2">
+        <div className="mx-auto max-w-4xl space-y-2">
+          {visibleError ? (
+            <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>
+          ) : null}
+
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex min-w-0 flex-1 flex-col gap-3 lg:flex-row lg:flex-nowrap lg:items-center lg:gap-4 xl:pr-4">
+              <div className="flex min-w-0 flex-wrap items-center gap-3 lg:flex-nowrap">
+                <InlineSwitch
+                  checked={value.scheduleMode === 'at'}
+                  label="One time"
+                  onCheckedChange={(checked) => onChange({ scheduleMode: checked ? 'at' : 'cron' })}
+                />
+                {value.scheduleMode === 'cron' ? (
+                  <div className="min-w-0 lg:flex-none">
+                    <CronBuilderEditor value={value.cronEditor} onChange={(cronEditor) => onChange({ cronEditor })} />
+                  </div>
+                ) : (
+                  <input
+                    type="datetime-local"
+                    value={value.atValue}
+                    onChange={(event) => onChange({ atValue: event.target.value })}
+                    className={cx(INLINE_INPUT_CLASS, 'w-full max-w-[18rem]')}
+                    name="runAt"
+                    aria-label="Run at"
+                  />
+                )}
+              </div>
+
+              <div className="flex min-w-0 flex-wrap items-center gap-3 lg:flex-nowrap">
+                <InlineSwitch
+                  checked={value.runIn === 'worktree'}
+                  label="Worktree"
+                  onCheckedChange={(checked) => onChange({
+                    runIn: checked ? 'worktree' : 'local',
+                    ...(checked ? {} : { projectPath: '' }),
+                  })}
+                />
+                {value.runIn === 'worktree' ? (
+                  <InlineSelect
+                    value={value.projectPath.trim()}
+                    onChange={(event) => onChange({ projectPath: event.target.value, runIn: 'worktree' })}
+                    className="w-full min-w-[12rem] max-w-[20rem]"
+                    name="projectPath"
+                    aria-label="Automation project"
+                  >
+                    <option value="">Select project</option>
+                    {projectOptions.map((entry) => (
+                      <option key={entry.path} value={entry.path}>{entry.label}</option>
+                    ))}
+                  </InlineSelect>
+                ) : (
+                  <span className="text-[12px] text-secondary">Local workspace</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center justify-end gap-3 xl:self-end">
+              <button type="button" onClick={onCancel} className="text-[13px] text-secondary transition-colors hover:text-primary">
+                Cancel
+              </button>
+              <ToolbarButton type="submit" disabled={saving}>
+                {saving ? (mode === 'create' ? 'Creating…' : 'Saving…') : (mode === 'create' ? 'Create' : 'Save')}
+              </ToolbarButton>
+            </div>
           </div>
         </div>
       </div>

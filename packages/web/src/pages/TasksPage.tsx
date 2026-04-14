@@ -140,7 +140,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
         className="ui-dialog-shell"
         style={{
           maxWidth: '960px',
-          height: 'min(860px, calc(100vh - 3.5rem))',
+          height: 'min(760px, calc(100vh - 5rem))',
           background: 'rgb(var(--color-surface) / 0.985)',
           backdropFilter: 'blur(28px)',
           boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
@@ -182,7 +182,7 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
         className="ui-dialog-shell"
         style={{
           maxWidth: '960px',
-          height: 'min(860px, calc(100vh - 3.5rem))',
+          height: 'min(760px, calc(100vh - 5rem))',
           background: 'rgb(var(--color-surface) / 0.985)',
           backdropFilter: 'blur(28px)',
           boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
