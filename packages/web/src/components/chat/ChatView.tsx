@@ -2028,20 +2028,26 @@ function ImageInspectModal({
         role="dialog"
         aria-modal="true"
         aria-label={label}
-        className="ui-dialog-shell"
-        style={{ width: 'min(96vw, 1440px)', height: 'min(94vh, 1040px)', maxHeight: 'calc(100vh - 2rem)' }}
+        className="ui-dialog-shell relative"
+        style={{ width: 'min(96vw, 1440px)', height: 'min(94vh, 1040px)', maxHeight: 'calc(100vh - 2rem)', background: 'rgb(10 13 20 / 0.96)' }}
       >
-        <div className="flex items-start justify-between gap-3 border-b border-border-subtle px-4 py-3">
-          <div className="min-w-0">
-            <p className="ui-section-label">Image</p>
-            <p className="mt-1 break-all text-[13px] text-primary">{label}</p>
-            {image.width && image.height ? (
-              <p className="mt-1 text-[11px] text-dim">{image.width}×{image.height}</p>
-            ) : null}
+        <div className="relative min-h-0 flex-1 bg-black/30 px-4 py-4 sm:px-6 sm:py-6">
+          <div className="pointer-events-none absolute inset-x-4 top-4 z-10 flex items-start justify-between gap-3 sm:inset-x-6 sm:top-6">
+            <div className="pointer-events-auto min-w-0 rounded-lg bg-black/45 px-3 py-1.5 backdrop-blur-sm" title={label}>
+              <p className="truncate text-[12px] font-medium text-white/95">{label}</p>
+              {image.width && image.height ? (
+                <p className="mt-0.5 text-[10px] text-white/60">{image.width}×{image.height}</p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close image preview"
+              className="pointer-events-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-black/45 text-[16px] leading-none text-white/80 transition-colors hover:bg-black/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/25 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+            >
+              ×
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="ui-toolbar-button shrink-0">close</button>
-        </div>
-        <div className="min-h-0 flex-1 bg-black/30 px-4 py-4 sm:px-6 sm:py-6">
           <img
             src={image.src}
             alt={image.alt}

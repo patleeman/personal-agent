@@ -6,7 +6,7 @@ import { useAppEvents } from '../contexts';
 import { useApi } from '../hooks';
 import { formatDate } from '../utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
-import { ErrorState, LoadingState, Pill, cx } from './ui';
+import { ErrorState, LoadingState, cx } from './ui';
 
 export function ConversationArtifactModal({
   conversationId,
@@ -109,33 +109,40 @@ export function ConversationArtifactModal({
         className="ui-dialog-shell"
         style={{ width: 'min(1200px, calc(100vw - 3rem))', height: 'min(85vh, 920px)', maxHeight: 'calc(100vh - 3rem)' }}
       >
-        <div className="border-b border-border-subtle px-5 py-4">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex min-w-0 items-center gap-2">
-                <p className="ui-section-label">Artifact</p>
-                {artifact ? <Pill tone="accent" mono>{artifact.kind}</Pill> : null}
-              </div>
-              <h2 className="mt-1 truncate text-[16px] font-semibold text-primary">{artifact?.title ?? artifactId}</h2>
-              <p className="mt-1 break-all font-mono text-[12px] text-secondary">{artifact?.id ?? artifactId}</p>
+        <div className="border-b border-border-subtle px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex flex-1 items-center gap-2.5">
+              <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-dim/80">
+                {artifact?.kind ?? 'artifact'}
+              </span>
+              <h2
+                className="min-w-0 truncate text-[14px] font-medium text-primary"
+                title={artifact
+                  ? `${artifact.title} · ${artifact.id} · rev ${artifact.revision} · updated ${formatDate(artifact.updatedAt)}`
+                  : artifactId}
+              >
+                {artifact?.title ?? artifactId}
+              </h2>
               {artifact ? (
-                <p className="mt-1 text-[11px] text-dim">Revision {artifact.revision} · updated {formatDate(artifact.updatedAt)}</p>
+                <span className="hidden shrink-0 text-[11px] text-dim sm:inline">
+                  rev {artifact.revision}
+                </span>
               ) : null}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1.5">
               {artifact ? (
                 <>
-                  <button type="button" onClick={() => { void copySource(); }} className="ui-toolbar-button text-[11px]">
+                  <button type="button" onClick={() => { void copySource(); }} className="ui-toolbar-button px-2 py-1 text-[10px]">
                     {copied ? 'copied' : artifact.kind === 'latex' ? 'copy latex' : 'copy source'}
                   </button>
                   {artifact.kind !== 'latex' ? (
-                    <button type="button" onClick={() => setShowSource((current) => !current)} className="ui-toolbar-button text-[11px]">
+                    <button type="button" onClick={() => setShowSource((current) => !current)} className="ui-toolbar-button px-2 py-1 text-[10px]">
                       {showSource ? 'hide source' : 'show source'}
                     </button>
                   ) : null}
                 </>
               ) : null}
-              <button type="button" onClick={closeArtifact} className="ui-toolbar-button">close</button>
+              <button type="button" onClick={closeArtifact} className="ui-toolbar-button px-2 py-1 text-[10px]">close</button>
             </div>
           </div>
         </div>

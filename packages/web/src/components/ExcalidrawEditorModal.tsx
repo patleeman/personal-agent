@@ -164,23 +164,23 @@ export function ExcalidrawEditorModal({
         className="ui-dialog-shell"
         style={{ width: 'min(85vw, 1600px)', height: '85vh', maxHeight: '85vh' }}
       >
-        <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="ui-section-label">Excalidraw drawing</p>
-            <input
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-border-subtle bg-surface px-2.5 py-1.5 text-[13px] text-primary outline-none focus:border-accent/50"
-              placeholder="Drawing title"
-              disabled={saving}
-            />
-          </div>
+        <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+          <input
+            aria-label="Drawing title"
+            name="drawingTitle"
+            autoComplete="off"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-3 py-1.5 text-[13px] text-primary outline-none transition-colors focus:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent/20"
+            placeholder="Drawing title"
+            disabled={saving}
+          />
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
               onClick={onClose}
-              className="ui-toolbar-button"
+              className="ui-toolbar-button px-2 py-1 text-[10px]"
               disabled={saving}
             >
               Cancel
@@ -188,7 +188,7 @@ export function ExcalidrawEditorModal({
             <button
               type="button"
               onClick={() => { void handleSave(); }}
-              className="ui-pill ui-pill-solid-accent"
+              className="ui-pill ui-pill-solid-accent whitespace-nowrap px-2.5 py-1 text-[11px]"
               disabled={saving || !LoadedExcalidraw || loadError !== null}
             >
               {saving ? 'Saving…' : saveLabel}
