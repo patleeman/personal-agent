@@ -98,7 +98,7 @@ The **Settings** route now carries most of what used to be spread across separat
 
 It is also the fallback destination for the removed standalone **Tools** and **Instructions** pages.
 
-The page is now organized as one long settings document with distinct top-level sections and a sticky table of contents on the right side.
+The page is now organized as one long settings document with a centered intro and a sticky table of contents on the right side.
 
 The top-level section order is:
 
@@ -108,7 +108,7 @@ The top-level section order is:
 - desktop connections when running inside Electron
 - interface reset tools
 
-The current layout keeps those top-level sections visually distinct with spacing, dividers, and a sticky right-side table of contents instead of stacking nested cards inside larger cards.
+The current layout keeps those top-level sections visually distinct with spacing and dividers instead of wrapping each section in another large card, while the sticky right-side table of contents mirrors only the sections that are actually present in the current shell.
 
 ## Remote browser access
 

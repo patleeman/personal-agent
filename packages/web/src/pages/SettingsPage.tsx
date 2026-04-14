@@ -36,7 +36,8 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
-type SettingsQuickLinkId = (typeof SETTINGS_QUICK_LINKS)[number]['id'];
+type SettingsQuickLink = (typeof SETTINGS_QUICK_LINKS)[number];
+type SettingsQuickLinkId = SettingsQuickLink['id'];
 type ModelOption = ModelState['models'][number];
 
 const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string }> = [
@@ -287,6 +288,16 @@ function ThemeButton({
   );
 }
 
+function SettingsHero() {
+  return (
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3" />
+      </svg>
+    </div>
+  );
+}
+
 function SettingsSection({
   id,
   label,
@@ -301,16 +312,12 @@ function SettingsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-4', className)}>
-      <div className="space-y-1.5">
-        <h2 className="text-[24px] font-semibold tracking-[-0.03em] text-primary">{label}</h2>
+    <section id={id} className={cx('scroll-mt-24 space-y-5', className)}>
+      <div className="space-y-2">
+        <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
         {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
       </div>
-      <div className="h-px bg-gradient-to-r from-border-default/70 via-border-subtle/45 to-transparent" />
-      <div className="relative pl-5 sm:pl-6">
-        <div className="pointer-events-none absolute bottom-1 left-0 top-1 w-px bg-gradient-to-b from-accent/35 via-steel/35 to-transparent" />
-        {children}
-      </div>
+      <div className="border-t border-border-subtle/65 pt-5">{children}</div>
     </section>
   );
 }
@@ -329,11 +336,11 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-4 border-t border-border-subtle/60 pt-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,14rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
+    <section className={cx('grid gap-5 border-t border-border-subtle/70 pt-5 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
       <div className="min-w-0 space-y-2">
         <div className="space-y-1.5">
           <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
-          {description ? <p className="max-w-xs text-[12px] leading-5 text-secondary">{description}</p> : null}
+          {description ? <p className="max-w-sm text-[12px] leading-5 text-secondary">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
       </div>
@@ -411,14 +418,14 @@ function SettingsTableOfContents({
   activeId,
   onNavigate,
 }: {
-  items: typeof SETTINGS_QUICK_LINKS;
+  items: readonly SettingsQuickLink[];
   activeId: SettingsQuickLinkId;
   onNavigate: (sectionId: SettingsQuickLinkId) => void;
 }) {
   return (
-    <aside className="hidden lg:block lg:sticky lg:top-5 lg:self-start">
+    <aside className="hidden lg:block lg:sticky lg:top-8 lg:self-start">
       <nav aria-label="Settings sections" className="space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">On this page</p>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/85">On this page</p>
         <div className="space-y-2">
           {items.map((item) => {
             const active = item.id === activeId;
@@ -431,7 +438,7 @@ function SettingsTableOfContents({
                   onNavigate(item.id);
                 }}
                 className={cx(
-                  'block border-l pl-4 pr-1 py-1 transition-colors',
+                  'block border-l py-1 pl-4 pr-1 transition-colors',
                   active ? 'border-accent text-primary' : 'border-border-subtle/60 text-secondary hover:border-border-default hover:text-primary',
                 )}
                 aria-current={active ? 'location' : undefined}
@@ -1178,6 +1185,12 @@ export function SettingsPage() {
     theme,
     modelState?.currentModel ?? null,
   ].filter(Boolean).join(' · ');
+  const visibleQuickLinks = useMemo(
+    () => (desktopEnvironment?.isElectron || isDesktopShell())
+      ? SETTINGS_QUICK_LINKS
+      : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop'),
+    [desktopEnvironment?.isElectron],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1200,8 +1213,17 @@ export function SettingsPage() {
   }, []);
 
   useEffect(() => {
+    if (visibleQuickLinks.some((item) => item.id === activeQuickLinkId)) {
+      return;
+    }
+
+    const nextId = visibleQuickLinks[0]?.id ?? SETTINGS_QUICK_LINKS[0].id;
+    setActiveQuickLinkId(nextId);
+  }, [activeQuickLinkId, visibleQuickLinks]);
+
+  useEffect(() => {
     const container = settingsScrollRef.current;
-    if (!container || typeof window === 'undefined') {
+    if (!container || typeof window === 'undefined' || visibleQuickLinks.length === 0) {
       return undefined;
     }
 
@@ -1209,9 +1231,9 @@ export function SettingsPage() {
     const updateActiveQuickLink = () => {
       frame = null;
       const containerTop = container.getBoundingClientRect().top;
-      let nextId = SETTINGS_QUICK_LINKS[0].id;
+      let nextId = visibleQuickLinks[0].id;
 
-      for (const item of SETTINGS_QUICK_LINKS) {
+      for (const item of visibleQuickLinks) {
         const section = container.querySelector<HTMLElement>(`#${item.id}`);
         if (!section) {
           continue;
@@ -1243,7 +1265,7 @@ export function SettingsPage() {
         window.cancelAnimationFrame(frame);
       }
     };
-  }, []);
+  }, [visibleQuickLinks]);
 
   const groupedModels = useMemo(
     () => groupModelsByProvider(modelState?.models ?? []),
@@ -2166,6 +2188,20 @@ export function SettingsPage() {
     }
   }
 
+  function handleRefresh() {
+    void Promise.all([
+      refetchSkillFolders({ resetLoading: false }),
+      refetchInstructions({ resetLoading: false }),
+      refetchModels({ resetLoading: false }),
+      refetchModelProviders({ resetLoading: false }),
+      refetchVaultRoot({ resetLoading: false }),
+      refetchDefaultCwd({ resetLoading: false }),
+      refetchConversationTitleSettings({ resetLoading: false }),
+      refetchProviderAuth({ resetLoading: false }),
+      oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
+    ]);
+  }
+
   function navigateToSection(sectionId: SettingsQuickLinkId) {
     setActiveQuickLinkId(sectionId);
     const section = settingsScrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
@@ -2174,42 +2210,39 @@ export function SettingsPage() {
 
   return (
     <div ref={settingsScrollRef} className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[90rem] px-4 py-5 pb-8 sm:px-6">
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_15rem] lg:items-start lg:gap-10">
-          <div className="min-w-0 flex flex-col gap-8">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="max-w-2xl space-y-1.5">
-                <h1 className="ui-page-title text-[30px] font-semibold tracking-[-0.035em] text-primary">Settings</h1>
-                <p className="ui-page-meta text-[12px]">{pageMeta}</p>
-              </div>
-              <ToolbarButton
-                className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                onClick={() => {
-                  void Promise.all([
-                    refetchSkillFolders({ resetLoading: false }),
-                    refetchInstructions({ resetLoading: false }),
-                    refetchModels({ resetLoading: false }),
-                    refetchModelProviders({ resetLoading: false }),
-                    refetchVaultRoot({ resetLoading: false }),
-                    refetchDefaultCwd({ resetLoading: false }),
-                    refetchConversationTitleSettings({ resetLoading: false }),
-                    refetchProviderAuth({ resetLoading: false }),
-                    oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-                  ]);
-                }}
-              >
-                ↻ Refresh
-              </ToolbarButton>
-            </div>
+      <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14">
+          <div className="min-w-0">
+            <div className="mx-auto flex w-full max-w-[58rem] flex-col gap-12">
+              <div className="space-y-6">
+                <div className="flex justify-end">
+                  <ToolbarButton
+                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                    onClick={handleRefresh}
+                  >
+                    ↻ Refresh
+                  </ToolbarButton>
+                </div>
 
-            <SettingsSection
-              id="settings-general"
-              label="General"
-              description="Workspace defaults, prompt inputs, and other runtime-wide preferences."
-              className="order-2"
-            >
-            <div className="space-y-0">
-              <SettingsPanel
+                <div className="mx-auto flex max-w-[38rem] flex-col items-center text-center">
+                  <SettingsHero />
+                  <h1 className="ui-page-title mt-5 text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Settings</h1>
+                  {pageMeta ? <p className="ui-page-meta mt-1.5 text-[12px]">{pageMeta}</p> : null}
+                  <p className="mt-4 text-[14px] leading-7 text-secondary">
+                    Appearance, workspace defaults, providers, and local browser state in one place.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-12">
+                <SettingsSection
+                  id="settings-general"
+                  label="General"
+                  description="Workspace defaults, prompt inputs, and other runtime-wide preferences."
+                  className="order-2"
+                >
+                  <div className="space-y-0">
+                    <SettingsPanel
                 title="Skill folders"
                 description="Load extra skill folders alongside the root skills directory."
               >
@@ -3473,10 +3506,12 @@ export function SettingsPage() {
               </div>
             </SettingsPanel>
           </SettingsSection>
+              </div>
+            </div>
           </div>
 
           <SettingsTableOfContents
-            items={SETTINGS_QUICK_LINKS}
+            items={visibleQuickLinks}
             activeId={activeQuickLinkId}
             onNavigate={navigateToSection}
           />
