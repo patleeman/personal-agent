@@ -251,10 +251,9 @@
   }
 
   .ui-sidebar-nav-item-active {
-    @apply text-primary ring-1 ring-accent/15;
-    background-color: rgb(var(--color-accent) / 0.1);
-    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.16), rgb(var(--color-steel) / 0.1));
-    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
+    @apply text-primary;
+    background-color: rgb(var(--color-steel) / 0.08);
+    box-shadow: inset 0 0 0 1px rgb(var(--color-border-subtle) / 0.9);
   }
 
   .ui-browser-entry-selected::before,
@@ -293,10 +292,10 @@
   }
 
   .ui-sidebar-session-row-active {
-    @apply text-primary ring-1 ring-accent/15;
-    background-color: rgb(var(--color-accent) / 0.08);
-    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.14), rgb(var(--color-steel) / 0.08));
-    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.12);
+    @apply text-primary ring-1 ring-accent/20;
+    background-color: rgb(var(--color-accent) / 0.12);
+    background-image: linear-gradient(135deg, rgb(var(--color-accent) / 0.22), rgb(var(--color-steel) / 0.1));
+    box-shadow: inset 0 1px 0 rgb(var(--color-steel) / 0.16), 0 0 0 1px rgb(var(--color-accent) / 0.06);
   }
 
   .ui-sidebar-session-row-active .ui-sidebar-session-meta {
