@@ -496,6 +496,36 @@ export function resolveMcpConfig(options: {
   };
 }
 
+export function readMcpConfigDocument(options: {
+  path: string;
+  exists: boolean;
+  searchedPaths: string[];
+  document: unknown;
+}): McpConfigState {
+  if (!options.exists) {
+    return {
+      path: options.path,
+      exists: false,
+      searchedPaths: options.searchedPaths,
+      servers: [],
+    };
+  }
+
+  const serversRecord = isRecord(options.document) && isRecord(options.document.mcpServers) ? options.document.mcpServers : {};
+  const configDir = dirname(options.path);
+  const servers = Object.entries(serversRecord)
+    .map(([name, value]) => parseServerConfig(name, value, configDir))
+    .filter((entry): entry is McpServerConfig => entry !== null)
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  return {
+    path: options.path,
+    exists: true,
+    searchedPaths: options.searchedPaths,
+    servers,
+  };
+}
+
 export function readMcpConfig(options: {
   cwd?: string;
   configPath?: string;
@@ -512,19 +542,12 @@ export function readMcpConfig(options: {
   }
 
   const parsed = JSON.parse(readFileSync(resolved.path, 'utf-8')) as unknown;
-  const serversRecord = isRecord(parsed) && isRecord(parsed.mcpServers) ? parsed.mcpServers : {};
-  const configDir = dirname(resolved.path);
-  const servers = Object.entries(serversRecord)
-    .map(([name, value]) => parseServerConfig(name, value, configDir))
-    .filter((entry): entry is McpServerConfig => entry !== null)
-    .sort((left, right) => left.name.localeCompare(right.name));
-
-  return {
+  return readMcpConfigDocument({
     path: resolved.path,
     exists: true,
     searchedPaths: resolved.searchedPaths,
-    servers,
-  };
+    document: parsed,
+  });
 }
 
 function describeSchemaType(schema: unknown): string {

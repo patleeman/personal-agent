@@ -159,6 +159,59 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.tools) {
+        return buildUseApiResult({
+          profile: 'assistant',
+          tools: [],
+          toolsets: [],
+          dependentCliTools: [],
+          mcp: {
+            configPath: '/tmp/mcp_servers.json',
+            configExists: true,
+            searchedPaths: ['/tmp/mcp_servers.json'],
+            servers: [
+              {
+                name: 'atlassian',
+                transport: 'stdio',
+                command: 'pa',
+                args: ['mcp', 'serve', 'atlassian'],
+                source: 'skill',
+                skillName: 'dd-atlassian-mcp',
+                skillPath: '/vault/skills/dd-atlassian-mcp',
+                manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+                raw: {},
+              },
+              {
+                name: 'github',
+                transport: 'stdio',
+                command: 'npx',
+                args: ['@mcp/github'],
+                source: 'config',
+                raw: {},
+              },
+            ],
+            bundledSkills: [
+              {
+                skillName: 'dd-atlassian-mcp',
+                skillPath: '/vault/skills/dd-atlassian-mcp',
+                manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+                serverNames: ['atlassian'],
+                overriddenServerNames: [],
+              },
+            ],
+          },
+          packageInstall: {
+            currentProfile: 'assistant',
+            profileTargets: [],
+            localTarget: {
+              target: 'local',
+              settingsPath: '/tmp/packages.json',
+              packages: [],
+            },
+          },
+        });
+      }
+
       if (fetcher === api.modelProviders) {
         return buildUseApiResult({
           profile: 'assistant',
@@ -271,6 +324,8 @@ describe('SettingsPage', () => {
     expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
     expect(html).toContain('Skill folders');
+    expect(html).toContain('Bundled MCP wrappers');
+    expect(html).toContain('bundled with dd-atlassian-mcp');
     expect(html).toContain('AGENTS.md files');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');

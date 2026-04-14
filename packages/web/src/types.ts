@@ -1146,6 +1146,14 @@ export interface DependentCliToolState {
   binary: CliBinaryState;
 }
 
+export interface McpSkillBundleState {
+  skillName: string;
+  skillPath: string;
+  manifestPath: string;
+  serverNames: string[];
+  overriddenServerNames: string[];
+}
+
 export interface McpServerConfig {
   name: string;
   transport: 'stdio' | 'remote';
@@ -1154,6 +1162,10 @@ export interface McpServerConfig {
   cwd?: string;
   url?: string;
   env?: Record<string, string>;
+  source?: 'config' | 'skill';
+  skillName?: string;
+  skillPath?: string;
+  manifestPath?: string;
   raw: Record<string, unknown>;
 }
 
@@ -1162,6 +1174,7 @@ export interface McpState {
   configExists: boolean;
   searchedPaths: string[];
   servers: McpServerConfig[];
+  bundledSkills: McpSkillBundleState[];
 }
 
 export interface McpServerToolSummary {

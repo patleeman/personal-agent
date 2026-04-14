@@ -1,6 +1,11 @@
 import type { Express, Request, Response } from 'express';
 import { listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
-import { inspectCliBinary, readMcpConfig } from '@personal-agent/core';
+import {
+  buildMergedMcpConfigDocument,
+  inspectCliBinary,
+  readBundledSkillMcpManifests,
+  readMcpConfigDocument,
+} from '@personal-agent/core';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
 import { inspectAvailableTools } from '../conversations/liveSessions.js';
@@ -87,12 +92,30 @@ function buildPackageInstallState(profile = getCurrentProfileFn()) {
 async function handleToolsRequest(req: Request, res: Response): Promise<void> {
   try {
     const profile = resolveRequestedProfileFromQuery(req);
+    const resourceOptions = buildLiveSessionResourceOptionsFn(profile);
     const details = await withTemporaryProfileAgentDirFn(profile, (agentDir) => inspectAvailableTools(getRepoRootFn(), {
-      ...buildLiveSessionResourceOptionsFn(profile),
+      ...resourceOptions,
       agentDir,
       extensionFactories: buildLiveSessionExtensionFactoriesFn(),
     }));
-    const mcpConfig = readMcpConfig({ cwd: getRepoRootFn() });
+    const bundledSkillManifests = readBundledSkillMcpManifests(resourceOptions.additionalSkillPaths ?? []);
+    const mergedMcpConfig = buildMergedMcpConfigDocument({
+      cwd: getRepoRootFn(),
+      skillDirs: resourceOptions.additionalSkillPaths ?? [],
+    });
+    const parsedMcpConfig = readMcpConfigDocument({
+      path: mergedMcpConfig.baseConfigPath,
+      exists: mergedMcpConfig.baseConfigExists || Object.keys(mergedMcpConfig.document.mcpServers).length > 0,
+      searchedPaths: mergedMcpConfig.searchedPaths,
+      document: mergedMcpConfig.document,
+    });
+    const explicitServerNames = new Set(mergedMcpConfig.baseServerNames);
+    const bundledManifestByServerName = new Map<string, ReturnType<typeof readBundledSkillMcpManifests>[number]>();
+    for (const manifest of bundledSkillManifests) {
+      for (const serverName of manifest.serverNames) {
+        bundledManifestByServerName.set(serverName, manifest);
+      }
+    }
     const onePasswordCommand = process.env.PERSONAL_AGENT_OP_BIN?.trim() || 'op';
     const dependentCliTools = [
       {
@@ -110,17 +133,32 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
       ...details,
       dependentCliTools,
       mcp: {
-        configPath: mcpConfig.path,
-        configExists: mcpConfig.exists,
-        searchedPaths: mcpConfig.searchedPaths,
-        servers: mcpConfig.servers.map((server) => ({
-          name: server.name,
-          transport: server.transport,
-          command: server.command,
-          args: [...server.args],
-          cwd: server.cwd,
-          url: server.url,
-          raw: {},
+        configPath: parsedMcpConfig.path,
+        configExists: mergedMcpConfig.baseConfigExists,
+        searchedPaths: parsedMcpConfig.searchedPaths,
+        servers: parsedMcpConfig.servers.map((server) => {
+          const bundledManifest = bundledManifestByServerName.get(server.name);
+          const source = explicitServerNames.has(server.name) ? 'config' : 'skill';
+          return {
+            name: server.name,
+            transport: server.transport,
+            command: server.command,
+            args: [...server.args],
+            cwd: server.cwd,
+            url: server.url,
+            source,
+            skillName: source === 'skill' ? bundledManifest?.skillName : undefined,
+            skillPath: source === 'skill' ? bundledManifest?.skillDir : undefined,
+            manifestPath: source === 'skill' ? bundledManifest?.manifestPath : undefined,
+            raw: {},
+          };
+        }),
+        bundledSkills: bundledSkillManifests.map((manifest) => ({
+          skillName: manifest.skillName,
+          skillPath: manifest.skillDir,
+          manifestPath: manifest.manifestPath,
+          serverNames: [...manifest.serverNames],
+          overriddenServerNames: manifest.serverNames.filter((serverName) => explicitServerNames.has(serverName)),
         })),
       },
       packageInstall: buildPackageInstallState(),

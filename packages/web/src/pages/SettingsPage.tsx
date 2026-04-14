@@ -13,6 +13,7 @@ import type {
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
+  McpServerConfig,
   ModelProviderApi,
   ModelProviderConfig,
   ModelProviderModelConfig,
@@ -262,6 +263,23 @@ function formatProviderModelCoverage(provider: ProviderAuthSummary | null): stri
   }
 
   return `${provider.modelCount} discovered ${provider.modelCount === 1 ? 'model' : 'models'} mapped to this provider.`;
+}
+
+function formatMcpServerSource(server: McpServerConfig): string {
+  if (server.source === 'skill' && server.skillName) {
+    return `bundled with ${server.skillName}`;
+  }
+
+  return 'explicit config';
+}
+
+function formatMcpServerCommand(server: McpServerConfig): string {
+  if (server.transport === 'remote') {
+    return server.url ?? 'Remote endpoint';
+  }
+
+  const commandLine = [server.command, ...server.args].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+  return commandLine.length > 0 ? commandLine.join(' ') : 'Local stdio wrapper';
 }
 
 function ThemeButton({
@@ -1091,6 +1109,11 @@ export function SettingsPage() {
     error: modelsError,
     refetch: refetchModels,
   } = useApi(api.models);
+  const {
+    data: toolsState,
+    loading: toolsLoading,
+    error: toolsError,
+  } = useApi(api.tools);
   const {
     data: modelProviderState,
     loading: modelProviderLoading,
@@ -2299,6 +2322,75 @@ export function SettingsPage() {
                 ) : null}
 
                 {skillFoldersSaveError && <p className="text-[12px] text-danger">{skillFoldersSaveError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
+                title="Bundled MCP wrappers"
+                description="Skills can keep their MCP CLI wrapper config in mcp.json next to SKILL.md. Explicit config still wins when server names collide."
+              >
+                {toolsLoading && !toolsState ? (
+                  <p className="ui-card-meta">Loading MCP wrappers…</p>
+                ) : toolsError && !toolsState ? (
+                  <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
+                ) : toolsState ? (
+                  <div className="space-y-4">
+                    <p className="ui-card-meta break-all">
+                      {toolsState.mcp.configExists
+                        ? (
+                            <>
+                              Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
+                            </>
+                          )
+                        : 'No explicit MCP config file found.'}
+                    </p>
+
+                    {toolsState.mcp.bundledSkills.length > 0 ? (
+                      <div className="space-y-2.5">
+                        <p className="ui-card-meta">
+                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active for this profile.
+                        </p>
+                        {toolsState.mcp.bundledSkills.map((bundle) => (
+                          <div key={bundle.manifestPath} className="space-y-1 border-t border-border-subtle/60 pt-2.5 first:border-t-0 first:pt-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
+                              <span className="ui-card-meta">{bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}</span>
+                            </div>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
+                            </p>
+                            {bundle.overriddenServerNames.length > 0 ? (
+                              <p className="text-[12px] text-secondary">
+                                Overridden by explicit config: <span className="font-mono text-[11px]">{bundle.overriddenServerNames.join(', ')}</span>
+                              </p>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="ui-card-meta">No skill-local mcp.json wrappers found in the active skill set.</p>
+                    )}
+
+                    {toolsState.mcp.servers.length > 0 ? (
+                      <div className="space-y-2.5">
+                        <p className="ui-card-meta">Effective MCP servers</p>
+                        {toolsState.mcp.servers.map((server) => (
+                          <div key={server.name} className="space-y-1 border-t border-border-subtle/60 pt-2.5 first:border-t-0 first:pt-0">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="font-mono text-[12px] text-primary">{server.name}</span>
+                              <span className="ui-card-meta">{server.transport}</span>
+                              <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
+                            </div>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="ui-card-meta">No MCP servers are currently available.</p>
+                    )}
+                  </div>
+                ) : null}
               </SettingsPanel>
 
               <SettingsPanel

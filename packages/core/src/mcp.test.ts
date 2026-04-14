@@ -1,5 +1,5 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -9,9 +9,10 @@ import {
   inspectMcpTool,
   listMcpCatalog,
   readMcpConfig,
+  readMcpConfigDocument,
   resolveMcpConfig,
 } from './mcp.js';
-import { buildMergedMcpConfigDocument } from './mcp-bundled-config.js';
+import { buildMergedMcpConfigDocument, readBundledSkillMcpManifests } from './mcp-bundled-config.js';
 
 function makeTempDir(prefix: string): string {
   const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -123,7 +124,23 @@ describe('mcp config helpers', () => {
       },
     }, null, 2));
 
+    const manifests = readBundledSkillMcpManifests([skillDir]);
+    expect(manifests).toEqual([
+      {
+        skillName: 'jira-helper',
+        skillDir,
+        manifestPath: join(skillDir, 'mcp.json'),
+        serverNames: ['atlassian'],
+      },
+    ]);
+
     const merged = buildMergedMcpConfigDocument({ cwd, skillDirs: [skillDir] });
+    expect(merged.baseServerNames).toEqual(['atlassian', 'github']);
+    expect(merged.searchedPaths).toEqual([
+      join(cwd, 'mcp_servers.json'),
+      join(homedir(), '.mcp_servers.json'),
+      join(homedir(), '.config', 'mcp', 'mcp_servers.json'),
+    ]);
     expect(merged.bundledServerCount).toBe(1);
     expect(merged.manifestPaths).toEqual([join(skillDir, 'mcp.json')]);
     expect(merged.document).toEqual({
@@ -138,6 +155,14 @@ describe('mcp config helpers', () => {
         },
       },
     });
+
+    const parsed = readMcpConfigDocument({
+      path: merged.baseConfigPath,
+      exists: true,
+      searchedPaths: merged.searchedPaths,
+      document: merged.document,
+    });
+    expect(parsed.servers.map((server) => server.name)).toEqual(['atlassian', 'github']);
   });
 });
 

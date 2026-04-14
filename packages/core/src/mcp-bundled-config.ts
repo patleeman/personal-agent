@@ -1,14 +1,23 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join, resolve } from 'path';
+import { basename, dirname, join, resolve } from 'path';
 import { resolveMcpConfig } from './mcp.js';
 
 interface McpServersDocument {
   mcpServers: Record<string, unknown>;
 }
 
+export interface BundledSkillMcpManifest {
+  skillName: string;
+  skillDir: string;
+  manifestPath: string;
+  serverNames: string[];
+}
+
 export interface BundledMcpConfigBuildResult {
   baseConfigPath: string;
   baseConfigExists: boolean;
+  baseServerNames: string[];
+  searchedPaths: string[];
   bundledServerCount: number;
   manifestPaths: string[];
   document: McpServersDocument;
@@ -37,22 +46,37 @@ function readRawMcpServersRecord(path: string): Record<string, unknown> {
   return { ...servers };
 }
 
-export function readBundledSkillMcpServers(skillDirs: readonly string[]): {
-  servers: Record<string, unknown>;
-  manifestPaths: string[];
-} {
-  const servers: Record<string, unknown> = {};
-  const manifestPaths: string[] = [];
+export function readBundledSkillMcpManifests(skillDirs: readonly string[]): BundledSkillMcpManifest[] {
+  const manifests: BundledSkillMcpManifest[] = [];
 
   for (const skillDir of skillDirs) {
-    const manifestPath = join(resolve(skillDir), 'mcp.json');
+    const resolvedSkillDir = resolve(skillDir);
+    const manifestPath = join(resolvedSkillDir, 'mcp.json');
     if (!existsSync(manifestPath)) {
       continue;
     }
 
     const entries = readRawMcpServersRecord(manifestPath);
-    manifestPaths.push(manifestPath);
+    manifests.push({
+      skillName: basename(resolvedSkillDir),
+      skillDir: resolvedSkillDir,
+      manifestPath,
+      serverNames: Object.keys(entries).sort((left, right) => left.localeCompare(right)),
+    });
+  }
 
+  return manifests;
+}
+
+export function readBundledSkillMcpServers(skillDirs: readonly string[]): {
+  servers: Record<string, unknown>;
+  manifestPaths: string[];
+} {
+  const servers: Record<string, unknown> = {};
+  const manifests = readBundledSkillMcpManifests(skillDirs);
+
+  for (const manifest of manifests) {
+    const entries = readRawMcpServersRecord(manifest.manifestPath);
     for (const [serverName, serverConfig] of Object.entries(entries)) {
       servers[serverName] = serverConfig;
     }
@@ -60,7 +84,7 @@ export function readBundledSkillMcpServers(skillDirs: readonly string[]): {
 
   return {
     servers,
-    manifestPaths,
+    manifestPaths: manifests.map((manifest) => manifest.manifestPath),
   };
 }
 
@@ -77,6 +101,8 @@ export function buildMergedMcpConfigDocument(options: {
   return {
     baseConfigPath: resolved.path,
     baseConfigExists: resolved.exists,
+    baseServerNames: Object.keys(baseServers).sort((left, right) => left.localeCompare(right)),
+    searchedPaths: resolved.searchedPaths,
     bundledServerCount: Object.keys(bundled.servers).length,
     manifestPaths: bundled.manifestPaths,
     document: {
