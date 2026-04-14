@@ -65,9 +65,13 @@ Important behaviors:
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
+- commit checkpoints can show up as transcript cards and open a dedicated two-pane diff review modal from the conversation
 - the new-conversation empty state owns the draft workspace picker, including saved workspace selection and folder picking; the draft header stays title-only
 - saved conversation headers keep the top bar title-only; working directory still stays attached to the conversation instead of rendering inline there
+- the Threads filter can switch between all threads, human threads, and automation-owned threads, and automation-owned threads show an inline automation badge in the sidebar
 - working directory and model preferences stay attached to the conversation
+- file/doc mentions already work through `@` in the composer for one-shot context
+- the conversation model is moving toward a lightweight attached-doc shelf above the composer for persistent KB context across turns
 - desktop and remote browser sessions can watch the same live conversation
 
 ## Async attention
@@ -101,6 +105,8 @@ The **Settings** route now carries most of what used to be spread across separat
 It is also the fallback destination for the removed standalone **Tools** and **Instructions** pages.
 
 The page is now organized as one long settings document with a centered intro and a sticky table of contents on the right side.
+
+It is also the place to manage local instruction-file selection and other runtime defaults.
 
 The top-level section order is:
 

@@ -1,7 +1,7 @@
 import type { ExcalidrawSceneData } from './excalidrawUtils';
 import { NEW_CONVERSATION_TITLE } from './conversationTitle';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
-import type { PromptImageInput, SessionMeta } from './types';
+import type { ConversationContextDocRef, PromptImageInput, SessionMeta } from './types';
 
 export const DRAFT_CONVERSATION_ID = 'new';
 export const DRAFT_CONVERSATION_ROUTE = '/conversations/new';
@@ -12,6 +12,7 @@ const DRAFT_CONVERSATION_CWD_STORAGE_KEY = 'pa:reload:conversation:draft:cwd';
 const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft:attachments';
 const DRAFT_CONVERSATION_MODEL_STORAGE_KEY = 'pa:reload:conversation:draft:model';
 const DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY = 'pa:reload:conversation:draft:thinking-level';
+const DRAFT_CONVERSATION_CONTEXT_DOCS_STORAGE_KEY = 'pa:reload:conversation:draft:context-docs';
 
 let draftConversationAttachmentsMutationVersion = 0;
 
@@ -54,6 +55,10 @@ export function buildDraftConversationModelStorageKey(): string {
 
 export function buildDraftConversationThinkingLevelStorageKey(): string {
   return DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY;
+}
+
+export function buildDraftConversationContextDocsStorageKey(): string {
+  return DRAFT_CONVERSATION_CONTEXT_DOCS_STORAGE_KEY;
 }
 
 function normalizeDraftConversationComposer(value: unknown): string {
@@ -152,6 +157,62 @@ function normalizeDraftConversationAttachments(value: unknown): DraftConversatio
     : [];
 
   return { images, drawings };
+}
+
+function normalizeDraftConversationContextDoc(value: unknown): ConversationContextDocRef | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const doc = value as Partial<ConversationContextDocRef>;
+  if (typeof doc.path !== 'string' || typeof doc.title !== 'string') {
+    return null;
+  }
+
+  const path = doc.path.trim();
+  const title = doc.title.trim();
+  if (!path || !title) {
+    return null;
+  }
+
+  const kind: ConversationContextDocRef['kind'] = doc.kind === 'doc' || doc.kind === 'file'
+    ? doc.kind
+    : 'file';
+  const mentionId = typeof doc.mentionId === 'string' && doc.mentionId.trim().length > 0
+    ? doc.mentionId.trim()
+    : undefined;
+  const summary = typeof doc.summary === 'string' && doc.summary.trim().length > 0
+    ? doc.summary.trim()
+    : undefined;
+
+  return {
+    path,
+    title,
+    kind,
+    ...(mentionId ? { mentionId } : {}),
+    ...(summary ? { summary } : {}),
+  };
+}
+
+function normalizeDraftConversationContextDocs(value: unknown): ConversationContextDocRef[] {
+  const docs = Array.isArray(value)
+    ? value
+      .map((doc) => normalizeDraftConversationContextDoc(doc))
+      .filter((doc): doc is ConversationContextDocRef => doc !== null)
+    : [];
+
+  const deduped: ConversationContextDocRef[] = [];
+  const seen = new Set<string>();
+  for (const doc of docs) {
+    if (seen.has(doc.path)) {
+      continue;
+    }
+
+    seen.add(doc.path);
+    deduped.push(doc);
+  }
+
+  return deduped;
 }
 
 function emitDraftConversationStateChanged(): void {
@@ -332,6 +393,43 @@ export function hasDraftConversationAttachments(
 ): boolean {
   const attachments = readDraftConversationAttachments(storage);
   return attachments.images.length > 0 || attachments.drawings.length > 0;
+}
+
+export function readDraftConversationContextDocs(
+  storage: StorageLike | null = getSessionStorage(),
+): ConversationContextDocRef[] {
+  return readStoredState<ConversationContextDocRef[]>({
+    key: buildDraftConversationContextDocsStorageKey(),
+    fallback: [],
+    storage,
+    deserialize: (raw) => normalizeDraftConversationContextDocs(JSON.parse(raw) as unknown),
+  });
+}
+
+export function persistDraftConversationContextDocs(
+  docs: ConversationContextDocRef[],
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  persistStoredState({
+    key: buildDraftConversationContextDocsStorageKey(),
+    value: normalizeDraftConversationContextDocs(docs),
+    storage,
+    shouldPersist: (value) => value.length > 0,
+  });
+  emitDraftConversationStateChanged();
+}
+
+export function clearDraftConversationContextDocs(
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  clearStoredState(storage, buildDraftConversationContextDocsStorageKey());
+  emitDraftConversationStateChanged();
+}
+
+export function hasDraftConversationContextDocs(
+  storage: StorageLike | null = getSessionStorage(),
+): boolean {
+  return readDraftConversationContextDocs(storage).length > 0;
 }
 
 export function isDraftConversationPath(pathname: string): boolean {

@@ -34,6 +34,7 @@ import {
 } from './conversationModelPreferences.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { type SavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readConversationContextDocs } from './conversationContextDocs.js';
 
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation service');
@@ -316,6 +317,7 @@ export function decorateSessionsWithAttention<T extends {
       attentionUnreadActivityCount: summary?.unreadActivityCount ?? 0,
       attentionActivityIds: summary?.unreadActivityIds ?? [],
       deferredResumes: deferredResumesBySessionFile.get(session.file) ?? [],
+      attachedContextDocs: readConversationContextDocs(session.id),
     };
   });
 }
@@ -341,6 +343,7 @@ function buildSyntheticLiveSessionSnapshot(
     attentionUnreadActivityCount: 0,
     attentionActivityIds: [],
     deferredResumes: deferredResumesBySessionFile.get(liveEntry.sessionFile) ?? [],
+    attachedContextDocs: readConversationContextDocs(liveEntry.id),
   };
 }
 

@@ -8,7 +8,7 @@ The web server source now lives under `packages/web/server/`.
 
 Current source layout:
 
-- `app/` — bootstrap and profile/runtime wiring
+- `app/` — bootstrap and instruction/runtime wiring
 - `automation/` — daemon, alerts, deferred resumes, durable runs, scheduled tasks
 - `conversations/` — live sessions, titles, cwd, recovery, conversation services
 - `extensions/` — web-runtime tool extensions such as reminders, runs, tasks, and artifacts
@@ -16,7 +16,7 @@ Current source layout:
 - `models/` — model registry, preferences, providers, auth, usage
 - `routes/` — Express route registration modules
 - `shared/` — app events, SSE snapshots, logging, security helpers
-- `ui/` — SPA serving, remote-access auth, settings persistence, profile defaults
+- `ui/` — SPA serving, remote-access auth, settings persistence, and local runtime defaults
 - `workspace/` — folder picker and repo-status helpers
 
 ## App surface
@@ -39,7 +39,6 @@ The important point is that route modules get the context directly during regist
 
 Current route groups include:
 
-- profiles
 - daemon
 - tasks
 - models
@@ -48,7 +47,7 @@ Current route groups include:
 - system / web UI state
 - conversations / live sessions
 - runs
-- memory notes
+- memory docs
 - folder picker
 - shell helpers
 

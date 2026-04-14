@@ -5,7 +5,7 @@
 The main idea is simple:
 
 - keep shared defaults in the repo
-- keep durable knowledge in an external vault
+- keep portable knowledge in an external vault of docs and skills
 - keep machine-local runtime state under `~/.local/state/personal-agent`
 - use the smallest correct durable surface for each job
 
@@ -25,20 +25,21 @@ These ship with the repo and are shared through git:
 
 ### 2. Durable knowledge vault
 
-By default, durable knowledge lives at:
+By default, portable knowledge lives at:
 
 ```text
 ~/Documents/personal-agent/
 ```
 
-That vault holds:
+That vault is doc-first.
 
-- `AGENTS.md`
+Typical contents:
+
+- arbitrary markdown docs and doc packages
 - `skills/<skill>/SKILL.md`
-- `notes/**`
-- `projects/**`
+- optional conventions such as `instructions/`, `work/`, `systems/`, or `references/`
 
-This is the canonical home for durable knowledge, procedures, tracked work, and shared instruction files.
+This is the canonical home for reusable knowledge and shared skill content.
 
 ### 3. Machine-local runtime state
 
@@ -50,7 +51,7 @@ Machine-local state defaults to:
 
 Common pieces:
 
-- `config/config.json` — machine config, selected default profile, web UI prefs, vault override
+- `config/config.json` — machine config, selected instruction files, web UI prefs, vault override
 - `daemon/` — daemon socket, log, runtime DB, durable runs
 - `web/` — remote browser pairing state and web runtime state
 - `desktop/` — Electron desktop config and logs
@@ -63,7 +64,7 @@ This state is durable on one machine, but it is not the portable vault.
 When you start Pi through `pa`, `personal-agent` resolves layered runtime resources:
 
 1. repo defaults from `defaults/agent`
-2. vault root `AGENTS.md`, vault skills, and any machine-selected `instructionFiles` / `skillDirs`
+2. selected instruction files, selected skill dirs, and vault docs discoverable from the configured vault root
 3. machine-local overlay from `~/.local/state/personal-agent/config/local`
 4. built-in repo extensions/themes and any discovered package sources
 
@@ -74,9 +75,10 @@ Those layers are materialized into the runtime that Pi actually sees.
 | Surface | Purpose | Durable home |
 | --- | --- | --- |
 | Conversation | active work right now | session state |
-| Note page | reusable knowledge | vault `notes/` |
-| Skill page | reusable procedure | vault `_skills/` |
-| Tracked page | ongoing work | vault `projects/` |
+| Doc | reusable knowledge | vault markdown anywhere |
+| Skill | reusable procedure | vault `skills/` |
+| Attached context doc | persistent KB context for one thread | conversation state + vault refs |
+| Tracked work package | optional structured ongoing work | current implementation may use vault `projects/` |
 | Conversation attention | async follow-up on an owned thread | conversation attention state + linked records |
 | Reminder / alert | stronger tell-me-later delivery | machine-local alert/wakeup state |
 | Deferred resume | wake this conversation later | machine-local wakeup state |
@@ -104,17 +106,19 @@ The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable
 
 ## Rules that keep the system coherent
 
-- conversations are for execution, not long-term storage
-- durable knowledge belongs in the vault
+- conversations are for execution, not for being the only durable store
+- reusable knowledge belongs in vault docs
+- standing behavior belongs in selected instruction files
+- shared reusable workflows belong in `skills/`
 - scheduled task files stay machine-local
-- durable behavior belongs in `AGENTS.md` and machine-selected instruction files, not in random notes
-- machine-selected extra skill folders belong in `skillDirs`, not mixed into unrelated config
+- folder names should not carry more meaning than necessary
 - if a feature needs later attention, attach it to the owning conversation, automation, reminder, deferred resume, run, or scheduled task explicitly
 
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
 - [Knowledge Management System](./knowledge-system.md)
+- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
+- [Conversation Context Attachments](./conversation-context.md)
 - [Configuration](./configuration.md)
-- [Conversations](./conversations.md)
 - [Web UI Guide](./web-ui.md)

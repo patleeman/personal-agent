@@ -5,7 +5,7 @@ This page explains the current configuration model for `personal-agent`.
 The main principle is:
 
 - keep shared defaults in repo files
-- keep durable knowledge in the external vault
+- keep portable knowledge in the external vault
 - keep machine-local behavior in machine config and local overlays
 - use environment variables mostly for machine bootstrap and secret resolution
 
@@ -19,7 +19,6 @@ The main machine-local config file is:
 
 Common top-level keys:
 
-- `defaultProfile`
 - `vaultRoot`
 - `instructionFiles`
 - `skillDirs`
@@ -30,10 +29,9 @@ Example:
 
 ```json
 {
-  "defaultProfile": "shared",
   "vaultRoot": "~/Documents/personal-agent",
   "instructionFiles": [
-    "~/Documents/shared-agent-prompts/AGENTS.md"
+    "~/Documents/personal-agent/instructions/base.md"
   ],
   "skillDirs": [
     "~/Documents/personal-agent/skills",
@@ -70,38 +68,45 @@ The default durable vault root is:
 ~/Documents/personal-agent
 ```
 
-That vault holds:
+That vault should be treated as a file-backed KB.
+
+A typical layout might look like:
 
 ```text
 ~/Documents/personal-agent/
-├── AGENTS.md
 ├── skills/
-├── notes/
-└── projects/
+├── instructions/
+├── work/
+├── systems/
+└── references/
 ```
 
-You can override it with either:
+The only broad shared folder contract is `skills/`.
+
+Everything else can stay freeform.
+
+You can override the vault root with either:
 
 - `vaultRoot` in machine config
 - `PERSONAL_AGENT_VAULT_ROOT`
 
 The environment variable wins.
 
-## Durable instruction files
+## Instruction files
 
-The canonical shared instruction file now lives at:
+Instruction files are selected docs.
 
-- `AGENTS.md`
+They are configured through `instructionFiles[]` in machine config or the Settings UI.
 
-The Settings page can also append extra machine-local AGENTS files through `config.json` → `instructionFiles`.
+Commonly people may keep one at `AGENTS.md`, but that is a convention, not the whole KB model.
 
-Legacy `_profiles/` content may still be read when it exists, but new setups should use the root `AGENTS.md` plus local instruction-file selection instead.
+Repo-root `AGENTS.md` can still matter for coding-harness compatibility, but the product should think in terms of selected instruction docs.
 
-## Extra skill folders
+## Skill folders
 
 The canonical shared skills live under the vault `skills/` directory.
 
-If you want to load additional machine-local skill folders, add them in Settings or write them directly to `config.json` → `skillDirs`.
+If you want additional machine-local skill folders, add them through Settings or write them directly to `config.json` → `skillDirs`.
 
 ## Local overlay
 
@@ -156,7 +161,6 @@ The most useful overrides are:
 - `PERSONAL_AGENT_CONFIG_ROOT` — override the config directory
 - `PERSONAL_AGENT_CONFIG_FILE` — override the machine config file path
 - `PERSONAL_AGENT_VAULT_ROOT` — override the durable vault root
-- `PERSONAL_AGENT_PROFILES_ROOT` — override the legacy profiles root directly
 - `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay directory
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — override daemon socket path
 - `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — force Tailscale Serve on/off for the web UI
@@ -169,24 +173,21 @@ The Codex/OpenAI compaction extension only applies to direct OpenAI Responses an
 
 Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL_AGENT_WEB_CONFIG_FILE` are still honored for compatibility.
 
-On macOS, the desktop app and managed services may start from GUI or `launchd` contexts with a minimal inherited `PATH`. Child shell commands, live conversation bash calls, durable runs, and daemon-spawned Pi subprocesses now rehydrate environment variables from the user's interactive shell before launch so Homebrew and repo-local toolchains remain available.
-
 ## What belongs where
 
 | Setting type | Best home |
 | --- | --- |
 | shared product defaults | repo files |
-| durable behavior | vault `AGENTS.md` + machine `instructionFiles` |
-| runtime defaults | local `settings.json` |
-| model provider defs | local `models.json` |
-| portable knowledge | vault `notes/`, `skills/`, `projects/` |
+| durable behavior and standing instructions | vault docs selected via `instructionFiles[]` |
+| portable knowledge | vault docs and `skills/` |
+| machine-local deployment/runtime settings | local `config.json` |
+| model provider defs | local settings/models files |
 | machine-local extra skills | machine `skillDirs` |
-| machine-local deployment settings | machine `config.json` |
 | machine-local one-off tweaks | local overlay |
 
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
+- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
+- [Conversation Context Attachments](./conversation-context.md)
 - [Web UI Guide](./web-ui.md)
-- [Electron desktop app](./electron-desktop-app-plan.md)

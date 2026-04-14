@@ -1,81 +1,72 @@
-# Pages
+# Docs and Packages
 
-Pages are the umbrella concept for durable content in `personal-agent`.
+`personal-agent` is converging on a simple file-backed doc model.
 
-A page is durable markdown plus optional supporting files and relationships.
+A doc is just durable markdown plus optional supporting files.
 
-Today, the public workflows are still split into notes, skills, and tracked pages. There is not yet a first-class general-purpose `/pages` browser in the desktop UI, but the durable model is still page-first.
+Older product and implementation language may still say **page**. For normal usage, think **doc**.
 
-## What a page can contain
+## Common doc shapes
 
-A page can hold:
+A doc can be:
 
-- markdown content
-- frontmatter metadata
-- tags
-- parent / related links
-- supporting files such as `references/`, `attachments/`, `documents/`, or `artifacts/`
+- a single markdown file such as `systems/runtime-model.md`
+- a package such as `systems/runtime-model/INDEX.md`
 
-## Current page roles
+Doc packages can keep nearby supporting files such as:
 
-### Note pages
+- `references/`
+- `attachments/`
+- `documents/`
+- `artifacts/`
 
-Reusable knowledge.
+## What can make a doc special
 
-Common shapes:
+A doc becomes special because of how it is used, not because of a generic folder name.
 
-- `notes/<id>.md`
-- `notes/<id>/INDEX.md`
+Examples:
 
-### Skill pages
+- selected locally as an instruction file
+- attached to a conversation as persistent context
+- mentioned in a prompt with `@...`
+- packaged as a skill under `skills/<skill>/SKILL.md`
 
-Reusable procedures.
+## Metadata
 
-Common shape:
+Docs can carry frontmatter metadata such as:
 
-- `_skills/<skill>/SKILL.md`
+- `title`
+- `summary`
+- `tags`
+- `kind`
+- `status`
 
-### Tracked pages
+That metadata should support search, filters, and views.
 
-Ongoing work with structured execution state.
+It should not force a rigid vault taxonomy.
 
-Common shape:
+## Reserved shared path
 
-- `projects/<projectId>/project.md`
-- `projects/<projectId>/state.yaml`
-
-## Durable root
-
-By default, durable pages live under:
+The only shared KB folder contract that should matter broadly is:
 
 ```text
-~/Documents/personal-agent/
+skills/<skill>/SKILL.md
 ```
 
-Machine-local runtime paths are not the canonical durable store for pages.
+Everything else in the vault can stay freeform.
 
-## Why the page model matters even now
+## Why this matters
 
-Even without a broad page browser, the page model explains why notes, skills, and projects feel coherent:
+A doc-first model keeps the vault:
 
-- they are all durable content
-- they all live in the same vault
-- they can link to each other
-- they differ mainly by role, not by being unrelated systems
-
-## Current product reality
-
-Lead with the concrete role when you are doing work:
-
-- use a **note page** for knowledge
-- use a **skill page** for procedure
-- use a **tracked page** for active work
-
-Use **page** when you are talking about the shared durable model behind all three.
+- easy to browse in a normal editor
+- easy to grep and sync
+- easy to reorganize without changing product semantics
+- more honest than pretending every knowledge artifact belongs in a hard-coded category
 
 ## Related docs
 
 - [Knowledge Management System](./knowledge-system.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Tracked Pages](./projects.md)
+- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
+- [Conversation Context Attachments](./conversation-context.md)
 - [Nodes](./nodes.md)

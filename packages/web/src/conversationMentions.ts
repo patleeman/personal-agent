@@ -10,6 +10,7 @@ export interface MentionItem {
   kind: MentionKind;
   title?: string;
   summary?: string;
+  path?: string;
 }
 
 function compareMentionItems(left: MentionItem, right: MentionItem): number {
@@ -76,6 +77,7 @@ export function buildMentionItems(input: {
       kind: 'note' as const,
       title: doc.title,
       summary: doc.summary,
+      path: doc.path,
     })),
     ...input.vaultFiles.map((file) => ({
       id: `@${file.id}`,
@@ -83,6 +85,7 @@ export function buildMentionItems(input: {
       kind: (file.kind === 'folder' ? 'folder' : 'file') as const,
       title: file.name,
       summary: file.path,
+      path: file.path,
     })),
   ];
 

@@ -4,7 +4,7 @@
 
 It has two jobs:
 
-1. launch Pi with the right layered profile resources
+1. launch Pi with the right layered instruction/skill resources
 2. manage local system services and machine-level setup around Pi
 
 Inside a live conversation, prefer the built-in runtime tools over shelling out to `pa`. Durable runs and scheduled automations are tool-first now, not public CLI workflows.
@@ -17,7 +17,6 @@ Top-level commands:
 pa status
 pa tui
 pa install
-pa profile
 pa doctor
 pa restart
 pa update
@@ -28,11 +27,10 @@ pa mcp
 
 ## Launch Pi
 
-Use `pa tui` to start Pi with the resolved profile resources:
+Use `pa tui` to start Pi with the resolved local configuration, selected instruction files, and available skill dirs:
 
 ```bash
 pa tui
-pa tui --profile shared
 pa tui -p "summarize this repo"
 pa tui -- --model kimi-coding/k2p5
 ```
@@ -49,24 +47,15 @@ pa doctor
 - `pa status` gives the quick machine summary
 - `pa doctor` validates the local install and runtime wiring
 
-## Profile management
-
-```bash
-pa profile list
-pa profile show
-pa profile show shared
-pa profile use shared
-```
-
 ## Install package sources
 
 ```bash
 pa install https://github.com/user/pi-extension
-pa install --profile shared npm:@scope/package@1.2.3
+pa install npm:@scope/package@1.2.3
 pa install --local ./my-extension
 ```
 
-This writes package sources into profile settings or the local overlay.
+This writes package sources into local settings or the local overlay.
 
 ## Web UI
 
@@ -165,6 +154,7 @@ pa mcp list --probe -d
 
 - [Getting Started](./getting-started.md)
 - [Web UI Guide](./web-ui.md)
+- [Configuration](./configuration.md)
 - [Daemon and Background Automation](./daemon.md)
 - [MCP](./mcp.md)
 - [Runs](../internal-skills/runs/INDEX.md)

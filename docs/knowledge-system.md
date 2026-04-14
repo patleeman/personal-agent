@@ -1,52 +1,68 @@
 # Knowledge Management System
 
-This page explains `personal-agent`'s durable memory model.
+This page explains the durable knowledge model for `personal-agent`.
 
 The short version is:
 
-- **`AGENTS.md`** stores behavior and preferences
-- **pages** are the umbrella concept for durable content
-- **notes** store reusable knowledge
-- **skills** store reusable procedures
-- **projects** store ongoing tracked work
+- the KB is a file-backed vault of markdown docs
+- docs are the default unit of durable knowledge
+- skills are the only special shared folder contract
+- instruction files are selected docs, not a vault profile system
+- conversations can reference docs either one-shot or persistently
 
-## One memory system, different roles
+## One knowledge system, different uses
 
-### `AGENTS.md` = behavioral memory
+### Instruction files = behavioral context
 
-Use profile `AGENTS.md` files for:
+Instruction files shape how the agent behaves because they were selected locally.
+
+Use them for:
 
 - standing instructions
 - role and mission
 - preference defaults
-- durable behavior rules
-- profile-specific operating constraints
+- operating constraints
 
-Do not use `AGENTS.md` as your project notebook.
+An instruction file can live anywhere. `AGENTS.md` is a useful convention, but not the only valid shape.
 
-### Notes = knowledge memory
+### Docs = knowledge context
 
-Use note pages for facts and references that should be reusable later:
+Use ordinary docs for reusable information such as:
 
 - research notes
 - architecture notes
-- environment references
+- references
+- plans and design briefs
 - distilled learnings
-- decision context that is not tied to one active execution plan
 
-### Skills = procedural memory
+A doc can be a single markdown file or a doc package with an `INDEX.md`.
 
-Use skill pages for reusable “how to do this” procedures.
+### Skills = procedural context
 
-A good skill is something you expect to invoke again across different tasks.
+Use skill packages for reusable workflows the agent should invoke again later.
 
-### Projects = working memory that needs to persist
+The shared skill contract is:
 
-Use tracked pages for work that has a durable plan or status:
+```text
+skills/<skill>/SKILL.md
+```
 
-- ongoing features
-- multi-step investigations
-- work with blockers, milestones, or attachments
+## What is special and what is not
+
+These are special:
+
+- selected instruction files
+- `skills/<skill>/SKILL.md`
+- conversation attachments and mentions
+
+These are not special KB contracts:
+
+- `notes/`
+- `projects/`
+- `_profiles/`
+- folder names used to imply semantics by themselves
+
+Those can still exist as conventions or implementation details, but the durable model should stay doc-first.
 
 ## Where it lives
 
@@ -54,61 +70,59 @@ By default, the durable vault is:
 
 ```text
 ~/Documents/personal-agent/
-├── _profiles/
-│   └── <profile>/
-│       ├── AGENTS.md
-│       ├── settings.json
-│       └── models.json
-├── _skills/
-│   └── <skill>/SKILL.md
-├── notes/
-└── projects/
+├── skills/
+├── work/
+├── systems/
+├── people/
+└── ...
 ```
 
-That vault is the source of truth for durable knowledge.
+That vault is the source of truth for portable knowledge.
 
-## Pages are the umbrella term
+Machine-local runtime state lives separately under `~/.local/state/personal-agent/`.
 
-The product model is **page-first** even though the current UI is narrower.
+## Conversations and the vault
 
-In practice today:
+A conversation should be able to use vault docs in two ways:
 
-- note pages live under `notes/`
-- skill pages live under `_skills/`
-- tracked pages live under `projects/`
+- mention a doc with `@...` for one turn
+- attach docs persistently for the lifetime of the conversation
 
-A full page browser is not the main public UI yet, but the durable model is still page-based.
+That keeps the roles clean:
+
+- the vault stores the docs
+- local config selects instruction files and skill dirs
+- the conversation stores references to the docs it cares about
 
 ## How to choose quickly
 
 Use this rule:
 
-- “How should the agent behave?” → `AGENTS.md`
-- “What should be remembered as a reusable fact?” → note page
-- “How should this workflow be repeated?” → skill page
-- “What work is still in progress?” → tracked page
+- “How should the agent behave?” → selected instruction file
+- “What should be remembered as reusable knowledge?” → ordinary doc
+- “How should this workflow be repeated?” → skill
+- “What should stay in scope for this thread?” → attached conversation doc
 
 ## What not to do
 
-- do not keep durable knowledge only in old conversation text
-- do not put long reusable procedures into `AGENTS.md`
-- do not use a tracked page for generic knowledge that should outlive the project
-- do not treat machine-local runtime state as the portable memory layer
+- do not treat folder names as the primary meaning system
+- do not put reusable procedures into random docs when they should be skills
+- do not rely on old conversation text as the only durable store
+- do not mix machine-local runtime/config state into the shared vault
 
-## Notes on nodes
+## Notes on old terminology
 
-You will still see the word **node** in some implementation details and legacy APIs.
+You will still see older terms such as **page** and **node** in some docs, APIs, and tests.
 
-The preferred mental model is still:
+The preferred user mental model is simpler:
 
-- page = durable thing
-- note / skill / project = page role
-
-See [Nodes](./nodes.md) for the compatibility note.
+- doc = durable markdown content
+- skill = reusable workflow package
+- instruction file = selected behavioral doc
 
 ## Related docs
 
-- [Pages](./pages.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Tracked Pages](./projects.md)
-- [Nodes](./nodes.md)
+- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
+- [Docs and Packages](./pages.md)
+- [Conversation Context Attachments](./conversation-context.md)
+- [Configuration](./configuration.md)

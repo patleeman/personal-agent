@@ -7,7 +7,7 @@ This guide gets `personal-agent` into a usable state quickly.
 `personal-agent` adds a durable layer around Pi:
 
 - repo-managed defaults live in git
-- durable knowledge lives in an external vault
+- portable knowledge lives in an external vault of docs and skills
 - machine-local runtime state stays under `~/.local/state/personal-agent`
 - the CLI, web UI, daemon, and desktop shell all sit on top of the same state model
 
@@ -44,33 +44,21 @@ pa status
 
 `pa doctor` should confirm that Pi, the runtime paths, and built artifacts are available.
 
-## Choose a profile
-
-List the available profiles:
-
-```bash
-pa profile list
-```
-
-Switch the default profile if needed:
-
-```bash
-pa profile use shared
-```
-
-The selected default profile is stored in `~/.local/state/personal-agent/config/config.json`.
-
 ## Understand the default paths
 
-Durable knowledge defaults to the external vault:
+Portable knowledge defaults to the external vault:
 
 ```text
 ~/Documents/personal-agent/
-├── _profiles/
-├── _skills/
-├── notes/
-└── projects/
+├── skills/
+├── instructions/
+├── work/
+└── references/
 ```
+
+Only `skills/` is a shared folder contract.
+
+Everything else can stay freeform.
 
 Machine-local runtime state defaults to:
 
@@ -113,22 +101,35 @@ npm run desktop:start
 
 The desktop shell owns its own local backend while it is running. If a separate daemon is already healthy on the same machine, the desktop shell reuses it instead of failing startup. A separately managed web UI still is not reused.
 
-## Create your first durable instructions
+## Create your first instruction file
 
-Edit `~/Documents/personal-agent/_profiles/<profile>/AGENTS.md` directly.
+Create a markdown doc anywhere in the vault, for example:
 
-Use `AGENTS.md` for durable behavior and preferences, not for project notes. The web UI no longer has a dedicated Instructions editor.
+```text
+~/Documents/personal-agent/instructions/base.md
+```
+
+Then select it through Settings or add it to `~/.local/state/personal-agent/config/config.json` under `instructionFiles`.
+
+`AGENTS.md` is still a fine convention if you want one, but it is not the only valid instruction-file shape.
 
 ## Create durable knowledge
 
-Use the vault directly for now:
+Use the vault directly:
 
-- note page: `~/Documents/personal-agent/notes/<id>.md`
-- note package: `~/Documents/personal-agent/notes/<id>/INDEX.md`
-- skill: `~/Documents/personal-agent/_skills/<skill>/SKILL.md`
-- tracked page: `~/Documents/personal-agent/projects/<projectId>/project.md`
+- doc: `~/Documents/personal-agent/systems/runtime-model.md`
+- doc package: `~/Documents/personal-agent/systems/runtime-model/INDEX.md`
+- skill: `~/Documents/personal-agent/skills/agent-browser/SKILL.md`
 
-Use [Knowledge Management System](./knowledge-system.md) and [Pages](./pages.md) for the model behind those files.
+Use [Knowledge Management System](./knowledge-system.md) and [Instruction Files, Docs, and Skills](./instructions-docs-skills.md) for the model behind those files.
+
+## Use docs in conversations
+
+Today you can already `@`-tag files and docs in the composer.
+
+The next step is persistent attached docs that stay linked to a conversation across turns.
+
+See [Conversation Context Attachments](./conversation-context.md) for the target behavior.
 
 ## Validate scheduled tasks
 
@@ -141,5 +142,5 @@ Example task files live under `docs/examples/` and runtime task files live under
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
 3. [Web UI Guide](./web-ui.md)
-4. [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-5. [Tracked Pages](./projects.md)
+4. [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
+5. [Conversation Context Attachments](./conversation-context.md)

@@ -30,7 +30,7 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - read durable run lists/details/logs and cancel local runs without routing those hot paths through generic local API calls
 - read and manage local scheduled tasks without routing those operator flows through generic local API calls
 - read and manage local alerts and conversation attention without routing those operator flows through generic local API calls
-- read and manage local settings/operator flows such as profiles, model/runtime preferences, vault/default-cwd state, model providers, and provider auth without routing those flows through generic local API calls
+- read and manage local settings/operator flows such as instruction-file selection, model/runtime preferences, vault/default-cwd state, model providers, and provider auth without routing those flows through generic local API calls
 
 - get desktop environment
 - get saved connections
@@ -62,14 +62,13 @@ That means:
 - direct remote workspaces connect to a `ws://` / `wss://` Codex-compatible endpoint
 - SSH remote workspaces tunnel a remote `pa codex app-server --listen ...` process
 - the preload bridge remains the renderer boundary; the remote transport is now the Codex protocol, not a custom desktop-only websocket surface
-+
-+## Litter compatibility
-+
-+The desktop app owns installation of the local Litter SSH shim at `~/.litter/bin/codex`.
-+
-+- the shim delegates `codex app-server ...` to the desktop app's headless Codex-compatible server mode
-+- the same server implementation also backs direct websocket remotes and SSH-bootstrapped remote workspaces
-+- local Litter connectivity should not require replacing the system `codex` binary globally
+## Litter compatibility
+
+The desktop app owns installation of the local Litter SSH shim at `~/.litter/bin/codex`.
+
+- the shim delegates `codex app-server ...` to the desktop app's headless Codex-compatible server mode
+- the same server implementation also backs direct websocket remotes and SSH-bootstrapped remote workspaces
+- local Litter connectivity should not require replacing the system `codex` binary globally
 
 ## UI shape
 

@@ -12,6 +12,7 @@ import { Layout } from './components/Layout';
 import { resolveConversationIndexRedirect } from './conversationRoutes';
 import {
   hasDraftConversationAttachments,
+  hasDraftConversationContextDocs,
   readDraftConversationComposer,
   readDraftConversationCwd,
 } from './draftConversation';
@@ -68,7 +69,8 @@ function ConversationsRouteRedirect() {
     pinnedIds,
     hasDraft: readDraftConversationComposer().trim().length > 0
       || readDraftConversationCwd().trim().length > 0
-      || hasDraftConversationAttachments(),
+      || hasDraftConversationAttachments()
+      || hasDraftConversationContextDocs(),
   });
 
   return <Navigate to={redirectPath} replace />;

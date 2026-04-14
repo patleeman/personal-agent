@@ -11,14 +11,15 @@ Use these docs for:
 - which durable surface to use
 - where state lives
 - how the CLI, web UI, daemon, and desktop shell fit together
-- current product behavior
+- current product behavior and the intended KB model
 
 Use these other places for adjacent concerns:
 
-- repo `AGENTS.md` — repo-specific engineering rules
-- active profile `AGENTS.md` — user/profile behavior and durable preferences
+- repo `AGENTS.md` — repo-specific harness instructions and engineering rules
+- selected instruction files — machine-local behavior selection for the active runtime
 - `../internal-skills/` — built-in runtime feature guides for runs, tasks, artifacts, reminders, async attention, and inbox removal
-- `~/Documents/personal-agent/_skills/<skill>/SKILL.md` — reusable workflow skills
+- `~/Documents/personal-agent/skills/<skill>/SKILL.md` — reusable workflow skills
+- vault docs/packages — durable knowledge anywhere under the configured vault root
 - tool schemas / runtime prompt material — exact live tool contracts
 
 ## Start here
@@ -34,11 +35,12 @@ Then use this order:
 ## Core concepts
 
 - [Conversations](./conversations.md)
-- [Pages](./pages.md)
-- [Tracked Pages](./projects.md)
-- [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md)
-- [Nodes](./nodes.md)
+- [Conversation Context Attachments](./conversation-context.md)
+- [Docs and Packages](./pages.md)
+- [Tracked Work Packages](./projects.md)
+- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
 - [Knowledge Management System](./knowledge-system.md)
+- [Nodes](./nodes.md)
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
 - [Runs](../internal-skills/runs/INDEX.md)
@@ -81,14 +83,15 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | Question | Start here | Then go deeper in |
 | --- | --- | --- |
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
-| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md), [Pages](./pages.md) |
-| How do notes, skills, projects, and AGENTS fit together? | [Knowledge Management System](./knowledge-system.md) | [Profiles, AGENTS, Pages, and Skills](./profiles-memory-skills.md) |
-| Where should durable knowledge live? | [Pages](./pages.md) | [Knowledge Management System](./knowledge-system.md) |
-| Where should ongoing work live? | [Tracked Pages](./projects.md) | [Conversations](./conversations.md) |
+| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md), [Docs and Packages](./pages.md) |
+| How do instruction files, docs, skills, and conversation context fit together? | [Knowledge Management System](./knowledge-system.md) | [Instruction Files, Docs, and Skills](./instructions-docs-skills.md), [Conversation Context Attachments](./conversation-context.md) |
+| Where should durable knowledge live? | [Docs and Packages](./pages.md) | [Knowledge Management System](./knowledge-system.md) |
+| How should a conversation keep stable KB context? | [Conversation Context Attachments](./conversation-context.md) | [Conversations](./conversations.md) |
+| Where should structured long-running work live? | [Tracked Work Packages](./projects.md) | [Conversations](./conversations.md) |
 | How do async outcomes, reminders, wakeups, and owning surfaces differ? | [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md) | [Shared Inbox Removal](../internal-skills/inbox/INDEX.md), [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md) |
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How should I handle local repo files? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
-| How do rendered outputs work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Pages](./projects.md) |
+| How do rendered outputs work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Work Packages](./projects.md) |
 | Which interface should I use day to day? | [Web UI Guide](./web-ui.md) | [Electron desktop app](./electron-desktop-app-plan.md), [Command-Line Guide (`pa`)](./command-line.md) |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 
@@ -97,10 +100,11 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | If you need to… | Use | Durable home |
 | --- | --- | --- |
 | Work with the agent right now | conversation / live session | local session state |
-| Save durable knowledge | note page | `~/Documents/personal-agent/notes/**` |
-| Save reusable procedure | skill page | `~/Documents/personal-agent/_skills/<skill>/SKILL.md` |
-| Track ongoing work | tracked page | `~/Documents/personal-agent/projects/<id>/project.md` + `state.yaml` |
-| Store durable behavior or profile preferences | `AGENTS.md`, profile `settings.json`, profile `models.json` | `~/Documents/personal-agent/_profiles/<profile>/` |
+| Save durable knowledge | doc | vault markdown anywhere |
+| Keep stable KB context in a thread | attached context doc(s) | conversation state + vault refs |
+| Save reusable procedure | skill | `~/Documents/personal-agent/skills/<skill>/SKILL.md` |
+| Save standing instructions | selected instruction file(s) | local config `instructionFiles[]` + vault docs |
+| Track structured ongoing work | tracked work package | current implementation may use `~/Documents/personal-agent/projects/<id>/...` |
 | Notice async results later | conversation attention / alerts | owning thread state + wakeup/alert state |
 | Wake the same conversation later | conversation queue or reminder | live queue state or machine-local wakeup state |
 | Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` |
@@ -112,7 +116,8 @@ These pages live under `../internal-skills/` because they describe runtime featu
 The highest-value rules are:
 
 - use the smallest correct durable surface
-- keep conversations for active work, not durable storage
+- keep conversations for active work, not as the only durable store
 - keep durable knowledge in the vault, not in machine-local session state
+- prefer selected instruction files over magic KB folders
 - prefer the built-in runtime tools over shelling out to `pa` from inside a conversation
 - use internal skills for built-in feature behavior and `docs/` for product semantics

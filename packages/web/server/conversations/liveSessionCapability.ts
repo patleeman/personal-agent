@@ -21,6 +21,10 @@ import {
 } from '../knowledge/promptReferences.js';
 import { buildReferencedVaultFilesContext, resolveMentionedVaultFiles } from '../knowledge/vaultFiles.js';
 import {
+  buildAttachedConversationContextDocsContext,
+  readConversationContextDocs,
+} from './conversationContextDocs.js';
+import {
   abortSession as abortLocalSession,
   branchSession as branchLiveSession,
   compactSession as compactLiveSession,
@@ -526,7 +530,15 @@ export async function submitLiveSessionPromptCapability(
     : [];
   const backgroundRunHiddenContext = buildBackgroundRunHiddenContext(backgroundRunContextEntries);
 
+  const referencedPaths = new Set<string>([
+    ...referencedMemoryDocs.map((doc) => doc.path),
+    ...referencedVaultFiles.map((file) => file.path),
+  ]);
+  const attachedConversationContextDocs = readConversationContextDocs(conversationId)
+    .filter((doc) => !referencedPaths.has(doc.path));
+
   const queuedContextBlocks = [
+    attachedConversationContextDocs.length > 0 ? buildAttachedConversationContextDocsContext(attachedConversationContextDocs) : '',
     referencedAttachments.length > 0 ? buildConversationAttachmentsContext(referencedAttachments) : '',
     referencedTasks.length > 0 ? buildReferencedTasksContext(referencedTasks, context.getRepoRoot()) : '',
     referencedMemoryDocs.length > 0 ? buildReferencedMemoryDocsContext(referencedMemoryDocs, context.getRepoRoot()) : '',

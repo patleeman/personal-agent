@@ -7,7 +7,7 @@ import { ConversationWorkspaceShell, type ConversationWorkspaceShellControls } f
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -54,6 +54,7 @@ import {
   buildDraftConversationComposerStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
+  clearDraftConversationContextDocs,
   clearDraftConversationCwd,
   clearDraftConversationModel,
   clearDraftConversationThinkingLevel,
@@ -62,10 +63,12 @@ import {
   isDraftConversationAttachmentsMutationCurrent,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
+  persistDraftConversationContextDocs,
   persistDraftConversationCwd,
   persistDraftConversationModel,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
+  readDraftConversationContextDocs,
   readDraftConversationCwd,
   readDraftConversationModel,
   readDraftConversationThinkingLevel,
@@ -154,6 +157,42 @@ export function resolveConversationAutocompleteCatalogDemand(input: string): {
     needsMemoryData: hasMentionQuery || Boolean(slashInput && !showModelPicker),
     needsVaultFiles: hasMentionQuery,
   };
+}
+
+function isAttachableMentionItem(item: MentionItem): item is MentionItem & { path: string } {
+  return (item.kind === 'note' || item.kind === 'file')
+    && typeof item.path === 'string'
+    && item.path.trim().length > 0;
+}
+
+function mentionItemToConversationContextDoc(item: MentionItem & { path: string }): ConversationContextDocRef {
+  return {
+    path: item.path,
+    title: item.title?.trim() || item.label,
+    kind: item.kind === 'note' ? 'doc' : 'file',
+    ...(item.id ? { mentionId: item.id } : {}),
+    ...(item.summary?.trim() ? { summary: item.summary.trim() } : {}),
+  };
+}
+
+function dedupeConversationContextDocs(docs: ConversationContextDocRef[]): ConversationContextDocRef[] {
+  const next: ConversationContextDocRef[] = [];
+  const seenPaths = new Set<string>();
+  for (const doc of docs) {
+    const path = doc.path.trim();
+    if (!path || seenPaths.has(path)) {
+      continue;
+    }
+
+    seenPaths.add(path);
+    next.push({
+      ...doc,
+      path,
+      title: doc.title.trim() || path,
+    });
+  }
+
+  return next;
 }
 
 export function truncateConversationShelfText(
@@ -2284,6 +2323,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
   const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
   const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachmentSummary[]>([]);
+  const [attachedContextDocs, setAttachedContextDocs] = useState<ConversationContextDocRef[]>([]);
+  const [contextDocsBusy, setContextDocsBusy] = useState(false);
   const [drawingsBusy, setDrawingsBusy] = useState(false);
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [composerAltHeld, setComposerAltHeld] = useState(false);
@@ -2315,6 +2356,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setEditingDrawingLocalId(null);
     setDrawingsPickerOpen(false);
     setConversationAttachments([]);
+    setAttachedContextDocs(readDraftConversationContextDocs());
     setDrawingsError(null);
     setDragOver(false);
     setSlashIdx(0);
@@ -2747,6 +2789,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => mergeConversationSessionMeta(visibleSessionDetail?.meta, sessionSnapshot),
     [sessionSnapshot, visibleSessionDetail?.meta],
   );
+
+  useEffect(() => {
+    if (draft) {
+      return;
+    }
+
+    setAttachedContextDocs(currentSessionMeta?.attachedContextDocs ?? []);
+  }, [currentSessionMeta?.attachedContextDocs, draft]);
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const currentCwd = useMemo(
     () => draft
@@ -3037,6 +3087,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     lastMessage: lastConversationMessage,
   }), [conversationRun, isLiveSession, lastConversationMessage]);
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems), [input, mentionItems]);
+  const attachableDraftMentionItems = useMemo(
+    () => draftMentionItems.filter((item): item is MentionItem & { path: string } => isAttachableMentionItem(item)),
+    [draftMentionItems],
+  );
+  const attachedContextDocPathSet = useMemo(
+    () => new Set(attachedContextDocs.map((doc) => doc.path)),
+    [attachedContextDocs],
+  );
+  const unattachedDraftMentionItems = useMemo(
+    () => attachableDraftMentionItems.filter((item) => !attachedContextDocPathSet.has(item.path)),
+    [attachableDraftMentionItems, attachedContextDocPathSet],
+  );
   const shouldLoadConversationRun = Boolean(conversationRunId)
     && !draft
     && (
@@ -4982,6 +5044,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const text = inputSnapshot.trim();
     const pendingImageAttachments = attachments;
     const pendingDrawingAttachments = drawingAttachments;
+    const pendingAttachedContextDocs = attachedContextDocs;
     if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
       return;
     }
@@ -5059,6 +5122,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
       };
 
+      const persistPromptContextDocs = async (conversationId: string): Promise<ConversationContextDocRef[]> => {
+        if (pendingAttachedContextDocs.length === 0) {
+          return [];
+        }
+
+        const result = await api.updateConversationContextDocs(conversationId, pendingAttachedContextDocs);
+        return result.attachedContextDocs;
+      };
+
       if (!id && !visibleSessionDetail) {
         const selectedRelatedThreadIdsSnapshot = [...selectedRelatedThreadIds];
 
@@ -5080,6 +5152,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               sessionDetailVersion: conversationEventVersion,
             });
             const attachmentRefs = await persistPromptDrawings(created.id);
+            await persistPromptContextDocs(created.id);
 
             rememberComposerInput(inputSnapshot, created.id);
             setPendingAssistantStatusLabel('Working…');
@@ -5094,6 +5167,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             );
 
             clearDraftConversationAttachments();
+            clearDraftConversationContextDocs();
             clearDraftConversationCwd();
             clearDraftConversationModel();
             clearDraftConversationThinkingLevel();
@@ -5154,6 +5228,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           });
           const newId = created.id;
           const attachmentRefs = await persistPromptDrawings(newId);
+          await persistPromptContextDocs(newId);
           const initialPrompt = {
             text: textToSend,
             behavior: queuedBehavior,
@@ -5166,6 +5241,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setPendingConversationPromptDispatching(newId, true);
 
           clearDraftConversationAttachments();
+          clearDraftConversationContextDocs();
           clearDraftConversationCwd();
           clearDraftConversationModel();
           clearDraftConversationThinkingLevel();
@@ -5540,6 +5616,52 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setAttachments(prev => prev.filter((_, j) => j !== i));
   }
 
+  async function saveAttachedContextDocs(nextDocs: ConversationContextDocRef[]) {
+    const normalized = dedupeConversationContextDocs(nextDocs);
+
+    if (draft) {
+      setAttachedContextDocs(normalized);
+      persistDraftConversationContextDocs(normalized);
+      return normalized;
+    }
+
+    if (!id) {
+      return attachedContextDocs;
+    }
+
+    setContextDocsBusy(true);
+    try {
+      const result = await api.updateConversationContextDocs(id, normalized);
+      setAttachedContextDocs(result.attachedContextDocs);
+      return result.attachedContextDocs;
+    } finally {
+      setContextDocsBusy(false);
+    }
+  }
+
+  async function attachMentionedDocsToConversation(items: Array<MentionItem & { path: string }>) {
+    if (items.length === 0) {
+      return;
+    }
+
+    try {
+      await saveAttachedContextDocs([
+        ...attachedContextDocs,
+        ...items.map((item) => mentionItemToConversationContextDoc(item)),
+      ]);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
+  async function removeAttachedContextDoc(path: string) {
+    try {
+      await saveAttachedContextDocs(attachedContextDocs.filter((doc) => doc.path !== path));
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0;
   const composerShowsQuestionSubmit = shouldShowQuestionSubmitAsPrimaryComposerAction(
     Boolean(pendingAskUserQuestion),
@@ -5556,7 +5678,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const renameConversationDisabled = conversationNeedsTakeover
     || conversationCwdEditorOpen
     || conversationCwdBusy;
-  const hasComposerShelfContent = draftMentionItems.length > 0
+  const hasComposerShelfContent = attachedContextDocs.length > 0
+    || draftMentionItems.length > 0
     || pendingQueue.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
@@ -6058,10 +6181,45 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             {hasComposerShelfContent && (
               <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                {attachedContextDocs.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
+                    <span className="ui-section-label">Attached context</span>
+                    {attachedContextDocs.map((doc) => (
+                      <span
+                        key={doc.path}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
+                        title={doc.summary ? `${doc.path}\n\n${doc.summary}` : doc.path}
+                      >
+                        <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{doc.kind}</span>
+                        <span className="max-w-[18rem] truncate text-secondary">{doc.title}</span>
+                        <button
+                          type="button"
+                          onClick={() => { void removeAttachedContextDoc(doc.path); }}
+                          disabled={contextDocsBusy}
+                          className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none disabled:opacity-50"
+                          title={`Remove ${doc.title} from attached context`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Prompt references */}
                 {draftMentionItems.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
                     <span className="ui-section-label">Prompt references</span>
+                    {unattachedDraftMentionItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { void attachMentionedDocsToConversation(unattachedDraftMentionItems); }}
+                        disabled={contextDocsBusy}
+                        className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:opacity-50"
+                      >
+                        {contextDocsBusy ? 'attaching…' : `attach ${unattachedDraftMentionItems.length}`}
+                      </button>
+                    )}
                     {draftMentionItems.map((item) => (
                       <span
                         key={`${item.kind}:${item.id}`}
