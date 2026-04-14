@@ -3389,7 +3389,11 @@ export const ChatView = memo(function ChatView({
       const live = isStreaming && isTailItem;
 
       return (
-        <div key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`} style={contentVisibilityStyle}>
+        <div
+          key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`}
+          data-chat-tail={isTailItem ? '1' : undefined}
+          style={contentVisibilityStyle}
+        >
           {item.blocks.map((_, offset) => {
             const absoluteIndex = messageIndexOffset + item.startIndex + offset;
             return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
@@ -3500,6 +3504,7 @@ export const ChatView = memo(function ChatView({
         key={absoluteIndex}
         id={`msg-${absoluteIndex}`}
         data-message-index={absoluteIndex}
+        data-chat-tail={isTailItem ? '1' : undefined}
         data-conversation-rail-kind={markerKind}
         style={contentVisibilityStyle}
       >

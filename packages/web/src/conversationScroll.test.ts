@@ -1,12 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   getConversationBottomScrollTop,
   getConversationInitialScrollKey,
   getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
+  isConversationTailVisibleAtBottom,
+  scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
   shouldContinueConversationBottomSettle,
+  shouldRunConversationInitialScroll,
   shouldShowScrollToBottomControl,
 } from './conversationScroll.js';
 
@@ -72,6 +75,53 @@ describe('conversation scroll helpers', () => {
       nextClientHeight: 400,
       stickToBottom: false,
     })).toBe(880);
+  });
+
+  it('scrolls the marked transcript tail into view when a tail anchor is present', () => {
+    const scrollIntoView = vi.fn();
+    const root = {
+      querySelector: vi.fn().mockReturnValue({
+        scrollIntoView,
+      }),
+    };
+
+    expect(scrollConversationTailIntoView(root as unknown as Pick<ParentNode, 'querySelector'>)).toBe(true);
+    expect(root.querySelector).toHaveBeenCalledWith('[data-chat-tail="1"]');
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: 'end',
+      inline: 'nearest',
+    });
+  });
+
+  it('falls back when no transcript tail anchor is available', () => {
+    const root = {
+      querySelector: vi.fn().mockReturnValue(null),
+    };
+
+    expect(scrollConversationTailIntoView(root as unknown as Pick<ParentNode, 'querySelector'>, { behavior: 'smooth' })).toBe(false);
+    expect(root.querySelector).toHaveBeenCalledWith('[data-chat-tail="1"]');
+  });
+
+  it('treats a visible tail anchor near the viewport bottom as pinned', () => {
+    const container = {
+      querySelector: vi.fn().mockReturnValue({
+        getBoundingClientRect: () => ({ top: 430, bottom: 495 }),
+      }),
+      getBoundingClientRect: () => ({ top: 100, bottom: 500 }),
+    };
+
+    expect(isConversationTailVisibleAtBottom(container as unknown as Pick<ParentNode, 'querySelector'> & { getBoundingClientRect: () => { top: number; bottom: number } })).toBe(true);
+  });
+
+  it('does not treat an offscreen tail anchor as pinned', () => {
+    const container = {
+      querySelector: vi.fn().mockReturnValue({
+        getBoundingClientRect: () => ({ top: 820, bottom: 900 }),
+      }),
+      getBoundingClientRect: () => ({ top: 100, bottom: 500 }),
+    };
+
+    expect(isConversationTailVisibleAtBottom(container as unknown as Pick<ParentNode, 'querySelector'> & { getBoundingClientRect: () => { top: number; bottom: number } })).toBe(false);
   });
 
   it('returns a stable tail key for in-place streaming text updates', () => {
@@ -140,6 +190,26 @@ describe('conversation scroll helpers', () => {
   it('shows the scroll-to-bottom control only when messages exist and the view is not pinned', () => {
     expect(shouldShowScrollToBottomControl(4, true)).toBe(false);
     expect(shouldShowScrollToBottomControl(4, false)).toBe(true);
+  });
+
+  it('starts the initial bottom scroll as soon as transcript content is available', () => {
+    expect(shouldRunConversationInitialScroll({
+      initialScrollKey: 'conv-123:settled',
+      hasMessages: true,
+      sessionLoading: true,
+    })).toBe(true);
+
+    expect(shouldRunConversationInitialScroll({
+      initialScrollKey: 'conv-123:settled',
+      hasMessages: false,
+      sessionLoading: false,
+    })).toBe(false);
+
+    expect(shouldRunConversationInitialScroll({
+      initialScrollKey: null,
+      hasMessages: true,
+      sessionLoading: false,
+    })).toBe(false);
   });
 
   it('keeps the initial bottom-settle loop alive until the minimum frame budget has elapsed', () => {

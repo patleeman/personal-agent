@@ -1,6 +1,7 @@
 import type { MessageBlock } from './types';
 
 const DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX = 40;
+const CONVERSATION_TAIL_SELECTOR = '[data-chat-tail="1"]';
 const DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT = 2;
 const DEFAULT_BOTTOM_SETTLE_MAX_FRAMES = 45;
 
@@ -71,6 +72,44 @@ export function getConversationTailBlockKey(block: MessageBlock | null | undefin
   }
 }
 
+type TailQueryRoot = Pick<ParentNode, 'querySelector'>;
+
+type TailRectReadable = {
+  getBoundingClientRect?: () => { top: number; bottom: number };
+};
+
+export function scrollConversationTailIntoView(
+  root: TailQueryRoot | null | undefined,
+  options?: Pick<ScrollIntoViewOptions, 'behavior'>,
+): boolean {
+  const tail = root?.querySelector(CONVERSATION_TAIL_SELECTOR) as { scrollIntoView?: (options?: ScrollIntoViewOptions) => void } | null | undefined;
+  if (!tail || typeof tail.scrollIntoView !== 'function') {
+    return false;
+  }
+
+  tail.scrollIntoView({
+    block: 'end',
+    inline: 'nearest',
+    ...(options?.behavior ? { behavior: options.behavior } : {}),
+  });
+  return true;
+}
+
+export function isConversationTailVisibleAtBottom(
+  container: (TailQueryRoot & TailRectReadable) | null | undefined,
+  thresholdPx = DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX,
+): boolean {
+  const tail = container?.querySelector(CONVERSATION_TAIL_SELECTOR) as TailRectReadable | null | undefined;
+  if (!container || typeof container.getBoundingClientRect !== 'function' || !tail || typeof tail.getBoundingClientRect !== 'function') {
+    return false;
+  }
+
+  const containerRect = container.getBoundingClientRect();
+  const tailRect = tail.getBoundingClientRect();
+  return tailRect.bottom <= containerRect.bottom + thresholdPx
+    && tailRect.bottom >= containerRect.top - thresholdPx;
+}
+
 export function shouldAutoScrollToStreamingTail(
   previousTailKey: string | null,
   nextTailBlock: MessageBlock | null | undefined,
@@ -91,6 +130,14 @@ export function shouldAutoScrollToStreamingTail(
 
 export function shouldShowScrollToBottomControl(messageCount: number, atBottom: boolean): boolean {
   return messageCount > 0 && !atBottom;
+}
+
+export function shouldRunConversationInitialScroll(input: {
+  initialScrollKey: string | null;
+  hasMessages: boolean;
+  sessionLoading: boolean;
+}): boolean {
+  return Boolean(input.initialScrollKey) && input.hasMessages;
 }
 
 export function shouldContinueConversationBottomSettle(

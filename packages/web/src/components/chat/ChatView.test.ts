@@ -280,6 +280,31 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('gpt-5.4');
   });
 
+  it('uses run tool input context even when the persisted step lacks structured run details', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'run',
+        input: {
+          action: 'start',
+          taskSlug: 'ui-preview-check',
+          command: 'printf ok',
+          cwd: '/Users/patrick/workingdir/personal-agent',
+        },
+        output: 'Started durable run run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b for ui-preview-check.',
+        status: 'ok',
+      }],
+      onOpenRun: () => undefined,
+    }));
+
+    expect(html).toContain('start printf ok');
+    expect(html).toContain('Open printf ok');
+    expect(html).toContain('shell run');
+    expect(html).toContain('ui-preview-check');
+    expect(html).toContain('cwd personal-agent');
+  });
+
   it('limits listed runs in the transcript to 5 rows by default', () => {
     const listedRuns = Array.from({ length: 7 }, (_, index) => ({
       runId: `run-fix-build-${String.fromCharCode(97 + index)}-2026-03-25T00-53-25-347Z-903aa31b`,
@@ -621,6 +646,41 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).toContain('id="msg-7"');
     expect(html).toContain('data-message-index="7"');
+  });
+
+  it('marks exactly one tail transcript item as the scroll anchor', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'text',
+          ts: '2026-03-11T18:00:00.000Z',
+          text: 'Earlier assistant message',
+        },
+        {
+          type: 'text',
+          ts: '2026-03-11T18:01:00.000Z',
+          text: 'Latest assistant message',
+        },
+      ],
+    }));
+
+    expect(html.match(/data-chat-tail="1"/g)).toHaveLength(1);
+  });
+
+  it('marks a tail trace cluster as the scroll anchor too', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'echo tail' },
+        output: '',
+        status: 'running',
+      }],
+      isStreaming: true,
+    }));
+
+    expect(html.match(/data-chat-tail="1"/g)).toHaveLength(1);
   });
 
   it('renders skill invocations as disclosure cards instead of raw wrapper markup', () => {

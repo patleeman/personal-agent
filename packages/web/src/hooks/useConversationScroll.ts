@@ -4,8 +4,11 @@ import {
   getConversationPrependRestoreScrollTop,
   getConversationTailBlockKey,
   isConversationScrolledToBottom,
+  isConversationTailVisibleAtBottom,
+  scrollConversationTailIntoView,
   shouldAutoScrollToStreamingTail,
   shouldContinueConversationBottomSettle,
+  shouldRunConversationInitialScroll,
 } from '../conversationScroll';
 import type { MessageBlock } from '../types';
 
@@ -53,6 +56,8 @@ export function useConversationScroll({
   const bottomScrollAnimationFrameRef = useRef(0);
   const smoothBottomScrollTimeoutRef = useRef<number | null>(null);
   const smoothBottomScrollCleanupRef = useRef<(() => void) | null>(null);
+  const pinnedBottomWatchUntilRef = useRef(0);
+  const pinnedBottomWatchFrameRef = useRef(0);
   const hasMessages = (messages?.length ?? 0) > 0;
 
   const clearSmoothBottomScrollSettle = useCallback(() => {
@@ -76,6 +81,49 @@ export function useConversationScroll({
     clearSmoothBottomScrollSettle();
   }, [clearSmoothBottomScrollSettle]);
 
+  const syncPinnedBottomFromDom = useCallback((el: HTMLDivElement, scrollHeight = el.scrollHeight) => {
+    scrollPinnedToBottomRef.current = true;
+    if (!scrollConversationTailIntoView(el)) {
+      el.scrollTop = getConversationBottomScrollTop({
+        scrollHeight,
+        clientHeight: el.clientHeight,
+      });
+    }
+    setAtBottom(true);
+  }, []);
+
+  const startPinnedBottomWatch = useCallback((durationMs = 8000) => {
+    const nextDeadline = window.performance.now() + durationMs;
+    pinnedBottomWatchUntilRef.current = Math.max(pinnedBottomWatchUntilRef.current, nextDeadline);
+
+    if (pinnedBottomWatchFrameRef.current !== 0) {
+      return;
+    }
+
+    let lastScrollHeight = scrollRef.current?.scrollHeight ?? 0;
+    const tick = () => {
+      pinnedBottomWatchFrameRef.current = 0;
+      const el = scrollRef.current;
+      if (!el) {
+        return;
+      }
+
+      const nextScrollHeight = el.scrollHeight;
+      if (scrollPinnedToBottomRef.current && nextScrollHeight !== lastScrollHeight) {
+        syncPinnedBottomFromDom(el, nextScrollHeight);
+      }
+      lastScrollHeight = nextScrollHeight;
+
+      if (window.performance.now() >= pinnedBottomWatchUntilRef.current) {
+        return;
+      }
+
+      pinnedBottomWatchFrameRef.current = window.requestAnimationFrame(tick);
+    };
+
+    pinnedBottomWatchFrameRef.current = window.requestAnimationFrame(tick);
+  }, [scrollRef, syncPinnedBottomFromDom]);
+
   const settleBottomScroll = useCallback((options?: { onSettled?: () => void; minFrames?: number }) => {
     const el = scrollRef.current;
     if (!el) {
@@ -88,6 +136,8 @@ export function useConversationScroll({
       bottomScrollAnimationFrameRef.current = 0;
     }
 
+    startPinnedBottomWatch();
+
     let lastScrollHeight = -1;
     let stableFrames = 0;
     let frameCount = 0;
@@ -95,12 +145,7 @@ export function useConversationScroll({
     const tick = () => {
       bottomScrollAnimationFrameRef.current = 0;
       const nextScrollHeight = el.scrollHeight;
-      scrollPinnedToBottomRef.current = true;
-      el.scrollTop = getConversationBottomScrollTop({
-        scrollHeight: nextScrollHeight,
-        clientHeight: el.clientHeight,
-      });
-      setAtBottom(true);
+      syncPinnedBottomFromDom(el, nextScrollHeight);
       frameCount += 1;
 
       if (nextScrollHeight === lastScrollHeight) {
@@ -125,7 +170,7 @@ export function useConversationScroll({
     };
 
     tick();
-  }, [scrollRef]);
+  }, [scrollRef, startPinnedBottomWatch, syncPinnedBottomFromDom]);
 
   useLayoutEffect(() => {
     cancelBottomScrollSettle();
@@ -140,10 +185,8 @@ export function useConversationScroll({
     const frame = window.requestAnimationFrame(() => {
       const el = scrollRef.current;
       if (el) {
-        el.scrollTop = getConversationBottomScrollTop({
-          scrollHeight: el.scrollHeight,
-          clientHeight: el.clientHeight,
-        });
+        syncPinnedBottomFromDom(el);
+        startPinnedBottomWatch();
       }
       setAtBottom(true);
     });
@@ -151,10 +194,15 @@ export function useConversationScroll({
     return () => {
       window.cancelAnimationFrame(frame);
     };
-  }, [cancelBottomScrollSettle, conversationId, scrollRef]);
+  }, [cancelBottomScrollSettle, conversationId, scrollRef, startPinnedBottomWatch, syncPinnedBottomFromDom]);
 
   useLayoutEffect(() => () => {
     cancelBottomScrollSettle();
+    if (pinnedBottomWatchFrameRef.current !== 0) {
+      window.cancelAnimationFrame(pinnedBottomWatchFrameRef.current);
+      pinnedBottomWatchFrameRef.current = 0;
+    }
+    pinnedBottomWatchUntilRef.current = 0;
   }, [cancelBottomScrollSettle]);
 
   const syncScrollStateFromDom = useCallback(() => {
@@ -165,11 +213,12 @@ export function useConversationScroll({
       return;
     }
 
-    const nextAtBottom = isConversationScrolledToBottom({
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    });
+    const nextAtBottom = isConversationTailVisibleAtBottom(el)
+      || isConversationScrolledToBottom({
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+      });
     scrollPinnedToBottomRef.current = nextAtBottom;
     setAtBottom(nextAtBottom);
   }, [scrollRef]);
@@ -206,19 +255,22 @@ export function useConversationScroll({
       }, SMOOTH_SCROLL_SETTLE_DELAY_MS);
 
       el.addEventListener('scrollend', handleScrollEnd, { once: true });
-      el.scrollTo({
-        top: getConversationBottomScrollTop({
-          scrollHeight: el.scrollHeight,
-          clientHeight: el.clientHeight,
-        }),
-        behavior: 'smooth',
-      });
+      startPinnedBottomWatch();
+      if (!scrollConversationTailIntoView(el, { behavior: 'smooth' })) {
+        el.scrollTo({
+          top: getConversationBottomScrollTop({
+            scrollHeight: el.scrollHeight,
+            clientHeight: el.clientHeight,
+          }),
+          behavior: 'smooth',
+        });
+      }
       setAtBottom(true);
       return;
     }
 
     settleBottomScroll();
-  }, [cancelBottomScrollSettle, clearSmoothBottomScrollSettle, scrollRef, settleBottomScroll]);
+  }, [cancelBottomScrollSettle, clearSmoothBottomScrollSettle, scrollRef, settleBottomScroll, startPinnedBottomWatch]);
 
   const capturePrependRestore = useCallback(() => {
     if (!conversationId) {
@@ -252,11 +304,14 @@ export function useConversationScroll({
       return;
     }
 
-    setAtBottom(isConversationScrolledToBottom({
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    }));
+    setAtBottom(
+      isConversationTailVisibleAtBottom(el)
+      || isConversationScrolledToBottom({
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+      }),
+    );
   }, [conversationId, messages, scrollRef]);
 
   useLayoutEffect(() => {
@@ -285,18 +340,25 @@ export function useConversationScroll({
       return;
     }
 
-    setAtBottom(isConversationScrolledToBottom({
-      scrollHeight: el.scrollHeight,
-      scrollTop: el.scrollTop,
-      clientHeight: el.clientHeight,
-    }));
+    setAtBottom(
+      isConversationTailVisibleAtBottom(el)
+      || isConversationScrolledToBottom({
+        scrollHeight: el.scrollHeight,
+        scrollTop: el.scrollTop,
+        clientHeight: el.clientHeight,
+      }),
+    );
   }, [conversationId, messages, prependRestoreKey, scrollRef, settleBottomScroll]);
 
   useLayoutEffect(() => {
     // Only restart the open-scroll loop when the conversation/scroll phase changes
     // or the transcript flips from empty to non-empty. Streaming updates should
     // extend the existing loop, not restart it every time the tail grows.
-    if (!initialScrollKey || !hasMessages || !scrollRef.current || sessionLoading) {
+    if (!shouldRunConversationInitialScroll({
+      initialScrollKey,
+      hasMessages,
+      sessionLoading,
+    }) || !scrollRef.current) {
       return;
     }
 
