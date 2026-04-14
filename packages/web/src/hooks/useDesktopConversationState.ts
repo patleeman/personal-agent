@@ -24,6 +24,27 @@ type DesktopConversationStateEnvelope = {
   };
 };
 
+export function mergeDesktopConversationState(
+  previous: DesktopConversationState | null,
+  next: DesktopConversationState,
+): DesktopConversationState {
+  const previousCwdChange = previous?.conversationId === next.conversationId
+    ? previous.stream.cwdChange
+    : null;
+
+  if (!previousCwdChange || next.stream.cwdChange) {
+    return next;
+  }
+
+  return {
+    ...next,
+    stream: {
+      ...next.stream,
+      cwdChange: previousCwdChange,
+    },
+  };
+}
+
 export function useDesktopConversationState(
   conversationId: string | null,
   options?: { tailBlocks?: number; enabled?: boolean },
@@ -87,7 +108,7 @@ export function useDesktopConversationState(
           return;
         case 'state':
           if (detail.event.state) {
-            setState(detail.event.state);
+            setState((previous) => mergeDesktopConversationState(previous, detail.event.state as DesktopConversationState));
             setError(null);
           }
           return;
