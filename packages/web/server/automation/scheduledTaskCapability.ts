@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createStoredAutomation,
+  ensureAutomationThread,
   startScheduledTaskRun,
   updateStoredAutomation,
   type StoredAutomation,
@@ -8,8 +9,9 @@ import {
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { loadScheduledTasksForProfile, toScheduledTaskMetadata, type TaskRuntimeEntry } from './scheduledTasks.js';
 import { findTaskForProfile, readRequiredTaskId } from './taskService.js';
+import { applyScheduledTaskThreadBinding, buildScheduledTaskThreadDetail, resolveScheduledTaskThreadBinding, type ScheduledTaskThreadInput } from './scheduledTaskThreads.js';
 
-export interface ScheduledTaskCreateCapabilityInput {
+export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadInput {
   title: string;
   enabled?: boolean;
   cron?: string | null;
@@ -21,7 +23,7 @@ export interface ScheduledTaskCreateCapabilityInput {
   prompt: string;
 }
 
-export interface ScheduledTaskUpdateCapabilityInput {
+export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadInput {
   taskId: string;
   title?: string;
   enabled?: boolean;
@@ -78,6 +80,7 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     prompt: metadata.promptBody,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
+    ...buildScheduledTaskThreadDetail(task),
   };
 }
 
@@ -96,11 +99,21 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
     throw new Error('Task not found');
   }
 
-  return buildScheduledTaskDetail(resolvedTask.task, resolvedTask.runtime);
+  const task = resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
+    ? ensureAutomationThread(resolvedTask.task.id)
+    : resolvedTask.task;
+
+  return buildScheduledTaskDetail(task, resolvedTask.runtime);
 }
 
 export async function createScheduledTaskCapability(profile: string, input: ScheduledTaskCreateCapabilityInput) {
-  const task = createStoredAutomation({
+  const threadSelection = resolveScheduledTaskThreadBinding({
+    threadMode: input.threadMode,
+    threadConversationId: input.threadConversationId,
+    cwd: input.cwd,
+  });
+
+  const createdTask = createStoredAutomation({
     profile,
     title: input.title ?? '',
     enabled: input.enabled ?? true,
@@ -111,6 +124,13 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     cwd: input.cwd,
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt ?? '',
+  });
+
+  const task = applyScheduledTaskThreadBinding(createdTask.id, {
+    threadMode: threadSelection.mode,
+    threadConversationId: threadSelection.conversationId,
+    threadSessionFile: threadSelection.sessionFile,
+    cwd: input.cwd,
   });
 
   invalidateAppTopics('tasks');
@@ -129,6 +149,12 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     throw new Error('Task not found');
   }
 
+  const threadSelection = resolveScheduledTaskThreadBinding({
+    threadMode: input.threadMode,
+    threadConversationId: input.threadConversationId,
+    cwd: input.cwd ?? resolvedTask.task.cwd,
+  });
+
   const updatedTask = updateStoredAutomation(resolvedTask.task.id, {
     title: input.title,
     enabled: input.enabled,
@@ -141,12 +167,19 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     prompt: input.prompt,
   });
 
+  const task = applyScheduledTaskThreadBinding(updatedTask.id, {
+    threadMode: threadSelection.mode,
+    threadConversationId: threadSelection.conversationId,
+    threadSessionFile: threadSelection.sessionFile,
+    cwd: input.cwd ?? updatedTask.cwd,
+  });
+
   invalidateAppTopics('tasks');
 
-  const refreshedTask = findTaskForProfile(profile, updatedTask.id);
+  const refreshedTask = findTaskForProfile(profile, task.id);
   return {
     ok: true as const,
-    task: buildScheduledTaskDetail(refreshedTask?.task ?? updatedTask, refreshedTask?.runtime),
+    task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime),
   };
 }
 

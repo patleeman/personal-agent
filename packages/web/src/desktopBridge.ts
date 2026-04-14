@@ -202,6 +202,8 @@ export interface PersonalAgentDesktopBridge {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }): Promise<{ ok: true; task: ScheduledTaskDetail }>;
   updateScheduledTask(input: {
     taskId: string;
@@ -214,6 +216,8 @@ export interface PersonalAgentDesktopBridge {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }): Promise<{ ok: true; task: ScheduledTaskDetail }>;
   runScheduledTask(taskId: string): Promise<{ ok: true; accepted: boolean; runId: string; reason?: string }>;
   readDurableRuns(): Promise<DurableRunListResult>;

@@ -3,8 +3,10 @@ import {
   createWriteStream,
   existsSync,
   mkdirSync,
+  readFileSync,
   statSync,
   type WriteStream,
+  writeFileSync,
 } from 'fs';
 import { join } from 'path';
 import {
@@ -22,11 +24,19 @@ import {
 } from '@personal-agent/resources';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
+export interface TaskRunThreadBinding {
+  threadMode?: 'dedicated' | 'existing' | 'none';
+  threadSessionFile?: string;
+  threadConversationId?: string;
+}
+
+export type RunnableTaskDefinition = ParsedTaskDefinition & TaskRunThreadBinding;
+
 const GRACEFUL_SHUTDOWN_MS = 5000;
 const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
 
 export interface TaskRunRequest {
-  task: ParsedTaskDefinition;
+  task: RunnableTaskDefinition;
   attempt: number;
   runsRoot: string;
   signal?: AbortSignal;
@@ -85,8 +95,12 @@ function writeLine(stream: WriteStream, message: string): void {
   stream.write(`${message}\n`);
 }
 
-function toTaskRunArgs(task: ParsedTaskDefinition, resolvedProfile: ResolvedResourceProfile): string[] {
+function toTaskRunArgs(task: RunnableTaskDefinition, resolvedProfile: ResolvedResourceProfile): string[] {
   const args = [...buildPiResourceArgs(resolvedProfile)];
+
+  if (task.threadMode && task.threadMode !== 'none' && task.threadSessionFile) {
+    args.push('--session', task.threadSessionFile);
+  }
 
   if (task.modelRef) {
     args.push('--model', task.modelRef);
@@ -121,6 +135,51 @@ function resolvePiCommand(repoRoot: string): { command: string; argsPrefix: stri
     command: 'pi',
     argsPrefix: [],
   };
+}
+
+function normalizeThreadSessionTranscript(sessionFile: string | undefined): void {
+  if (!sessionFile || !existsSync(sessionFile)) {
+    return;
+  }
+
+  let raw = '';
+  try {
+    raw = readFileSync(sessionFile, 'utf-8');
+  } catch {
+    return;
+  }
+
+  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 3) {
+    return;
+  }
+
+  const prefix = [lines[0]];
+  let cursor = 1;
+  while (cursor < lines.length) {
+    try {
+      const parsed = JSON.parse(lines[cursor] ?? '{}') as { type?: string };
+      if (parsed.type !== 'session_info') {
+        break;
+      }
+      prefix.push(lines[cursor] as string);
+      cursor += 1;
+    } catch {
+      return;
+    }
+  }
+
+  if (cursor + prefix.length > lines.length) {
+    return;
+  }
+
+  const duplicatedPrefix = prefix.every((line, index) => lines[cursor + index] === line);
+  if (!duplicatedPrefix) {
+    return;
+  }
+
+  const normalized = [...prefix, ...lines.slice(cursor + prefix.length)];
+  writeFileSync(sessionFile, `${normalized.join('\n')}\n`, 'utf-8');
 }
 
 function appendCapturedOutput(current: string, chunk: string): { next: string; truncated: boolean } {
@@ -239,6 +298,8 @@ async function runTaskWithDirectSpawn(context: RunnerExecutionContext): Promise<
       const endedAt = new Date().toISOString();
       const success = exitCode === 0 && !timedOut && !cancelled;
 
+      normalizeThreadSessionTranscript(context.request.task.threadSessionFile);
+
       let error: string | undefined;
       if (timedOut) {
         error = `Task timed out after ${context.request.task.timeoutSeconds}s`;
@@ -347,7 +408,10 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       env: resolveChildProcessEnv(envOverrides),
     };
 
-    writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''}${request.task.thinkingLevel ? ` --thinking ${request.task.thinkingLevel}` : ''} -p <task prompt>`);
+    const threadLog = request.task.threadMode && request.task.threadMode !== 'none' && request.task.threadSessionFile
+      ? ` --session ${request.task.threadSessionFile}`
+      : '';
+    writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''}${request.task.thinkingLevel ? ` --thinking ${request.task.thinkingLevel}` : ''}${threadLog} -p <task prompt>`);
     writeLine(stream, '# mode=subprocess');
     writeLine(stream, '');
 

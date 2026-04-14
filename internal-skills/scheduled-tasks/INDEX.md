@@ -127,6 +127,7 @@ Important behavior to understand:
 - overlap is prevented; if one run is still active, the next due run is skipped
 - retries happen up to the configured retry limit
 - each run writes a log
+- every automation defaults to a dedicated thread unless you explicitly bind it to an existing thread or disable thread ownership
 - successful and failed runs stay on the automation and its owning thread by default
 - tasks are still passive by default; they do not become interrupting reminders unless explicitly wired back to a conversation
 
@@ -163,10 +164,12 @@ The Automations page lets you:
 
 - inspect discovered automations
 - create a new automation from a centered modal launched from the page toolbar
+- choose a dedicated thread, an existing thread, or no thread for each automation
 - enable or disable an automation
 - edit an automation from the detail rail with a focused form
 - adjust common recurring schedules with an interactive schedule builder or fall back to raw cron
 - run an automation immediately
+- open the automation-owned thread directly from the detail view
 - inspect automation status visually
 
 See [Web UI Guide](../../docs/web-ui.md).

@@ -13,11 +13,16 @@ import {
   type ParsedTaskSchedule,
 } from './modules/tasks-parser.js';
 
+export type AutomationThreadMode = 'dedicated' | 'existing' | 'none';
+
 export interface StoredAutomation extends ParsedTaskDefinition {
   title: string;
   createdAt: string;
   updatedAt: string;
   legacyFilePath?: string;
+  threadMode: AutomationThreadMode;
+  threadSessionFile?: string;
+  threadConversationId?: string;
 }
 
 export interface LegacyAutomationImportIssue {
@@ -59,6 +64,9 @@ type StoredAutomationRow = {
   created_at: string;
   updated_at: string;
   legacy_file_path: string | null;
+  thread_mode: string | null;
+  thread_session_file: string | null;
+  thread_conversation_id: string | null;
 };
 
 type AutomationStateRow = {
@@ -107,6 +115,14 @@ function readRequiredString(value: string | null | undefined, label: string): st
 
 function buildSyntheticAutomationFilePath(id: string): string {
   return `/__automations__/${id}.automation.md`;
+}
+
+function normalizeAutomationThreadMode(value: string | null | undefined): AutomationThreadMode {
+  if (value === 'none' || value === 'existing' || value === 'dedicated') {
+    return value;
+  }
+
+  return 'dedicated';
 }
 
 function automationFileName(input: { id: string; legacyFilePath?: string }): string {
@@ -163,7 +179,10 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
       timeout_seconds INTEGER NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      legacy_file_path TEXT
+      legacy_file_path TEXT,
+      thread_mode TEXT NOT NULL DEFAULT 'dedicated',
+      thread_session_file TEXT,
+      thread_conversation_id TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_automations_profile_title ON automations(profile, title);
@@ -208,6 +227,16 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   if (!automationColumnNames.has('thinking_level')) {
     db.exec('ALTER TABLE automations ADD COLUMN thinking_level TEXT');
   }
+  if (!automationColumnNames.has('thread_mode')) {
+    db.exec("ALTER TABLE automations ADD COLUMN thread_mode TEXT NOT NULL DEFAULT 'dedicated'");
+  }
+  if (!automationColumnNames.has('thread_session_file')) {
+    db.exec('ALTER TABLE automations ADD COLUMN thread_session_file TEXT');
+  }
+  if (!automationColumnNames.has('thread_conversation_id')) {
+    db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
+  }
+  db.exec("UPDATE automations SET thread_mode = 'dedicated' WHERE thread_mode IS NULL OR trim(thread_mode) = ''");
 
   dbCache.set(resolved, db);
   return db;
@@ -256,6 +285,9 @@ function rowToStoredAutomation(row: StoredAutomationRow): StoredAutomation {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     legacyFilePath,
+    threadMode: normalizeAutomationThreadMode(row.thread_mode),
+    threadSessionFile: readOptionalString(row.thread_session_file),
+    threadConversationId: readOptionalString(row.thread_conversation_id),
   };
 }
 
@@ -313,7 +345,7 @@ function collectLegacyTaskFiles(taskDir: string): string[] {
 function readStoredAutomationRows(db: SqliteDatabase, profile?: string): StoredAutomationRow[] {
   if (profile) {
     return db.prepare(`
-      SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path
+      SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
       FROM automations
       WHERE profile = ?
       ORDER BY title COLLATE NOCASE ASC, created_at ASC, id ASC
@@ -321,7 +353,7 @@ function readStoredAutomationRows(db: SqliteDatabase, profile?: string): StoredA
   }
 
   return db.prepare(`
-    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path
+    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     ORDER BY profile ASC, title COLLATE NOCASE ASC, created_at ASC, id ASC
   `).all() as StoredAutomationRow[];
@@ -406,7 +438,7 @@ export function listStoredAutomations(options: { profile?: string; dbPath?: stri
 export function getStoredAutomation(id: string, options: { profile?: string; dbPath?: string } = {}): StoredAutomation | undefined {
   const db = openAutomationDb(options.dbPath);
   const row = db.prepare(`
-    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path
+    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     WHERE id = ?
   `).get(id) as StoredAutomationRow | undefined;
@@ -427,8 +459,8 @@ export function createStoredAutomation(input: AutomationMutationInput & { dbPath
 
   db.prepare(`
     INSERT INTO automations (
-      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'dedicated', NULL, NULL)
   `).run(
     id,
     normalized.profile,
@@ -490,6 +522,45 @@ export function updateStoredAutomation(id: string, input: Partial<Omit<Automatio
     normalized.modelRef ?? null,
     normalized.thinkingLevel ?? null,
     normalized.timeoutSeconds,
+    updatedAt,
+    id,
+  );
+
+  return getStoredAutomation(id, { dbPath: input.dbPath }) as StoredAutomation;
+}
+
+export function setStoredAutomationThreadBinding(
+  id: string,
+  input: {
+    mode: AutomationThreadMode;
+    conversationId?: string | null;
+    sessionFile?: string | null;
+    dbPath?: string;
+  },
+): StoredAutomation {
+  const existing = getStoredAutomation(id, { dbPath: input.dbPath });
+  if (!existing) {
+    throw new Error(`Automation not found: ${id}`);
+  }
+
+  const db = openAutomationDb(input.dbPath);
+  const updatedAt = new Date().toISOString();
+  const mode = normalizeAutomationThreadMode(input.mode);
+  const conversationId = mode === 'none' || mode === 'dedicated'
+    ? readOptionalString(input.conversationId ?? undefined)
+    : readRequiredString(input.conversationId ?? undefined, 'conversationId');
+  const sessionFile = mode === 'none' || mode === 'dedicated'
+    ? readOptionalString(input.sessionFile ?? undefined)
+    : readRequiredString(input.sessionFile ?? undefined, 'sessionFile');
+
+  db.prepare(`
+    UPDATE automations
+    SET thread_mode = ?, thread_conversation_id = ?, thread_session_file = ?, updated_at = ?
+    WHERE id = ?
+  `).run(
+    mode,
+    mode === 'none' ? null : (conversationId ?? null),
+    mode === 'none' ? null : (sessionFile ?? null),
     updatedAt,
     id,
   );
@@ -631,8 +702,8 @@ export function ensureLegacyTaskImports(options: {
 
   const insertAutomation = db.prepare(`
     INSERT INTO automations (
-      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dedicated', NULL, NULL)
   `);
   const markImported = db.prepare(`
     INSERT INTO legacy_automation_imports (legacy_file_path, automation_id, imported_at)

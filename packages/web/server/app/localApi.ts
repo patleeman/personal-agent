@@ -1760,6 +1760,8 @@ export async function createDesktopScheduledTask(input: {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt?: string;
+  threadMode?: 'dedicated' | 'existing' | 'none' | null;
+  threadConversationId?: string | null;
 }) {
   await getLocalRoutes();
   return createScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', {
@@ -1780,6 +1782,8 @@ export async function updateDesktopScheduledTask(input: {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt?: string;
+  threadMode?: 'dedicated' | 'existing' | 'none' | null;
+  threadConversationId?: string | null;
 }) {
   await getLocalRoutes();
   return updateScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', input);

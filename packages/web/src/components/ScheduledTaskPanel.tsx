@@ -402,6 +402,18 @@ function formatScheduleButtonLabel(state: TaskFormState): string {
   return cron ? formatTaskSchedule({ cron }) : 'Schedule';
 }
 
+function formatThreadModeLabel(mode: TaskFormState['threadMode']): string {
+  switch (mode) {
+    case 'existing':
+      return 'Existing thread';
+    case 'none':
+      return 'No thread';
+    case 'dedicated':
+    default:
+      return 'Dedicated thread';
+  }
+}
+
 function InlineSwitch({
   checked,
   label,
@@ -505,7 +517,7 @@ function TaskEditorForm({
   onCancel: () => void;
   onSubmit: () => void;
 }) {
-  const { projects } = useAppData();
+  const { projects, sessions } = useAppData();
   const validationError = useMemo(() => validateTaskForm(value, mode), [mode, value]);
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -581,6 +593,24 @@ function TaskEditorForm({
   }, [cwdState?.effectiveCwd, projects, value.projectPath]);
 
   const scheduleSummary = formatScheduleButtonLabel(value);
+  const effectiveThreadCwd = value.runIn === 'worktree'
+    ? value.projectPath.trim()
+    : (cwdState?.effectiveCwd?.trim() || '');
+  const existingThreadOptions = useMemo(() => {
+    const entries = (sessions ?? [])
+      .filter((session) => !effectiveThreadCwd || !session.cwd || session.cwd === effectiveThreadCwd)
+      .map((session) => ({
+        id: session.id,
+        label: session.title,
+        cwd: session.cwd,
+      }));
+
+    return entries.sort((left, right) => left.label.localeCompare(right.label));
+  }, [effectiveThreadCwd, sessions]);
+  const selectedExistingThread = existingThreadOptions.find((option) => option.id === value.threadConversationId);
+  const threadSummary = value.threadMode === 'existing'
+    ? (selectedExistingThread?.label ?? 'Choose thread')
+    : formatThreadModeLabel(value.threadMode);
   const visibleError = error ?? (submitAttempted ? validationError : null);
   const projectHelp = value.runIn === 'local'
     ? 'Runs from the local workspace.'
@@ -739,6 +769,50 @@ function TaskEditorForm({
                   </div>
                 </div>
 
+                <div className="flex flex-col gap-2 md:flex-row md:items-start md:gap-4">
+                  <p className={`${FIELD_LABEL_CLASS} shrink-0 pt-2 md:w-20`}>Thread</p>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:flex-wrap">
+                      <InlineSelect
+                        value={value.threadMode}
+                        onChange={(event) => onChange({ threadMode: event.target.value as TaskFormState['threadMode'] })}
+                        className="w-full min-w-[12rem] max-w-[14rem]"
+                        name="threadMode"
+                        aria-label="Automation thread mode"
+                      >
+                        <option value="dedicated">Dedicated thread</option>
+                        <option value="existing">Existing thread</option>
+                        <option value="none">No thread</option>
+                      </InlineSelect>
+                      {value.threadMode === 'existing' ? (
+                        <InlineSelect
+                          value={value.threadConversationId}
+                          onChange={(event) => onChange({ threadConversationId: event.target.value })}
+                          className="w-full min-w-[14rem] max-w-[20rem]"
+                          name="threadConversationId"
+                          aria-label="Existing automation thread"
+                        >
+                          <option value="">Choose thread</option>
+                          {existingThreadOptions.map((entry) => (
+                            <option key={entry.id} value={entry.id}>{entry.label}</option>
+                          ))}
+                        </InlineSelect>
+                      ) : (
+                        <span className="text-[12px] text-secondary">{threadSummary}</span>
+                      )}
+                    </div>
+                    <p className={FIELD_HELP_CLASS}>
+                      {value.threadMode === 'dedicated'
+                        ? 'Recommended. This automation keeps one thread and appends each run there.'
+                        : value.threadMode === 'existing'
+                          ? (existingThreadOptions.length > 0
+                            ? 'Use a saved thread in the same working directory.'
+                            : 'No saved threads match this working directory yet.')
+                          : 'Runs without a thread. You only get automation history and logs.'}
+                    </p>
+                  </div>
+                </div>
+
               </div>
             </div>
           </section>
@@ -751,7 +825,7 @@ function TaskEditorForm({
             {visibleError ? (
               <p className="text-[12px] text-danger" aria-live="polite">{visibleError}</p>
             ) : (
-              <p className="text-[12px] leading-relaxed text-secondary">Automations run through the daemon and keep their run history attached here.</p>
+              <p className="text-[12px] leading-relaxed text-secondary">Automations run through the daemon and can keep a dedicated thread for each run.</p>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -861,6 +935,7 @@ export function ScheduledTaskPanel({
   initialMode?: 'view' | 'edit';
   onClose?: () => void;
 }) {
+  const navigate = useNavigate();
   const { setTasks } = useAppData();
   const { data: task, loading, error, refetch } = useApi(async () => {
     const detail = await api.taskDetail(id);
@@ -991,6 +1066,22 @@ export function ScheduledTaskPanel({
               <p className="ui-detail-value break-all">{taskDetail.cwd}</p>
             </div>
           )}
+          <div className="ui-detail-row">
+            <span className="ui-detail-label">thread</span>
+            <div className="min-w-0">
+              <p className="ui-detail-value">{formatThreadModeLabel(taskDetail.threadMode)}</p>
+              {taskDetail.threadTitle && <p className="ui-card-meta mt-0.5 break-all">{taskDetail.threadTitle}</p>}
+              {taskDetail.threadConversationId && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/conversations/${encodeURIComponent(taskDetail.threadConversationId)}`)}
+                  className="mt-1 text-[11px] text-accent transition-colors hover:text-accent/80"
+                >
+                  Open thread →
+                </button>
+              )}
+            </div>
+          </div>
           {taskDetail.timeoutSeconds !== undefined && (
             <div className="ui-detail-row">
               <span className="ui-detail-label">timeout</span>

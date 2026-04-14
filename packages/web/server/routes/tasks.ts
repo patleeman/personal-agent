@@ -9,6 +9,7 @@ import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
 import {
   createStoredAutomation,
+  ensureAutomationThread,
   startScheduledTaskRun,
   updateStoredAutomation,
   type StoredAutomation,
@@ -20,6 +21,7 @@ import {
   toScheduledTaskMetadata,
   type TaskRuntimeEntry,
 } from '../automation/scheduledTasks.js';
+import { applyScheduledTaskThreadBinding, buildScheduledTaskThreadDetail, resolveScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
 
 /**
  * Gets the current profile getter for use in route handlers.
@@ -54,6 +56,7 @@ function buildTaskDetailResponse(
     prompt: metadata.promptBody,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
+    ...buildScheduledTaskThreadDetail(task),
   };
 }
 
@@ -116,9 +119,16 @@ export function registerTaskRoutes(
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
+        threadMode?: string | null;
+        threadConversationId?: string | null;
       };
       const profile = getCurrentProfileFn();
-      const task = createStoredAutomation({
+      const threadSelection = resolveScheduledTaskThreadBinding({
+        threadMode: body.threadMode,
+        threadConversationId: body.threadConversationId,
+        cwd: body.cwd,
+      });
+      const createdTask = createStoredAutomation({
         profile,
         title: body.title ?? '',
         enabled: body.enabled ?? true,
@@ -129,6 +139,12 @@ export function registerTaskRoutes(
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt ?? '',
+      });
+      const task = applyScheduledTaskThreadBinding(createdTask.id, {
+        threadMode: threadSelection.mode,
+        threadConversationId: threadSelection.conversationId,
+        threadSessionFile: threadSelection.sessionFile,
+        cwd: body.cwd,
       });
 
       invalidateAppTopics('tasks');
@@ -159,9 +175,17 @@ export function registerTaskRoutes(
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
+        threadMode?: string | null;
+        threadConversationId?: string | null;
       };
       const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
+
+      const threadSelection = resolveScheduledTaskThreadBinding({
+        threadMode: body.threadMode,
+        threadConversationId: body.threadConversationId,
+        cwd: body.cwd ?? resolvedTask.task.cwd,
+      });
 
       const updatedTask = updateStoredAutomation(resolvedTask.task.id, {
         title: body.title,
@@ -174,11 +198,17 @@ export function registerTaskRoutes(
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt,
       });
+      const task = applyScheduledTaskThreadBinding(updatedTask.id, {
+        threadMode: threadSelection.mode,
+        threadConversationId: threadSelection.conversationId,
+        threadSessionFile: threadSelection.sessionFile,
+        cwd: body.cwd ?? updatedTask.cwd,
+      });
 
       invalidateAppTopics('tasks');
 
-      const refreshedTask = findTaskForProfile(getCurrentProfileFn(), updatedTask.id);
-      res.json({ ok: true, task: buildTaskDetailResponse(refreshedTask?.task ?? updatedTask, refreshedTask?.runtime) });
+      const refreshedTask = findTaskForProfile(getCurrentProfileFn(), task.id);
+      res.json({ ok: true, task: buildTaskDetailResponse(refreshedTask?.task ?? task, refreshedTask?.runtime) });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -213,7 +243,10 @@ export function registerTaskRoutes(
       const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
-      res.json(buildTaskDetailResponse(resolvedTask.task, resolvedTask.runtime));
+      const task = resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
+        ? ensureAutomationThread(resolvedTask.task.id)
+        : resolvedTask.task;
+      res.json(buildTaskDetailResponse(task, resolvedTask.runtime));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

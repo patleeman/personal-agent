@@ -15,6 +15,9 @@ describe('scheduledTaskDetail helpers', () => {
       prompt: 'Summarize the day.',
       lastStatus: 'success',
       lastRunAt: '2026-03-12T20:15:00.000Z',
+      threadMode: 'dedicated',
+      threadConversationId: 'automation.daily-status',
+      threadTitle: 'Automation: Daily status',
     })).toBe(true);
   });
 
@@ -23,6 +26,7 @@ describe('scheduledTaskDetail helpers', () => {
       id: 'daily-status',
       running: false,
       enabled: true,
+      threadMode: 'dedicated',
     })).toBe(false);
   });
 

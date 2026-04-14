@@ -38,6 +38,18 @@ function formatTaskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>): strin
   return task.title?.trim() || task.id;
 }
 
+function formatThreadModeLabel(mode: 'dedicated' | 'existing' | 'none'): string {
+  switch (mode) {
+    case 'existing':
+      return 'Existing thread';
+    case 'none':
+      return 'No thread';
+    case 'dedicated':
+    default:
+      return 'Dedicated thread';
+  }
+}
+
 function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
   if (task.running) return 0;
   if (task.lastStatus === 'failure') return 1;
@@ -311,6 +323,7 @@ function AutomationDetailView({
   const scheduleLabel = detail ? formatTaskSchedule(detail) : effectiveSummary ? formatTaskSchedule(effectiveSummary) : 'Manual';
   const lastRunLabel = effectiveSummary?.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : null;
   const lastSuccessLabel = effectiveSummary?.lastSuccessAt ? timeAgo(effectiveSummary.lastSuccessAt) : null;
+  const threadModeLabel = formatThreadModeLabel(detail?.threadMode ?? 'dedicated');
   const selectedRunId = getConversationRunIdFromSearch(location.search);
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks: effectiveSummary ? [effectiveSummary] : [], sessions }), [effectiveSummary, sessions]);
   const taskRuns = useMemo(
@@ -403,6 +416,11 @@ function AutomationDetailView({
             <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
               {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
             </ToolbarButton>
+            {detail?.threadConversationId && (
+              <ToolbarButton onClick={() => navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`)}>
+                Open thread
+              </ToolbarButton>
+            )}
             <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
             <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
               {runningNow ? 'Running…' : '▷ Run now'}
@@ -507,10 +525,12 @@ function AutomationDetailView({
               <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-dim">Details</p>
               <div className="space-y-1">
                 <DetailMetaRow label="Automation ID" value={effectiveSummary.id} />
+                <DetailMetaRow label="Thread" value={threadModeLabel} />
                 <DetailMetaRow label="Folder" value={detail?.cwd || effectiveSummary.cwd || 'Current workspace'} />
                 <DetailMetaRow label="Model" value={detail?.model || effectiveSummary.model || 'Default'} />
                 {detail?.thinkingLevel && <DetailMetaRow label="Reasoning" value={detail.thinkingLevel} />}
                 {typeof detail?.timeoutSeconds === 'number' && <DetailMetaRow label="Timeout" value={`${detail.timeoutSeconds}s`} />}
+                {detail?.threadTitle && <DetailMetaRow label="Thread title" value={detail.threadTitle} />}
                 {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
                   <DetailMetaRow label="Attempts" value={String(effectiveSummary.lastAttemptCount)} />
                 )}

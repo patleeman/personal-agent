@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   createStoredAutomationMock,
+  ensureAutomationThreadMock,
   existsSyncMock,
   findTaskForProfileMock,
   invalidateAppTopicsMock,
@@ -10,8 +11,12 @@ const {
   startScheduledTaskRunMock,
   toScheduledTaskMetadataMock,
   updateStoredAutomationMock,
+  applyScheduledTaskThreadBindingMock,
+  buildScheduledTaskThreadDetailMock,
+  resolveScheduledTaskThreadBindingMock,
 } = vi.hoisted(() => ({
   createStoredAutomationMock: vi.fn(),
+  ensureAutomationThreadMock: vi.fn(),
   existsSyncMock: vi.fn(),
   findTaskForProfileMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
@@ -20,6 +25,9 @@ const {
   startScheduledTaskRunMock: vi.fn(),
   toScheduledTaskMetadataMock: vi.fn(),
   updateStoredAutomationMock: vi.fn(),
+  applyScheduledTaskThreadBindingMock: vi.fn(),
+  buildScheduledTaskThreadDetailMock: vi.fn(),
+  resolveScheduledTaskThreadBindingMock: vi.fn(),
 }));
 
 vi.mock('node:fs', () => ({
@@ -29,6 +37,7 @@ vi.mock('node:fs', () => ({
 
 vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
+  ensureAutomationThread: ensureAutomationThreadMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
 }));
@@ -53,6 +62,12 @@ vi.mock('./scheduledTasks.js', () => ({
   toScheduledTaskMetadata: toScheduledTaskMetadataMock,
 }));
 
+vi.mock('./scheduledTaskThreads.js', () => ({
+  applyScheduledTaskThreadBinding: applyScheduledTaskThreadBindingMock,
+  buildScheduledTaskThreadDetail: buildScheduledTaskThreadDetailMock,
+  resolveScheduledTaskThreadBinding: resolveScheduledTaskThreadBindingMock,
+}));
+
 import {
   buildScheduledTaskDetail,
   createScheduledTaskCapability,
@@ -74,6 +89,9 @@ type TestTask = {
   thinkingLevel?: string;
   cwd?: string;
   timeoutSeconds?: number;
+  threadMode?: 'dedicated' | 'existing' | 'none';
+  threadConversationId?: string;
+  threadTitle?: string;
 };
 
 function createTask(overrides: Partial<TestTask> = {}): TestTask {
@@ -88,6 +106,9 @@ function createTask(overrides: Partial<TestTask> = {}): TestTask {
     thinkingLevel: overrides.thinkingLevel ?? 'high',
     cwd: overrides.cwd ?? '/repo',
     timeoutSeconds: overrides.timeoutSeconds ?? 120,
+    threadMode: overrides.threadMode ?? 'dedicated',
+    threadConversationId: overrides.threadConversationId ?? `automation.${overrides.id ?? 'task-1'}`,
+    threadTitle: overrides.threadTitle ?? `Automation: ${overrides.title ?? 'Task 1'}`,
   };
 }
 
@@ -123,6 +144,7 @@ function toMetadata(task: TestTask) {
 describe('scheduledTaskCapability', () => {
   beforeEach(() => {
     createStoredAutomationMock.mockReset();
+    ensureAutomationThreadMock.mockReset();
     existsSyncMock.mockReset();
     findTaskForProfileMock.mockReset();
     invalidateAppTopicsMock.mockReset();
@@ -131,7 +153,33 @@ describe('scheduledTaskCapability', () => {
     startScheduledTaskRunMock.mockReset();
     toScheduledTaskMetadataMock.mockReset();
     updateStoredAutomationMock.mockReset();
+    applyScheduledTaskThreadBindingMock.mockReset();
+    buildScheduledTaskThreadDetailMock.mockReset();
+    resolveScheduledTaskThreadBindingMock.mockReset();
     toScheduledTaskMetadataMock.mockImplementation((task: TestTask) => toMetadata(task));
+    applyScheduledTaskThreadBindingMock.mockImplementation((taskId: string, input: { threadMode?: string | null; threadConversationId?: string | null; threadSessionFile?: string | null }) => {
+      const sourceTask = [...updateStoredAutomationMock.mock.results, ...createStoredAutomationMock.mock.results]
+        .map((result) => result.value as TestTask | undefined)
+        .filter((task): task is TestTask => Boolean(task) && task.id === taskId)
+        .at(-1);
+      return createTask({
+        ...sourceTask,
+        id: taskId,
+        threadMode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
+        threadConversationId: input.threadConversationId ?? `automation.${taskId}`,
+      });
+    });
+    buildScheduledTaskThreadDetailMock.mockImplementation((task: TestTask) => ({
+      threadMode: task.threadMode ?? 'dedicated',
+      ...(task.threadConversationId ? { threadConversationId: task.threadConversationId } : {}),
+      ...(task.threadTitle ? { threadTitle: task.threadTitle } : {}),
+    }));
+    resolveScheduledTaskThreadBindingMock.mockImplementation((input: { threadMode?: string | null; threadConversationId?: string | null }) => ({
+      mode: (input.threadMode as TestTask['threadMode']) ?? 'dedicated',
+      conversationId: input.threadConversationId ?? undefined,
+      sessionFile: input.threadConversationId ? `/sessions/${input.threadConversationId}.jsonl` : undefined,
+    }));
+    ensureAutomationThreadMock.mockImplementation((taskId: string) => createTask({ id: taskId }));
   });
 
   it('lists scheduled tasks with runtime fallbacks', async () => {
@@ -221,6 +269,9 @@ describe('scheduledTaskCapability', () => {
       prompt: 'Saved prompt',
       lastStatus: 'success',
       lastRunAt: '2026-04-09T15:00:00.000Z',
+      threadMode: 'dedicated',
+      threadConversationId: 'automation.task-created',
+      threadTitle: 'Automation: Saved task',
     });
 
     findTaskForProfileMock.mockReturnValueOnce({ task: storedTask, runtime: createRuntime({ id: 'task-created', running: false }) });
@@ -241,6 +292,9 @@ describe('scheduledTaskCapability', () => {
       prompt: 'Saved prompt',
       lastStatus: 'success',
       lastRunAt: '2026-04-09T15:00:00.000Z',
+      threadMode: 'dedicated',
+      threadConversationId: 'automation.task-created',
+      threadTitle: 'Automation: Saved task',
     });
 
     createStoredAutomationMock.mockReturnValue(createdTask);
@@ -276,6 +330,9 @@ describe('scheduledTaskCapability', () => {
         prompt: 'Saved prompt',
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
+        threadMode: 'dedicated',
+        threadConversationId: 'automation.task-created',
+        threadTitle: 'Automation: Saved task',
       },
     });
     expect(createStoredAutomationMock).toHaveBeenCalledWith({
@@ -289,6 +346,12 @@ describe('scheduledTaskCapability', () => {
       cwd: '/tmp/work',
       timeoutSeconds: 45,
       prompt: 'Body',
+    });
+    expect(applyScheduledTaskThreadBindingMock).toHaveBeenNthCalledWith(1, 'task-created', {
+      threadMode: 'dedicated',
+      threadConversationId: undefined,
+      threadSessionFile: undefined,
+      cwd: '/tmp/work',
     });
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('tasks');
 
@@ -321,12 +384,21 @@ describe('scheduledTaskCapability', () => {
         prompt: 'Updated prompt',
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
+        threadMode: 'dedicated',
+        threadConversationId: 'automation.task-created',
+        threadTitle: 'Automation: Updated task',
       },
     });
     expect(updateStoredAutomationMock).toHaveBeenCalledWith('task-created', expect.objectContaining({
       title: 'Updated task',
       prompt: 'Updated prompt',
     }));
+    expect(applyScheduledTaskThreadBindingMock).toHaveBeenNthCalledWith(2, 'task-created', {
+      threadMode: 'dedicated',
+      threadConversationId: undefined,
+      threadSessionFile: undefined,
+      cwd: '/repo',
+    });
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(2);
   });
 

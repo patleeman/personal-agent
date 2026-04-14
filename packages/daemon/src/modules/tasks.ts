@@ -18,7 +18,9 @@ import {
   loadAutomationSchedulerState,
   saveAutomationRuntimeStateMap,
   saveAutomationSchedulerState,
+  type StoredAutomation,
 } from '../automation-store.js';
+import { ensureAutomationThread } from '../automation-threads.js';
 import {
   surfaceReadyDeferredResume,
 } from '../conversation-wakeups.js';
@@ -500,14 +502,15 @@ export function createTasksModule(
   };
 
   const executeTaskRun = async (
-    task: ParsedTaskDefinition,
+    task: StoredAutomation,
     record: TaskRuntimeState,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
     controller: AbortController,
     options: { runIdOverride?: string } = {},
   ): Promise<void> => {
+    const runnableTask = ensureAutomationThread(task.id, { dbPath: runtimeDbPath, stateRoot: context.paths.stateRoot });
     const startedAt = record.runningStartedAt ?? now().toISOString();
-    const durableRun = await createDurableTaskRunRecord(task, record, startedAt, options.runIdOverride);
+    const durableRun = await createDurableTaskRunRecord(runnableTask, record, startedAt, options.runIdOverride);
     let finalResult: TaskRunResult | undefined;
 
     for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
@@ -531,14 +534,14 @@ export function createTasksModule(
         type: 'run.attempt.started',
         attempt,
         payload: {
-          taskId: task.id,
+          taskId: runnableTask.id,
         },
       });
 
       const result = await runTask({
         task: {
-          ...task,
-          timeoutSeconds: task.timeoutSeconds > 0 ? task.timeoutSeconds : defaultTimeoutSeconds,
+          ...runnableTask,
+          timeoutSeconds: runnableTask.timeoutSeconds > 0 ? runnableTask.timeoutSeconds : defaultTimeoutSeconds,
         },
         attempt,
         runsRoot: durableRun.attemptsRoot,
@@ -572,7 +575,7 @@ export function createTasksModule(
           : (result.cancelled ? 'run.interrupted' : 'run.attempt.failed'),
         attempt,
         payload: {
-          taskId: task.id,
+          taskId: runnableTask.id,
           logPath: result.logPath,
           error: result.error,
           timedOut: result.timedOut,
@@ -586,7 +589,7 @@ export function createTasksModule(
       }
 
       if (attempt < maxRetries) {
-        context.logger.warn(`task ${task.id} failed attempt ${attempt}, retrying`);
+        context.logger.warn(`task ${runnableTask.id} failed attempt ${attempt}, retrying`);
       }
     }
 
@@ -603,7 +606,7 @@ export function createTasksModule(
     }
 
     writeJsonFile(durableRun.runPaths.resultPath, {
-      taskId: task.id,
+      taskId: runnableTask.id,
       runId: durableRun.runId,
       startedAt,
       finishedAt,
@@ -622,7 +625,7 @@ export function createTasksModule(
       record.lastError = undefined;
       state.successfulRuns += 1;
 
-      if (task.schedule.type === 'at') {
+      if (runnableTask.schedule.type === 'at') {
         record.oneTimeResolvedAt = finishedAt;
         record.oneTimeResolvedStatus = 'success';
         record.oneTimeCompletedAt = finishedAt;
@@ -644,21 +647,21 @@ export function createTasksModule(
         timestamp: finishedAt,
         type: 'run.completed',
         payload: {
-          taskId: task.id,
+          taskId: runnableTask.id,
           logPath: finalResult.logPath,
         },
       });
 
       context.publish('tasks.run.completed', {
-        taskId: task.id,
-        filePath: task.filePath,
+        taskId: runnableTask.id,
+        filePath: runnableTask.filePath,
         completedAt: finishedAt,
         logPath: finalResult.logPath,
         runId: durableRun.runId,
       });
-      context.logger.info(`task completed id=${task.id} run=${durableRun.runId} log=${finalResult.logPath}`);
+      context.logger.info(`task completed id=${runnableTask.id} run=${durableRun.runId} log=${finalResult.logPath}`);
 
-      await deliverTaskCallbackWakeup(task, 'success', context, {
+      await deliverTaskCallbackWakeup(runnableTask, 'success', context, {
         finishedAt,
         outputText: finalResult.outputText,
         logPath: finalResult.logPath,
@@ -684,7 +687,7 @@ export function createTasksModule(
       record.lastError = finalResult?.error ?? 'Task run failed';
       state.failedRuns += 1;
 
-      if (task.schedule.type === 'at') {
+      if (runnableTask.schedule.type === 'at') {
         record.oneTimeResolvedAt = finishedAt;
         record.oneTimeResolvedStatus = 'failed';
       }
@@ -706,23 +709,23 @@ export function createTasksModule(
         timestamp: finishedAt,
         type: 'run.failed',
         payload: {
-          taskId: task.id,
+          taskId: runnableTask.id,
           error: record.lastError,
           logPath: finalResult?.logPath,
         },
       });
 
       context.publish('tasks.run.failed', {
-        taskId: task.id,
-        filePath: task.filePath,
+        taskId: runnableTask.id,
+        filePath: runnableTask.filePath,
         failedAt: finishedAt,
         error: record.lastError,
         logPath: finalResult?.logPath,
         runId: durableRun.runId,
       });
-      context.logger.warn(`task failed id=${task.id} run=${durableRun.runId} error=${record.lastError}`);
+      context.logger.warn(`task failed id=${runnableTask.id} run=${durableRun.runId} error=${record.lastError}`);
 
-      await deliverTaskCallbackWakeup(task, 'failed', context, {
+      await deliverTaskCallbackWakeup(runnableTask, 'failed', context, {
         finishedAt,
         outputText: finalResult?.outputText,
         error: record.lastError,
@@ -733,7 +736,7 @@ export function createTasksModule(
   };
 
   const startTaskRun = (
-    task: ParsedTaskDefinition,
+    task: StoredAutomation,
     record: TaskRuntimeState,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
     options: { runIdOverride?: string } = {},

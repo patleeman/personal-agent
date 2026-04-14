@@ -272,6 +272,8 @@ export interface ScheduledTaskSummary {
   lastAttemptCount?: number;
 }
 
+export type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
+
 export interface ScheduledTaskDetail {
   id: string;
   title?: string;
@@ -288,6 +290,9 @@ export interface ScheduledTaskDetail {
   prompt: string;
   lastStatus?: string;
   lastRunAt?: string;
+  threadMode: ScheduledTaskThreadMode;
+  threadConversationId?: string;
+  threadTitle?: string;
 }
 
 export interface DurableRunSource {

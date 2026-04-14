@@ -105,6 +105,7 @@ export {
   getStoredAutomation,
   createStoredAutomation,
   updateStoredAutomation,
+  setStoredAutomationThreadBinding,
   deleteStoredAutomation,
   loadAutomationRuntimeStateMap,
   loadAutomationSchedulerState,
@@ -112,13 +113,18 @@ export {
   saveAutomationSchedulerState,
   ensureLegacyTaskImports,
 } from './automation-store.js';
+export {
+  ensureAutomationThread,
+  resolveAutomationThreadTitle,
+  normalizeAutomationThreadModeForSelection,
+} from './automation-threads.js';
 export { parseTaskDefinition } from './modules/tasks-parser.js';
 export {
   surfaceReadyDeferredResume,
   buildDeferredResumeActivityId,
   buildDeferredResumeAlertId,
 } from './conversation-wakeups.js';
-export type { StoredAutomation, LegacyAutomationImportIssue, AutomationMutationInput, AutomationSchedulerState } from './automation-store.js';
+export type { StoredAutomation, AutomationThreadMode, LegacyAutomationImportIssue, AutomationMutationInput, AutomationSchedulerState } from './automation-store.js';
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type {
   DaemonEvent,

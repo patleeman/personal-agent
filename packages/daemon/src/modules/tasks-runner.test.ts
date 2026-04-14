@@ -4,7 +4,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ParsedTaskDefinition } from './tasks-parser.js';
+import type { RunnableTaskDefinition } from './tasks-runner.js';
 
 const mocks = vi.hoisted(() => ({
   spawn: vi.fn(),
@@ -60,7 +60,7 @@ function createMockChildProcess(): MockChildProcess {
   return child;
 }
 
-function createTask(overrides: Partial<ParsedTaskDefinition> = {}): ParsedTaskDefinition {
+function createTask(overrides: Partial<RunnableTaskDefinition> = {}): RunnableTaskDefinition {
   return {
     key: 'task.md',
     filePath: '/tmp/task.md',
@@ -235,6 +235,81 @@ describe('runTaskInIsolatedPi', () => {
     const log = readFileSync(result.logPath, 'utf-8');
     expect(log).toContain('# task=nightly-run');
     expect(log).toContain('# success=true');
+  });
+
+  it('passes the bound thread session file through to pi when the task owns a thread', async () => {
+    const repoRoot = createTempDir('tasks-runner-repo-');
+    const runsRoot = createTempDir('tasks-runner-runs-');
+
+    mocks.resolveResourceProfile.mockReturnValue({
+      name: 'shared',
+      repoRoot,
+    });
+
+    const child = createMockChildProcess();
+    mocks.spawn.mockReturnValue(child);
+
+    const promise = runTaskInIsolatedPi({
+      task: createTask({
+        threadMode: 'dedicated',
+        threadSessionFile: '/tmp/automation-thread.jsonl',
+      }),
+      attempt: 1,
+      runsRoot,
+    });
+
+    await waitForCondition(() => mocks.spawn.mock.calls.length === 1);
+    child.emit('close', 0, null);
+    await promise;
+
+    expect(mocks.spawn).toHaveBeenCalledWith(
+      'pi',
+      expect.arrayContaining([
+        '--profile',
+        'shared',
+        '--session',
+        '/tmp/automation-thread.jsonl',
+        '-p',
+        'Run nightly checks',
+      ]),
+      expect.any(Object),
+    );
+  });
+
+  it('deduplicates a precreated thread session prefix after a successful run', async () => {
+    const repoRoot = createTempDir('tasks-runner-repo-');
+    const runsRoot = createTempDir('tasks-runner-runs-');
+    const sessionFile = join(createTempDir('tasks-runner-session-'), 'automation.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', version: 3, id: 'conv-1', timestamp: '2026-04-14T00:00:00.000Z', cwd: repoRoot }),
+      JSON.stringify({ type: 'session_info', id: 'info-1', parentId: null, timestamp: '2026-04-14T00:00:00.000Z', name: 'Automation: smoke' }),
+      JSON.stringify({ type: 'session', version: 3, id: 'conv-1', timestamp: '2026-04-14T00:00:00.000Z', cwd: repoRoot }),
+      JSON.stringify({ type: 'session_info', id: 'info-1', parentId: null, timestamp: '2026-04-14T00:00:00.000Z', name: 'Automation: smoke' }),
+      JSON.stringify({ type: 'message', id: 'assistant-1', parentId: 'info-1', timestamp: '2026-04-14T00:00:01.000Z', message: { role: 'assistant', content: 'hello' } }),
+      '',
+    ].join('\n'));
+
+    mocks.resolveResourceProfile.mockReturnValue({
+      name: 'shared',
+      repoRoot,
+    });
+
+    const child = createMockChildProcess();
+    mocks.spawn.mockReturnValue(child);
+
+    const promise = runTaskInIsolatedPi({
+      task: createTask({ threadMode: 'dedicated', threadSessionFile: sessionFile }),
+      attempt: 1,
+      runsRoot,
+    });
+
+    await waitForCondition(() => mocks.spawn.mock.calls.length === 1);
+    child.emit('close', 0, null);
+    await promise;
+
+    const normalized = readFileSync(sessionFile, 'utf-8');
+    expect((normalized.match(/"type":"session"/g) ?? [])).toHaveLength(1);
+    expect((normalized.match(/"type":"session_info"/g) ?? [])).toHaveLength(1);
   });
 
   it('returns process error when spawn emits error', async () => {

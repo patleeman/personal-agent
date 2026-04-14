@@ -20,6 +20,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && typeof record.enabled === 'boolean'
     && typeof record.scheduleType === 'string'
     && typeof record.prompt === 'string'
+    && typeof record.threadMode === 'string'
     && isOptionalString(record.filePath)
     && isOptionalString(record.cron)
     && isOptionalString(record.at)
@@ -28,7 +29,9 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.cwd)
     && isOptionalNumber(record.timeoutSeconds)
     && isOptionalString(record.lastStatus)
-    && isOptionalString(record.lastRunAt);
+    && isOptionalString(record.lastRunAt)
+    && isOptionalString(record.threadConversationId)
+    && isOptionalString(record.threadTitle);
 }
 
 export function getScheduledTaskBody(prompt: string): string {

@@ -582,6 +582,8 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt: string;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -608,6 +610,8 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
