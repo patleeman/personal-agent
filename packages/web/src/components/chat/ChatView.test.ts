@@ -293,8 +293,9 @@ describe('chat view streaming disclosure', () => {
           cwd: '/Users/patrick/workingdir/personal-agent',
         },
         output: 'Started durable run run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b for ui-preview-check.',
-        status: 'ok',
+        status: 'running',
       }],
+      isStreaming: true,
       onOpenRun: () => undefined,
     }));
 

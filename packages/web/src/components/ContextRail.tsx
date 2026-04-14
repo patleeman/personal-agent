@@ -17,7 +17,13 @@ import { useReloadState } from '../reloadState';
 import {
   getRunConnections,
   getRunHeadline,
+  getRunTargetCommand,
+  getRunTargetModel,
+  getRunTargetProfile,
+  getRunTargetPrompt,
+  getRunTaskSlug,
   getRunTimeline,
+  getRunWorkingDirectory,
   isRunActive,
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
@@ -350,6 +356,12 @@ function RunContextPanel({
   const run = detail.run;
   const status = runStatusText(run);
   const headline = getRunHeadline(run, lookups);
+  const taskSlug = getRunTaskSlug(run);
+  const targetPrompt = getRunTargetPrompt(run);
+  const targetCommand = getRunTargetCommand(run);
+  const targetCwd = getRunWorkingDirectory(run);
+  const targetModel = getRunTargetModel(run);
+  const targetProfile = getRunTargetProfile(run);
   const connections = getRunConnections(run, lookups).filter((connection) => connection.label !== 'Source file');
   const timeline = getRunTimeline(run);
   const showRecovery = run.recoveryAction !== 'none';
@@ -452,17 +464,19 @@ function RunContextPanel({
           </div>
         )}
 
-        <div className="border-t border-border-subtle pt-3 grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <p className="ui-section-label">Run</p>
-            <p className="text-[13px] text-primary">{run.manifest?.kind ?? 'unknown kind'}</p>
-            {run.manifest?.source?.type && <p className="text-[12px] text-secondary">source {run.manifest.source.type}</p>}
-          </div>
-
-          <div className="space-y-1">
-            <p className="ui-section-label">Progress</p>
-            <p className="text-[13px] text-primary">attempt {run.status?.activeAttempt ?? 0}</p>
-            {run.checkpoint?.step && <p className="text-[12px] text-secondary">checkpoint {run.checkpoint.step}</p>}
+        <div className="border-t border-border-subtle pt-3 space-y-2">
+          <p className="ui-section-label">Run details</p>
+          <div className="space-y-2">
+            {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
+            {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
+            {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
+            {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
+            {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
+            {targetProfile && <RailMetadataRow label="Profile" value={targetProfile} />}
+            <RailMetadataRow label="Run" value={run.manifest?.kind ?? 'unknown kind'} />
+            <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
+            <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
+            {run.checkpoint?.step && <RailMetadataRow label="Checkpoint" value={run.checkpoint.step} />}
           </div>
         </div>
 

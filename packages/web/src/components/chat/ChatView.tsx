@@ -1444,15 +1444,23 @@ function presentLinkedRun(runId: string, listed: ListedRunDetails | null = null)
 }
 
 function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>): LinkedRunPresentation | null {
-  if (block.tool !== 'run' || !isRecord(block.details) || block.details.action === 'list') {
+  if (block.tool !== 'run') {
     return null;
   }
 
-  const details = block.details;
+  const details = isRecord(block.details) ? block.details : null;
   const input = isRecord(block.input) ? block.input : null;
   const action = readRunField(details, 'action') ?? readRunField(input, 'action');
-  const runId = readRunField(details, 'runId');
-  if (!action || !runId) {
+  if (!action || action === 'list') {
+    return null;
+  }
+
+  const sourceRunId = readRunField(details, 'sourceRunId');
+  const extractedRunIds = extractDurableRunIdsFromBlock(block);
+  const runId = readRunField(details, 'runId')
+    ?? extractedRunIds.find((candidate) => candidate !== sourceRunId)
+    ?? sourceRunId;
+  if (!runId) {
     return null;
   }
 
@@ -1462,8 +1470,7 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
   const command = excerptLinkedRunText(readRunField(details, 'command') ?? readRunField(input, 'command'));
   const cwd = summarizeWorkspaceTail(readRunField(details, 'cwd') ?? readRunField(input, 'cwd'));
   const model = readRunField(details, 'model') ?? readRunField(input, 'model');
-  const sourceRunId = readRunField(details, 'sourceRunId');
-  const status = readRunField(details, 'status');
+  const status = readRunField(details, 'status') ?? (typeof block.status === 'string' ? block.status : null);
   const title = prompt ?? command ?? taskSlug ?? descriptor.detail ?? descriptor.title;
   const detailBits: string[] = [];
 

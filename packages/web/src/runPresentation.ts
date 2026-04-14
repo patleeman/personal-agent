@@ -135,6 +135,72 @@ function readNestedCheckpoint(run: DurableRunRecord, key: string, nestedKey: str
   return isRecord(value) ? readString(value, nestedKey) : undefined;
 }
 
+function readTargetSpec(run: DurableRunRecord, key: string): string | undefined {
+  return readNestedSpec(run, 'target', key);
+}
+
+function readTargetCheckpoint(run: DurableRunRecord, key: string): string | undefined {
+  return readNestedCheckpoint(run, 'target', key);
+}
+
+function readMetadataSpec(run: DurableRunRecord, key: string): string | undefined {
+  return readNestedSpec(run, 'metadata', key);
+}
+
+function readMetadataCheckpoint(run: DurableRunRecord, key: string): string | undefined {
+  return readNestedCheckpoint(run, 'metadata', key);
+}
+
+export function getRunTaskSlug(run: DurableRunRecord): string | undefined {
+  return readMetadataSpec(run, 'taskSlug')
+    ?? readMetadataCheckpoint(run, 'taskSlug')
+    ?? readSpec(run, 'taskSlug')
+    ?? readCheckpoint(run, 'taskSlug');
+}
+
+export function getRunTargetPrompt(run: DurableRunRecord): string | undefined {
+  return readTargetSpec(run, 'prompt')
+    ?? readTargetCheckpoint(run, 'prompt')
+    ?? readNestedSpec(run, 'agent', 'prompt')
+    ?? readNestedCheckpoint(run, 'agent', 'prompt')
+    ?? readSpec(run, 'prompt')
+    ?? readCheckpoint(run, 'prompt');
+}
+
+export function getRunTargetCommand(run: DurableRunRecord): string | undefined {
+  return readTargetSpec(run, 'command')
+    ?? readTargetCheckpoint(run, 'command')
+    ?? readSpec(run, 'shellCommand')
+    ?? readCheckpoint(run, 'shellCommand');
+}
+
+export function getRunWorkingDirectory(run: DurableRunRecord): string | undefined {
+  return readTargetSpec(run, 'cwd')
+    ?? readTargetCheckpoint(run, 'cwd')
+    ?? readMetadataSpec(run, 'cwd')
+    ?? readMetadataCheckpoint(run, 'cwd')
+    ?? readSpec(run, 'cwd')
+    ?? readCheckpoint(run, 'cwd');
+}
+
+export function getRunTargetModel(run: DurableRunRecord): string | undefined {
+  return readTargetSpec(run, 'model')
+    ?? readTargetCheckpoint(run, 'model')
+    ?? readNestedSpec(run, 'agent', 'model')
+    ?? readNestedCheckpoint(run, 'agent', 'model')
+    ?? readSpec(run, 'model')
+    ?? readCheckpoint(run, 'model');
+}
+
+export function getRunTargetProfile(run: DurableRunRecord): string | undefined {
+  return readTargetSpec(run, 'profile')
+    ?? readTargetCheckpoint(run, 'profile')
+    ?? readNestedSpec(run, 'agent', 'profile')
+    ?? readNestedCheckpoint(run, 'agent', 'profile')
+    ?? readSpec(run, 'profile')
+    ?? readCheckpoint(run, 'profile');
+}
+
 function excerpt(value: string | undefined, maxLength = 88): string | undefined {
   if (!value) {
     return undefined;
@@ -317,9 +383,9 @@ function excerptShellCommand(command: string | undefined, maxLength = 88): strin
 
 export function getRunTaskId(run: DurableRunRecord): string | undefined {
   return run.manifest?.source?.type === 'scheduled-task'
-    ? run.manifest.source.id ?? readSpec(run, 'taskId')
+    ? run.manifest.source.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId')
     : run.manifest?.kind === 'scheduled-task'
-      ? run.manifest?.source?.id ?? readSpec(run, 'taskId')
+      ? run.manifest?.source?.id ?? readMetadataSpec(run, 'taskId') ?? readSpec(run, 'taskId')
       : undefined;
 }
 
@@ -369,9 +435,9 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
 
   if (isConversationRun) {
     const conversationId = sourceType === 'web-live-session'
-      ? run.manifest?.source?.id ?? readSpec(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
-      : readCheckpoint(run, 'conversationId') ?? readSpec(run, 'conversationId');
-    const title = readCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
+      ? run.manifest?.source?.id ?? readTargetSpec(run, 'conversationId') ?? readSpec(run, 'conversationId') ?? readTargetCheckpoint(run, 'conversationId') ?? readCheckpoint(run, 'conversationId')
+      : readTargetCheckpoint(run, 'conversationId') ?? readCheckpoint(run, 'conversationId') ?? readTargetSpec(run, 'conversationId') ?? readSpec(run, 'conversationId');
+    const title = readCheckpoint(run, 'title') ?? readMetadataCheckpoint(run, 'title') ?? sessionById(lookups, conversationId)?.title;
 
     return {
       title,
@@ -480,7 +546,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
 
   if (run.manifest?.source?.type === 'deferred-resume') {
     const deferredResumeId = run.manifest.source.id;
-    const prompt = excerpt(readCheckpoint(run, 'prompt') ?? readSpec(run, 'prompt'));
+    const prompt = excerpt(getRunTargetPrompt(run));
     const { title, conversationId } = conversationLabel(run, lookups);
     const target = title ?? conversationId;
     const headline = prompt ?? target ?? deferredResumeId ?? run.runId;
@@ -492,21 +558,26 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
   }
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
-    const agentPrompt = excerpt(readNestedSpec(run, 'agent', 'prompt') ?? readNestedCheckpoint(run, 'agent', 'prompt'));
-    const shellCommand = excerptShellCommand(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
-    const taskSlug = readSpec(run, 'taskSlug') ?? readCheckpoint(run, 'taskSlug') ?? run.manifest?.source?.id;
+    const agentPrompt = excerpt(getRunTargetPrompt(run));
+    const shellCommand = excerptShellCommand(getRunTargetCommand(run));
+    const taskSlug = getRunTaskSlug(run);
     const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
     const summary = taskSlug && headline !== taskSlug
       ? `Background run · ${taskSlug}`
-      : 'Background run';
+      : shellCommand && headline !== shellCommand
+        ? `Background run · ${shellCommand}`
+        : 'Background run';
     return { title: headline, summary };
   }
 
   if (run.manifest?.kind === 'raw-shell') {
-    const shellCommand = excerptShellCommand(readSpec(run, 'shellCommand') ?? readCheckpoint(run, 'shellCommand'));
+    const shellCommand = excerptShellCommand(getRunTargetCommand(run));
+    const taskSlug = getRunTaskSlug(run);
+    const title = taskSlug ?? shellCommand ?? run.runId;
+    const detail = title === taskSlug ? shellCommand : taskSlug;
     return {
-      title: shellCommand ?? run.runId,
-      summary: shellCommand ? 'Shell run' : sourceKindLabel(run),
+      title,
+      summary: detail ? `Shell run · ${detail}` : shellCommand ? 'Shell run' : sourceKindLabel(run),
     };
   }
 
@@ -558,7 +629,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
   }
 
   if (run.manifest?.source?.type === 'deferred-resume' && run.manifest.source.id) {
-    const prompt = excerpt(readCheckpoint(run, 'prompt') ?? readSpec(run, 'prompt'));
+    const prompt = excerpt(getRunTargetPrompt(run));
     connections.push({
       key: `deferred-resume:${run.manifest.source.id}`,
       label: 'Wakeup',

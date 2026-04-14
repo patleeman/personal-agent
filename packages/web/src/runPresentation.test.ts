@@ -3,7 +3,6 @@ import {
   getRunCategory,
   getRunConnections,
   getRunHeadline,
-  getRunLocation,
   getRunMoment,
   getRunPrimaryActionLabel,
   getRunPrimaryConnection,
@@ -483,6 +482,87 @@ describe('runPresentation', () => {
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/web run dev',
       summary: 'Shell run',
+    });
+  });
+
+  it('reads unified schedule-run metadata for raw shell headlines', () => {
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-raw-shell-456',
+        kind: 'raw-shell',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          target: {
+            type: 'shell',
+            command: 'printf ok',
+            cwd: '/Users/patrick/workingdir/personal-agent',
+          },
+          metadata: {
+            taskSlug: 'ui-preview-check',
+            cwd: '/Users/patrick/workingdir/personal-agent',
+          },
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+      checkpoint: {
+        version: 1,
+        runId: 'run-raw-shell-456',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        step: 'completed',
+        payload: {
+          target: {
+            type: 'shell',
+            command: 'printf ok',
+            cwd: '/Users/patrick/workingdir/personal-agent',
+          },
+          metadata: {
+            taskSlug: 'ui-preview-check',
+            cwd: '/Users/patrick/workingdir/personal-agent',
+          },
+        },
+      },
+    });
+
+    expect(getRunHeadline(run)).toEqual({
+      title: 'ui-preview-check',
+      summary: 'Shell run · printf ok',
+    });
+  });
+
+  it('reads unified schedule-run metadata for background agent headlines', () => {
+    const run = createRun({
+      manifest: {
+        version: 1,
+        id: 'run-background-456',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {
+          target: {
+            type: 'agent',
+            prompt: 'Inspect git diff and summarize the result.',
+            model: 'openai-codex/gpt-5.4',
+          },
+          metadata: {
+            taskSlug: 'ui-polish',
+            cwd: '/Users/patrick/workingdir/personal-agent',
+          },
+        },
+        source: {
+          type: 'tool',
+          id: 'conv-123',
+        },
+      },
+    });
+
+    expect(getRunHeadline(run)).toEqual({
+      title: 'Inspect git diff and summarize the result.',
+      summary: 'Background run · ui-polish',
     });
   });
 

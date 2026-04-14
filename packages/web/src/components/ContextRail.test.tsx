@@ -257,6 +257,90 @@ describe('ContextRail run detail', () => {
     expect(html).toContain('Target conversation');
   });
 
+  it('shows task, command, and working directory for unified raw shell runs', () => {
+    vi.mocked(useDurableRunStream).mockReturnValue({
+      detail: createDetail({
+        runId: 'run-ui-preview-check-1',
+        manifest: {
+          version: 1,
+          id: 'run-ui-preview-check-1',
+          kind: 'raw-shell',
+          resumePolicy: 'manual',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          spec: {
+            target: {
+              type: 'shell',
+              command: 'printf ok',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+            metadata: {
+              taskSlug: 'ui-preview-check',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+          },
+          source: {
+            type: 'tool',
+            id: 'conv-123',
+            filePath: '/tmp/conv-123.jsonl',
+          },
+        },
+        status: {
+          version: 1,
+          runId: 'run-ui-preview-check-1',
+          status: 'completed',
+          createdAt: '2026-03-18T00:00:00.000Z',
+          updatedAt: '2026-03-18T00:01:00.000Z',
+          activeAttempt: 1,
+          startedAt: '2026-03-18T00:00:00.000Z',
+          completedAt: '2026-03-18T00:01:00.000Z',
+        },
+        checkpoint: {
+          version: 1,
+          runId: 'run-ui-preview-check-1',
+          updatedAt: '2026-03-18T00:01:00.000Z',
+          step: 'completed',
+          payload: {
+            target: {
+              type: 'shell',
+              command: 'printf ok',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+            metadata: {
+              taskSlug: 'ui-preview-check',
+              cwd: '/Users/patrick/workingdir/personal-agent',
+            },
+          },
+        },
+      }),
+      log: { path: '/tmp/runs/run-ui-preview-check-1/output.log', log: 'ok' },
+      loading: false,
+      error: null,
+      reconnect: vi.fn(),
+    });
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/conv-123?run=run-ui-preview-check-1']}>
+        <AppDataContext.Provider value={{
+          projects: null,
+          sessions: [createSession()],
+          tasks: null,
+          runs: null,
+          setProjects: vi.fn(),
+          setSessions: vi.fn(),
+          setTasks: vi.fn(),
+          setRuns: vi.fn(),
+        }}>
+          <ContextRail />
+        </AppDataContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('ui-preview-check');
+    expect(html).toContain('printf ok');
+    expect(html).toContain('/Users/patrick/workingdir/personal-agent');
+    expect(html).toContain('Working dir');
+  });
+
   it('shows the working directory controls on the draft conversation rail', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
