@@ -1,12 +1,18 @@
 import { summarizeConversationCwd } from '../conversationCwdHistory';
 import type { RelatedConversationSearchResult } from '../relatedConversationSearch';
 import { timeAgo } from '../utils';
-import { cx } from './ui';
+import { Keycap, cx } from './ui';
 
 function formatMatchedTerms(result: RelatedConversationSearchResult): string {
   return result.matchedTerms
     .slice(0, 3)
     .join(', ');
+}
+
+function formatRowHotkey(index: number): string | null {
+  return index >= 0 && index < 9
+    ? `Ctrl+${index + 1}`
+    : null;
 }
 
 export function DraftRelatedThreadsPanel({
@@ -56,17 +62,19 @@ export function DraftRelatedThreadsPanel({
 
       {results.length > 0 ? (
         <div className="mt-2 space-y-0.5">
-          {results.map((result) => {
+          {results.map((result, index) => {
             const checked = selectedSessionIds.includes(result.sessionId);
             const inputId = `draft-related-thread-${result.sessionId}`;
             const matchedTerms = formatMatchedTerms(result);
+            const hotkey = formatRowHotkey(index);
             return (
               <label
                 key={result.sessionId}
                 htmlFor={inputId}
                 className={cx(
-                  'flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1.5 transition-colors hover:bg-elevated/30 focus-within:bg-elevated/40',
-                  checked && 'bg-accent/7 text-accent',
+                  'group flex cursor-pointer items-center gap-2.5 rounded-md px-1.5 py-1.5 transition-colors hover:bg-elevated/30 focus-within:bg-elevated/40 focus-within:ring-1 focus-within:ring-accent/20',
+                  checked && 'bg-accent/7',
+                  busy && 'cursor-progress',
                 )}
               >
                 <input
@@ -74,15 +82,26 @@ export function DraftRelatedThreadsPanel({
                   type="checkbox"
                   checked={checked}
                   onChange={() => onToggle(result.sessionId)}
-                  className="h-3.5 w-3.5 shrink-0 rounded border-border-default text-accent focus:ring-2 focus:ring-accent/40"
+                  className={cx(
+                    'h-4 w-4 shrink-0 appearance-none rounded-[4px] border border-border-default bg-surface/80 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-[background-color,border-color,box-shadow,transform] duration-150 after:block after:h-[0.42rem] after:w-[0.22rem] after:translate-x-[0.26rem] after:translate-y-[0.01rem] after:rotate-45 after:border-b-[2px] after:border-r-[2px] after:border-transparent after:opacity-0 after:content-[""] checked:border-accent/70 checked:bg-accent/15 checked:shadow-[0_0_0_1px_rgba(var(--color-accent),0.12)] checked:after:border-current checked:after:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                    !checked && 'group-hover:border-accent/30 group-hover:bg-elevated/70',
+                    busy && 'cursor-progress',
+                  )}
                   aria-label={`Reuse context from ${result.title}`}
                   disabled={busy}
                 />
-                <span className="min-w-0 flex-1 truncate text-[12px] text-primary">
-                  <span className="font-medium">{result.title}</span>
-                  <span className="text-dim">{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
-                  {matchedTerms && (
-                    <span className="text-accent/80">{` · ${matchedTerms}`}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-primary">
+                    <span className="font-medium">{result.title}</span>
+                    <span className={cx('text-dim', checked && 'text-accent/70')}>{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
+                    {matchedTerms && (
+                      <span className={cx('text-accent/80', checked && 'text-accent/75')}>{` · ${matchedTerms}`}</span>
+                    )}
+                  </span>
+                  {hotkey && (
+                    <Keycap className={cx('shrink-0 text-[9px]', checked && 'border-accent/25 bg-accent/10 text-accent/80')}>
+                      {hotkey}
+                    </Keycap>
                   )}
                 </span>
               </label>

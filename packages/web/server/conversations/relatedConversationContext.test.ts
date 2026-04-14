@@ -55,7 +55,11 @@ describe('buildRelatedConversationContext', () => {
         content: expect.stringContaining('Conversation 1 — Release signing'),
       }),
     ]);
-    expect(result.contextMessages[0]?.content).toContain('Wakeups use durable run callbacks.');
+
+    const content = result.contextMessages[0]?.content ?? '';
+    expect(content).toContain('Wakeups use durable run callbacks.');
+    expect(content.indexOf('Keep the notarization mapping fix.')).toBeGreaterThan(content.indexOf('Conversation 1 — Release signing'));
+    expect(content.indexOf('Keep the notarization mapping fix.')).toBeLessThan(content.indexOf('Workspace: /repo/a'));
   });
 
   it('rejects blank prompts, missing sessions, and oversized selections', async () => {

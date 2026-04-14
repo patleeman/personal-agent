@@ -66,10 +66,11 @@ function buildCombinedContext(summaries: RelatedConversationContextSummary[]): s
     lines.push(
       '',
       `Conversation ${index + 1} — ${summary.title}`,
-      `Workspace: ${summary.cwd}`,
-      `Created: ${summary.timestamp}`,
       '',
       summary.summary,
+      '',
+      `Workspace: ${summary.cwd}`,
+      `Created: ${summary.timestamp}`,
     );
   });
 
