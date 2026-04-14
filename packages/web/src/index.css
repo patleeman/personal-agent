@@ -170,7 +170,34 @@
   }
 
   .ui-input-shell {
-    @apply rounded-xl border border-border-subtle bg-elevated transition-all;
+    @apply rounded-xl border border-border-subtle bg-elevated transition-[border-color,background-color,box-shadow];
+  }
+
+  .ui-input-shell-auto-mode {
+    box-shadow:
+      0 0 0 1px rgb(var(--color-auto-mode-glow) / 0.06),
+      0 0 18px rgb(var(--color-auto-mode-glow) / 0.14);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .ui-input-shell-auto-mode {
+      animation: ui-input-shell-auto-mode-glow 2.8s ease-in-out infinite;
+    }
+  }
+
+  @keyframes ui-input-shell-auto-mode-glow {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-auto-mode-glow) / 0.04),
+        0 0 16px rgb(var(--color-auto-mode-glow) / 0.12);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 1px rgb(var(--color-auto-mode-glow) / 0.12),
+        0 0 30px rgb(var(--color-auto-mode-glow) / 0.24);
+    }
   }
 
   .excalidraw-embed-lite .main-menu-trigger,
@@ -1098,6 +1125,7 @@
   --color-accent-bg:      225 217 245;
   --color-success:        73  105 44;
   --color-warning:        130 97  49;
+  --color-auto-mode-glow: 234 196 86;
   --color-danger:         183 54  80;
   --color-teal:           0   106 141;
   --color-steel:          46  125 233;
@@ -1123,6 +1151,7 @@
   --color-accent-bg:      78  61  120;
   --color-success:        158 206 106;
   --color-warning:        224 175 104;
+  --color-auto-mode-glow: 245 211 102;
   --color-danger:         247 118 142;
   --color-teal:           125 207 255;
   --color-steel:          122 162 247;

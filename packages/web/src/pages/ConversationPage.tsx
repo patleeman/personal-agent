@@ -866,7 +866,7 @@ export function resolveConversationComposerShellStateClassName({
   }
 
   if (autoModeEnabled) {
-    return 'border-warning/30 ring-1 ring-warning/15 shadow-[0_0_18px_rgba(245,158,11,0.10)]';
+    return 'border-warning/30 ring-1 ring-warning/15 ui-input-shell-auto-mode';
   }
 
   return 'border-border-subtle';

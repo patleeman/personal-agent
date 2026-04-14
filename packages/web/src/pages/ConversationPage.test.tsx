@@ -1140,12 +1140,12 @@ describe('conversation git summary presentation', () => {
 });
 
 describe('conversation composer shell state', () => {
-  it('uses a subtle gold glow when auto mode is enabled', () => {
+  it('uses a subtle pulsing yellow glow when auto mode is enabled', () => {
     expect(resolveConversationComposerShellStateClassName({
       dragOver: false,
       hasInteractiveOverlay: false,
       autoModeEnabled: true,
-    })).toContain('border-warning/30');
+    })).toBe('border-warning/30 ring-1 ring-warning/15 ui-input-shell-auto-mode');
   });
 
   it('prefers the interactive overlay accent state over the auto mode glow', () => {
