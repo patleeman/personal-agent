@@ -486,6 +486,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     behavior?: 'steer' | 'followUp',
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
+    contextMessages?: Array<{ customType: string; content: string }>,
   ) => {
     if (!normalizedSessionId) return;
 
@@ -520,7 +521,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
     try {
       await submitLivePromptWithControlRetry({
-        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId).then(() => undefined),
+        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId, contextMessages).then(() => undefined),
         waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
         takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
       });

@@ -194,12 +194,13 @@ export function useDesktopConversationState(
     behavior?: 'steer' | 'followUp',
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
+    contextMessages?: Array<{ customType: string; content: string }>,
   ) => {
     if (!conversationId) {
       return;
     }
 
-    await api.promptSession(conversationId, text, behavior, images, attachmentRefs, surfaceId);
+    await api.promptSession(conversationId, text, behavior, images, attachmentRefs, surfaceId, contextMessages);
   }, [conversationId, surfaceId]);
 
   const abort = useCallback(async () => {

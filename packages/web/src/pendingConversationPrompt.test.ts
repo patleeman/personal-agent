@@ -40,6 +40,8 @@ describe('pendingConversationPrompt helpers', () => {
       behavior: 'followUp',
       images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
       attachmentRefs: [{ attachmentId: 'diagram-1' }],
+      contextMessages: [{ customType: 'related_threads_context', content: 'Summaries from selected threads.' }],
+      relatedConversationIds: ['conv-1', ' conv-2 ', 'conv-1'],
     }, storage);
 
     expect(readPendingConversationPrompt('session-123', storage)).toEqual({
@@ -47,6 +49,8 @@ describe('pendingConversationPrompt helpers', () => {
       behavior: 'followUp',
       images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
       attachmentRefs: [{ attachmentId: 'diagram-1' }],
+      contextMessages: [{ customType: 'related_threads_context', content: 'Summaries from selected threads.' }],
+      relatedConversationIds: ['conv-1', 'conv-2'],
     });
   });
 
@@ -118,6 +122,24 @@ describe('pendingConversationPrompt helpers', () => {
     }, storage);
 
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
+  });
+
+  it('keeps related-thread staging metadata even before the prompt starts', () => {
+    const storage = createStorage();
+
+    persistPendingConversationPrompt('session-123', {
+      text: '',
+      images: [],
+      attachmentRefs: [],
+      relatedConversationIds: ['conv-1'],
+    }, storage);
+
+    expect(readPendingConversationPrompt('session-123', storage)).toEqual({
+      text: '',
+      images: [],
+      attachmentRefs: [],
+      relatedConversationIds: ['conv-1'],
+    });
   });
 
   it('tracks background initial-prompt dispatch state per session', () => {

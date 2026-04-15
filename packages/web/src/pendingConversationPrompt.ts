@@ -1,16 +1,61 @@
 import { clearConversationComposerDraft } from './forking';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
-import type { PromptAttachmentRefInput, PromptImageInput } from './types';
+import type { InjectedPromptMessage, PromptAttachmentRefInput, PromptImageInput } from './types';
 
 export interface PendingConversationPrompt {
   text: string;
   behavior?: 'steer' | 'followUp';
   images: PromptImageInput[];
   attachmentRefs: PromptAttachmentRefInput[];
+  contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>;
+  relatedConversationIds?: string[];
 }
 
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
 const inFlightPendingPromptDispatches = new Set<string>();
+
+function normalizePendingPromptContextMessages(value: unknown): Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((message): message is { customType: string; content: string } => (
+      !!message
+      && typeof message === 'object'
+      && typeof message.customType === 'string'
+      && message.customType.trim().length > 0
+      && typeof message.content === 'string'
+    ))
+    .map((message) => ({
+      customType: message.customType.trim(),
+      content: message.content,
+    }));
+}
+
+function normalizePendingRelatedConversationIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+
+    const normalized = candidate.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    ids.push(normalized);
+  }
+
+  return ids;
+}
 
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
 
@@ -50,20 +95,35 @@ export function persistPendingConversationPrompt(
     return;
   }
 
-  const shouldPersist = prompt.text.trim().length > 0 || prompt.images.length > 0 || prompt.attachmentRefs.length > 0;
+  const contextMessages = normalizePendingPromptContextMessages(prompt.contextMessages);
+  const relatedConversationIds = normalizePendingRelatedConversationIds(prompt.relatedConversationIds);
+  const nextPrompt: PendingConversationPrompt = {
+    text: prompt.text,
+    ...(prompt.behavior ? { behavior: prompt.behavior } : {}),
+    images: prompt.images,
+    attachmentRefs: prompt.attachmentRefs,
+    ...(contextMessages.length > 0 ? { contextMessages } : {}),
+    ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
+  };
+
+  const shouldPersist = nextPrompt.text.trim().length > 0
+    || nextPrompt.images.length > 0
+    || nextPrompt.attachmentRefs.length > 0
+    || contextMessages.length > 0
+    || relatedConversationIds.length > 0;
   if (!shouldPersist) {
     inMemoryPendingPrompts.delete(sessionId);
   } else {
-    inMemoryPendingPrompts.set(sessionId, prompt);
+    inMemoryPendingPrompts.set(sessionId, nextPrompt);
   }
 
   persistStoredState({
     key: buildPendingConversationPromptStorageKey(sessionId),
-    value: prompt,
+    value: nextPrompt,
     storage,
     shouldPersist: () => shouldPersist,
   });
-  emitPendingConversationPromptChanged(sessionId, shouldPersist ? prompt : null);
+  emitPendingConversationPromptChanged(sessionId, shouldPersist ? nextPrompt : null);
 }
 
 export function readPendingConversationPrompt(
@@ -120,6 +180,8 @@ export function readPendingConversationPrompt(
             ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
           }))
         : [];
+      const contextMessages = normalizePendingPromptContextMessages(parsed.contextMessages);
+      const relatedConversationIds = normalizePendingRelatedConversationIds(parsed.relatedConversationIds);
 
       return {
         text: typeof parsed.text === 'string' ? parsed.text : '',
@@ -128,6 +190,8 @@ export function readPendingConversationPrompt(
           : undefined,
         images,
         attachmentRefs,
+        ...(contextMessages.length > 0 ? { contextMessages } : {}),
+        ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
       };
     },
   });

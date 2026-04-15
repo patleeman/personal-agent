@@ -276,10 +276,22 @@ export function resolveConversationPendingStatusLabel(input: {
   return 'Sending…';
 }
 
+export function resolvePendingConversationPreparationStatusLabel(
+  prompt: PendingConversationPrompt | null | undefined,
+): string | null {
+  const relatedThreadCount = prompt?.relatedConversationIds?.length ?? 0;
+  if (relatedThreadCount <= 0) {
+    return null;
+  }
+
+  return `Summarizing ${relatedThreadCount} related thread${relatedThreadCount === 1 ? '' : 's'}…`;
+}
+
 export function resolveDisplayedConversationPendingStatusLabel(input: {
   explicitLabel: string | null;
   draft: boolean;
   hasDraftPendingPrompt: boolean;
+  pendingPrompt: PendingConversationPrompt | null | undefined;
   isStreaming: boolean;
   hasPendingInitialPrompt: boolean;
   hasPendingInitialPromptInFlight: boolean;
@@ -302,10 +314,11 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   }
 
   if (input.hasPendingInitialPrompt || input.hasPendingInitialPromptInFlight) {
-    return resolveConversationPendingStatusLabel({
-      isLiveSession: input.isLiveSession,
-      hasVisibleSessionDetail: input.hasVisibleSessionDetail,
-    });
+    return resolvePendingConversationPreparationStatusLabel(input.pendingPrompt)
+      ?? resolveConversationPendingStatusLabel({
+        isLiveSession: input.isLiveSession,
+        hasVisibleSessionDetail: input.hasVisibleSessionDetail,
+      });
   }
 
   return null;
@@ -3206,6 +3219,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     explicitLabel: pendingAssistantStatusLabel,
     draft,
     hasDraftPendingPrompt: Boolean(draftPendingPrompt),
+    pendingPrompt: pendingInitialPrompt ?? draftPendingPrompt,
     isStreaming: stream.isStreaming,
     hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
     hasPendingInitialPromptInFlight,
@@ -3919,6 +3933,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationCwdEditorOpen(false);
   }, [currentCwd]);
 
+  const preparePendingConversationPromptWithRelatedContext = useCallback(async (
+    prompt: PendingConversationPrompt,
+  ): Promise<PendingConversationPrompt> => {
+    if ((prompt.contextMessages?.length ?? 0) > 0) {
+      return prompt;
+    }
+
+    const relatedConversationIds = Array.from(new Set(
+      (prompt.relatedConversationIds ?? [])
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ));
+    if (relatedConversationIds.length === 0) {
+      return prompt;
+    }
+
+    const relatedContext = await api.relatedConversationContext(relatedConversationIds, prompt.text);
+    return {
+      ...prompt,
+      relatedConversationIds,
+      contextMessages: relatedContext.contextMessages,
+    };
+  }, []);
+
   useEffect(() => {
     if (!shouldAutoDispatchPendingInitialPrompt({
       draft,
@@ -3945,29 +3983,40 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pinnedInitialPromptTailKeyRef.current = null;
     setPendingInitialPrompt(null);
 
-    void stream.send(
-      claimedInitialPrompt.text,
-      normalizeConversationComposerBehavior(claimedInitialPrompt.behavior, allowQueuedPrompts),
-      claimedInitialPrompt.images,
-      claimedInitialPrompt.attachmentRefs,
-    ).then(() => {
-      pendingInitialPromptSessionIdRef.current = null;
-    }).catch((error) => {
-      pendingInitialPromptSessionIdRef.current = null;
-      pinnedInitialPromptScrollSessionIdRef.current = null;
-      pinnedInitialPromptTailKeyRef.current = null;
-      persistPendingConversationPrompt(id, claimedInitialPrompt);
-      setPendingInitialPrompt(claimedInitialPrompt);
-      persistForkPromptDraft(id, claimedInitialPrompt.text);
-      console.error('Initial prompt failed:', error);
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    });
+    void (async () => {
+      let preparedInitialPrompt = claimedInitialPrompt;
+      try {
+        preparedInitialPrompt = await preparePendingConversationPromptWithRelatedContext(claimedInitialPrompt);
+        if (preparedInitialPrompt !== claimedInitialPrompt) {
+          persistPendingConversationPrompt(id, preparedInitialPrompt);
+        }
+
+        await stream.send(
+          preparedInitialPrompt.text,
+          normalizeConversationComposerBehavior(preparedInitialPrompt.behavior, allowQueuedPrompts),
+          preparedInitialPrompt.images,
+          preparedInitialPrompt.attachmentRefs,
+          preparedInitialPrompt.contextMessages,
+        );
+        pendingInitialPromptSessionIdRef.current = null;
+      } catch (error) {
+        pendingInitialPromptSessionIdRef.current = null;
+        pinnedInitialPromptScrollSessionIdRef.current = null;
+        pinnedInitialPromptTailKeyRef.current = null;
+        persistPendingConversationPrompt(id, preparedInitialPrompt);
+        setPendingInitialPrompt(preparedInitialPrompt);
+        persistForkPromptDraft(id, preparedInitialPrompt.text);
+        console.error('Initial prompt failed:', error);
+        showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+      }
+    })();
   }, [
     draft,
     id,
     pendingInitialPrompt,
     pendingInitialPromptDispatching,
     allowQueuedPrompts,
+    preparePendingConversationPromptWithRelatedContext,
     stream.hasSnapshot,
     stream.send,
     showNotice,
@@ -5256,11 +5305,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         if (selectedRelatedThreadIdsSnapshot.length > 0) {
           let createdSessionId: string | null = null;
+          let navigatedToCreatedConversation = false;
           setPreparingRelatedThreadContext(true);
-          setPendingAssistantStatusLabel(`Summarizing ${selectedRelatedThreadIdsSnapshot.length} related thread${selectedRelatedThreadIdsSnapshot.length === 1 ? '' : 's'}…`);
+          setPendingAssistantStatusLabel('Creating conversation…');
 
           try {
-            const relatedContext = await api.relatedConversationContext(selectedRelatedThreadIdsSnapshot, textToSend);
             const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
               ...(currentModel ? { model: currentModel } : {}),
               ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
@@ -5272,20 +5321,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               bootstrapVersionKey: conversationVersionKey,
               sessionDetailVersion: conversationEventVersion,
             });
+
             const attachmentRefs = await persistPromptDrawings(created.id);
             await persistPromptContextDocs(created.id);
 
-            rememberComposerInput(inputSnapshot, created.id);
-            setPendingAssistantStatusLabel('Working…');
-            await api.promptSession(
-              created.id,
-              textToSend,
-              queuedBehavior,
-              promptImages,
+            const initialPrompt: PendingConversationPrompt = {
+              text: textToSend,
+              behavior: queuedBehavior,
+              images: promptImages,
               attachmentRefs,
-              undefined,
-              relatedContext.contextMessages,
-            );
+              relatedConversationIds: selectedRelatedThreadIdsSnapshot,
+            };
+
+            rememberComposerInput(inputSnapshot, created.id);
+            persistPendingConversationPrompt(created.id, initialPrompt);
+            setPendingConversationPromptDispatching(created.id, true);
 
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
@@ -5314,8 +5364,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 },
               },
             });
+            navigatedToCreatedConversation = true;
+
+            void (async () => {
+              let preparedInitialPrompt = initialPrompt;
+              try {
+                preparedInitialPrompt = await preparePendingConversationPromptWithRelatedContext(initialPrompt);
+                if (preparedInitialPrompt !== initialPrompt) {
+                  persistPendingConversationPrompt(created.id, preparedInitialPrompt);
+                }
+
+                await api.promptSession(
+                  created.id,
+                  preparedInitialPrompt.text,
+                  preparedInitialPrompt.behavior,
+                  preparedInitialPrompt.images,
+                  preparedInitialPrompt.attachmentRefs,
+                  undefined,
+                  preparedInitialPrompt.contextMessages,
+                );
+              } catch (error) {
+                persistPendingConversationPrompt(created.id, preparedInitialPrompt);
+                setPendingConversationPromptDispatching(created.id, false);
+                console.error('Initial prompt with related threads failed:', error);
+              }
+            })();
           } catch (error) {
-            if (createdSessionId) {
+            if (createdSessionId && !navigatedToCreatedConversation) {
               await api.destroySession(createdSessionId).catch(() => {});
             }
             showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
