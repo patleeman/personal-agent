@@ -39,6 +39,27 @@ describe('chat transcript items', () => {
     expect(isTraceConversationBlock(messages[1]!)).toBe(false);
   });
 
+  it('keeps terminal-style bash blocks visible as standalone message items', () => {
+    const messages: MessageBlock[] = [
+      { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'Retry it directly.' },
+      {
+        type: 'tool_use',
+        ts: '2026-03-12T18:00:01.000Z',
+        tool: 'bash',
+        input: { command: 'npm run release:publish' },
+        output: '/bin/bash: npm: command not found',
+        status: 'error',
+        details: { displayMode: 'terminal', exitCode: 127 },
+      },
+    ];
+
+    const items = buildChatRenderItems(messages);
+
+    expect(items).toHaveLength(2);
+    expect(items.every((item) => item.type === 'message')).toBe(true);
+    expect(isTraceConversationBlock(messages[1]!)).toBe(false);
+  });
+
   it('keeps ask_user_question tool blocks visible as standalone message items', () => {
     const messages: MessageBlock[] = [
       { type: 'text', ts: '2026-03-12T18:00:00.000Z', text: 'I need one clarification.' },

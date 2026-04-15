@@ -867,6 +867,30 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('Conversation 2 — Auto mode wakeups');
   });
 
+  it('renders terminal-style bang command output outside internal-work clusters', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'npm run release:publish' },
+        output: '/bin/bash: npm: command not found',
+        status: 'error',
+        details: {
+          displayMode: 'terminal',
+          exitCode: 127,
+          excludeFromContext: true,
+        },
+      }],
+    }));
+
+    expect(html).toContain('npm run release:publish');
+    expect(html).toContain('/bin/bash: npm: command not found');
+    expect(html).toContain('no context');
+    expect(html).not.toContain('Internal work');
+    expect(html).not.toContain('&quot;command&quot;');
+  });
+
   it('renders a continue action for the tail internal-work cluster when recovery is available', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [{

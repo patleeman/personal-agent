@@ -1363,7 +1363,7 @@ describe('sessions', () => {
     ]);
   });
 
-  it('renders bash execution messages as bash tool blocks', () => {
+  it('renders bash execution messages as terminal-style bash blocks', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {
         id: 'bash-1',
@@ -1385,6 +1385,7 @@ describe('sessions', () => {
         input: { command: 'git status --short' },
         output: ' M src/index.ts',
         details: expect.objectContaining({
+          displayMode: 'terminal',
           exitCode: 0,
           excludeFromContext: true,
         }),

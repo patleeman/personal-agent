@@ -82,6 +82,60 @@ describe('desktopConversationState reducer', () => {
     });
   });
 
+  it('preserves terminal-style metadata for direct bang bash runs', async () => {
+    const {
+      applyDesktopConversationStreamEvent,
+      createEmptyDesktopConversationStreamState,
+    } = await import('./desktopConversationState.js');
+
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'tool_start',
+      toolName: 'bash',
+      args: {
+        command: 'npm run release:publish',
+        displayMode: 'terminal',
+        excludeFromContext: true,
+      },
+      toolCallId: 'user-bash-1',
+    } as never);
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'tool_end',
+      toolName: 'bash',
+      toolCallId: 'user-bash-1',
+      output: '/bin/bash: npm: command not found',
+      isError: true,
+      durationMs: 127,
+      details: {
+        displayMode: 'terminal',
+        exitCode: 127,
+        excludeFromContext: true,
+      },
+    } as never);
+
+    expect(state.blocks).toEqual([
+      {
+        type: 'tool_use',
+        tool: 'bash',
+        input: {
+          command: 'npm run release:publish',
+          displayMode: 'terminal',
+          excludeFromContext: true,
+        },
+        output: '/bin/bash: npm: command not found',
+        status: 'error',
+        durationMs: 127,
+        details: {
+          displayMode: 'terminal',
+          exitCode: 127,
+          excludeFromContext: true,
+        },
+        ts: expect.any(String),
+        _toolCallId: 'user-bash-1',
+      },
+    ]);
+  });
+
   it('replaces duplicate user message blocks instead of appending them twice', async () => {
     const {
       applyDesktopConversationStreamEvent,

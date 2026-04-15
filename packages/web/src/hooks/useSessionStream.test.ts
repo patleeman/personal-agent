@@ -279,6 +279,61 @@ describe('applyEvent', () => {
     expect(next.blocks).toEqual([{ type: 'text', id: 'assistant-1', ts: '2026-03-25T00:00:01.000Z', text: 'finished response' }]);
     expect(blocksRef.current).toEqual(next.blocks);
   });
+
+  it('marks direct bang bash executions for terminal-style rendering', () => {
+    let state: StreamState = {
+      ...INITIAL_STREAM_STATE,
+    };
+    const blocksRef = { current: state.blocks };
+    const streamingRef = { current: false };
+
+    state = applyEvent(state, blocksRef, streamingRef, {
+      type: 'tool_start',
+      toolCallId: 'user-bash-1',
+      toolName: 'bash',
+      args: {
+        command: 'npm run release:publish',
+        displayMode: 'terminal',
+        excludeFromContext: true,
+      },
+    });
+
+    state = applyEvent(state, blocksRef, streamingRef, {
+      type: 'tool_end',
+      toolCallId: 'user-bash-1',
+      toolName: 'bash',
+      isError: true,
+      durationMs: 42,
+      output: '/bin/bash: npm: command not found',
+      details: {
+        displayMode: 'terminal',
+        exitCode: 127,
+        excludeFromContext: true,
+      },
+    });
+
+    expect(state.blocks).toEqual([
+      {
+        type: 'tool_use',
+        tool: 'bash',
+        input: {
+          command: 'npm run release:publish',
+          displayMode: 'terminal',
+          excludeFromContext: true,
+        },
+        output: '/bin/bash: npm: command not found',
+        status: 'error',
+        durationMs: 42,
+        details: {
+          displayMode: 'terminal',
+          exitCode: 127,
+          excludeFromContext: true,
+        },
+        ts: expect.any(String),
+        _toolCallId: 'user-bash-1',
+      },
+    ]);
+  });
 });
 
 describe('pending queue optimistic updates', () => {

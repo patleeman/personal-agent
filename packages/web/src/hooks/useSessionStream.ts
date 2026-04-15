@@ -659,6 +659,22 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
 // ── Event → block reducer ─────────────────────────────────────────────────────
 
+const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
+
+function readLiveTerminalBashDetails(
+  toolName: string,
+  args: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (toolName !== 'bash' || !args || args.displayMode !== TERMINAL_BASH_DISPLAY_MODE) {
+    return null;
+  }
+
+  return {
+    displayMode: TERMINAL_BASH_DISPLAY_MODE,
+    ...(args.excludeFromContext === true ? { excludeFromContext: true } : {}),
+  };
+}
+
 export function applyEvent(
   prev: StreamState,
   blocksRef: React.MutableRefObject<MessageBlock[]>,
@@ -769,6 +785,7 @@ export function applyEvent(
 
     case 'tool_start': {
       const args = (event.args ?? {}) as Record<string, unknown>;
+      const details = readLiveTerminalBashDetails(event.toolName, args);
       blocks.push({
         type: 'tool_use',
         tool: event.toolName,
@@ -777,6 +794,7 @@ export function applyEvent(
         status: 'running',
         ts: new Date().toISOString(),
         _toolCallId: event.toolCallId,
+        ...(details ? { details } : {}),
       } as MessageBlock & { _toolCallId: string });
       blocksRef.current = blocks;
       return { ...prev, blocks, totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length) };
@@ -809,7 +827,7 @@ export function applyEvent(
           output:     event.output,   // replace partial with final
           status:     event.isError ? 'error' : 'ok',
           durationMs: event.durationMs,
-          details:    event.details,
+          details:    event.details ?? b.details,
         };
       }
       blocksRef.current = blocks;

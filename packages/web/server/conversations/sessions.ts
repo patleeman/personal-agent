@@ -925,6 +925,7 @@ function buildDisplayBlocksInternal(
       const commandText = typeof msg.message.command === 'string' ? msg.message.command : '';
       const outputText = typeof msg.message.output === 'string' ? msg.message.output : '';
       const bashDetails = {
+        displayMode: 'terminal',
         ...(typeof msg.message.exitCode === 'number' ? { exitCode: msg.message.exitCode } : {}),
         ...(msg.message.cancelled === true ? { cancelled: true } : {}),
         ...(msg.message.truncated === true ? { truncated: true } : {}),

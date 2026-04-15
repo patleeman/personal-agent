@@ -115,6 +115,8 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
   };
 }
 
+const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
+
 function findLastToolUseIndex(
   blocks: DesktopConversationMessageBlock[],
   toolCallId: string,
@@ -127,6 +129,20 @@ function findLastToolUseIndex(
   }
 
   return -1;
+}
+
+function readLiveTerminalBashDetails(
+  toolName: string | undefined,
+  args: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (toolName !== 'bash' || !args || args.displayMode !== TERMINAL_BASH_DISPLAY_MODE) {
+    return null;
+  }
+
+  return {
+    displayMode: TERMINAL_BASH_DISPLAY_MODE,
+    ...(args.excludeFromContext === true ? { excludeFromContext: true } : {}),
+  };
 }
 
 function displayBlockToMessageBlock(block: {
@@ -319,21 +335,25 @@ export function applyDesktopConversationStreamEvent(
       };
     }
 
-    case 'tool_start':
+    case 'tool_start': {
+      const input = (event.args ?? {}) as Record<string, unknown>;
+      const details = readLiveTerminalBashDetails(event.toolName, input);
       blocks.push({
         type: 'tool_use',
         tool: event.toolName,
-        input: (event.args ?? {}) as Record<string, unknown>,
+        input,
         output: '',
         status: 'running',
         ts: new Date().toISOString(),
         _toolCallId: event.toolCallId,
+        ...(details ? { details } : {}),
       });
       return {
         ...prev,
         blocks,
         totalBlocks: Math.max(prev.totalBlocks, prev.blockOffset + blocks.length),
       };
+    }
 
     case 'tool_update': {
       const index = findLastToolUseIndex(blocks, event.toolCallId);
@@ -364,7 +384,7 @@ export function applyDesktopConversationStreamEvent(
           output: event.output,
           status: event.isError ? 'error' : 'ok',
           durationMs: event.durationMs,
-          details: event.details,
+          details: event.details ?? block.details,
         };
       }
       return {

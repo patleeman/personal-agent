@@ -1,4 +1,5 @@
 import type { DurableRunRecord, MessageBlock } from './types';
+import { isTerminalBashToolBlock } from './terminalBashBlock';
 
 export interface ConversationResumeState {
   canResume: boolean;
@@ -31,7 +32,7 @@ export function didConversationStopWithError(message: MessageBlock | null | unde
     case 'error':
       return true;
     case 'tool_use':
-      return message.status === 'error' || Boolean(message.error);
+      return !isTerminalBashToolBlock(message) && (message.status === 'error' || Boolean(message.error));
     case 'subagent':
       return message.status === 'failed';
     default:
@@ -48,7 +49,7 @@ export function didConversationStopMidTurn(message: MessageBlock | null | undefi
     case 'thinking':
       return true;
     case 'tool_use':
-      return true;
+      return !isTerminalBashToolBlock(message);
     case 'subagent':
       return true;
     case 'error':

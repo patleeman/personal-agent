@@ -142,6 +142,21 @@ describe('conversation resume helpers', () => {
     })).toBe(true);
   });
 
+  it('ignores direct terminal bash output when deciding whether a conversation can resume', () => {
+    const lastMessage: MessageBlock = {
+      type: 'tool_use',
+      ts: '2026-03-13T12:05:00.000Z',
+      tool: 'bash',
+      input: { command: 'npm run release:publish' },
+      output: '/bin/bash: npm: command not found',
+      status: 'error',
+      details: { displayMode: 'terminal', exitCode: 127 },
+    };
+
+    expect(didConversationStopWithError(lastMessage)).toBe(false);
+    expect(didConversationStopMidTurn(lastMessage)).toBe(false);
+  });
+
   it('treats a tail trace block as an unfinished turn even when the durable run says waiting', () => {
     const lastMessage: MessageBlock = {
       type: 'tool_use',

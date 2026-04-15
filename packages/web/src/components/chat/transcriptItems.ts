@@ -1,4 +1,5 @@
 import type { MessageBlock } from '../../types';
+import { isTerminalBashToolBlock } from '../../terminalBashBlock';
 
 export type TraceConversationBlock = Extract<MessageBlock, { type: 'thinking' | 'tool_use' | 'subagent' | 'error' }>;
 
@@ -42,7 +43,10 @@ export function isTraceConversationBlock(block: MessageBlock): block is TraceCon
     case 'error':
       return true;
     case 'tool_use':
-      return block.tool !== 'artifact' && block.tool !== 'checkpoint' && block.tool !== 'ask_user_question';
+      return block.tool !== 'artifact'
+        && block.tool !== 'checkpoint'
+        && block.tool !== 'ask_user_question'
+        && !isTerminalBashToolBlock(block);
     default:
       return false;
   }

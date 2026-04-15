@@ -2881,6 +2881,7 @@ export async function executeSessionBash(
   const startedAtMs = Date.now();
   const eventArgs: Record<string, unknown> = {
     command: normalizedCommand,
+    displayMode: 'terminal',
     ...(options.excludeFromContext ? { excludeFromContext: true } : {}),
   };
 
@@ -2909,6 +2910,7 @@ export async function executeSessionBash(
       fullOutputPath?: unknown;
     };
     const details = {
+      displayMode: 'terminal',
       ...(typeof bashResult.exitCode === 'number' ? { exitCode: bashResult.exitCode } : {}),
       ...(bashResult.cancelled === true ? { cancelled: true } : {}),
       ...(bashResult.truncated === true ? { truncated: true } : {}),
@@ -2953,7 +2955,10 @@ export async function executeSessionBash(
 
     return result;
   } catch (error) {
-    const details = options.excludeFromContext ? { excludeFromContext: true } : undefined;
+    const details = {
+      displayMode: 'terminal',
+      ...(options.excludeFromContext ? { excludeFromContext: true } : {}),
+    };
     broadcast(entry, {
       type: 'tool_end',
       toolCallId,
