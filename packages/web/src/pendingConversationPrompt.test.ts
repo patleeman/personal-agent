@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { StorageLike } from './reloadState';
 import { buildConversationComposerStorageKey } from './forking';
 import {
+  buildPendingConversationPromptDispatchingStorageKey,
   buildPendingConversationPromptStorageKey,
   clearPendingConversationPrompt,
   consumePendingConversationPrompt,
@@ -145,12 +146,31 @@ describe('pendingConversationPrompt helpers', () => {
   it('tracks background initial-prompt dispatch state per session', () => {
     const storage = createStorage();
 
-    expect(isPendingConversationPromptDispatching('session-123')).toBe(false);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
 
     setPendingConversationPromptDispatching('session-123', true, storage);
-    expect(isPendingConversationPromptDispatching('session-123')).toBe(true);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(true);
 
     setPendingConversationPromptDispatching('session-123', false, storage);
-    expect(isPendingConversationPromptDispatching('session-123')).toBe(false);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+  });
+
+  it('reuses recently persisted dispatching state across navigation but drops stale entries', () => {
+    const storage = createStorage();
+    const nowSpy = vi.spyOn(Date, 'now');
+    const key = buildPendingConversationPromptDispatchingStorageKey('session-123');
+
+    nowSpy.mockReturnValue(1_000);
+    setPendingConversationPromptDispatching('session-123', true, storage);
+    setPendingConversationPromptDispatching('session-123', false, null);
+
+    nowSpy.mockReturnValue(30_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(true);
+
+    storage.setItem(key, '1000');
+    nowSpy.mockReturnValue(200_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+
+    nowSpy.mockRestore();
   });
 });

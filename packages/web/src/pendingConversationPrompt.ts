@@ -13,6 +13,7 @@ export interface PendingConversationPrompt {
 
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
 const inFlightPendingPromptDispatches = new Set<string>();
+const PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS = 90_000;
 
 function normalizePendingPromptContextMessages(value: unknown): Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> {
   if (!Array.isArray(value)) {
@@ -65,7 +66,11 @@ export interface PendingConversationPromptChangedDetail {
   dispatching: boolean;
 }
 
-function emitPendingConversationPromptChanged(sessionId: string, prompt: PendingConversationPrompt | null): void {
+function emitPendingConversationPromptChanged(
+  sessionId: string,
+  prompt: PendingConversationPrompt | null,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
   if (typeof window === 'undefined' || !sessionId) {
     return;
   }
@@ -76,7 +81,7 @@ function emitPendingConversationPromptChanged(sessionId: string, prompt: Pending
       detail: {
         sessionId,
         prompt,
-        dispatching: inFlightPendingPromptDispatches.has(sessionId),
+        dispatching: isPendingConversationPromptDispatching(sessionId, storage),
       },
     },
   ));
@@ -84,6 +89,29 @@ function emitPendingConversationPromptChanged(sessionId: string, prompt: Pending
 
 export function buildPendingConversationPromptStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:pending-prompt`;
+}
+
+export function buildPendingConversationPromptDispatchingStorageKey(sessionId: string): string {
+  return `pa:reload:conversation:${sessionId}:pending-prompt-dispatching`;
+}
+
+function readPendingConversationPromptDispatchingAt(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): number | null {
+  if (!sessionId) {
+    return null;
+  }
+
+  return readStoredState<number | null>({
+    key: buildPendingConversationPromptDispatchingStorageKey(sessionId),
+    fallback: null,
+    storage,
+    deserialize: (raw) => {
+      const parsed = Number.parseInt(raw, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    },
+  });
 }
 
 export function persistPendingConversationPrompt(
@@ -123,7 +151,7 @@ export function persistPendingConversationPrompt(
     storage,
     shouldPersist: () => shouldPersist,
   });
-  emitPendingConversationPromptChanged(sessionId, shouldPersist ? nextPrompt : null);
+  emitPendingConversationPromptChanged(sessionId, shouldPersist ? nextPrompt : null, storage);
 }
 
 export function readPendingConversationPrompt(
@@ -221,11 +249,23 @@ export function clearPendingConversationPrompt(
 
   inMemoryPendingPrompts.delete(sessionId);
   clearStoredState(storage, buildPendingConversationPromptStorageKey(sessionId));
-  emitPendingConversationPromptChanged(sessionId, null);
+  emitPendingConversationPromptChanged(sessionId, null, storage);
 }
 
-export function isPendingConversationPromptDispatching(sessionId: string): boolean {
-  return Boolean(sessionId) && inFlightPendingPromptDispatches.has(sessionId);
+export function isPendingConversationPromptDispatching(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): boolean {
+  if (!sessionId) {
+    return false;
+  }
+
+  if (inFlightPendingPromptDispatches.has(sessionId)) {
+    return true;
+  }
+
+  const dispatchingAt = readPendingConversationPromptDispatchingAt(sessionId, storage);
+  return dispatchingAt !== null && (Date.now() - dispatchingAt) < PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS;
 }
 
 export function setPendingConversationPromptDispatching(
@@ -243,5 +283,13 @@ export function setPendingConversationPromptDispatching(
     inFlightPendingPromptDispatches.delete(sessionId);
   }
 
-  emitPendingConversationPromptChanged(sessionId, readPendingConversationPrompt(sessionId, storage));
+  persistStoredState({
+    key: buildPendingConversationPromptDispatchingStorageKey(sessionId),
+    value: Date.now(),
+    storage,
+    serialize: (value) => String(value),
+    shouldPersist: () => dispatching,
+  });
+
+  emitPendingConversationPromptChanged(sessionId, readPendingConversationPrompt(sessionId, storage), storage);
 }
