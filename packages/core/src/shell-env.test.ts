@@ -15,15 +15,23 @@ function createTempDir(prefix: string): string {
   return dir;
 }
 
+function renderEnvEntries(entries: string[] = []): string {
+  return entries.map((entry) => `printf '%s\\0' ${JSON.stringify(entry)}`).join('\n');
+}
+
 function createFakeInteractiveShell(options: {
   prefix?: string;
   entries?: string[];
+  entriesByArg?: Record<string, string[]>;
   exitCode?: number;
   counterFile?: string;
 } = {}): string {
   const shellDir = createTempDir('shell-env-');
   const shellPath = join(shellDir, 'zsh');
-  const entries = (options.entries ?? []).map((entry) => `printf '%s\\0' ${JSON.stringify(entry)}`).join('\n');
+  const defaultEntries = renderEnvEntries(options.entries ?? []);
+  const entriesByArg = Object.entries(options.entriesByArg ?? {})
+    .map(([arg, entries]) => `${JSON.stringify(arg)})\n${renderEnvEntries(entries)}\n;;`)
+    .join('\n');
   const counterScript = options.counterFile
     ? `count=0\nif [ -f ${JSON.stringify(options.counterFile)} ]; then count=$(cat ${JSON.stringify(options.counterFile)}); fi\ncount=$((count + 1))\nprintf '%s' "$count" > ${JSON.stringify(options.counterFile)}\n`
     : '';
@@ -33,7 +41,7 @@ function createFakeInteractiveShell(options: {
     counterScript.trim(),
     options.prefix ? `printf '%s' ${JSON.stringify(options.prefix)}` : '',
     `printf '%s\\0' ${JSON.stringify(START)}`,
-    entries,
+    entriesByArg ? ['case "$1" in', entriesByArg, `*)\n${defaultEntries}\n;;`, 'esac'].join('\n') : defaultEntries,
     `printf '%s\\0' ${JSON.stringify(END)}`,
     `exit ${String(options.exitCode ?? 0)}`,
   ].filter(Boolean).join('\n');
@@ -77,6 +85,35 @@ describe('resolveChildProcessEnv', () => {
       FROM_SHELL: '1',
       OVERRIDE_ONLY: '1',
       SHARED: 'from-shell',
+    });
+    expect(resolved.PATH).toBe('/opt/homebrew/bin:/usr/bin:/base/bin');
+  });
+
+  it('uses the login + interactive zsh env so login PATH entries are available', () => {
+    const shellPath = createFakeInteractiveShell({
+      entriesByArg: {
+        '-ic': [
+          'PATH=/usr/bin',
+          'FROM_RC=1',
+        ],
+        '-ilc': [
+          'PATH=/opt/homebrew/bin:/usr/bin',
+          'FROM_LOGIN=1',
+          'FROM_RC=1',
+        ],
+      },
+    });
+    const baseEnv = {
+      SHELL: shellPath,
+      HOME: '/tmp/patrick',
+      PATH: '/usr/bin:/base/bin',
+    };
+
+    const resolved = resolveChildProcessEnv({}, baseEnv);
+
+    expect(resolved).toMatchObject({
+      FROM_LOGIN: '1',
+      FROM_RC: '1',
     });
     expect(resolved.PATH).toBe('/opt/homebrew/bin:/usr/bin:/base/bin');
   });

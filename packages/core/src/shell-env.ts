@@ -69,11 +69,18 @@ function mergePathValues(preferred: string | undefined, fallback: string | undef
   return entries.length > 0 ? entries.join(delimiter) : undefined;
 }
 
-function resolveShellCaptureArgs(shellPath: string): string[] | null {
+function resolveShellCaptureArgSets(shellPath: string): string[][] | null {
   const shellName = basename(shellPath).toLowerCase();
 
-  if (shellName === 'zsh' || shellName === 'bash' || shellName === 'fish' || shellName === 'ksh') {
-    return ['-ic', ENV_CAPTURE_COMMAND];
+  if (shellName === 'zsh') {
+    return [
+      ['-ilc', ENV_CAPTURE_COMMAND],
+      ['-ic', ENV_CAPTURE_COMMAND],
+    ];
+  }
+
+  if (shellName === 'bash' || shellName === 'fish' || shellName === 'ksh') {
+    return [['-ic', ENV_CAPTURE_COMMAND]];
   }
 
   return null;
@@ -120,24 +127,31 @@ function captureInteractiveShellEnvironment(baseEnv: NodeJS.ProcessEnv): NodeJS.
     return null;
   }
 
-  const args = resolveShellCaptureArgs(shellPath);
-  if (!args) {
+  const argSets = resolveShellCaptureArgSets(shellPath);
+  if (!argSets) {
     return null;
   }
 
-  const result = spawnSync(shellPath, args, {
-    env: baseEnv,
-    encoding: 'buffer',
-    maxBuffer: ENV_CAPTURE_MAX_BUFFER,
-    timeout: ENV_CAPTURE_TIMEOUT_MS,
-    windowsHide: true,
-  });
+  for (const args of argSets) {
+    const result = spawnSync(shellPath, args, {
+      env: baseEnv,
+      encoding: 'buffer',
+      maxBuffer: ENV_CAPTURE_MAX_BUFFER,
+      timeout: ENV_CAPTURE_TIMEOUT_MS,
+      windowsHide: true,
+    });
 
-  if (result.error || result.status !== 0 || !Buffer.isBuffer(result.stdout) || result.stdout.length === 0) {
-    return null;
+    if (result.error || result.status !== 0 || !Buffer.isBuffer(result.stdout) || result.stdout.length === 0) {
+      continue;
+    }
+
+    const parsed = parseCapturedEnvironment(result.stdout);
+    if (parsed) {
+      return parsed;
+    }
   }
 
-  return parseCapturedEnvironment(result.stdout);
+  return null;
 }
 
 function getCachedInteractiveShellEnvironment(baseEnv: NodeJS.ProcessEnv): NodeJS.ProcessEnv | null {
