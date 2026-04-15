@@ -8,7 +8,7 @@ import {
 } from '../conversationCheckpoints';
 import { useAppEvents } from '../contexts';
 import { useApi } from '../hooks';
-import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointFile } from '../types';
+import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointComment, ConversationCommitCheckpointFile } from '../types';
 import { formatDate } from '../utils';
 import { ErrorState, LoadingState, cx } from './ui';
 
@@ -327,6 +327,27 @@ function CheckpointDiffSection({
   );
 }
 
+function CheckpointCommentList({ comments }: { comments: ConversationCommitCheckpointComment[] }) {
+  if (comments.length === 0) {
+    return <p className="rounded-xl bg-elevated/25 px-3 py-2.5 text-[12px] text-dim">No comments yet.</p>;
+  }
+
+  return (
+    <div className="space-y-2.5">
+      {comments.map((comment) => (
+        <div key={comment.id} className="rounded-xl bg-elevated/25 px-3 py-2.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+            <span className="font-medium text-primary">{comment.authorName}</span>
+            <span className="text-dim">{formatDate(comment.updatedAt)}</span>
+            {comment.filePath ? <span className="font-mono text-dim">{comment.filePath}</span> : null}
+          </div>
+          <p className="mt-1 whitespace-pre-wrap break-words text-[12px] leading-relaxed text-secondary">{comment.body}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function StructuralDiffContent({
   state,
 }: {
@@ -376,7 +397,6 @@ export function ConversationCheckpointModal({
     data: ConversationCheckpointStructuralDiffResult | null;
   }>({ loading: false, error: null, data: null });
   const [commentDraft, setCommentDraft] = useState('');
-  const [commentDirty, setCommentDirty] = useState(false);
   const [commentSaveState, setCommentSaveState] = useState<SaveState>('idle');
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
   const viewerScrollRef = useRef<HTMLDivElement | null>(null);
@@ -402,7 +422,7 @@ export function ConversationCheckpointModal({
     setDiffView('split');
     setStructuralDisplay('side-by-side');
     setStructuralState({ loading: false, error: null, data: null });
-    setCommentDirty(false);
+    setCommentDraft('');
     setCommentSaveState('idle');
   }, [checkpointId]);
 
@@ -462,14 +482,6 @@ export function ConversationCheckpointModal({
 
     setActiveFilePath((current) => current ?? checkpoint?.files[0]?.path ?? null);
   }, [checkpoint?.files, selectedFilePath]);
-
-  useEffect(() => {
-    if (commentDirty) {
-      return;
-    }
-
-    setCommentDraft(checkpoint?.comment ?? '');
-  }, [checkpoint?.comment, checkpoint?.commentUpdatedAt, commentDirty]);
 
   useEffect(() => {
     if (diffView !== 'structural' || !selectedFile || !structuralDiffAvailable) {
@@ -590,19 +602,23 @@ export function ConversationCheckpointModal({
     window.setTimeout(() => setCopied(false), 1200);
   }
 
-  async function saveComment(nextComment = commentDraft) {
+  async function saveComment() {
     if (!checkpoint) {
+      return;
+    }
+
+    const body = commentDraft.trim();
+    if (!body) {
       return;
     }
 
     setCommentSaveState('saving');
     try {
-      const updated = await api.updateConversationCheckpoint(conversationId, checkpoint.id, {
-        comment: nextComment,
+      const updated = await api.createConversationCheckpointComment(conversationId, checkpoint.id, {
+        body,
       });
       replaceData(updated);
-      setCommentDraft(updated.checkpoint.comment ?? '');
-      setCommentDirty(false);
+      setCommentDraft('');
       setCommentSaveState('saved');
       window.setTimeout(() => setCommentSaveState((current) => current === 'saved' ? 'idle' : current), 1400);
     } catch {
@@ -656,6 +672,7 @@ export function ConversationCheckpointModal({
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-secondary">
                   <span>{checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}</span>
                   <span className="font-mono tabular-nums"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
+                  <span>{checkpoint.commentCount} comment{checkpoint.commentCount === 1 ? '' : 's'}</span>
                   <span>committed {formatDate(checkpoint.committedAt)}</span>
                   {reviewContextError ? <span className="text-dim">GitHub info unavailable</span> : null}
                 </div>
@@ -781,20 +798,19 @@ export function ConversationCheckpointModal({
                 <div className="border-t border-border-subtle px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="ui-section-label">Comment</p>
+                      <p className="ui-section-label">Comments</p>
                       <p className="mt-1 text-[11px] text-dim">
-                        {checkpoint.commentUpdatedAt ? `Updated ${formatDate(checkpoint.commentUpdatedAt)}` : 'Add a note to this checkpoint.'}
+                        {checkpoint.commentCount > 0 ? `${checkpoint.commentCount} saved` : 'Add review notes to this checkpoint.'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 text-[11px]">
-                      {commentSaveState === 'saved' ? <span className="text-success">Saved</span> : null}
+                      {commentSaveState === 'saved' ? <span className="text-success">Added</span> : null}
                       {commentSaveState === 'error' ? <span className="text-danger">Couldn’t save</span> : null}
-                      {(commentDirty || checkpoint.comment) ? (
+                      {commentDraft.trim().length > 0 ? (
                         <button
                           type="button"
                           onClick={() => {
                             setCommentDraft('');
-                            setCommentDirty(true);
                             setCommentSaveState('idle');
                           }}
                           className="ui-toolbar-button px-2 py-1 text-[10px]"
@@ -807,23 +823,25 @@ export function ConversationCheckpointModal({
                         type="button"
                         onClick={() => { void saveComment(); }}
                         className="ui-toolbar-button px-2 py-1 text-[10px] text-accent"
-                        disabled={!commentDirty || commentSaveState === 'saving'}
+                        disabled={commentDraft.trim().length === 0 || commentSaveState === 'saving'}
                       >
-                        {commentSaveState === 'saving' ? 'Saving…' : 'Save comment'}
+                        {commentSaveState === 'saving' ? 'Adding…' : 'Add comment'}
                       </button>
                     </div>
+                  </div>
+                  <div className="mt-3 max-h-44 overflow-y-auto pr-1">
+                    <CheckpointCommentList comments={checkpoint.comments} />
                   </div>
                   <textarea
                     value={commentDraft}
                     onChange={(event) => {
                       setCommentDraft(event.target.value);
-                      setCommentDirty(true);
                       setCommentSaveState((current) => current === 'saving' ? current : 'idle');
                     }}
                     rows={3}
                     name="checkpointComment"
                     aria-label="Checkpoint comment"
-                    placeholder="Add context, follow-up, or review notes…"
+                    placeholder="Add a checkpoint comment…"
                     autoComplete="off"
                     className={cx(COMMENT_TEXTAREA_CLASS, 'mt-3 resize-y')}
                   />

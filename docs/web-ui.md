@@ -65,7 +65,7 @@ Important behaviors:
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - conversation artifacts open inline in the thread workspace
-- commit checkpoints can show up as transcript cards and open a dedicated diff review modal from the conversation, with continuous scrolling across files, sidebar jump navigation, split / unified views, optional structural diffs when `difft` is installed locally, GitHub / PR links, and a saved per-checkpoint comment
+- commit checkpoints can show up as transcript cards and open a dedicated diff review modal from the conversation, with continuous scrolling across files, sidebar jump navigation, split / unified views, bundled structural diffs in the desktop build, GitHub / PR links, and a saved comment thread on the checkpoint
 - the new-conversation empty state owns the draft workspace picker, including saved workspace selection and folder picking; the draft header stays title-only
 - saved conversation headers keep the top bar title-only; working directory still stays attached to the conversation instead of rendering inline there
 - the Threads filter can switch between all threads, human threads, and automation-owned threads, and automation-owned threads show an inline automation badge in the sidebar

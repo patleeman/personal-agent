@@ -636,6 +636,9 @@ function CheckpointToolBlock({
             {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
               <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
             ) : null}
+            {typeof (checkpoint as { commentCount?: number }).commentCount === 'number' && (checkpoint as { commentCount?: number }).commentCount > 0 ? (
+              <span className="text-dim">{(checkpoint as { commentCount?: number }).commentCount} comment{(checkpoint as { commentCount?: number }).commentCount === 1 ? '' : 's'}</span>
+            ) : null}
             {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
           </div>
           {isError && block.output && (

@@ -68,6 +68,10 @@ const electronBuilderConfig = {
       from: 'prompt-catalog',
       to: 'prompt-catalog',
     },
+    {
+      from: 'packages/desktop/vendor/difftastic',
+      to: 'vendor/difftastic',
+    },
   ],
   mac: {
     category: 'public.app-category.developer-tools',

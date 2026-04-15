@@ -32,6 +32,7 @@ const {
   readSessionSearchTextMock,
   resolveConversationSessionFileMock,
   saveConversationAttachmentMock,
+  addConversationCommitCheckpointCommentMock,
   scheduleDeferredResumeForSessionFileMock,
   setConversationServiceContextMock,
   setServerTimingHeadersMock,
@@ -70,6 +71,7 @@ const {
   readSessionSearchTextMock: vi.fn(),
   resolveConversationSessionFileMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
+  addConversationCommitCheckpointCommentMock: vi.fn(),
   scheduleDeferredResumeForSessionFileMock: vi.fn(),
   setConversationServiceContextMock: vi.fn(),
   setServerTimingHeadersMock: vi.fn(),
@@ -91,6 +93,7 @@ vi.mock('@personal-agent/core', () => ({
   listConversationAttachments: listConversationAttachmentsMock,
   readConversationAttachmentDownload: readConversationAttachmentDownloadMock,
   saveConversationAttachment: saveConversationAttachmentMock,
+  addConversationCommitCheckpointComment: addConversationCommitCheckpointCommentMock,
 }));
 
 vi.mock('../automation/deferredResumes.js', () => ({
@@ -270,6 +273,7 @@ describe('conversation routes', () => {
     readSessionSearchTextMock.mockReset();
     resolveConversationSessionFileMock.mockReset();
     saveConversationAttachmentMock.mockReset();
+    addConversationCommitCheckpointCommentMock.mockReset();
     scheduleDeferredResumeForSessionFileMock.mockReset();
     setConversationServiceContextMock.mockReset();
     setServerTimingHeadersMock.mockReset();
@@ -316,6 +320,7 @@ describe('conversation routes', () => {
     readSessionSearchTextMock.mockReturnValue('search text');
     resolveConversationSessionFileMock.mockReturnValue('/sessions/session-1.jsonl');
     saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
+    addConversationCommitCheckpointCommentMock.mockReturnValue({ id: 'checkpoint-1', commentCount: 1, comments: [{ id: 'comment-1', body: 'Ship it' }] });
     scheduleDeferredResumeForSessionFileMock.mockResolvedValue({ id: 'resume-2', delay: '5m' });
     toggleConversationAttentionMock.mockReturnValue({ read: true });
     updateLiveSessionModelPreferencesMock.mockResolvedValue({ model: 'gpt-4o', thinkingLevel: 'high' });
@@ -521,6 +526,24 @@ describe('conversation routes', () => {
     }), missingArtifactRes);
     expect(missingArtifactRes.status).toHaveBeenCalledWith(404);
     expect(missingArtifactRes.json).toHaveBeenCalledWith({ error: 'Artifact not found' });
+
+    const createCheckpointCommentRes = createResponse();
+    postHandler('/api/conversations/:id/checkpoints/:checkpointId/comments')(createRequest({
+      params: { id: 'session-1', checkpointId: 'checkpoint-1' },
+      body: { body: 'Ship it' },
+    }), createCheckpointCommentRes);
+    expect(addConversationCommitCheckpointCommentMock).toHaveBeenCalledWith({
+      profile: 'assistant',
+      conversationId: 'session-1',
+      checkpointId: 'checkpoint-1',
+      body: 'Ship it',
+      authorName: 'You',
+      authorProfile: 'assistant',
+    });
+    expect(createCheckpointCommentRes.json).toHaveBeenCalledWith({
+      conversationId: 'session-1',
+      checkpoint: { id: 'checkpoint-1', commentCount: 1, comments: [{ id: 'comment-1', body: 'Ship it' }] },
+    });
 
     const attachmentsRes = createResponse();
     getHandler('/api/conversations/:id/attachments')(createRequest({ params: { id: 'session-1' } }), attachmentsRes);

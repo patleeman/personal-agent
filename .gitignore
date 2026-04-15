@@ -12,6 +12,7 @@ build/generated/
 *.tsbuildinfo
 packages/*/dist/
 packages/*/dist-server/
+packages/desktop/vendor/
 profiles/**/dist/
 profiles/**/build/
 tools/*/.build/

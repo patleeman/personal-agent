@@ -36,12 +36,12 @@ import {
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
+  createConversationCommitCheckpointCommentCapability,
   readConversationCheckpointReviewContextCapability,
   readConversationCheckpointStructuralDiffCapability,
   readConversationCommitCheckpointCapability,
   readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
-  updateConversationCommitCheckpointCapability,
 } from '../conversations/conversationAssetsCapability.js';
 import {
   readConversationSessionMetaCapability,
@@ -57,12 +57,17 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
 };
 
+let getRepoRootFn: () => string = () => {
+  throw new Error('getRepoRoot not initialized for conversation routes');
+};
+
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 function initializeConversationRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
+  getRepoRootFn = context.getRepoRoot;
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 
   setConversationServiceContext({
@@ -467,6 +472,8 @@ export function registerConversationRoutes(
       res.json(await readConversationCheckpointReviewContextCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         checkpointId: req.params.checkpointId,
+      }, {
+        repoRoot: getRepoRootFn(),
       }));
     } catch (err) {
       logError('request handler error', {
@@ -487,6 +494,8 @@ export function registerConversationRoutes(
         checkpointId: req.params.checkpointId,
         filePath: parseTrimmedQueryString(req.query.path) ?? '',
         display: req.query.display === 'side-by-side' ? 'side-by-side' : 'inline',
+      }, {
+        repoRoot: getRepoRootFn(),
       }));
     } catch (err) {
       logError('request handler error', {
@@ -500,12 +509,13 @@ export function registerConversationRoutes(
     }
   });
 
-  router.patch('/api/conversations/:id/checkpoints/:checkpointId', (req, res) => {
+  router.post('/api/conversations/:id/checkpoints/:checkpointId/comments', (req, res) => {
     try {
-      res.json(updateConversationCommitCheckpointCapability(getCurrentProfileFn(), {
+      res.json(createConversationCommitCheckpointCommentCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         checkpointId: req.params.checkpointId,
-        comment: req.body?.comment,
+        body: req.body?.body,
+        filePath: req.body?.filePath,
       }));
     } catch (err) {
       logError('request handler error', {

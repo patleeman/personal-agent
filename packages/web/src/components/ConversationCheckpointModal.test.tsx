@@ -100,8 +100,16 @@ describe('ConversationCheckpointModal', () => {
             fileCount: 2,
             linesAdded: 12,
             linesDeleted: 3,
-            comment: 'Looks good.',
-            commentUpdatedAt: '2026-04-14T12:05:00.000Z',
+            commentCount: 1,
+            comments: [
+              {
+                id: 'comment-1',
+                authorName: 'You',
+                body: 'Looks good.',
+                createdAt: '2026-04-14T12:05:00.000Z',
+                updatedAt: '2026-04-14T12:05:00.000Z',
+              },
+            ],
             files: [
               {
                 path: 'packages/web/src/pages/ConversationPage.tsx',
@@ -152,7 +160,8 @@ describe('ConversationCheckpointModal', () => {
     expect(html).toContain('Files');
     expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');
     expect(html).toContain('ConversationCheckpointModal.tsx');
-    expect(html).toContain('Comment');
+    expect(html).toContain('Comments');
+    expect(html).toContain('Looks good.');
   });
 
   it('renders an error state when the checkpoint cannot be loaded', () => {

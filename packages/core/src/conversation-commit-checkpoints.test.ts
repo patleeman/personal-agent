@@ -3,12 +3,12 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  addConversationCommitCheckpointComment,
   getConversationCommitCheckpoint,
   listConversationCommitCheckpoints,
   resolveConversationCommitCheckpointPath,
   resolveProfileConversationCommitCheckpointsDir,
   saveConversationCommitCheckpoint,
-  updateConversationCommitCheckpointComment,
   validateConversationCommitCheckpointId,
 } from './conversation-commit-checkpoints.js';
 
@@ -50,6 +50,15 @@ describe('conversation commit checkpoint storage', () => {
       updatedAt: '2026-04-14T12:00:01.000Z',
       linesAdded: 12,
       linesDeleted: 3,
+      comments: [
+        {
+          id: 'comment-1',
+          authorName: 'You',
+          body: 'Looks good.',
+          createdAt: '2026-04-14T12:03:00.000Z',
+          updatedAt: '2026-04-14T12:03:00.000Z',
+        },
+      ],
       files: [
         {
           path: 'packages/web/src/pages/ConversationPage.tsx',
@@ -64,6 +73,8 @@ describe('conversation commit checkpoint storage', () => {
     expect(record.fileCount).toBe(1);
     expect(record.linesAdded).toBe(12);
     expect(record.linesDeleted).toBe(3);
+    expect(record.commentCount).toBe(1);
+    expect(record.comments).toHaveLength(1);
 
     expect(resolveConversationCommitCheckpointPath({
       stateRoot,
@@ -101,11 +112,12 @@ describe('conversation commit checkpoint storage', () => {
         fileCount: 1,
         linesAdded: 12,
         linesDeleted: 3,
+        commentCount: 1,
       },
     ]);
   });
 
-  it('updates persisted checkpoint comments', () => {
+  it('appends checkpoint comments and migrates legacy note fields', () => {
     const stateRoot = createTempStateRoot();
     const record = saveConversationCommitCheckpoint({
       stateRoot,
@@ -120,35 +132,32 @@ describe('conversation commit checkpoint storage', () => {
       committedAt: '2026-04-14T12:00:00.000Z',
       linesAdded: 12,
       linesDeleted: 3,
+      comment: 'Legacy note.',
+      commentUpdatedAt: '2026-04-14T12:10:00.000Z',
       files: [],
     });
 
-    const updated = updateConversationCommitCheckpointComment({
+    expect(record.comments).toHaveLength(1);
+    expect(record.comments[0]).toMatchObject({ body: 'Legacy note.' });
+
+    const updated = addConversationCommitCheckpointComment({
       stateRoot,
       profile: 'assistant',
       conversationId: 'conversation-1',
       checkpointId: record.id,
-      comment: 'Needs a cleaner follow-up.',
-      commentUpdatedAt: '2026-04-14T13:00:00.000Z',
+      body: 'Needs a cleaner follow-up.',
+      authorName: 'You',
+      createdAt: '2026-04-14T13:00:00.000Z',
     });
 
     expect(updated).toMatchObject({
       id: record.id,
-      comment: 'Needs a cleaner follow-up.',
-      commentUpdatedAt: '2026-04-14T13:00:00.000Z',
+      commentCount: 2,
+      comments: [
+        expect.objectContaining({ body: 'Legacy note.' }),
+        expect.objectContaining({ body: 'Needs a cleaner follow-up.', authorName: 'You' }),
+      ],
     });
-
-    const cleared = updateConversationCommitCheckpointComment({
-      stateRoot,
-      profile: 'assistant',
-      conversationId: 'conversation-1',
-      checkpointId: record.id,
-      comment: '   ',
-    });
-
-    expect(cleared?.id).toBe(record.id);
-    expect(cleared?.comment).toBeUndefined();
-    expect(cleared?.commentUpdatedAt).toBeUndefined();
   });
 
   it('rejects invalid checkpoint ids', () => {

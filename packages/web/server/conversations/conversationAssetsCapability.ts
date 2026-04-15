@@ -1,4 +1,5 @@
 import {
+  addConversationCommitCheckpointComment,
   deleteConversationArtifact,
   deleteConversationAttachment,
   getConversationArtifact,
@@ -9,7 +10,6 @@ import {
   listConversationCommitCheckpoints,
   readConversationAttachmentDownload,
   saveConversationAttachment,
-  updateConversationCommitCheckpointComment,
 } from '@personal-agent/core';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import {
@@ -49,8 +49,9 @@ interface ConversationAttachmentSaveInput {
   note?: string;
 }
 
-interface ConversationCheckpointUpdateInput extends ConversationCheckpointMutationInput {
-  comment?: string | null;
+interface ConversationCheckpointCommentCreateInput extends ConversationCheckpointMutationInput {
+  body?: string;
+  filePath?: string;
 }
 
 interface ConversationCheckpointStructuralDiffInput extends ConversationCheckpointMutationInput {
@@ -182,17 +183,21 @@ export function readConversationCommitCheckpointCapability(
   };
 }
 
-export function updateConversationCommitCheckpointCapability(
+export function createConversationCommitCheckpointCommentCapability(
   profile: string,
-  input: ConversationCheckpointUpdateInput,
+  input: ConversationCheckpointCommentCreateInput,
 ) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
-  const checkpoint = updateConversationCommitCheckpointComment({
+  const body = normalizeRequiredId(input.body ?? '', 'body');
+  const checkpoint = addConversationCommitCheckpointComment({
     profile,
     conversationId,
     checkpointId,
-    comment: input.comment,
+    body,
+    authorName: 'You',
+    authorProfile: profile,
+    ...(typeof input.filePath === 'string' && input.filePath.trim().length > 0 ? { filePath: input.filePath.trim() } : {}),
   });
   if (!checkpoint) {
     throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
@@ -209,6 +214,7 @@ export function updateConversationCommitCheckpointCapability(
 export async function readConversationCheckpointReviewContextCapability(
   profile: string,
   input: ConversationCheckpointMutationInput,
+  options?: { repoRoot?: string },
 ) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
@@ -216,6 +222,7 @@ export async function readConversationCheckpointReviewContextCapability(
     profile,
     conversationId,
     checkpointId,
+    repoRoot: options?.repoRoot,
   });
   if (!reviewContext) {
     throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
@@ -227,6 +234,7 @@ export async function readConversationCheckpointReviewContextCapability(
 export function readConversationCheckpointStructuralDiffCapability(
   profile: string,
   input: ConversationCheckpointStructuralDiffInput,
+  options?: { repoRoot?: string },
 ) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
@@ -238,6 +246,7 @@ export function readConversationCheckpointStructuralDiffCapability(
     checkpointId,
     filePath,
     display,
+    repoRoot: options?.repoRoot,
   });
   if (!result) {
     throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');

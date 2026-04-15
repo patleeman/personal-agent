@@ -59,6 +59,16 @@ export interface ConversationCommitCheckpointFile {
   patch: string;
 }
 
+export interface ConversationCommitCheckpointComment {
+  id: string;
+  authorName: string;
+  authorProfile?: string;
+  body: string;
+  filePath?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConversationCommitCheckpointSummary {
   id: string;
   conversationId: string;
@@ -76,12 +86,12 @@ export interface ConversationCommitCheckpointSummary {
   fileCount: number;
   linesAdded: number;
   linesDeleted: number;
-  comment?: string;
-  commentUpdatedAt?: string;
+  commentCount: number;
 }
 
 export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
   files: ConversationCommitCheckpointFile[];
+  comments: ConversationCommitCheckpointComment[];
 }
 
 export interface ConversationCheckpointToolDetails {

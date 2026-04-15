@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve } from 'path';
 import { validateConversationId } from './conversation-project-links.js';
@@ -28,6 +29,16 @@ export interface ConversationCommitCheckpointFile {
   patch: string;
 }
 
+export interface ConversationCommitCheckpointComment {
+  id: string;
+  authorName: string;
+  authorProfile?: string;
+  body: string;
+  filePath?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConversationCommitCheckpointSummary {
   id: string;
   conversationId: string;
@@ -45,12 +56,12 @@ export interface ConversationCommitCheckpointSummary {
   fileCount: number;
   linesAdded: number;
   linesDeleted: number;
-  comment?: string;
-  commentUpdatedAt?: string;
+  commentCount: number;
 }
 
 export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
   files: ConversationCommitCheckpointFile[];
+  comments: ConversationCommitCheckpointComment[];
 }
 
 function getConversationCommitCheckpointStateRoot(stateRoot?: string): string {
@@ -146,20 +157,66 @@ function normalizeCheckpointFile(value: unknown): ConversationCommitCheckpointFi
   };
 }
 
+function normalizeCheckpointComment(value: unknown): ConversationCommitCheckpointComment {
+  if (!value || typeof value !== 'object') {
+    throw new Error('Commit checkpoint comment is invalid.');
+  }
+
+  const comment = value as Partial<ConversationCommitCheckpointComment>;
+  return {
+    id: normalizeRequiredText(typeof comment.id === 'string' ? comment.id : '', 'comment id'),
+    authorName: normalizeRequiredText(typeof comment.authorName === 'string' ? comment.authorName : '', 'comment authorName'),
+    ...(normalizeOptionalText(comment.authorProfile) ? { authorProfile: normalizeOptionalText(comment.authorProfile) } : {}),
+    body: normalizeRequiredText(typeof comment.body === 'string' ? comment.body : '', 'comment body'),
+    ...(normalizeOptionalText(comment.filePath) ? { filePath: normalizeFilePath(comment.filePath as string, 'comment filePath') } : {}),
+    createdAt: normalizeIsoTimestamp(typeof comment.createdAt === 'string' ? comment.createdAt : '', 'comment createdAt'),
+    updatedAt: normalizeIsoTimestamp(typeof comment.updatedAt === 'string' ? comment.updatedAt : '', 'comment updatedAt'),
+  };
+}
+
+function normalizeCheckpointComments(
+  value: Partial<ConversationCommitCheckpointRecord> & { comment?: string; commentUpdatedAt?: string },
+): ConversationCommitCheckpointComment[] {
+  if (Array.isArray(value.comments)) {
+    return value.comments.map((comment) => normalizeCheckpointComment(comment));
+  }
+
+  const legacyComment = normalizeOptionalText(value.comment as string | undefined);
+  if (!legacyComment) {
+    return [];
+  }
+
+  const updatedAt = normalizeIsoTimestamp(
+    typeof value.commentUpdatedAt === 'string'
+      ? value.commentUpdatedAt
+      : typeof value.updatedAt === 'string'
+        ? value.updatedAt
+        : new Date().toISOString(),
+    'commentUpdatedAt',
+  );
+
+  return [{
+    id: `legacy-${randomUUID()}`,
+    authorName: 'You',
+    body: legacyComment,
+    createdAt: updatedAt,
+    updatedAt,
+  }];
+}
+
 function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpointRecord {
   if (!value || typeof value !== 'object') {
     throw new Error('Commit checkpoint document is invalid.');
   }
 
-  const record = value as Partial<ConversationCommitCheckpointRecord>;
+  const record = value as Partial<ConversationCommitCheckpointRecord> & { comment?: string; commentUpdatedAt?: string };
   const id = typeof record.id === 'string' ? record.id.trim() : '';
   validateConversationCommitCheckpointId(id);
 
   const files = Array.isArray(record.files)
     ? record.files.map((file) => normalizeCheckpointFile(file))
     : [];
-
-  const comment = normalizeOptionalText(record.comment);
+  const comments = normalizeCheckpointComments(record);
 
   return {
     id,
@@ -178,24 +235,23 @@ function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpoint
     fileCount: normalizeNonNegativeInteger(record.fileCount ?? Number.NaN, 'fileCount'),
     linesAdded: normalizeNonNegativeInteger(record.linesAdded ?? Number.NaN, 'linesAdded'),
     linesDeleted: normalizeNonNegativeInteger(record.linesDeleted ?? Number.NaN, 'linesDeleted'),
-    ...(comment ? {
-      comment,
-      commentUpdatedAt: normalizeIsoTimestamp(
-        typeof record.commentUpdatedAt === 'string'
-          ? record.commentUpdatedAt
-          : typeof record.updatedAt === 'string'
-            ? record.updatedAt
-            : '',
-        'commentUpdatedAt',
-      ),
-    } : {}),
+    commentCount: normalizeNonNegativeInteger(
+      typeof record.commentCount === 'number' ? record.commentCount : comments.length,
+      'commentCount',
+    ),
     files,
+    comments,
   };
 }
 
 function readCheckpoint(path: string): ConversationCommitCheckpointRecord {
   const parsed = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
   return normalizeCheckpointRecord(parsed);
+}
+
+function writeCheckpoint(path: string, record: ConversationCommitCheckpointRecord): ConversationCommitCheckpointRecord {
+  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
+  return record;
 }
 
 export function resolveProfileConversationCommitCheckpointsDir(options: {
@@ -243,7 +299,7 @@ export function listConversationCommitCheckpoints(options: ResolveConversationCo
   return readdirSync(dir)
     .filter((entry) => entry.endsWith('.json'))
     .map((entry) => readCheckpoint(join(dir, entry)))
-    .map(({ files: _files, ...summary }) => summary)
+    .map(({ files: _files, comments: _comments, ...summary }) => summary)
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt) || left.id.localeCompare(right.id));
 }
 
@@ -264,6 +320,7 @@ export function saveConversationCommitCheckpoint(options: {
   updatedAt?: string;
   comment?: string;
   commentUpdatedAt?: string;
+  comments?: ConversationCommitCheckpointComment[];
   files: ConversationCommitCheckpointFile[];
   linesAdded: number;
   linesDeleted: number;
@@ -275,8 +332,20 @@ export function saveConversationCommitCheckpoint(options: {
   const checkpointId = normalizeOptionalText(options.checkpointId) ?? normalizeRequiredText(options.commitSha, 'commitSha');
   validateConversationCommitCheckpointId(checkpointId);
 
-  const comment = normalizeOptionalText(options.comment);
   const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'updatedAt');
+  const explicitComments = Array.isArray(options.comments)
+    ? options.comments.map((comment) => normalizeCheckpointComment(comment))
+    : null;
+  const legacyComment = normalizeOptionalText(options.comment);
+  const comments = explicitComments ?? (legacyComment
+    ? [{
+        id: randomUUID(),
+        authorName: 'You',
+        body: legacyComment,
+        createdAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
+        updatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
+      } satisfies ConversationCommitCheckpointComment]
+    : []);
 
   const record: ConversationCommitCheckpointRecord = {
     id: checkpointId,
@@ -295,11 +364,9 @@ export function saveConversationCommitCheckpoint(options: {
     fileCount: normalizeNonNegativeInteger(options.files.length, 'fileCount'),
     linesAdded: normalizeNonNegativeInteger(options.linesAdded, 'linesAdded'),
     linesDeleted: normalizeNonNegativeInteger(options.linesDeleted, 'linesDeleted'),
-    ...(comment ? {
-      comment,
-      commentUpdatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
-    } : {}),
+    commentCount: normalizeNonNegativeInteger(comments.length, 'commentCount'),
     files: options.files.map((file) => normalizeCheckpointFile(file)),
+    comments,
   };
 
   const dir = resolveConversationCommitCheckpointsDir({
@@ -315,16 +382,19 @@ export function saveConversationCommitCheckpoint(options: {
   });
 
   mkdirSync(dir, { recursive: true });
-  writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
-  return record;
+  return writeCheckpoint(path, record);
 }
 
-export function updateConversationCommitCheckpointComment(options: {
+export function addConversationCommitCheckpointComment(options: {
   profile: string;
   conversationId: string;
   checkpointId: string;
-  comment?: string | null;
-  commentUpdatedAt?: string;
+  body: string;
+  authorName: string;
+  authorProfile?: string;
+  filePath?: string;
+  createdAt?: string;
+  updatedAt?: string;
   stateRoot?: string;
 }): ConversationCommitCheckpointRecord | null {
   const existing = getConversationCommitCheckpoint(options);
@@ -332,21 +402,23 @@ export function updateConversationCommitCheckpointComment(options: {
     return null;
   }
 
-  const comment = normalizeOptionalText(options.comment ?? undefined);
-  const updated = normalizeCheckpointRecord({
-    ...existing,
-    ...(comment
-      ? {
-          comment,
-          commentUpdatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? new Date().toISOString(), 'commentUpdatedAt'),
-        }
-      : {
-          comment: undefined,
-          commentUpdatedAt: undefined,
-        }),
-    updatedAt: normalizeIsoTimestamp(new Date().toISOString(), 'updatedAt'),
+  const now = normalizeIsoTimestamp(options.updatedAt ?? options.createdAt ?? new Date().toISOString(), 'updatedAt');
+  const nextComment = normalizeCheckpointComment({
+    id: randomUUID(),
+    authorName: options.authorName,
+    authorProfile: options.authorProfile,
+    body: options.body,
+    filePath: options.filePath,
+    createdAt: options.createdAt ?? now,
+    updatedAt: options.updatedAt ?? now,
   });
 
-  writeFileSync(resolveConversationCommitCheckpointPath(options), `${JSON.stringify(updated, null, 2)}\n`);
-  return updated;
+  const updated = normalizeCheckpointRecord({
+    ...existing,
+    updatedAt: now,
+    commentCount: existing.comments.length + 1,
+    comments: [...existing.comments, nextComment],
+  });
+
+  return writeCheckpoint(resolveConversationCommitCheckpointPath(options), updated);
 }

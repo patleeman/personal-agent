@@ -823,12 +823,12 @@ export const api = {
     const params = new URLSearchParams({ path: input.path, display: input.display });
     return get<ConversationCheckpointStructuralDiffResult>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/structural-diff?${params.toString()}`);
   },
-  updateConversationCheckpoint: async (
+  createConversationCheckpointComment: async (
     id: string,
     checkpointId: string,
-    input: { comment?: string | null },
+    input: { body: string; filePath?: string },
   ) => {
-    return patch<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}`, input);
+    return post<{ conversationId: string; checkpoint: ConversationCommitCheckpointRecord }>(`/conversations/${encodeURIComponent(id)}/checkpoints/${encodeURIComponent(checkpointId)}/comments`, input);
   },
   conversationContextDocs: async (id: string) => {
     return get<{ conversationId: string; attachedContextDocs: ConversationContextDocRef[] }>(`/conversations/${encodeURIComponent(id)}/context-docs`);

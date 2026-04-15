@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { getConversationCommitCheckpoint, type ConversationCommitCheckpointFile, type ConversationCommitCheckpointRecord } from '@personal-agent/core';
 
@@ -42,7 +42,7 @@ export interface ConversationCheckpointStructuralDiffResult {
   content?: string;
 }
 
-let cachedDifftasticCommand: string | null | undefined;
+const difftasticCommandCache = new Map<string, string | null>();
 
 function runGit(cwd: string, args: string[], options?: { encoding?: BufferEncoding | 'buffer'; timeout?: number }): string | Buffer | null {
   const result = spawnSync('git', args, {
@@ -81,24 +81,100 @@ export function parseGitHubRemoteUrl(value: string): GitHubRepoRef | null {
   return null;
 }
 
-export function detectDifftasticCommand(): string | null {
-  if (cachedDifftasticCommand !== undefined) {
-    return cachedDifftasticCommand;
+export function resolveDifftasticPlatformKey(
+  platform: NodeJS.Platform | string = process.platform,
+  arch: string = process.arch,
+): string | null {
+  if (platform === 'darwin' && arch === 'arm64') {
+    return 'darwin-arm64';
+  }
+  if (platform === 'darwin' && arch === 'x64') {
+    return 'darwin-x64';
+  }
+  if (platform === 'linux' && arch === 'x64') {
+    return 'linux-x64';
+  }
+  if (platform === 'linux' && arch === 'arm64') {
+    return 'linux-arm64';
+  }
+  if (platform === 'win32' && arch === 'x64') {
+    return 'win32-x64';
+  }
+  if (platform === 'win32' && arch === 'arm64') {
+    return 'win32-arm64';
+  }
+
+  return null;
+}
+
+function isUsableCommand(command: string): boolean {
+  const result = spawnSync(command, ['--version'], {
+    encoding: 'utf-8',
+    timeout: 2_000,
+  });
+  return !result.error && result.status === 0;
+}
+
+export function resolveBundledDifftasticCommand(options: {
+  repoRoot?: string;
+  platform?: string;
+  arch?: string;
+} = {}): string | null {
+  const platformKey = resolveDifftasticPlatformKey(options.platform, options.arch);
+  const executableName = options.platform === 'win32' || (options.platform === undefined && process.platform === 'win32')
+    ? 'difft.exe'
+    : 'difft';
+  const override = process.env.PERSONAL_AGENT_DIFFTASTIC_PATH?.trim();
+  const repoRoot = options.repoRoot?.trim();
+  const candidates = [
+    override,
+    repoRoot && platformKey ? resolve(repoRoot, 'vendor', 'difftastic', platformKey, executableName) : null,
+    repoRoot && platformKey ? resolve(repoRoot, 'packages', 'desktop', 'vendor', 'difftastic', platformKey, executableName) : null,
+    platformKey ? resolve(process.cwd(), 'packages', 'desktop', 'vendor', 'difftastic', platformKey, executableName) : null,
+  ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate) && isUsableCommand(candidate)) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+export function detectDifftasticCommand(options: {
+  repoRoot?: string;
+  platform?: string;
+  arch?: string;
+} = {}): string | null {
+  const cacheKey = [options.repoRoot ?? '', options.platform ?? process.platform, options.arch ?? process.arch].join(':');
+  if (difftasticCommandCache.has(cacheKey)) {
+    return difftasticCommandCache.get(cacheKey) ?? null;
+  }
+
+  const bundled = resolveBundledDifftasticCommand(options);
+  if (bundled) {
+    difftasticCommandCache.set(cacheKey, bundled);
+    return bundled;
   }
 
   for (const command of ['difft', 'difftastic']) {
-    const result = spawnSync(command, ['--version'], {
-      encoding: 'utf-8',
-      timeout: 2_000,
-    });
-    if (!result.error && result.status === 0) {
-      cachedDifftasticCommand = command;
+    if (isUsableCommand(command)) {
+      difftasticCommandCache.set(cacheKey, command);
       return command;
     }
   }
 
-  cachedDifftasticCommand = null;
+  difftasticCommandCache.set(cacheKey, null);
   return null;
+}
+
+function renderDifftasticCommandLabel(command: string): string {
+  if (!command.includes('/')) {
+    return command;
+  }
+
+  return `${basename(command)} (bundled)`;
 }
 
 function sanitizeRelativePath(value: string): string {
@@ -220,13 +296,14 @@ export async function readConversationCheckpointReviewContext(options: {
   profile: string;
   conversationId: string;
   checkpointId: string;
+  repoRoot?: string;
 }): Promise<ConversationCheckpointReviewContextResult | null> {
   const checkpoint = getConversationCommitCheckpoint(options);
   if (!checkpoint) {
     return null;
   }
 
-  const difftasticCommand = detectDifftasticCommand();
+  const difftasticCommand = detectDifftasticCommand({ repoRoot: options.repoRoot });
 
   return {
     conversationId: options.conversationId,
@@ -234,7 +311,7 @@ export async function readConversationCheckpointReviewContext(options: {
     github: await readGitHubInfoForCheckpoint(checkpoint),
     structuralDiff: {
       available: difftasticCommand !== null,
-      ...(difftasticCommand ? { command: difftasticCommand } : {}),
+      ...(difftasticCommand ? { command: renderDifftasticCommandLabel(difftasticCommand) } : {}),
     },
   };
 }
@@ -245,13 +322,14 @@ export function readConversationCheckpointStructuralDiff(options: {
   checkpointId: string;
   filePath: string;
   display: 'inline' | 'side-by-side';
+  repoRoot?: string;
 }): ConversationCheckpointStructuralDiffResult | null {
   const checkpoint = getConversationCommitCheckpoint(options);
   if (!checkpoint) {
     return null;
   }
 
-  const difftasticCommand = detectDifftasticCommand();
+  const difftasticCommand = detectDifftasticCommand({ repoRoot: options.repoRoot });
   if (!difftasticCommand) {
     return {
       conversationId: options.conversationId,
