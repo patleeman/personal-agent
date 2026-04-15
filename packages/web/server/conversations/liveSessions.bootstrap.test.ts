@@ -12,9 +12,11 @@ const {
   hasAssistantTitleSourceMessageMock,
   logWarnMock,
   publishAppEventMock,
+  readConversationModelPreferenceSnapshotMock,
   readSessionBlocksByFileMock,
   readSessionMetaByFileMock,
   resolveChildProcessEnvMock,
+  resolveConversationModelPreferenceStateMock,
   sessionManagerCreateMock,
   sessionManagerForkFromMock,
   sessionManagerInMemoryMock,
@@ -40,9 +42,11 @@ const {
     hasAssistantTitleSourceMessageMock: vi.fn(),
     logWarnMock: vi.fn(),
     publishAppEventMock: vi.fn(),
+    readConversationModelPreferenceSnapshotMock: vi.fn(),
     readSessionBlocksByFileMock: vi.fn(),
     readSessionMetaByFileMock: vi.fn(),
     resolveChildProcessEnvMock: vi.fn(),
+    resolveConversationModelPreferenceStateMock: vi.fn(),
     sessionManagerCreateMock: vi.fn(),
     sessionManagerForkFromMock: vi.fn(),
     sessionManagerInMemoryMock: vi.fn(),
@@ -87,6 +91,8 @@ vi.mock('./conversationAutoTitle.js', () => ({
 
 vi.mock('./conversationModelPreferences.js', () => ({
   applyConversationModelPreferencesToLiveSession: applyConversationModelPreferencesMock,
+  readConversationModelPreferenceSnapshot: readConversationModelPreferenceSnapshotMock,
+  resolveConversationModelPreferenceState: resolveConversationModelPreferenceStateMock,
 }));
 
 vi.mock('./conversationRuns.js', () => ({
@@ -259,9 +265,11 @@ describe('liveSessions bootstrap helpers', () => {
     hasAssistantTitleSourceMessageMock.mockReset();
     logWarnMock.mockReset();
     publishAppEventMock.mockReset();
+    readConversationModelPreferenceSnapshotMock.mockReset();
     readSessionBlocksByFileMock.mockReset();
     readSessionMetaByFileMock.mockReset();
     resolveChildProcessEnvMock.mockReset();
+    resolveConversationModelPreferenceStateMock.mockReset();
     registry.clear();
     clearPrewarmedLiveSessionLoaders();
     sessionManagerCreateMock.mockReset();
@@ -279,12 +287,25 @@ describe('liveSessions bootstrap helpers', () => {
     defaultResourceLoaderReloadMock.mockResolvedValue(undefined);
     generateConversationTitleMock.mockResolvedValue('');
     hasAssistantTitleSourceMessageMock.mockReturnValue(false);
+    readConversationModelPreferenceSnapshotMock.mockReturnValue({
+      currentModel: '',
+      currentThinkingLevel: '',
+      currentServiceTier: '',
+      hasExplicitModel: false,
+      hasExplicitThinkingLevel: false,
+      hasExplicitServiceTier: false,
+    });
     readSessionBlocksByFileMock.mockReturnValue(null);
     readSessionMetaByFileMock.mockReturnValue(null);
     resolveChildProcessEnvMock.mockImplementation((overrides: Record<string, string>, baseEnv: Record<string, string>) => ({
       ...baseEnv,
       ...overrides,
       PATH: '/interactive/bin:/usr/bin',
+    }));
+    resolveConversationModelPreferenceStateMock.mockImplementation((_snapshot, defaults) => ({
+      currentModel: defaults?.currentModel ?? '',
+      currentThinkingLevel: defaults?.currentThinkingLevel ?? '',
+      currentServiceTier: defaults?.currentServiceTier ?? '',
     }));
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
   });
@@ -300,8 +321,8 @@ describe('liveSessions bootstrap helpers', () => {
 
     expect(getAvailableModelObjects()).toEqual(availableModels);
     expect(getAvailableModels()).toEqual([
-      { id: 'gpt-5', name: 'GPT-5', context: 256_000, provider: 'openai' },
-      { id: 'local-model', name: 'local-model', context: 128_000, provider: '' },
+      { id: 'gpt-5', name: 'GPT-5', context: 256_000, contextWindow: 256_000, provider: 'openai', api: undefined },
+      { id: 'local-model', name: 'local-model', context: 128_000, contextWindow: 128_000, provider: '', api: undefined },
     ]);
   });
 
@@ -459,7 +480,7 @@ describe('liveSessions bootstrap helpers', () => {
     expect(applyConversationModelPreferencesMock).toHaveBeenCalledWith(
       createdSession.session,
       { model: 'gpt-5', thinkingLevel: 'high' },
-      { currentModel: 'gpt-5', currentThinkingLevel: 'medium' },
+      { currentModel: 'gpt-5', currentThinkingLevel: 'medium', currentServiceTier: '' },
       [{ id: 'gpt-5', name: 'GPT-5', provider: 'openai' }],
     );
     expect(registry.get('session-created')?.cwd).toBe('/tmp/workspace');
@@ -722,8 +743,8 @@ describe('liveSessions bootstrap helpers', () => {
     );
     expect(applyConversationModelPreferencesMock).toHaveBeenCalledWith(
       createdSession.session,
-      { model: 'gpt-5', thinkingLevel: 'high' },
-      { currentModel: 'gpt-5', currentThinkingLevel: 'high' },
+      { model: 'gpt-5', thinkingLevel: 'high', serviceTier: null },
+      { currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' },
       [],
     );
   });

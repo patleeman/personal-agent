@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
+const SERVICE_TIERS = new Set(['auto', 'default', 'flex', 'priority', 'scale']);
+
 export interface SavedModelPreferences {
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
   currentPresetId: string;
 }
 
@@ -14,6 +17,11 @@ export interface ModelPreferenceOption {
 
 function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
+}
+
+function readServiceTier(value: unknown): string {
+  const normalized = readNonEmptyString(value).toLowerCase();
+  return SERVICE_TIERS.has(normalized) ? normalized : '';
 }
 
 function readSettingsObject(settingsFile: string): Record<string, unknown> {
@@ -33,7 +41,7 @@ function readSettingsObject(settingsFile: string): Record<string, unknown> {
   }
 }
 
-function resolveModelPreference(model: string, models: ModelPreferenceOption[]): { model: string; provider: string } {
+function resolveModelPreference(model: string, models: readonly ModelPreferenceOption[]): { model: string; provider: string } {
   const normalizedModel = readNonEmptyString(model);
   if (!normalizedModel) {
     return { model: '', provider: '' };
@@ -61,7 +69,7 @@ function resolveModelPreference(model: string, models: ModelPreferenceOption[]):
   };
 }
 
-function normalizeSettingsDefaultModelProvider(settings: Record<string, unknown>, models: ModelPreferenceOption[]): boolean {
+function normalizeSettingsDefaultModelProvider(settings: Record<string, unknown>, models: readonly ModelPreferenceOption[]): boolean {
   const defaultModel = readNonEmptyString(settings.defaultModel);
   if (!defaultModel || models.length === 0) {
     return false;
@@ -100,7 +108,7 @@ function normalizeSettingsDefaultModelProvider(settings: Record<string, unknown>
   return true;
 }
 
-export function normalizeSavedModelPreferences(settingsFile: string, models: ModelPreferenceOption[] = []): SavedModelPreferences {
+export function normalizeSavedModelPreferences(settingsFile: string, models: readonly ModelPreferenceOption[] = []): SavedModelPreferences {
   const settings = readSettingsObject(settingsFile);
   const changed = normalizeSettingsDefaultModelProvider(settings, models);
   if (changed) {
@@ -111,15 +119,17 @@ export function normalizeSavedModelPreferences(settingsFile: string, models: Mod
   return readSavedModelPreferences(settingsFile, models);
 }
 
-export function readSavedModelPreferences(settingsFile: string, models: ModelPreferenceOption[] = []): SavedModelPreferences {
+export function readSavedModelPreferences(settingsFile: string, models: readonly ModelPreferenceOption[] = []): SavedModelPreferences {
   const parsed = readSettingsObject(settingsFile);
   const defaultModel = readNonEmptyString(parsed.defaultModel);
   const defaultThinkingLevel = readNonEmptyString(parsed.defaultThinkingLevel);
+  const defaultServiceTier = readServiceTier(parsed.defaultServiceTier);
 
   const resolved = resolveModelPreference(defaultModel, models);
   return {
     currentModel: resolved.model,
     currentThinkingLevel: defaultThinkingLevel,
+    currentServiceTier: defaultServiceTier,
     currentPresetId: '',
   };
 }
@@ -128,9 +138,10 @@ export function writeSavedModelPreferences(
   input: {
     model?: string | null;
     thinkingLevel?: string | null;
+    serviceTier?: string | null;
   },
   settingsFile: string,
-  models: ModelPreferenceOption[] = [],
+  models: readonly ModelPreferenceOption[] = [],
 ): SavedModelPreferences {
   const settings = readSettingsObject(settingsFile);
 
@@ -160,6 +171,15 @@ export function writeSavedModelPreferences(
       settings.defaultThinkingLevel = normalizedThinkingLevel;
     } else {
       delete settings.defaultThinkingLevel;
+    }
+  }
+
+  if (input.serviceTier !== undefined) {
+    const normalizedServiceTier = readServiceTier(input.serviceTier ?? '');
+    if (normalizedServiceTier) {
+      settings.defaultServiceTier = normalizedServiceTier;
+    } else {
+      delete settings.defaultServiceTier;
     }
   }
 

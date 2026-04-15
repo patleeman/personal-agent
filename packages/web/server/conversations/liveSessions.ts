@@ -21,12 +21,17 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
+import { stream, streamSimple, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
   applyConversationModelPreferencesToLiveSession,
+  modelSupportsServiceTiers,
+  readConversationModelPreferenceSnapshot,
+  resolveConversationModelPreferenceState,
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
+import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import {
   generateConversationTitle,
@@ -60,6 +65,52 @@ const SESSIONS_DIR = getDurableSessionsDir();
 export function resolvePersistentSessionDir(cwd: string): string {
   const safePath = `--${cwd.replace(/^[/\\]/, '').replace(/[/\\:]/g, '-')}--`;
   return join(SESSIONS_DIR, safePath);
+}
+
+function resolveConversationPreferenceStateForSession(
+  sessionManager: Pick<SessionManager, 'buildSessionContext' | 'getBranch'>,
+  availableModels: Model<any>[],
+): ConversationModelPreferenceState {
+  return resolveConversationModelPreferenceState(
+    readConversationModelPreferenceSnapshot(sessionManager),
+    readSavedModelPreferences(SETTINGS_FILE, availableModels),
+    availableModels,
+  );
+}
+
+function buildServiceTierAwareStreamFn(
+  modelRegistry: ModelRegistry,
+  serviceTier: string,
+) {
+  return async (model: Model<any>, context: Context, options?: SimpleStreamOptions) => {
+    const auth = await modelRegistry.getApiKeyAndHeaders(model);
+    if (!auth.ok) {
+      throw new Error(auth.error);
+    }
+
+    const mergedOptions: ProviderStreamOptions = {
+      ...options,
+      apiKey: auth.apiKey,
+      headers: auth.headers || options?.headers ? { ...auth.headers, ...options?.headers } : undefined,
+    };
+
+    if (!serviceTier || !modelSupportsServiceTiers(model)) {
+      return streamSimple(model, context, mergedOptions);
+    }
+
+    return stream(model, context, {
+      ...mergedOptions,
+      reasoningEffort: options?.reasoning,
+      serviceTier,
+    });
+  };
+}
+
+function applyLiveSessionServiceTier(
+  session: AgentSession,
+  serviceTier: string,
+): void {
+  session.agent.streamFn = buildServiceTierAwareStreamFn(session.modelRegistry, serviceTier);
 }
 
 // ── SSE event types sent to clients ──────────────────────────────────────────
@@ -1790,12 +1841,17 @@ export function getAvailableModelObjects() {
 }
 
 export function getAvailableModels() {
-  return getAvailableModelObjects().map((model) => ({
-    id: model.id,
-    name: model.name ?? model.id,
-    context: model.contextWindow ?? 128_000,
-    provider: (model as { provider?: string }).provider ?? '',
-  }));
+  return getAvailableModelObjects().map((model) => {
+    const contextWindow = model.contextWindow ?? 128_000;
+    return {
+      id: model.id,
+      name: model.name ?? model.id,
+      context: contextWindow,
+      contextWindow,
+      provider: (model as { provider?: string }).provider ?? '',
+      api: (model as { api?: string }).api,
+    };
+  });
 }
 
 const NEW_SESSION_PROMPT_PROBE = 'hello';
@@ -1929,6 +1985,7 @@ export interface LiveSessionLoaderOptions {
   additionalThemePaths?: string[];
   initialModel?: string | null;
   initialThinkingLevel?: string | null;
+  initialServiceTier?: string | null;
 }
 
 interface PrewarmedLiveSessionLoaderEntry {
@@ -2113,20 +2170,27 @@ export async function createSession(
   const availableModels = modelRegistry.getAvailable();
   await repairSessionModelProvider(session, availableModels);
 
-  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined) {
+  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined || options.initialServiceTier !== undefined) {
     await applyConversationModelPreferencesToLiveSession(
       session,
       {
         ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
         ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
+        ...(options.initialServiceTier !== undefined ? { serviceTier: options.initialServiceTier } : {}),
       },
       {
         currentModel: session.model?.id ?? '',
         currentThinkingLevel: session.thinkingLevel ?? '',
+        currentServiceTier: readSavedModelPreferences(SETTINGS_FILE, availableModels).currentServiceTier,
       },
       availableModels,
     );
   }
+
+  applyLiveSessionServiceTier(
+    session,
+    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
+  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -2156,7 +2220,12 @@ export async function createSessionFromExisting(
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
-  await repairSessionModelProvider(session, modelRegistry.getAvailable());
+  const availableModels = modelRegistry.getAvailable();
+  await repairSessionModelProvider(session, availableModels);
+  applyLiveSessionServiceTier(
+    session,
+    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
+  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -2364,7 +2433,12 @@ export async function resumeSession(
 
   patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
   patchSessionManagerPersistence(session.sessionManager);
-  await repairSessionModelProvider(session, modelRegistry.getAvailable());
+  const availableModels = modelRegistry.getAvailable();
+  await repairSessionModelProvider(session, availableModels);
+  applyLiveSessionServiceTier(
+    session,
+    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
+  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd, {
@@ -3074,10 +3148,12 @@ export async function updateLiveSessionModelPreferences(
     {
       currentModel: entry.session.model?.id ?? '',
       currentThinkingLevel: entry.session.thinkingLevel ?? '',
+      currentServiceTier: readSavedModelPreferences(SETTINGS_FILE, models).currentServiceTier,
     },
     models,
   );
 
+  applyLiveSessionServiceTier(entry.session, next.currentServiceTier);
   publishSessionMetaChanged(sessionId);
   return next;
 }
@@ -3156,6 +3232,9 @@ export async function forkSession(
       initialThinkingLevel: loaderOptions.initialThinkingLevel === undefined
         ? entry.session.thinkingLevel ?? null
         : loaderOptions.initialThinkingLevel,
+      initialServiceTier: loaderOptions.initialServiceTier === undefined
+        ? resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()).currentServiceTier || null
+        : loaderOptions.initialServiceTier,
     });
 
     if (!preserveSource) {

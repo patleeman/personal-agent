@@ -352,7 +352,8 @@ describe('model routes', () => {
     expect(desktopRes.json).toHaveBeenCalledWith({
       currentModel: 'model-a',
       currentThinkingLevel: 'high',
-      models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A' }],
+      currentServiceTier: undefined,
+      models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     });
 
     getAvailableModelsMock.mockImplementation(() => {
@@ -378,14 +379,14 @@ describe('model routes', () => {
     const invalidModelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: {} }), invalidModelRes);
     expect(invalidModelRes.status).toHaveBeenCalledWith(400);
-    expect(invalidModelRes.json).toHaveBeenCalledWith({ error: 'model or thinkingLevel required' });
+    expect(invalidModelRes.json).toHaveBeenCalledWith({ error: 'model, thinkingLevel, or serviceTier required' });
 
     const modelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: { model: 'model-b', thinkingLevel: 'medium' } }), modelRes);
     expect(writeSavedModelPreferencesMock).toHaveBeenCalledWith(
       { model: 'model-b', thinkingLevel: 'medium' },
       expect.any(String),
-      [{ id: 'model-a', provider: 'provider-a', name: 'Model A' }],
+      [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     );
     expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
     expect(modelRes.json).toHaveBeenCalledWith({ ok: true });
