@@ -508,9 +508,9 @@ function RunContextPanel({
       )}
 
       <div className="min-h-0 flex-1 px-4 py-3">
-        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border-subtle/80 bg-[rgb(11,14,19)]">
-          <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-dim">
-            <span className={cx('h-2 w-2 shrink-0 rounded-full', runStreaming ? 'animate-pulse bg-accent' : 'bg-white/20')} />
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border-subtle/80 bg-elevated">
+          <div className="flex items-center gap-2 border-b border-border-subtle/70 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-dim">
+            <span className={cx('h-2 w-2 shrink-0 rounded-full', runStreaming ? 'animate-pulse bg-accent' : 'bg-border-default')} />
             <span>{outputLabel}</span>
             <span className="min-w-0 truncate font-mono normal-case tracking-normal text-dim/80">{outputPathLabel}</span>
             <span className="flex-1" />
@@ -537,7 +537,7 @@ function RunContextPanel({
             className="min-h-0 flex-1 overflow-auto px-3 py-3"
           >
             {hasOutput ? (
-              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-secondary">{log?.log}</pre>
+              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-primary">{log?.log}</pre>
             ) : (
               <p className="text-[11px] italic leading-relaxed text-dim">{emptyOutputLabel}</p>
             )}

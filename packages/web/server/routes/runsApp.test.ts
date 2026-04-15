@@ -3,23 +3,29 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   cancelDurableRunMock,
+  getDurableRunLogCursorMock,
   getDurableRunLogMock,
   getDurableRunMock,
   listDurableRunsMock,
   logErrorMock,
+  readDurableRunLogDeltaMock,
 } = vi.hoisted(() => ({
   cancelDurableRunMock: vi.fn(),
+  getDurableRunLogCursorMock: vi.fn(),
   getDurableRunLogMock: vi.fn(),
   getDurableRunMock: vi.fn(),
   listDurableRunsMock: vi.fn(),
   logErrorMock: vi.fn(),
+  readDurableRunLogDeltaMock: vi.fn(),
 }));
 
 vi.mock('../automation/durableRuns.js', () => ({
   cancelDurableRun: cancelDurableRunMock,
   getDurableRun: getDurableRunMock,
   getDurableRunLog: getDurableRunLogMock,
+  getDurableRunLogCursor: getDurableRunLogCursorMock,
   listDurableRuns: listDurableRunsMock,
+  readDurableRunLogDelta: readDurableRunLogDeltaMock,
 }));
 
 vi.mock('../middleware/index.js', () => ({
@@ -36,21 +42,25 @@ describe('registerRunAppRoutes', () => {
 
   beforeEach(() => {
     cancelDurableRunMock.mockReset();
+    getDurableRunLogCursorMock.mockReset();
+    getDurableRunLogCursorMock.mockReturnValue(0);
     getDurableRunLogMock.mockReset();
     getDurableRunMock.mockReset();
     listDurableRunsMock.mockReset();
     logErrorMock.mockReset();
+    readDurableRunLogDeltaMock.mockReset();
+    readDurableRunLogDeltaMock.mockReturnValue(undefined);
   });
 
   function createHarness(options?: {
     getDurableRunSnapshot?: (runId: string, tail: number) => Promise<unknown | null>;
   }) {
-    const handlers: Record<string, (req: any, res: any) => Promise<void> | void> = {};
+    const handlers: Record<string, (req: unknown, res: unknown) => Promise<void> | void> = {};
     const router = {
-      get: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      get: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`GET ${path}`] = next;
       }),
-      post: vi.fn((path: string, next: (req: any, res: any) => Promise<void> | void) => {
+      post: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`POST ${path}`] = next;
       }),
       patch: vi.fn(),
@@ -139,8 +149,14 @@ describe('registerRunAppRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'Error: detail failed' });
   });
 
-  it('streams run snapshots, clamps large tails, writes heartbeats, and stops after close', async () => {
+  it('streams run snapshots, log deltas, heartbeats, and stops after close', async () => {
     vi.useFakeTimers();
+    readDurableRunLogDeltaMock.mockReturnValueOnce({
+      path: '/tmp/run.log',
+      delta: '\nstream chunk',
+      nextCursor: 12,
+      reset: false,
+    });
     const getDurableRunSnapshot = vi.fn()
       .mockResolvedValueOnce({
         detail: { run: { runId: 'run-1', status: 'running' } },
@@ -160,6 +176,7 @@ describe('registerRunAppRoutes', () => {
     await eventsHandler(req, res);
 
     expect(getDurableRunSnapshot).toHaveBeenCalledWith('run-1', 1000);
+    expect(getDurableRunLogCursorMock).toHaveBeenCalledWith('/tmp/run.log');
     expect(res.setHeader).toHaveBeenCalledWith('Content-Type', 'text/event-stream');
     expect(res.flushHeaders).toHaveBeenCalledTimes(1);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
@@ -168,14 +185,22 @@ describe('registerRunAppRoutes', () => {
       log: { path: '/tmp/run.log', log: 'initial' },
     })}\n\n`);
 
-    await vi.advanceTimersByTimeAsync(15_000);
-
-    expect(res.write).toHaveBeenCalledWith(': heartbeat\n\n');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(readDurableRunLogDeltaMock).toHaveBeenCalledWith('/tmp/run.log', 0);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
-      type: 'snapshot',
-      detail: { run: { runId: 'run-1', status: 'running' } },
-      log: { path: '/tmp/run.log', log: 'next' },
+      type: 'log_delta',
+      path: '/tmp/run.log',
+      delta: '\nstream chunk',
     })}\n\n`);
+
+    await vi.advanceTimersByTimeAsync(750);
+    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
+      type: 'detail',
+      detail: { run: { runId: 'run-1', status: 'running' } },
+    })}\n\n`);
+
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(res.write).toHaveBeenCalledWith(': heartbeat\n\n');
 
     const writesBeforeClose = res.write.mock.calls.length;
     req.emit('close');
@@ -223,7 +248,7 @@ describe('registerRunAppRoutes', () => {
     const res = createStreamResponse();
 
     await eventsHandler(req, res);
-    await vi.advanceTimersByTimeAsync(5_000);
+    await vi.advanceTimersByTimeAsync(1_000);
 
     expect(getDurableRunSnapshot).toHaveBeenLastCalledWith('run-1', 120);
     expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({ type: 'deleted', runId: 'run-1' })}\n\n`);

@@ -971,6 +971,8 @@ export type SseEvent =
 
 export type DurableRunSseEvent =
   | { type: 'snapshot'; detail: DurableRunDetailResult; log: { path: string; log: string } }
+  | { type: 'detail'; detail: DurableRunDetailResult }
+  | { type: 'log_delta'; path: string; delta: string }
   | { type: 'deleted'; runId: string }
   | { type: 'error'; message: string };
 

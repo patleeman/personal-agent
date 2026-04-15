@@ -93,6 +93,32 @@ export function useDurableRunStream(runId: string | null, tail = 120) {
           return;
         }
 
+        if (payload.type === 'detail') {
+          setState((current) => ({
+            ...current,
+            detail: payload.detail,
+            loading: false,
+            error: null,
+          }));
+          return;
+        }
+
+        if (payload.type === 'log_delta') {
+          if (!payload.delta) {
+            return;
+          }
+
+          setState((current) => ({
+            ...current,
+            log: current.log?.path === payload.path
+              ? { path: current.log.path, log: `${current.log.log}${payload.delta}` }
+              : { path: payload.path, log: payload.delta },
+            loading: false,
+            error: null,
+          }));
+          return;
+        }
+
         if (payload.type === 'deleted') {
           setState({ detail: null, log: null, loading: false, error: `Run no longer exists: ${payload.runId}` });
           stream?.close();

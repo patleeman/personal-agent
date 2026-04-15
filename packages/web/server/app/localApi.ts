@@ -17,7 +17,7 @@ import {
 } from '@personal-agent/core';
 import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
-import { getDurableRunSnapshot } from '../automation/durableRuns.js';
+import { getDurableRunSnapshot, getDurableRunLogCursor, readDurableRunLogDelta } from '../automation/durableRuns.js';
 import {
   createScheduledTaskCapability,
   listScheduledTasksCapability,
@@ -1140,8 +1140,10 @@ async function subscribeDesktopLiveSessionStream(
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
 const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
+const ACTIVE_RUN_LOG_POLL_INTERVAL_MS = 250;
+const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 
-function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+function isRunStreamActive(snapshot: { detail: { run: { status?: { status?: string } | string } } }): boolean {
   const runStatus = typeof snapshot.detail.run.status === 'string'
     ? snapshot.detail.run.status
     : snapshot.detail.run.status?.status;
@@ -1149,9 +1151,15 @@ function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status
   return runStatus === 'queued'
     || runStatus === 'waiting'
     || runStatus === 'running'
-    || runStatus === 'recovering'
-    ? ACTIVE_RUN_POLL_INTERVAL_MS
-    : IDLE_RUN_POLL_INTERVAL_MS;
+    || runStatus === 'recovering';
+}
+
+function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+  return isRunStreamActive(snapshot) ? ACTIVE_RUN_POLL_INTERVAL_MS : IDLE_RUN_POLL_INTERVAL_MS;
+}
+
+function getRunLogPollInterval(active: boolean): number {
+  return active ? ACTIVE_RUN_LOG_POLL_INTERVAL_MS : IDLE_RUN_LOG_POLL_INTERVAL_MS;
 }
 
 async function subscribeDesktopRunStream(
@@ -1173,31 +1181,49 @@ async function subscribeDesktopRunStream(
   }
 
   let closed = false;
-  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let logPollTimer: ReturnType<typeof setTimeout> | null = null;
+  let logPath = initial.log.path;
+  let logCursor = getDurableRunLogCursor(logPath);
+  let runActive = isRunStreamActive(initial);
   const close = () => {
     if (closed) {
       return;
     }
 
     closed = true;
-    if (pollTimer) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
+    if (detailPollTimer) {
+      clearTimeout(detailPollTimer);
+      detailPollTimer = null;
+    }
+    if (logPollTimer) {
+      clearTimeout(logPollTimer);
+      logPollTimer = null;
     }
     onEvent({ type: 'close' });
   };
 
-  const schedulePoll = (delayMs: number) => {
+  const scheduleDetailPoll = (delayMs: number) => {
     if (closed) {
       return;
     }
 
-    pollTimer = setTimeout(() => {
-      void pollOnce();
+    detailPollTimer = setTimeout(() => {
+      void pollDetailOnce();
     }, delayMs);
   };
 
-  const pollOnce = async () => {
+  const scheduleLogPoll = (delayMs: number) => {
+    if (closed) {
+      return;
+    }
+
+    logPollTimer = setTimeout(() => {
+      void pollLogOnce();
+    }, delayMs);
+  };
+
+  const pollDetailOnce = async () => {
     if (closed) {
       return;
     }
@@ -1214,14 +1240,66 @@ async function subscribeDesktopRunStream(
         return;
       }
 
-      emitStreamMessage(onEvent, {
-        type: 'snapshot',
-        detail: next.detail,
-        log: next.log,
-      });
-      schedulePoll(getRunStreamPollInterval(next));
+      runActive = isRunStreamActive(next);
+      if (next.log.path !== logPath) {
+        logPath = next.log.path;
+        logCursor = getDurableRunLogCursor(logPath);
+        emitStreamMessage(onEvent, {
+          type: 'snapshot',
+          detail: next.detail,
+          log: next.log,
+        });
+      } else {
+        emitStreamMessage(onEvent, {
+          type: 'detail',
+          detail: next.detail,
+        });
+      }
+      scheduleDetailPoll(getRunStreamPollInterval(next));
     } catch {
-      schedulePoll(ACTIVE_RUN_POLL_INTERVAL_MS);
+      scheduleDetailPoll(ACTIVE_RUN_POLL_INTERVAL_MS);
+    }
+  };
+
+  const pollLogOnce = async () => {
+    if (closed) {
+      return;
+    }
+
+    try {
+      const delta = readDurableRunLogDelta(logPath, logCursor);
+      if (closed) {
+        return;
+      }
+
+      if (delta?.reset) {
+        const next = await getDurableRunSnapshot(runId, tail);
+        if (closed) {
+          return;
+        }
+
+        if (!next) {
+          emitStreamMessage(onEvent, { type: 'deleted', runId });
+          close();
+          return;
+        }
+
+        runActive = isRunStreamActive(next);
+        logPath = next.log.path;
+        logCursor = getDurableRunLogCursor(logPath);
+        emitStreamMessage(onEvent, {
+          type: 'snapshot',
+          detail: next.detail,
+          log: next.log,
+        });
+      } else if (delta) {
+        logCursor = delta.nextCursor;
+        if (delta.delta.length > 0) {
+          emitStreamMessage(onEvent, { type: 'log_delta', path: delta.path, delta: delta.delta });
+        }
+      }
+    } finally {
+      scheduleLogPoll(getRunLogPollInterval(runActive));
     }
   };
 
@@ -1231,7 +1309,8 @@ async function subscribeDesktopRunStream(
     detail: initial.detail,
     log: initial.log,
   });
-  schedulePoll(getRunStreamPollInterval(initial));
+  scheduleDetailPoll(getRunStreamPollInterval(initial));
+  scheduleLogPoll(getRunLogPollInterval(runActive));
 
   return close;
 }

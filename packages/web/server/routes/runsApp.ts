@@ -11,11 +11,15 @@ import {
   getDurableRunLog,
   listDurableRuns,
   cancelDurableRun,
+  getDurableRunLogCursor,
+  readDurableRunLogDelta,
 } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
 const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
+const ACTIVE_RUN_LOG_POLL_INTERVAL_MS = 250;
+const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 
 function parseRunLogTail(raw: unknown): number {
   const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : undefined;
@@ -24,7 +28,7 @@ function parseRunLogTail(raw: unknown): number {
     : 120;
 }
 
-function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+function isRunStreamActive(snapshot: { detail: { run: { status?: { status?: string } | string } } }): boolean {
   const runStatus = typeof snapshot.detail.run.status === 'string'
     ? snapshot.detail.run.status
     : snapshot.detail.run.status?.status;
@@ -32,9 +36,15 @@ function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status
   return runStatus === 'queued'
     || runStatus === 'waiting'
     || runStatus === 'running'
-    || runStatus === 'recovering'
-    ? ACTIVE_RUN_POLL_INTERVAL_MS
-    : IDLE_RUN_POLL_INTERVAL_MS;
+    || runStatus === 'recovering';
+}
+
+function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+  return isRunStreamActive(snapshot) ? ACTIVE_RUN_POLL_INTERVAL_MS : IDLE_RUN_POLL_INTERVAL_MS;
+}
+
+function getRunLogPollInterval(active: boolean): number {
+  return active ? ACTIVE_RUN_LOG_POLL_INTERVAL_MS : IDLE_RUN_LOG_POLL_INTERVAL_MS;
 }
 
 let getDurableRunSnapshotFn: (runId: string, tail: number) => Promise<unknown | null> = async () => {
@@ -96,7 +106,11 @@ export function registerRunAppRoutes(
       };
 
       let closed = false;
-      let pollTimer: ReturnType<typeof setTimeout> | null = null;
+      let detailPollTimer: ReturnType<typeof setTimeout> | null = null;
+      let logPollTimer: ReturnType<typeof setTimeout> | null = null;
+      let logPath = (initial as { log: { path: string } }).log.path;
+      let logCursor = getDurableRunLogCursor(logPath);
+      let runActive = isRunStreamActive(initial as { detail: { run: { status?: { status?: string } | string } } });
       const heartbeat = setInterval(() => {
         if (!closed) res.write(': heartbeat\n\n');
       }, 15_000);
@@ -104,23 +118,37 @@ export function registerRunAppRoutes(
       const stopStream = () => {
         closed = true;
         clearInterval(heartbeat);
-        if (pollTimer) {
-          clearTimeout(pollTimer);
-          pollTimer = null;
+        if (detailPollTimer) {
+          clearTimeout(detailPollTimer);
+          detailPollTimer = null;
+        }
+        if (logPollTimer) {
+          clearTimeout(logPollTimer);
+          logPollTimer = null;
         }
       };
 
-      const schedulePoll = (delayMs: number) => {
+      const scheduleDetailPoll = (delayMs: number) => {
         if (closed) {
           return;
         }
 
-        pollTimer = setTimeout(() => {
-          void pollOnce();
+        detailPollTimer = setTimeout(() => {
+          void pollDetailOnce();
         }, delayMs);
       };
 
-      const pollOnce = async () => {
+      const scheduleLogPoll = (delayMs: number) => {
+        if (closed) {
+          return;
+        }
+
+        logPollTimer = setTimeout(() => {
+          void pollLogOnce();
+        }, delayMs);
+      };
+
+      const pollDetailOnce = async () => {
         if (closed) {
           return;
         }
@@ -138,15 +166,64 @@ export function registerRunAppRoutes(
             return;
           }
 
-          writeEvent({ type: 'snapshot', detail: (next as { detail: unknown }).detail, log: (next as { log: unknown }).log });
-          schedulePoll(getRunStreamPollInterval(next as { detail: { run: { status?: { status?: string } | string } } }));
+          const typedNext = next as { detail: { run: { status?: { status?: string } | string } }; log: { path: string; log: string } };
+          runActive = isRunStreamActive(typedNext);
+          if (typedNext.log.path !== logPath) {
+            logPath = typedNext.log.path;
+            logCursor = getDurableRunLogCursor(logPath);
+            writeEvent({ type: 'snapshot', detail: typedNext.detail, log: typedNext.log });
+          } else {
+            writeEvent({ type: 'detail', detail: typedNext.detail });
+          }
+          scheduleDetailPoll(getRunStreamPollInterval(typedNext));
         } catch {
-          schedulePoll(ACTIVE_RUN_POLL_INTERVAL_MS);
+          scheduleDetailPoll(ACTIVE_RUN_POLL_INTERVAL_MS);
+        }
+      };
+
+      const pollLogOnce = async () => {
+        if (closed) {
+          return;
+        }
+
+        try {
+          const delta = readDurableRunLogDelta(logPath, logCursor);
+          if (closed) {
+            return;
+          }
+
+          if (delta?.reset) {
+            const next = await getDurableRunSnapshotFn(runId, tail);
+            if (closed) {
+              return;
+            }
+
+            if (!next) {
+              writeEvent({ type: 'deleted', runId });
+              stopStream();
+              res.end();
+              return;
+            }
+
+            const typedNext = next as { detail: { run: { status?: { status?: string } | string } }; log: { path: string; log: string } };
+            runActive = isRunStreamActive(typedNext);
+            logPath = typedNext.log.path;
+            logCursor = getDurableRunLogCursor(logPath);
+            writeEvent({ type: 'snapshot', detail: typedNext.detail, log: typedNext.log });
+          } else if (delta) {
+            logCursor = delta.nextCursor;
+            if (delta.delta.length > 0) {
+              writeEvent({ type: 'log_delta', path: delta.path, delta: delta.delta });
+            }
+          }
+        } finally {
+          scheduleLogPoll(getRunLogPollInterval(runActive));
         }
       };
 
       writeEvent({ type: 'snapshot', detail: (initial as { detail: unknown }).detail, log: (initial as { log: unknown }).log });
-      schedulePoll(getRunStreamPollInterval(initial as { detail: { run: { status?: { status?: string } | string } } }));
+      scheduleDetailPoll(getRunStreamPollInterval(initial as { detail: { run: { status?: { status?: string } | string } } }));
+      scheduleLogPoll(getRunLogPollInterval(runActive));
 
       req.on('close', () => {
         stopStream();

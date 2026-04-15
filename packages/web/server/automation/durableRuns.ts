@@ -108,6 +108,71 @@ function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 6
   }
 }
 
+export function getDurableRunLogCursor(filePath: string | undefined): number {
+  if (!filePath || !existsSync(filePath)) {
+    return 0;
+  }
+
+  try {
+    return statSync(filePath).size;
+  } catch {
+    return 0;
+  }
+}
+
+export function readDurableRunLogDelta(
+  filePath: string | undefined,
+  fromCursor: number,
+  maxBytes = 32 * 1024,
+): { path: string; delta: string; nextCursor: number; reset: boolean } | undefined {
+  if (!filePath || !existsSync(filePath)) {
+    return undefined;
+  }
+
+  let fd: number | undefined;
+
+  try {
+    const stats = statSync(filePath);
+    const normalizedCursor = Number.isFinite(fromCursor) && fromCursor > 0 ? Math.floor(fromCursor) : 0;
+
+    if (stats.size < normalizedCursor) {
+      return {
+        path: filePath,
+        delta: '',
+        nextCursor: stats.size,
+        reset: true,
+      };
+    }
+
+    const readLength = Math.min(maxBytes, stats.size - normalizedCursor);
+    if (readLength <= 0) {
+      return {
+        path: filePath,
+        delta: '',
+        nextCursor: stats.size,
+        reset: false,
+      };
+    }
+
+    const buffer = Buffer.alloc(readLength);
+    fd = openSync(filePath, 'r');
+    const bytesRead = readSync(fd, buffer, 0, readLength, normalizedCursor);
+
+    return {
+      path: filePath,
+      delta: buffer.subarray(0, bytesRead).toString('utf-8'),
+      nextCursor: normalizedCursor + bytesRead,
+      reset: false,
+    };
+  } catch {
+    return undefined;
+  } finally {
+    if (fd !== undefined) {
+      closeSync(fd);
+    }
+  }
+}
+
 export async function listDurableRunsWithTelemetry(): Promise<{
   result: ListDurableRunsResult & { runsRoot: string };
   telemetry: DurableRunsListTelemetry;
