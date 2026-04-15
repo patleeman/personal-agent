@@ -1,8 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { app } from 'electron';
-import { resolveDesktopRuntimePaths } from './desktop-env.js';
+import { join } from 'node:path';
+import { renderCodexServerShellCommand } from './codex-server-invocation.js';
 
 export interface LitterShimState {
   installed: boolean;
@@ -15,13 +14,7 @@ function resolveLitterShimPath(): string {
 }
 
 function resolveShimCommand(): string {
-  const runtime = resolveDesktopRuntimePaths();
-  if (app.isPackaged && process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE !== '1') {
-    return `${JSON.stringify(process.execPath)} --codex-app-server`;
-  }
-
-  const cliEntry = resolve(runtime.repoRoot, 'packages', 'cli', 'dist', 'index.js');
-  return `${JSON.stringify(runtime.nodeCommand)} ${JSON.stringify(cliEntry)} codex app-server`;
+  return renderCodexServerShellCommand();
 }
 
 function buildShimContent(command: string): string {
@@ -37,7 +30,7 @@ export function readLitterShimState(): LitterShimState {
 
   const content = readFileSync(shimPath, 'utf-8');
   return {
-    installed: content.includes('--codex-app-server') || content.includes(' codex app-server '),
+    installed: content.includes(command) || content.includes('--codex-app-server') || content.includes(' codex app-server ') || content.includes('"codex" "app-server"'),
     shimPath,
     command,
   };

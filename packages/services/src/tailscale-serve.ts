@@ -1,5 +1,11 @@
 import { spawnSync, type SpawnSyncReturns } from 'child_process';
 
+export interface SyncTailscaleServeProxyInput {
+  enabled: boolean;
+  port: number;
+  path?: string;
+}
+
 export interface SyncWebUiTailscaleServeInput {
   enabled: boolean;
   port: number;
@@ -20,12 +26,12 @@ interface TailscaleCommandExecution {
 
 function normalizePort(port: number): number {
   if (!Number.isFinite(port)) {
-    throw new Error(`Invalid web UI port: ${String(port)}`);
+    throw new Error(`Invalid Tailscale Serve port: ${String(port)}`);
   }
 
   const parsed = Math.floor(port);
   if (parsed <= 0 || parsed > 65535) {
-    throw new Error(`Invalid web UI port: ${String(port)}`);
+    throw new Error(`Invalid Tailscale Serve port: ${String(port)}`);
   }
 
   return parsed;
@@ -139,23 +145,31 @@ function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | und
   return `${hostName}.${suffix}`;
 }
 
-export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
+export function syncTailscaleServeProxy(input: SyncTailscaleServeProxyInput): void {
   const normalizedPort = normalizePort(input.port);
+  const normalizedPath = typeof input.path === 'string' && input.path.trim().length > 0
+    ? input.path.trim()
+    : undefined;
   const execution = runTailscaleCommand(buildTailscaleServeArgs({
     enabled: input.enabled,
     port: normalizedPort,
+    path: normalizedPath,
   }));
   const status = execution.result.status ?? 1;
 
   if (status !== 0) {
     const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
     throw new Error(
-      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for / -> localhost:${normalizedPort}: ${detail}`,
+      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${normalizedPath ?? '/'} -> localhost:${normalizedPort}: ${detail}`,
     );
   }
 }
 
-export function resolveWebUiTailscaleUrl(): string | undefined {
+export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
+  syncTailscaleServeProxy(input);
+}
+
+export function resolveTailscaleServeBaseUrl(): string | undefined {
   let execution: TailscaleCommandExecution;
 
   try {
@@ -181,4 +195,8 @@ export function resolveWebUiTailscaleUrl(): string | undefined {
   } catch {
     return undefined;
   }
+}
+
+export function resolveWebUiTailscaleUrl(): string | undefined {
+  return resolveTailscaleServeBaseUrl();
 }

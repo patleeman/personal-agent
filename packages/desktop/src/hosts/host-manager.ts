@@ -1,5 +1,4 @@
 import { loadDesktopConfig, saveDesktopConfig } from '../state/desktop-config.js';
-import { clearDesktopRemoteHostAuth } from '../state/remote-host-auth.js';
 import type {
   DesktopConfig,
   DesktopConnectionsState,
@@ -130,15 +129,6 @@ export class HostManager {
     };
 
     if (existing) {
-      if (
-        existing.kind === 'web'
-        && (
-          record.kind !== 'web'
-          || existing.websocketUrl.trim() !== record.websocketUrl.trim()
-        )
-      ) {
-        clearDesktopRemoteHostAuth(record.id);
-      }
       await this.disposeController(record.id);
     }
 
@@ -167,26 +157,7 @@ export class HostManager {
       defaultHostId: this.activeHostId,
       hosts: this.config.hosts.filter((host) => host.id !== hostId),
     };
-    clearDesktopRemoteHostAuth(hostId);
     saveDesktopConfig(this.config);
-  }
-
-  readHostAuthState(hostId: string) {
-    const record = this.getHostRecordById(hostId);
-    return {
-      hostId: record.id,
-      hasBearerToken: false,
-    };
-  }
-
-  async pairHost(_hostId: string, _input: { code: string; deviceLabel?: string }): Promise<ReturnType<HostManager['readHostAuthState']>> {
-    throw new Error('Bearer-token pairing is no longer supported for remote workspaces.');
-  }
-
-  async clearHostAuth(hostId: string): Promise<ReturnType<HostManager['readHostAuthState']>> {
-    const record = this.getHostRecordById(hostId);
-    await this.disposeController(record.id);
-    return clearDesktopRemoteHostAuth(record.id);
   }
 
   getActiveHostRecord(): DesktopHostRecord {

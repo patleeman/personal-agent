@@ -1,11 +1,21 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import type { DesktopConfig, DesktopHostRecord } from '../hosts/types.js';
+import type { DesktopConfig, DesktopHostRecord, DesktopWorkspaceServerConfig } from '../hosts/types.js';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const DEFAULT_WINDOW_STATE = {
   width: 1440,
   height: 960,
 };
+
+export const DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT = 8390;
+
+function createDefaultWorkspaceServerConfig(): DesktopWorkspaceServerConfig {
+  return {
+    enabled: false,
+    port: DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT,
+    useTailscaleServe: false,
+  };
+}
 
 function createDefaultLocalHost(): DesktopHostRecord {
   return {
@@ -38,6 +48,11 @@ function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
   }
 
   if (kind === 'ssh') {
+    const rawRemotePort = typeof candidate.remotePort === 'number' ? candidate.remotePort : undefined;
+    const normalizedRemotePort = rawRemotePort === 3741
+      ? DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT
+      : rawRemotePort;
+
     return {
       id,
       label,
@@ -45,7 +60,7 @@ function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
       sshTarget: typeof candidate.sshTarget === 'string' ? candidate.sshTarget : '',
       workspaceRoot: typeof candidate.workspaceRoot === 'string' ? candidate.workspaceRoot : undefined,
       remoteRepoRoot: typeof candidate.remoteRepoRoot === 'string' ? candidate.remoteRepoRoot : undefined,
-      remotePort: typeof candidate.remotePort === 'number' ? candidate.remotePort : undefined,
+      remotePort: normalizedRemotePort,
       autoConnect: candidate.autoConnect === true,
     };
   }
@@ -62,6 +77,23 @@ function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
     websocketUrl,
     workspaceRoot: typeof candidate.workspaceRoot === 'string' ? candidate.workspaceRoot : undefined,
     autoConnect: candidate.autoConnect === true,
+  };
+}
+
+function normalizeWorkspaceServerConfig(value: unknown): DesktopWorkspaceServerConfig {
+  if (!value || typeof value !== 'object') {
+    return createDefaultWorkspaceServerConfig();
+  }
+
+  const candidate = value as Record<string, unknown>;
+  const parsedPort = typeof candidate.port === 'number' && Number.isFinite(candidate.port)
+    ? Math.floor(candidate.port)
+    : DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT;
+
+  return {
+    enabled: candidate.enabled === true,
+    port: parsedPort > 0 && parsedPort <= 65535 ? parsedPort : DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT,
+    useTailscaleServe: candidate.useTailscaleServe === true,
   };
 }
 
@@ -92,6 +124,7 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
         }
       : { ...DEFAULT_WINDOW_STATE },
     hosts,
+    workspaceServer: normalizeWorkspaceServerConfig(input.workspaceServer),
   };
 }
 
@@ -102,6 +135,7 @@ export function createDefaultDesktopConfig(): DesktopConfig {
     openWindowOnLaunch: true,
     windowState: { ...DEFAULT_WINDOW_STATE },
     hosts: [createDefaultLocalHost()],
+    workspaceServer: createDefaultWorkspaceServerConfig(),
   };
 }
 

@@ -250,6 +250,106 @@ describe('codex app server', () => {
     socket.close();
   });
 
+  it('runs buffered command/exec requests', async () => {
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    socket.send(JSON.stringify({
+      id: 2,
+      method: 'command/exec',
+      params: {
+        command: [
+          process.execPath,
+          '-e',
+          "process.stdout.write('out'); process.stderr.write('err'); process.exit(3);",
+        ],
+      },
+    }));
+
+    await expect(readJsonMessage(socket)).resolves.toEqual({
+      id: 2,
+      result: {
+        exitCode: 3,
+        stdout: 'out',
+        stderr: 'err',
+      },
+    });
+
+    socket.close();
+  });
+
+  it('supports command/exec stdin writes and streamed stdout', async () => {
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    const messages = collectJsonMessages(socket, async () => {
+      socket.send(JSON.stringify({
+        id: 2,
+        method: 'command/exec',
+        params: {
+          processId: 'proc-1',
+          command: [
+            process.execPath,
+            '-e',
+            "let data='';process.stdin.setEncoding('utf8');process.stdin.on('data', (chunk) => data += chunk);process.stdin.on('end', () => process.stdout.write(data.toUpperCase()));",
+          ],
+          streamStdin: true,
+          streamStdoutStderr: true,
+        },
+      }));
+
+      socket.send(JSON.stringify({
+        id: 3,
+        method: 'command/exec/write',
+        params: {
+          processId: 'proc-1',
+          deltaBase64: Buffer.from('hello').toString('base64'),
+          closeStdin: true,
+        },
+      }));
+    }, 250) as Promise<Array<{ id?: number; method?: string; result?: Record<string, unknown>; params?: Record<string, unknown> }>>;
+
+    await expect(messages).resolves.toEqual(expect.arrayContaining([
+      {
+        id: 3,
+        result: {},
+      },
+      {
+        method: 'command/exec/outputDelta',
+        params: {
+          processId: 'proc-1',
+          stream: 'stdout',
+          deltaBase64: Buffer.from('HELLO').toString('base64'),
+          capReached: false,
+        },
+      },
+      {
+        id: 2,
+        result: {
+          exitCode: 0,
+          stdout: '',
+          stderr: '',
+        },
+      },
+    ]));
+
+    socket.close();
+  });
+
   it('starts threads and translates live-session stream notifications', async () => {
     mocks.readDesktopModels.mockResolvedValue({
       currentModel: 'gpt-5.4',

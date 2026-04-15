@@ -23,7 +23,7 @@ import type {
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
   DesktopConnectionsState,
-  DesktopRemoteHostAuthState,
+  DesktopWorkspaceServerState,
   DurableRunDetailResult,
   DurableRunListResult,
   DesktopEnvironmentState,
@@ -102,9 +102,8 @@ export interface PersonalAgentDesktopBridge {
   switchHost(hostId: string): Promise<void>;
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
-  readHostAuthState(hostId: string): Promise<DesktopRemoteHostAuthState>;
-  pairHost(input: { hostId: string; code: string; deviceLabel?: string }): Promise<DesktopRemoteHostAuthState>;
-  clearHostAuth(hostId: string): Promise<DesktopRemoteHostAuthState>;
+  readWorkspaceServerState(): Promise<DesktopWorkspaceServerState>;
+  updateWorkspaceServerConfig(input: { enabled?: boolean; port?: number; useTailscaleServe?: boolean }): Promise<DesktopWorkspaceServerState>;
   readLitterShimState(): Promise<{ installed: boolean; shimPath: string; command: string }>;
   installLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;
   uninstallLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;

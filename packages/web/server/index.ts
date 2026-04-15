@@ -62,7 +62,6 @@ import {
   startDeferredResumeLoop,
   startServerListeners,
 } from './app/bootstrap.js';
-import { createAppServerUpgradeHandler } from './app-server.js';
 import { createProfileState } from './app/profileState.js';
 import { createServerRouteContext } from './app/routeContext.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './ui/webUiPreferences.js';
@@ -940,8 +939,6 @@ mountStaticServerApps({
 
 warmMemoryBrowserCaches(getCurrentProfile());
 
-const appServerUpgradeHandler = createAppServerUpgradeHandler();
-
 startServerListeners({
   app,
   port: PORT,
@@ -950,9 +947,4 @@ startServerListeners({
   getDefaultWebCwd,
   repoRoot: REPO_ROOT,
   distDir: DIST_DIR,
-  handleUpgrade: (request, socket, head) => {
-    if (!appServerUpgradeHandler.handleUpgrade(request, socket, head)) {
-      socket.destroy();
-    }
-  },
 });

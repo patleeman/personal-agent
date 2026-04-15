@@ -803,13 +803,17 @@ export interface DesktopConnectionsState {
   hosts: DesktopHostRecord[];
 }
 
-export interface DesktopRemoteHostAuthState {
-  hostId: string;
-  hasBearerToken: boolean;
-  sessionId?: string;
-  deviceLabel?: string;
-  createdAt?: string;
-  expiresAt?: string;
+export interface DesktopWorkspaceServerState {
+  enabled: boolean;
+  port: number;
+  useTailscaleServe: boolean;
+  running: boolean;
+  websocketPath: string;
+  localWebsocketUrl: string;
+  tailnetWebsocketUrl?: string;
+  logFile: string;
+  pid?: number;
+  error?: string;
 }
 
 export interface DesktopNavigationState {

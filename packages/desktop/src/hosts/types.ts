@@ -23,6 +23,22 @@ export type DesktopHostRecord =
       autoConnect?: boolean;
     };
 
+export interface DesktopWorkspaceServerConfig {
+  enabled: boolean;
+  port: number;
+  useTailscaleServe: boolean;
+}
+
+export interface DesktopWorkspaceServerState extends DesktopWorkspaceServerConfig {
+  running: boolean;
+  websocketPath: string;
+  localWebsocketUrl: string;
+  tailnetWebsocketUrl?: string;
+  logFile: string;
+  pid?: number;
+  error?: string;
+}
+
 export interface DesktopConfig {
   version: 1;
   defaultHostId: string;
@@ -34,6 +50,7 @@ export interface DesktopConfig {
     height: number;
   };
   hosts: DesktopHostRecord[];
+  workspaceServer?: DesktopWorkspaceServerConfig;
 }
 
 export interface HostStatus {
@@ -50,15 +67,6 @@ export interface DesktopApiStreamEvent {
   type: 'open' | 'message' | 'error' | 'close';
   data?: string;
   message?: string;
-}
-
-export interface DesktopRemoteHostAuthState {
-  hostId: string;
-  hasBearerToken: boolean;
-  sessionId?: string;
-  deviceLabel?: string;
-  createdAt?: string;
-  expiresAt?: string;
 }
 
 export interface HostApiDispatchResult {

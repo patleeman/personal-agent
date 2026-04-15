@@ -20,8 +20,11 @@ export {
   type WebUiServiceStatus,
 } from './service.js';
 export {
+  resolveTailscaleServeBaseUrl,
   resolveWebUiTailscaleUrl,
+  syncTailscaleServeProxy,
   syncWebUiTailscaleServe,
+  type SyncTailscaleServeProxyInput,
   type SyncWebUiTailscaleServeInput,
 } from './tailscale-serve.js';
 export {

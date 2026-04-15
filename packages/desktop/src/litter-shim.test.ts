@@ -45,7 +45,7 @@ describe('litter shim', () => {
     const content = readFileSync(installed.shimPath, 'utf-8');
     expect(content).toContain('/usr/local/bin/node');
     expect(content).toContain('/repo/packages/cli/dist/index.js');
-    expect(content).toContain('codex app-server');
+    expect(content).toContain('"codex" "app-server"');
 
     const after = readLitterShimState();
     expect(after.installed).toBe(true);

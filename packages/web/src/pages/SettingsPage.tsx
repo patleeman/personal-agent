@@ -13,6 +13,7 @@ import type {
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
+  DesktopWorkspaceServerState,
   McpServerConfig,
   ModelProviderApi,
   ModelProviderConfig,
@@ -32,7 +33,7 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
   { id: 'settings-general', label: 'General', summary: 'Defaults, prompt sources, and roots' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
-  { id: 'settings-desktop', label: 'Desktop', summary: 'Local and remote desktop hosts' },
+  { id: 'settings-desktop', label: 'Desktop', summary: 'Hosted workspace server and remote connections' },
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
@@ -378,6 +379,20 @@ interface DesktopHostDraft {
   autoConnect: boolean;
 }
 
+interface DesktopWorkspaceServerDraft {
+  enabled: boolean;
+  port: string;
+  useTailscaleServe: boolean;
+}
+
+function createDesktopWorkspaceServerDraft(state?: DesktopWorkspaceServerState | null): DesktopWorkspaceServerDraft {
+  return {
+    enabled: state?.enabled ?? false,
+    port: String(state?.port ?? 8390),
+    useTailscaleServe: state?.useTailscaleServe ?? false,
+  };
+}
+
 function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' | 'ssh' }>): DesktopHostDraft {
   if (!host) {
     return {
@@ -388,7 +403,7 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
       workspaceRoot: '',
       sshTarget: '',
       remoteRepoRoot: '',
-      remotePort: '3741',
+      remotePort: '8390',
       autoConnect: false,
     };
   }
@@ -402,7 +417,7 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
       workspaceRoot: host.workspaceRoot ?? '',
       sshTarget: '',
       remoteRepoRoot: '',
-      remotePort: '3741',
+      remotePort: '8390',
       autoConnect: host.autoConnect ?? false,
     };
   }
@@ -415,7 +430,7 @@ function createDesktopHostDraft(host?: Extract<DesktopHostRecord, { kind: 'web' 
     workspaceRoot: host.workspaceRoot ?? '',
     sshTarget: host.sshTarget,
     remoteRepoRoot: host.remoteRepoRoot ?? '',
-    remotePort: host.remotePort ? String(host.remotePort) : '3741',
+    remotePort: host.remotePort ? String(host.remotePort) : '8390',
     autoConnect: host.autoConnect ?? false,
   };
 }
@@ -483,9 +498,11 @@ function DesktopConnectionsSettingsPanel() {
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [editorMode, setEditorMode] = useState<DesktopHostEditorMode>('new');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
+  const [workspaceServerState, setWorkspaceServerState] = useState<DesktopWorkspaceServerState | null>(null);
+  const [workspaceServerDraft, setWorkspaceServerDraft] = useState<DesktopWorkspaceServerDraft>(() => createDesktopWorkspaceServerDraft());
   const [litterShimState, setLitterShimState] = useState<{ installed: boolean; shimPath: string; command: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'pair' | 'clear-auth' | 'install-shim' | 'uninstall-shim' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'save-workspace-server' | 'install-shim' | 'uninstall-shim' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -534,22 +551,24 @@ function DesktopConnectionsSettingsPanel() {
   useEffect(() => {
     const bridge = getDesktopBridge();
     if (!bridge) {
+      setWorkspaceServerState(null);
       setLitterShimState(null);
       return;
     }
 
     let cancelled = false;
-    void bridge.readLitterShimState()
-      .then((state) => {
-        if (!cancelled) {
-          setLitterShimState(state);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setLitterShimState(null);
-        }
-      });
+    void Promise.all([
+      bridge.readWorkspaceServerState().catch(() => null),
+      bridge.readLitterShimState().catch(() => null),
+    ]).then(([serverState, shimState]) => {
+      if (cancelled) {
+        return;
+      }
+
+      setWorkspaceServerState(serverState);
+      setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
+      setLitterShimState(shimState);
+    });
 
     return () => {
       cancelled = true;
@@ -729,6 +748,42 @@ function DesktopConnectionsSettingsPanel() {
     }
   }
 
+  async function handleSaveWorkspaceServer() {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      return;
+    }
+
+    const parsedPort = Number(workspaceServerDraft.port.trim());
+    if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+      setError('Workspace server port must be a number between 1 and 65535.');
+      return;
+    }
+
+    setAction('save-workspace-server');
+    setError(null);
+    setNotice(null);
+
+    try {
+      const nextState = await bridge.updateWorkspaceServerConfig({
+        enabled: workspaceServerDraft.enabled,
+        port: parsedPort,
+        useTailscaleServe: workspaceServerDraft.enabled && workspaceServerDraft.useTailscaleServe,
+      });
+      setWorkspaceServerState(nextState);
+      setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(nextState));
+      setNotice(nextState.enabled
+        ? nextState.running
+          ? 'Desktop workspace server updated.'
+          : 'Desktop workspace server settings saved, but the server is not healthy yet.'
+        : 'Stopped hosting this desktop as a remote workspace.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }
+
   async function handleInstallLitterShim() {
     const bridge = getDesktopBridge();
     if (!bridge) {
@@ -780,7 +835,7 @@ function DesktopConnectionsSettingsPanel() {
     >
       <SettingsPanel
         title="Connections"
-        description="Switch workspace connections for the Electron app. WebSocket uses direct Codex URLs; SSH tunnels into a remote workspace helper."
+        description="Switch workspace connections for the Electron app. WebSocket uses direct Codex URLs, and the hosting card below can publish this desktop at a managed local or Tailnet Codex endpoint."
         actions={(
           <button
             type="button"
@@ -923,8 +978,9 @@ function DesktopConnectionsSettingsPanel() {
                         className={`${INPUT_CLASS} font-mono text-[13px]`}
                         autoComplete="off"
                         spellCheck={false}
-                        placeholder="wss://my-machine.example/codex"
+                        placeholder="wss://my-machine.tailnet.ts.net/codex"
                       />
+                      <p className="ui-card-meta">Point this at a live Codex-compatible app-server endpoint, not the normal Personal Agent web UI URL.</p>
                     </div>
                     <div className="space-y-2 min-w-0 md:col-span-2">
                       <label className="ui-card-meta" htmlFor="desktop-host-web-workspace-root">Workspace root</label>
@@ -1013,6 +1069,76 @@ function DesktopConnectionsSettingsPanel() {
               <p className="ui-card-meta">
                 The active workspace controls this window right now. The default workspace controls which connection opens the next time the desktop app launches.
               </p>
+
+              <div className="space-y-3 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
+                <div className="space-y-1">
+                  <p className="text-[13px] font-medium text-primary">Host this desktop as a remote workspace</p>
+                  <p className="ui-card-meta">Run the managed Codex-compatible server from the desktop app so direct WebSocket remotes and Tailnet publishing stop requiring manual shell nonsense.</p>
+                </div>
+                <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-workspace-server-enabled">
+                  <input
+                    id="desktop-workspace-server-enabled"
+                    type="checkbox"
+                    checked={workspaceServerDraft.enabled}
+                    onChange={(event) => setWorkspaceServerDraft((current) => ({
+                      ...current,
+                      enabled: event.target.checked,
+                      useTailscaleServe: event.target.checked ? current.useTailscaleServe : false,
+                    }))}
+                    disabled={action !== null}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <span>Host this desktop as a remote workspace</span>
+                </label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2 min-w-0">
+                    <label className="ui-card-meta" htmlFor="desktop-workspace-server-port">Local port</label>
+                    <input
+                      id="desktop-workspace-server-port"
+                      value={workspaceServerDraft.port}
+                      onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, port: event.target.value }))}
+                      disabled={action !== null}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="8390"
+                    />
+                  </div>
+                  <div className="space-y-2 min-w-0">
+                    <label className="ui-card-meta">Status</label>
+                    <p className="text-[13px] text-primary">{workspaceServerState?.running ? 'Running' : workspaceServerState?.enabled ? 'Starting or unhealthy' : 'Disabled'}</p>
+                  </div>
+                </div>
+                <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-workspace-server-tailnet">
+                  <input
+                    id="desktop-workspace-server-tailnet"
+                    type="checkbox"
+                    checked={workspaceServerDraft.enabled && workspaceServerDraft.useTailscaleServe}
+                    onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, useTailscaleServe: event.target.checked }))}
+                    disabled={action !== null || !workspaceServerDraft.enabled}
+                    className={CHECKBOX_CLASS}
+                  />
+                  <span>Publish over Tailscale at <span className="font-mono text-[11px]">/codex</span></span>
+                </label>
+                <div className="space-y-1">
+                  <p className="ui-card-meta break-all">Local URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}</span></p>
+                  {workspaceServerState?.tailnetWebsocketUrl ? (
+                    <p className="ui-card-meta break-all">Tailnet URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState.tailnetWebsocketUrl}</span></p>
+                  ) : null}
+                  <p className="ui-card-meta break-all">Log: <span className="font-mono text-[11px]">{workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log'}</span></p>
+                  {workspaceServerState?.error ? <p className="text-[12px] text-danger">{workspaceServerState.error}</p> : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { void handleSaveWorkspaceServer(); }}
+                    disabled={action !== null}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    {action === 'save-workspace-server' ? 'Saving…' : 'Save server settings'}
+                  </button>
+                </div>
+              </div>
 
               <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
                 <p className="text-[13px] font-medium text-primary">Litter SSH shim</p>

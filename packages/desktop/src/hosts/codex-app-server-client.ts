@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+import type { IncomingMessage } from 'node:http';
 import WebSocket from 'ws';
 
 interface JsonRpcResponse {
@@ -16,6 +18,16 @@ interface JsonRpcNotification {
 
 function renderRpcError(response: JsonRpcResponse): Error {
   return new Error(response.error?.message?.trim() || `Codex RPC request ${String(response.id)} failed.`);
+}
+
+async function readUnexpectedResponseMessage(response: IncomingMessage): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of response) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+
+  const bodyText = Buffer.concat(chunks).toString('utf-8').trim();
+  return bodyText || `${String(response.statusCode ?? 500)} ${response.statusMessage ?? 'Codex app-server connection failed.'}`;
 }
 
 export class CodexAppServerClient {
@@ -82,6 +94,13 @@ export class CodexAppServerClient {
 
       socket.on('message', (data: WebSocket.RawData) => {
         this.handleSocketMessage(data.toString());
+      });
+
+      socket.once('unexpected-response', (_request: unknown, response: IncomingMessage) => {
+        void (async () => {
+          const message = await readUnexpectedResponseMessage(response);
+          finishReject(new Error(message));
+        })();
       });
 
       socket.once('error', (error: Error) => {

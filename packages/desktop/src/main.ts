@@ -16,6 +16,7 @@ import { installDesktopApplicationMenu } from './menu.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
 import { loadCodexServerModule } from './codex-server-module.js';
+import { desktopWorkspaceServerManager } from './workspace-server.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
@@ -324,6 +325,7 @@ async function bootstrapDesktopApp(): Promise<void> {
   });
 
   updateManager.start();
+  await desktopWorkspaceServerManager.readState();
 
   const ready = await ensureDesktopBackendAvailable();
   if (ready && hostManager.getConfig().openWindowOnLaunch) {
@@ -340,6 +342,7 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
+  await desktopWorkspaceServerManager.stop();
   await hostManager?.dispose();
 }
 

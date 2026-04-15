@@ -34,9 +34,9 @@ const desktopBridge = {
   switchHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:switch-host`, hostId),
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
-  readHostAuthState: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-host-auth-state`, hostId),
-  pairHost: (input: { hostId: string; code: string; deviceLabel?: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:pair-host`, input),
-  clearHostAuth: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:clear-host-auth`, hostId),
+  readWorkspaceServerState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-workspace-server-state`),
+  updateWorkspaceServerConfig: (input: { enabled?: boolean; port?: number; useTailscaleServe?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-workspace-server-config`, input),
   readLitterShimState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-litter-shim-state`),
   installLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:install-litter-shim`),
   uninstallLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:uninstall-litter-shim`),

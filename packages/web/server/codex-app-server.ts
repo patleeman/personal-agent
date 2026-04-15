@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+import { spawn, type ChildProcess } from 'node:child_process';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
@@ -40,9 +42,17 @@ interface ConnectionThreadRuntime {
   };
 }
 
+interface ConnectionCommandRuntime {
+  processId: string;
+  child: ChildProcess;
+  stdinWritable: boolean;
+  supportsResize: boolean;
+}
+
 interface ConnectionState {
   initialized: boolean;
   threads: Map<string, ConnectionThreadRuntime>;
+  commands: Map<string, ConnectionCommandRuntime>;
   nextTurnCounter: number;
 }
 
@@ -50,6 +60,10 @@ export interface CodexAppServerHandle {
   websocketUrl: string;
   close(): Promise<void>;
 }
+
+const DEFAULT_COMMAND_OUTPUT_BYTES_CAP = 64 * 1024;
+const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
+const COMMAND_KILL_GRACE_PERIOD_MS = 5_000;
 
 function normalizePathname(value: string): string {
   return value.endsWith('/') && value.length > 1 ? value.slice(0, -1) : value;
@@ -116,6 +130,136 @@ function parseTextInput(input: unknown): string {
 
 function normalizeReasoningEffort(value: unknown): 'low' | 'medium' | 'high' | null {
   return value === 'low' || value === 'medium' || value === 'high' ? value : null;
+}
+
+function normalizeCommandProcessId(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeCommandOutputCap(params: { outputBytesCap?: unknown; disableOutputCap?: unknown }): number | null {
+  const disableOutputCap = params.disableOutputCap === true;
+  const requestedCap = typeof params.outputBytesCap === 'number' && Number.isFinite(params.outputBytesCap)
+    ? Math.max(0, Math.floor(params.outputBytesCap))
+    : null;
+
+  if (disableOutputCap && requestedCap !== null) {
+    throw new Error('disableOutputCap cannot be combined with outputBytesCap.');
+  }
+
+  if (disableOutputCap) {
+    return null;
+  }
+
+  return requestedCap ?? DEFAULT_COMMAND_OUTPUT_BYTES_CAP;
+}
+
+function normalizeCommandTimeoutMs(params: { timeoutMs?: unknown; disableTimeout?: unknown }): number | null {
+  const disableTimeout = params.disableTimeout === true;
+  const requestedTimeout = typeof params.timeoutMs === 'number' && Number.isFinite(params.timeoutMs)
+    ? Math.max(1, Math.floor(params.timeoutMs))
+    : null;
+
+  if (disableTimeout && requestedTimeout !== null) {
+    throw new Error('disableTimeout cannot be combined with timeoutMs.');
+  }
+
+  if (disableTimeout) {
+    return null;
+  }
+
+  return requestedTimeout ?? DEFAULT_COMMAND_TIMEOUT_MS;
+}
+
+function buildCommandEnvironment(overrides: unknown): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  if (!overrides || typeof overrides !== 'object' || Array.isArray(overrides)) {
+    return env;
+  }
+
+  for (const [key, value] of Object.entries(overrides as Record<string, unknown>)) {
+    if (typeof value === 'string') {
+      env[key] = value;
+      continue;
+    }
+
+    if (value === null) {
+      delete env[key];
+    }
+  }
+
+  return env;
+}
+
+function appendCapturedText(current: string, chunk: Buffer, capturedBytes: { value: number }, cap: number | null): { next: string; capReached: boolean; capturedChunk: Buffer } {
+  if (cap === null) {
+    return {
+      next: current + chunk.toString('utf-8'),
+      capReached: false,
+      capturedChunk: chunk,
+    };
+  }
+
+  const remaining = Math.max(0, cap - capturedBytes.value);
+  const capturedChunk = remaining > 0 ? chunk.subarray(0, Math.min(remaining, chunk.length)) : Buffer.alloc(0);
+  capturedBytes.value += capturedChunk.length;
+
+  return {
+    next: capturedChunk.length > 0 ? current + capturedChunk.toString('utf-8') : current,
+    capReached: capturedChunk.length < chunk.length || (remaining === 0 && chunk.length > 0),
+    capturedChunk,
+  };
+}
+
+function sendCommandOutputDelta(input: {
+  socket: WebSocket;
+  processId: string;
+  stream: 'stdout' | 'stderr';
+  chunk: Buffer;
+  capReached: boolean;
+}): void {
+  if (input.chunk.length === 0 && !input.capReached) {
+    return;
+  }
+
+  sendNotification(input.socket, 'command/exec/outputDelta', {
+    processId: input.processId,
+    stream: input.stream,
+    deltaBase64: input.chunk.toString('base64'),
+    capReached: input.capReached,
+  });
+}
+
+async function writeToCommandStdin(runtime: ConnectionCommandRuntime, chunk: Buffer, closeStdin: boolean): Promise<void> {
+  if (!runtime.stdinWritable || !runtime.child.stdin) {
+    throw new Error('stdin streaming is not enabled for this command/exec.');
+  }
+
+  if (chunk.length > 0) {
+    await new Promise<void>((resolve, reject) => {
+      runtime.child.stdin?.write(chunk, (error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
+  }
+
+  if (closeStdin) {
+    runtime.child.stdin.end();
+    runtime.stdinWritable = false;
+  }
+}
+
+function terminateCommand(runtime: ConnectionCommandRuntime): void {
+  runtime.child.kill('SIGTERM');
+}
+
+function disposeCommand(runtime: ConnectionCommandRuntime): void {
+  if (runtime.child.exitCode === null && !runtime.child.killed) {
+    runtime.child.kill('SIGTERM');
+  }
 }
 
 function buildModelCatalog(state: Awaited<ReturnType<typeof readDesktopModels>>) {
@@ -498,11 +642,137 @@ async function ensureThreadSubscription(input: {
   return runtime;
 }
 
+async function runCommandExec(input: {
+  socket: WebSocket;
+  state: ConnectionState;
+  processId: string;
+  command: string[];
+  cwd?: string;
+  env?: unknown;
+  streamStdin: boolean;
+  streamStdoutStderr: boolean;
+  outputBytesCap: number | null;
+  timeoutMs: number | null;
+}): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const [program, ...args] = input.command;
+  if (!program || program.trim().length === 0) {
+    throw new Error('command must not be empty.');
+  }
+
+  if (input.processId && input.state.commands.has(input.processId)) {
+    throw new Error(`duplicate active command/exec process id: ${input.processId}`);
+  }
+
+  const child = spawn(program, args, {
+    cwd: typeof input.cwd === 'string' && input.cwd.trim().length > 0 ? input.cwd.trim() : process.cwd(),
+    env: buildCommandEnvironment(input.env),
+    stdio: [input.streamStdin ? 'pipe' : 'ignore', 'pipe', 'pipe'],
+  });
+
+  const runtime: ConnectionCommandRuntime | null = input.processId
+    ? {
+        processId: input.processId,
+        child,
+        stdinWritable: input.streamStdin,
+        supportsResize: false,
+      }
+    : null;
+
+  if (runtime) {
+    input.state.commands.set(runtime.processId, runtime);
+  }
+
+  const stdoutBytes = { value: 0 };
+  const stderrBytes = { value: 0 };
+  let stdout = '';
+  let stderr = '';
+  let timedOut = false;
+  let killTimer: ReturnType<typeof setTimeout> | null = null;
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+  const cleanup = () => {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+      timeoutHandle = null;
+    }
+    if (killTimer) {
+      clearTimeout(killTimer);
+      killTimer = null;
+    }
+    if (runtime) {
+      input.state.commands.delete(runtime.processId);
+    }
+  };
+
+  if (input.timeoutMs !== null) {
+    timeoutHandle = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+      killTimer = setTimeout(() => {
+        if (child.exitCode === null && !child.killed) {
+          child.kill('SIGKILL');
+        }
+      }, COMMAND_KILL_GRACE_PERIOD_MS);
+    }, input.timeoutMs);
+  }
+
+  child.stdout?.on('data', (chunk: Buffer | string) => {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const captured = appendCapturedText(stdout, buffer, stdoutBytes, input.outputBytesCap);
+    stdout = captured.next;
+    if (input.streamStdoutStderr && input.processId) {
+      sendCommandOutputDelta({
+        socket: input.socket,
+        processId: input.processId,
+        stream: 'stdout',
+        chunk: captured.capturedChunk,
+        capReached: captured.capReached,
+      });
+    }
+  });
+
+  child.stderr?.on('data', (chunk: Buffer | string) => {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const captured = appendCapturedText(stderr, buffer, stderrBytes, input.outputBytesCap);
+    stderr = captured.next;
+    if (input.streamStdoutStderr && input.processId) {
+      sendCommandOutputDelta({
+        socket: input.socket,
+        processId: input.processId,
+        stream: 'stderr',
+        chunk: captured.capturedChunk,
+        capReached: captured.capReached,
+      });
+    }
+  });
+
+  return await new Promise<{ exitCode: number; stdout: string; stderr: string }>((resolve, reject) => {
+    child.once('error', (error) => {
+      cleanup();
+      reject(error instanceof Error ? error : new Error(String(error)));
+    });
+
+    child.once('close', (code, signal) => {
+      cleanup();
+      resolve({
+        exitCode: timedOut ? 124 : (typeof code === 'number' ? code : (signal ? 1 : 0)),
+        stdout: input.streamStdoutStderr ? '' : stdout,
+        stderr: input.streamStdoutStderr ? '' : stderr,
+      });
+    });
+  });
+}
+
 async function disposeConnection(state: ConnectionState): Promise<void> {
   await Promise.all([...state.threads.values()].map(async (thread) => {
     thread.unsubscribe?.();
     thread.unsubscribe = undefined;
   }));
+
+  for (const runtime of state.commands.values()) {
+    disposeCommand(runtime);
+  }
+  state.commands.clear();
 }
 
 async function handleRequest(socket: WebSocket, state: ConnectionState, request: JsonRpcRequest): Promise<void> {
@@ -785,6 +1055,140 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
       return;
     }
 
+    if (method === 'command/exec') {
+      const params = request.params as {
+        command?: unknown;
+        processId?: unknown;
+        tty?: unknown;
+        streamStdin?: unknown;
+        streamStdoutStderr?: unknown;
+        outputBytesCap?: unknown;
+        disableOutputCap?: unknown;
+        disableTimeout?: unknown;
+        timeoutMs?: unknown;
+        cwd?: unknown;
+        env?: unknown;
+        size?: unknown;
+      } | undefined;
+      const command = Array.isArray(params?.command)
+        ? params.command.filter((entry): entry is string => typeof entry === 'string')
+        : [];
+      const processId = normalizeCommandProcessId(params?.processId);
+      const tty = params?.tty === true;
+      const streamStdin = tty || params?.streamStdin === true;
+      const streamStdoutStderr = tty || params?.streamStdoutStderr === true;
+      if (command.length === 0) {
+        sendError(socket, id, -32602, 'command must not be empty.');
+        return;
+      }
+      if (tty) {
+        sendError(socket, id, -32602, 'PTY command/exec is not supported by personal-agent yet.');
+        return;
+      }
+      if (params?.size && !tty) {
+        sendError(socket, id, -32602, 'command/exec size is only valid when tty is enabled.');
+        return;
+      }
+      if ((streamStdin || streamStdoutStderr) && !processId) {
+        sendError(socket, id, -32602, 'command/exec streaming requires processId.');
+        return;
+      }
+
+      const result = await runCommandExec({
+        socket,
+        state,
+        processId,
+        command,
+        cwd: typeof params?.cwd === 'string' ? params.cwd : undefined,
+        env: params?.env,
+        streamStdin,
+        streamStdoutStderr,
+        outputBytesCap: normalizeCommandOutputCap({
+          outputBytesCap: params?.outputBytesCap,
+          disableOutputCap: params?.disableOutputCap,
+        }),
+        timeoutMs: normalizeCommandTimeoutMs({
+          timeoutMs: params?.timeoutMs,
+          disableTimeout: params?.disableTimeout,
+        }),
+      });
+      sendResult(socket, id ?? 0, {
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+      return;
+    }
+
+    if (method === 'command/exec/write') {
+      const params = request.params as { processId?: unknown; deltaBase64?: unknown; closeStdin?: unknown } | undefined;
+      const processId = normalizeCommandProcessId(params?.processId);
+      if (!processId) {
+        sendError(socket, id, -32602, 'processId required.');
+        return;
+      }
+      const runtime = state.commands.get(processId);
+      if (!runtime) {
+        sendError(socket, id, -32013, 'No active command/exec process found.');
+        return;
+      }
+      const closeStdin = params?.closeStdin === true;
+      const deltaBase64 = typeof params?.deltaBase64 === 'string' ? params.deltaBase64 : null;
+      if (!closeStdin && !deltaBase64) {
+        sendError(socket, id, -32602, 'command/exec/write requires deltaBase64 or closeStdin.');
+        return;
+      }
+      let decoded = Buffer.alloc(0);
+      if (deltaBase64) {
+        try {
+          decoded = Buffer.from(deltaBase64, 'base64');
+        } catch {
+          sendError(socket, id, -32602, 'deltaBase64 must be valid base64.');
+          return;
+        }
+      }
+      await writeToCommandStdin(runtime, decoded, closeStdin);
+      sendResult(socket, id ?? 0, {});
+      return;
+    }
+
+    if (method === 'command/exec/terminate') {
+      const params = request.params as { processId?: unknown } | undefined;
+      const processId = normalizeCommandProcessId(params?.processId);
+      if (!processId) {
+        sendError(socket, id, -32602, 'processId required.');
+        return;
+      }
+      const runtime = state.commands.get(processId);
+      if (!runtime) {
+        sendError(socket, id, -32013, 'No active command/exec process found.');
+        return;
+      }
+      terminateCommand(runtime);
+      sendResult(socket, id ?? 0, {});
+      return;
+    }
+
+    if (method === 'command/exec/resize') {
+      const params = request.params as { processId?: unknown } | undefined;
+      const processId = normalizeCommandProcessId(params?.processId);
+      if (!processId) {
+        sendError(socket, id, -32602, 'processId required.');
+        return;
+      }
+      const runtime = state.commands.get(processId);
+      if (!runtime) {
+        sendError(socket, id, -32013, 'No active command/exec process found.');
+        return;
+      }
+      if (!runtime.supportsResize) {
+        sendError(socket, id, -32602, 'PTY resize is not supported for this command/exec session.');
+        return;
+      }
+      sendResult(socket, id ?? 0, {});
+      return;
+    }
+
     sendError(socket, id, -32601, `Unsupported method: ${method}`);
   } catch (error) {
     sendError(socket, id, -32010, error instanceof Error ? error.message : String(error));
@@ -835,6 +1239,7 @@ export async function startCodexAppServer(input: { listenUrl: string }): Promise
     const state: ConnectionState = {
       initialized: false,
       threads: new Map(),
+      commands: new Map(),
       nextTurnCounter: 1,
     };
     connectionStates.set(socket, state);

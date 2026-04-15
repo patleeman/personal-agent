@@ -5,6 +5,7 @@ import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 import { installLitterShim, readLitterShimState, uninstallLitterShim } from './litter-shim.js';
+import { desktopWorkspaceServerManager } from './workspace-server.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
@@ -113,30 +114,8 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getConnectionsState();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-host-auth-state`, async (_event, hostId: string) => {
-    return options.hostManager.readHostAuthState(hostId);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:pair-host`, async (_event, input: { hostId?: string; code?: string; deviceLabel?: string }) => {
-    const hostId = typeof input?.hostId === 'string' ? input.hostId.trim() : '';
-    const code = typeof input?.code === 'string' ? input.code.trim() : '';
-    if (!hostId || !code) {
-      throw new Error('Host id and pairing code are required.');
-    }
-
-    const result = await options.hostManager.pairHost(hostId, {
-      code,
-      ...(typeof input.deviceLabel === 'string' ? { deviceLabel: input.deviceLabel } : {}),
-    });
-    options.onHostStateChanged?.();
-    return result;
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:clear-host-auth`, async (_event, hostId: string) => {
-    const result = await options.hostManager.clearHostAuth(hostId);
-    options.onHostStateChanged?.();
-    return result;
-  });
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-workspace-server-state`, async () => desktopWorkspaceServerManager.readState());
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-workspace-server-config`, async (_event, input) => desktopWorkspaceServerManager.updateConfig(input ?? {}));
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-litter-shim-state`, async () => readLitterShimState());
   ipcMain.handle(`${CHANNEL_PREFIX}:install-litter-shim`, async () => installLitterShim());

@@ -62,11 +62,23 @@ That means:
 - direct remote workspaces connect to a `ws://` / `wss://` Codex-compatible endpoint
 - SSH remote workspaces tunnel a remote `pa codex app-server --listen ...` process
 - the preload bridge remains the renderer boundary; the remote transport is now the Codex protocol, not a custom desktop-only websocket surface
+- the Codex surface should implement both thread/turn methods and standalone `command/exec` so Litter and other clients can browse workspaces and run helper commands without falling back to custom APIs
+
+## Hosted workspace server
+
+The desktop shell can host this machine as a remote workspace through a managed local Codex-compatible server.
+
+- Desktop settings own an enable/disable toggle for the managed workspace server
+- Electron main spawns and monitors the bundled helper instead of requiring manual shell commands
+- the managed local endpoint is shown as an exact websocket URL, including the publish path (currently `/codex`)
+- optional Tailnet publishing uses `tailscale serve --set-path=/codex` and surfaces the exact `wss://.../codex` URL to copy into direct websocket remotes
+- this hosting path is machine-local desktop state, separate from saved remote workspace connection records
+
 ## Litter compatibility
 
 The desktop app owns installation of the local Litter SSH shim at `~/.litter/bin/codex`.
 
-- the shim delegates `codex app-server ...` to the desktop app's headless Codex-compatible server mode
+- the shim delegates `codex app-server ...` to the same bundled desktop helper path used by the managed workspace server
 - the same server implementation also backs direct websocket remotes and SSH-bootstrapped remote workspaces
 - local Litter connectivity should not require replacing the system `codex` binary globally
 

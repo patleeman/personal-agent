@@ -8,11 +8,28 @@ vi.mock('child_process', () => ({
   spawnSync: mocks.spawnSync,
 }));
 
-import { resolveWebUiTailscaleUrl, syncWebUiTailscaleServe } from './tailscale-serve.js';
+import {
+  resolveTailscaleServeBaseUrl,
+  resolveWebUiTailscaleUrl,
+  syncTailscaleServeProxy,
+  syncWebUiTailscaleServe,
+} from './tailscale-serve.js';
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+});
+
+describe('syncTailscaleServeProxy', () => {
+  it('supports mounting a reverse proxy on a custom path', () => {
+    syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' });
+
+    expect(mocks.spawnSync).toHaveBeenCalledWith(
+      'tailscale',
+      ['serve', '--bg', '--set-path=/codex', 'localhost:8390'],
+      { encoding: 'utf-8' },
+    );
+  });
 });
 
 describe('syncWebUiTailscaleServe', () => {
@@ -37,7 +54,7 @@ describe('syncWebUiTailscaleServe', () => {
   });
 
   it('fails fast for invalid ports', () => {
-    expect(() => syncWebUiTailscaleServe({ enabled: true, port: 0 })).toThrow('Invalid web UI port');
+    expect(() => syncWebUiTailscaleServe({ enabled: true, port: 0 })).toThrow('Invalid Tailscale Serve port');
     expect(mocks.spawnSync).not.toHaveBeenCalled();
   });
 
@@ -63,6 +80,25 @@ describe('syncWebUiTailscaleServe', () => {
     expect(() => syncWebUiTailscaleServe({ enabled: true, port: 3741 })).toThrow(
       '/ -> localhost:3741',
     );
+  });
+});
+
+describe('resolveTailscaleServeBaseUrl', () => {
+  it('returns the current tailnet https hostname when available', () => {
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: JSON.stringify({
+        Self: {
+          DNSName: 'my-host.tailnet.ts.net.',
+        },
+      }),
+      stderr: '',
+    });
+
+    const url = resolveTailscaleServeBaseUrl();
+
+    expect(url).toBe('https://my-host.tailnet.ts.net');
+    expect(mocks.spawnSync).toHaveBeenCalledWith('tailscale', ['status', '--json'], { encoding: 'utf-8' });
   });
 });
 
