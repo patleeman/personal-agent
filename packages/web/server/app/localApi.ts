@@ -170,6 +170,9 @@ import {
   readRemoteAccessAdminState,
   revokeRemoteAccessSession,
 } from '../ui/remoteAccessAuth.js';
+import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
+import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
+import { startDeferredResumeLoop } from './bootstrap.js';
 import { createProfileState } from './profileState.js';
 import { createServerRouteContext } from './routeContext.js';
 
@@ -327,9 +330,15 @@ let localServerRouteContext: ServerRouteContext | null = null;
 let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = null;
 let localProviderDesktopCapabilityContext: ProviderDesktopCapabilityContext | null = null;
 
+const LOCAL_API_DEFERRED_RESUME_POLL_MS = 3_000;
+
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
   return process.env.PERSONAL_AGENT_REPO_ROOT ?? defaultRepoRoot;
+}
+
+function resolveDaemonRoot(): string {
+  return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
 function buildRoutePattern(path: string): { pattern: RegExp; keys: string[] } {
@@ -440,6 +449,19 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     },
   });
 
+  const flushLiveDeferredResumes = createLiveDeferredResumeFlusher({
+    getCurrentProfile: profileState.getCurrentProfile,
+    getRepoRoot: () => repoRoot,
+    getStateRoot,
+    resolveDaemonRoot,
+    publishConversationSessionMetaChanged,
+  });
+
+  startDeferredResumeLoop({
+    flushLiveDeferredResumes,
+    pollMs: LOCAL_API_DEFERRED_RESUME_POLL_MS,
+  });
+
   const context = createServerRouteContext({
     repoRoot,
     settingsFile,
@@ -455,7 +477,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     resolveRequestedCwd,
     buildLiveSessionResourceOptions: profileState.buildLiveSessionResourceOptions,
     buildLiveSessionExtensionFactories: profileState.buildLiveSessionExtensionFactories,
-    flushLiveDeferredResumes: async () => {},
+    flushLiveDeferredResumes,
     getSavedWebUiPreferences: () => readSavedWebUiPreferences(settingsFile),
     listTasksForCurrentProfile: () => {
       const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());

@@ -1,0 +1,178 @@
+import {
+  completeDeferredResumeConversationRun,
+  markDeferredResumeConversationRunReady,
+  markDeferredResumeConversationRunRetryScheduled,
+  surfaceReadyDeferredResume,
+} from '@personal-agent/daemon';
+import {
+  activateDueDeferredResumesForSessionFile,
+  completeDeferredResumeForSessionFile,
+  listDeferredResumesForSessionFile,
+  retryDeferredResumeForSessionFile,
+} from '../automation/deferredResumes.js';
+import { syncWebLiveConversationRun } from './conversationRuns.js';
+import { getLiveSessions, promptSession as promptLocalSession, registry as liveRegistry } from './liveSessions.js';
+
+const DEFAULT_RETRY_DELAY_MS = 30_000;
+
+export interface CreateLiveDeferredResumeFlusherOptions {
+  getCurrentProfile: () => string;
+  getRepoRoot?: () => string | undefined;
+  getStateRoot: () => string;
+  resolveDaemonRoot: () => string;
+  publishConversationSessionMetaChanged: (...conversationIds: string[]) => void;
+  retryDelayMs?: number;
+  warn?: (message: string) => void;
+}
+
+export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResumeFlusherOptions): () => Promise<void> {
+  let processingDeferredResumes = false;
+
+  return async function flushLiveDeferredResumes(): Promise<void> {
+    if (processingDeferredResumes) {
+      return;
+    }
+
+    processingDeferredResumes = true;
+
+    try {
+      const liveSessions = getLiveSessions().filter((session) => session.sessionFile);
+      const now = new Date();
+      const daemonRoot = options.resolveDaemonRoot();
+      let mutated = false;
+      const mutatedConversationIds = new Set<string>();
+
+      for (const session of liveSessions) {
+        const activated = activateDueDeferredResumesForSessionFile({
+          at: now,
+          sessionFile: session.sessionFile,
+        });
+        if (activated.length > 0) {
+          mutated = true;
+          mutatedConversationIds.add(session.id);
+          for (const entry of activated) {
+            await markDeferredResumeConversationRunReady({
+              daemonRoot,
+              deferredResumeId: entry.id,
+              sessionFile: entry.sessionFile,
+              prompt: entry.prompt,
+              dueAt: entry.dueAt,
+              createdAt: entry.createdAt,
+              readyAt: entry.readyAt ?? now.toISOString(),
+              conversationId: session.id,
+            });
+
+            surfaceReadyDeferredResume({
+              entry,
+              repoRoot: options.getRepoRoot?.(),
+              profile: options.getCurrentProfile(),
+              stateRoot: options.getStateRoot(),
+              conversationId: session.id,
+            });
+          }
+        }
+
+        const readyEntries = listDeferredResumesForSessionFile(session.sessionFile)
+          .filter((entry) => entry.status === 'ready');
+        for (const readyEntry of readyEntries) {
+          const liveEntry = liveRegistry.get(session.id);
+          if (!liveEntry) {
+            break;
+          }
+
+          try {
+            const deferredResumeBehavior = readyEntry.behavior
+              ?? (liveEntry.session.isStreaming ? 'followUp' as const : undefined);
+            if (liveEntry.session.sessionFile) {
+              await syncWebLiveConversationRun({
+                conversationId: session.id,
+                sessionFile: liveEntry.session.sessionFile,
+                cwd: liveEntry.cwd,
+                title: liveEntry.title,
+                profile: options.getCurrentProfile(),
+                state: 'running',
+                pendingOperation: {
+                  type: 'prompt',
+                  text: readyEntry.prompt,
+                  ...(deferredResumeBehavior ? { behavior: deferredResumeBehavior } : {}),
+                  enqueuedAt: new Date().toISOString(),
+                },
+              });
+            }
+
+            await promptLocalSession(
+              session.id,
+              readyEntry.prompt,
+              deferredResumeBehavior,
+            );
+
+            const completedEntry = completeDeferredResumeForSessionFile({
+              sessionFile: readyEntry.sessionFile,
+              id: readyEntry.id,
+            });
+            if (completedEntry) {
+              mutated = true;
+              mutatedConversationIds.add(session.id);
+              await completeDeferredResumeConversationRun({
+                daemonRoot,
+                deferredResumeId: completedEntry.id,
+                sessionFile: completedEntry.sessionFile,
+                prompt: completedEntry.prompt,
+                dueAt: completedEntry.dueAt,
+                createdAt: completedEntry.createdAt,
+                readyAt: completedEntry.readyAt,
+                completedAt: new Date().toISOString(),
+                conversationId: session.id,
+                cwd: liveEntry.cwd,
+              });
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            if (liveEntry.session.sessionFile) {
+              await syncWebLiveConversationRun({
+                conversationId: session.id,
+                sessionFile: liveEntry.session.sessionFile,
+                cwd: liveEntry.cwd,
+                title: liveEntry.title,
+                profile: options.getCurrentProfile(),
+                state: 'failed',
+                lastError: message,
+              });
+            }
+
+            const retryDueAt = new Date(Date.now() + (options.retryDelayMs ?? DEFAULT_RETRY_DELAY_MS)).toISOString();
+            const retriedEntry = retryDeferredResumeForSessionFile({
+              sessionFile: readyEntry.sessionFile,
+              id: readyEntry.id,
+              dueAt: retryDueAt,
+            });
+            if (retriedEntry) {
+              mutated = true;
+              mutatedConversationIds.add(session.id);
+              await markDeferredResumeConversationRunRetryScheduled({
+                daemonRoot,
+                deferredResumeId: retriedEntry.id,
+                sessionFile: retriedEntry.sessionFile,
+                prompt: retriedEntry.prompt,
+                dueAt: retriedEntry.dueAt,
+                createdAt: retriedEntry.createdAt,
+                retryAt: retriedEntry.dueAt,
+                conversationId: session.id,
+                cwd: liveEntry.cwd,
+                lastError: message,
+              });
+            }
+            options.warn?.(`Deferred resume delivery failed for ${session.id}: ${message}`);
+            break;
+          }
+        }
+      }
+
+      if (mutated) {
+        options.publishConversationSessionMetaChanged(...mutatedConversationIds);
+      }
+    } finally {
+      processingDeferredResumes = false;
+    }
+  };
+}
