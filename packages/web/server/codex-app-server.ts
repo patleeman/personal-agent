@@ -6,14 +6,19 @@ import { join } from 'node:path';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { getStateRoot, buildCodexThreadFromSessionDetail, type CodexThread, type CodexThreadStatus, type CompatSessionDetail } from '@personal-agent/core';
 import {
+  abortDesktopLiveSession,
   createDesktopLiveSession,
+  forkDesktopConversation,
   readDesktopConversationBootstrap,
   readDesktopModels,
+  readDesktopOpenConversationTabs,
   readDesktopSessions,
   renameDesktopConversation,
   resumeDesktopLiveSession,
+  rollbackDesktopConversation,
   submitDesktopLiveSessionPrompt,
   subscribeDesktopLocalApiStream,
+  updateDesktopOpenConversationTabs,
 } from './app/localApi.js';
 
 interface JsonRpcRequest {
@@ -39,6 +44,7 @@ interface ConnectionThreadRuntime {
     reasoningItemId?: string;
     reasoningText: string;
     sentTurnStarted: boolean;
+    forcedCompletionStatus?: 'interrupted';
   };
 }
 
@@ -401,6 +407,89 @@ function buildThreadStartLikeResponse(input: {
   };
 }
 
+async function readArchivedThreadIdSet(): Promise<Set<string>> {
+  const tabs = await readDesktopOpenConversationTabs();
+  return new Set(tabs.archivedSessionIds);
+}
+
+async function archiveThreadId(threadId: string): Promise<void> {
+  const tabs = await readDesktopOpenConversationTabs();
+  await updateDesktopOpenConversationTabs({
+    sessionIds: tabs.sessionIds.filter((id) => id !== threadId),
+    pinnedSessionIds: tabs.pinnedSessionIds.filter((id) => id !== threadId),
+    archivedSessionIds: tabs.archivedSessionIds.includes(threadId)
+      ? tabs.archivedSessionIds
+      : [...tabs.archivedSessionIds, threadId],
+  });
+}
+
+async function unarchiveThreadId(threadId: string): Promise<void> {
+  const tabs = await readDesktopOpenConversationTabs();
+  if (!tabs.archivedSessionIds.includes(threadId)) {
+    return;
+  }
+
+  await updateDesktopOpenConversationTabs({
+    archivedSessionIds: tabs.archivedSessionIds.filter((id) => id !== threadId),
+  });
+}
+
+function completeActiveTurn(input: {
+  socket: WebSocket;
+  threadId: string;
+  runtime: ConnectionThreadRuntime;
+  status: 'completed' | 'interrupted';
+}): void {
+  const activeTurn = input.runtime.activeTurn;
+  if (!activeTurn) {
+    return;
+  }
+
+  const completedAt = Math.floor(Date.now() / 1000);
+  if (activeTurn.reasoningItemId) {
+    sendNotification(input.socket, 'item/completed', {
+      threadId: input.threadId,
+      turnId: activeTurn.id,
+      item: {
+        type: 'reasoning',
+        id: activeTurn.reasoningItemId,
+        summary: [],
+        content: activeTurn.reasoningText.length > 0 ? [activeTurn.reasoningText] : [],
+      },
+    });
+  }
+  if (activeTurn.agentMessageItemId) {
+    sendNotification(input.socket, 'item/completed', {
+      threadId: input.threadId,
+      turnId: activeTurn.id,
+      item: {
+        type: 'agentMessage',
+        id: activeTurn.agentMessageItemId,
+        text: activeTurn.agentMessageText,
+        phase: null,
+        memoryCitation: null,
+      },
+    });
+  }
+  sendNotification(input.socket, 'turn/completed', {
+    threadId: input.threadId,
+    turn: {
+      id: activeTurn.id,
+      items: [],
+      status: input.status,
+      error: null,
+      startedAt: activeTurn.startedAt,
+      completedAt,
+      durationMs: Math.max(0, (completedAt - activeTurn.startedAt) * 1000),
+    },
+  });
+  sendNotification(input.socket, 'thread/status/changed', {
+    threadId: input.threadId,
+    status: { type: 'idle' },
+  });
+  input.runtime.activeTurn = undefined;
+}
+
 async function ensureThreadSubscription(input: {
   socket: WebSocket;
   state: ConnectionState;
@@ -486,49 +575,12 @@ async function ensureThreadSubscription(input: {
         return;
       }
 
-      const completedAt = Math.floor(Date.now() / 1000);
-      if (activeTurn.reasoningItemId) {
-        sendNotification(input.socket, 'item/completed', {
-          threadId: input.threadId,
-          turnId: activeTurn.id,
-          item: {
-            type: 'reasoning',
-            id: activeTurn.reasoningItemId,
-            summary: [],
-            content: activeTurn.reasoningText.length > 0 ? [activeTurn.reasoningText] : [],
-          },
-        });
-      }
-      if (activeTurn.agentMessageItemId) {
-        sendNotification(input.socket, 'item/completed', {
-          threadId: input.threadId,
-          turnId: activeTurn.id,
-          item: {
-            type: 'agentMessage',
-            id: activeTurn.agentMessageItemId,
-            text: activeTurn.agentMessageText,
-            phase: null,
-            memoryCitation: null,
-          },
-        });
-      }
-      sendNotification(input.socket, 'turn/completed', {
+      completeActiveTurn({
+        socket: input.socket,
         threadId: input.threadId,
-        turn: {
-          id: activeTurn.id,
-          items: [],
-          status: 'completed',
-          error: null,
-          startedAt: activeTurn.startedAt,
-          completedAt,
-          durationMs: Math.max(0, (completedAt - activeTurn.startedAt) * 1000),
-        },
+        runtime: activeRuntime,
+        status: activeTurn.forcedCompletionStatus ?? 'completed',
       });
-      sendNotification(input.socket, 'thread/status/changed', {
-        threadId: input.threadId,
-        status: { type: 'idle' },
-      });
-      activeRuntime.activeTurn = undefined;
       return;
     }
 
@@ -820,13 +872,21 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
     }
 
     if (method === 'thread/list') {
-      const params = request.params as { limit?: number; cursor?: string; cwd?: string; searchTerm?: string } | undefined;
-      const sessions = await readDesktopSessions() as CompatSessionDetail['meta'][];
-      const modelState = await readDesktopModels();
+      const params = request.params as { limit?: number; cursor?: string; cwd?: string; searchTerm?: string; archived?: boolean } | undefined;
+      const [sessions, modelState, archivedThreadIds] = await Promise.all([
+        readDesktopSessions() as Promise<CompatSessionDetail['meta'][]>,
+        readDesktopModels(),
+        readArchivedThreadIdSet(),
+      ]);
       const catalog = buildModelCatalog(modelState);
       const providerByModel = new Map(catalog.descriptors.map((descriptor) => [descriptor.model, descriptor.provider]));
       const cliVersion = process.env.npm_package_version || '0.1.0';
       let filtered = sessions.filter((session) => !params?.cwd || session.cwd === params.cwd);
+      if (params?.archived === true) {
+        filtered = filtered.filter((session) => archivedThreadIds.has(session.id));
+      } else if (params?.archived === false) {
+        filtered = filtered.filter((session) => !archivedThreadIds.has(session.id));
+      }
       if (params?.searchTerm) {
         const searchTerm = params.searchTerm.trim().toLowerCase();
         filtered = filtered.filter((session) => session.title.toLowerCase().includes(searchTerm));
@@ -919,6 +979,7 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
         sendError(socket, id, -32004, 'Thread not found.');
         return;
       }
+      await unarchiveThreadId(threadId);
       await resumeDesktopLiveSession(session.file);
       const modelState = await readDesktopModels();
       const catalog = buildModelCatalog(modelState);
@@ -936,7 +997,104 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
       return;
     }
 
-    if (method === 'thread/name/set') {
+    if (method === 'thread/fork') {
+      const params = request.params as { threadId?: string; cwd?: string | null; model?: string | null } | undefined;
+      const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
+      if (!threadId) {
+        sendError(socket, id, -32602, 'threadId required.');
+        return;
+      }
+
+      const forkResult = await forkDesktopConversation({
+        conversationId: threadId,
+        ...(typeof params?.cwd === 'string' ? { cwd: params.cwd } : {}),
+        ...(typeof params?.model === 'string' ? { model: params.model } : {}),
+      });
+      const modelState = await readDesktopModels();
+      const catalog = buildModelCatalog(modelState);
+      const requestedModel = typeof params?.model === 'string' && params.model.trim().length > 0 ? params.model : null;
+      const initialModel = requestedModel ?? (modelState.currentModel || catalog.descriptors[0]?.model || '');
+      const initialProvider = catalog.descriptors.find((descriptor) => descriptor.model === initialModel)?.provider ?? 'openai-codex';
+      const { detail, thread } = await readThreadDetail({
+        conversationId: forkResult.id,
+        modelProvider: initialProvider,
+        cliVersion: process.env.npm_package_version || '0.1.0',
+      });
+      const model = detail.meta.model || initialModel;
+      const modelProvider = catalog.descriptors.find((descriptor) => descriptor.model === model)?.provider ?? initialProvider;
+      const runtime = buildThreadRuntime({
+        detail,
+        model,
+        modelProvider,
+        reasoningEffort: buildModelCatalog(modelState).currentThinkingLevel,
+      });
+      state.threads.set(thread.id, runtime);
+      sendResult(socket, id ?? 0, buildThreadStartLikeResponse({ thread, runtime }));
+      sendNotification(socket, 'thread/started', { thread });
+      return;
+    }
+
+    if (method === 'thread/rollback') {
+      const params = request.params as { threadId?: string; numTurns?: number } | undefined;
+      const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
+      const numTurns = typeof params?.numTurns === 'number' && Number.isInteger(params.numTurns)
+        ? params.numTurns
+        : null;
+      if (!threadId || !numTurns || numTurns <= 0) {
+        sendError(socket, id, -32602, 'threadId and positive numTurns required.');
+        return;
+      }
+
+      await unarchiveThreadId(threadId);
+      const runtime = state.threads.get(threadId);
+      runtime?.unsubscribe?.();
+      if (runtime) {
+        runtime.unsubscribe = undefined;
+        runtime.activeTurn = undefined;
+      }
+
+      const rollbackResult = await rollbackDesktopConversation({ conversationId: threadId, numTurns });
+      const modelState = await readDesktopModels();
+      const catalog = buildModelCatalog(modelState);
+      const currentProvider = catalog.descriptors.find((descriptor) => descriptor.model === modelState.currentModel)?.provider ?? 'openai-codex';
+      const { detail, thread } = await readThreadDetail({
+        conversationId: rollbackResult.id,
+        modelProvider: currentProvider,
+        cliVersion: process.env.npm_package_version || '0.1.0',
+      });
+      if (runtime) {
+        state.threads.set(thread.id, buildThreadRuntime({
+          detail,
+          model: runtime.model,
+          modelProvider: runtime.modelProvider,
+          reasoningEffort: runtime.reasoningEffort,
+        }));
+      }
+      sendResult(socket, id ?? 0, { thread });
+      return;
+    }
+
+    if (method === 'thread/archive') {
+      const params = request.params as { threadId?: string } | undefined;
+      const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
+      if (!threadId) {
+        sendError(socket, id, -32602, 'threadId required.');
+        return;
+      }
+
+      const sessions = await readDesktopSessions() as CompatSessionDetail['meta'][];
+      if (!sessions.some((session) => session.id === threadId)) {
+        sendError(socket, id, -32004, 'Thread not found.');
+        return;
+      }
+
+      await archiveThreadId(threadId);
+      sendResult(socket, id ?? 0, {});
+      sendNotification(socket, 'thread/archived', { threadId });
+      return;
+    }
+
+    if (method === 'thread/name/set' || method === 'thread/setName') {
       const params = request.params as { threadId?: string; name?: string } | undefined;
       const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
       const name = typeof params?.name === 'string' ? params.name.trim() : '';
@@ -971,6 +1129,7 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
         return;
       }
 
+      await unarchiveThreadId(threadId);
       const runtime = await ensureThreadSubscription({ socket, state, threadId });
       const text = parseTextInput(params?.input);
       if (!text) {
@@ -1041,6 +1200,7 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
         return;
       }
 
+      await unarchiveThreadId(threadId);
       const promptResult = await submitDesktopLiveSessionPrompt({
         conversationId: threadId,
         text,
@@ -1052,6 +1212,39 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
       }
 
       sendResult(socket, id ?? 0, { turnId: runtime.activeTurn.id });
+      return;
+    }
+
+    if (method === 'turn/interrupt') {
+      const params = request.params as { threadId?: string; turnId?: string } | undefined;
+      const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
+      const turnId = typeof params?.turnId === 'string' ? params.turnId.trim() : '';
+      const runtime = state.threads.get(threadId);
+      if (!threadId || !turnId || !runtime?.activeTurn || runtime.activeTurn.id !== turnId) {
+        sendError(socket, id, -32012, 'Expected active turn not found.');
+        return;
+      }
+
+      runtime.activeTurn.forcedCompletionStatus = 'interrupted';
+      try {
+        await abortDesktopLiveSession(threadId);
+      } catch (error) {
+        if (runtime.activeTurn?.id === turnId) {
+          delete runtime.activeTurn.forcedCompletionStatus;
+        }
+        throw error;
+      }
+
+      if (runtime.activeTurn?.id === turnId) {
+        completeActiveTurn({
+          socket,
+          threadId,
+          runtime,
+          status: 'interrupted',
+        });
+      }
+
+      sendResult(socket, id ?? 0, {});
       return;
     }
 

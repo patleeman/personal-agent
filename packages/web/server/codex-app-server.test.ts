@@ -10,9 +10,14 @@ const mocks = vi.hoisted(() => {
     readDesktopModels: vi.fn(),
     readDesktopConversationBootstrap: vi.fn(),
     createDesktopLiveSession: vi.fn(),
+    forkDesktopConversation: vi.fn(),
     resumeDesktopLiveSession: vi.fn(),
+    rollbackDesktopConversation: vi.fn(),
     submitDesktopLiveSessionPrompt: vi.fn(),
     renameDesktopConversation: vi.fn(),
+    readDesktopOpenConversationTabs: vi.fn(),
+    updateDesktopOpenConversationTabs: vi.fn(),
+    abortDesktopLiveSession: vi.fn(),
     subscribeDesktopLocalApiStream: vi.fn(async (_path: string, onEvent: (event: { type: 'open' | 'message' | 'error' | 'close'; data?: string; message?: string }) => void) => {
       streamListener = onEvent;
       return unsubscribeMock;
@@ -28,12 +33,17 @@ const mocks = vi.hoisted(() => {
 vi.mock('./app/localApi.js', () => ({
   readDesktopSessions: mocks.readDesktopSessions,
   readDesktopModels: mocks.readDesktopModels,
+  abortDesktopLiveSession: mocks.abortDesktopLiveSession,
   readDesktopConversationBootstrap: mocks.readDesktopConversationBootstrap,
   createDesktopLiveSession: mocks.createDesktopLiveSession,
+  forkDesktopConversation: mocks.forkDesktopConversation,
+  readDesktopOpenConversationTabs: mocks.readDesktopOpenConversationTabs,
   resumeDesktopLiveSession: mocks.resumeDesktopLiveSession,
+  rollbackDesktopConversation: mocks.rollbackDesktopConversation,
   submitDesktopLiveSessionPrompt: mocks.submitDesktopLiveSessionPrompt,
   renameDesktopConversation: mocks.renameDesktopConversation,
   subscribeDesktopLocalApiStream: mocks.subscribeDesktopLocalApiStream,
+  updateDesktopOpenConversationTabs: mocks.updateDesktopOpenConversationTabs,
 }));
 
 import { startCodexAppServer } from './codex-app-server.js';
@@ -94,12 +104,31 @@ describe('codex app server', () => {
     mocks.readDesktopModels.mockReset();
     mocks.readDesktopConversationBootstrap.mockReset();
     mocks.createDesktopLiveSession.mockReset();
+    mocks.forkDesktopConversation.mockReset();
     mocks.resumeDesktopLiveSession.mockReset();
+    mocks.rollbackDesktopConversation.mockReset();
     mocks.submitDesktopLiveSessionPrompt.mockReset();
     mocks.renameDesktopConversation.mockReset();
+    mocks.readDesktopOpenConversationTabs.mockReset();
+    mocks.updateDesktopOpenConversationTabs.mockReset();
+    mocks.abortDesktopLiveSession.mockReset();
     mocks.subscribeDesktopLocalApiStream.mockClear();
     mocks.unsubscribeMock.mockReset();
     mocks.resetStreamListener();
+    mocks.readDesktopOpenConversationTabs.mockResolvedValue({
+      sessionIds: [],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [],
+    });
+    mocks.updateDesktopOpenConversationTabs.mockResolvedValue({
+      ok: true,
+      sessionIds: [],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [],
+    });
+    mocks.abortDesktopLiveSession.mockResolvedValue({ ok: true });
   });
 
   afterEach(async () => {
@@ -489,6 +518,352 @@ describe('codex app server', () => {
         params: {
           threadId: 'live-1',
           turn: expect.objectContaining({ id: 'live-1:active-turn:1', status: 'completed' }),
+        },
+      },
+      {
+        method: 'thread/status/changed',
+        params: { threadId: 'live-1', status: { type: 'idle' } },
+      },
+    ]));
+
+    socket.close();
+  });
+
+  it('filters archived threads and archives threads', async () => {
+    mocks.readDesktopModels.mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      models: [
+        { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', reasoning: true },
+      ],
+    });
+    mocks.readDesktopSessions.mockResolvedValue([
+      {
+        id: 'conversation-1',
+        file: '/sessions/conversation-1.jsonl',
+        timestamp: '2026-04-14T10:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'gpt-5.4',
+        title: 'Active conversation',
+        messageCount: 1,
+        isRunning: false,
+        isLive: false,
+        lastActivityAt: '2026-04-14T10:05:00.000Z',
+      },
+      {
+        id: 'conversation-2',
+        file: '/sessions/conversation-2.jsonl',
+        timestamp: '2026-04-14T11:00:00.000Z',
+        cwd: '/repo',
+        cwdSlug: 'repo',
+        model: 'gpt-5.4',
+        title: 'Archived conversation',
+        messageCount: 1,
+        isRunning: false,
+        isLive: false,
+        lastActivityAt: '2026-04-14T11:05:00.000Z',
+      },
+    ]);
+    mocks.readDesktopOpenConversationTabs.mockResolvedValue({
+      sessionIds: ['conversation-1'],
+      pinnedSessionIds: ['conversation-pinned'],
+      archivedSessionIds: ['conversation-2'],
+      workspacePaths: [],
+    });
+
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    socket.send(JSON.stringify({ id: 2, method: 'thread/list', params: { archived: false } }));
+    await expect(readJsonMessage(socket)).resolves.toEqual({
+      id: 2,
+      result: {
+        data: [expect.objectContaining({ id: 'conversation-1' })],
+        nextCursor: null,
+      },
+    });
+
+    socket.send(JSON.stringify({ id: 3, method: 'thread/list', params: { archived: true } }));
+    await expect(readJsonMessage(socket)).resolves.toEqual({
+      id: 3,
+      result: {
+        data: [expect.objectContaining({ id: 'conversation-2' })],
+        nextCursor: null,
+      },
+    });
+
+    const archiveMessages = await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({ id: 4, method: 'thread/archive', params: { threadId: 'conversation-1' } }));
+    }) as Array<{ id?: number; method?: string; params?: Record<string, unknown>; result?: Record<string, unknown> }>;
+
+    expect(mocks.updateDesktopOpenConversationTabs).toHaveBeenCalledWith({
+      sessionIds: [],
+      pinnedSessionIds: ['conversation-pinned'],
+      archivedSessionIds: ['conversation-2', 'conversation-1'],
+    });
+    expect(archiveMessages).toEqual(expect.arrayContaining([
+      { id: 4, result: {} },
+      { method: 'thread/archived', params: { threadId: 'conversation-1' } },
+    ]));
+
+    socket.close();
+  });
+
+  it('forks threads into new live workspaces', async () => {
+    mocks.readDesktopModels.mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      models: [
+        { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', reasoning: true },
+      ],
+    });
+    mocks.forkDesktopConversation.mockResolvedValue({
+      id: 'fork-1',
+      sessionFile: '/sessions/fork-1.jsonl',
+    });
+    mocks.readDesktopConversationBootstrap.mockResolvedValue({
+      conversationId: 'fork-1',
+      sessionDetail: {
+        meta: {
+          id: 'fork-1',
+          file: '/sessions/fork-1.jsonl',
+          timestamp: '2026-04-14T12:00:00.000Z',
+          cwd: '/repo',
+          cwdSlug: 'repo',
+          model: 'gpt-5.4',
+          title: 'Forked conversation',
+          messageCount: 1,
+          isRunning: false,
+          isLive: true,
+          lastActivityAt: '2026-04-14T12:05:00.000Z',
+          parentSessionId: 'conversation-1',
+        },
+        blocks: [
+          { type: 'user', id: 'u1', ts: '2026-04-14T12:00:00.000Z', text: 'Hello' },
+          { type: 'text', id: 'a1', ts: '2026-04-14T12:00:01.000Z', text: 'Forked' },
+        ],
+        blockOffset: 0,
+        totalBlocks: 2,
+        contextUsage: null,
+        signature: 'sig-fork',
+      },
+      liveSession: { live: true },
+    });
+
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    const forkMessages = await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 2,
+        method: 'thread/fork',
+        params: { threadId: 'conversation-1', model: 'gpt-5.4' },
+      }));
+    }) as Array<{ id?: number; result?: { thread?: { id: string; forkedFromId: string | null } }; method?: string; params?: { thread?: { id: string } } }>;
+
+    expect(mocks.forkDesktopConversation).toHaveBeenCalledWith({
+      conversationId: 'conversation-1',
+      model: 'gpt-5.4',
+    });
+    expect(forkMessages).toEqual(expect.arrayContaining([
+      {
+        id: 2,
+        result: expect.objectContaining({
+          thread: expect.objectContaining({ id: 'fork-1', forkedFromId: 'conversation-1' }),
+        }),
+      },
+      {
+        method: 'thread/started',
+        params: expect.objectContaining({ thread: expect.objectContaining({ id: 'fork-1' }) }),
+      },
+    ]));
+
+    socket.close();
+  });
+
+  it('rolls threads back and returns the updated thread snapshot', async () => {
+    mocks.readDesktopModels.mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      models: [
+        { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', reasoning: true },
+      ],
+    });
+    mocks.rollbackDesktopConversation.mockResolvedValue({
+      id: 'conversation-1',
+      sessionFile: '/sessions/conversation-1.jsonl',
+    });
+    mocks.readDesktopConversationBootstrap.mockResolvedValue({
+      conversationId: 'conversation-1',
+      sessionDetail: {
+        meta: {
+          id: 'conversation-1',
+          file: '/sessions/conversation-1.jsonl',
+          timestamp: '2026-04-14T10:00:00.000Z',
+          cwd: '/repo',
+          cwdSlug: 'repo',
+          model: 'gpt-5.4',
+          title: 'Rolled back conversation',
+          messageCount: 1,
+          isRunning: false,
+          isLive: false,
+          lastActivityAt: '2026-04-14T10:05:00.000Z',
+        },
+        blocks: [
+          { type: 'user', id: 'u1', ts: '2026-04-14T10:00:00.000Z', text: 'Only the first turn remains' },
+          { type: 'text', id: 'a1', ts: '2026-04-14T10:00:01.000Z', text: 'Okay' },
+        ],
+        blockOffset: 0,
+        totalBlocks: 2,
+        contextUsage: null,
+        signature: 'sig-rollback',
+      },
+      liveSession: { live: false },
+    });
+
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    socket.send(JSON.stringify({
+      id: 2,
+      method: 'thread/rollback',
+      params: { threadId: 'conversation-1', numTurns: 1 },
+    }));
+
+    await expect(readJsonMessage(socket)).resolves.toEqual({
+      id: 2,
+      result: {
+        thread: expect.objectContaining({
+          id: 'conversation-1',
+          turns: [
+            expect.objectContaining({ id: 'conversation-1:turn:1', status: 'completed' }),
+          ],
+        }),
+      },
+    });
+    expect(mocks.rollbackDesktopConversation).toHaveBeenCalledWith({ conversationId: 'conversation-1', numTurns: 1 });
+
+    socket.close();
+  });
+
+  it('interrupts active turns as interrupted', async () => {
+    mocks.readDesktopModels.mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      models: [
+        { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', reasoning: true },
+      ],
+    });
+    mocks.createDesktopLiveSession.mockResolvedValue({
+      id: 'live-1',
+      sessionFile: '/sessions/live-1.jsonl',
+      bootstrap: {
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/sessions/live-1.jsonl',
+            timestamp: '2026-04-14T10:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: 'repo',
+            model: 'gpt-5.4',
+            title: 'Live workspace',
+            messageCount: 0,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: '2026-04-14T10:00:00.000Z',
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+          signature: 'sig-live',
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/sessions/live-1.jsonl',
+          isStreaming: false,
+        },
+      },
+    });
+    mocks.submitDesktopLiveSessionPrompt.mockResolvedValue({
+      ok: true,
+      accepted: true,
+      delivery: 'started',
+      referencedTaskIds: [],
+      referencedMemoryDocIds: [],
+      referencedVaultFileIds: [],
+      referencedAttachmentIds: [],
+    });
+
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 2,
+        method: 'thread/start',
+        params: { cwd: '/repo', model: 'gpt-5.4' },
+      }));
+    });
+
+    const turnMessages = await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 3,
+        method: 'turn/start',
+        params: { threadId: 'live-1', input: [{ type: 'text', text: 'Hello', textElements: [] }] },
+      }));
+    }) as Array<{ id?: number; result?: { turn?: { id: string } } }>;
+    const turnId = turnMessages.find((message) => message.id === 3)?.result?.turn?.id;
+    expect(turnId).toBe('live-1:active-turn:1');
+
+    const interruptMessages = await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 4,
+        method: 'turn/interrupt',
+        params: { threadId: 'live-1', turnId },
+      }));
+    }) as Array<{ id?: number; method?: string; result?: Record<string, unknown>; params?: Record<string, unknown> }>;
+
+    expect(mocks.abortDesktopLiveSession).toHaveBeenCalledWith('live-1');
+    expect(interruptMessages).toEqual(expect.arrayContaining([
+      { id: 4, result: {} },
+      {
+        method: 'turn/completed',
+        params: {
+          threadId: 'live-1',
+          turn: expect.objectContaining({ id: 'live-1:active-turn:1', status: 'interrupted' }),
         },
       },
       {

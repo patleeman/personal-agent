@@ -292,7 +292,7 @@ export function buildCodexThreadFromSessionDetail(input: {
 
   return {
     id: input.detail.meta.id,
-    forkedFromId: null,
+    forkedFromId: input.detail.meta.parentSessionId ?? null,
     preview: buildPreview(input.detail.blocks, input.detail.meta.title),
     ephemeral: false,
     modelProvider: input.modelProvider,

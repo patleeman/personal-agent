@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -2255,6 +2255,97 @@ export async function readDesktopSessionBlock(input: {
   return result;
 }
 
+function resolveDesktopConversationSource(conversationId: string): {
+  sessionFile: string;
+  cwd: string;
+  live: boolean;
+} {
+  const trimmedConversationId = conversationId.trim();
+  if (!trimmedConversationId) {
+    throw new Error('conversationId required');
+  }
+
+  const liveEntry = liveRegistry.get(trimmedConversationId);
+  const liveSessionFile = liveEntry?.session.sessionFile?.trim();
+  if (liveEntry && liveSessionFile) {
+    return {
+      sessionFile: liveSessionFile,
+      cwd: liveEntry.cwd,
+      live: true,
+    };
+  }
+
+  const sessionFile = resolveConversationSessionFile(trimmedConversationId)?.trim();
+  if (!sessionFile || !existsSync(sessionFile)) {
+    throw new Error('Conversation not found');
+  }
+
+  const sessionManager = SessionManager.open(sessionFile);
+  return {
+    sessionFile,
+    cwd: sessionManager.getCwd(),
+    live: false,
+  };
+}
+
+function resolveRollbackLeafId(sessionFile: string, numTurns: number): string | null {
+  const sessionManager = SessionManager.open(sessionFile);
+  const branch = sessionManager.getBranch();
+  const userMessageEntries = branch.filter((entry) => entry.type === 'message' && entry.message.role === 'user');
+
+  if (userMessageEntries.length === 0) {
+    throw new Error('No user turns are available to roll back.');
+  }
+
+  if (numTurns >= userMessageEntries.length) {
+    return null;
+  }
+
+  const firstRemovedTurn = userMessageEntries[userMessageEntries.length - numTurns];
+  if (!firstRemovedTurn) {
+    throw new Error('Could not resolve rollback target.');
+  }
+
+  return firstRemovedTurn.parentId ?? null;
+}
+
+function rewriteConversationSessionToLeaf(sessionFile: string, leafId: string | null): void {
+  const sessionManager = SessionManager.open(sessionFile);
+  const header = sessionManager.getHeader();
+  if (!header) {
+    throw new Error('Conversation session header is missing.');
+  }
+
+  if (leafId === null) {
+    writeFileSync(sessionFile, `${JSON.stringify(header)}\n`, 'utf-8');
+    return;
+  }
+
+  const branchedSessionFile = sessionManager.createBranchedSession(leafId);
+  if (!branchedSessionFile || !existsSync(branchedSessionFile)) {
+    throw new Error('Unable to create rollback snapshot.');
+  }
+
+  try {
+    const lines = readFileSync(branchedSessionFile, 'utf-8')
+      .split(/\r?\n/)
+      .filter((line) => line.trim().length > 0);
+
+    if (lines.length === 0) {
+      throw new Error('Rollback snapshot was empty.');
+    }
+
+    lines[0] = JSON.stringify(header);
+    writeFileSync(sessionFile, `${lines.join('\n')}\n`, 'utf-8');
+  } finally {
+    try {
+      unlinkSync(branchedSessionFile);
+    } catch {
+      // Ignore temporary rollback snapshot cleanup failures.
+    }
+  }
+}
+
 export async function createDesktopLiveSession(input: {
   cwd?: string;
   model?: string | null;
@@ -2355,6 +2446,56 @@ export async function summarizeAndForkDesktopLiveSession(input: {
   conversationId: string;
 }) {
   return summarizeAndForkLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function forkDesktopConversation(input: {
+  conversationId: string;
+  cwd?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+}): Promise<{ id: string; sessionFile: string }> {
+  const source = resolveDesktopConversationSource(input.conversationId);
+  return createSessionFromExisting(
+    source.sessionFile,
+    input.cwd?.trim() || source.cwd,
+    {
+      ...(input.model !== undefined ? { initialModel: input.model } : {}),
+      ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
+    },
+  );
+}
+
+export async function rollbackDesktopConversation(input: {
+  conversationId: string;
+  numTurns: number;
+}): Promise<{ id: string; sessionFile: string }> {
+  if (!Number.isInteger(input.numTurns) || input.numTurns <= 0) {
+    throw new Error('numTurns must be a positive integer.');
+  }
+
+  const conversationId = input.conversationId.trim();
+  const source = resolveDesktopConversationSource(conversationId);
+  if (source.live) {
+    const liveEntry = liveRegistry.get(conversationId);
+    if (liveEntry?.session.isStreaming) {
+      throw new Error('Cannot roll back a running conversation. Interrupt it first.');
+    }
+    destroySession(conversationId);
+  }
+
+  const leafId = resolveRollbackLeafId(source.sessionFile, input.numTurns);
+  rewriteConversationSessionToLeaf(source.sessionFile, leafId);
+
+  if (source.live) {
+    await resumeLiveSessionCapability({ sessionFile: source.sessionFile }, await getLocalLiveSessionCapabilityContext());
+  } else {
+    publishConversationSessionMetaChanged(conversationId);
+  }
+
+  return {
+    id: conversationId,
+    sessionFile: source.sessionFile,
+  };
 }
 
 export async function abortDesktopLiveSession(conversationId: string): Promise<{ ok: true }> {

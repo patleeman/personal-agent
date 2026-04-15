@@ -20,6 +20,7 @@ describe('codex compatibility mappers', () => {
         isRunning: false,
         isLive: false,
         lastActivityAt: '2026-04-14T10:05:00.000Z',
+        parentSessionId: 'conversation-parent',
       },
       blocks: [
         { type: 'user', id: 'u1', ts: '2026-04-14T10:00:00.000Z', text: 'Hello there' },
@@ -42,6 +43,7 @@ describe('codex compatibility mappers', () => {
     });
 
     expect(thread.id).toBe('conversation-1');
+    expect(thread.forkedFromId).toBe('conversation-parent');
     expect(thread.status).toEqual({ type: 'idle' });
     expect(thread.turns).toHaveLength(2);
     expect(thread.turns[0]?.items).toEqual([
