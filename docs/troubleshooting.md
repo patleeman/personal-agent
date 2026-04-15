@@ -35,6 +35,19 @@ Optional global fallback:
 npm install -g @mariozechner/pi-coding-agent
 ```
 
+## `npm` or Homebrew tools are missing inside agent shells
+
+Recent runtimes hydrate their own `PATH` from your login shell at startup so GUI and launchd launches can still find Homebrew-installed tools.
+
+If you are still on an older running daemon or web service after updating, restart them:
+
+```bash
+pa daemon restart
+pa ui restart
+```
+
+If the path is still wrong after that, reinstall the managed service so launchd picks up the refreshed environment.
+
 ## Web UI will not start
 
 Check whether the build exists and whether the port is already occupied:

@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { clearResolvedChildProcessEnvCache, resolveChildProcessEnv } from './shell-env.js';
+import { clearResolvedChildProcessEnvCache, hydrateProcessEnvFromShell, resolveChildProcessEnv } from './shell-env.js';
 
 const START = '__PERSONAL_AGENT_ENV_START__';
 const END = '__PERSONAL_AGENT_ENV_END__';
@@ -116,6 +116,62 @@ describe('resolveChildProcessEnv', () => {
       FROM_RC: '1',
     });
     expect(resolved.PATH).toBe('/opt/homebrew/bin:/usr/bin:/base/bin');
+  });
+
+  it('merges PATH values even when the base env uses different key casing', () => {
+    const shellPath = createFakeInteractiveShell({
+      entries: ['PATH=/opt/homebrew/bin:/usr/bin'],
+    });
+    const baseEnv: NodeJS.ProcessEnv = {
+      SHELL: shellPath,
+      HOME: '/tmp/patrick',
+      Path: '/usr/bin:/base/bin',
+    };
+
+    const resolved = resolveChildProcessEnv({}, baseEnv);
+
+    expect(resolved.PATH).toBe('/opt/homebrew/bin:/usr/bin:/base/bin');
+    expect('Path' in resolved).toBe(false);
+  });
+
+  it('hydrates a target env object in place using the resolved shell env', () => {
+    const shellPath = createFakeInteractiveShell({
+      entries: [
+        'PATH=/opt/homebrew/bin:/usr/bin',
+        'FROM_SHELL=1',
+      ],
+    });
+    const targetEnv = {
+      SHELL: shellPath,
+      HOME: '/tmp/patrick',
+      PATH: '/usr/bin:/base/bin',
+      BASE_ONLY: '1',
+    };
+
+    const hydrated = hydrateProcessEnvFromShell(targetEnv);
+
+    expect(hydrated).toBe(targetEnv);
+    expect(targetEnv).toMatchObject({
+      BASE_ONLY: '1',
+      FROM_SHELL: '1',
+      PATH: '/opt/homebrew/bin:/usr/bin:/base/bin',
+    });
+  });
+
+  it('preserves the target PATH key casing when hydrating in place', () => {
+    const shellPath = createFakeInteractiveShell({
+      entries: ['PATH=/opt/homebrew/bin:/usr/bin'],
+    });
+    const targetEnv: NodeJS.ProcessEnv = {
+      SHELL: shellPath,
+      HOME: '/tmp/patrick',
+      Path: '/usr/bin:/base/bin',
+    };
+
+    hydrateProcessEnvFromShell(targetEnv);
+
+    expect(targetEnv.Path).toBe('/opt/homebrew/bin:/usr/bin:/base/bin');
+    expect('PATH' in targetEnv).toBe(false);
   });
 
   it('falls back to the base env when shell capture fails', () => {

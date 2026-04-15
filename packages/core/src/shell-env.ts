@@ -69,6 +69,24 @@ function mergePathValues(preferred: string | undefined, fallback: string | undef
   return entries.length > 0 ? entries.join(delimiter) : undefined;
 }
 
+function readPathValue(env: NodeJS.ProcessEnv | null | undefined): string | undefined {
+  if (!env) {
+    return undefined;
+  }
+
+  return env[findPathKey(env)];
+}
+
+function setNormalizedPathValue(env: NodeJS.ProcessEnv, pathKey: string, value: string): void {
+  for (const key of Object.keys(env)) {
+    if (key !== pathKey && key.toLowerCase() === 'path') {
+      delete env[key];
+    }
+  }
+
+  env[pathKey] = value;
+}
+
 function resolveShellCaptureArgSets(shellPath: string): string[][] | null {
   const shellName = basename(shellPath).toLowerCase();
 
@@ -172,9 +190,9 @@ function mergeResolvedEnvironment(baseEnv: NodeJS.ProcessEnv, shellEnv: NodeJS.P
   };
 
   const pathKey = findPathKey(shellEnv, baseEnv);
-  const mergedPath = mergePathValues(shellEnv?.[pathKey], baseEnv[pathKey]);
+  const mergedPath = mergePathValues(readPathValue(shellEnv), readPathValue(baseEnv));
   if (mergedPath) {
-    mergedEnv[pathKey] = mergedPath;
+    setNormalizedPathValue(mergedEnv, pathKey, mergedPath);
   }
 
   return mergedEnv;
@@ -187,13 +205,38 @@ export function resolveChildProcessEnv(
   const shellEnv = getCachedInteractiveShellEnvironment(baseEnv);
   const mergedEnv = mergeResolvedEnvironment(baseEnv, shellEnv);
   const pathKey = findPathKey(overrides, mergedEnv);
-  const resolvedPath = mergePathValues(overrides[pathKey], mergedEnv[pathKey]);
-
-  return {
+  const resolvedPath = mergePathValues(readPathValue(overrides), readPathValue(mergedEnv));
+  const resolvedEnv: NodeJS.ProcessEnv = {
     ...mergedEnv,
     ...overrides,
-    ...(resolvedPath ? { [pathKey]: resolvedPath } : {}),
   };
+
+  if (resolvedPath) {
+    setNormalizedPathValue(resolvedEnv, pathKey, resolvedPath);
+  }
+
+  return resolvedEnv;
+}
+
+export function hydrateProcessEnvFromShell(targetEnv: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const resolvedEnv = resolveChildProcessEnv({}, targetEnv);
+  const targetPathKey = findPathKey(targetEnv, resolvedEnv);
+  const resolvedPathKey = findPathKey(resolvedEnv, targetEnv);
+
+  for (const [key, value] of Object.entries(resolvedEnv)) {
+    if (typeof value !== 'string' || key.toLowerCase() === 'path') {
+      continue;
+    }
+
+    targetEnv[key] = value;
+  }
+
+  const resolvedPath = resolvedEnv[resolvedPathKey];
+  if (typeof resolvedPath === 'string' && resolvedPath.length > 0) {
+    setNormalizedPathValue(targetEnv, targetPathKey, resolvedPath);
+  }
+
+  return targetEnv;
 }
 
 export function clearResolvedChildProcessEnvCache(): void {

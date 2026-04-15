@@ -12,6 +12,7 @@ import {
   bootstrapStateOrThrow,
   finalizeMachineWebUiConfigState,
   getDurableProfilesDir,
+  hydrateProcessEnvFromShell,
   preparePiAgentDir,
   readMachineWebUiConfig,
   resolveStatePaths,
@@ -2873,6 +2874,8 @@ function printRootHelp(
 }
 
 export async function runCli(argv: string[] = process.argv.slice(2)): Promise<number> {
+  hydrateProcessEnvFromShell();
+
   const parsedFlags = parseGlobalFlags(argv);
   configureUi({ plain: parsedFlags.plain });
 

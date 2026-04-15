@@ -1,6 +1,6 @@
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { getStateRoot } from '@personal-agent/core';
+import { getStateRoot, hydrateProcessEnvFromShell } from '@personal-agent/core';
 import { app, dialog, shell } from 'electron';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
@@ -91,6 +91,8 @@ async function openDesktopLogs(): Promise<void> {
 }
 
 function configureDesktopRuntimeEnvironment(): void {
+  hydrateProcessEnvFromShell();
+
   const runtime = resolveDesktopRuntimePaths();
   process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
   process.env.PERSONAL_AGENT_REPO_ROOT = runtime.repoRoot;

@@ -133,6 +133,7 @@ import {
   getProfilesRoot,
   getLocalProfileDir,
   getStateRoot,
+  hydrateProcessEnvFromShell,
   createMemoryDoc,
   loadMemoryPackageReferences,
   listConversationArtifacts,
@@ -190,6 +191,8 @@ import {
   scheduleDeferredResumeForSessionFile,
   type DeferredResumeSummary,
 } from './automation/deferredResumes.js';
+
+hydrateProcessEnvFromShell();
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const LOOPBACK_HOST = '127.0.0.1';

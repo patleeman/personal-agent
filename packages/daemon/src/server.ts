@@ -1,7 +1,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { createServer, type Server, type Socket } from 'net';
 import { cpSync, createWriteStream, existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
-import { resolveChildProcessEnv } from '@personal-agent/core';
+import { hydrateProcessEnvFromShell, resolveChildProcessEnv } from '@personal-agent/core';
 import { looksLikePersonalAgentCliEntryPath } from './background-run-agent.js';
 import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
@@ -1043,6 +1043,8 @@ export class PersonalAgentDaemon {
 }
 
 export async function runDaemonProcess(): Promise<void> {
+  hydrateProcessEnvFromShell();
+
   const daemon = new PersonalAgentDaemon();
 
   const shutdown = async () => {
