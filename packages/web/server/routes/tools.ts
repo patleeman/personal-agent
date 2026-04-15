@@ -89,6 +89,21 @@ function buildPackageInstallState(profile = getCurrentProfileFn()) {
   };
 }
 
+function buildMcpCallbackUrl(input: {
+  callbackHost?: string;
+  callbackPort?: number;
+  callbackPath?: string;
+}): string | undefined {
+  if (!input.callbackHost && !input.callbackPort && !input.callbackPath) {
+    return undefined;
+  }
+
+  const host = input.callbackHost ?? 'localhost';
+  const port = input.callbackPort ?? 3334;
+  const path = input.callbackPath ?? '/oauth/callback';
+  return `http://${host}:${port}${path}`;
+}
+
 async function handleToolsRequest(req: Request, res: Response): Promise<void> {
   try {
     const profile = resolveRequestedProfileFromQuery(req);
@@ -99,8 +114,11 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
       extensionFactories: buildLiveSessionExtensionFactoriesFn(),
     }));
     const bundledSkillManifests = readBundledSkillMcpManifests(resourceOptions.additionalSkillPaths ?? []);
+    const configDiscoveryEnv = { ...process.env };
+    delete configDiscoveryEnv.MCP_CONFIG_PATH;
     const mergedMcpConfig = buildMergedMcpConfigDocument({
       cwd: getRepoRootFn(),
+      env: configDiscoveryEnv,
       skillDirs: resourceOptions.additionalSkillPaths ?? [],
     });
     const parsedMcpConfig = readMcpConfigDocument({
@@ -139,6 +157,11 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
         servers: parsedMcpConfig.servers.map((server) => {
           const bundledManifest = bundledManifestByServerName.get(server.name);
           const source = explicitServerNames.has(server.name) ? 'config' : 'skill';
+          const callbackUrl = buildMcpCallbackUrl({
+            callbackHost: server.callbackHost,
+            callbackPort: server.callbackPort,
+            callbackPath: server.callbackPath,
+          });
           return {
             name: server.name,
             transport: server.transport,
@@ -147,9 +170,13 @@ async function handleToolsRequest(req: Request, res: Response): Promise<void> {
             cwd: server.cwd,
             url: server.url,
             source,
+            sourcePath: source === 'skill' ? bundledManifest?.manifestPath : parsedMcpConfig.path,
             skillName: source === 'skill' ? bundledManifest?.skillName : undefined,
             skillPath: source === 'skill' ? bundledManifest?.skillDir : undefined,
             manifestPath: source === 'skill' ? bundledManifest?.manifestPath : undefined,
+            hasOAuth: Boolean(server.oauthClientInfo || server.oauthClientMetadata || callbackUrl),
+            callbackUrl,
+            authorizeResource: server.authorizeResource,
             raw: {},
           };
         }),

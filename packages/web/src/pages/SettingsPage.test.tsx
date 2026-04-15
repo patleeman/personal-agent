@@ -173,13 +173,17 @@ describe('SettingsPage', () => {
             servers: [
               {
                 name: 'atlassian',
-                transport: 'stdio',
-                command: 'pa',
-                args: ['mcp', 'serve', 'atlassian'],
+                transport: 'remote',
+                args: [],
+                url: 'https://mcp.atlassian.com/v1/mcp',
                 source: 'skill',
+                sourcePath: '/vault/skills/dd-atlassian-mcp/mcp.json',
                 skillName: 'dd-atlassian-mcp',
                 skillPath: '/vault/skills/dd-atlassian-mcp',
                 manifestPath: '/vault/skills/dd-atlassian-mcp/mcp.json',
+                hasOAuth: true,
+                callbackUrl: 'http://localhost:3118/callback',
+                authorizeResource: 'https://datadoghq.atlassian.net/',
                 raw: {},
               },
               {
@@ -188,6 +192,8 @@ describe('SettingsPage', () => {
                 command: 'npx',
                 args: ['@mcp/github'],
                 source: 'config',
+                sourcePath: '/tmp/mcp_servers.json',
+                hasOAuth: false,
                 raw: {},
               },
             ],
@@ -326,7 +332,10 @@ describe('SettingsPage', () => {
     expect(html).toContain('Theme');
     expect(html).toContain('Skill folders');
     expect(html).toContain('Bundled MCP wrappers');
-    expect(html).toContain('bundled with dd-atlassian-mcp');
+    expect(html).toContain('Bundled with dd-atlassian-mcp');
+    expect(html).toContain('Callback');
+    expect(html).toContain('http://localhost:3118/callback');
+    expect(html).toContain('Manifest');
     expect(html).toContain('AGENTS.md files');
     expect(html).toContain('Default model');
     expect(html).toContain('Provider &amp; model definitions');

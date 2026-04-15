@@ -1201,9 +1201,13 @@ export interface McpServerConfig {
   url?: string;
   env?: Record<string, string>;
   source?: 'config' | 'skill';
+  sourcePath?: string;
   skillName?: string;
   skillPath?: string;
   manifestPath?: string;
+  hasOAuth?: boolean;
+  callbackUrl?: string;
+  authorizeResource?: string;
   raw: Record<string, unknown>;
 }
 

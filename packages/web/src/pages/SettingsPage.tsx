@@ -24,7 +24,7 @@ import type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../types';
-import { ToolbarButton, cx } from '../components/ui';
+import { Pill, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
@@ -268,10 +268,10 @@ function formatProviderModelCoverage(provider: ProviderAuthSummary | null): stri
 
 function formatMcpServerSource(server: McpServerConfig): string {
   if (server.source === 'skill' && server.skillName) {
-    return `bundled with ${server.skillName}`;
+    return `Bundled with ${server.skillName}`;
   }
 
-  return 'explicit config';
+  return 'Explicit config';
 }
 
 function formatMcpServerCommand(server: McpServerConfig): string {
@@ -281,6 +281,10 @@ function formatMcpServerCommand(server: McpServerConfig): string {
 
   const commandLine = [server.command, ...server.args].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
   return commandLine.length > 0 ? commandLine.join(' ') : 'Local stdio wrapper';
+}
+
+function formatMcpServerSourcePathLabel(server: McpServerConfig): string {
+  return server.source === 'skill' ? 'Manifest' : 'Config';
 }
 
 function ThemeButton({
@@ -330,12 +334,12 @@ function SettingsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-5', className)}>
+    <section id={id} className={cx('scroll-mt-24 space-y-6', className)}>
       <div className="space-y-2">
         <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
         {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
       </div>
-      <div className="border-t border-border-subtle/65 pt-5">{children}</div>
+      <div className="border-t border-border-subtle/65 pt-6">{children}</div>
     </section>
   );
 }
@@ -354,7 +358,7 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-5 border-t border-border-subtle/70 pt-5 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
+    <section className={cx('grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
       <div className="min-w-0 space-y-2">
         <div className="space-y-1.5">
           <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
@@ -2468,7 +2472,7 @@ export function SettingsPage() {
                 ) : toolsError && !toolsState ? (
                   <p className="text-[12px] text-danger">Failed to load MCP wrappers: {toolsError}</p>
                 ) : toolsState ? (
-                  <div className="space-y-4">
+                  <div className="space-y-5">
                     <p className="ui-card-meta break-all">
                       {toolsState.mcp.configExists
                         ? (
@@ -2476,20 +2480,23 @@ export function SettingsPage() {
                               Explicit config file: <span className="font-mono text-[11px]">{toolsState.mcp.configPath}</span>
                             </>
                           )
-                        : 'No explicit MCP config file found.'}
+                        : 'No explicit MCP config file found. Using bundled skill manifests only.'}
                     </p>
 
                     {toolsState.mcp.bundledSkills.length > 0 ? (
-                      <div className="space-y-2.5">
+                      <div className="space-y-3">
                         <p className="ui-card-meta">
                           {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active for this profile.
                         </p>
                         {toolsState.mcp.bundledSkills.map((bundle) => (
-                          <div key={bundle.manifestPath} className="space-y-1 border-t border-border-subtle/60 pt-2.5 first:border-t-0 first:pt-0">
+                          <div key={bundle.manifestPath} className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                               <span className="text-[13px] font-medium text-primary">{bundle.skillName}</span>
                               <span className="ui-card-meta">{bundle.serverNames.length} server{bundle.serverNames.length === 1 ? '' : 's'}</span>
                             </div>
+                            <p className="ui-card-meta break-all">
+                              <span className="font-mono text-[11px]">{bundle.manifestPath}</span>
+                            </p>
                             <p className="ui-card-meta break-all">
                               <span className="font-mono text-[11px]">{bundle.serverNames.join(', ')}</span>
                             </p>
@@ -2506,18 +2513,45 @@ export function SettingsPage() {
                     )}
 
                     {toolsState.mcp.servers.length > 0 ? (
-                      <div className="space-y-2.5">
+                      <div className="space-y-3">
                         <p className="ui-card-meta">Effective MCP servers</p>
                         {toolsState.mcp.servers.map((server) => (
-                          <div key={server.name} className="space-y-1 border-t border-border-subtle/60 pt-2.5 first:border-t-0 first:pt-0">
-                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <div key={server.name} className="space-y-2 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="font-mono text-[12px] text-primary">{server.name}</span>
-                              <span className="ui-card-meta">{server.transport}</span>
+                              <Pill tone={server.transport === 'remote' ? 'teal' : 'muted'}>{server.transport}</Pill>
+                              {server.hasOAuth ? <Pill tone="accent">oauth</Pill> : null}
                               <span className="ui-card-meta">{formatMcpServerSource(server)}</span>
                             </div>
                             <p className="ui-card-meta break-all">
                               <span className="font-mono text-[11px]">{formatMcpServerCommand(server)}</span>
                             </p>
+                            <div className="grid gap-y-1 text-[11px] leading-5 text-dim sm:grid-cols-[max-content_minmax(0,1fr)] sm:gap-x-3">
+                              {server.sourcePath ? (
+                                <>
+                                  <span className="text-secondary">{formatMcpServerSourcePathLabel(server)}</span>
+                                  <span className="break-all font-mono">{server.sourcePath}</span>
+                                </>
+                              ) : null}
+                              {server.callbackUrl ? (
+                                <>
+                                  <span className="text-secondary">Callback</span>
+                                  <span className="break-all font-mono">{server.callbackUrl}</span>
+                                </>
+                              ) : null}
+                              {server.authorizeResource ? (
+                                <>
+                                  <span className="text-secondary">Resource</span>
+                                  <span className="break-all font-mono">{server.authorizeResource}</span>
+                                </>
+                              ) : null}
+                              {server.cwd ? (
+                                <>
+                                  <span className="text-secondary">Working dir</span>
+                                  <span className="break-all font-mono">{server.cwd}</span>
+                                </>
+                              ) : null}
+                            </div>
                           </div>
                         ))}
                       </div>
