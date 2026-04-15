@@ -225,6 +225,17 @@ describe('Sidebar', () => {
     expect((html.match(/Fresh live title B/g) ?? []).length).toBe(1);
   });
 
+  it('renders an open conversation only once when the hydrated session data catches up', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-dup-guard']));
+
+    const html = renderSidebar('/conversations/conv-dup-guard', {
+      sessions: [createSession({ id: 'conv-dup-guard', title: 'Sidebar duplicate guard validation' })],
+    });
+
+    expect((html.match(/href="\/conversations\/conv-dup-guard"/g) ?? []).length).toBe(1);
+    expect((html.match(/Sidebar duplicate guard validation/g) ?? []).length).toBe(1);
+  });
+
   it('renders the conversation timestamp in the trailing inline slot by default', () => {
     const html = renderSidebar('/conversations/new', {
       sessions: [createSession({ title: 'Single-line timestamp row' })],
