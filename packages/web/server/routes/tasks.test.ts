@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  clearTaskCallbackBindingMock,
   createStoredAutomationMock,
+  deleteStoredAutomationMock,
   ensureAutomationThreadMock,
   existsSyncMock,
   findTaskForProfileMock,
@@ -16,7 +18,9 @@ const {
   buildScheduledTaskThreadDetailMock,
   resolveScheduledTaskThreadBindingMock,
 } = vi.hoisted(() => ({
+  clearTaskCallbackBindingMock: vi.fn(),
   createStoredAutomationMock: vi.fn(),
+  deleteStoredAutomationMock: vi.fn(),
   ensureAutomationThreadMock: vi.fn(),
   existsSyncMock: vi.fn(),
   findTaskForProfileMock: vi.fn(),
@@ -37,8 +41,13 @@ vi.mock('node:fs', () => ({
   readFileSync: readFileSyncMock,
 }));
 
+vi.mock('@personal-agent/core', () => ({
+  clearTaskCallbackBinding: clearTaskCallbackBindingMock,
+}));
+
 vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
+  deleteStoredAutomation: deleteStoredAutomationMock,
   ensureAutomationThread: ensureAutomationThreadMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
@@ -131,7 +140,9 @@ function toMetadata(task: TestTask) {
 
 describe('registerTaskRoutes', () => {
   beforeEach(() => {
+    clearTaskCallbackBindingMock.mockReset();
     createStoredAutomationMock.mockReset();
+    deleteStoredAutomationMock.mockReset();
     ensureAutomationThreadMock.mockReset();
     existsSyncMock.mockReset();
     findTaskForProfileMock.mockReset();
@@ -183,6 +194,9 @@ describe('registerTaskRoutes', () => {
       patch: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
         handlers[`PATCH ${path}`] = next;
       }),
+      delete: vi.fn((path: string, next: (req: unknown, res: unknown) => Promise<void> | void) => {
+        handlers[`DELETE ${path}`] = next;
+      }),
     };
 
     registerTaskRoutes(router as never, { getCurrentProfile: () => 'assistant' });
@@ -191,6 +205,7 @@ describe('registerTaskRoutes', () => {
       listHandler: handlers['GET /api/tasks']!,
       createHandler: handlers['POST /api/tasks']!,
       patchHandler: handlers['PATCH /api/tasks/:id']!,
+      deleteHandler: handlers['DELETE /api/tasks/:id']!,
       logHandler: handlers['GET /api/tasks/:id/log']!,
       detailHandler: handlers['GET /api/tasks/:id']!,
       runHandler: handlers['POST /api/tasks/:id/run']!,
@@ -249,6 +264,8 @@ describe('registerTaskRoutes', () => {
         model: 'gpt-4o',
         thinkingLevel: 'high',
         cwd: '/repo',
+        threadConversationId: 'automation.task-1',
+        threadTitle: 'Automation: Cron task',
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
         lastSuccessAt: '2026-04-09T15:00:00.000Z',
@@ -267,6 +284,8 @@ describe('registerTaskRoutes', () => {
         model: 'gpt-4o',
         thinkingLevel: 'high',
         cwd: '/repo',
+        threadConversationId: 'automation.task-2',
+        threadTitle: 'Automation: One-off task',
         lastStatus: 'idle',
         lastRunAt: '2026-04-08T00:00:00.000Z',
         lastSuccessAt: '2026-04-09T15:00:00.000Z',
@@ -451,6 +470,35 @@ describe('registerTaskRoutes', () => {
     patchHandler({ params: { id: 'task-1' }, body: {} }, failingRes);
     expect(failingRes.status).toHaveBeenCalledWith(500);
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: patch failed' });
+  });
+
+  it('deletes tasks, clears callback bindings, and handles missing ids', () => {
+    const { deleteHandler } = createHarness();
+    const task = createTask({ id: 'task-1' });
+
+    findTaskForProfileMock.mockReturnValueOnce(undefined);
+    const missingRes = createResponse();
+    deleteHandler({ params: { id: 'missing' } }, missingRes);
+    expect(missingRes.status).toHaveBeenCalledWith(404);
+    expect(missingRes.json).toHaveBeenCalledWith({ error: 'Task not found' });
+
+    findTaskForProfileMock.mockReturnValueOnce({ task, runtime: createRuntime() });
+    deleteStoredAutomationMock.mockReturnValueOnce(true);
+    const successRes = createResponse();
+    deleteHandler({ params: { id: 'task-1' } }, successRes);
+    expect(deleteStoredAutomationMock).toHaveBeenCalledWith('task-1', { profile: 'assistant' });
+    expect(clearTaskCallbackBindingMock).toHaveBeenCalledWith({ profile: 'assistant', taskId: 'task-1' });
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('tasks');
+    expect(successRes.json).toHaveBeenCalledWith({ ok: true, deleted: true });
+
+    findTaskForProfileMock.mockReturnValueOnce({ task, runtime: createRuntime() });
+    deleteStoredAutomationMock.mockImplementationOnce(() => {
+      throw new Error('delete failed');
+    });
+    const failingRes = createResponse();
+    deleteHandler({ params: { id: 'task-1' } }, failingRes);
+    expect(failingRes.status).toHaveBeenCalledWith(500);
+    expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: delete failed' });
   });
 
   it('reads task logs and details, handling missing tasks, missing files, and errors', () => {

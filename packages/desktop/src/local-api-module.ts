@@ -117,6 +117,7 @@ export interface LocalApiModule {
   readDesktopScheduledTasks(): Promise<unknown>;
   readDesktopScheduledTaskDetail(taskId: string): Promise<unknown>;
   readDesktopScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
+  deleteDesktopScheduledTask(taskId: string): Promise<unknown>;
   createDesktopScheduledTask(input: {
     title?: string;
     enabled?: boolean;

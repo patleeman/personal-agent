@@ -20,6 +20,7 @@ import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
 import { getDurableRunSnapshot, getDurableRunLogCursor, readDurableRunLogDelta } from '../automation/durableRuns.js';
 import {
   createScheduledTaskCapability,
+  deleteScheduledTaskCapability,
   listScheduledTasksCapability,
   readScheduledTaskCapability,
   readScheduledTaskLogCapability,
@@ -1962,6 +1963,11 @@ export async function updateDesktopScheduledTask(input: {
 export async function runDesktopScheduledTask(taskId: string) {
   await getLocalRoutes();
   return runScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
+}
+
+export async function deleteDesktopScheduledTask(taskId: string) {
+  await getLocalRoutes();
+  return deleteScheduledTaskCapability(localLiveSessionCapabilityContext?.getCurrentProfile() ?? 'assistant', taskId);
 }
 
 export async function markDesktopConversationAttention(input: { conversationId: string; read?: boolean }) {

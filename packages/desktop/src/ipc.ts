@@ -622,6 +622,17 @@ export function registerDesktopIpc(options: {
     return controller.readScheduledTaskLog(taskId);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:delete-scheduled-task`, async (event, taskId: string) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.deleteScheduledTask) {
+      throw new Error('Dedicated desktop task deletion is only available for the local host.');
+    }
+
+    return controller.deleteScheduledTask(taskId);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:create-scheduled-task`, async (event, input) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

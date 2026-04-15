@@ -202,6 +202,7 @@ export interface PersonalAgentDesktopBridge {
   readScheduledTasks(): Promise<ScheduledTaskSummary[]>;
   readScheduledTaskDetail(taskId: string): Promise<ScheduledTaskDetail>;
   readScheduledTaskLog(taskId: string): Promise<{ path: string; log: string }>;
+  deleteScheduledTask(taskId: string): Promise<{ ok: true; deleted: boolean }>;
   createScheduledTask(input: {
     title?: string;
     enabled?: boolean;

@@ -141,6 +141,7 @@ const desktopBridge = {
   readScheduledTasks: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-tasks`),
   readScheduledTaskDetail: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-detail`, taskId),
   readScheduledTaskLog: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-scheduled-task-log`, taskId),
+  deleteScheduledTask: (taskId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-scheduled-task`, taskId),
   createScheduledTask: (input: {
     title?: string;
     enabled?: boolean;

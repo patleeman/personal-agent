@@ -7,8 +7,10 @@
 import type { Express } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
+import { clearTaskCallbackBinding } from '@personal-agent/core';
 import {
   createStoredAutomation,
+  deleteStoredAutomation,
   ensureAutomationThread,
   startScheduledTaskRun,
   updateStoredAutomation,
@@ -64,7 +66,7 @@ function buildTaskDetailResponse(
  * Register task routes on the given router.
  */
 export function registerTaskRoutes(
-  router: Pick<Express, 'get' | 'post' | 'patch'>,
+  router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
   context: Pick<ServerRouteContext, 'getCurrentProfile'>,
 ): void {
   initializeTaskRoutesContext(context);
@@ -250,6 +252,27 @@ export function registerTaskRoutes(
         ? ensureAutomationThread(resolvedTask.task.id)
         : resolvedTask.task;
       res.json(buildTaskDetailResponse(task, resolvedTask.runtime));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.delete('/api/tasks/:id', (req, res) => {
+    try {
+      const profile = getCurrentProfileFn();
+      const resolvedTask = findTaskForProfile(profile, req.params.id);
+      if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
+
+      const deleted = deleteStoredAutomation(resolvedTask.task.id, { profile });
+      if (!deleted) { res.status(404).json({ error: 'Task not found' }); return; }
+
+      clearTaskCallbackBinding({ profile, taskId: resolvedTask.task.id });
+      invalidateAppTopics('tasks');
+      res.json({ ok: true, deleted: true });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

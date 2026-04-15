@@ -166,7 +166,8 @@ The Automations page lets you:
 - create a new automation from a centered modal launched from the page toolbar
 - choose a dedicated thread, an existing thread, or no thread for each automation
 - enable or disable an automation
-- edit an automation from the detail rail with a focused form
+- edit an automation from the detail view with a focused form
+- delete an automation from the detail view with confirmation
 - adjust common recurring schedules with an interactive schedule builder or fall back to raw cron
 - run an automation immediately
 - open the automation-owned thread directly from the detail view

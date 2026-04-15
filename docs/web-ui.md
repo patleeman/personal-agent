@@ -97,6 +97,7 @@ Current capabilities:
 - choose whether an automation uses a dedicated thread, an existing thread, or no thread
 - open the automation-owned thread directly from the detail view
 - enable / disable tasks
+- delete automations with an in-app confirmation step
 - run a task immediately and watch the automation state refresh in place
 - inspect recent automation-owned run history directly from the automation detail view
 

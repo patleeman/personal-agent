@@ -380,6 +380,7 @@ export interface HostController {
   readScheduledTasks?(): Promise<unknown>;
   readScheduledTaskDetail?(taskId: string): Promise<unknown>;
   readScheduledTaskLog?(taskId: string): Promise<{ path: string; log: string }>;
+  deleteScheduledTask?(taskId: string): Promise<unknown>;
   createScheduledTask?(input: Omit<DesktopScheduledTaskUpdateRequest, 'taskId'>): Promise<unknown>;
   updateScheduledTask?(input: DesktopScheduledTaskUpdateRequest): Promise<unknown>;
   runScheduledTask?(taskId: string): Promise<unknown>;

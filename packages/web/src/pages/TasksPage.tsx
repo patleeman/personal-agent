@@ -13,17 +13,17 @@ import { timeAgo } from '../utils';
 
 function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
   if (task.running) return 'bg-accent animate-pulse';
-  if (task.lastStatus === 'success') return 'bg-success';
-  if (task.lastStatus === 'failure') return 'bg-danger';
   if (!task.enabled) return 'bg-border-default';
+  if (task.lastStatus === 'failure') return 'bg-danger';
+  if (task.lastStatus === 'success') return 'bg-success';
   return 'bg-border-default/50';
 }
 
 function statusText(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): { text: string; cls: string } {
   if (task.running) return { text: 'Running', cls: 'text-accent' };
-  if (task.lastStatus === 'success') return { text: 'Active', cls: 'text-success' };
-  if (task.lastStatus === 'failure') return { text: 'Needs attention', cls: 'text-danger' };
   if (!task.enabled) return { text: 'Disabled', cls: 'text-dim' };
+  if (task.lastStatus === 'failure') return { text: 'Needs attention', cls: 'text-danger' };
+  if (task.lastStatus === 'success') return { text: 'Active', cls: 'text-success' };
   return { text: 'Scheduled', cls: 'text-secondary' };
 }
 
@@ -317,6 +317,82 @@ function AutomationsTableOfContents({
   );
 }
 
+function DeleteTaskModal({
+  title,
+  deleting,
+  error,
+  onClose,
+  onConfirm,
+}: {
+  title: string;
+  deleting: boolean;
+  error: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape' && !deleting) {
+        onClose();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleting, onClose]);
+
+  return (
+    <div
+      className="ui-overlay-backdrop"
+      style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
+      onMouseDown={(event) => {
+        if (!deleting && event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Delete automation"
+        className="ui-dialog-shell"
+        style={{
+          maxWidth: '440px',
+          background: 'rgb(var(--color-surface) / 0.985)',
+          backdropFilter: 'blur(28px)',
+          boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
+        }}
+      >
+        <div className="space-y-4 px-6 py-6">
+          <div className="space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Delete automation</p>
+            <h2 className="text-[24px] font-semibold tracking-tight text-primary">Delete “{title}”?</h2>
+            <p className="text-[14px] leading-6 text-secondary">
+              This removes the schedule from Automations. It will not undo past runs or existing thread history.
+            </p>
+          </div>
+
+          {error ? <p className="text-[12px] text-danger" aria-live="polite">{error}</p> : null}
+
+          <div className="flex items-center justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={deleting}
+              className="text-[13px] text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <ToolbarButton onClick={onConfirm} disabled={deleting} className="text-danger hover:text-danger">
+              {deleting ? 'Deleting…' : 'Delete'}
+            </ToolbarButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AutomationOverviewStat({
   label,
   value,
@@ -389,11 +465,20 @@ function PromptBody({ value }: { value: string }) {
   );
 }
 
-function DetailMetaRow({ label, value }: { label: string; value: string }) {
+function DetailMetaBlock({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+}) {
   return (
-    <div className="flex items-start justify-between gap-4 py-1.5 text-[14px]">
-      <span className="text-secondary">{label}</span>
-      <span className="max-w-[15rem] text-right text-primary">{value}</span>
+    <div className="space-y-1.5">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</p>
+      <p className="break-words text-[15px] leading-6 text-primary">{value}</p>
+      {hint ? <p className="break-words text-[12px] leading-5 text-secondary">{hint}</p> : null}
     </div>
   );
 }
@@ -421,6 +506,9 @@ function AutomationDetailView({
   }, id);
   const [runningNow, setRunningNow] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const detail = data;
   const effectiveSummary = summary ?? (detail ? {
@@ -452,6 +540,12 @@ function AutomationDetailView({
     () => sortAutomationRuns((runs?.runs ?? []).filter((run) => getRunTaskId(run) === effectiveSummary?.id)),
     [effectiveSummary?.id, runs?.runs],
   );
+  const runHistoryLabel = taskRuns.length === 0
+    ? (selectedRunId ? 'Opening run details…' : 'No runs yet')
+    : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`;
+  const folderLabel = detail?.cwd || effectiveSummary?.cwd || 'Current workspace';
+  const modelLabel = detail?.model || effectiveSummary?.model || 'Default';
+  const definitionLabel = detail?.filePath ? detail.filePath.split('/').slice(-1)[0] : null;
 
   const setSelectedRun = useCallback((runId: string | null) => {
     navigate({
@@ -499,6 +593,24 @@ function AutomationDetailView({
     }
   }
 
+  async function handleDelete() {
+    if (!id || deleting) {
+      return;
+    }
+
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.deleteTask(id);
+      await onRefreshTasks();
+      navigate('/automations');
+    } catch (nextError) {
+      setDeleteError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading && !detail && !effectiveSummary) {
     return <LoadingState label="Loading automation…" className="px-8 py-12" />;
   }
@@ -521,41 +633,51 @@ function AutomationDetailView({
   }
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="sticky top-0 z-10 border-b border-border-subtle bg-base/94 px-6 py-4 backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[12px] text-dim">
-              <button type="button" onClick={onBack} className="transition-colors hover:text-primary">Automations</button>
-              <span>›</span>
-              <span className="truncate text-secondary">{title}</span>
+    <>
+      <div className="flex h-full flex-col">
+        <div className="sticky top-0 z-10 border-b border-border-subtle bg-base/94 px-6 py-4 backdrop-blur-xl">
+          <div className="mx-auto flex max-w-[960px] flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-[12px] text-dim">
+                <button type="button" onClick={onBack} className="transition-colors hover:text-primary">Automations</button>
+                <span>›</span>
+                <span className="truncate text-secondary">{title}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>
+                ↻ Refresh
+              </ToolbarButton>
+              <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
+                {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
+              </ToolbarButton>
+              {detail?.threadConversationId && (
+                <ToolbarButton onClick={() => navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`)}>
+                  Open thread
+                </ToolbarButton>
+              )}
+              <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
+              <ToolbarButton
+                onClick={() => {
+                  setDeleteError(null);
+                  setDeleteModalOpen(true);
+                }}
+                disabled={deleting}
+                className="text-danger hover:text-danger"
+              >
+                Delete
+              </ToolbarButton>
+              <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
+                {runningNow ? 'Running…' : '▷ Run now'}
+              </ToolbarButton>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>
-              ↻ Refresh
-            </ToolbarButton>
-            <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
-              {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
-            </ToolbarButton>
-            {detail?.threadConversationId && (
-              <ToolbarButton onClick={() => navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`)}>
-                Open thread
-              </ToolbarButton>
-            )}
-            <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
-            <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
-              {runningNow ? 'Running…' : '▷ Run now'}
-            </ToolbarButton>
-          </div>
         </div>
-      </div>
 
-      <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 overflow-y-auto px-8 py-8">
-          <div className="mx-auto max-w-4xl space-y-8">
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 text-[13px]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-8">
+          <div className="mx-auto max-w-[960px] space-y-8">
+            <section className="space-y-4">
+              <div className="flex flex-wrap items-center gap-3 text-[13px]">
                 <span className={`inline-flex items-center gap-2 ${status.cls}`}>
                   <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(effectiveSummary)}`} />
                   {status.text}
@@ -566,18 +688,47 @@ function AutomationDetailView({
                 <h1 className="text-[46px] font-semibold tracking-[-0.04em] text-primary">{title}</h1>
                 <p className="mt-3 max-w-3xl text-[16px] leading-7 text-secondary">{summarizePrompt(prompt) || 'No prompt yet.'}</p>
               </div>
-            </div>
+            </section>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-4 border-b border-border-subtle pb-3">
+            <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
+              <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
+              <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
+              <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
+              <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
+              <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
+              <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning'} />
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Configuration</h2>
+                  <p className="mt-1 text-[13px] text-secondary">The bits that matter without shoving them into a skinny side rail.</p>
+                </div>
+                {definitionLabel && <span className="truncate text-[12px] text-dim">{definitionLabel}</span>}
+              </div>
+              <div className="grid gap-6 sm:grid-cols-2">
+                <DetailMetaBlock label="Automation ID" value={effectiveSummary.id} />
+                <DetailMetaBlock label="Folder" value={folderLabel} />
+                {detail?.threadTitle && <DetailMetaBlock label="Thread title" value={detail.threadTitle} />}
+                {typeof detail?.timeoutSeconds === 'number' && <DetailMetaBlock label="Timeout" value={`${detail.timeoutSeconds}s`} />}
+                {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
+                  <DetailMetaBlock label="Attempts" value={String(effectiveSummary.lastAttemptCount)} hint="last run retries" />
+                )}
+                {detail?.filePath && <DetailMetaBlock label="Definition path" value={detail.filePath} />}
+              </div>
+            </section>
+
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <div className="flex items-center justify-between gap-4">
                 <h2 className="text-[20px] font-semibold tracking-tight text-primary">Prompt</h2>
-                {detail?.filePath && <span className="truncate text-[12px] text-dim">{detail.filePath.split('/').slice(-1)[0]}</span>}
+                {definitionLabel && <span className="truncate text-[12px] text-dim">{definitionLabel}</span>}
               </div>
               {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
-            </div>
+            </section>
 
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-4 border-b border-border-subtle pb-3">
+            <section className="space-y-4 border-t border-border-subtle pt-6">
+              <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-[20px] font-semibold tracking-tight text-primary">Runs</h2>
                   <p className="mt-1 text-[13px] text-secondary">This automation owns its run history.</p>
@@ -590,7 +741,7 @@ function AutomationDetailView({
               </div>
 
               {taskRuns.length === 0 ? (
-                <p className="text-[14px] text-secondary">{selectedRunId ? 'Opening run details…' : 'No runs yet.'}</p>
+                <p className="text-[14px] text-secondary">{runHistoryLabel}</p>
               ) : (
                 <div className="space-y-2">
                   {taskRuns.slice(0, 8).map((run) => {
@@ -629,39 +780,24 @@ function AutomationDetailView({
             </section>
           </div>
         </div>
-
-        <aside className="border-t border-border-subtle px-6 py-8 xl:border-l xl:border-t-0">
-          <div className="space-y-8 xl:sticky xl:top-[76px]">
-            <section className="space-y-3">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-dim">Status</p>
-              <div className="space-y-1">
-                <DetailMetaRow label="State" value={status.text} />
-                <DetailMetaRow label="Schedule" value={scheduleLabel} />
-                <DetailMetaRow label="Last ran" value={lastRunLabel ?? '—'} />
-                <DetailMetaRow label="Last success" value={lastSuccessLabel ?? '—'} />
-                <DetailMetaRow label="Run history" value={taskRuns.length === 0 ? (selectedRunId ? 'Opening run details…' : 'No runs yet') : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`} />
-              </div>
-            </section>
-
-            <section className="space-y-3">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-dim">Details</p>
-              <div className="space-y-1">
-                <DetailMetaRow label="Automation ID" value={effectiveSummary.id} />
-                <DetailMetaRow label="Thread" value={threadModeLabel} />
-                <DetailMetaRow label="Folder" value={detail?.cwd || effectiveSummary.cwd || 'Current workspace'} />
-                <DetailMetaRow label="Model" value={detail?.model || effectiveSummary.model || 'Default'} />
-                {detail?.thinkingLevel && <DetailMetaRow label="Reasoning" value={detail.thinkingLevel} />}
-                {typeof detail?.timeoutSeconds === 'number' && <DetailMetaRow label="Timeout" value={`${detail.timeoutSeconds}s`} />}
-                {detail?.threadTitle && <DetailMetaRow label="Thread title" value={detail.threadTitle} />}
-                {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
-                  <DetailMetaRow label="Attempts" value={String(effectiveSummary.lastAttemptCount)} />
-                )}
-              </div>
-            </section>
-          </div>
-        </aside>
       </div>
-    </div>
+
+      {deleteModalOpen && (
+        <DeleteTaskModal
+          title={title}
+          deleting={deleting}
+          error={deleteError}
+          onClose={() => {
+            if (deleting) {
+              return;
+            }
+            setDeleteModalOpen(false);
+            setDeleteError(null);
+          }}
+          onConfirm={() => { void handleDelete(); }}
+        />
+      )}
+    </>
   );
 }
 

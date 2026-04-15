@@ -651,6 +651,14 @@ export const api = {
 
     return get<{ log: string; path: string }>(`/tasks/${encodeURIComponent(id)}/log`);
   },
+  deleteTask: async (id: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+      return desktopBridge.deleteScheduledTask(id);
+    }
+
+    return del<{ ok: true; deleted: boolean }>(`/tasks/${encodeURIComponent(id)}`);
+  },
   runTaskNow: async (id: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {

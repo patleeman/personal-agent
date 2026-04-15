@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
+  clearTaskCallbackBindingMock,
   createStoredAutomationMock,
+  deleteStoredAutomationMock,
   ensureAutomationThreadMock,
   existsSyncMock,
   findTaskForProfileMock,
@@ -15,7 +17,9 @@ const {
   buildScheduledTaskThreadDetailMock,
   resolveScheduledTaskThreadBindingMock,
 } = vi.hoisted(() => ({
+  clearTaskCallbackBindingMock: vi.fn(),
   createStoredAutomationMock: vi.fn(),
+  deleteStoredAutomationMock: vi.fn(),
   ensureAutomationThreadMock: vi.fn(),
   existsSyncMock: vi.fn(),
   findTaskForProfileMock: vi.fn(),
@@ -35,8 +39,13 @@ vi.mock('node:fs', () => ({
   readFileSync: readFileSyncMock,
 }));
 
+vi.mock('@personal-agent/core', () => ({
+  clearTaskCallbackBinding: clearTaskCallbackBindingMock,
+}));
+
 vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
+  deleteStoredAutomation: deleteStoredAutomationMock,
   ensureAutomationThread: ensureAutomationThreadMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
@@ -71,6 +80,7 @@ vi.mock('./scheduledTaskThreads.js', () => ({
 import {
   buildScheduledTaskDetail,
   createScheduledTaskCapability,
+  deleteScheduledTaskCapability,
   listScheduledTasksCapability,
   readScheduledTaskCapability,
   readScheduledTaskLogCapability,
@@ -143,7 +153,9 @@ function toMetadata(task: TestTask) {
 
 describe('scheduledTaskCapability', () => {
   beforeEach(() => {
+    clearTaskCallbackBindingMock.mockReset();
     createStoredAutomationMock.mockReset();
+    deleteStoredAutomationMock.mockReset();
     ensureAutomationThreadMock.mockReset();
     existsSyncMock.mockReset();
     findTaskForProfileMock.mockReset();
@@ -400,6 +412,23 @@ describe('scheduledTaskCapability', () => {
       cwd: '/repo',
     });
     expect(invalidateAppTopicsMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('deletes tasks and clears callback bindings', async () => {
+    const task = createTask({ id: 'task-1' });
+
+    findTaskForProfileMock.mockReturnValueOnce(undefined);
+    await expect(deleteScheduledTaskCapability('assistant', 'task-1')).rejects.toThrow('Task not found');
+
+    findTaskForProfileMock.mockReturnValueOnce({ task, runtime: createRuntime() });
+    deleteStoredAutomationMock.mockReturnValueOnce(true);
+    await expect(deleteScheduledTaskCapability('assistant', 'task-1')).resolves.toEqual({
+      ok: true,
+      deleted: true,
+    });
+    expect(deleteStoredAutomationMock).toHaveBeenCalledWith('task-1', { profile: 'assistant' });
+    expect(clearTaskCallbackBindingMock).toHaveBeenCalledWith({ profile: 'assistant', taskId: 'task-1' });
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('tasks');
   });
 
   it('reads task logs and reports missing logs', async () => {

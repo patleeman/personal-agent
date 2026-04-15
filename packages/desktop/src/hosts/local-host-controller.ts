@@ -326,6 +326,11 @@ export class LocalHostController implements HostController {
     return module.readDesktopScheduledTaskLog(taskId);
   }
 
+  async deleteScheduledTask(taskId: string): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.deleteDesktopScheduledTask(taskId);
+  }
+
   async createScheduledTask(input: {
     title?: string;
     enabled?: boolean;

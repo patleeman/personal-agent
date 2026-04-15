@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { clearTaskCallbackBinding } from '@personal-agent/core';
 import {
   createStoredAutomation,
+  deleteStoredAutomation,
   ensureAutomationThread,
   startScheduledTaskRun,
   updateStoredAutomation,
@@ -180,6 +182,27 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
   return {
     ok: true as const,
     task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime),
+  };
+}
+
+export async function deleteScheduledTaskCapability(profile: string, taskId: string) {
+  const normalizedTaskId = readRequiredTaskId(taskId);
+  const resolvedTask = findTaskForProfile(profile, normalizedTaskId);
+  if (!resolvedTask) {
+    throw new Error('Task not found');
+  }
+
+  const deleted = deleteStoredAutomation(resolvedTask.task.id, { profile });
+  if (!deleted) {
+    throw new Error('Task not found');
+  }
+
+  clearTaskCallbackBinding({ profile, taskId: resolvedTask.task.id });
+  invalidateAppTopics('tasks');
+
+  return {
+    ok: true as const,
+    deleted: true,
   };
 }
 
