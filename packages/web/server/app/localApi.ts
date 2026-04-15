@@ -1116,6 +1116,22 @@ async function subscribeDesktopLiveSessionStream(
   };
 }
 
+const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
+const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
+
+function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+  const runStatus = typeof snapshot.detail.run.status === 'string'
+    ? snapshot.detail.run.status
+    : snapshot.detail.run.status?.status;
+
+  return runStatus === 'queued'
+    || runStatus === 'waiting'
+    || runStatus === 'running'
+    || runStatus === 'recovering'
+    ? ACTIVE_RUN_POLL_INTERVAL_MS
+    : IDLE_RUN_POLL_INTERVAL_MS;
+}
+
 async function subscribeDesktopRunStream(
   url: URL,
   onEvent: (event: DesktopLocalApiStreamEvent) => void,
@@ -1135,30 +1151,41 @@ async function subscribeDesktopRunStream(
   }
 
   let closed = false;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
   const close = () => {
     if (closed) {
       return;
     }
 
     closed = true;
-    clearInterval(pollInterval);
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
     onEvent({ type: 'close' });
   };
 
-  onEvent({ type: 'open' });
-  emitStreamMessage(onEvent, {
-    type: 'snapshot',
-    detail: initial.detail,
-    log: initial.log,
-  });
+  const schedulePoll = (delayMs: number) => {
+    if (closed) {
+      return;
+    }
 
-  const pollInterval = setInterval(async () => {
+    pollTimer = setTimeout(() => {
+      void pollOnce();
+    }, delayMs);
+  };
+
+  const pollOnce = async () => {
     if (closed) {
       return;
     }
 
     try {
       const next = await getDurableRunSnapshot(runId, tail);
+      if (closed) {
+        return;
+      }
+
       if (!next) {
         emitStreamMessage(onEvent, { type: 'deleted', runId });
         close();
@@ -1170,10 +1197,19 @@ async function subscribeDesktopRunStream(
         detail: next.detail,
         log: next.log,
       });
+      schedulePoll(getRunStreamPollInterval(next));
     } catch {
-      // Ignore transient polling failures; the next interval can recover.
+      schedulePoll(ACTIVE_RUN_POLL_INTERVAL_MS);
     }
-  }, 5_000);
+  };
+
+  onEvent({ type: 'open' });
+  emitStreamMessage(onEvent, {
+    type: 'snapshot',
+    detail: initial.detail,
+    log: initial.log,
+  });
+  schedulePoll(getRunStreamPollInterval(initial));
 
   return close;
 }

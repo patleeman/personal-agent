@@ -336,6 +336,7 @@ describe('ContextRail run detail', () => {
     );
 
     expect(html).toContain('ui-preview-check');
+    expect(html).toContain('Terminal output');
     expect(html).toContain('printf ok');
     expect(html).toContain('/Users/patrick/workingdir/personal-agent');
     expect(html).toContain('Working dir');

@@ -272,6 +272,10 @@ function canCancelRun(detail: DurableRunDetailResult['run']): boolean {
   );
 }
 
+function isTerminalRun(detail: DurableRunDetailResult['run']): boolean {
+  return detail.manifest?.kind === 'raw-shell';
+}
+
 function isRefreshingRun(detail: DurableRunDetailResult['run'] | null | undefined): boolean {
   return isRunActive(detail);
 }
@@ -293,6 +297,9 @@ function RunContextPanel({
   const [cancelling, setCancelling] = useState(false);
   const [markingReviewed, setMarkingReviewed] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [followingOutput, setFollowingOutput] = useState(true);
+  const [detailsExpanded, setDetailsExpanded] = useState(false);
+  const logViewportRef = useRef<HTMLDivElement | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const {
     detail,
@@ -300,7 +307,7 @@ function RunContextPanel({
     loading,
     error,
     reconnect,
-  } = useDurableRunStream(runId, simplified ? 240 : 160);
+  } = useDurableRunStream(runId, simplified ? 480 : 320);
 
   const closeRun = useCallback(() => {
     navigate({
@@ -308,6 +315,36 @@ function RunContextPanel({
       search: setConversationRunIdInSearch(location.search, null),
     });
   }, [location.pathname, location.search, navigate]);
+
+  const scrollOutputToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const viewport = logViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+  }, []);
+
+  const handleOutputScroll = useCallback(() => {
+    const viewport = logViewportRef.current;
+    if (!viewport) {
+      return;
+    }
+
+    const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 24;
+    setFollowingOutput((current) => (current === atBottom ? current : atBottom));
+  }, []);
+
+  const jumpToLatestOutput = useCallback(() => {
+    setFollowingOutput(true);
+    scrollOutputToBottom('smooth');
+  }, [scrollOutputToBottom]);
+
+  const detailsShouldAutoOpen = Boolean(
+    detail
+    && !isTerminalRun(detail.run)
+    && (Boolean(detail.run.status?.lastError) || detail.run.problems.length > 0 || Boolean(error)),
+  );
 
   async function handleCancel() {
     if (!detail || cancelling || !canCancelRun(detail.run)) {
@@ -341,6 +378,34 @@ function RunContextPanel({
     }
   }
 
+  useEffect(() => {
+    setFollowingOutput(true);
+  }, [runId]);
+
+  useEffect(() => {
+    setDetailsExpanded(false);
+  }, [runId]);
+
+  useEffect(() => {
+    if (detailsShouldAutoOpen) {
+      setDetailsExpanded(true);
+    }
+  }, [detailsShouldAutoOpen]);
+
+  useEffect(() => {
+    if (!followingOutput) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      scrollOutputToBottom();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [followingOutput, log?.log, scrollOutputToBottom]);
+
   if (loading && !detail) {
     return <LoadingState label="Loading run…" className="px-4 py-4" />;
   }
@@ -354,6 +419,8 @@ function RunContextPanel({
   }
 
   const run = detail.run;
+  const terminalRun = isTerminalRun(run);
+  const runStreaming = isRefreshingRun(run);
   const status = runStatusText(run);
   const headline = getRunHeadline(run, lookups);
   const taskSlug = getRunTaskSlug(run);
@@ -367,9 +434,14 @@ function RunContextPanel({
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
   const showOwnerChrome = Boolean(closeLabel);
+  const outputLabel = terminalRun ? 'Terminal output' : 'Run output';
+  const outputPathLabel = log?.path?.split('/').filter(Boolean).pop() ?? 'output.log';
+  const hasOutput = Boolean(log?.log && log.log.length > 0);
+  const emptyOutputLabel = runStreaming ? 'Waiting for output…' : '(empty)';
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-4 py-4 space-y-4">
+      <div className="shrink-0 border-b border-border-subtle px-4 py-3">
         <div className={showOwnerChrome ? 'flex items-center justify-between gap-2' : 'flex items-center justify-end gap-1.5'}>
           {showOwnerChrome && (
             <button type="button" onClick={closeRun} className="ui-toolbar-button">
@@ -387,13 +459,23 @@ function RunContextPanel({
                 {run.attentionDismissed ? 'Reviewed' : markingReviewed ? 'Reviewing…' : 'Mark reviewed'}
               </button>
             )}
+            {cancelable && (
+              <button
+                type="button"
+                onClick={() => { void handleCancel(); }}
+                disabled={cancelling}
+                className="ui-toolbar-button text-danger"
+              >
+                {cancelling ? 'Cancelling…' : 'Cancel'}
+              </button>
+            )}
             <button type="button" onClick={reconnect} className="ui-toolbar-button">
               ↻ Refresh
             </button>
           </div>
         </div>
 
-        <div className="space-y-1.5">
+        <div className="mt-3 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="ui-card-title break-words">{headline.title}</p>
             <Pill tone={status.cls === 'text-danger' ? 'danger' : status.cls === 'text-warning' ? 'warning' : status.cls === 'text-success' ? 'success' : 'muted'}>
@@ -416,101 +498,146 @@ function RunContextPanel({
             )}
           </p>
         </div>
+      </div>
 
-        {cancelable && (
-          <div className="flex items-center justify-between gap-2 rounded-lg border border-border-subtle bg-surface px-3 py-2.5">
-            <p className="text-[12px] text-secondary">This run can still be cancelled.</p>
-            <button type="button" onClick={() => { void handleCancel(); }} disabled={cancelling} className="ui-toolbar-button text-danger">
-              {cancelling ? 'Cancelling…' : 'Cancel'}
-            </button>
+      {(actionError || error) && (
+        <div className="shrink-0 space-y-2 px-4 pt-3">
+          {actionError && <ErrorState message={actionError} />}
+          {error && <ErrorState message={error} />}
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 px-4 py-3">
+        <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border-subtle/80 bg-[rgb(11,14,19)]">
+          <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-dim">
+            <span className={cx('h-2 w-2 shrink-0 rounded-full', runStreaming ? 'animate-pulse bg-accent' : 'bg-white/20')} />
+            <span>{outputLabel}</span>
+            <span className="min-w-0 truncate font-mono normal-case tracking-normal text-dim/80">{outputPathLabel}</span>
+            <span className="flex-1" />
+            {!followingOutput ? (
+              <button
+                type="button"
+                onClick={jumpToLatestOutput}
+                className="ui-action-button text-[10px] normal-case tracking-normal"
+                aria-label="Jump to the latest run output"
+              >
+                Jump to latest
+              </button>
+            ) : runStreaming ? (
+              <span className="text-dim/80 normal-case tracking-normal">Following latest</span>
+            ) : null}
           </div>
-        )}
 
-        {connections.length > 0 && (
-          <div className="border-t border-border-subtle pt-3">
-            <p className="ui-section-label mb-2">Connected to</p>
-            <div className="space-y-2">
-              {connections.map((connection) => {
-                const isCurrentOwnerConnection = ownerRoute !== undefined && connection.to === ownerRoute;
-                const detailText = isCurrentOwnerConnection
-                  ? ['Current view', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
-                  : connection.detail;
-                const connectionHref = connection.to ?? null;
-
-                return (
-                  <div key={connection.key} className="space-y-0.5">
-                    <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
-                    {isCurrentOwnerConnection ? (
-                      <button
-                        type="button"
-                        onClick={closeRun}
-                        className="text-left text-[13px] text-accent hover:underline break-all"
-                        title="Return to the current view"
-                      >
-                        {connection.value}
-                      </button>
-                    ) : connectionHref ? (
-                      <Link to={connectionHref} className="text-[13px] text-accent hover:underline break-all">
-                        {connection.value}
-                      </Link>
-                    ) : (
-                      <p className="text-[13px] text-primary break-all">{connection.value}</p>
-                    )}
-                    {detailText && <p className="text-[12px] text-secondary break-words">{detailText}</p>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        <div className="border-t border-border-subtle pt-3 space-y-2">
-          <p className="ui-section-label">Run details</p>
-          <div className="space-y-2">
-            {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
-            {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
-            {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
-            {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
-            {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
-            {targetProfile && <RailMetadataRow label="Profile" value={targetProfile} />}
-            <RailMetadataRow label="Run" value={run.manifest?.kind ?? 'unknown kind'} />
-            <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
-            <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
-            {run.checkpoint?.step && <RailMetadataRow label="Checkpoint" value={run.checkpoint.step} />}
+          <div
+            ref={logViewportRef}
+            onScroll={handleOutputScroll}
+            role="log"
+            aria-live={followingOutput ? 'polite' : 'off'}
+            aria-relevant="additions text"
+            className="min-h-0 flex-1 overflow-auto px-3 py-3"
+          >
+            {hasOutput ? (
+              <pre className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-secondary">{log?.log}</pre>
+            ) : (
+              <p className="text-[11px] italic leading-relaxed text-dim">{emptyOutputLabel}</p>
+            )}
           </div>
         </div>
+      </div>
 
-        {(run.status?.lastError || run.problems.length > 0) && (
-          <div className="border-t border-border-subtle pt-3 space-y-3">
-            {run.status?.lastError && (
-              <div className="space-y-1">
-                <p className="ui-section-label">Last error</p>
-                <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
-              </div>
-            )}
-            {run.problems.length > 0 && (
-              <div className="space-y-1">
-                <p className="ui-section-label">Problems</p>
-                <div className="space-y-1 text-[12px] text-danger">
-                  {run.problems.map((problem) => (
-                    <p key={problem}>• {problem}</p>
-                  ))}
+      <details
+        className="ui-disclosure shrink-0"
+        open={detailsExpanded}
+        onToggle={(event) => {
+          setDetailsExpanded((event.currentTarget as HTMLDetailsElement).open);
+        }}
+      >
+        <summary className="ui-disclosure-summary px-4">
+          <span>Details</span>
+          <span className="ui-disclosure-meta">
+            {connections.length > 0 ? 'Links, command, and runtime' : 'Command and runtime'}
+          </span>
+        </summary>
+        <div className="ui-disclosure-body px-4">
+          <div className="space-y-4">
+            {connections.length > 0 && (
+              <div className="space-y-2">
+                <p className="ui-section-label">Connected to</p>
+                <div className="space-y-2">
+                  {connections.map((connection) => {
+                    const isCurrentOwnerConnection = ownerRoute !== undefined && connection.to === ownerRoute;
+                    const detailText = isCurrentOwnerConnection
+                      ? ['Current view', connection.detail].filter((value): value is string => typeof value === 'string' && value.length > 0).join(' · ')
+                      : connection.detail;
+                    const connectionHref = connection.to ?? null;
+
+                    return (
+                      <div key={connection.key} className="space-y-0.5">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-dim">{connection.label}</p>
+                        {isCurrentOwnerConnection ? (
+                          <button
+                            type="button"
+                            onClick={closeRun}
+                            className="break-all text-left text-[13px] text-accent hover:underline"
+                            title="Return to the current view"
+                          >
+                            {connection.value}
+                          </button>
+                        ) : connectionHref ? (
+                          <Link to={connectionHref} className="break-all text-[13px] text-accent hover:underline">
+                            {connection.value}
+                          </Link>
+                        ) : (
+                          <p className="break-all text-[13px] text-primary">{connection.value}</p>
+                        )}
+                        {detailText && <p className="text-[12px] text-secondary break-words">{detailText}</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
+
+            <div className="space-y-2">
+              <p className="ui-section-label">Run details</p>
+              <div className="ui-detail-list">
+                {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
+                {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
+                {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
+                {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
+                {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
+                {targetProfile && <RailMetadataRow label="Profile" value={targetProfile} />}
+                <RailMetadataRow label="Run" value={run.manifest?.kind ?? 'unknown kind'} />
+                <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
+                <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
+                {run.checkpoint?.step && <RailMetadataRow label="Checkpoint" value={run.checkpoint.step} />}
+                {log?.path && <RailMetadataRow label="Log" value={<span className="break-all font-mono text-[12px] text-primary">{log.path}</span>} />}
+              </div>
+            </div>
+
+            {(run.status?.lastError || run.problems.length > 0) && (
+              <div className="space-y-3">
+                {run.status?.lastError && (
+                  <div className="space-y-1">
+                    <p className="ui-section-label">Last error</p>
+                    <p className="text-[12px] text-danger whitespace-pre-wrap break-words">{run.status.lastError}</p>
+                  </div>
+                )}
+                {run.problems.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="ui-section-label">Problems</p>
+                    <div className="space-y-1 text-[12px] text-danger">
+                      {run.problems.map((problem) => (
+                        <p key={problem}>• {problem}</p>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
-
-        {actionError && <ErrorState message={actionError} />}
-        {error && <ErrorState message={error} />}
-      </div>
-
-      <div className="min-h-0 flex-1 border-t border-border-subtle px-4 pt-4 pb-4 flex flex-col gap-2">
-        <p className="ui-section-label shrink-0">Output log</p>
-        <pre className="min-h-0 flex-1 overflow-auto rounded-lg bg-elevated px-3 py-2.5 text-[11px] leading-relaxed text-secondary whitespace-pre-wrap break-words">
-          {log?.log || '(empty)'}
-        </pre>
-      </div>
+        </div>
+      </details>
     </div>
   );
 }

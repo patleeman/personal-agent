@@ -12,13 +12,29 @@ import {
   listDurableRuns,
   cancelDurableRun,
 } from '../automation/durableRuns.js';
-import { invalidateAppTopics, logError } from '../middleware/index.js';
+import { logError } from '../middleware/index.js';
+
+const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
+const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
 
 function parseRunLogTail(raw: unknown): number {
   const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : undefined;
   return Number.isFinite(parsed) && (parsed as number) > 0
     ? Math.min(1000, parsed as number)
     : 120;
+}
+
+function getRunStreamPollInterval(snapshot: { detail: { run: { status?: { status?: string } | string } } }): number {
+  const runStatus = typeof snapshot.detail.run.status === 'string'
+    ? snapshot.detail.run.status
+    : snapshot.detail.run.status?.status;
+
+  return runStatus === 'queued'
+    || runStatus === 'waiting'
+    || runStatus === 'running'
+    || runStatus === 'recovering'
+    ? ACTIVE_RUN_POLL_INTERVAL_MS
+    : IDLE_RUN_POLL_INTERVAL_MS;
 }
 
 let getDurableRunSnapshotFn: (runId: string, tail: number) => Promise<unknown | null> = async () => {
@@ -80,32 +96,60 @@ export function registerRunAppRoutes(
       };
 
       let closed = false;
+      let pollTimer: ReturnType<typeof setTimeout> | null = null;
       const heartbeat = setInterval(() => {
         if (!closed) res.write(': heartbeat\n\n');
       }, 15_000);
 
-      const poll = setInterval(async () => {
-        if (closed) return;
+      const stopStream = () => {
+        closed = true;
+        clearInterval(heartbeat);
+        if (pollTimer) {
+          clearTimeout(pollTimer);
+          pollTimer = null;
+        }
+      };
+
+      const schedulePoll = (delayMs: number) => {
+        if (closed) {
+          return;
+        }
+
+        pollTimer = setTimeout(() => {
+          void pollOnce();
+        }, delayMs);
+      };
+
+      const pollOnce = async () => {
+        if (closed) {
+          return;
+        }
+
         try {
           const next = await getDurableRunSnapshotFn(runId, tail);
+          if (closed) {
+            return;
+          }
+
           if (!next) {
             writeEvent({ type: 'deleted', runId });
-            closed = true;
-            clearInterval(heartbeat);
-            clearInterval(poll);
+            stopStream();
             res.end();
             return;
           }
+
           writeEvent({ type: 'snapshot', detail: (next as { detail: unknown }).detail, log: (next as { log: unknown }).log });
-        } catch { /* ignore */ }
-      }, 5_000);
+          schedulePoll(getRunStreamPollInterval(next as { detail: { run: { status?: { status?: string } | string } } }));
+        } catch {
+          schedulePoll(ACTIVE_RUN_POLL_INTERVAL_MS);
+        }
+      };
 
       writeEvent({ type: 'snapshot', detail: (initial as { detail: unknown }).detail, log: (initial as { log: unknown }).log });
+      schedulePoll(getRunStreamPollInterval(initial as { detail: { run: { status?: { status?: string } | string } } }));
 
       req.on('close', () => {
-        closed = true;
-        clearInterval(heartbeat);
-        clearInterval(poll);
+        stopStream();
       });
     } catch (err) {
       logError('request handler error', {
