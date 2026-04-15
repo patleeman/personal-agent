@@ -1506,6 +1506,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [pendingInitialPromptDispatching, setPendingInitialPromptDispatchingState] = useState(false);
   const [draftPendingPrompt, setDraftPendingPrompt] = useState<PendingConversationPrompt | null>(null);
   const pendingInitialPromptSessionIdRef = useRef<string | null>(null);
+  const pendingInitialPromptFailureSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptScrollSessionIdRef = useRef<string | null>(null);
   const pinnedInitialPromptTailKeyRef = useRef<string | null>(null);
   const deferredConversationFileVersionRef = useRef<{ conversationId: string; version: number } | null>(null);
@@ -2541,6 +2542,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setPendingInitialPrompt(null);
       setPendingInitialPromptDispatchingState(false);
       pendingInitialPromptSessionIdRef.current = null;
+      pendingInitialPromptFailureSessionIdRef.current = null;
       pinnedInitialPromptScrollSessionIdRef.current = null;
       pinnedInitialPromptTailKeyRef.current = null;
       return;
@@ -2549,6 +2551,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setPendingInitialPrompt(readPendingConversationPrompt(id));
     setPendingInitialPromptDispatchingState(isPendingConversationPromptDispatching(id));
     pendingInitialPromptSessionIdRef.current = null;
+    pendingInitialPromptFailureSessionIdRef.current = null;
     pinnedInitialPromptScrollSessionIdRef.current = null;
     pinnedInitialPromptTailKeyRef.current = null;
   }, [draft, id]);
@@ -2593,6 +2596,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setPendingInitialPrompt(null);
     setPendingInitialPromptDispatchingState(false);
   }, [draft, id, pendingInitialPrompt, pendingInitialPromptDispatching, realMessages]);
+
+  useEffect(() => {
+    if (!id || !pendingInitialPrompt) {
+      pendingInitialPromptFailureSessionIdRef.current = null;
+    }
+  }, [id, pendingInitialPrompt]);
 
   useEffect(() => {
     if (!draft) {
@@ -3968,11 +3977,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (pendingInitialPromptSessionIdRef.current === id) {
+    if (
+      pendingInitialPromptSessionIdRef.current === id
+      || pendingInitialPromptFailureSessionIdRef.current === id
+      || !pendingInitialPrompt
+    ) {
       return;
     }
 
-    const claimedInitialPrompt = consumePendingConversationPrompt(id);
+    const keepsStoredPromptDuringDispatch = (pendingInitialPrompt.relatedConversationIds?.length ?? 0) > 0;
+    const claimedInitialPrompt = keepsStoredPromptDuringDispatch
+      ? pendingInitialPrompt
+      : consumePendingConversationPrompt(id);
     if (!claimedInitialPrompt) {
       setPendingInitialPrompt(null);
       return;
@@ -3981,7 +3997,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pendingInitialPromptSessionIdRef.current = id;
     pinnedInitialPromptScrollSessionIdRef.current = id;
     pinnedInitialPromptTailKeyRef.current = null;
-    setPendingInitialPrompt(null);
+
+    if (keepsStoredPromptDuringDispatch) {
+      setPendingConversationPromptDispatching(id, true);
+    } else {
+      setPendingInitialPrompt(null);
+    }
 
     void (async () => {
       let preparedInitialPrompt = claimedInitialPrompt;
@@ -4001,9 +4022,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         pendingInitialPromptSessionIdRef.current = null;
       } catch (error) {
         pendingInitialPromptSessionIdRef.current = null;
+        pendingInitialPromptFailureSessionIdRef.current = id;
         pinnedInitialPromptScrollSessionIdRef.current = null;
         pinnedInitialPromptTailKeyRef.current = null;
         persistPendingConversationPrompt(id, preparedInitialPrompt);
+        setPendingConversationPromptDispatching(id, false);
         setPendingInitialPrompt(preparedInitialPrompt);
         persistForkPromptDraft(id, preparedInitialPrompt.text);
         console.error('Initial prompt failed:', error);
@@ -5335,7 +5358,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             rememberComposerInput(inputSnapshot, created.id);
             persistPendingConversationPrompt(created.id, initialPrompt);
-            setPendingConversationPromptDispatching(created.id, true);
 
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
@@ -5365,30 +5387,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               },
             });
             navigatedToCreatedConversation = true;
-
-            void (async () => {
-              let preparedInitialPrompt = initialPrompt;
-              try {
-                preparedInitialPrompt = await preparePendingConversationPromptWithRelatedContext(initialPrompt);
-                if (preparedInitialPrompt !== initialPrompt) {
-                  persistPendingConversationPrompt(created.id, preparedInitialPrompt);
-                }
-
-                await api.promptSession(
-                  created.id,
-                  preparedInitialPrompt.text,
-                  preparedInitialPrompt.behavior,
-                  preparedInitialPrompt.images,
-                  preparedInitialPrompt.attachmentRefs,
-                  undefined,
-                  preparedInitialPrompt.contextMessages,
-                );
-              } catch (error) {
-                persistPendingConversationPrompt(created.id, preparedInitialPrompt);
-                setPendingConversationPromptDispatching(created.id, false);
-                console.error('Initial prompt with related threads failed:', error);
-              }
-            })();
           } catch (error) {
             if (createdSessionId && !navigatedToCreatedConversation) {
               await api.destroySession(createdSessionId).catch(() => {});
