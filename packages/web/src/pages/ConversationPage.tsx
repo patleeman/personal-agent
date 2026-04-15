@@ -20,7 +20,7 @@ import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversationCheckpoints';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
-import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { formatContextUsageLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -28,7 +28,7 @@ import {
 } from '../conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
+import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSupportedServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
@@ -57,6 +57,7 @@ import {
   clearDraftConversationContextDocs,
   clearDraftConversationCwd,
   clearDraftConversationModel,
+  clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
@@ -66,11 +67,13 @@ import {
   persistDraftConversationContextDocs,
   persistDraftConversationCwd,
   persistDraftConversationModel,
+  persistDraftConversationServiceTier,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationContextDocs,
   readDraftConversationCwd,
   readDraftConversationModel,
+  readDraftConversationServiceTier,
   readDraftConversationThinkingLevel,
   type DraftConversationDrawingAttachment,
 } from '../draftConversation';
@@ -699,6 +702,7 @@ function useModels(enabled: boolean) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [defaultModel, setDefaultModel] = useState<string>('');
   const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string>('');
+  const [defaultServiceTier, setDefaultServiceTier] = useState<string>('');
 
   useEffect(() => {
     if (!enabled) {
@@ -710,6 +714,7 @@ function useModels(enabled: boolean) {
         setModels(data.models);
         setDefaultModel(data.currentModel);
         setDefaultThinkingLevel(data.currentThinkingLevel ?? '');
+        setDefaultServiceTier(data.currentServiceTier ?? '');
       })
       .catch(() => {});
   }, [enabled]);
@@ -718,6 +723,7 @@ function useModels(enabled: boolean) {
     models,
     defaultModel,
     defaultThinkingLevel,
+    defaultServiceTier,
   };
 }
 
@@ -832,18 +838,30 @@ function ConversationPreferencesRow({
   models,
   currentModel,
   currentThinkingLevel,
+  currentServiceTier,
   savingPreference,
   onSelectModel,
   onSelectThinkingLevel,
+  onSelectServiceTier,
 }: {
   models: ModelInfo[];
   currentModel: string;
   currentThinkingLevel: string;
-  savingPreference: 'model' | 'thinking' | null;
+  currentServiceTier: string;
+  savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
+  onSelectServiceTier: (serviceTier: string) => void;
 }) {
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
+  const selectedModel = useMemo(
+    () => models.find((model) => model.id === currentModel) ?? null,
+    [currentModel, models],
+  );
+  const serviceTierOptions = useMemo(
+    () => getModelSupportedServiceTierOptions(selectedModel),
+    [selectedModel],
+  );
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -885,6 +903,25 @@ function ConversationPreferencesRow({
           <path d="m6 9 6 6 6-6" />
         </svg>
       </label>
+      {serviceTierOptions.length > 0 && (
+        <label className="relative inline-flex min-w-0 items-center">
+          <span className="sr-only">Conversation service tier</span>
+          <select
+            value={currentServiceTier}
+            onChange={(event) => { onSelectServiceTier(event.target.value); }}
+            disabled={savingPreference !== null}
+            className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[7rem] min-w-[6.25rem] appearance-none')}
+            aria-label="Conversation service tier"
+          >
+            {SERVICE_TIER_OPTIONS.filter((option) => option.value.length === 0 || serviceTierOptions.some((candidate) => candidate.value === option.value)).map((option) => (
+              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+          <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </label>
+      )}
     </div>
   );
 }
@@ -1241,6 +1278,7 @@ interface ConversationInitialModelPreferenceState {
   conversationId: string;
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
 }
 
 interface ConversationInitialDeferredResumeState {
@@ -1261,15 +1299,18 @@ interface ConversationLocationState {
 
 export function buildConversationInitialModelPreferenceState(input: {
   conversationId: string;
-  currentModel: string;
-  currentThinkingLevel: string;
-  defaultModel: string;
-  defaultThinkingLevel: string;
+  currentModel?: string;
+  currentThinkingLevel?: string;
+  currentServiceTier?: string;
+  defaultModel?: string;
+  defaultThinkingLevel?: string;
+  defaultServiceTier?: string;
 }): ConversationInitialModelPreferenceState {
   return {
     conversationId: input.conversationId,
-    currentModel: input.currentModel.trim() || input.defaultModel,
-    currentThinkingLevel: input.currentThinkingLevel.trim() || input.defaultThinkingLevel,
+    currentModel: input.currentModel?.trim() || input.defaultModel?.trim() || '',
+    currentThinkingLevel: input.currentThinkingLevel?.trim() || input.defaultThinkingLevel?.trim() || '',
+    currentServiceTier: input.currentServiceTier?.trim() || input.defaultServiceTier?.trim() || '',
   };
 }
 
@@ -1279,6 +1320,7 @@ export function resolveConversationInitialModelPreferenceState(input: {
   locationState: unknown;
   defaultModel: string;
   defaultThinkingLevel: string;
+  defaultServiceTier: string;
 }): ConversationInitialModelPreferenceState | null {
   if (input.draft || !input.conversationId || !input.locationState || typeof input.locationState !== 'object') {
     return null;
@@ -1293,8 +1335,10 @@ export function resolveConversationInitialModelPreferenceState(input: {
     conversationId: candidate.conversationId,
     currentModel: typeof candidate.currentModel === 'string' ? candidate.currentModel : '',
     currentThinkingLevel: typeof candidate.currentThinkingLevel === 'string' ? candidate.currentThinkingLevel : '',
+    currentServiceTier: typeof candidate.currentServiceTier === 'string' ? candidate.currentServiceTier : '',
     defaultModel: input.defaultModel,
     defaultThinkingLevel: input.defaultThinkingLevel,
+    defaultServiceTier: input.defaultServiceTier,
   });
 }
 
@@ -2061,9 +2105,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     models,
     defaultModel,
     defaultThinkingLevel,
+    defaultServiceTier,
   } = useModels(shouldLoadModels);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
+  const [currentServiceTier, setCurrentServiceTier] = useState<string>('');
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
   const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
@@ -2072,7 +2118,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     locationState: location.state,
     defaultModel,
     defaultThinkingLevel,
-  }), [defaultModel, defaultThinkingLevel, draft, id, location.state]);
+    defaultServiceTier,
+  }), [defaultModel, defaultThinkingLevel, defaultServiceTier, draft, id, location.state]);
   const initialDeferredResumeState = useMemo(() => resolveConversationInitialDeferredResumeState({
     draft,
     conversationId: id,
@@ -2107,6 +2154,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const syncDraftPreferences = () => {
       setCurrentModel(readDraftConversationModel().trim() || defaultModel);
       setCurrentThinkingLevel(readDraftConversationThinkingLevel().trim() || defaultThinkingLevel);
+      setCurrentServiceTier(readDraftConversationServiceTier().trim() || defaultServiceTier);
       setDraftCwdValue(readDraftConversationCwd().trim());
     };
 
@@ -2115,7 +2163,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftPreferences);
     };
-  }, [defaultModel, defaultThinkingLevel, draft]);
+  }, [defaultModel, defaultThinkingLevel, defaultServiceTier, draft]);
 
   useEffect(() => {
     if (!draft) {
@@ -2132,6 +2180,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     if (!id) {
       setCurrentModel(defaultModel);
       setCurrentThinkingLevel(defaultThinkingLevel);
+      setCurrentServiceTier(defaultServiceTier);
       return;
     }
 
@@ -2139,6 +2188,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       appliedInitialModelPreferenceLocationKeyRef.current = location.key;
       setCurrentModel(initialModelPreferenceState.currentModel);
       setCurrentThinkingLevel(initialModelPreferenceState.currentThinkingLevel);
+      setCurrentServiceTier(initialModelPreferenceState.currentServiceTier);
       return;
     }
 
@@ -2151,6 +2201,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         setCurrentModel(data.currentModel || defaultModel);
         setCurrentThinkingLevel(data.currentThinkingLevel ?? defaultThinkingLevel);
+        setCurrentServiceTier(data.currentServiceTier ?? defaultServiceTier);
       })
       .catch(() => {
         if (cancelled) {
@@ -2159,12 +2210,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         setCurrentModel(defaultModel);
         setCurrentThinkingLevel(defaultThinkingLevel);
+        setCurrentServiceTier(defaultServiceTier);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [conversationEventVersion, defaultModel, defaultThinkingLevel, draft, id, initialModelPreferenceState, location.key]);
+  }, [conversationEventVersion, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, id, initialModelPreferenceState, location.key]);
 
   useEffect(() => {
     if (draft) {
@@ -2248,7 +2300,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [liveSessionContext, setLiveSessionContext] = useState<LiveSessionContext | null>(null);
 
   const [notice, setNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
-  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
+  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | 'serviceTier' | null>(null);
   const [modelIdx, setModelIdx] = useState(0);
   const noticeTimeoutRef = useRef<number | null>(null);
   const showNotice = useCallback((tone: 'accent' | 'danger', text: string, durationMs = 2500) => {
@@ -3938,6 +3990,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
       ...(currentModel ? { model: currentModel } : {}),
       ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+      ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
     });
     primeCreatedConversationOpenCaches(created, {
       tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
@@ -3954,6 +4007,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationCwd();
     clearDraftConversationModel();
     clearDraftConversationThinkingLevel();
+    clearDraftConversationServiceTier();
 
     ensureConversationTabOpen(newId);
     navigate(`/conversations/${newId}`, {
@@ -3963,8 +4017,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           conversationId: newId,
           currentModel,
           currentThinkingLevel,
+          currentServiceTier,
           defaultModel,
           defaultThinkingLevel,
+          defaultServiceTier,
         }),
         initialDeferredResumeState: {
           conversationId: newId,
@@ -3978,7 +4034,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
 
     return newId;
-  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, defaultModel, defaultThinkingLevel, draft, draftCwdValue, id, input, navigate]);
+  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, currentServiceTier, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, draftCwdValue, id, input, navigate]);
 
   const toggleConversationAutoMode = useCallback(async () => {
     if (conversationAutoModeBusy) {
@@ -4122,6 +4178,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const next = await api.updateConversationModelPreferences(id, { model: modelId }, currentSurfaceId);
         setCurrentModel(next.currentModel);
         setCurrentThinkingLevel(next.currentThinkingLevel);
+        setCurrentServiceTier(next.currentServiceTier);
       }
 
       const selectedModel = models.find((candidate) => candidate.id === modelId);
@@ -4159,10 +4216,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const next = await api.updateConversationModelPreferences(id, { thinkingLevel }, currentSurfaceId);
         setCurrentModel(next.currentModel);
         setCurrentThinkingLevel(next.currentThinkingLevel);
+        setCurrentServiceTier(next.currentServiceTier);
         savedThinkingLevel = next.currentThinkingLevel;
       }
 
       showNotice('accent', `Thinking level set to ${formatThinkingLevelLabel(savedThinkingLevel)}.`);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setSavingPreference(null);
+    }
+  }
+
+  async function saveServiceTierPreference(serviceTier: string) {
+    if (serviceTier === currentServiceTier || savingPreference !== null) {
+      return;
+    }
+
+    setSavingPreference('serviceTier');
+    try {
+      let savedServiceTier = serviceTier || defaultServiceTier;
+
+      if (draft) {
+        if (!serviceTier || serviceTier === defaultServiceTier) {
+          clearDraftConversationServiceTier();
+        } else {
+          persistDraftConversationServiceTier(serviceTier);
+        }
+        setCurrentServiceTier(savedServiceTier);
+      } else if (id) {
+        if (isLiveSession && !ensureConversationCanControl('change the service tier')) {
+          return;
+        }
+
+        const next = await api.updateConversationModelPreferences(id, { serviceTier }, currentSurfaceId);
+        setCurrentModel(next.currentModel);
+        setCurrentThinkingLevel(next.currentThinkingLevel);
+        setCurrentServiceTier(next.currentServiceTier);
+        savedServiceTier = next.currentServiceTier;
+      }
+
+      showNotice('accent', `Service tier set to ${formatServiceTierLabel(savedServiceTier)}.`);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
@@ -4193,6 +4287,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const created = await api.createLiveSession(cwd, undefined, {
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+        ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
       });
       primeCreatedConversationOpenCaches(created, {
         tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
@@ -4206,8 +4301,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             conversationId: created.id,
             currentModel,
             currentThinkingLevel,
+            currentServiceTier,
             defaultModel,
             defaultThinkingLevel,
+            defaultServiceTier,
           }),
           initialDeferredResumeState: {
             conversationId: created.id,
@@ -4633,8 +4730,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationCwd();
     clearDraftConversationModel();
     clearDraftConversationThinkingLevel();
+    clearDraftConversationServiceTier();
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
+    setCurrentServiceTier(defaultServiceTier);
     setDraftCwdValue('');
     setDraftCwdPickBusy(false);
     setDraftCwdError(null);
@@ -4985,6 +5084,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
           ...(currentModel ? { model: currentModel } : {}),
           ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+          ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
         });
         conversationId = created.id;
       } else {
@@ -5001,6 +5101,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         clearDraftConversationCwd();
         clearDraftConversationModel();
         clearDraftConversationThinkingLevel();
+        clearDraftConversationServiceTier();
       }
 
       if (conversationId !== id) {
@@ -5012,8 +5113,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               conversationId,
               currentModel,
               currentThinkingLevel,
+              currentServiceTier,
               defaultModel,
               defaultThinkingLevel,
+              defaultServiceTier,
             }),
             initialDeferredResumeState: {
               conversationId,
@@ -5144,6 +5247,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
               ...(currentModel ? { model: currentModel } : {}),
               ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+              ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
             });
             createdSessionId = created.id;
             primeCreatedConversationOpenCaches(created, {
@@ -5171,6 +5275,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             clearDraftConversationCwd();
             clearDraftConversationModel();
             clearDraftConversationThinkingLevel();
+            clearDraftConversationServiceTier();
             setSelectedRelatedThreadIds([]);
 
             ensureConversationTabOpen(created.id);
@@ -5181,8 +5286,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   conversationId: created.id,
                   currentModel,
                   currentThinkingLevel,
+                  currentServiceTier,
                   defaultModel,
                   defaultThinkingLevel,
+                  defaultServiceTier,
                 }),
                 initialDeferredResumeState: {
                   conversationId: created.id,
@@ -5220,6 +5327,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+            ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
           });
           primeCreatedConversationOpenCaches(created, {
             tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
@@ -5245,6 +5353,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationCwd();
           clearDraftConversationModel();
           clearDraftConversationThinkingLevel();
+          clearDraftConversationServiceTier();
 
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, {
@@ -5254,8 +5363,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 conversationId: newId,
                 currentModel,
                 currentThinkingLevel,
+                currentServiceTier,
                 defaultModel,
                 defaultThinkingLevel,
+                defaultServiceTier,
               }),
               initialDeferredResumeState: {
                 conversationId: newId,
@@ -6582,9 +6693,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         models={models}
                         currentModel={currentModel || model || defaultModel}
                         currentThinkingLevel={currentThinkingLevel}
+                        currentServiceTier={currentServiceTier}
                         savingPreference={savingPreference}
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
+                        onSelectServiceTier={(serviceTier) => { void saveServiceTierPreference(serviceTier); }}
                       />
                       {(draft || id) && (
                         <ConversationAutoModeToggle

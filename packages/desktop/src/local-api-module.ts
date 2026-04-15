@@ -52,6 +52,7 @@ export interface LocalApiModule {
   updateDesktopModelPreferences(input: {
     model?: string | null;
     thinkingLevel?: string | null;
+    serviceTier?: string | null;
   }): Promise<{ ok: true }>;
   readDesktopDefaultCwd(): Promise<unknown>;
   updateDesktopDefaultCwd(cwd: string | null): Promise<unknown>;
@@ -184,6 +185,7 @@ export interface LocalApiModule {
     conversationId: string;
     model?: string | null;
     thinkingLevel?: string | null;
+    serviceTier?: string | null;
     surfaceId?: string;
   }): Promise<unknown>;
   readDesktopConversationArtifacts(conversationId: string): Promise<unknown>;
@@ -241,6 +243,7 @@ export interface LocalApiModule {
     cwd?: string;
     model?: string | null;
     thinkingLevel?: string | null;
+    serviceTier?: string | null;
   }): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }>;
   resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }>;
   submitDesktopLiveSessionPrompt(input: {

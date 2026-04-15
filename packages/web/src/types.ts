@@ -986,16 +986,20 @@ export interface ApplicationRestartRequestResult {
   logFile: string;
 }
 
+export type ModelServiceTier = 'auto' | 'default' | 'flex' | 'priority' | 'scale';
+
 export interface ModelInfo {
   id: string;
   provider: string;
   name: string;
   context: number;
+  supportedServiceTiers?: ModelServiceTier[];
 }
 
 export interface ModelState {
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
   models: ModelInfo[];
 }
 

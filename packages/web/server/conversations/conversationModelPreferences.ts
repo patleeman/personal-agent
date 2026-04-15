@@ -5,27 +5,35 @@ import { supportsXhigh, type Model } from '@mariozechner/pi-ai';
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'medium';
 const THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high'];
 const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = [...THINKING_LEVELS, 'xhigh'];
+const SERVICE_TIERS = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
+type ServiceTier = typeof SERVICE_TIERS[number];
+const SERVICE_TIER_CUSTOM_TYPE = 'conversation-service-tier';
 
 export interface ConversationModelPreferenceState {
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
 }
 
 export interface ConversationModelPreferenceDefaults {
   currentModel?: string;
   currentThinkingLevel?: string;
+  currentServiceTier?: string;
 }
 
 export interface ConversationModelPreferenceInput {
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }
 
 export interface ConversationModelPreferenceSnapshot {
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
   hasExplicitModel: boolean;
   hasExplicitThinkingLevel: boolean;
+  hasExplicitServiceTier: boolean;
 }
 
 function readNonEmptyString(value: unknown): string {
@@ -45,6 +53,11 @@ function normalizeThinkingLevel(value: unknown): ThinkingLevel | '' {
     default:
       return '';
   }
+}
+
+function normalizeServiceTier(value: unknown): ServiceTier | '' {
+  const normalized = readNonEmptyString(value).toLowerCase();
+  return SERVICE_TIERS.includes(normalized as ServiceTier) ? normalized as ServiceTier : '';
 }
 
 function getAvailableThinkingLevels(model: Model<any> | null | undefined): ThinkingLevel[] {
@@ -68,6 +81,10 @@ function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null 
   return availableLevels[availableLevels.length - 1] ?? 'off';
 }
 
+export function modelSupportsServiceTiers(model: Pick<Model<any>, 'api'> | null | undefined): boolean {
+  return model?.api === 'openai-responses' || model?.api === 'openai-codex-responses';
+}
+
 function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | null {
   if (!modelId) {
     return null;
@@ -88,22 +105,53 @@ function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | n
   return null;
 }
 
+function readServiceTierOverride(
+  branch: Array<{ type: string; customType?: string; data?: unknown }>,
+): { currentServiceTier: string; hasExplicitServiceTier: boolean } {
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (!entry || entry.type !== 'custom' || entry.customType !== SERVICE_TIER_CUSTOM_TYPE) {
+      continue;
+    }
+
+    const data = entry.data as { serviceTier?: unknown } | undefined;
+    const serviceTier = normalizeServiceTier(data?.serviceTier);
+    if (serviceTier) {
+      return { currentServiceTier: serviceTier, hasExplicitServiceTier: true };
+    }
+
+    return { currentServiceTier: '', hasExplicitServiceTier: false };
+  }
+
+  return { currentServiceTier: '', hasExplicitServiceTier: false };
+}
+
 function buildResolvedState(
   snapshot: ConversationModelPreferenceSnapshot,
   defaults: ConversationModelPreferenceDefaults,
   models: Model<any>[],
-): { currentModel: string; currentThinkingLevel: ThinkingLevel | ''; currentModelDefinition: Model<any> | null } {
+): {
+  currentModel: string;
+  currentThinkingLevel: ThinkingLevel | '';
+  currentServiceTier: ServiceTier | '';
+  currentModelDefinition: Model<any> | null;
+} {
   const fallbackModel = readNonEmptyString(defaults.currentModel);
   const currentModel = snapshot.currentModel || fallbackModel;
   const currentModelDefinition = resolveModelById(currentModel, models);
   const fallbackThinkingLevel = normalizeThinkingLevel(defaults.currentThinkingLevel);
+  const fallbackServiceTier = normalizeServiceTier(defaults.currentServiceTier);
   const currentThinkingLevel = snapshot.hasExplicitThinkingLevel
     ? normalizeThinkingLevel(snapshot.currentThinkingLevel)
     : fallbackThinkingLevel;
+  const currentServiceTier = snapshot.hasExplicitServiceTier
+    ? normalizeServiceTier(snapshot.currentServiceTier)
+    : fallbackServiceTier;
 
   return {
     currentModel,
     currentThinkingLevel,
+    currentServiceTier,
     currentModelDefinition,
   };
 }
@@ -116,14 +164,18 @@ function computeNextConversationModelPreferences(
 ): {
   currentModel: string;
   currentThinkingLevel: string;
+  currentServiceTier: string;
   nextModel: Model<any> | null;
   shouldAppendModelChange: boolean;
   nextPersistedThinkingLevel: ThinkingLevel | null;
+  nextServiceTierOverride: ServiceTier | null | undefined;
 } {
   const resolved = buildResolvedState(snapshot, defaults, models);
   const requestedModel = input.model === undefined ? undefined : readNonEmptyString(input.model ?? '');
   const requestedThinkingLevel = input.thinkingLevel === undefined ? undefined : normalizeThinkingLevel(input.thinkingLevel ?? '');
   const requestedThinkingClearsToDefault = requestedThinkingLevel !== undefined && requestedThinkingLevel === '';
+  const requestedServiceTier = input.serviceTier === undefined ? undefined : normalizeServiceTier(input.serviceTier ?? '');
+  const requestedServiceTierClearsToDefault = requestedServiceTier !== undefined && requestedServiceTier === '';
 
   if (requestedModel !== undefined && !requestedModel) {
     throw new Error('model required');
@@ -160,12 +212,31 @@ function computeNextConversationModelPreferences(
     }
   }
 
+  let nextServiceTierForDisplay = resolved.currentServiceTier;
+  let nextServiceTierOverride: ServiceTier | null | undefined;
+
+  if (requestedServiceTier !== undefined) {
+    const fallbackServiceTier = normalizeServiceTier(defaults.currentServiceTier);
+    const effectiveServiceTier = requestedServiceTier || fallbackServiceTier;
+    nextServiceTierForDisplay = effectiveServiceTier;
+
+    if (requestedServiceTier) {
+      if (requestedServiceTier !== resolved.currentServiceTier || !snapshot.hasExplicitServiceTier) {
+        nextServiceTierOverride = requestedServiceTier;
+      }
+    } else if (requestedServiceTierClearsToDefault && snapshot.hasExplicitServiceTier) {
+      nextServiceTierOverride = null;
+    }
+  }
+
   return {
     currentModel,
     currentThinkingLevel: nextThinkingLevelForDisplay,
+    currentServiceTier: nextServiceTierForDisplay,
     nextModel,
     shouldAppendModelChange,
     nextPersistedThinkingLevel,
+    nextServiceTierOverride,
   };
 }
 
@@ -174,12 +245,15 @@ export function readConversationModelPreferenceSnapshot(
 ): ConversationModelPreferenceSnapshot {
   const context = sessionManager.buildSessionContext();
   const branch = sessionManager.getBranch();
+  const serviceTier = readServiceTierOverride(branch);
 
   return {
     currentModel: context.model?.modelId ?? '',
     currentThinkingLevel: context.thinkingLevel ?? '',
+    currentServiceTier: serviceTier.currentServiceTier,
     hasExplicitModel: branch.some((entry) => entry.type === 'model_change'),
     hasExplicitThinkingLevel: branch.some((entry) => entry.type === 'thinking_level_change'),
+    hasExplicitServiceTier: serviceTier.hasExplicitServiceTier,
   };
 }
 
@@ -192,11 +266,19 @@ export function resolveConversationModelPreferenceState(
   return {
     currentModel: resolved.currentModel,
     currentThinkingLevel: resolved.currentThinkingLevel,
+    currentServiceTier: resolved.currentServiceTier,
   };
 }
 
+function appendConversationServiceTierOverride(
+  sessionManager: Pick<SessionManager, 'appendCustomEntry'>,
+  serviceTier: ServiceTier | null,
+): void {
+  sessionManager.appendCustomEntry(SERVICE_TIER_CUSTOM_TYPE, { serviceTier });
+}
+
 export function applyConversationModelPreferencesToSessionManager(
-  sessionManager: Pick<SessionManager, 'appendModelChange' | 'appendThinkingLevelChange' | 'buildSessionContext' | 'getBranch'>,
+  sessionManager: Pick<SessionManager, 'appendCustomEntry' | 'appendModelChange' | 'appendThinkingLevelChange' | 'buildSessionContext' | 'getBranch'>,
   input: ConversationModelPreferenceInput,
   defaults: ConversationModelPreferenceDefaults,
   models: Model<any>[],
@@ -212,9 +294,14 @@ export function applyConversationModelPreferencesToSessionManager(
     sessionManager.appendThinkingLevelChange(next.nextPersistedThinkingLevel);
   }
 
+  if (next.nextServiceTierOverride !== undefined) {
+    appendConversationServiceTierOverride(sessionManager, next.nextServiceTierOverride);
+  }
+
   return {
     currentModel: next.currentModel,
     currentThinkingLevel: next.currentThinkingLevel,
+    currentServiceTier: next.currentServiceTier,
   };
 }
 
@@ -237,8 +324,13 @@ export async function applyConversationModelPreferencesToLiveSession(
     session.sessionManager.appendThinkingLevelChange(next.nextPersistedThinkingLevel);
   }
 
+  if (next.nextServiceTierOverride !== undefined) {
+    appendConversationServiceTierOverride(session.sessionManager, next.nextServiceTierOverride);
+  }
+
   return {
     currentModel: next.currentModel,
     currentThinkingLevel: next.currentThinkingLevel,
+    currentServiceTier: next.currentServiceTier,
   };
 }

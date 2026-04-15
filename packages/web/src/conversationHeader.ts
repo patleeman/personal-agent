@@ -3,6 +3,24 @@ export function formatThinkingLevelLabel(level?: string): string {
   return normalized && normalized.length > 0 ? normalized : 'default';
 }
 
+export function formatServiceTierLabel(tier?: string): string {
+  const normalized = tier?.trim().toLowerCase();
+  switch (normalized) {
+    case 'auto':
+      return 'auto';
+    case 'default':
+      return 'default';
+    case 'flex':
+      return 'flex';
+    case 'priority':
+      return 'priority';
+    case 'scale':
+      return 'scale';
+    default:
+      return 'default';
+  }
+}
+
 export function formatLiveSessionLabel(isLiveSession: boolean): string {
   return isLiveSession ? 'active session' : '';
 }

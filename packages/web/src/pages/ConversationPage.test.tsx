@@ -334,12 +334,15 @@ describe('conversation initial model preference state', () => {
       conversationId: 'conv-123',
       currentModel: 'anthropic/claude-sonnet-4-6',
       currentThinkingLevel: 'medium',
+      currentServiceTier: '',
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: '',
     })).toEqual({
       conversationId: 'conv-123',
       currentModel: 'anthropic/claude-sonnet-4-6',
       currentThinkingLevel: 'medium',
+      currentServiceTier: '',
     });
   });
 
@@ -348,12 +351,15 @@ describe('conversation initial model preference state', () => {
       conversationId: 'conv-123',
       currentModel: '   ',
       currentThinkingLevel: '',
+      currentServiceTier: '',
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: '',
     })).toEqual({
       conversationId: 'conv-123',
       currentModel: 'openai/gpt-5.4',
       currentThinkingLevel: 'high',
+      currentServiceTier: '',
     });
   });
 
@@ -366,14 +372,17 @@ describe('conversation initial model preference state', () => {
           conversationId: 'conv-123',
           currentModel: 'anthropic/claude-sonnet-4-6',
           currentThinkingLevel: 'medium',
+          currentServiceTier: '',
         },
       },
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: '',
     })).toEqual({
       conversationId: 'conv-123',
       currentModel: 'anthropic/claude-sonnet-4-6',
       currentThinkingLevel: 'medium',
+      currentServiceTier: '',
     });
 
     expect(resolveConversationInitialModelPreferenceState({
@@ -384,10 +393,12 @@ describe('conversation initial model preference state', () => {
           conversationId: 'conv-123',
           currentModel: 'anthropic/claude-sonnet-4-6',
           currentThinkingLevel: 'medium',
+          currentServiceTier: '',
         },
       },
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: '',
     })).toBeNull();
 
     expect(resolveConversationInitialModelPreferenceState({
@@ -398,10 +409,12 @@ describe('conversation initial model preference state', () => {
           conversationId: 'conv-123',
           currentModel: 'anthropic/claude-sonnet-4-6',
           currentThinkingLevel: 'medium',
+          currentServiceTier: '',
         },
       },
       defaultModel: 'openai/gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: '',
     })).toBeNull();
   });
 });

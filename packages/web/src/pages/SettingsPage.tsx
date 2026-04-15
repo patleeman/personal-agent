@@ -1,8 +1,8 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from '../modelPreferences';
+import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSupportedServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
@@ -1277,7 +1277,7 @@ export function SettingsPage() {
   const [instructionFilesDraft, setInstructionFilesDraft] = useState<string[]>([]);
   const [savingInstructionFiles, setSavingInstructionFiles] = useState(false);
   const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
-  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | null>(null);
+  const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | 'serviceTier' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
   const [vaultRootDraft, setVaultRootDraft] = useState('');
   const [savingVaultRoot, setSavingVaultRoot] = useState(false);
@@ -1412,6 +1412,11 @@ export function SettingsPage() {
 
     return modelState.models.find((model) => model.id === modelState.currentModel) ?? null;
   }, [modelState]);
+
+  const selectedModelServiceTierOptions = useMemo(
+    () => getModelSupportedServiceTierOptions(selectedModel),
+    [selectedModel],
+  );
 
   const selectedConversationTitleModel = useMemo(
     () => findModelByRef(modelState?.models ?? [], conversationTitleState?.currentModel ?? ''),
@@ -1772,7 +1777,7 @@ export function SettingsPage() {
     }
   }
 
-  async function handleModelPreferenceChange(input: { model?: string; thinkingLevel?: string }, field: 'model' | 'thinking') {
+  async function handleModelPreferenceChange(input: { model?: string; thinkingLevel?: string; serviceTier?: string }, field: 'model' | 'thinking' | 'serviceTier') {
     if (!modelState || savingPreference !== null) {
       return;
     }
@@ -1782,6 +1787,10 @@ export function SettingsPage() {
     }
 
     if (field === 'thinking' && input.thinkingLevel === modelState.currentThinkingLevel) {
+      return;
+    }
+
+    if (field === 'serviceTier' && input.serviceTier === modelState.currentServiceTier) {
       return;
     }
 
@@ -2650,6 +2659,30 @@ export function SettingsPage() {
                         ? 'Saving thinking level…'
                         : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
                     </p>
+
+                    {selectedModelServiceTierOptions.length > 0 && (
+                      <>
+                        <label className="ui-card-meta pt-1" htmlFor="settings-service-tier">Service tier</label>
+                        <select
+                          id="settings-service-tier"
+                          value={modelState.currentServiceTier}
+                          onChange={(event) => {
+                            void handleModelPreferenceChange({ serviceTier: event.target.value }, 'serviceTier');
+                          }}
+                          disabled={savingPreference !== null}
+                          className={INPUT_CLASS}
+                        >
+                          {SERVICE_TIER_OPTIONS.filter((option) => option.value.length === 0 || selectedModelServiceTierOptions.some((candidate) => candidate.value === option.value)).map((option) => (
+                            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                        <p className="ui-card-meta">
+                          {savingPreference === 'serviceTier'
+                            ? 'Saving service tier…'
+                            : `Current service tier: ${formatServiceTierLabel(modelState.currentServiceTier)}`}
+                        </p>
+                      </>
+                    )}
                   </>
                 ) : null}
 

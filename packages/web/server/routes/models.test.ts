@@ -280,7 +280,7 @@ describe('model routes', () => {
     writeSavedDefaultCwdPreferenceMock.mockReset();
     writeSavedModelPreferencesMock.mockReset();
 
-    getAvailableModelsMock.mockReturnValue([{ id: 'model-a', provider: 'provider-a', name: 'Model A' }]);
+    getAvailableModelsMock.mockReturnValue([{ id: 'model-a', provider: 'provider-a', name: 'Model A', contextWindow: 128_000, api: 'anthropic-messages' }]);
     getDefaultVaultRootMock.mockReturnValue('/default-vault');
     getMachineConfigFilePathMock.mockReturnValue('/config/config.json');
     getProviderOAuthLoginStateMock.mockReturnValue({ id: 'login-1', status: 'pending' });
@@ -290,13 +290,14 @@ describe('model routes', () => {
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'model-a',
       currentThinkingLevel: 'high',
+      currentServiceTier: '',
     });
     persistSettingsWriteMock.mockImplementation((write: (settingsFile: string) => unknown, options: { runtimeSettingsFile: string }) => write(options.runtimeSettingsFile));
     readMachineConfigMock.mockImplementation(() => machineConfig);
     readModelProvidersStateMock.mockReturnValue({ providers: [] });
     readProviderAuthStateMock.mockReturnValue({ providers: [] });
     readSavedDefaultCwdPreferencesMock.mockReturnValue({ cwd: '/repo' });
-    readSavedModelPreferencesMock.mockReturnValue({ currentModel: 'model-a', currentThinkingLevel: 'high' });
+    readSavedModelPreferencesMock.mockReturnValue({ currentModel: 'model-a', currentThinkingLevel: 'high', currentServiceTier: '' });
     setProviderApiKeyMock.mockReturnValue({ providers: [{ id: 'openai' }] });
     startProviderOAuthLoginMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     submitProviderOAuthLoginInputMock.mockReturnValue({ id: 'login-1', status: 'waiting_input' });
@@ -352,7 +353,7 @@ describe('model routes', () => {
     expect(desktopRes.json).toHaveBeenCalledWith({
       currentModel: 'model-a',
       currentThinkingLevel: 'high',
-      currentServiceTier: undefined,
+      currentServiceTier: '',
       models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     });
 
@@ -362,6 +363,7 @@ describe('model routes', () => {
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'missing-model',
       currentThinkingLevel: 'medium',
+      currentServiceTier: '',
     });
 
     const fallbackRes = createResponse();
@@ -384,7 +386,7 @@ describe('model routes', () => {
     const modelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: { model: 'model-b', thinkingLevel: 'medium' } }), modelRes);
     expect(writeSavedModelPreferencesMock).toHaveBeenCalledWith(
-      { model: 'model-b', thinkingLevel: 'medium' },
+      { model: 'model-b', thinkingLevel: 'medium', serviceTier: undefined },
       expect.any(String),
       [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     );

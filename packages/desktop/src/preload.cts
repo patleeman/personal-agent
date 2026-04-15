@@ -82,7 +82,7 @@ const desktopBridge = {
   readProfiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-profiles`),
   setCurrentProfile: (profile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-current-profile`, profile),
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
-  updateModelPreferences: (input: { model?: string | null; thinkingLevel?: string | null }) =>
+  updateModelPreferences: (input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-model-preferences`, input),
   readDefaultCwd: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-default-cwd`),
   updateDefaultCwd: (cwd: string | null) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-default-cwd`, cwd),
@@ -190,7 +190,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:recover-conversation`, conversationId),
   readConversationModelPreferences: (input: { conversationId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-model-preferences`, input),
-  updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }) =>
+  updateConversationModelPreferences: (input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-conversation-model-preferences`, input),
   readConversationArtifacts: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-conversation-artifacts`, conversationId),
   readConversationArtifact: (input: { conversationId: string; artifactId: string }) =>
@@ -241,7 +241,7 @@ const desktopBridge = {
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-detail`, input),
   readSessionBlock: (input: { sessionId: string; blockId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-block`, input),
-  createLiveSession: (input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }) =>
+  createLiveSession: (input: { cwd?: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-live-session`, input),
   resumeLiveSession: (sessionFile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:resume-live-session`, sessionFile),
   takeOverLiveSession: (input: { conversationId: string; surfaceId: string }) =>

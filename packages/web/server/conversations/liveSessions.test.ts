@@ -57,6 +57,14 @@ function setLiveEntry(
   sessionId: string,
   entry: Omit<Partial<LiveRegistryEntry>, 'session'> & { session: unknown },
 ) {
+  const session = entry.session as Record<string, unknown>;
+  if (!('agent' in session)) {
+    session.agent = {};
+  }
+  if (!('modelRegistry' in session)) {
+    session.modelRegistry = {};
+  }
+
   registry.set(sessionId, {
     sessionId,
     cwd: entry.cwd ?? '',
@@ -71,7 +79,7 @@ function setLiveEntry(
     lastCompactionSummaryTitle: entry.lastCompactionSummaryTitle ?? null,
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
     ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
-    session: entry.session as LiveRegistryEntry['session'],
+    session: session as LiveRegistryEntry['session'],
   });
 }
 
@@ -3252,7 +3260,7 @@ describe('session actions', () => {
 
   it('updates live session model preferences with the current session state', async () => {
     const applyPreferences = vi.spyOn(conversationModelPreferences, 'applyConversationModelPreferencesToLiveSession')
-      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority' });
 
     try {
       setLiveEntry('session-model-preferences', {
@@ -3266,6 +3274,8 @@ describe('session actions', () => {
         session: {
           model: { id: 'gpt-4.1' },
           thinkingLevel: 'low',
+          agent: {},
+          modelRegistry: {},
         },
       });
 
@@ -3273,12 +3283,12 @@ describe('session actions', () => {
         'session-model-preferences',
         { model: 'gpt-5', thinkingLevel: 'high' },
         [{ id: 'gpt-5', provider: 'openai' }] as never,
-      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority' });
 
       expect(applyPreferences).toHaveBeenCalledWith(
         registry.get('session-model-preferences')?.session,
         { model: 'gpt-5', thinkingLevel: 'high' },
-        { currentModel: 'gpt-4.1', currentThinkingLevel: 'low' },
+        { currentModel: 'gpt-4.1', currentThinkingLevel: 'low', currentServiceTier: '' },
         [{ id: 'gpt-5', provider: 'openai' }],
       );
     } finally {

@@ -6,19 +6,21 @@ import { SessionManager } from '@mariozechner/pi-coding-agent';
 import type { Model } from '@mariozechner/pi-ai';
 import {
   applyConversationModelPreferencesToSessionManager,
+  modelSupportsServiceTiers,
   readConversationModelPreferenceSnapshot,
   resolveConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 
 function createTestModel(input: {
   id: string;
+  api?: 'openai-responses' | 'openai-codex-responses' | 'openai-completions';
   provider?: string;
   reasoning?: boolean;
-}): Model<'openai-responses'> {
+}): Model<any> {
   return {
     id: input.id,
     name: input.id,
-    api: 'openai-responses',
+    api: input.api ?? 'openai-responses',
     provider: input.provider ?? 'openai',
     baseUrl: 'https://example.com',
     reasoning: input.reasoning ?? true,
@@ -47,11 +49,35 @@ describe('conversationModelPreferences', () => {
     const state = resolveConversationModelPreferenceState(snapshot, {
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
     }, []);
 
     expect(state).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
+    });
+  });
+
+  it('reports whether a model supports service tiers', () => {
+    expect(modelSupportsServiceTiers(createTestModel({ id: 'gpt-5.4', api: 'openai-responses' }))).toBe(true);
+    expect(modelSupportsServiceTiers(createTestModel({ id: 'gpt-5.4', api: 'openai-codex-responses' }))).toBe(true);
+    expect(modelSupportsServiceTiers(createTestModel({ id: 'gpt-4o', api: 'openai-completions' }))).toBe(false);
+  });
+
+  it('reads the latest explicit service tier override from custom session entries', () => {
+    const sessionManager = createSessionManager();
+    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: 'priority' });
+    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: null });
+    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: 'flex' });
+
+    expect(readConversationModelPreferenceSnapshot(sessionManager)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: 'off',
+      currentServiceTier: 'flex',
+      hasExplicitModel: false,
+      hasExplicitThinkingLevel: false,
+      hasExplicitServiceTier: true,
     });
   });
 
@@ -68,6 +94,7 @@ describe('conversationModelPreferences', () => {
       {
         currentModel: 'claude-sonnet-4-6',
         currentThinkingLevel: 'high',
+        currentServiceTier: 'priority',
       },
       models,
     );
@@ -75,6 +102,7 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change']);
   });
@@ -83,7 +111,7 @@ describe('conversationModelPreferences', () => {
     const sessionManager = createSessionManager();
     const models = [
       createTestModel({ id: 'gpt-5.4', provider: 'openai-codex', reasoning: true }),
-      createTestModel({ id: 'gpt-4o', provider: 'openai', reasoning: false }),
+      createTestModel({ id: 'gpt-4o', provider: 'openai', api: 'openai-completions', reasoning: false }),
     ];
 
     const state = applyConversationModelPreferencesToSessionManager(
@@ -92,6 +120,7 @@ describe('conversationModelPreferences', () => {
       {
         currentModel: 'gpt-5.4',
         currentThinkingLevel: 'xhigh',
+        currentServiceTier: 'priority',
       },
       models,
     );
@@ -99,11 +128,12 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'gpt-4o',
       currentThinkingLevel: 'off',
+      currentServiceTier: 'priority',
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
 
-  it('accepts provider/model refs when switching models', () => {
+  it('accepts provider/model refs when switching models and setting an explicit service tier', () => {
     const sessionManager = createSessionManager();
     const models = [
       createTestModel({ id: 'qwen-reap', provider: 'desktop', reasoning: true }),
@@ -112,10 +142,11 @@ describe('conversationModelPreferences', () => {
 
     const state = applyConversationModelPreferencesToSessionManager(
       sessionManager,
-      { model: 'desktop/qwen-reap', thinkingLevel: 'medium' },
+      { model: 'desktop/qwen-reap', thinkingLevel: 'medium', serviceTier: 'priority' },
       {
         currentModel: 'gpt-5.4',
         currentThinkingLevel: 'high',
+        currentServiceTier: '',
       },
       models,
     );
@@ -123,8 +154,9 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'qwen-reap',
       currentThinkingLevel: 'medium',
+      currentServiceTier: 'priority',
     });
-    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
+    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change', 'custom']);
   });
 
   it('accepts raw model ids that already contain slashes', () => {
@@ -140,6 +172,7 @@ describe('conversationModelPreferences', () => {
       {
         currentModel: 'gpt-5.4',
         currentThinkingLevel: 'high',
+        currentServiceTier: 'priority',
       },
       models,
     );
@@ -147,7 +180,38 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'openrouter/free',
       currentThinkingLevel: 'medium',
+      currentServiceTier: 'priority',
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
+  });
+
+  it('can clear an explicit service tier override back to the saved default', () => {
+    const sessionManager = createSessionManager();
+    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: 'priority' });
+
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      { serviceTier: null },
+      {
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'auto',
+      },
+      [createTestModel({ id: 'gpt-5.4', provider: 'openai-codex' })],
+    );
+
+    expect(state).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: 'auto',
+    });
+    expect(readConversationModelPreferenceSnapshot(sessionManager)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: 'off',
+      currentServiceTier: '',
+      hasExplicitModel: false,
+      hasExplicitThinkingLevel: false,
+      hasExplicitServiceTier: false,
+    });
   });
 });

@@ -34,7 +34,7 @@ Those belong in vault docs, skill packages, and selected instruction files.
 A conversation can carry:
 
 - a current working directory
-- selected model / thinking preferences
+- selected model / thinking / service-tier preferences
 - binary or editor-style attachments
 - conversation artifacts
 - one-shot `@` mentions for the current turn

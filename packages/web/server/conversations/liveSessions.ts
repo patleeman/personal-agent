@@ -98,9 +98,13 @@ function buildServiceTierAwareStreamFn(
       return streamSimple(model, context, mergedOptions);
     }
 
+    const reasoningEffort = typeof (options as { reasoning?: unknown } | undefined)?.reasoning === 'string'
+      ? (options as { reasoning: string }).reasoning
+      : undefined;
+
     return stream(model, context, {
       ...mergedOptions,
-      reasoningEffort: options?.reasoning,
+      reasoningEffort,
       serviceTier,
     });
   };

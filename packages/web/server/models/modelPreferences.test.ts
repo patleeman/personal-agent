@@ -20,15 +20,15 @@ function createTempDir(): string {
 describe('readSavedModelPreferences', () => {
   it('returns empty values when the settings file is missing', () => {
     const dir = createTempDir();
-    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(join(dir, 'settings.json'))).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
   });
 
-  it('reads the default model and thinking level from settings.json', () => {
+  it('reads the default model, thinking level, and service tier from settings.json', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
-    writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4', defaultThinkingLevel: 'xhigh' }));
+    writeFileSync(file, JSON.stringify({ defaultModel: 'gpt-5.4', defaultThinkingLevel: 'xhigh', defaultServiceTier: 'priority' }));
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'xhigh', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'xhigh', currentServiceTier: 'priority', currentPresetId: '' });
   });
 
   it('falls back safely on invalid JSON', () => {
@@ -36,7 +36,7 @@ describe('readSavedModelPreferences', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, '{not json');
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
   });
 });
 
@@ -51,6 +51,7 @@ describe('normalizeSavedModelPreferences', () => {
     ])).toEqual({
       currentModel: 'claude-sonnet-4-6',
       currentThinkingLevel: '',
+      currentServiceTier: '',
       currentPresetId: '',
     });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
@@ -69,6 +70,7 @@ describe('normalizeSavedModelPreferences', () => {
     ])).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
+      currentServiceTier: '',
       currentPresetId: '',
     });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
@@ -88,6 +90,7 @@ describe('normalizeSavedModelPreferences', () => {
     ])).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
+      currentServiceTier: '',
       currentPresetId: '',
     });
     expect(JSON.parse(readFileSync(ambiguousFile, 'utf-8'))).toEqual({ defaultModel: 'gpt-5.4' });
@@ -105,6 +108,7 @@ describe('normalizeSavedModelPreferences', () => {
     ])).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: '',
+      currentServiceTier: '',
       currentPresetId: '',
     });
     expect(JSON.parse(readFileSync(matchingFile, 'utf-8'))).toEqual({
@@ -115,21 +119,22 @@ describe('normalizeSavedModelPreferences', () => {
 });
 
 describe('writeSavedModelPreferences', () => {
-  it('writes model, provider, and thinking level while preserving unrelated settings', () => {
+  it('writes model, provider, thinking level, and service tier while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({ theme: 'cobalt2' }));
 
-    writeSavedModelPreferences({ model: 'gpt-5.4', thinkingLevel: 'high' }, file, [
+    writeSavedModelPreferences({ model: 'gpt-5.4', thinkingLevel: 'high', serviceTier: 'priority' }, file, [
       { id: 'gpt-5.4', provider: 'openai-codex' },
     ]);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'priority', currentPresetId: '' });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       theme: 'cobalt2',
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: 'priority',
     });
   });
 
@@ -140,12 +145,13 @@ describe('writeSavedModelPreferences', () => {
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'xhigh',
+      defaultServiceTier: 'priority',
       theme: 'cobalt2',
     }));
 
-    writeSavedModelPreferences({ model: '', thinkingLevel: '' }, file);
+    writeSavedModelPreferences({ model: '', thinkingLevel: '', serviceTier: '' }, file);
 
-    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentPresetId: '' });
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({ theme: 'cobalt2' });
   });
 
@@ -175,16 +181,17 @@ describe('writeSavedModelPreferences', () => {
     });
   });
 
-  it('clears only thinking level when model is left untouched', () => {
+  it('clears only thinking level and service tier when model is left untouched', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
       defaultThinkingLevel: 'high',
+      defaultServiceTier: 'priority',
     }));
 
-    writeSavedModelPreferences({ thinkingLevel: null }, file, [
+    writeSavedModelPreferences({ thinkingLevel: null, serviceTier: null }, file, [
       { id: 'gpt-5.4', provider: 'openai-codex' },
     ]);
 
@@ -192,5 +199,16 @@ describe('writeSavedModelPreferences', () => {
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
     });
+  });
+
+  it('ignores invalid service tiers in settings.json and when writing updates', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({ defaultServiceTier: 'turbo' }));
+
+    expect(readSavedModelPreferences(file)).toEqual({ currentModel: '', currentThinkingLevel: '', currentServiceTier: '', currentPresetId: '' });
+
+    writeSavedModelPreferences({ serviceTier: 'turbo' }, file);
+    expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({});
   });
 });

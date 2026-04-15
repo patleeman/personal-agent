@@ -423,7 +423,7 @@ export const api = {
 
     return patch<{ ok: boolean }>('/models/current', { model });
   },
-  updateModelPreferences: async (input: { model?: string; thinkingLevel?: string }) => {
+  updateModelPreferences: async (input: { model?: string; thinkingLevel?: string; serviceTier?: string }) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       return desktopBridge.updateModelPreferences(input);
@@ -984,9 +984,9 @@ export const api = {
       return desktopBridge.readConversationModelPreferences({ conversationId: id });
     }
 
-    return get<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
+    return get<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
   },
-  updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null }, surfaceId?: string) => {
+  updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       return desktopBridge.updateConversationModelPreferences({
@@ -996,7 +996,7 @@ export const api = {
       });
     }
 
-    return patch<{ currentModel: string; currentThinkingLevel: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
+    return patch<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
   },
   recoverConversation: async (id: string) => {
     const desktopBridge = getDesktopBridge();
@@ -1010,7 +1010,7 @@ export const api = {
   createLiveSession: async (
     cwd?: string,
     text?: string,
-    options?: { model?: string | null; thinkingLevel?: string | null },
+    options?: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null },
   ) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
@@ -1018,6 +1018,7 @@ export const api = {
         cwd,
         ...(options?.model !== undefined ? { model: options.model } : {}),
         ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+        ...(options?.serviceTier !== undefined ? { serviceTier: options.serviceTier } : {}),
       });
     }
 
@@ -1026,6 +1027,7 @@ export const api = {
       text,
       ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
+      ...(options?.serviceTier !== undefined ? { serviceTier: options.serviceTier } : {}),
     });
   },
 

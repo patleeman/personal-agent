@@ -291,29 +291,33 @@ export function registerConversationStateRoutes(
 
   router.patch('/api/conversations/:id/model-preferences', async (req, res) => {
     try {
-      const { model, thinkingLevel } = req.body as {
+      const { model, thinkingLevel, serviceTier } = req.body as {
         model?: string | null;
         thinkingLevel?: string | null;
+        serviceTier?: string | null;
         surfaceId?: string;
       };
 
-      if (model === undefined && thinkingLevel === undefined) {
-        res.status(400).json({ error: 'model or thinkingLevel required' });
+      if (model === undefined && thinkingLevel === undefined && serviceTier === undefined) {
+        res.status(400).json({ error: 'model, thinkingLevel, or serviceTier required' });
         return;
       }
 
       if ((model !== undefined && model !== null && typeof model !== 'string')
-        || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
-        res.status(400).json({ error: 'model and thinkingLevel must be strings or null' });
+        || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
+        || (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')) {
+        res.status(400).json({ error: 'model, thinkingLevel, and serviceTier must be strings or null' });
         return;
       }
 
       const input: {
         model?: string | null;
         thinkingLevel?: string | null;
+        serviceTier?: string | null;
       } = {
         ...(model !== undefined ? { model } : {}),
         ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+        ...(serviceTier !== undefined ? { serviceTier } : {}),
       };
 
       if (isLocalLive(req.params.id)) {

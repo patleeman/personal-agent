@@ -192,6 +192,9 @@ function createMockSession(options: {
     isStreaming: options.isStreaming ?? false,
     messages: [],
     model: options.model,
+    modelRegistry: {
+      getApiKeyAndHeaders: vi.fn(),
+    },
     prompt: vi.fn(async () => undefined),
     reload: vi.fn(async () => undefined),
     sendCustomMessage: vi.fn(async () => undefined),
@@ -279,7 +282,7 @@ describe('liveSessions bootstrap helpers', () => {
     syncWebLiveConversationRunMock.mockReset();
 
     authCreateMock.mockReturnValue({ kind: 'auth' });
-    applyConversationModelPreferencesMock.mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+    applyConversationModelPreferencesMock.mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' });
     createBashToolMock.mockReturnValue({ name: 'bash-tool' });
     createRuntimeModelRegistryMock.mockReturnValue({
       getAvailable: vi.fn(() => []),

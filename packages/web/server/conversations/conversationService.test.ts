@@ -178,13 +178,13 @@ describe('conversationService', () => {
     });
     loadDeferredResumeStateMock.mockReturnValue({});
     loadProfileActivityReadStateMock.mockReturnValue(new Set());
-    readSavedModelPreferencesMock.mockReturnValue({ defaultModel: 'gpt-5' });
+    readSavedModelPreferencesMock.mockReturnValue({ defaultModel: 'gpt-5', currentServiceTier: '' });
     readSessionBlocksWithTelemetryMock.mockReturnValue({
       detail: null,
       telemetry: { cache: 'miss', loader: 'disk', durationMs: 4 },
     });
     readSessionMetaMock.mockReturnValue(null);
-    resolveConversationModelPreferenceStateMock.mockReturnValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high' });
+    resolveConversationModelPreferenceStateMock.mockReturnValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' });
     statSyncMock.mockImplementation(() => {
       throw new Error('stat unavailable');
     });
@@ -508,12 +508,13 @@ describe('conversationService', () => {
     await expect(readConversationModelPreferenceStateById('conversation-3')).resolves.toEqual({
       currentModel: 'gpt-5',
       currentThinkingLevel: 'high',
+      currentServiceTier: '',
     });
     expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/conversation-3.jsonl');
     expect(readSavedModelPreferencesMock).toHaveBeenCalledWith(expect.any(String), [{ id: 'gpt-5' }]);
     expect(resolveConversationModelPreferenceStateMock).toHaveBeenCalledWith(
       { model: 'gpt-5' },
-      { defaultModel: 'gpt-5' },
+      { defaultModel: 'gpt-5', currentServiceTier: '' },
       [{ id: 'gpt-5' }],
     );
 

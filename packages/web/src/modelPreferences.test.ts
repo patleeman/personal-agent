@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { THINKING_LEVEL_OPTIONS, groupModelsByProvider } from './modelPreferences';
+import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSupportedServiceTierOptions, groupModelsByProvider } from './modelPreferences';
 
 describe('model preferences helpers', () => {
   it('exports the supported thinking levels in UI order', () => {
@@ -11,6 +11,26 @@ describe('model preferences helpers', () => {
       'high',
       'xhigh',
     ]);
+  });
+
+  it('exports the supported service tiers in UI order', () => {
+    expect(SERVICE_TIER_OPTIONS.map((option) => option.value)).toEqual([
+      '',
+      'auto',
+      'default',
+      'flex',
+      'priority',
+      'scale',
+    ]);
+  });
+
+  it('filters service tier options to the tiers supported by the selected model', () => {
+    expect(getModelSupportedServiceTierOptions({ supportedServiceTiers: ['priority', 'auto'] })).toEqual([
+      { value: 'auto', label: 'Auto' },
+      { value: 'priority', label: 'Priority' },
+    ]);
+    expect(getModelSupportedServiceTierOptions({ supportedServiceTiers: [] })).toEqual([]);
+    expect(getModelSupportedServiceTierOptions(null)).toEqual([]);
   });
 
   it('groups models by provider while preserving original order', () => {

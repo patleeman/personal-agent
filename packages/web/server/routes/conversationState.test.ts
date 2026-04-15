@@ -293,7 +293,7 @@ describe('registerConversationStateRoutes', () => {
     });
     promptLocalSessionMock.mockResolvedValue(undefined);
     readConversationSessionSignatureMock.mockReturnValue(undefined);
-    readSavedModelPreferencesMock.mockReturnValue({ defaultModel: 'openai/gpt-5' });
+    readSavedModelPreferencesMock.mockReturnValue({ defaultModel: 'openai/gpt-5', currentServiceTier: '' });
     resolveRequestedCwdMock.mockImplementation((requested: string | undefined, current: string) => requested?.trim() || current);
     resumeLocalSessionMock.mockResolvedValue({ id: 'resumed-conversation' });
     statSyncMock.mockReturnValue({ isDirectory: () => true });
@@ -538,12 +538,12 @@ describe('registerConversationStateRoutes', () => {
     const missingRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: {} }, missingRes);
     expect(missingRes.status).toHaveBeenCalledWith(400);
-    expect(missingRes.json).toHaveBeenCalledWith({ error: 'model or thinkingLevel required' });
+    expect(missingRes.json).toHaveBeenCalledWith({ error: 'model, thinkingLevel, or serviceTier required' });
 
     const invalidTypeRes = createResponse();
     await handler({ params: { id: 'conversation-1' }, body: { model: 42 } }, invalidTypeRes);
     expect(invalidTypeRes.status).toHaveBeenCalledWith(400);
-    expect(invalidTypeRes.json).toHaveBeenCalledWith({ error: 'model and thinkingLevel must be strings or null' });
+    expect(invalidTypeRes.json).toHaveBeenCalledWith({ error: 'model, thinkingLevel, and serviceTier must be strings or null' });
   });
 
   it('updates live and stored conversation model preferences', async () => {
@@ -551,7 +551,7 @@ describe('registerConversationStateRoutes', () => {
     const handler = patchHandler('/api/conversations/:id/model-preferences');
 
     isLocalLiveMock.mockReturnValueOnce(true);
-    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({ conversationId: 'conversation-1', model: 'gpt-5' });
+    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '' });
     const liveRes = createResponse();
     await handler({
       params: { id: 'conversation-1' },
@@ -562,11 +562,11 @@ describe('registerConversationStateRoutes', () => {
       surfaceId: 'surface-1',
     });
     expect(updateLiveSessionModelPreferencesMock).toHaveBeenCalledWith('conversation-1', { model: 'gpt-5' }, [{ id: 'model-1' }]);
-    expect(liveRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'gpt-5' });
+    expect(liveRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '' });
 
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
     SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
-    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({ conversationId: 'conversation-1', model: 'claude-4' });
+    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '' });
     const storedRes = createResponse();
     await handler({
       params: { id: 'conversation-1' },
@@ -576,11 +576,11 @@ describe('registerConversationStateRoutes', () => {
     expect(applyConversationModelPreferencesToSessionManagerMock).toHaveBeenCalledWith(
       { id: 'session-manager' },
       { model: 'claude-4', thinkingLevel: null },
-      { defaultModel: 'openai/gpt-5' },
+      { defaultModel: 'openai/gpt-5', currentServiceTier: '' },
       [{ id: 'model-1' }],
     );
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-1');
-    expect(storedRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'claude-4' });
+    expect(storedRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '' });
   });
 
   it('handles missing stored conversations and mapped model preference errors', async () => {

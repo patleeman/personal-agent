@@ -123,7 +123,7 @@ export interface PersonalAgentDesktopBridge {
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;
   readModels(): Promise<ModelState>;
-  updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null }): Promise<{ ok: true }>;
+  updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<{ ok: true }>;
   readDefaultCwd(): Promise<DefaultCwdState>;
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
   readVaultRoot(): Promise<VaultRootState>;
@@ -253,8 +253,8 @@ export interface PersonalAgentDesktopBridge {
     resumes: DeferredResumeSummary[];
   }>;
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
-  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
-  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string }>;
+  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>;
+  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>;
   readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
   readConversationCheckpoints(conversationId: string): Promise<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>;
@@ -298,7 +298,7 @@ export interface PersonalAgentDesktopBridge {
     knownLastBlockId?: string;
   }): Promise<SessionDetailResult>;
   readSessionBlock(input: { sessionId: string; blockId: string }): Promise<DisplayBlock>;
-  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null }): Promise<LiveSessionCreateResult>;
+  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<LiveSessionCreateResult>;
   resumeLiveSession(sessionFile: string): Promise<{ id: string }>;
   takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
   restoreQueuedLiveSessionMessage(input: {

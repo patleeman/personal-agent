@@ -251,11 +251,13 @@ export function registerLiveSessionRoutes(
         cwd?: string;
         model?: string | null;
         thinkingLevel?: string | null;
+        serviceTier?: string | null;
       };
       const result = await createLiveSessionCapability({
         cwd: body.cwd,
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { thinkingLevel: body.thinkingLevel } : {}),
+        ...(body.serviceTier !== undefined ? { serviceTier: body.serviceTier } : {}),
       }, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {

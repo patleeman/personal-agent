@@ -154,7 +154,7 @@ export class LocalHostController implements HostController {
     return module.readDesktopModels();
   }
 
-  async updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null }): Promise<{ ok: true }> {
+  async updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<{ ok: true }> {
     const module = await this.loadLocalApi();
     return module.updateDesktopModelPreferences(input);
   }

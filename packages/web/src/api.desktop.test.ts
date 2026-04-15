@@ -97,7 +97,7 @@ describe('api desktop transport', () => {
     const readSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
     const readSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
     const readSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
-    const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
     const updateModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const saveModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
@@ -134,8 +134,8 @@ describe('api desktop transport', () => {
       usedFallbackPrompt: true,
     });
     const readLiveSessionForkEntries = vi.fn().mockResolvedValue([{ entryId: 'entry-1', text: 'fork from here' }]);
-    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high' });
-    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
+    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '' });
+    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority' });
     const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
     const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
@@ -431,7 +431,7 @@ describe('api desktop transport', () => {
     expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
     expect(sessionMeta).toEqual({ id: 'conversation-1', title: 'Conversation 1' });
     expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
-    expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
     expect(modelPreferenceUpdate).toEqual({ ok: true });
     expect(modelProviders).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
     expect(savedModelProvider).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
@@ -468,8 +468,8 @@ describe('api desktop transport', () => {
       replayedPendingOperation: false,
       usedFallbackPrompt: true,
     });
-    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high' });
-    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium' });
+    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '' });
+    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority' });
     expect(live).toEqual({ live: true, id: 'live-1' });
     expect(forkEntries).toEqual([{ entryId: 'entry-1', text: 'fork from here' }]);
     expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });
@@ -1394,7 +1394,7 @@ describe('api desktop transport', () => {
 
   it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', models: [] }))
+      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [] }))
       .mockResolvedValueOnce(createJsonResponse({ ok: true }))
       .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-provider', models: [] }] }))
       .mockResolvedValueOnce(createJsonResponse({ providers: [{ id: 'remote-auth', authType: 'api_key' }] }))
@@ -1442,7 +1442,7 @@ describe('api desktop transport', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ input: '123456' }),
     });
-    expect(models).toEqual({ currentModel: 'remote-model', currentThinkingLevel: 'medium', models: [] });
+    expect(models).toEqual({ currentModel: 'remote-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [] });
     expect(updated).toEqual({ ok: true });
     expect(providers).toEqual({ providers: [{ id: 'remote-provider', models: [] }] });
     expect(auth).toEqual({ providers: [{ id: 'remote-auth', authType: 'api_key' }] });

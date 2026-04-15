@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatContextBreakdownLabel, formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatThinkingLevelLabel, getContextUsagePercent } from './conversationHeader.js';
+import { formatContextBreakdownLabel, formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatLiveSessionLabel, formatServiceTierLabel, formatThinkingLevelLabel, getContextUsagePercent } from './conversationHeader.js';
 
 describe('conversation header helpers', () => {
   it('formats thinking level labels with a sensible fallback', () => {
@@ -7,6 +7,13 @@ describe('conversation header helpers', () => {
     expect(formatThinkingLevelLabel('  low  ')).toBe('low');
     expect(formatThinkingLevelLabel('')).toBe('default');
     expect(formatThinkingLevelLabel(undefined)).toBe('default');
+  });
+
+  it('formats service tier labels with a sensible fallback', () => {
+    expect(formatServiceTierLabel('priority')).toBe('priority');
+    expect(formatServiceTierLabel('  flex  ')).toBe('flex');
+    expect(formatServiceTierLabel('')).toBe('default');
+    expect(formatServiceTierLabel(undefined)).toBe('default');
   });
 
   it('formats context window labels compactly', () => {

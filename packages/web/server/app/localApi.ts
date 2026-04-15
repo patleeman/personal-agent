@@ -1425,9 +1425,10 @@ export async function readDesktopModels() {
 export async function updateDesktopModelPreferences(input: {
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }) {
-  if (typeof input.model !== 'string' && typeof input.thinkingLevel !== 'string') {
-    throw new Error('model or thinkingLevel required');
+  if (typeof input.model !== 'string' && typeof input.thinkingLevel !== 'string' && typeof input.serviceTier !== 'string') {
+    throw new Error('model, thinkingLevel, or serviceTier required');
   }
 
   const context = await getLocalServerRouteContext();
@@ -1436,6 +1437,7 @@ export async function updateDesktopModelPreferences(input: {
     writeSavedModelPreferences({
       model: input.model,
       thinkingLevel: input.thinkingLevel,
+      serviceTier: input.serviceTier,
     }, settingsFile, models);
   }, {
     localSettingsFile: context.getCurrentProfileSettingsFile(),
@@ -2086,6 +2088,7 @@ export async function updateDesktopConversationModelPreferences(input: {
   conversationId: string;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
   surfaceId?: string;
 }) {
   await getLocalRoutes();
@@ -2095,19 +2098,21 @@ export async function updateDesktopConversationModelPreferences(input: {
     throw new Error('conversationId required');
   }
 
-  const { model, thinkingLevel } = input;
-  if (model === undefined && thinkingLevel === undefined) {
-    throw new Error('model or thinkingLevel required');
+  const { model, thinkingLevel, serviceTier } = input;
+  if (model === undefined && thinkingLevel === undefined && serviceTier === undefined) {
+    throw new Error('model, thinkingLevel, or serviceTier required');
   }
 
   if ((model !== undefined && model !== null && typeof model !== 'string')
-    || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')) {
-    throw new Error('model and thinkingLevel must be strings or null');
+    || (thinkingLevel !== undefined && thinkingLevel !== null && typeof thinkingLevel !== 'string')
+    || (serviceTier !== undefined && serviceTier !== null && typeof serviceTier !== 'string')) {
+    throw new Error('model, thinkingLevel, and serviceTier must be strings or null');
   }
 
   const nextInput = {
     ...(model !== undefined ? { model } : {}),
     ...(thinkingLevel !== undefined ? { thinkingLevel } : {}),
+    ...(serviceTier !== undefined ? { serviceTier } : {}),
   };
 
   if (isLiveSession(conversationId)) {
@@ -2350,6 +2355,7 @@ export async function createDesktopLiveSession(input: {
   cwd?: string;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }> {
   return createLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
@@ -2453,6 +2459,7 @@ export async function forkDesktopConversation(input: {
   cwd?: string | null;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }): Promise<{ id: string; sessionFile: string }> {
   const source = resolveDesktopConversationSource(input.conversationId);
   return createSessionFromExisting(
@@ -2461,6 +2468,7 @@ export async function forkDesktopConversation(input: {
     {
       ...(input.model !== undefined ? { initialModel: input.model } : {}),
       ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
+      ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
     },
   );
 }

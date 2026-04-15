@@ -492,7 +492,7 @@ describe('LocalHostController', () => {
 
   it('routes dedicated model and provider capabilities through the local API module without loopback proxying', async () => {
     const unsubscribeProviderOAuth = vi.fn();
-    const readDesktopModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    const readDesktopModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
     const updateDesktopModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readDesktopModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const saveDesktopModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
@@ -532,7 +532,7 @@ describe('LocalHostController', () => {
     );
     const onState = vi.fn();
 
-    await expect(controller.readModels?.()).resolves.toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', models: [] });
+    await expect(controller.readModels?.()).resolves.toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
     await expect(controller.updateModelPreferences?.({ model: 'gpt-5.4', thinkingLevel: 'medium' })).resolves.toEqual({ ok: true });
     await expect(controller.readModelProviders?.()).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });
     await expect(controller.saveModelProvider?.({ provider: 'openrouter', baseUrl: 'https://openrouter.ai/api' })).resolves.toEqual({ providers: [{ id: 'openrouter', models: [] }] });

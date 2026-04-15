@@ -5,12 +5,14 @@ import {
   buildDraftConversationComposerStorageKey,
   buildDraftConversationCwdStorageKey,
   buildDraftConversationModelStorageKey,
+  buildDraftConversationServiceTierStorageKey,
   buildDraftConversationSessionMeta,
   buildDraftConversationThinkingLevelStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationModel,
+  clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ID,
   DRAFT_CONVERSATION_ROUTE,
@@ -19,11 +21,13 @@ import {
   persistDraftConversationComposer,
   persistDraftConversationCwd,
   persistDraftConversationModel,
+  persistDraftConversationServiceTier,
   persistDraftConversationThinkingLevel,
   readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
   readDraftConversationModel,
+  readDraftConversationServiceTier,
   readDraftConversationThinkingLevel,
   shouldShowDraftConversationTab,
 } from './draftConversation';
@@ -44,6 +48,7 @@ describe('draftConversation', () => {
     expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
     expect(buildDraftConversationModelStorageKey()).toBe('pa:reload:conversation:draft:model');
     expect(buildDraftConversationThinkingLevelStorageKey()).toBe('pa:reload:conversation:draft:thinking-level');
+    expect(buildDraftConversationServiceTierStorageKey()).toBe('pa:reload:conversation:draft:service-tier');
   });
 
   it('persists and reads the draft composer text', () => {
@@ -120,6 +125,25 @@ describe('draftConversation', () => {
 
     expect(readDraftConversationThinkingLevel(storage)).toBe('');
     expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBeNull();
+  });
+
+  it('persists and reads the draft service tier', () => {
+    const storage = createStorage();
+
+    persistDraftConversationServiceTier('priority', storage);
+
+    expect(readDraftConversationServiceTier(storage)).toBe('priority');
+    expect(storage.getItem(buildDraftConversationServiceTierStorageKey())).toBe(JSON.stringify('priority'));
+  });
+
+  it('clears the stored draft service tier', () => {
+    const storage = createStorage();
+
+    persistDraftConversationServiceTier('priority', storage);
+    clearDraftConversationServiceTier(storage);
+
+    expect(readDraftConversationServiceTier(storage)).toBe('');
+    expect(storage.getItem(buildDraftConversationServiceTierStorageKey())).toBeNull();
   });
 
   it('persists and reads draft attachments', () => {

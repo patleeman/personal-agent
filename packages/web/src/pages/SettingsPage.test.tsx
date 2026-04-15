@@ -142,6 +142,7 @@ describe('SettingsPage', () => {
         return buildUseApiResult({
           currentModel: 'gpt-5.4',
           currentThinkingLevel: 'medium',
+          currentServiceTier: '',
           models: [
             {
               id: 'gpt-5.4',

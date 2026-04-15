@@ -116,6 +116,7 @@ export interface DesktopProviderOAuthInputRequest {
 export interface DesktopModelPreferencesUpdateRequest {
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }
 
 export interface DesktopConversationPlanDefaultsUpdateRequest {
@@ -163,6 +164,7 @@ export interface DesktopConversationModelPreferencesUpdateRequest {
   conversationId: string;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
   surfaceId?: string;
 }
 
@@ -219,6 +221,7 @@ export interface DesktopLiveSessionCreateRequest {
   cwd?: string;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }
 
 export interface DesktopLiveSessionTakeoverRequest {

@@ -487,7 +487,7 @@ export async function readSessionDetailForRoute(input: {
 
 export async function readConversationModelPreferenceStateById(
   conversationId: string,
-): Promise<{ currentModel: string; currentThinkingLevel: string } | null> {
+): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string } | null> {
   const sessionFile = resolveConversationSessionFile(conversationId);
   if (!sessionFile || !existsSync(sessionFile)) {
     return null;

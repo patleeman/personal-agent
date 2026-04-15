@@ -78,6 +78,7 @@ export interface CreateLiveSessionCapabilityInput {
   cwd?: string;
   model?: string | null;
   thinkingLevel?: string | null;
+  serviceTier?: string | null;
 }
 
 export interface CreateLiveSessionCapabilityResult {
@@ -407,6 +408,7 @@ export async function createLiveSessionCapability(
   const created = await createLocalSession(cwd, buildLiveSessionOptions(context, {
     ...(input.model !== undefined ? { initialModel: input.model } : {}),
     ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
+    ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
   }));
   const bootstrap = buildCreatedLiveSessionBootstrap(created.id, created.sessionFile);
 
