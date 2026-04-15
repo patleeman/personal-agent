@@ -612,14 +612,14 @@ function CheckpointToolBlock({
   const isRunning = block.status === 'running' || !!block.running;
   const isError = block.status === 'error' || !!block.error;
   const isActive = activeCheckpointId === checkpoint.checkpointId;
-  const actionLabel = isActive ? 'opened' : 'open review';
+  const actionLabel = isActive ? 'Review open' : 'View diff';
 
   return (
     <SurfacePanel
       muted
       className={cx(
         'px-3.5 py-3 text-[12px] transition-colors',
-        isError && 'border-danger/30 bg-danger/5',
+        isError ? 'border-danger/30 bg-danger/5' : 'border-success/20 bg-success/5',
       )}
     >
       <div className="flex items-start gap-3">
@@ -632,14 +632,16 @@ function CheckpointToolBlock({
             <Pill tone={isError ? 'danger' : 'success'} mono>{checkpoint.shortSha}</Pill>
             {typeof checkpoint.fileCount === 'number' ? <span className="text-[10px] text-dim">{checkpoint.fileCount} files</span> : null}
           </div>
-          <p className="mt-1 break-all font-mono text-[11px] text-secondary">{checkpoint.commitSha}</p>
-          {block.output && !isError && (
-            <p className="mt-2 text-[12px] leading-relaxed text-secondary">{block.output}</p>
-          )}
+          <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px]">
+            {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
+              <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
+            ) : null}
+            {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
+          </div>
           {isError && block.output && (
             <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
             {isRunning ? (
               <span className="inline-flex items-center gap-1.5 text-dim">
                 <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
@@ -651,17 +653,13 @@ function CheckpointToolBlock({
                 onClick={() => onOpenCheckpoint?.(checkpoint.checkpointId)}
                 disabled={!onOpenCheckpoint}
                 className={cx(
-                  'text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim',
-                  isActive && 'text-dim hover:text-dim',
+                  'ui-action-button text-[11px] text-accent disabled:cursor-default disabled:opacity-50',
+                  isActive && 'text-secondary',
                 )}
               >
                 {actionLabel}
               </button>
             )}
-            {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
-              <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
-            ) : null}
-            {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
           </div>
         </div>
       </div>

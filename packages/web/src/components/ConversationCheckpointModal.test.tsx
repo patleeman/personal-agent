@@ -27,11 +27,26 @@ function createUseApiResult(overrides: Partial<ReturnType<typeof useApi>> = {}) 
 
 function mockUseApiResults(results: Record<string, Partial<ReturnType<typeof useApi>>>) {
   vi.mocked(useApi).mockImplementation((_fetcher, key) => {
-    if (!key || !(key in results)) {
+    if (!key) {
       throw new Error(`Unexpected useApi key: ${String(key)}`);
     }
 
-    return createUseApiResult(results[key]);
+    if (key in results) {
+      return createUseApiResult(results[key]);
+    }
+
+    if (String(key).includes(':checkpoint-review:')) {
+      return createUseApiResult({
+        data: {
+          conversationId: 'conv-123',
+          checkpointId: 'abc1234def567890abc1234def567890abc12345',
+          github: null,
+          structuralDiff: { available: false },
+        },
+      });
+    }
+
+    throw new Error(`Unexpected useApi key: ${String(key)}`);
   });
 }
 
@@ -64,7 +79,7 @@ describe('ConversationCheckpointModal', () => {
     vi.clearAllMocks();
   });
 
-  it('renders a two-pane checkpoint review modal', () => {
+  it('renders a checkpoint review modal with continuous diff sections', () => {
     mockUseApiResults({
       'conv-123:checkpoint:abc1234def567890abc1234def567890abc12345': {
         data: {
@@ -82,9 +97,11 @@ describe('ConversationCheckpointModal', () => {
             committedAt: '2026-04-14T12:00:00.000Z',
             createdAt: '2026-04-14T12:00:01.000Z',
             updatedAt: '2026-04-14T12:00:01.000Z',
-            fileCount: 1,
+            fileCount: 2,
             linesAdded: 12,
             linesDeleted: 3,
+            comment: 'Looks good.',
+            commentUpdatedAt: '2026-04-14T12:05:00.000Z',
             files: [
               {
                 path: 'packages/web/src/pages/ConversationPage.tsx',
@@ -93,7 +110,32 @@ describe('ConversationCheckpointModal', () => {
                 deletions: 3,
                 patch: 'diff --git a/packages/web/src/pages/ConversationPage.tsx b/packages/web/src/pages/ConversationPage.tsx\n@@ -10,2 +10,3 @@\n old line\n-old value\n+new value\n+added value\n',
               },
+              {
+                path: 'packages/web/src/components/ConversationCheckpointModal.tsx',
+                status: 'modified',
+                additions: 4,
+                deletions: 1,
+                patch: 'diff --git a/packages/web/src/components/ConversationCheckpointModal.tsx b/packages/web/src/components/ConversationCheckpointModal.tsx\n@@ -1 +1 @@\n-old\n+new\n',
+              },
             ],
+          },
+        },
+      },
+      'conv-123:checkpoint-review:abc1234def567890abc1234def567890abc12345': {
+        data: {
+          conversationId: 'conv-123',
+          checkpointId: 'abc1234def567890abc1234def567890abc12345',
+          github: {
+            provider: 'github',
+            repoUrl: 'https://github.com/patleeman/personal-agent',
+            commitUrl: 'https://github.com/patleeman/personal-agent/commit/abc1234def567890abc1234def567890abc12345',
+            pullRequestUrl: 'https://github.com/patleeman/personal-agent/pull/42',
+            pullRequestTitle: 'feat: add checkpoint review',
+            pullRequestNumber: 42,
+          },
+          structuralDiff: {
+            available: true,
+            command: 'difft',
           },
         },
       },
@@ -103,13 +145,14 @@ describe('ConversationCheckpointModal', () => {
 
     expect(html).toContain('role="dialog"');
     expect(html).toContain('feat: add checkpoint review');
-    expect(html).toContain('copy sha');
+    expect(html).toContain('Copy SHA');
+    expect(html).toContain('GitHub');
+    expect(html).toContain('pull/42');
+    expect(html).toContain('All diffs');
     expect(html).toContain('Files');
     expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');
-    expect(html).toContain('text-success');
-    expect(html).toContain('text-danger');
-    expect(html).toContain('12');
-    expect(html).toContain('3');
+    expect(html).toContain('ConversationCheckpointModal.tsx');
+    expect(html).toContain('Comment');
   });
 
   it('renders an error state when the checkpoint cannot be loaded', () => {
@@ -122,6 +165,6 @@ describe('ConversationCheckpointModal', () => {
     const html = renderModal();
 
     expect(html).toContain('Checkpoint not found.');
-    expect(html).toContain('close');
+    expect(html).toContain('Close');
   });
 });

@@ -36,9 +36,12 @@ import {
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
+  readConversationCheckpointReviewContextCapability,
+  readConversationCheckpointStructuralDiffCapability,
   readConversationCommitCheckpointCapability,
   readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
+  updateConversationCommitCheckpointCapability,
 } from '../conversations/conversationAssetsCapability.js';
 import {
   readConversationSessionMetaCapability,
@@ -446,6 +449,63 @@ export function registerConversationRoutes(
       res.json(readConversationCommitCheckpointCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         checkpointId: req.params.checkpointId,
+      }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/conversations/:id/checkpoints/:checkpointId/review-context', async (req, res) => {
+    try {
+      res.json(await readConversationCheckpointReviewContextCapability(getCurrentProfileFn(), {
+        conversationId: req.params.id,
+        checkpointId: req.params.checkpointId,
+      }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/conversations/:id/checkpoints/:checkpointId/structural-diff', (req, res) => {
+    try {
+      res.json(readConversationCheckpointStructuralDiffCapability(getCurrentProfileFn(), {
+        conversationId: req.params.id,
+        checkpointId: req.params.checkpointId,
+        filePath: parseTrimmedQueryString(req.query.path) ?? '',
+        display: req.query.display === 'side-by-side' ? 'side-by-side' : 'inline',
+      }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      if (writeConversationAssetCapabilityError(res, err)) {
+        return;
+      }
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/conversations/:id/checkpoints/:checkpointId', (req, res) => {
+    try {
+      res.json(updateConversationCommitCheckpointCapability(getCurrentProfileFn(), {
+        conversationId: req.params.id,
+        checkpointId: req.params.checkpointId,
+        comment: req.body?.comment,
       }));
     } catch (err) {
       logError('request handler error', {

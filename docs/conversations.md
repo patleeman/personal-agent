@@ -17,7 +17,7 @@ Good fits:
 - one-shot `@` mentions of docs/files
 - persistent attached context docs
 - conversation artifacts
-- checkpoint commits and review snapshots tied to the thread
+- checkpoint commits and review snapshots tied to the thread, including review comments saved on the checkpoint itself
 - short-lived execution context
 
 Bad fits:

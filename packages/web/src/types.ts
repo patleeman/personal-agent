@@ -76,6 +76,8 @@ export interface ConversationCommitCheckpointSummary {
   fileCount: number;
   linesAdded: number;
   linesDeleted: number;
+  comment?: string;
+  commentUpdatedAt?: string;
 }
 
 export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
@@ -99,6 +101,34 @@ export interface ConversationCheckpointToolDetails {
   checkpointCount?: number;
   checkpointIds?: string[];
   paths?: string[];
+}
+
+export interface ConversationCheckpointGithubInfo {
+  provider: 'github';
+  repoUrl: string;
+  commitUrl: string;
+  pullRequestUrl?: string;
+  pullRequestTitle?: string;
+  pullRequestNumber?: number;
+}
+
+export interface ConversationCheckpointReviewContext {
+  conversationId: string;
+  checkpointId: string;
+  github: ConversationCheckpointGithubInfo | null;
+  structuralDiff: {
+    available: boolean;
+    command?: string;
+  };
+}
+
+export interface ConversationCheckpointStructuralDiffResult {
+  conversationId: string;
+  checkpointId: string;
+  filePath: string;
+  display: 'inline' | 'side-by-side';
+  available: boolean;
+  content?: string;
 }
 
 export type ConversationAttachmentKind = 'excalidraw';

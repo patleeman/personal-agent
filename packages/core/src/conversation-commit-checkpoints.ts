@@ -45,6 +45,8 @@ export interface ConversationCommitCheckpointSummary {
   fileCount: number;
   linesAdded: number;
   linesDeleted: number;
+  comment?: string;
+  commentUpdatedAt?: string;
 }
 
 export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
@@ -157,6 +159,8 @@ function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpoint
     ? record.files.map((file) => normalizeCheckpointFile(file))
     : [];
 
+  const comment = normalizeOptionalText(record.comment);
+
   return {
     id,
     conversationId: normalizeRequiredText(typeof record.conversationId === 'string' ? record.conversationId : '', 'conversationId'),
@@ -174,6 +178,17 @@ function normalizeCheckpointRecord(value: unknown): ConversationCommitCheckpoint
     fileCount: normalizeNonNegativeInteger(record.fileCount ?? Number.NaN, 'fileCount'),
     linesAdded: normalizeNonNegativeInteger(record.linesAdded ?? Number.NaN, 'linesAdded'),
     linesDeleted: normalizeNonNegativeInteger(record.linesDeleted ?? Number.NaN, 'linesDeleted'),
+    ...(comment ? {
+      comment,
+      commentUpdatedAt: normalizeIsoTimestamp(
+        typeof record.commentUpdatedAt === 'string'
+          ? record.commentUpdatedAt
+          : typeof record.updatedAt === 'string'
+            ? record.updatedAt
+            : '',
+        'commentUpdatedAt',
+      ),
+    } : {}),
     files,
   };
 }
@@ -247,6 +262,8 @@ export function saveConversationCommitCheckpoint(options: {
   committedAt: string;
   createdAt?: string;
   updatedAt?: string;
+  comment?: string;
+  commentUpdatedAt?: string;
   files: ConversationCommitCheckpointFile[];
   linesAdded: number;
   linesDeleted: number;
@@ -257,6 +274,9 @@ export function saveConversationCommitCheckpoint(options: {
 
   const checkpointId = normalizeOptionalText(options.checkpointId) ?? normalizeRequiredText(options.commitSha, 'commitSha');
   validateConversationCommitCheckpointId(checkpointId);
+
+  const comment = normalizeOptionalText(options.comment);
+  const updatedAt = normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'updatedAt');
 
   const record: ConversationCommitCheckpointRecord = {
     id: checkpointId,
@@ -271,10 +291,14 @@ export function saveConversationCommitCheckpoint(options: {
     ...(normalizeOptionalText(options.authorEmail) ? { authorEmail: normalizeOptionalText(options.authorEmail) } : {}),
     committedAt: normalizeIsoTimestamp(options.committedAt, 'committedAt'),
     createdAt: normalizeIsoTimestamp(options.createdAt ?? new Date().toISOString(), 'createdAt'),
-    updatedAt: normalizeIsoTimestamp(options.updatedAt ?? new Date().toISOString(), 'updatedAt'),
+    updatedAt,
     fileCount: normalizeNonNegativeInteger(options.files.length, 'fileCount'),
     linesAdded: normalizeNonNegativeInteger(options.linesAdded, 'linesAdded'),
     linesDeleted: normalizeNonNegativeInteger(options.linesDeleted, 'linesDeleted'),
+    ...(comment ? {
+      comment,
+      commentUpdatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? updatedAt, 'commentUpdatedAt'),
+    } : {}),
     files: options.files.map((file) => normalizeCheckpointFile(file)),
   };
 
@@ -293,4 +317,36 @@ export function saveConversationCommitCheckpoint(options: {
   mkdirSync(dir, { recursive: true });
   writeFileSync(path, `${JSON.stringify(record, null, 2)}\n`);
   return record;
+}
+
+export function updateConversationCommitCheckpointComment(options: {
+  profile: string;
+  conversationId: string;
+  checkpointId: string;
+  comment?: string | null;
+  commentUpdatedAt?: string;
+  stateRoot?: string;
+}): ConversationCommitCheckpointRecord | null {
+  const existing = getConversationCommitCheckpoint(options);
+  if (!existing) {
+    return null;
+  }
+
+  const comment = normalizeOptionalText(options.comment ?? undefined);
+  const updated = normalizeCheckpointRecord({
+    ...existing,
+    ...(comment
+      ? {
+          comment,
+          commentUpdatedAt: normalizeIsoTimestamp(options.commentUpdatedAt ?? new Date().toISOString(), 'commentUpdatedAt'),
+        }
+      : {
+          comment: undefined,
+          commentUpdatedAt: undefined,
+        }),
+    updatedAt: normalizeIsoTimestamp(new Date().toISOString(), 'updatedAt'),
+  });
+
+  writeFileSync(resolveConversationCommitCheckpointPath(options), `${JSON.stringify(updated, null, 2)}\n`);
+  return updated;
 }

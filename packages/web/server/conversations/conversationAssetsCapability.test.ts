@@ -9,6 +9,7 @@ const {
   listConversationAttachmentsMock,
   readConversationAttachmentDownloadMock,
   saveConversationAttachmentMock,
+  updateConversationCommitCheckpointCommentMock,
   invalidateAppTopicsMock,
 } = vi.hoisted(() => ({
   deleteConversationArtifactMock: vi.fn(),
@@ -19,6 +20,7 @@ const {
   listConversationAttachmentsMock: vi.fn(),
   readConversationAttachmentDownloadMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
+  updateConversationCommitCheckpointCommentMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
 }));
 
@@ -31,6 +33,7 @@ vi.mock('@personal-agent/core', () => ({
   listConversationAttachments: listConversationAttachmentsMock,
   readConversationAttachmentDownload: readConversationAttachmentDownloadMock,
   saveConversationAttachment: saveConversationAttachmentMock,
+  updateConversationCommitCheckpointComment: updateConversationCommitCheckpointCommentMock,
 }));
 
 vi.mock('../shared/appEvents.js', () => ({
@@ -49,6 +52,7 @@ import {
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
   updateConversationAttachmentCapability,
+  updateConversationCommitCheckpointCapability,
 } from './conversationAssetsCapability.js';
 
 beforeEach(() => {
@@ -60,6 +64,7 @@ beforeEach(() => {
   listConversationAttachmentsMock.mockReset();
   readConversationAttachmentDownloadMock.mockReset();
   saveConversationAttachmentMock.mockReset();
+  updateConversationCommitCheckpointCommentMock.mockReset();
   invalidateAppTopicsMock.mockReset();
 
   listConversationArtifactsMock.mockReturnValue([{ id: 'artifact-1', title: 'Artifact 1' }]);
@@ -74,6 +79,7 @@ beforeEach(() => {
     mimeType: 'image/png',
   });
   saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } });
+  updateConversationCommitCheckpointCommentMock.mockReturnValue({ id: 'checkpoint-1', subject: 'feat: checkpoint', comment: 'Ship it' });
   deleteConversationArtifactMock.mockReturnValue(true);
   deleteConversationAttachmentMock.mockReturnValue(true);
 });
@@ -123,6 +129,32 @@ describe('conversationAssetsCapability', () => {
       conversationId: 'session-1',
       attachmentId: 'missing',
     })).toThrowError(new ConversationAssetCapabilityNotFoundError('Attachment not found'));
+  });
+
+  it('updates checkpoint comments with invalidation', () => {
+    expect(updateConversationCommitCheckpointCapability('assistant', {
+      conversationId: 'session-1',
+      checkpointId: 'checkpoint-1',
+      comment: 'Ship it',
+    })).toEqual({
+      conversationId: 'session-1',
+      checkpoint: { id: 'checkpoint-1', subject: 'feat: checkpoint', comment: 'Ship it' },
+    });
+
+    expect(updateConversationCommitCheckpointCommentMock).toHaveBeenCalledWith({
+      profile: 'assistant',
+      conversationId: 'session-1',
+      checkpointId: 'checkpoint-1',
+      comment: 'Ship it',
+    });
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('checkpoints');
+
+    updateConversationCommitCheckpointCommentMock.mockReturnValueOnce(null);
+    expect(() => updateConversationCommitCheckpointCapability('assistant', {
+      conversationId: 'session-1',
+      checkpointId: 'missing',
+      comment: 'Nope',
+    })).toThrowError(new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found'));
   });
 
   it('reads and creates conversation attachments with invalidation', () => {

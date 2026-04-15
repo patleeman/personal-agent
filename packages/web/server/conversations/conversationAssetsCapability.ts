@@ -9,8 +9,13 @@ import {
   listConversationCommitCheckpoints,
   readConversationAttachmentDownload,
   saveConversationAttachment,
+  updateConversationCommitCheckpointComment,
 } from '@personal-agent/core';
 import { invalidateAppTopics } from '../shared/appEvents.js';
+import {
+  readConversationCheckpointReviewContext,
+  readConversationCheckpointStructuralDiff,
+} from './checkpointReview.js';
 
 export class ConversationAssetCapabilityInputError extends Error {}
 export class ConversationAssetCapabilityNotFoundError extends Error {}
@@ -42,6 +47,15 @@ interface ConversationAttachmentSaveInput {
   previewName?: string;
   previewMimeType?: string;
   note?: string;
+}
+
+interface ConversationCheckpointUpdateInput extends ConversationCheckpointMutationInput {
+  comment?: string | null;
+}
+
+interface ConversationCheckpointStructuralDiffInput extends ConversationCheckpointMutationInput {
+  filePath: string;
+  display: 'inline' | 'side-by-side';
 }
 
 interface ConversationAttachmentDownloadInput extends ConversationAttachmentMutationInput {
@@ -166,6 +180,70 @@ export function readConversationCommitCheckpointCapability(
     conversationId,
     checkpoint,
   };
+}
+
+export function updateConversationCommitCheckpointCapability(
+  profile: string,
+  input: ConversationCheckpointUpdateInput,
+) {
+  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
+  const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
+  const checkpoint = updateConversationCommitCheckpointComment({
+    profile,
+    conversationId,
+    checkpointId,
+    comment: input.comment,
+  });
+  if (!checkpoint) {
+    throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
+  }
+
+  invalidateAppTopics('checkpoints');
+
+  return {
+    conversationId,
+    checkpoint,
+  };
+}
+
+export async function readConversationCheckpointReviewContextCapability(
+  profile: string,
+  input: ConversationCheckpointMutationInput,
+) {
+  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
+  const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
+  const reviewContext = await readConversationCheckpointReviewContext({
+    profile,
+    conversationId,
+    checkpointId,
+  });
+  if (!reviewContext) {
+    throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
+  }
+
+  return reviewContext;
+}
+
+export function readConversationCheckpointStructuralDiffCapability(
+  profile: string,
+  input: ConversationCheckpointStructuralDiffInput,
+) {
+  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
+  const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
+  const filePath = normalizeRequiredId(input.filePath, 'filePath');
+  const display: 'inline' | 'side-by-side' = input.display === 'side-by-side' ? 'side-by-side' : 'inline';
+  const result = readConversationCheckpointStructuralDiff({
+    profile,
+    conversationId,
+    checkpointId,
+    filePath,
+    display,
+  });
+  if (!result) {
+    throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
+  }
+
+  return result;
 }
 
 export function deleteConversationArtifactCapability(

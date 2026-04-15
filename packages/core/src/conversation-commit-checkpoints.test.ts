@@ -8,6 +8,7 @@ import {
   resolveConversationCommitCheckpointPath,
   resolveProfileConversationCommitCheckpointsDir,
   saveConversationCommitCheckpoint,
+  updateConversationCommitCheckpointComment,
   validateConversationCommitCheckpointId,
 } from './conversation-commit-checkpoints.js';
 
@@ -102,6 +103,52 @@ describe('conversation commit checkpoint storage', () => {
         linesDeleted: 3,
       },
     ]);
+  });
+
+  it('updates persisted checkpoint comments', () => {
+    const stateRoot = createTempStateRoot();
+    const record = saveConversationCommitCheckpoint({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conversation-1',
+      commitSha: 'abc1234def567890abc1234def567890abc12345',
+      shortSha: 'abc1234',
+      title: 'feat: add checkpoint review',
+      cwd: '/tmp/workspace',
+      subject: 'feat: add checkpoint review',
+      authorName: 'Patrick Lee',
+      committedAt: '2026-04-14T12:00:00.000Z',
+      linesAdded: 12,
+      linesDeleted: 3,
+      files: [],
+    });
+
+    const updated = updateConversationCommitCheckpointComment({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conversation-1',
+      checkpointId: record.id,
+      comment: 'Needs a cleaner follow-up.',
+      commentUpdatedAt: '2026-04-14T13:00:00.000Z',
+    });
+
+    expect(updated).toMatchObject({
+      id: record.id,
+      comment: 'Needs a cleaner follow-up.',
+      commentUpdatedAt: '2026-04-14T13:00:00.000Z',
+    });
+
+    const cleared = updateConversationCommitCheckpointComment({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conversation-1',
+      checkpointId: record.id,
+      comment: '   ',
+    });
+
+    expect(cleared?.id).toBe(record.id);
+    expect(cleared?.comment).toBeUndefined();
+    expect(cleared?.commentUpdatedAt).toBeUndefined();
   });
 
   it('rejects invalid checkpoint ids', () => {
