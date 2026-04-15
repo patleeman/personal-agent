@@ -1007,13 +1007,21 @@ function ConversationAutoModeToggle({
 function SlashMenu({ items, idx, onSelect }: { items: SlashMenuItem[]; idx: number; onSelect: (item: SlashMenuItem) => void }) {
   if (!items.length) return null;
 
+  const selectedIndex = idx % items.length;
+  const selectedItemRef = useRef<HTMLButtonElement | null>(null);
+
+  useLayoutEffect(() => {
+    selectedItemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   return (
     <div className="ui-menu-shell max-h-[28rem] overflow-y-auto py-1.5">
       {items.map((item, itemIndex) => (
         <button
           key={item.key}
+          ref={itemIndex === selectedIndex ? selectedItemRef : undefined}
           onMouseDown={(event) => { event.preventDefault(); onSelect(item); }}
-          className={cx('w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors', itemIndex === idx % items.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
+          className={cx('w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors', itemIndex === selectedIndex ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
         >
           <span className="w-5 pt-0.5 text-center text-[13px] select-none text-dim/70">{item.icon}</span>
           <div className="min-w-0 flex-1">
@@ -1048,6 +1056,14 @@ function MentionMenu({
 }) {
   const filtered = filterMentionItems(items, query, { limit: MAX_MENTION_MENU_ITEMS });
   if (!filtered.length) return null;
+
+  const selectedIndex = idx % filtered.length;
+  const selectedItemRef = useRef<HTMLButtonElement | null>(null);
+
+  useLayoutEffect(() => {
+    selectedItemRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   return (
     <div className="ui-menu-shell max-h-[18rem] overflow-y-auto py-1.5">
       <div className="px-3 pt-2 pb-1">
@@ -1056,8 +1072,9 @@ function MentionMenu({
       {filtered.map((item, i) => (
         <button
           key={`${item.kind}:${item.id}`}
+          ref={i === selectedIndex ? selectedItemRef : undefined}
           onMouseDown={(event) => { event.preventDefault(); onSelect(item.id); }}
-          className={cx('w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors', i === idx % filtered.length ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
+          className={cx('w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors', i === selectedIndex ? 'bg-elevated text-primary' : 'text-secondary hover:bg-elevated/50')}
         >
           <Pill tone="muted">{item.kind}</Pill>
           <div className="min-w-0 flex-1">

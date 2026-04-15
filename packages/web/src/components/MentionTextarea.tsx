@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useMemo, useRef, useState, type KeyboardEventHandler, type TextareaHTMLAttributes } from 'react';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEventHandler, type TextareaHTMLAttributes } from 'react';
 import { filterMentionItems, MAX_MENTION_MENU_ITEMS, type MentionItem } from '../conversationMentions';
 import { useNodeMentionItems } from '../useNodeMentionItems';
 import { Pill, cx } from './ui';
@@ -65,6 +65,12 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
     [items, mentionMatch],
   );
   const showMentionMenu = !disabled && mentionMatch !== null && filteredItems.length > 0;
+  const selectedMentionIndex = filteredItems.length > 0 ? mentionIdx % filteredItems.length : -1;
+  const selectedMentionRef = useRef<HTMLButtonElement | null>(null);
+
+  useLayoutEffect(() => {
+    selectedMentionRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [selectedMentionIndex]);
 
   function updateMentionStateFromTextarea(element: HTMLTextAreaElement) {
     const nextMatch = findMentionMatch(element.value, element.selectionStart, element.selectionEnd);
@@ -139,6 +145,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
           {filteredItems.map((item, index) => (
             <button
               key={`${item.kind}:${item.id}`}
+              ref={index === selectedMentionIndex ? selectedMentionRef : undefined}
               type="button"
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -146,7 +153,7 @@ export const MentionTextarea = forwardRef<HTMLTextAreaElement, MentionTextareaPr
               }}
               className={cx(
                 'flex w-full items-start gap-3 px-3 py-2.5 text-left transition-colors',
-                index === (mentionIdx % filteredItems.length)
+                index === selectedMentionIndex
                   ? 'bg-elevated text-primary'
                   : 'text-secondary hover:bg-elevated/50',
               )}
