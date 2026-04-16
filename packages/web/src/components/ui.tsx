@@ -15,9 +15,9 @@ const PILL_TONE_CLASSES = {
   solidAccent: 'ui-pill-solid-accent',
 } as const;
 
-export type PillTone = keyof typeof PILL_TONE_CLASSES;
+type PillTone = keyof typeof PILL_TONE_CLASSES;
 
-export function pillToneClass(tone: PillTone) {
+function pillToneClass(tone: PillTone) {
   return PILL_TONE_CLASSES[tone];
 }
 

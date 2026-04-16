@@ -1,6 +1,6 @@
 import type { DeferredResumeSummary } from '../shared/types';
 
-export function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
+function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
   return Date.parse(resume.status === 'ready'
     ? resume.readyAt ?? resume.dueAt
     : resume.dueAt);

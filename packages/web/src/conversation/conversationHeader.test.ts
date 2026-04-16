@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatContextUsageLabel, formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel, getContextUsagePercent } from './conversationHeader.js';
+import { formatContextUsageLabel, formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from './conversationHeader.js';
 
 describe('conversation header helpers', () => {
   it('formats thinking level labels with a sensible fallback', () => {
@@ -24,8 +24,6 @@ describe('conversation header helpers', () => {
 
 
   it('formats current context usage labels, including unknown post-compaction state', () => {
-    expect(getContextUsagePercent(27_200, 272_000)).toBe(10);
-    expect(getContextUsagePercent(null, 272_000)).toBeNull();
     expect(formatContextUsageLabel(27_200, 272_000)).toBe('10.0% of 272k ctx');
     expect(formatContextUsageLabel(null, 272_000)).toBe('? of 272k ctx');
   });

@@ -35,7 +35,7 @@ export function formatContextWindowLabel(contextWindow: number): string {
   return String(contextWindow);
 }
 
-export function getContextUsagePercent(tokens: number | null, contextWindow: number): number | null {
+function getContextUsagePercent(tokens: number | null, contextWindow: number): number | null {
   if (tokens === null || contextWindow <= 0) {
     return null;
   }

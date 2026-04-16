@@ -93,7 +93,7 @@ export function recordApiTiming(path: string, res: Response): void {
   }
 }
 
-export function markConversationOpenStart(conversationId: string, source = 'route'): void {
+function markConversationOpenStart(conversationId: string, source = 'route'): void {
   const normalizedConversationId = conversationId.trim();
   if (!normalizedConversationId) {
     return;

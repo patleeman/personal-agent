@@ -14,7 +14,7 @@ export function normalizeReplyQuoteSelection(text: string): string {
     .trim();
 }
 
-export function formatReplyQuoteMarkdown(text: string): string {
+function formatReplyQuoteMarkdown(text: string): string {
   const normalized = normalizeReplyQuoteSelection(text);
   if (!normalized) {
     return '';

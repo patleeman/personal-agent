@@ -1,4 +1,4 @@
-export function normalizeConversationCwd(value: string | null | undefined): string {
+function normalizeConversationCwd(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 

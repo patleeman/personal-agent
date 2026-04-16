@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  formatReplyQuoteMarkdown,
   insertReplyQuoteIntoComposer,
   normalizeReplyQuoteSelection,
 } from './conversationReplyQuote';
@@ -12,16 +11,6 @@ describe('normalizeReplyQuoteSelection', () => {
 
   it('preserves intentional blank lines inside the selection', () => {
     expect(normalizeReplyQuoteSelection('alpha\n\n beta\n')).toBe('alpha\n\n beta');
-  });
-});
-
-describe('formatReplyQuoteMarkdown', () => {
-  it('formats a multi-line selection as a markdown blockquote', () => {
-    expect(formatReplyQuoteMarkdown('alpha\n\nbeta')).toBe('> alpha\n>\n> beta');
-  });
-
-  it('returns an empty string for an empty selection', () => {
-    expect(formatReplyQuoteMarkdown('   ')).toBe('');
   });
 });
 
@@ -61,6 +50,14 @@ describe('insertReplyQuoteIntoComposer', () => {
       text: '> First point\n\n> Second point\n\n',
       selectionStart: 31,
       selectionEnd: 31,
+    });
+  });
+
+  it('keeps blank quoted lines when inserting multi-line text', () => {
+    expect(insertReplyQuoteIntoComposer('', 'alpha\n\nbeta')).toEqual({
+      text: '> alpha\n>\n> beta\n\n',
+      selectionStart: 18,
+      selectionEnd: 18,
     });
   });
 });
