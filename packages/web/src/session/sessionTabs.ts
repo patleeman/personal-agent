@@ -292,7 +292,7 @@ export function unpinConversationTab(
   });
 }
 
-export function moveConversationToSection(
+function moveConversationToSection(
   layout: ConversationLayout,
   draggedSessionId: string,
   targetSection: ConversationShelf,

@@ -17,7 +17,7 @@ import {
 import {
   closeConversationTab,
   ensureConversationTabOpen,
-  moveConversationToSection,
+  moveConversationTab,
   pinConversationTab,
   readArchivedSessionIds,
   readConversationLayout,
@@ -118,25 +118,27 @@ describe('sessionTabs', () => {
   });
 
   it('moves conversations between the open and pinned shelves while preserving archived overrides', () => {
-    expect(moveConversationToSection({
+    replaceConversationLayout({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: ['session-3'],
       archivedSessionIds: ['session-4'],
-    }, 'session-2', 'pinned', 'session-3', 'before')).toEqual({
-      sessionIds: ['session-1'],
-      pinnedSessionIds: ['session-2', 'session-3'],
-      archivedSessionIds: ['session-4'],
     });
+    dispatchEvent.mockReset();
 
-    expect(moveConversationToSection({
+    expect(moveConversationTab('session-2', 'pinned', 'session-3', 'before')).toEqual({
       sessionIds: ['session-1'],
       pinnedSessionIds: ['session-2', 'session-3'],
       archivedSessionIds: ['session-4'],
-    }, 'session-2', 'open', 'session-1', 'after')).toEqual({
+    });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
+
+    dispatchEvent.mockReset();
+    expect(moveConversationTab('session-2', 'open', 'session-1', 'after')).toEqual({
       sessionIds: ['session-1', 'session-2'],
       pinnedSessionIds: ['session-3'],
       archivedSessionIds: ['session-4'],
     });
+    expect(dispatchEvent).toHaveBeenCalledTimes(1);
   });
 
   it('shifts an open conversation left or right within its shelf', () => {

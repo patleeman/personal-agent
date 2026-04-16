@@ -1,4 +1,4 @@
-export interface SessionMetaRefreshScheduler {
+interface SessionMetaRefreshScheduler {
   schedule(sessionId: string | null | undefined): void;
   dispose(): void;
 }
