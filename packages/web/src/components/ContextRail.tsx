@@ -159,7 +159,7 @@ interface ConversationRelatedWorkCard {
   activityAt?: string;
 }
 
-export function groupConversationRailRunCards<T extends { mention: { source: ConversationRelatedWorkGroupKey } }>(cards: T[]): Array<{
+function groupConversationRailRunCards<T extends { mention: { source: ConversationRelatedWorkGroupKey } }>(cards: T[]): Array<{
   key: ConversationRelatedWorkGroupKey;
   title: string;
   items: T[];
@@ -183,7 +183,7 @@ export function groupConversationRailRunCards<T extends { mention: { source: Con
   return groups.filter((group) => group.items.length > 0);
 }
 
-export function formatConversationRailRunSummary(input: {
+function formatConversationRailRunSummary(input: {
   loading: boolean;
   totalCount: number;
   activeCount: number;
