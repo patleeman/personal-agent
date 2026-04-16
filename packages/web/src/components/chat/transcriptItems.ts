@@ -36,7 +36,7 @@ function addSummaryCategory(
   categories.set(category.key, { ...category, count: 1 });
 }
 
-export function isTraceConversationBlock(block: MessageBlock): block is TraceConversationBlock {
+function isTraceConversationBlock(block: MessageBlock): block is TraceConversationBlock {
   switch (block.type) {
     case 'thinking':
     case 'subagent':
@@ -52,7 +52,7 @@ export function isTraceConversationBlock(block: MessageBlock): block is TraceCon
   }
 }
 
-export function summarizeTraceCluster(blocks: TraceConversationBlock[]): TraceClusterSummary {
+function summarizeTraceCluster(blocks: TraceConversationBlock[]): TraceClusterSummary {
   const categories = new Map<string, TraceClusterSummaryCategory>();
   let durationMs = 0;
   let hasDuration = false;
