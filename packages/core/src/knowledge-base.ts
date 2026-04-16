@@ -33,6 +33,8 @@ interface StoredKnowledgeBaseState {
   branch: string;
   lastSyncAt?: string;
   lastSyncHead?: string;
+  lastMaintenanceAt?: string;
+  lastFullMaintenanceAt?: string;
   snapshot: Snapshot;
 }
 
@@ -81,6 +83,8 @@ interface PathChangeResolution {
 const SYNC_COMMIT_AUTHOR_NAME = 'Personal Agent';
 const SYNC_COMMIT_AUTHOR_EMAIL = 'kb@personal-agent.local';
 const KNOWLEDGE_BASE_SYNC_INTERVAL_MS = 15_000;
+const KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
+const KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const LOCAL_STATE_FILE_NAME = 'state.json';
 const RECOVERY_INDEX_FILE_NAME = 'recovery-index.json';
 const SNAPSHOT_VERSION = 1;
@@ -107,6 +111,15 @@ function ensureParentDirectory(path: string): void {
 
 function toIsoTimestamp(value: number | Date = Date.now()): string {
   return new Date(value).toISOString();
+}
+
+function parseTimestampMs(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function runGitCommand(cwd: string, args: string[], options: { allowFailure?: boolean; encoding?: BufferEncoding | 'buffer' } = {}): string | Buffer {
@@ -289,6 +302,8 @@ function readStoredState(filePath: string): StoredKnowledgeBaseState | null {
       branch: normalizeBranch(parsed.branch),
       ...(typeof parsed.lastSyncAt === 'string' && parsed.lastSyncAt.trim().length > 0 ? { lastSyncAt: parsed.lastSyncAt.trim() } : {}),
       ...(typeof parsed.lastSyncHead === 'string' && parsed.lastSyncHead.trim().length > 0 ? { lastSyncHead: parsed.lastSyncHead.trim() } : {}),
+      ...(typeof parsed.lastMaintenanceAt === 'string' && parsed.lastMaintenanceAt.trim().length > 0 ? { lastMaintenanceAt: parsed.lastMaintenanceAt.trim() } : {}),
+      ...(typeof parsed.lastFullMaintenanceAt === 'string' && parsed.lastFullMaintenanceAt.trim().length > 0 ? { lastFullMaintenanceAt: parsed.lastFullMaintenanceAt.trim() } : {}),
       snapshot,
     };
   } catch {
@@ -405,6 +420,64 @@ function readLocalPathTimestampMs(root: string, relativePath: string, existsInLo
   } catch {
     return Date.now();
   }
+}
+
+function tryRunGitCommand(cwd: string, args: string[]): boolean {
+  try {
+    runGitText(cwd, args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runRepositoryMaintenance(root: string, task: 'auto' | 'gc'): boolean {
+  if (task === 'gc') {
+    if (tryRunGitCommand(root, ['maintenance', 'run', '--task=gc', '--quiet'])) {
+      return true;
+    }
+
+    return tryRunGitCommand(root, ['gc', '--quiet']);
+  }
+
+  if (tryRunGitCommand(root, ['maintenance', 'run', '--auto', '--quiet'])) {
+    return true;
+  }
+
+  return tryRunGitCommand(root, ['gc', '--auto', '--quiet']);
+}
+
+function maybeRunRepositoryMaintenance(
+  root: string,
+  storedState: StoredKnowledgeBaseState | null,
+  timestamp: string,
+): Pick<StoredKnowledgeBaseState, 'lastMaintenanceAt' | 'lastFullMaintenanceAt'> {
+  const nowMs = parseTimestampMs(timestamp) ?? Date.now();
+  const lastMaintenanceAtMs = parseTimestampMs(storedState?.lastMaintenanceAt);
+  const lastFullMaintenanceAtMs = parseTimestampMs(storedState?.lastFullMaintenanceAt);
+
+  const shouldRunFullMaintenance = lastFullMaintenanceAtMs !== null
+    && nowMs - lastFullMaintenanceAtMs >= KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS;
+  if (shouldRunFullMaintenance && runRepositoryMaintenance(root, 'gc')) {
+    return {
+      lastMaintenanceAt: timestamp,
+      lastFullMaintenanceAt: timestamp,
+    };
+  }
+
+  const shouldRunAutoMaintenance = lastMaintenanceAtMs === null
+    || nowMs - lastMaintenanceAtMs >= KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS;
+  if (shouldRunAutoMaintenance && runRepositoryMaintenance(root, 'auto')) {
+    return {
+      lastMaintenanceAt: timestamp,
+      ...(storedState?.lastFullMaintenanceAt ? { lastFullMaintenanceAt: storedState.lastFullMaintenanceAt } : {}),
+    };
+  }
+
+  return {
+    ...(storedState?.lastMaintenanceAt ? { lastMaintenanceAt: storedState.lastMaintenanceAt } : {}),
+    ...(storedState?.lastFullMaintenanceAt ? { lastFullMaintenanceAt: storedState.lastFullMaintenanceAt } : {}),
+  };
 }
 
 function setRuntimeState(
@@ -697,6 +770,7 @@ export class KnowledgeBaseManager {
         this.checkoutRemoteBase(root, config.branch, false);
         ensureBootstrapFiles(root);
         this.stageAndCommitIfNeeded(root, config.branch, timestamp);
+        const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, timestamp);
         const snapshot = listWorkingSnapshot(root);
         writeStoredState(this.localStateFilePath, {
           version: SNAPSHOT_VERSION,
@@ -704,6 +778,7 @@ export class KnowledgeBaseManager {
           branch: config.branch,
           lastSyncAt: timestamp,
           ...(headExists(root) ? { lastSyncHead: getHeadSha(root) } : {}),
+          ...maintenanceMetadata,
           snapshot,
         });
         setRuntimeState(this.runtimeState, {
@@ -779,6 +854,7 @@ export class KnowledgeBaseManager {
       ensureBootstrapFiles(root);
       this.stageAndCommitIfNeeded(root, config.branch, timestamp);
 
+      const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, timestamp);
       const snapshot = listWorkingSnapshot(root);
       writeStoredState(this.localStateFilePath, {
         version: SNAPSHOT_VERSION,
@@ -786,6 +862,7 @@ export class KnowledgeBaseManager {
         branch: config.branch,
         lastSyncAt: timestamp,
         ...(headExists(root) ? { lastSyncHead: getHeadSha(root) } : {}),
+        ...maintenanceMetadata,
         snapshot,
       });
 

@@ -56,6 +56,10 @@ afterEach(() => {
   }
 });
 
+function readKnowledgeBaseStateFile(stateRoot: string): Record<string, unknown> {
+  return JSON.parse(readFileSync(join(stateRoot, 'knowledge-base', 'state.json'), 'utf-8')) as Record<string, unknown>;
+}
+
 describe('KnowledgeBaseManager', () => {
   it('bootstraps and pushes a managed knowledge base into an empty remote repo', () => {
     const remoteRepo = initBareRepo();
@@ -76,6 +80,10 @@ describe('KnowledgeBaseManager', () => {
     expect(readFileSync(join(remoteClone, '.gitignore'), 'utf-8')).toContain('.DS_Store');
     expect(readFileSync(join(remoteClone, 'skills', '.gitkeep'), 'utf-8')).toBe('');
     expect(readFileSync(join(remoteClone, 'notes', '.gitkeep'), 'utf-8')).toBe('');
+
+    const storedState = readKnowledgeBaseStateFile(stateRoot);
+    expect(typeof storedState.lastMaintenanceAt).toBe('string');
+    expect(storedState.lastFullMaintenanceAt).toBeUndefined();
   });
 
   it('auto-resolves same-file collisions by keeping the newer remote version and saving a recovery copy', () => {
@@ -118,6 +126,37 @@ describe('KnowledgeBaseManager', () => {
     expect(recoveryDirs.length).toBeGreaterThan(0);
     const recoveryFile = join(recoveryRoot, recoveryDirs[0] as string, 'notes', 'daily.md');
     expect(readFileSync(recoveryFile, 'utf-8')).toBe('# Local\nolder\n');
+  });
+
+  it('runs a full maintenance pass when the prior one is stale', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    const stateFilePath = join(stateRoot, 'knowledge-base', 'state.json');
+    const storedBefore = readKnowledgeBaseStateFile(stateRoot);
+    storedBefore.lastMaintenanceAt = '2026-01-01T00:00:00.000Z';
+    storedBefore.lastFullMaintenanceAt = '2026-01-01T00:00:00.000Z';
+    writeFileSync(stateFilePath, `${JSON.stringify(storedBefore, null, 2)}\n`);
+
+    const managedFile = join(stateRoot, 'knowledge-base', 'repo', 'notes', 'daily.md');
+    writeFileSync(managedFile, '# Seed\nlocal edit\n');
+    utimesSync(managedFile, new Date('2026-04-16T00:00:00Z'), new Date('2026-04-16T00:00:00Z'));
+
+    manager.syncNow();
+
+    const storedAfter = readKnowledgeBaseStateFile(stateRoot);
+    expect(typeof storedAfter.lastFullMaintenanceAt).toBe('string');
+    expect(Date.parse(String(storedAfter.lastFullMaintenanceAt))).toBeGreaterThan(Date.parse('2026-01-01T00:00:00.000Z'));
   });
 });
 

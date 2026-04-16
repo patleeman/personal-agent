@@ -82,6 +82,8 @@ PA bootstraps a few boring defaults on first sync:
 
 Everything else stays freeform.
 
+PA also runs lightweight local git maintenance on the managed clone after successful syncs, plus a rarer full maintenance pass, so frequent note commits do not slowly turn the repo into soup.
+
 `knowledgeBaseBranch` defaults to `main`.
 
 ## Durable vault root
