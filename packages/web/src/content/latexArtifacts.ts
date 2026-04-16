@@ -1,4 +1,4 @@
-export type LatexArtifactDisplayMode = 'source' | 'math-preview-and-source';
+type LatexArtifactDisplayMode = 'source' | 'math-preview-and-source';
 
 const FULL_LATEX_DOCUMENT_PATTERNS = [
   /\\documentclass\b/,
@@ -70,7 +70,7 @@ function isStandaloneMathEnvironment(content: string): boolean {
   ));
 }
 
-export function shouldRenderLatexMathPreview(content: string): boolean {
+function shouldRenderLatexMathPreview(content: string): boolean {
   const trimmed = normalizeTrimmedContent(content);
   if (trimmed.length === 0) {
     return false;

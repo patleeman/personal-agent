@@ -3,7 +3,6 @@ import {
   getLatexArtifactDisplayMode,
   looksLikeFullLatexDocument,
   normalizeLatexMathSource,
-  shouldRenderLatexMathPreview,
 } from './latexArtifacts.js';
 
 describe('latex artifact helpers', () => {
@@ -16,7 +15,6 @@ Hello
 \end{document}`;
 
     expect(looksLikeFullLatexDocument(content)).toBe(true);
-    expect(shouldRenderLatexMathPreview(content)).toBe(false);
     expect(getLatexArtifactDisplayMode(content)).toBe('source');
   });
 
@@ -25,7 +23,7 @@ Hello
 This is still latex source.`;
 
     expect(looksLikeFullLatexDocument(content)).toBe(false);
-    expect(shouldRenderLatexMathPreview(content)).toBe(false);
+    expect(getLatexArtifactDisplayMode(content)).toBe('source');
   });
 
   it('normalizes wrapped math snippets for preview', () => {
@@ -44,7 +42,6 @@ y = x^2
 $$`;
 
     expect(looksLikeFullLatexDocument(content)).toBe(false);
-    expect(shouldRenderLatexMathPreview(content)).toBe(true);
     expect(getLatexArtifactDisplayMode(content)).toBe('math-preview-and-source');
   });
 
@@ -53,7 +50,7 @@ $$`;
 a &= b + c
 \end{align*}`;
 
-    expect(shouldRenderLatexMathPreview(content)).toBe(true);
+    expect(getLatexArtifactDisplayMode(content)).toBe('math-preview-and-source');
   });
 
   it('avoids math preview for non-math latex structures', () => {
@@ -62,7 +59,6 @@ a &= b + c
 \item second
 \end{itemize}`;
 
-    expect(shouldRenderLatexMathPreview(content)).toBe(false);
     expect(getLatexArtifactDisplayMode(content)).toBe('source');
   });
 });
