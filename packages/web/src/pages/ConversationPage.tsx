@@ -88,8 +88,8 @@ import {
   setPendingConversationPromptDispatching,
   type PendingConversationPrompt,
   type PendingConversationPromptChangedDetail,
-} from '../pendingConversationPrompt';
-import { appendPendingInitialPromptBlock } from '../pendingQueueMessages';
+} from '../pending/pendingConversationPrompt';
+import { appendPendingInitialPromptBlock } from '../pending/pendingQueueMessages';
 import {
   didConversationStopMidTurn,
   didConversationStopWithError,

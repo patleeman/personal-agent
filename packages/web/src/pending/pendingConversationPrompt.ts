@@ -1,6 +1,6 @@
-import { clearConversationComposerDraft } from './forking';
-import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
-import type { InjectedPromptMessage, PromptAttachmentRefInput, PromptImageInput } from './types';
+import { clearConversationComposerDraft } from '../forking';
+import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from '../reloadState';
+import type { InjectedPromptMessage, PromptAttachmentRefInput, PromptImageInput } from '../types';
 
 export interface PendingConversationPrompt {
   text: string;
