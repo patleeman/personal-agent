@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import type { MessageBlock } from './types';
+import type { MessageBlock } from '../types';
 import {
   formatStreamingThroughputLabel,
   getStreamingThroughputLabel,

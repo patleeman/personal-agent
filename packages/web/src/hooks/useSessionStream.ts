@@ -17,7 +17,7 @@ import type {
 import { api } from '../api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../liveSessionWarmth';
-import { displayBlockToMessageBlock } from '../messageBlocks';
+import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { parseSkillBlock } from '../knowledge/skillBlock';
 
 export interface StreamState {

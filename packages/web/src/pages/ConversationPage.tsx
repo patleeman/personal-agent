@@ -28,7 +28,7 @@ import {
   shouldShowScrollToBottomControl,
 } from '../conversation/conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
-import { displayBlockToMessageBlock } from '../messageBlocks';
+import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../model/modelPicker';
@@ -48,7 +48,7 @@ import {
   shouldAdvanceAskUserQuestionAfterSelection,
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
-} from '../askUserQuestions';
+} from '../transcript/askUserQuestions';
 import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
 import {
   beginDraftConversationAttachmentsMutation,

@@ -17,13 +17,13 @@ import {
   shouldAdvanceAskUserQuestionAfterSelection,
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
-} from '../../askUserQuestions';
+} from '../../transcript/askUserQuestions';
 import type { MessageBlock } from '../../types';
 import { timeAgo } from '../../utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
-import { readTerminalBashToolPresentation } from '../../terminalBashBlock';
-import { getStreamingThroughputLabel } from '../../streamingThroughput';
+import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
+import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
 import { getDesktopBridge } from '../../desktop/desktopBridge';
 import { Pill, SurfacePanel, cx } from '../ui';
 

@@ -1,4 +1,4 @@
-import type { DisplayBlock, MessageBlock } from './types';
+import type { DisplayBlock, MessageBlock } from '../types';
 
 export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
   switch (block.type) {

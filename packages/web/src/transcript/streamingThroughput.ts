@@ -1,4 +1,4 @@
-import type { MessageBlock } from './types';
+import type { MessageBlock } from '../types';
 
 const MIN_VISIBLE_ELAPSED_MS = 500;
 const MIN_RATE_WINDOW_MS = 1_000;

@@ -32,7 +32,7 @@ import { useApi } from '../hooks';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
-import { displayBlockToMessageBlock } from '../messageBlocks';
+import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { formatTaskSchedule } from '../automation/taskSchedule';
 import type {
   AgentToolInfo,
