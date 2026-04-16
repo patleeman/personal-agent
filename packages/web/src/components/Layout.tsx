@@ -45,7 +45,7 @@ function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop') !== null;
 }
 
-export function resolveRouteContentBoundaryErrorMessage(error: unknown): string | null {
+function resolveRouteContentBoundaryErrorMessage(error: unknown): string | null {
   if (error instanceof Error) {
     const message = error.message.trim();
     return message.length > 0 ? message : null;

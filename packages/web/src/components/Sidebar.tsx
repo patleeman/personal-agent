@@ -514,7 +514,7 @@ function resolveConversationNumberHotkey(event: KeyboardEvent): number {
   return /^[1-9]$/.test(key) ? Number(key) - 1 : -1;
 }
 
-export function resolveSidebarConversationHotkeyOrder<T,>(input: {
+function resolveSidebarConversationHotkeyOrder<T,>(input: {
   organizeMode: 'project' | 'chronological';
   orderedItems: readonly T[];
   groupedRows: ReadonlyArray<{ key: string; items: readonly T[] }>;

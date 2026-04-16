@@ -10,7 +10,7 @@ import {
   buildSidebarNavSectionStorageKey,
 } from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
-import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
+import { Sidebar } from './Sidebar.js';
 
 const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
 const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
@@ -52,29 +52,6 @@ function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {
     ...overrides,
   };
 }
-
-describe('resolveSidebarConversationHotkeyOrder', () => {
-  it('keeps flat-list shortcuts aligned with the ordered conversation list', () => {
-    expect(resolveSidebarConversationHotkeyOrder({
-      organizeMode: 'chronological',
-      orderedItems: ['pinned-1', 'open-2', 'open-3'],
-      groupedRows: [],
-    })).toEqual(['pinned-1', 'open-2', 'open-3']);
-  });
-
-  it('uses the visible grouped sidebar order for numbered conversation shortcuts', () => {
-    expect(resolveSidebarConversationHotkeyOrder({
-      organizeMode: 'project',
-      orderedItems: ['tab-a', 'tab-b', 'tab-c'],
-      groupedRows: [
-        { key: '/tmp/beta', items: ['tab-b'] },
-        { key: '/tmp/alpha', items: ['tab-a', 'tab-c'] },
-        { key: '/tmp/hidden', items: ['tab-hidden'] },
-      ],
-      collapsedGroupKeys: new Set(['/tmp/hidden']),
-    })).toEqual(['tab-b', 'tab-a', 'tab-c']);
-  });
-});
 
 describe('Sidebar', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
