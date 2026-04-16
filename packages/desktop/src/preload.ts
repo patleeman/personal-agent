@@ -32,6 +32,7 @@ const desktopBridge = {
   getConnections: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-connections`),
   getNavigationState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-navigation-state`),
   switchHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:switch-host`, hostId),
+  continueConversationInHost: (input: { conversationId: string; hostId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:continue-conversation-in-host`, input),
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   readWorkspaceServerState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-workspace-server-state`),

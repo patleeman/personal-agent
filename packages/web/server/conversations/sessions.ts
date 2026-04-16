@@ -39,6 +39,9 @@ interface RawSessionRecord {
   cwd: string;
   version?: number;
   parentSession?: string;
+  remoteHostId?: string;
+  remoteHostLabel?: string;
+  remoteConversationId?: string;
 }
 
 interface RawModelChange {
@@ -166,6 +169,9 @@ export interface SessionMeta {
   parentSessionFile?: string;
   parentSessionId?: string;
   sourceRunId?: string;
+  remoteHostId?: string;
+  remoteHostLabel?: string;
+  remoteConversationId?: string;
 }
 
 export interface SessionDetail {
@@ -1283,6 +1289,15 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
 
   const parentSessionFile = normalizeOptionalPath(sessionRecord.parentSession);
   const sourceRunId = readSourceRunIdFromSessionFilePath(filePath);
+  const remoteHostId = typeof sessionRecord.remoteHostId === 'string' && sessionRecord.remoteHostId.trim().length > 0
+    ? sessionRecord.remoteHostId.trim()
+    : null;
+  const remoteHostLabel = typeof sessionRecord.remoteHostLabel === 'string' && sessionRecord.remoteHostLabel.trim().length > 0
+    ? sessionRecord.remoteHostLabel.trim()
+    : null;
+  const remoteConversationId = typeof sessionRecord.remoteConversationId === 'string' && sessionRecord.remoteConversationId.trim().length > 0
+    ? sessionRecord.remoteConversationId.trim()
+    : null;
 
   return {
     id: sessionRecord.id,
@@ -1295,6 +1310,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     messageCount,
     ...(parentSessionFile ? { parentSessionFile } : {}),
     ...(sourceRunId ? { sourceRunId } : {}),
+    ...(remoteHostId ? { remoteHostId } : {}),
+    ...(remoteHostLabel ? { remoteHostLabel } : {}),
+    ...(remoteConversationId ? { remoteConversationId } : {}),
   };
 }
 
@@ -1340,6 +1358,16 @@ function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndex
     return null;
   }
 
+  const remoteHostId = typeof meta.remoteHostId === 'string' && meta.remoteHostId.trim().length > 0
+    ? meta.remoteHostId.trim()
+    : undefined;
+  const remoteHostLabel = typeof meta.remoteHostLabel === 'string' && meta.remoteHostLabel.trim().length > 0
+    ? meta.remoteHostLabel.trim()
+    : undefined;
+  const remoteConversationId = typeof meta.remoteConversationId === 'string' && meta.remoteConversationId.trim().length > 0
+    ? meta.remoteConversationId.trim()
+    : undefined;
+
   return {
     filePath: entry.filePath,
     signature: entry.signature,
@@ -1352,6 +1380,9 @@ function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndex
       model: meta.model,
       title: meta.title,
       messageCount: meta.messageCount,
+      ...(remoteHostId ? { remoteHostId } : {}),
+      ...(remoteHostLabel ? { remoteHostLabel } : {}),
+      ...(remoteConversationId ? { remoteConversationId } : {}),
     },
   };
 }
@@ -1719,6 +1750,69 @@ export function renameStoredSession(sessionId: string, name: string): SessionMet
   const updatedMeta = readSessionMetaByFile(meta.file);
   if (!updatedMeta) {
     throw new Error(`Conversation ${sessionId} could not be reloaded after renaming.`);
+  }
+
+  persistSessionIndex();
+  return updatedMeta;
+}
+
+function rewriteStoredSessionHeader(filePath: string, transform: (header: RawSessionRecord) => RawSessionRecord): void {
+  const raw = readFileSync(filePath, 'utf-8');
+  const lines = raw.split(/\r?\n/);
+  const firstLine = lines.findIndex((line) => line.trim().length > 0);
+  if (firstLine === -1) {
+    throw new Error(`Conversation header missing in ${filePath}`);
+  }
+
+  const parsed = parseJsonLine(lines[firstLine] ?? '');
+  if (!parsed || parsed.type !== 'session') {
+    throw new Error(`Conversation header missing in ${filePath}`);
+  }
+
+  lines[firstLine] = JSON.stringify(transform(parsed as RawSessionRecord));
+  writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
+}
+
+export function setStoredSessionRemoteTargetByFile(filePath: string, input: {
+  remoteHostId: string;
+  remoteHostLabel?: string;
+  remoteConversationId: string;
+}): SessionMeta {
+  const remoteHostId = input.remoteHostId.trim();
+  const remoteConversationId = input.remoteConversationId.trim();
+  const remoteHostLabel = input.remoteHostLabel?.trim() || undefined;
+  if (!remoteHostId || !remoteConversationId) {
+    throw new Error('Remote host id and remote conversation id are required.');
+  }
+
+  rewriteStoredSessionHeader(filePath, (header) => ({
+    ...header,
+    remoteHostId,
+    ...(remoteHostLabel ? { remoteHostLabel } : {}),
+    remoteConversationId,
+  }));
+
+  const updatedMeta = readSessionMetaByFile(filePath);
+  if (!updatedMeta) {
+    throw new Error(`Conversation at ${filePath} could not be reloaded after linking a remote target.`);
+  }
+
+  persistSessionIndex();
+  return updatedMeta;
+}
+
+export function clearStoredSessionRemoteTargetByFile(filePath: string): SessionMeta {
+  rewriteStoredSessionHeader(filePath, (header) => {
+    const nextHeader = { ...header };
+    delete nextHeader.remoteHostId;
+    delete nextHeader.remoteHostLabel;
+    delete nextHeader.remoteConversationId;
+    return nextHeader;
+  });
+
+  const updatedMeta = readSessionMetaByFile(filePath);
+  if (!updatedMeta) {
+    throw new Error(`Conversation at ${filePath} could not be reloaded after clearing the remote target.`);
   }
 
   persistSessionIndex();

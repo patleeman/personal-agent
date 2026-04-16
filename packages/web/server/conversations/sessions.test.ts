@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, renameStoredSession } from './sessions.js';
+import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -916,6 +916,43 @@ describe('sessions', () => {
     }));
     expect(readSessionBlocks('session-rename')?.meta.title).toBe('Better manual title');
     expect(readFileSync(filePath, 'utf-8')).toContain('"name":"Better manual title"');
+  });
+
+  it('stores remote execution target metadata in the session header', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const filePath = writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-remote',
+      title: 'Remote execution thread',
+      assistantTexts: ['Generated answer'],
+    });
+
+    expect(setStoredSessionRemoteTargetByFile(filePath, {
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
+    })).toEqual(expect.objectContaining({
+      id: 'session-remote',
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
+    }));
+
+    expect(listSessions()[0]).toEqual(expect.objectContaining({
+      id: 'session-remote',
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
+    }));
+
+    expect(clearStoredSessionRemoteTargetByFile(filePath)).toEqual(expect.not.objectContaining({
+      remoteHostId: expect.anything(),
+    }));
+    expect(listSessions()[0]).toEqual(expect.not.objectContaining({
+      remoteHostId: expect.anything(),
+    }));
   });
 
   it('lets the latest manual rename win over earlier session names', () => {

@@ -152,6 +152,20 @@ async function shouldUseDesktopLocalCapabilities(): Promise<boolean> {
   return environment?.activeHostKind === 'local';
 }
 
+async function shouldUseDesktopLocalConversationCapabilities(conversationId: string): Promise<boolean> {
+  const desktopBridge = getDesktopBridge();
+  if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
+    return false;
+  }
+
+  try {
+    const meta = await desktopBridge.readSessionMeta(conversationId);
+    return !(meta.remoteHostId && meta.remoteConversationId);
+  } catch {
+    return true;
+  }
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => {
@@ -247,7 +261,7 @@ export const api = {
     knownLastBlockId?: string;
   }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readSessionDetail({
         sessionId: id,
         ...(typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0
@@ -290,7 +304,7 @@ export const api = {
   },
   sessionBlock: async (id: string, blockId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readSessionBlock({ sessionId: id, blockId });
     }
 
@@ -709,7 +723,7 @@ export const api = {
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSession: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readLiveSession(id);
     }
 
@@ -717,7 +731,7 @@ export const api = {
   },
   liveSessionContext: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readLiveSessionContext(id);
     }
 
@@ -731,7 +745,7 @@ export const api = {
     knownLastBlockId?: string;
   }) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readConversationBootstrap({
         conversationId: id,
         ...(typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0
@@ -965,7 +979,7 @@ export const api = {
   },
   changeConversationCwd: async (id: string, cwd: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.changeConversationCwd({
         conversationId: id,
         cwd,
@@ -998,7 +1012,7 @@ export const api = {
   },
   conversationModelPreferences: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readConversationModelPreferences({ conversationId: id });
     }
 
@@ -1006,7 +1020,7 @@ export const api = {
   },
   updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.updateConversationModelPreferences({
         conversationId: id,
         ...input,
@@ -1018,11 +1032,19 @@ export const api = {
   },
   recoverConversation: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.recoverConversation(id);
     }
 
     return post<ConversationRecoveryResult>(`/conversations/${encodeURIComponent(id)}/recover`);
+  },
+  continueConversationInHost: async (id: string, hostId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
+      throw new Error('Continue in is only available in the desktop app.');
+    }
+
+    return desktopBridge.continueConversationInHost({ conversationId: id, hostId });
   },
 
   createLiveSession: async (
@@ -1068,7 +1090,7 @@ export const api = {
     contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>,
   ) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.submitLiveSessionPrompt({
         conversationId: id,
         text,
@@ -1132,7 +1154,7 @@ export const api = {
   },
   takeoverLiveSession: async (id: string, surfaceId: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.takeOverLiveSession({ conversationId: id, surfaceId });
     }
 
@@ -1140,7 +1162,7 @@ export const api = {
   },
   compactSession: async (id: string, customInstructions?: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.compactLiveSession({ conversationId: id, ...(customInstructions ? { customInstructions } : {}) });
     }
 
@@ -1156,7 +1178,7 @@ export const api = {
   },
   reloadSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.reloadLiveSession(id);
     }
 
@@ -1164,7 +1186,7 @@ export const api = {
   },
   exportSession: async (id: string, outputPath?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.exportLiveSession({
         conversationId: id,
         ...(outputPath ? { outputPath } : {}),
@@ -1175,7 +1197,7 @@ export const api = {
   },
   abortSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.abortLiveSession(id);
     }
 

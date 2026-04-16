@@ -16,6 +16,7 @@ import { useConversationEventVersion } from '../hooks/useConversationEventVersio
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
+import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversationCheckpoints';
@@ -1494,10 +1495,66 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   // ── Live session detection ─────────────────────────────────────────────────
-  const sessionSnapshot = useMemo(
+  const [conversationExecutionOverride, setConversationExecutionOverride] = useState<Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null>(null);
+  const [continueInBusy, setContinueInBusy] = useState(false);
+  const [continueInOptions, setContinueInOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const rawSessionSnapshot = useMemo(
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
   );
+  const sessionSnapshot = useMemo(() => {
+    if (!rawSessionSnapshot) {
+      return null;
+    }
+
+    return conversationExecutionOverride
+      ? { ...rawSessionSnapshot, ...conversationExecutionOverride }
+      : rawSessionSnapshot;
+  }, [conversationExecutionOverride, rawSessionSnapshot]);
+  useEffect(() => {
+    setConversationExecutionOverride(
+      rawSessionSnapshot?.remoteHostId && rawSessionSnapshot?.remoteConversationId
+        ? {
+            remoteHostId: rawSessionSnapshot.remoteHostId,
+            remoteHostLabel: rawSessionSnapshot.remoteHostLabel,
+            remoteConversationId: rawSessionSnapshot.remoteConversationId,
+          }
+        : null,
+    );
+  }, [rawSessionSnapshot?.id, rawSessionSnapshot?.remoteConversationId, rawSessionSnapshot?.remoteHostId, rawSessionSnapshot?.remoteHostLabel]);
+
+  useEffect(() => {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setContinueInOptions([]);
+      return;
+    }
+
+    let cancelled = false;
+    void readDesktopConnections()
+      .then((connections) => {
+        if (cancelled || !connections) {
+          return;
+        }
+
+        setContinueInOptions([
+          { value: 'local', label: 'Local project' },
+          ...connections.hosts
+            .filter((host) => host.kind !== 'local')
+            .map((host) => ({ value: host.id, label: host.label })),
+        ]);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setContinueInOptions([]);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
   const [confirmedLive, setConfirmedLive] = useState<boolean | null>(null);
@@ -1528,7 +1585,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
   const desktopConversation = useDesktopConversationState(id ?? null, {
     tailBlocks: historicalTailBlocks,
-    enabled: !draft,
+    enabled: !draft && !(sessionSnapshot?.remoteHostId && sessionSnapshot?.remoteConversationId),
   });
   const desktopConversationChecking = !draft && Boolean(id) && desktopConversation.mode === 'checking';
   const useDesktopConversation = shouldUseHealthyDesktopConversationState({
@@ -1603,6 +1660,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const streamReconnect = stream.reconnect;
   const streamTakeover = stream.takeover;
   const currentSurfaceId = stream.surfaceId;
+
+  const handleContinueConversationInHost = useCallback(async (hostId: string) => {
+    if (!id || continueInBusy) {
+      return;
+    }
+
+    setContinueInBusy(true);
+    try {
+      const result = await api.continueConversationInHost(id, hostId);
+      setConversationExecutionOverride(
+        result.remoteHostId && result.remoteConversationId
+          ? {
+              remoteHostId: result.remoteHostId,
+              remoteHostLabel: result.remoteHostLabel,
+              remoteConversationId: result.remoteConversationId,
+            }
+          : null,
+      );
+      showNotice(
+        'accent',
+        result.remoteHostId
+          ? `Continuing on ${result.remoteHostLabel ?? result.remoteHostId}.`
+          : 'Continuing locally.',
+        3000,
+      );
+      streamReconnect();
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setContinueInBusy(false);
+    }
+  }, [continueInBusy, id, showNotice, streamReconnect]);
 
   useEffect(() => {
     const pendingCwdChange = stream.cwdChange;
@@ -6258,6 +6347,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               cwdDraft={conversationCwdDraft}
               cwdError={conversationCwdError}
               cwdSaveBusy={conversationCwdBusy}
+              executionHostId={sessionSnapshot?.remoteHostId ?? null}
+              executionHostLabel={sessionSnapshot?.remoteHostLabel ?? null}
+              continueInOptions={continueInOptions}
+              continueInBusy={continueInBusy}
+              onContinueIn={id && continueInOptions.length > 1 ? (hostId) => { void handleContinueConversationInHost(hostId); } : undefined}
               onCwdDraftChange={(value) => {
                 setConversationCwdDraft(value);
                 if (conversationCwdError) {

@@ -561,6 +561,9 @@ export interface SessionMeta {
   parentSessionFile?: string;
   parentSessionId?: string;
   sourceRunId?: string;
+  remoteHostId?: string;
+  remoteHostLabel?: string;
+  remoteConversationId?: string;
   automationTaskId?: string;
   automationTitle?: string;
   needsAttention?: boolean;

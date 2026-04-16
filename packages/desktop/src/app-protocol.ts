@@ -7,6 +7,7 @@ import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-modul
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 import type { HostManager } from './hosts/host-manager.js';
+import { dispatchConversationExecutionRequest, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 
 export const DESKTOP_APP_SCHEME = 'personal-agent';
 const DESKTOP_APP_HOST = 'app';
@@ -209,11 +210,20 @@ export function createDesktopProtocolHandler(options?: {
       try {
         if (isEventStreamRequest(request)) {
           if (options?.hostManager) {
-            const controller = options.hostManager.getHostController(options.hostId ?? 'local');
-            return createSseProtocolResponse(
-              (onEvent) => controller.subscribeApiStream(`${url.pathname}${url.search}`, onEvent),
-              request,
-            );
+            const streamPath = `${url.pathname}${url.search}`;
+            const subscribe = async (onEvent: (event: DesktopApiStreamEvent) => void) => {
+              const targeted = await subscribeConversationExecutionApiStream(options.hostManager as HostManager, streamPath, onEvent);
+              if (targeted) {
+                return targeted;
+              }
+
+              const controller = options.hostManager?.getHostController(options.hostId ?? 'local');
+              if (!controller) {
+                throw new Error('Desktop host controller unavailable.');
+              }
+              return controller.subscribeApiStream(streamPath, onEvent);
+            };
+            return createSseProtocolResponse(subscribe, request);
           }
 
           const module = await loadLocalApi();
@@ -224,12 +234,20 @@ export function createDesktopProtocolHandler(options?: {
         }
 
         if (options?.hostManager) {
-          const controller = options.hostManager.getHostController(options.hostId ?? 'local');
-          const response = await controller.dispatchApiRequest({
+          const requestPath = `${url.pathname}${url.search}`;
+          const requestBody = await readDesktopProtocolRequestBody(request);
+          const requestHeaders = Object.fromEntries(request.headers.entries());
+          const targetedResponse = await dispatchConversationExecutionRequest(options.hostManager, {
             method: request.method,
-            path: `${url.pathname}${url.search}`,
-            body: await readDesktopProtocolRequestBody(request),
-            headers: Object.fromEntries(request.headers.entries()),
+            path: requestPath,
+            body: requestBody,
+            headers: requestHeaders,
+          });
+          const response = targetedResponse ?? await options.hostManager.getHostController(options.hostId ?? 'local').dispatchApiRequest({
+            method: request.method,
+            path: requestPath,
+            body: requestBody,
+            headers: requestHeaders,
           });
 
           return new Response(response.body, {

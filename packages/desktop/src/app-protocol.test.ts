@@ -121,6 +121,66 @@ describe('createDesktopProtocolHandler', () => {
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(Uint8Array.from([1, 2, 3, 4]));
   });
 
+  it('routes remote-target live-session prompts through the linked remote host', async () => {
+    const localDispatch = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: Buffer.from(JSON.stringify({
+        id: 'conversation-1',
+        file: '/tmp/conversation-1.jsonl',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-thread-1',
+      }), 'utf-8'),
+    });
+    const remoteDispatch = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: Buffer.from(JSON.stringify({ ok: true, accepted: true, delivery: 'started' }), 'utf-8'),
+    });
+    const handler = createDesktopProtocolHandler({
+      hostManager: {
+        getHostController: (hostId: string) => {
+          if (hostId === 'local') {
+            return {
+              dispatchApiRequest: localDispatch,
+              subscribeApiStream: vi.fn(),
+              readSessionMeta: vi.fn().mockResolvedValue({
+                id: 'conversation-1',
+                file: '/tmp/conversation-1.jsonl',
+                remoteHostId: 'bender',
+                remoteHostLabel: 'Bender',
+                remoteConversationId: 'remote-thread-1',
+              }),
+            };
+          }
+
+          return {
+            dispatchApiRequest: remoteDispatch,
+            subscribeApiStream: vi.fn(),
+          };
+        },
+      } as never,
+      hostId: 'local',
+    });
+
+    const response = await handler(new Request('personal-agent://app/api/live-sessions/conversation-1/prompt', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: 'continue remotely' }),
+    }));
+
+    expect(localDispatch).not.toHaveBeenCalledWith(expect.objectContaining({ path: '/api/live-sessions/conversation-1/prompt' }));
+    expect(remoteDispatch).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'POST',
+      path: '/api/live-sessions/remote-thread-1/prompt',
+      body: { text: 'continue remotely' },
+    }));
+    expect(await response.json()).toEqual({ ok: true, accepted: true, delivery: 'started' });
+  });
+
   it('parses JSON bodies for local live-session mutations', async () => {
     const dispatchDesktopLocalApiRequest = vi.fn().mockResolvedValue({
       statusCode: 200,

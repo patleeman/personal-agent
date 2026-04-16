@@ -6,6 +6,7 @@ import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 import { installLitterShim, readLitterShimState, uninstallLitterShim } from './litter-shim.js';
 import { desktopWorkspaceServerManager } from './workspace-server.js';
+import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
@@ -99,6 +100,10 @@ export function registerDesktopIpc(options: {
     await options.hostManager.switchHost(hostId);
     options.onHostStateChanged?.();
     await options.windowController.openMainWindow('/');
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:continue-conversation-in-host`, async (_event, input) => {
+    return continueConversationInHost(options.hostManager, input ?? {});
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:save-host`, async (_event, host) => {
@@ -1103,7 +1108,16 @@ export function registerDesktopIpc(options: {
       channel: API_STREAM_CHANNEL,
       subscriptionId,
       store: streamSubscriptions,
-      subscribe: (emit) => options.hostManager.getHostController(hostId).subscribeApiStream(path, emit),
+      subscribe: async (emit) => {
+        if (hostId === 'local') {
+          const targeted = await subscribeConversationExecutionApiStream(options.hostManager, path, emit);
+          if (targeted) {
+            return targeted;
+          }
+        }
+
+        return options.hostManager.getHostController(hostId).subscribeApiStream(path, emit);
+      },
     });
     return { subscriptionId };
   });

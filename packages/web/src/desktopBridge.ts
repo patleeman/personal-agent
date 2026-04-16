@@ -100,6 +100,12 @@ export interface PersonalAgentDesktopBridge {
   getConnections(): Promise<DesktopConnectionsState>;
   getNavigationState(): Promise<DesktopNavigationState>;
   switchHost(hostId: string): Promise<void>;
+  continueConversationInHost(input: { conversationId: string; hostId: string }): Promise<{
+    conversationId: string;
+    remoteHostId?: string;
+    remoteHostLabel?: string;
+    remoteConversationId?: string;
+  }>;
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   readWorkspaceServerState(): Promise<DesktopWorkspaceServerState>;
