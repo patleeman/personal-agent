@@ -189,39 +189,6 @@ export type MessageBlock =
   | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
 
-export interface ActivityEntry {
-  id: string;
-  createdAt: string;
-  profile: string;
-  kind: string;
-  summary: string;
-  details?: string;
-  read?: boolean;
-  relatedProjectIds?: string[];
-  relatedConversationIds?: string[];
-  notificationState?: string;
-}
-
-export interface AlertEntry {
-  id: string;
-  profile: string;
-  kind: string;
-  severity: 'passive' | 'disruptive';
-  status: 'active' | 'acknowledged' | 'dismissed';
-  title: string;
-  body: string;
-  createdAt: string;
-  updatedAt: string;
-  conversationId?: string;
-  activityId?: string;
-  wakeupId?: string;
-  sourceKind: string;
-  sourceId: string;
-  requiresAck: boolean;
-  acknowledgedAt?: string;
-  dismissedAt?: string;
-}
-
 export interface ProjectMilestone {
   id: string;
   title: string;
@@ -260,58 +227,11 @@ export interface ProjectRecord {
   plan: ProjectPlan;
 }
 
-export interface InvalidProjectRecord {
-  projectId: string;
-  profile?: string;
-  path: string;
-  error: string;
-}
-
 export interface ProjectTask {
   id: string;
   status: string;
   title: string;
   milestoneId?: string;
-}
-
-export interface ProjectDocumentRecord {
-  path: string;
-  content: string;
-  updatedAt: string;
-}
-
-export interface ProjectFile {
-  id: string;
-  kind?: 'attachment' | 'artifact';
-  path: string;
-  title: string;
-  description?: string;
-  originalName: string;
-  mimeType?: string;
-  sizeBytes: number;
-  createdAt: string;
-  updatedAt: string;
-  downloadPath: string;
-  sourceKind?: 'file' | 'attachment' | 'artifact';
-}
-
-export interface ProjectLinkedConversation {
-  conversationId: string;
-  title: string;
-  file?: string;
-  cwd?: string;
-  lastActivityAt?: string;
-  isRunning: boolean;
-  needsAttention: boolean;
-  snippet?: string;
-}
-
-export interface ProjectTimelineEntry {
-  id: string;
-  kind: 'project' | 'document' | 'task' | 'file' | 'conversation' | 'activity';
-  createdAt: string;
-  title: string;
-  href?: string;
 }
 
 export interface ScheduledTaskSummary {
@@ -957,12 +877,6 @@ export interface NodeLinkSummary {
   summary?: string;
 }
 
-export interface NodeLinks {
-  outgoing: NodeLinkSummary[];
-  incoming: NodeLinkSummary[];
-  unresolved: string[];
-}
-
 export interface MemorySkillItem {
   source: string;
   name: string;
@@ -1236,11 +1150,6 @@ export interface McpState {
   searchedPaths: string[];
   servers: McpServerConfig[];
   bundledSkills: McpSkillBundleState[];
-}
-
-export interface McpServerToolSummary {
-  name: string;
-  description?: string;
 }
 
 export interface ConfiguredPackageSource {
