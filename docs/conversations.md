@@ -81,6 +81,7 @@ Otherwise the conversation turns into an expensive soup bowl.
 When auto mode is enabled, the conversation backend treats it as durable conversation state and runs a hidden review turn after each visible assistant turn.
 
 That hidden controller step should prefer continuing while useful work remains, and only stop auto mode when the task is complete for the user's request or blocked on a real dependency or missing user input.
+If overflow compaction interrupts one of those hidden auto-mode turns, the backend schedules a delayed recovery check and re-requests the hidden review if the session stays idle instead of resuming cleanly.
 
 ## Async follow-through from a conversation
 

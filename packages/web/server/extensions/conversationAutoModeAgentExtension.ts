@@ -7,9 +7,12 @@ import {
 } from '../conversations/conversationAutoMode.js';
 import {
   markConversationAutoModeContinueRequested,
+  registerLiveSessionLifecycleHandler,
   requestConversationAutoModeTurn,
   setLiveSessionAutoModeState,
 } from '../conversations/liveSessions.js';
+
+const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
 
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([
@@ -54,6 +57,36 @@ function resolveCurrentTurnSourceCustomType(sessionManager: {
 
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
+    const pendingCompactionRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
+    const clearCompactionRecoveryTimer = (sessionId: string) => {
+      const timer = pendingCompactionRecoveryTimers.get(sessionId);
+      if (!timer) {
+        return;
+      }
+
+      clearTimeout(timer);
+      pendingCompactionRecoveryTimers.delete(sessionId);
+    };
+
+    registerLiveSessionLifecycleHandler((event) => {
+      const sessionId = event.conversationId.trim();
+      if (!sessionId) {
+        return;
+      }
+
+      if (event.trigger === 'turn_end') {
+        clearCompactionRecoveryTimer(sessionId);
+        return;
+      }
+
+      clearCompactionRecoveryTimer(sessionId);
+      const timer = setTimeout(() => {
+        pendingCompactionRecoveryTimers.delete(sessionId);
+        void Promise.resolve(requestConversationAutoModeTurn(sessionId)).catch(() => undefined);
+      }, AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS);
+      pendingCompactionRecoveryTimers.set(sessionId, timer);
+    });
+
     pi.registerTool({
       name: CONVERSATION_AUTO_MODE_CONTROL_TOOL,
       label: 'Conversation auto control',

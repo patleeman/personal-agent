@@ -4,16 +4,19 @@ import { createConversationAutoModeAgentExtension } from './conversationAutoMode
 
 const {
   markConversationAutoModeContinueRequestedMock,
+  registerLiveSessionLifecycleHandlerMock,
   requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeStateMock,
 } = vi.hoisted(() => ({
   markConversationAutoModeContinueRequestedMock: vi.fn(),
+  registerLiveSessionLifecycleHandlerMock: vi.fn(),
   requestConversationAutoModeTurnMock: vi.fn(),
   setLiveSessionAutoModeStateMock: vi.fn(),
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({
   markConversationAutoModeContinueRequested: markConversationAutoModeContinueRequestedMock,
+  registerLiveSessionLifecycleHandler: registerLiveSessionLifecycleHandlerMock,
   requestConversationAutoModeTurn: requestConversationAutoModeTurnMock,
   setLiveSessionAutoModeState: setLiveSessionAutoModeStateMock,
 }));
@@ -42,6 +45,7 @@ function createHarness() {
   return {
     tool,
     handlers,
+    lifecycleHandlers: registerLiveSessionLifecycleHandlerMock.mock.calls.map(([handler]) => handler),
   };
 }
 
@@ -63,7 +67,9 @@ function createSessionManager(options: {
 }
 
 beforeEach(() => {
+  vi.useRealTimers();
   markConversationAutoModeContinueRequestedMock.mockReset();
+  registerLiveSessionLifecycleHandlerMock.mockReset();
   requestConversationAutoModeTurnMock.mockReset();
   setLiveSessionAutoModeStateMock.mockReset();
 });
@@ -150,6 +156,51 @@ describe('conversation auto mode agent extension', () => {
     } as never);
     await Promise.resolve();
 
+    expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
+  });
+
+  it('retries the hidden review after auto compaction if the session stays idle', async () => {
+    vi.useFakeTimers();
+    const { lifecycleHandlers } = createHarness();
+    const lifecycleHandler = lifecycleHandlers[0];
+
+    expect(lifecycleHandler).toBeTypeOf('function');
+
+    lifecycleHandler?.({
+      conversationId: 'conversation-1',
+      trigger: 'auto_compaction_end',
+      cwd: '/tmp/workspace',
+      title: 'Auto mode thread',
+    });
+
+    expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('cancels the compaction recovery retry once a later turn ends', async () => {
+    vi.useFakeTimers();
+    const { lifecycleHandlers } = createHarness();
+    const lifecycleHandler = lifecycleHandlers[0];
+
+    lifecycleHandler?.({
+      conversationId: 'conversation-1',
+      trigger: 'auto_compaction_end',
+      cwd: '/tmp/workspace',
+      title: 'Auto mode thread',
+    });
+    lifecycleHandler?.({
+      conversationId: 'conversation-1',
+      trigger: 'turn_end',
+      cwd: '/tmp/workspace',
+      title: 'Auto mode thread',
+    });
+
+    await vi.runAllTimersAsync();
     expect(requestConversationAutoModeTurnMock).not.toHaveBeenCalled();
   });
 });
