@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { clampPanelWidth } from '../layoutSizing';
+import { clampPanelWidth } from '../ui-state/layoutSizing';
 import { cx } from './ui';
 
 interface ResizeOptions {

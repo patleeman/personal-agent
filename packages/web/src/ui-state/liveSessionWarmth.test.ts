@@ -5,7 +5,7 @@ import {
   readWarmLiveSessionState,
   writeWarmLiveSessionState,
 } from './liveSessionWarmth';
-import { INITIAL_STREAM_STATE, shouldPersistWarmLiveSessionState } from './hooks/useSessionStream';
+import { INITIAL_STREAM_STATE, shouldPersistWarmLiveSessionState } from '../hooks/useSessionStream';
 
 describe('liveSessionWarmth', () => {
   it('stores and clears warm live session state by conversation id', () => {

@@ -8,7 +8,7 @@ import {
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
   PINNED_WORKSPACE_IDS_STORAGE_KEY,
-} from './local/localSettings';
+} from '../local/localSettings';
 import {
   buildOpenNodeShelfId,
   closeOpenResourceShelfItem,

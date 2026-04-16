@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getConversationRunIdFromSearch } from '../conversation/conversationRuns';
-import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
+import { clampPanelWidth, getRailLayoutPrefs } from '../ui-state/layoutSizing';
 import { useDesktopChrome } from '../desktop/desktopChromeContext';
 import { ContextRail } from './ContextRail';
 

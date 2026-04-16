@@ -16,7 +16,7 @@ import type {
 } from '../types';
 import { api } from '../api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
-import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../liveSessionWarmth';
+import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { parseSkillBlock } from '../knowledge/skillBlock';
 

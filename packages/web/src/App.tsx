@@ -36,7 +36,7 @@ import {
   removeSessionMetaPreservingOrder,
   replaceSessionMetaPreservingOrder,
 } from './session/sessionListState';
-import { ThemeProvider } from './theme';
+import { ThemeProvider } from './ui-state/theme';
 import { createSessionMetaRefreshScheduler } from './session/sessionMetaRefreshScheduler';
 import type {
   AppEvent,

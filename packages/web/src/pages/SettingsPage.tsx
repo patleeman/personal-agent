@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
-import { type ThemePreference, useTheme } from '../theme';
+import { type ThemePreference, useTheme } from '../ui-state/theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktop/desktopConnections';
 import { describeDesktopWorkspaceServerTailnetPublish, labelDesktopWorkspaceServerTailnetUrl } from '../desktop/desktopWorkspaceServer';

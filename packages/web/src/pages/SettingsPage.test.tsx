@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { useSseConnection, useSystemStatus } from '../contexts';
-import { useTheme } from '../theme';
+import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage.js';
 
 vi.mock('../hooks', () => ({
@@ -17,7 +17,7 @@ vi.mock('../contexts', () => ({
   useSystemStatus: vi.fn(),
 }));
 
-vi.mock('../theme', () => ({
+vi.mock('../ui-state/theme', () => ({
   useTheme: vi.fn(),
 }));
 

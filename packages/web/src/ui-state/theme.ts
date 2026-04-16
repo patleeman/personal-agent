@@ -1,5 +1,5 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { THEME_STORAGE_KEY } from './local/localSettings';
+import { THEME_STORAGE_KEY } from '../local/localSettings';
 
 export type Theme = 'light' | 'dark';
 export type ThemePreference = Theme | 'system';

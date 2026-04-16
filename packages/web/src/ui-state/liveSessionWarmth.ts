@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { StreamState } from './hooks/useSessionStream';
+import type { StreamState } from '../hooks/useSessionStream';
 
 const MAX_WARM_LIVE_SESSION_STATES = 24;
 
