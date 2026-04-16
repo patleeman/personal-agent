@@ -129,6 +129,8 @@ const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
 const MAX_RELATED_THREAD_HOTKEYS = 9;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
+const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
+const MAX_RELATED_THREAD_CANDIDATES = 24;
 
 type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
 type RelatedThreadHotkeyEvent = Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'key' | 'code' | 'isComposing'>;
@@ -3055,6 +3057,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => draft
       ? selectRecentConversationCandidates(sessions, {
           workspaceCwd: draftCwdValue || null,
+          recentWindowDays: RELATED_THREAD_RECENT_WINDOW_DAYS,
+          limit: MAX_RELATED_THREAD_CANDIDATES,
           closedOnly: true,
         })
       : [],

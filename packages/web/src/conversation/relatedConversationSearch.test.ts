@@ -90,6 +90,29 @@ describe('selectRecentConversationCandidates', () => {
       'closed-other',
     ]);
   });
+
+  it('honors a tighter recent window for related-thread candidates', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'stale-other',
+        title: 'Stale other workspace',
+        cwd: '/repo/other',
+        lastActivityAt: '2026-04-09T08:59:59.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      recentWindowDays: 3,
+    }).map((session) => session.id)).toEqual(['recent-current']);
+  });
 });
 
 describe('listRecentConversationResults', () => {

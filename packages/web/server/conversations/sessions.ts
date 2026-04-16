@@ -231,6 +231,11 @@ interface CachedSessionDetail {
   detail: SessionDetail;
 }
 
+interface CachedSessionSearchText {
+  signature: string;
+  text: string;
+}
+
 interface PersistentSessionIndexEntry {
   filePath: string;
   signature: string;
@@ -245,6 +250,7 @@ interface PersistentSessionIndexDocument {
 
 const sessionMetaCache = new Map<string, CachedSessionMeta>();
 const sessionDetailCache = new Map<string, CachedSessionDetail>();
+const sessionSearchTextCache = new Map<string, CachedSessionSearchText>();
 let sessionFileById = new Map<string, string>();
 let loadedPersistentIndexKey: string | null = null;
 let persistedIndexJson: string | null = null;
@@ -285,6 +291,7 @@ function isRawDisplayLine(line: RawLine): line is RawDisplayLine {
 }
 
 const SESSION_SUMMARY_SANITIZE_PATTERN = /"(content|data|text|thinking|summary|errorMessage)":"((?:\\.|[^"\\])*)"/g;
+const SESSION_SEARCH_SANITIZE_PATTERN = /"(data|thinking)":"((?:\\.|[^"\\])*)"/g;
 const REVERSE_READ_CHUNK_BYTES = 64 * 1024;
 
 function sanitizeSessionLineForSummary(rawLine: string): string {
@@ -295,6 +302,10 @@ function sanitizeSessionLineForSummary(rawLine: string): string {
 
     return `"${field}":"${value.length > 0 ? 'x' : ''}"`;
   });
+}
+
+function sanitizeSessionLineForSearch(rawLine: string): string {
+  return rawLine.replace(SESSION_SEARCH_SANITIZE_PATTERN, (_match, field: string) => `"${field}":""`);
 }
 
 function readFileLinesReverse(filePath: string, visit: (line: string) => boolean | void): void {
@@ -703,47 +714,57 @@ function normalizeSearchSegment(text: string, maxLength = 360): string {
     : normalized;
 }
 
+function extractSearchTextFromMessage(message: { role: string; content?: unknown }): string {
+  if (message.role === 'user') {
+    return extractUserContent(message.content).text;
+  }
+
+  if (message.role !== 'assistant') {
+    return '';
+  }
+
+  return normalizeContent(message.content)
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n');
+}
+
+function appendSessionSearchSegment(segments: string[], segment: string, remaining: number): number {
+  if (remaining <= 0) {
+    return 0;
+  }
+
+  const normalizedSegment = normalizeSearchSegment(segment);
+  if (!normalizedSegment) {
+    return remaining;
+  }
+
+  const limitedSegment = normalizedSegment.length > remaining
+    ? `${normalizedSegment.slice(0, Math.max(0, remaining - 1)).trimEnd()}…`
+    : normalizedSegment;
+
+  if (!limitedSegment) {
+    return remaining;
+  }
+
+  segments.push(limitedSegment);
+  return Math.max(0, remaining - limitedSegment.length - 1);
+}
+
 function buildSessionSearchText(entries: SessionEntry[], maxCharacters: number): string {
   const segments: string[] = [];
   let remaining = Math.max(0, maxCharacters);
 
-  for (const entry of entries) {
-    if (remaining <= 0) {
-      break;
-    }
-
-    if (entry.type !== 'message') {
+  for (let index = entries.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const entry = entries[index];
+    if (!entry || entry.type !== 'message') {
       continue;
     }
 
-    let segment = '';
-    if (entry.message.role === 'user') {
-      segment = extractUserContent(entry.message.content).text;
-    } else if (entry.message.role === 'assistant') {
-      segment = normalizeContent(entry.message.content)
-        .filter((block) => block.type === 'text')
-        .map((block) => block.text ?? '')
-        .join('\n');
-    }
-
-    const normalizedSegment = normalizeSearchSegment(segment);
-    if (!normalizedSegment) {
-      continue;
-    }
-
-    const limitedSegment = normalizedSegment.length > remaining
-      ? `${normalizedSegment.slice(0, Math.max(0, remaining - 1)).trimEnd()}…`
-      : normalizedSegment;
-
-    if (!limitedSegment) {
-      continue;
-    }
-
-    segments.push(limitedSegment);
-    remaining -= limitedSegment.length + 1;
+    remaining = appendSessionSearchSegment(segments, extractSearchTextFromMessage(entry.message), remaining);
   }
 
-  return segments.join('\n');
+  return segments.reverse().join('\n');
 }
 
 const HIDDEN_TRANSCRIPT_TURN_CUSTOM_TYPES = new Set([
@@ -1577,6 +1598,7 @@ function resolveSessionMeta(sessionId: string): SessionMeta | null {
 export function clearSessionCaches(): void {
   sessionMetaCache.clear();
   sessionDetailCache.clear();
+  sessionSearchTextCache.clear();
   sessionFileById.clear();
   loadedPersistentIndexKey = null;
   persistedIndexJson = null;
@@ -1701,10 +1723,62 @@ export function readKnownSessionIdByFilePath(filePath: string): string | null {
   return readSessionIdFromSessionRecord(filePath) ?? readSessionMetaByFile(filePath)?.id ?? null;
 }
 
+function readSessionSearchTextByFile(filePath: string, maxCharacters: number): string | null {
+  const normalizedMaxCharacters = Math.max(0, maxCharacters);
+  const cacheKey = `${filePath}:${normalizedMaxCharacters}`;
+  const signature = getFileSignature(filePath);
+  if (!signature) {
+    sessionSearchTextCache.delete(cacheKey);
+    return null;
+  }
+
+  const cached = sessionSearchTextCache.get(cacheKey);
+  if (cached && cached.signature === signature) {
+    return cached.text;
+  }
+
+  try {
+    const segments: string[] = [];
+    let remaining = normalizedMaxCharacters;
+
+    readFileLinesReverse(filePath, (rawLine) => {
+      if (remaining <= 0) {
+        return false;
+      }
+
+      if (!rawLine.trim()) {
+        return;
+      }
+
+      const parsed = parseJsonLine(sanitizeSessionLineForSearch(rawLine));
+      if (!parsed || parsed.type !== 'message') {
+        return;
+      }
+
+      remaining = appendSessionSearchSegment(segments, extractSearchTextFromMessage(parsed.message), remaining);
+      if (remaining <= 0) {
+        return false;
+      }
+    });
+
+    const text = segments.reverse().join('\n');
+    sessionSearchTextCache.set(cacheKey, { signature, text });
+    return text;
+  } catch {
+    sessionSearchTextCache.delete(cacheKey);
+    return null;
+  }
+}
+
 export function readSessionSearchText(sessionId: string, maxCharacters = 12_000): string | null {
   const meta = resolveSessionMeta(sessionId);
   if (!meta) {
     return null;
+  }
+
+  const indexedText = readSessionSearchTextByFile(meta.file, maxCharacters);
+  if (indexedText !== null) {
+    return indexedText;
   }
 
   try {

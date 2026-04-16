@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, un
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
+import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -147,6 +147,20 @@ describe('sessions', () => {
       'Reply 3',
       'Reply 4',
     ]);
+  });
+
+  it('indexes the most recent conversation text first for related-thread search', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-search',
+      title: 'Older setup notes',
+      assistantTexts: ['volcanic legacy details', 'recent needle update'],
+    });
+
+    expect(readSessionSearchText('session-search', 20)).toBe('recent needle update');
   });
 
   it('builds append-only transcript responses when a cached tail window only needs new blocks', () => {
