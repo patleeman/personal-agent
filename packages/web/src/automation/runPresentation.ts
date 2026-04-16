@@ -1,4 +1,4 @@
-import type { DurableRunListResult, DurableRunRecord, ScheduledTaskSummary, SessionMeta } from './types';
+import type { DurableRunListResult, DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../types';
 
 export interface RunPresentationLookups {
   tasks?: ScheduledTaskSummary[] | null;

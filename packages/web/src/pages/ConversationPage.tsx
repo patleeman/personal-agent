@@ -100,7 +100,7 @@ import {
   isRunActive,
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
-} from '../runPresentation';
+} from '../automation/runPresentation';
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,

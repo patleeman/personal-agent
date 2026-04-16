@@ -49,7 +49,7 @@ import type {
   WebUiState,
 } from './types';
 import { setConversationRunIdInSearch } from './conversation/conversationRuns';
-import { getRunPrimaryConnection, type RunPresentationLookups } from './runPresentation';
+import { getRunPrimaryConnection, type RunPresentationLookups } from './automation/runPresentation';
 
 function LegacyTaskRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();

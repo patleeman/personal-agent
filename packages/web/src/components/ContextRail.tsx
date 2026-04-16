@@ -27,13 +27,13 @@ import {
   isRunActive,
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
-} from '../runPresentation';
+} from '../automation/runPresentation';
 import { useApi } from '../hooks';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { formatTaskSchedule } from '../taskSchedule';
+import { formatTaskSchedule } from '../automation/taskSchedule';
 import type {
   AgentToolInfo,
   DurableRunDetailResult,

@@ -4,7 +4,7 @@ import { api } from '../api';
 import { useAppData } from '../contexts';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
-import { isScheduledTaskDetail } from '../scheduledTaskDetail';
+import { isScheduledTaskDetail } from '../automation/scheduledTaskDetail';
 import {
   buildCronFromEasyTaskSchedule,
   createCronEditorState,
@@ -17,7 +17,7 @@ import {
   type CronEditorState,
   type EasyTaskCadence,
   type EasyTaskSchedule,
-} from '../taskSchedule';
+} from '../automation/taskSchedule';
 import type { ScheduledTaskDetail, ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';

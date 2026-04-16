@@ -28,6 +28,7 @@ Use these defaults:
 
 - `packages/web/src/pages/` — route-level UI surfaces
 - `packages/web/src/components/` — reusable UI pieces
+- `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, and scheduled-task detail guards
 - `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
 - `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
 - `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
@@ -40,6 +41,7 @@ Use these defaults:
 - `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
 
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
+If it formats or validates automation and durable-run UI state, keep it under `src/automation/`.
 If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.
 If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
 If it manages markdown/note/skill/node-mention rendering for the knowledge surfaces, keep it under `src/knowledge/`.

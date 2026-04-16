@@ -6,8 +6,8 @@ import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/Sche
 import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
-import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../runPresentation';
-import { formatTaskSchedule } from '../taskSchedule';
+import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
+import { formatTaskSchedule } from '../automation/taskSchedule';
 import type { DurableRunRecord, ScheduledTaskSummary } from '../types';
 import { timeAgo } from '../utils';
 
