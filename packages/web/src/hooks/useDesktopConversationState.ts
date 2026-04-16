@@ -24,7 +24,7 @@ type DesktopConversationStateEnvelope = {
   };
 };
 
-export function mergeDesktopConversationState(
+function mergeDesktopConversationState(
   previous: DesktopConversationState | null,
   next: DesktopConversationState,
 ): DesktopConversationState {
