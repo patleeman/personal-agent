@@ -30,7 +30,7 @@ Use these defaults:
 - `packages/web/src/components/` — reusable UI pieces
 - `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, and scheduled-task detail guards
 - `packages/web/src/commands/` — slash-command discovery, command palette ranking, and command-palette event helpers
-- `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
+- `packages/web/src/conversation/` — conversation-specific client helpers, including draft/fork state, related-thread search, search state helpers, formatting helpers, and parsing logic
 - `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
 - `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
 - `packages/web/src/knowledge/` — note/skill/note-mention helpers, markdown document helpers, and knowledge-workspace presentation utilities

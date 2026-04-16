@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StorageLike } from './local/reloadState';
+import type { StorageLike } from '../local/reloadState';
 import {
   buildDraftConversationAttachmentsStorageKey,
   buildDraftConversationComposerStorageKey,

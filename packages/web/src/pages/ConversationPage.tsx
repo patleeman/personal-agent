@@ -17,7 +17,7 @@ import { useDesktopConversationState } from '../hooks/useDesktopConversationStat
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
 import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
-import { appendComposerHistory, readComposerHistory } from '../composerHistory';
+import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
@@ -49,7 +49,7 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../transcript/askUserQuestions';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../conversation/forking';
 import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
@@ -77,7 +77,7 @@ import {
   readDraftConversationServiceTier,
   readDraftConversationThinkingLevel,
   type DraftConversationDrawingAttachment,
-} from '../draftConversation';
+} from '../conversation/draftConversation';
 import {
   clearPendingConversationPrompt,
   consumePendingConversationPrompt,
@@ -111,7 +111,7 @@ import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
-import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';
+import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));

@@ -11,7 +11,7 @@ import {
 import {
   buildDraftConversationCwdStorageKey,
   DRAFT_CONVERSATION_ID,
-} from '../draftConversation';
+} from '../conversation/draftConversation';
 import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../navigation/capabilitiesSelection';
 import { useReloadState } from '../local/reloadState';
 import {

@@ -15,7 +15,7 @@ import {
   hasDraftConversationContextDocs,
   readDraftConversationComposer,
   readDraftConversationCwd,
-} from './draftConversation';
+} from './conversation/draftConversation';
 import { useConversations } from './hooks/useConversations';
 import { fetchSessionsSnapshot } from './session/sessionSnapshot';
 import {

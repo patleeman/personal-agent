@@ -1,4 +1,4 @@
-import { isComposerHistoryStorageKey } from '../composerHistory';
+import { isComposerHistoryStorageKey } from '../conversation/composerHistory';
 import { isRailWidthStorageKey } from '../layoutSizing';
 
 export const THEME_STORAGE_KEY = 'pa-theme';

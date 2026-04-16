@@ -15,8 +15,8 @@ import {
   DRAFT_CONVERSATION_ROUTE,
   persistDraftConversationCwd,
   readDraftConversationCwd,
-} from '../draftConversation';
-import { persistForkPromptDraft } from '../forking';
+} from '../conversation/draftConversation';
+import { persistForkPromptDraft } from '../conversation/forking';
 import { timeAgoCompact } from '../utils';
 import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../session/sessionTabs';
 import {

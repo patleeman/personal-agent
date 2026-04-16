@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildComposerHistoryStorageKey } from '../composerHistory';
+import { buildComposerHistoryStorageKey } from '../conversation/composerHistory';
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,

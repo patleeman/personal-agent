@@ -1,5 +1,5 @@
-import { getSessionStorage, type StorageLike } from './local/reloadState';
-import type { DisplayBlock, MessageBlock } from './types';
+import { getSessionStorage, type StorageLike } from '../local/reloadState';
+import type { DisplayBlock, MessageBlock } from '../types';
 
 export interface ForkableMessageEntry {
   entryId: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionMeta } from './types';
+import type { SessionMeta } from '../types';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
 
 function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'title' | 'cwd'>): SessionMeta {

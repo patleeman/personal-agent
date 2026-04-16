@@ -1,5 +1,5 @@
 import { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
-import type { RelatedConversationSearchResult } from '../relatedConversationSearch';
+import type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import { timeAgo } from '../utils';
 import { Keycap, cx } from './ui';
 
