@@ -2,73 +2,88 @@ import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../shared/types';
 import {
   applyConversationRailFisheye,
-  buildConversationRailSnippet,
-  getConversationRailMaxScrollTop,
   getConversationRailScrollTopFromThumb,
-  getConversationRailTrackTravel,
   getConversationRailTurns,
   getConversationRailViewportTop,
   isConversationRailThumbHit,
   pickNearestConversationRailMarker,
 } from './conversationRail.js';
 
-describe('conversation rail snippets', () => {
+describe('conversation rail turns', () => {
   it('builds semantic snippets by stripping markdown and code noise', () => {
-    const snippet = buildConversationRailSnippet({
-      type: 'text',
-      ts: '2026-03-10T20:00:00.000Z',
-      text: '## Current plan\n- [x] Ship the rail\n- [ ] Keep it quiet\nRead [LessWrong](https://lesswrong.com) and use `git status`.\n```ts\nconst x = 1\n```',
-    });
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '## Current plan\n- [x] Ship the rail\n- [ ] Keep it quiet\nRead [LessWrong](https://lesswrong.com) and use `git status`.\n```ts\nconst x = 1\n```',
+      },
+    ];
 
-    expect(snippet).toBe('Current plan Ship the rail Keep it quiet Read LessWrong and use git status.');
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'Current plan Ship the rail Keep it quiet Read LessWrong and use git status.' },
+    ]);
   });
 
   it('falls back to image-oriented recall when a user turn has no text', () => {
-    const snippet = buildConversationRailSnippet({
-      type: 'user',
-      ts: '2026-03-10T20:00:00.000Z',
-      text: '',
-      images: [
-        { alt: 'image', caption: 'Screenshot of the rail mockup' },
-        { alt: 'image' },
-      ],
-    });
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '',
+        images: [
+          { alt: 'image', caption: 'Screenshot of the rail mockup' },
+          { alt: 'image' },
+        ],
+      },
+    ];
 
-    expect(snippet).toBe('2 image attachments · Screenshot of the rail mockup');
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: '2 image attachments · Screenshot of the rail mockup' },
+    ]);
   });
 
   it('strips xml tags and file paths so previews prefer human-language text', () => {
-    const snippet = buildConversationRailSnippet({
-      type: 'user',
-      ts: '2026-03-10T20:00:00.000Z',
-      text: '<note><path>/var/folders/c_/wv0qj11n47s5jdvn6z162py80000gn/T/file.png</path></note> Can we make the rail quieter and more readable?',
-    });
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '<note><path>/var/folders/c_/wv0qj11n47s5jdvn6z162py80000gn/T/file.png</path></note> Can we make the rail quieter and more readable?',
+      },
+    ];
 
-    expect(snippet).toBe('Can we make the rail quieter and more readable?');
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'Can we make the rail quieter and more readable?' },
+    ]);
   });
 
   it('falls back when a user message only contains technical path noise', () => {
-    const snippet = buildConversationRailSnippet({
-      type: 'user',
-      ts: '2026-03-10T20:00:00.000Z',
-      text: '/var/folders/c_/wv0qj11n47s5jdvn6z162py80000gn/T/file.png',
-    });
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '/var/folders/c_/wv0qj11n47s5jdvn6z162py80000gn/T/file.png',
+      },
+    ];
 
-    expect(snippet).toBe('Message');
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'Message' },
+    ]);
   });
 
   it('drops escaped screenshot filenames and keeps the actual request text', () => {
-    const snippet = buildConversationRailSnippet({
-      type: 'user',
-      ts: '2026-03-10T20:00:00.000Z',
-      text: '/var/folders/c_/tmp/Screenshot\\ 2026-03-10\\ at\\ 7.58.51\\ PM.png Get rid of the bold text',
-    });
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '/var/folders/c_/tmp/Screenshot\\ 2026-03-10\\ at\\ 7.58.51\\ PM.png Get rid of the bold text',
+      },
+    ];
 
-    expect(snippet).toBe('Get rid of the bold text');
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'Get rid of the bold text' },
+    ]);
   });
-});
 
-describe('conversation rail turns', () => {
   it('includes only user turns', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-10T20:00:00.000Z', text: 'First user turn' },
@@ -121,8 +136,6 @@ describe('conversation rail viewport math', () => {
   };
 
   it('maps scroll range to thumb travel like a scrollbar', () => {
-    expect(getConversationRailMaxScrollTop(metrics)).toBe(600);
-    expect(getConversationRailTrackTravel(metrics)).toBeCloseTo(220.8);
     expect(getConversationRailViewportTop(metrics, 0)).toBe(0);
     expect(getConversationRailViewportTop(metrics, 300)).toBeCloseTo(110.4);
     expect(getConversationRailViewportTop(metrics, 600)).toBeCloseTo(220.8);

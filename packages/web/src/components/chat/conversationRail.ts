@@ -1,19 +1,19 @@
 import type { MessageBlock } from '../../shared/types';
 
-export interface ConversationRailTurn {
+interface ConversationRailTurn {
   index: number;
   kind: 'user' | 'assistant';
   label: 'User' | 'Assistant';
   snippet: string;
 }
 
-export interface ConversationRailProjectedMarker {
+interface ConversationRailProjectedMarker {
   index: number;
   baseY: number;
   displayY: number;
 }
 
-export interface ConversationRailViewportMetrics {
+interface ConversationRailViewportMetrics {
   clientHeight: number;
   contentHeight: number;
   trackHeight: number;
@@ -132,7 +132,7 @@ function formatImageAttachmentSnippet(block: Extract<MessageBlock, { type: 'user
   return `${prefix} · ${firstDescriptor}`;
 }
 
-export function buildConversationRailSnippet(block: Extract<MessageBlock, { type: 'user' | 'text' }>, maxLength = DEFAULT_SNIPPET_LIMIT): string {
+function buildConversationRailSnippet(block: Extract<MessageBlock, { type: 'user' | 'text' }>, maxLength = DEFAULT_SNIPPET_LIMIT): string {
   if (block.type === 'user') {
     const stripped = stripConversationPreviewMarkdown(block.text);
     if (stripped.length > 0) {
@@ -209,11 +209,11 @@ export function pickNearestConversationRailMarker(
   return best;
 }
 
-export function getConversationRailTrackTravel(metrics: ConversationRailViewportMetrics): number {
+function getConversationRailTrackTravel(metrics: ConversationRailViewportMetrics): number {
   return Math.max(0, metrics.trackHeight - metrics.viewportHeightPx);
 }
 
-export function getConversationRailMaxScrollTop(metrics: ConversationRailViewportMetrics): number {
+function getConversationRailMaxScrollTop(metrics: ConversationRailViewportMetrics): number {
   return Math.max(0, metrics.contentHeight - metrics.clientHeight);
 }
 
