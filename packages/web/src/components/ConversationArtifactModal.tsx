@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../client/api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { useAppEvents } from '../contexts';
 import { useApi } from '../hooks';

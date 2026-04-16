@@ -1,9 +1,9 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { resolveWebRouteRedirect } from './navigation/routes';
-import { api } from './api';
-import { buildApiPath } from './apiBase';
-import { normalizeAppEvent } from './appEventTransport';
+import { api } from './client/api';
+import { buildApiPath } from './client/apiBase';
+import { normalizeAppEvent } from './client/appEventTransport';
 import { subscribeDesktopAppEvents } from './desktop/desktopAppEvents';
 import { readDesktopEnvironment } from './desktop/desktopBridge';
 import { createDesktopAwareEventSource } from './desktop/desktopEventSource';

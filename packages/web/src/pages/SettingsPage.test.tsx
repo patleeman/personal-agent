@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../api';
+import { api } from '../client/api';
 import { useApi } from '../hooks';
 import { useSseConnection, useSystemStatus } from '../contexts';
 import { useTheme } from '../ui-state/theme';

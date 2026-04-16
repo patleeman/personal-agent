@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ConversationBootstrapState } from './types';
+import type { ConversationBootstrapState } from '../types';
 
 function createBootstrapState(overrides?: Partial<ConversationBootstrapState>): ConversationBootstrapState {
   return {

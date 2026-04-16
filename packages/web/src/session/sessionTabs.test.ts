@@ -5,7 +5,7 @@ const apiMocks = vi.hoisted(() => ({
   setOpenConversationTabs: vi.fn(),
 }));
 
-vi.mock('../api', () => ({
+vi.mock('../client/api', () => ({
   api: apiMocks,
 }));
 

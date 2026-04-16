@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';

@@ -14,7 +14,7 @@ import type {
   SessionContextUsage,
   SseEvent,
 } from '../types';
-import { api } from '../api';
+import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';

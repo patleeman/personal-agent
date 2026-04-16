@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import { api } from '../api';
+import { api } from '../client/api';
 import { useAppEvents } from '../contexts';
 import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../types';
 

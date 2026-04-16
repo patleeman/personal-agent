@@ -1,4 +1,4 @@
-import type { AppEvent, DesktopAppEvent } from './types';
+import type { AppEvent, DesktopAppEvent } from '../types';
 
 export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
   switch (event.type) {

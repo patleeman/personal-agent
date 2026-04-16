@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type SelectHTMLAttributes } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../client/api';
 import { useAppData } from '../contexts';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';

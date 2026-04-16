@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../client/api';
 import {
   getConversationCheckpointFileFromSearch,
   setConversationCheckpointFileInSearch,

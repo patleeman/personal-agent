@@ -10,7 +10,7 @@
  * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import { api } from '../client/api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { fetchSessionsSnapshot } from '../session/sessionSnapshot';

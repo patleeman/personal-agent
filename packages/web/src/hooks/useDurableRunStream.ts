@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '../api';
+import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import type { DurableRunDetailResult, DurableRunSseEvent } from '../types';
 

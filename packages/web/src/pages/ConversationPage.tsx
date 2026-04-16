@@ -15,7 +15,7 @@ import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions'
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
-import { api } from '../api';
+import { api } from '../client/api';
 import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
@@ -109,7 +109,7 @@ import {
 import { insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
 import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
-import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
+import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';

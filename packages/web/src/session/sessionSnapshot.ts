@@ -1,4 +1,4 @@
-import { api } from '../api';
+import { api } from '../client/api';
 import type { SessionMeta } from '../types';
 
 export async function fetchSessionsSnapshot(): Promise<SessionMeta[]> {

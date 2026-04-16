@@ -3,7 +3,7 @@ import {
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from '../local/localSettings';
-import { api } from '../api';
+import { api } from '../client/api';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';
 

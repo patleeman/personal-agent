@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../api';
+import { api } from '../client/api';
 import { setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import {
   collectConversationRunMentions,
@@ -41,7 +41,7 @@ import type {
 } from '../types';
 import { timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
-import { completeConversationOpenPhase } from '../perfDiagnostics';
+import { completeConversationOpenPhase } from '../client/perfDiagnostics';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';

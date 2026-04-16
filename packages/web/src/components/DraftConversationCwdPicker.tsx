@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { api } from '../api';
+import { api } from '../client/api';
 import { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
 import { ToolbarButton, cx } from './ui';
 
