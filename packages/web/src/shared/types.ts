@@ -555,12 +555,12 @@ export type DesktopAppEvent =
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
-export interface GitWorkingTreeChange {
+interface GitWorkingTreeChange {
   relativePath: string;
   change: 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked' | 'conflicted';
 }
 
-export interface GitWorkingTreeSummary {
+interface GitWorkingTreeSummary {
   changeCount: number;
   linesAdded: number;
   linesDeleted: number;
@@ -804,7 +804,7 @@ export interface QueuedPromptPreview {
   pending?: boolean;
 }
 
-export interface DesktopConversationStreamState {
+interface DesktopConversationStreamState {
   blocks: MessageBlock[];
   blockOffset: number;
   totalBlocks: number;
@@ -861,7 +861,7 @@ export type DurableRunSseEvent =
 
 // ── Memory browser ────────────────────────────────────────────────────────────
 
-export interface MemoryAgentsItem {
+interface MemoryAgentsItem {
   source: string;
   path: string;
   exists: boolean;
