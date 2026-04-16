@@ -35,6 +35,7 @@ Use these defaults:
 - `packages/web/src/knowledge/` — note/skill/note-mention helpers, markdown document helpers, and knowledge-workspace presentation utilities
 - `packages/web/src/local/` — browser-local storage, persisted UI state, saved workspace path helpers, and local-path detection helpers
 - `packages/web/src/model/` — model filtering, grouping, and model-preference presentation helpers
+- `packages/web/src/navigation/` — route redirects, lazy-route recovery, and URL search-param selection helpers for cross-page navigation
 - `packages/web/src/pending/` — pending prompt persistence and optimistic pending-message presentation helpers
 - `packages/web/src/session/` — session snapshot, tab layout, refresh scheduling, and session attention helpers
 - `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
@@ -47,6 +48,7 @@ If it only exists because the Electron shell injects extra capabilities, keep it
 If it manages markdown/note/skill/node-mention rendering for the knowledge surfaces, keep it under `src/knowledge/`.
 If it manages browser-local persistence or saved local workspace state, keep it under `src/local/`.
 If it manages model filtering or reusable model preference presentation logic, keep it under `src/model/`.
+If it manages route redirects or search-param driven page navigation state, keep it under `src/navigation/`.
 If it manages pending prompt staging or optimistic pending-message state, keep it under `src/pending/`.
 If it manages session list, tab, or snapshot state, keep it under `src/session/`.
 

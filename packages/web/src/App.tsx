@@ -1,13 +1,13 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { resolveWebRouteRedirect } from './routes';
+import { resolveWebRouteRedirect } from './navigation/routes';
 import { api } from './api';
 import { buildApiPath } from './apiBase';
 import { normalizeAppEvent } from './appEventTransport';
 import { subscribeDesktopAppEvents } from './desktop/desktopAppEvents';
 import { readDesktopEnvironment } from './desktop/desktopBridge';
 import { createDesktopAwareEventSource } from './desktop/desktopEventSource';
-import { lazyRouteWithRecovery } from './lazyRouteRecovery';
+import { lazyRouteWithRecovery } from './navigation/lazyRouteRecovery';
 import { Layout } from './components/Layout';
 import { resolveConversationIndexRedirect } from './conversation/conversationRoutes';
 import {

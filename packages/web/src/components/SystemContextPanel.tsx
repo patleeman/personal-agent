@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useSystemStatus } from '../contexts';
-import { getSystemComponentLabel, type SystemComponentId } from '../systemSelection';
+import { getSystemComponentLabel, type SystemComponentId } from '../navigation/systemSelection';
 import type { DaemonState, WebUiState } from '../types';
 import { timeAgo } from '../utils';
 import { buildWebUiRemoteAccessSummary } from '../webUiRemoteAccess';

@@ -12,7 +12,7 @@ import {
   buildDraftConversationCwdStorageKey,
   DRAFT_CONVERSATION_ID,
 } from '../draftConversation';
-import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../capabilitiesSelection';
+import { buildCapabilitiesSearch, getCapabilitiesPresetId, getCapabilitiesSection, getCapabilitiesTaskId, getCapabilitiesToolName } from '../navigation/capabilitiesSelection';
 import { useReloadState } from '../local/reloadState';
 import {
   getRunConnections,
