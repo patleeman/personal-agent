@@ -1,10 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import type { MessageBlock } from '../shared/types';
-import {
-  formatStreamingThroughputLabel,
-  getStreamingThroughputLabel,
-  readStreamingThroughput,
-} from './streamingThroughput';
+import { getStreamingThroughputLabel } from './streamingThroughput';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -16,7 +12,7 @@ describe('streamingThroughput', () => {
       { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'hello world' },
     ];
 
-    expect(readStreamingThroughput(blocks, false, Date.parse('2026-03-29T12:00:02.000Z'))).toBeNull();
+    expect(getStreamingThroughputLabel(blocks, false, Date.parse('2026-03-29T12:00:02.000Z'))).toBeNull();
   });
 
   it('estimates tok/s from the live tail text block', () => {
@@ -24,14 +20,7 @@ describe('streamingThroughput', () => {
       { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'a'.repeat(48) },
     ];
 
-    const sample = readStreamingThroughput(blocks, true, Date.parse('2026-03-29T12:00:03.000Z'));
-    expect(sample).toEqual(expect.objectContaining({
-      kind: 'text',
-      estimatedTokens: 12,
-      elapsedMs: 3_000,
-      tokensPerSecond: 4,
-    }));
-    expect(formatStreamingThroughputLabel(sample)).toBe('~4.0 tok/s');
+    expect(getStreamingThroughputLabel(blocks, true, Date.parse('2026-03-29T12:00:03.000Z'))).toBe('~4.0 tok/s');
   });
 
   it('uses the current thinking block when that is still streaming', () => {

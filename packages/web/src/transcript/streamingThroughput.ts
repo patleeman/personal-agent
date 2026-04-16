@@ -5,7 +5,7 @@ const MIN_RATE_WINDOW_MS = 1_000;
 
 type StreamingTextBlock = Pick<MessageBlock, 'type' | 'ts'> & { text?: string };
 
-export interface StreamingThroughputSample {
+interface StreamingThroughputSample {
   kind: 'text' | 'thinking';
   estimatedTokens: number;
   elapsedMs: number;
@@ -29,7 +29,7 @@ function findStreamingTailBlock(blocks: ReadonlyArray<StreamingTextBlock>): Stre
   return tail;
 }
 
-export function readStreamingThroughput(
+function readStreamingThroughput(
   blocks: ReadonlyArray<StreamingTextBlock>,
   isStreaming: boolean,
   nowMs = Date.now(),
@@ -72,7 +72,7 @@ export function readStreamingThroughput(
   };
 }
 
-export function formatStreamingThroughputLabel(sample: StreamingThroughputSample | null): string | null {
+function formatStreamingThroughputLabel(sample: StreamingThroughputSample | null): string | null {
   if (!sample) {
     return null;
   }
