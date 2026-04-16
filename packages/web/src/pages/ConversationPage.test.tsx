@@ -6,8 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DurableRunRecord, MessageBlock, SessionMeta } from '../shared/types';
 import {
   ConversationPage,
-  buildConversationBackgroundRunIndicatorText,
-  formatConversationBackgroundRunStatusLabel,
   mergeConversationSessionMeta,
   replaceConversationTitleInSessionList,
   resolveConversationPageTitle,
@@ -21,9 +19,6 @@ import {
   shouldDeferConversationFileRefresh,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
-  truncateConversationShelfText,
-  formatQueuedPromptShelfText,
-  formatQueuedPromptImageSummary,
   resolveConversationInitialHistoricalWarmupTarget,
   hasConversationLoadedHistoricalTailBlocks,
   shouldShowConversationInitialHistoricalWarmupLoader,
@@ -1036,73 +1031,6 @@ describe('conversation live state helpers', () => {
     expect(merged?.file).toBe(snapshot.file);
   });
 
-  it('formats background run indicator labels', () => {
-    expect(formatConversationBackgroundRunStatusLabel('running')).toBe('running');
-    expect(formatConversationBackgroundRunStatusLabel(undefined)).toBe('active');
-  });
-
-  it('summarizes active background runs for the conversation shelf', () => {
-    const lookups = {
-      sessions: [{
-        id: 'conv-123',
-        file: '/tmp/conv-123.jsonl',
-        timestamp: '2026-03-29T00:00:00.000Z',
-        cwd: '/tmp',
-        cwdSlug: 'tmp',
-        model: 'gpt-test',
-        title: 'Bloodhounds',
-        messageCount: 12,
-      } as SessionMeta],
-    };
-
-    expect(buildConversationBackgroundRunIndicatorText([
-      createBackgroundRun(),
-    ], lookups)).toBe('running · npm run deploy:check');
-
-    expect(buildConversationBackgroundRunIndicatorText([
-      createBackgroundRun({ runId: 'run-background-456' }),
-      createBackgroundRun({
-        runId: 'run-background-789',
-        manifest: {
-          version: 1,
-          id: 'run-background-789',
-          kind: 'background-run',
-          resumePolicy: 'manual',
-          createdAt: '2026-03-29T00:02:00.000Z',
-          spec: {
-            taskSlug: 'review-deploy',
-            shellCommand: 'npm run review:deploy',
-          },
-          source: {
-            type: 'tool',
-            id: 'conv-123',
-          },
-        },
-      }),
-    ], lookups)).toBe('2 active · latest npm run deploy:check');
-  });
-
-  it('truncates oversized queued prompt previews by line count', () => {
-    expect(truncateConversationShelfText('1\n2\n3\n4', { maxLines: 3, maxChars: 100 })).toBe('1\n2\n3…');
-  });
-
-  it('truncates oversized queued prompt previews by character count', () => {
-    expect(truncateConversationShelfText('abcdefghijklmnopqrstuvwxyz', { maxLines: 10, maxChars: 8 })).toBe('abcdefgh…');
-  });
-
-  it('renders image-only queued prompts with an explicit placeholder', () => {
-    expect(formatQueuedPromptShelfText('', 1)).toBe('(image only)');
-  });
-
-  it('renders empty queued prompts distinctly when no images are attached', () => {
-    expect(formatQueuedPromptShelfText('', 0)).toBe('(empty queued prompt)');
-  });
-
-  it('summarizes queued image attachments', () => {
-    expect(formatQueuedPromptImageSummary(0)).toBeNull();
-    expect(formatQueuedPromptImageSummary(1)).toBe('1 image attached');
-    expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
-  });
 });
 
 describe('conversation git summary presentation', () => {

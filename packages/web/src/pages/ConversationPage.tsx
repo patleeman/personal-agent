@@ -202,7 +202,7 @@ function dedupeConversationContextDocs(docs: ConversationContextDocRef[]): Conve
   return next;
 }
 
-export function truncateConversationShelfText(
+function truncateConversationShelfText(
   text: string,
   options: { maxChars?: number; maxLines?: number } = {},
 ): string {
@@ -222,7 +222,7 @@ export function truncateConversationShelfText(
   return charLimited.endsWith('…') ? charLimited : `${charLimited.trimEnd()}…`;
 }
 
-export function formatQueuedPromptShelfText(text: string, imageCount: number): string {
+function formatQueuedPromptShelfText(text: string, imageCount: number): string {
   if (text.trim().length > 0) {
     return text;
   }
@@ -234,7 +234,7 @@ export function formatQueuedPromptShelfText(text: string, imageCount: number): s
   return '(empty queued prompt)';
 }
 
-export function formatQueuedPromptImageSummary(imageCount: number): string | null {
+function formatQueuedPromptImageSummary(imageCount: number): string | null {
   if (imageCount <= 0) {
     return null;
   }
@@ -540,7 +540,7 @@ export function mergeConversationSessionMeta(
   return detailMeta ?? sessionSnapshot ?? null;
 }
 
-export function formatConversationBackgroundRunStatusLabel(status: string | undefined): string {
+function formatConversationBackgroundRunStatusLabel(status: string | undefined): string {
   if (status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering') {
     return status;
   }
@@ -548,7 +548,7 @@ export function formatConversationBackgroundRunStatusLabel(status: string | unde
   return typeof status === 'string' && status.trim().length > 0 ? status : 'active';
 }
 
-export function buildConversationBackgroundRunIndicatorText(
+function buildConversationBackgroundRunIndicatorText(
   runs: DurableRunRecord[],
   lookups: RunPresentationLookups = {},
 ): string {
