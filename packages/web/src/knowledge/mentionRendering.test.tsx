@@ -2,7 +2,7 @@ import React, { Fragment } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
-import { buildMentionLookup, renderTextWithMentionLinks } from './mentionRendering';
+import { buildMentionLookup, renderChildrenWithMentionLinks } from './mentionRendering';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -15,7 +15,7 @@ describe('mentionRendering', () => {
 
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
-        <Fragment>{renderTextWithMentionLinks('See @note-index with @agent-browser.', { lookup, surface: 'main' })}</Fragment>
+        <Fragment>{renderChildrenWithMentionLinks('See @note-index with @agent-browser.', { lookup, surface: 'main' })}</Fragment>
       </StaticRouter>,
     );
 
@@ -33,7 +33,7 @@ describe('mentionRendering', () => {
 
     const html = renderToStaticMarkup(
       <StaticRouter location="/">
-        <Fragment>{renderTextWithMentionLinks('Keep @shared-id visible.', { lookup, surface: 'main' })}</Fragment>
+        <Fragment>{renderChildrenWithMentionLinks('Keep @shared-id visible.', { lookup, surface: 'main' })}</Fragment>
       </StaticRouter>,
     );
 

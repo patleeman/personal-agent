@@ -105,7 +105,7 @@ function renderMentionFragment(
   );
 }
 
-export function renderTextWithMentionLinks(
+function renderTextWithMentionLinks(
   text: string,
   options: { lookup: Map<string, MentionItem[]>; surface: NodeMentionSurface },
 ): ReactNode[] {
