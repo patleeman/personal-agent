@@ -1,7 +1,7 @@
-export const RESIZE_HANDLE_WIDTH = 5;
-export const RAIL_WIDTH_STORAGE_KEY_PREFIX = 'pa:rail-width:';
+const RESIZE_HANDLE_WIDTH = 5;
+const RAIL_WIDTH_STORAGE_KEY_PREFIX = 'pa:rail-width:';
 
-export function buildRailWidthStorageKey(pageKey: string): string {
+function buildRailWidthStorageKey(pageKey: string): string {
   return `${RAIL_WIDTH_STORAGE_KEY_PREFIX}${pageKey}`;
 }
 
@@ -9,7 +9,7 @@ export function isRailWidthStorageKey(key: string): boolean {
   return key.startsWith(RAIL_WIDTH_STORAGE_KEY_PREFIX);
 }
 
-export function getRailPageKey(pathname: string): string {
+function getRailPageKey(pathname: string): string {
   const parts = pathname.split('/').filter(Boolean);
   const section = parts[0] ?? 'default';
 
@@ -39,7 +39,7 @@ export function getRailPageKey(pathname: string): string {
   }
 }
 
-export interface RailLayoutPrefs {
+interface RailLayoutPrefs {
   storageKey: string;
   initialWidth?: number;
   initialMainWidthRatio?: number;
@@ -99,7 +99,7 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   }
 }
 
-export function getMainViewportWidth(input: {
+function getMainViewportWidth(input: {
   viewportWidth: number;
   sidebarWidth: number;
   resizeHandleWidth?: number;
