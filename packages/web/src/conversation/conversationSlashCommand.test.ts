@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_SLASH_COMMANDS } from './slashMenu';
+import { BASE_SLASH_COMMANDS } from '../slashMenu';
 import {
   CONVERSATION_MENU_SLASH_COMMANDS,
   EXTERNAL_MENU_SLASH_COMMANDS,

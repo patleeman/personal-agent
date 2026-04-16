@@ -1,4 +1,4 @@
-import type { ConversationArtifactToolDetails, MessageBlock } from './types';
+import type { ConversationArtifactToolDetails, MessageBlock } from '../types';
 
 export const CONVERSATION_ARTIFACT_QUERY_PARAM = 'artifact';
 

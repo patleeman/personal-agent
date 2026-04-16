@@ -1,5 +1,5 @@
-import type { DurableRunRecord, MessageBlock } from './types';
-import { isTerminalBashToolBlock } from './terminalBashBlock';
+import type { DurableRunRecord, MessageBlock } from '../types';
+import { isTerminalBashToolBlock } from '../terminalBashBlock';
 
 export interface ConversationResumeState {
   canResume: boolean;

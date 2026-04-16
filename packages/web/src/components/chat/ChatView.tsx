@@ -3,10 +3,10 @@ import ReactMarkdown from 'react-markdown';
 import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
-import { readArtifactPresentation } from '../../conversationArtifacts';
-import { readCheckpointPresentation } from '../../conversationCheckpoints';
-import { extractDurableRunIdsFromBlock } from '../../conversationRuns';
-import { normalizeReplyQuoteSelection } from '../../conversationReplyQuote';
+import { readArtifactPresentation } from '../../conversation/conversationArtifacts';
+import { readCheckpointPresentation } from '../../conversation/conversationCheckpoints';
+import { extractDurableRunIdsFromBlock } from '../../conversation/conversationRuns';
+import { normalizeReplyQuoteSelection } from '../../conversation/conversationReplyQuote';
 import {
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,

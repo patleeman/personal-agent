@@ -5,7 +5,7 @@ import { createContext, useContext } from 'react';
 import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   type ConversationScopedEventVersions,
-} from './conversationEventVersions';
+} from './conversation/conversationEventVersions';
 import type {
   AppEventTopic,
   DaemonState,

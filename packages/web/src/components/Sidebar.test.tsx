@@ -12,7 +12,7 @@ import {
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
 } from '../localSettings.js';
-import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types.js';
+import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types';
 import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

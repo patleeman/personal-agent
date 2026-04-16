@@ -3,10 +3,10 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext } from '../contexts.js';
-import { useApi } from '../hooks.js';
+import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
-import type { DurableRunDetailResult, SessionMeta } from '../types.js';
+import type { DurableRunDetailResult, SessionMeta } from '../types';
 import { ContextRail, formatConversationRailRunSummary, groupConversationRailRunCards } from './ContextRail.js';
 
 vi.mock('../hooks', () => ({

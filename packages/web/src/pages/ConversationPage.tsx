@@ -18,25 +18,25 @@ import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSes
 import { api } from '../api';
 import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
-import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversationArtifacts';
-import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversationCheckpoints';
-import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversationRuns';
-import { formatContextUsageLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
+import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
+import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
+import { formatContextUsageLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
   shouldShowScrollToBottomControl,
-} from '../conversationScroll';
-import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
+} from '../conversation/conversationScroll';
+import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
-import { parseWholeLineBashCommand } from '../conversationBashCommand';
-import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversationSlashCommand';
+import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
+import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
-import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversationMentions';
+import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
@@ -94,7 +94,7 @@ import {
   didConversationStopMidTurn,
   didConversationStopWithError,
   getConversationResumeState,
-} from '../conversationResume';
+} from '../conversation/conversationResume';
 import {
   getRunHeadline,
   isRunActive,
@@ -105,8 +105,8 @@ import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
   shouldShowQuestionSubmitAsPrimaryComposerAction,
-} from '../conversationComposerSubmit';
-import { insertReplyQuoteIntoComposer } from '../conversationReplyQuote';
+} from '../conversation/conversationComposerSubmit';
+import { insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
 import { useReloadState } from '../reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';

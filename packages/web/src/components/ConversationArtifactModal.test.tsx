@@ -3,8 +3,8 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppEventsContext, INITIAL_APP_EVENT_VERSIONS } from '../contexts.js';
-import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversationEventVersions.js';
-import { useApi } from '../hooks.js';
+import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../conversation/conversationEventVersions.js';
+import { useApi } from '../hooks';
 import { ConversationArtifactModal } from './ConversationArtifactModal.js';
 
 vi.mock('../hooks', () => ({

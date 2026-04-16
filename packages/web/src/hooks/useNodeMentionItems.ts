@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import type { MentionItem } from './conversationMentions';
-import { useApi, type UseApiResult } from './hooks';
+import type { MentionItem } from '../conversation/conversationMentions';
+import { useApi, type UseApiResult } from './useApi';
 
 export function invalidateNodeMentionItemsCache(): void {
 }

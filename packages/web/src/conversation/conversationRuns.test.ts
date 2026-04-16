@@ -7,7 +7,7 @@ import {
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
 } from './conversationRuns.js';
-import type { MessageBlock } from './types';
+import type { MessageBlock } from '../types';
 
 describe('conversationRuns helpers', () => {
   it('reads and writes the selected run search param', () => {

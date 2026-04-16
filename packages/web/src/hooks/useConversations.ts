@@ -12,7 +12,7 @@
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
-import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversationTitle';
+import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { fetchSessionsSnapshot } from '../sessionSnapshot';
 import {
   closeConversationTab,

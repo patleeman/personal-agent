@@ -24,7 +24,7 @@ import {
   getConversationGroupLabel,
   groupConversationItemsByCwd,
   normalizeConversationGroupCwd,
-} from '../conversationCwdGroups';
+} from '../conversation/conversationCwdGroups';
 import {
   getDesktopBridge,
   type DesktopConversationContextMenuAction,
@@ -35,7 +35,7 @@ import {
   buildConversationSurfacePath,
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
-} from '../conversationRoutes';
+} from '../conversation/conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';

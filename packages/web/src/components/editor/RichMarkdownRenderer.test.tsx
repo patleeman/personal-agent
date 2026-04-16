@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { RichMarkdownRenderer } from './RichMarkdownRenderer';
 
-vi.mock('../../useNodeMentionItems', () => ({
+vi.mock('../../hooks', () => ({
   useNodeMentionItems: () => ({ data: [], loading: false, refreshing: false, error: null, refetch: vi.fn() }),
 }));
 

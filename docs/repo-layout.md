@@ -20,6 +20,20 @@ That split is deliberate:
 
 If new code does not need a new deployment boundary, keep it inside one of those existing packages.
 
+## `packages/web` structure
+
+The web package is big enough that folder boundaries matter.
+
+Use these defaults:
+
+- `packages/web/src/pages/` — route-level UI surfaces
+- `packages/web/src/components/` — reusable UI pieces
+- `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
+- `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
+- `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
+
+If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
+
 ## Repo-level runtime resources
 
 Some important repo directories are not workspace packages at all:

@@ -1,5 +1,5 @@
 import type { ExcalidrawSceneData } from './excalidrawUtils';
-import { NEW_CONVERSATION_TITLE } from './conversationTitle';
+import { NEW_CONVERSATION_TITLE } from './conversation/conversationTitle';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from './reloadState';
 import type { ConversationContextDocRef, PromptImageInput, SessionMeta } from './types';
 

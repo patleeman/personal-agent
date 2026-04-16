@@ -1,4 +1,4 @@
-import { readConversationScopedEventVersion } from '../conversationEventVersions';
+import { readConversationScopedEventVersion } from '../conversation/conversationEventVersions';
 import { useAppEvents } from '../contexts';
 
 export type ConversationEventStreamEvent =

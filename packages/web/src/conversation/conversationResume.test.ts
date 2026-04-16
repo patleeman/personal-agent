@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DurableRunRecord, MessageBlock } from './types';
+import type { DurableRunRecord, MessageBlock } from '../types';
 import { didConversationStopMidTurn, didConversationStopWithError, getConversationResumeState, hasPendingConversationOperation } from './conversationResume';
 
 function createRun(input: {

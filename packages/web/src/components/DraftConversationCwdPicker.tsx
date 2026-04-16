@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
-import { summarizeConversationCwd } from '../conversationCwdHistory';
+import { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
 import { ToolbarButton, cx } from './ui';
 
 const CWD_PICKER_SELECT_CLASS = 'h-8 rounded-lg border border-border-default/70 bg-surface/90 px-2.5 pr-8 text-[11px] font-medium text-primary shadow-sm outline-none transition-colors hover:border-border-default hover:bg-elevated focus-visible:border-accent/70 focus-visible:ring-2 focus-visible:ring-accent/15 disabled:cursor-default disabled:opacity-40';

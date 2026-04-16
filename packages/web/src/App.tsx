@@ -9,7 +9,7 @@ import { readDesktopEnvironment } from './desktopBridge';
 import { createDesktopAwareEventSource } from './desktopEventSource';
 import { lazyRouteWithRecovery } from './lazyRouteRecovery';
 import { Layout } from './components/Layout';
-import { resolveConversationIndexRedirect } from './conversationRoutes';
+import { resolveConversationIndexRedirect } from './conversation/conversationRoutes';
 import {
   hasDraftConversationAttachments,
   hasDraftConversationContextDocs,
@@ -30,7 +30,7 @@ import {
 import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   bumpConversationScopedEventVersions,
-} from './conversationEventVersions';
+} from './conversation/conversationEventVersions';
 import {
   mergeSessionSnapshotPreservingOrder,
   removeSessionMetaPreservingOrder,
@@ -48,7 +48,7 @@ import type {
   SessionMeta,
   WebUiState,
 } from './types';
-import { setConversationRunIdInSearch } from './conversationRuns';
+import { setConversationRunIdInSearch } from './conversation/conversationRuns';
 import { getRunPrimaryConnection, type RunPresentationLookups } from './runPresentation';
 
 function LegacyTaskRoutesRedirect() {

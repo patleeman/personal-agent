@@ -1,4 +1,4 @@
-import type { MemoryDocItem, ScheduledTaskSummary, VaultFileSummary } from './types';
+import type { MemoryDocItem, ScheduledTaskSummary, VaultFileSummary } from '../types';
 
 export const MAX_MENTION_MENU_ITEMS = 12;
 

@@ -1,13 +1,13 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { setConversationArtifactIdInSearch } from '../conversationArtifacts';
+import { setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import {
   collectConversationRunMentions,
   createConversationLiveRunId,
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
-} from '../conversationRuns';
+} from '../conversation/conversationRuns';
 import {
   buildDraftConversationCwdStorageKey,
   DRAFT_CONVERSATION_ID,

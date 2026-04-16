@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversationHeader';
+import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';

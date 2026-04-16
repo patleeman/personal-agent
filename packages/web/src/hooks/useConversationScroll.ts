@@ -9,7 +9,7 @@ import {
   shouldAutoScrollToStreamingTail,
   shouldContinueConversationBottomSettle,
   shouldRunConversationInitialScroll,
-} from '../conversationScroll';
+} from '../conversation/conversationScroll';
 import type { MessageBlock } from '../types';
 
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;

@@ -1,6 +1,6 @@
 import React, { Children, cloneElement, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import type { MentionItem } from './conversationMentions';
+import type { MentionItem } from './conversation/conversationMentions';
 import { buildNodeMentionHref, type NodeMentionSurface } from './nodeMentionRoutes';
 
 const MENTION_REGEX = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;

@@ -3,7 +3,7 @@ import { api } from '../api';
 import {
   readPersistedConversationBootstrapEntry,
   writePersistedConversationBootstrapEntry,
-} from '../conversationBootstrapPersistence';
+} from '../conversation/conversationBootstrapPersistence';
 import { useAppEvents } from '../contexts';
 import type { ConversationBootstrapState, SessionDetail } from '../types';
 

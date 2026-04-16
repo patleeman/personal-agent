@@ -1,4 +1,4 @@
-import type { ConversationCheckpointToolDetails, MessageBlock } from './types';
+import type { ConversationCheckpointToolDetails, MessageBlock } from '../types';
 
 export const CONVERSATION_CHECKPOINT_QUERY_PARAM = 'checkpoint';
 export const CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM = 'checkpointFile';
