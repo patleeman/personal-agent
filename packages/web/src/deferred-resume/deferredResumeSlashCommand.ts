@@ -1,16 +1,16 @@
 import { parseSlashInput } from '../commands/slashMenu';
 
-export const DEFERRED_RESUME_SLASH_USAGE = 'Usage: /resume <delay> [--follow-up] [prompt]';
+const DEFERRED_RESUME_SLASH_USAGE = 'Usage: /resume <delay> [--follow-up] [prompt]';
 const DEFERRED_RESUME_SLASH_COMMANDS = new Set(['/resume', '/defer']);
 
-export interface DeferredResumeSlashCommand {
+interface DeferredResumeSlashCommand {
   action: 'schedule';
   delay: string;
   prompt?: string;
   behavior?: 'followUp';
 }
 
-export type DeferredResumeSlashParseResult =
+type DeferredResumeSlashParseResult =
   | { kind: 'command'; command: DeferredResumeSlashCommand }
   | { kind: 'invalid'; message: string };
 
