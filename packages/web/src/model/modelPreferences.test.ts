@@ -29,8 +29,9 @@ describe('model preferences helpers', () => {
     expect(getModelSelectableServiceTierOptions(null)).toEqual([]);
   });
 
-  it('builds selectable service tier options with an optional default choice', () => {
+  it('builds selectable service tier options with an unset or default choice', () => {
     expect(getModelSelectableServiceTierOptions({ supportedServiceTiers: ['priority', 'auto'] })).toEqual([
+      { value: '', label: 'Unset' },
       { value: 'auto', label: 'Auto' },
       { value: 'priority', label: 'Priority' },
     ]);

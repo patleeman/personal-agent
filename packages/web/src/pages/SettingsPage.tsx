@@ -2950,15 +2950,15 @@ export function SettingsPage() {
                         <label className="ui-card-meta pt-1" htmlFor="settings-service-tier">Service tier</label>
                         <select
                           id="settings-service-tier"
-                          value={modelState.currentServiceTier || 'auto'}
+                          value={modelState.currentServiceTier}
                           onChange={(event) => {
-                            void handleModelPreferenceChange({ serviceTier: event.target.value === 'auto' ? '' : event.target.value }, 'serviceTier');
+                            void handleModelPreferenceChange({ serviceTier: event.target.value }, 'serviceTier');
                           }}
                           disabled={savingPreference !== null}
                           className={INPUT_CLASS}
                         >
                           {selectedModelServiceTierOptions.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
+                            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
                           ))}
                         </select>
                         <p className="ui-card-meta">

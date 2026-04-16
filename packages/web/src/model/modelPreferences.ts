@@ -35,11 +35,11 @@ export function getModelSelectableServiceTierOptions(
   },
 ) {
   const supportedOptions = getModelSupportedServiceTierOptions(model);
-  if (!options?.includeDefaultOption) {
-    return supportedOptions;
+  if (supportedOptions.length === 0) {
+    return [];
   }
 
-  return [{ value: '', label: options.defaultLabel ?? 'Default' }, ...supportedOptions];
+  return [{ value: '', label: options?.includeDefaultOption ? (options.defaultLabel ?? 'Default') : 'Unset' }, ...supportedOptions];
 }
 
 export function groupModelsByProvider<T extends Pick<ModelInfo, 'provider'>>(models: T[]): Array<[string, T[]]> {

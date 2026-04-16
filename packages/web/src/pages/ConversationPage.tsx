@@ -867,7 +867,6 @@ function ConversationPreferencesRow({
   currentModel,
   currentThinkingLevel,
   currentServiceTier,
-  defaultServiceTier,
   savingPreference,
   onSelectModel,
   onSelectThinkingLevel,
@@ -877,7 +876,6 @@ function ConversationPreferencesRow({
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
-  defaultServiceTier: string;
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
@@ -888,15 +886,10 @@ function ConversationPreferencesRow({
     () => models.find((model) => model.id === currentModel) ?? null,
     [currentModel, models],
   );
-  const hasDefaultServiceTier = defaultServiceTier.trim().length > 0;
   const serviceTierOptions = useMemo(
-    () => getModelSelectableServiceTierOptions(selectedModel, {
-      includeDefaultOption: hasDefaultServiceTier,
-      defaultLabel: 'Default',
-    }),
-    [hasDefaultServiceTier, selectedModel],
+    () => getModelSelectableServiceTierOptions(selectedModel),
+    [selectedModel],
   );
-  const serviceTierValue = currentServiceTier || (!hasDefaultServiceTier && serviceTierOptions.length > 0 ? 'auto' : '');
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -942,14 +935,14 @@ function ConversationPreferencesRow({
         <label className="relative inline-flex min-w-0 items-center">
           <span className="sr-only">Conversation service tier</span>
           <select
-            value={serviceTierValue}
-            onChange={(event) => { onSelectServiceTier(!hasDefaultServiceTier && event.target.value === 'auto' ? '' : event.target.value); }}
+            value={currentServiceTier}
+            onChange={(event) => { onSelectServiceTier(event.target.value); }}
             disabled={savingPreference !== null}
             className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[7rem] min-w-[6.25rem] appearance-none')}
             aria-label="Conversation service tier"
           >
             {serviceTierOptions.map((option) => (
-              <option key={option.value || 'default'} value={option.value}>{option.label}</option>
+              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
             ))}
           </select>
           <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
@@ -7013,7 +7006,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         currentModel={currentModel || model || defaultModel}
                         currentThinkingLevel={currentThinkingLevel}
                         currentServiceTier={currentServiceTier}
-                        defaultServiceTier={defaultServiceTier}
                         savingPreference={savingPreference}
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}

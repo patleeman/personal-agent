@@ -94,6 +94,7 @@ describe('SettingsPage', () => {
               provider: 'openai-codex',
               name: 'GPT-5.4',
               context: 200000,
+              supportedServiceTiers: ['auto', 'priority'],
             },
             {
               id: 'qwen-reap',
@@ -312,6 +313,16 @@ describe('SettingsPage', () => {
     expect(html).toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
+  });
+
+  it('renders service tier controls with an unset option instead of defaulting to auto', () => {
+    const html = renderPage('/settings');
+
+    expect(html).toContain('id="settings-service-tier"');
+    expect(html).toContain('>Unset<');
+    expect(html).toContain('>Auto<');
+    expect(html).toContain('>Priority<');
+    expect(html).toContain('<option value="" selected="">Unset</option>');
   });
 
   it('renders the same consolidated settings page for legacy query routes', () => {
