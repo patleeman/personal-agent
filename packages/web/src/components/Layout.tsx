@@ -11,7 +11,7 @@ import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/d
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { readDesktopEnvironment } from '../desktop/desktopBridge';
-import type { DesktopEnvironmentState } from '../types';
+import type { DesktopEnvironmentState } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';

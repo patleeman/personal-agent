@@ -1,4 +1,4 @@
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 
 export const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
 

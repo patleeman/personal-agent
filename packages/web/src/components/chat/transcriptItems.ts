@@ -1,4 +1,4 @@
-import type { MessageBlock } from '../../types';
+import type { MessageBlock } from '../../shared/types';
 import { isTerminalBashToolBlock } from '../../transcript/terminalBashBlock';
 
 export type TraceConversationBlock = Extract<MessageBlock, { type: 'thinking' | 'tool_use' | 'subagent' | 'error' }>;

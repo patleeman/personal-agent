@@ -1,4 +1,4 @@
-import type { DurableRunRecord, MessageBlock } from '../types';
+import type { DurableRunRecord, MessageBlock } from '../shared/types';
 import { isTerminalBashToolBlock } from '../transcript/terminalBashBlock';
 
 export interface ConversationResumeState {

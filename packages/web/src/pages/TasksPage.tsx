@@ -8,8 +8,8 @@ import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
 import { formatTaskSchedule } from '../automation/taskSchedule';
-import type { DurableRunRecord, ScheduledTaskSummary } from '../types';
-import { timeAgo } from '../utils';
+import type { DurableRunRecord, ScheduledTaskSummary } from '../shared/types';
+import { timeAgo } from '../shared/utils';
 
 function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
   if (task.running) return 'bg-accent animate-pulse';

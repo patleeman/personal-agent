@@ -38,8 +38,8 @@ import type {
   AgentToolInfo,
   DurableRunDetailResult,
   ScheduledTaskSummary,
-} from '../types';
-import { timeAgo } from '../utils';
+} from '../shared/types';
+import { timeAgo } from '../shared/utils';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { completeConversationOpenPhase } from '../client/perfDiagnostics';
 import { sessionNeedsAttention } from '../session/sessionIndicators';

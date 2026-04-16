@@ -8,8 +8,8 @@ import {
 } from '../conversation/conversationCheckpoints';
 import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks';
-import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointComment, ConversationCommitCheckpointFile } from '../types';
-import { formatDate } from '../utils';
+import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointComment, ConversationCommitCheckpointFile } from '../shared/types';
+import { formatDate } from '../shared/utils';
 import { ErrorState, LoadingState, cx } from './ui';
 
 type ParsedPatchLine = {

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { MouseEvent as ReactMouseEvent, RefObject } from 'react';
-import type { MessageBlock } from '../../types';
+import type { MessageBlock } from '../../shared/types';
 import { cx } from '../ui';
 import {
   applyConversationRailFisheye,

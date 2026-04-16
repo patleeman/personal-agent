@@ -13,8 +13,8 @@ import {
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { useAppData } from '../app/contexts';
 import { useConversations } from '../hooks/useConversations';
-import type { ScheduledTaskSummary, SessionMeta } from '../types';
-import { timeAgo } from '../utils';
+import type { ScheduledTaskSummary, SessionMeta } from '../shared/types';
+import { timeAgo } from '../shared/utils';
 import { cx } from './ui';
 
 type CommandPaletteAction =

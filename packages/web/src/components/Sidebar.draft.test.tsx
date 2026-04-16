@@ -7,7 +7,7 @@ import {
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
 } from '../local/localSettings.js';
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 import { Sidebar } from './Sidebar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

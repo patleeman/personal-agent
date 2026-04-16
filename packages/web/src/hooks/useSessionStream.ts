@@ -13,7 +13,7 @@ import type {
   QueuedPromptPreview,
   SessionContextUsage,
   SseEvent,
-} from '../types';
+} from '../shared/types';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../ui-state/liveSessionWarmth';

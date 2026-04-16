@@ -1,5 +1,5 @@
 import { fuzzyScore } from '../commands/slashMenu';
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;

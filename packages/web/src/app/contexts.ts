@@ -14,7 +14,7 @@ import type {
   ScheduledTaskSummary,
   SessionMeta,
   WebUiState,
-} from '../types';
+} from '../shared/types';
 
 // ── Live title overrides ──────────────────────────────────────────────────────
 // ConversationPage pushes stream.title here; Sidebar reads it to update tabs/archive.

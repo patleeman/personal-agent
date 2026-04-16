@@ -1,5 +1,5 @@
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
-import type { ActivityEntry, LiveSessionMeta, SessionMeta } from '../types';
+import type { ActivityEntry, LiveSessionMeta, SessionMeta } from '../shared/types';
 
 export function sessionNeedsAttention(session: Pick<SessionMeta, 'needsAttention' | 'isRunning'>): boolean {
   return Boolean(session.needsAttention) && !session.isRunning;

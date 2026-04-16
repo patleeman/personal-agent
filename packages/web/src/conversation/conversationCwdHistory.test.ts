@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 import { buildConversationCwdHistory, summarizeConversationCwd } from './conversationCwdHistory';
 
 function createSession(overrides: Partial<SessionMeta> = {}): SessionMeta {

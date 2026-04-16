@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 import type { StreamState } from './useSessionStream';
 import {
   appendPendingQueueItem,

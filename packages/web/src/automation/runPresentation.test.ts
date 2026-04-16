@@ -13,7 +13,7 @@ import {
   runNeedsAttention,
   summarizeActiveRuns,
 } from './runPresentation';
-import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../types';
+import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 
 function createRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
   return {

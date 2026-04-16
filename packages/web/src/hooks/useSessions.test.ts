@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionDetail, SessionMeta } from '../types';
+import type { SessionDetail, SessionMeta } from '../shared/types';
 import {
   mergeSessionDetailResultWithCachedDetail,
   primeSessionDetailCache,

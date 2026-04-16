@@ -1,4 +1,4 @@
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 
 export function normalizeConversationCwd(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';

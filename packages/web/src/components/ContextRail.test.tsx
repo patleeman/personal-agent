@@ -6,7 +6,7 @@ import { AppDataContext } from '../app/contexts.js';
 import { useApi } from '../hooks';
 import { useConversations } from '../hooks/useConversations.js';
 import { useDurableRunStream } from '../hooks/useDurableRunStream.js';
-import type { DurableRunDetailResult, SessionMeta } from '../types';
+import type { DurableRunDetailResult, SessionMeta } from '../shared/types';
 import { ContextRail, formatConversationRailRunSummary, groupConversationRailRunCards } from './ContextRail.js';
 
 vi.mock('../hooks', () => ({

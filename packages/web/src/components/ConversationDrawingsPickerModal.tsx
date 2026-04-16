@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import type { ConversationAttachmentRecord, ConversationAttachmentSummary } from '../types';
-import { timeAgo } from '../utils';
+import type { ConversationAttachmentRecord, ConversationAttachmentSummary } from '../shared/types';
+import { timeAgo } from '../shared/utils';
 import { cx, Pill } from './ui';
 
 interface AttachSelection {

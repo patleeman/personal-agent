@@ -1,4 +1,4 @@
-import type { MemoryDocItem } from '../types';
+import type { MemoryDocItem } from '../shared/types';
 
 export const NOTE_ID_SEARCH_PARAM = 'note';
 const NOTE_NEW_SEARCH_PARAM = 'new';

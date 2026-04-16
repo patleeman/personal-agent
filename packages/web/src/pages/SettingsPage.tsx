@@ -25,7 +25,7 @@ import type {
   ProviderAuthSummary,
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
-} from '../types';
+} from '../shared/types';
 import { Pill, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';

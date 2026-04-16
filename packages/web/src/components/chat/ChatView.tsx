@@ -18,8 +18,8 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../../transcript/askUserQuestions';
-import type { MessageBlock } from '../../types';
-import { timeAgo } from '../../utils';
+import type { MessageBlock } from '../../shared/types';
+import { timeAgo } from '../../shared/utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';

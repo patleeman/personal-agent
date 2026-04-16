@@ -1,6 +1,6 @@
 import { isDesktopShell } from '../desktop/desktopBridge';
 import type { SystemComponentId } from '../navigation/systemSelection';
-import type { DesktopEnvironmentState } from '../types';
+import type { DesktopEnvironmentState } from '../shared/types';
 import { SystemServiceSection } from './SystemContextPanel';
 import { SectionLabel } from './ui';
 

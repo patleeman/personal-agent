@@ -33,7 +33,7 @@ import {
   type OpenConversationDropPosition,
   unpinConversationTab,
 } from '../session/sessionTabs';
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 
 function applyLayoutState(layout: ConversationLayout, setters: {
   setOpenIds: (ids: string[]) => void;

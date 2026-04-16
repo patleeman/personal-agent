@@ -7,7 +7,7 @@ import { ConversationWorkspaceShell, type ConversationWorkspaceShellControls } f
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';

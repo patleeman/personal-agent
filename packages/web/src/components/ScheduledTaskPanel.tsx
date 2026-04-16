@@ -18,8 +18,8 @@ import {
   type EasyTaskCadence,
   type EasyTaskSchedule,
 } from '../automation/taskSchedule';
-import type { ScheduledTaskDetail, ScheduledTaskSummary } from '../types';
-import { timeAgo } from '../utils';
+import type { ScheduledTaskDetail, ScheduledTaskSummary } from '../shared/types';
+import { timeAgo } from '../shared/utils';
 import { ErrorState, LoadingState, ToolbarButton, cx } from './ui';
 import { MentionTextarea } from './MentionTextarea';
 

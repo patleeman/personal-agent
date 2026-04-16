@@ -1,7 +1,7 @@
 import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
 import { NEW_CONVERSATION_TITLE } from './conversationTitle';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from '../local/reloadState';
-import type { ConversationContextDocRef, PromptImageInput, SessionMeta } from '../types';
+import type { ConversationContextDocRef, PromptImageInput, SessionMeta } from '../shared/types';
 
 export const DRAFT_CONVERSATION_ID = 'new';
 export const DRAFT_CONVERSATION_ROUTE = '/conversations/new';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DesktopConversationState } from '../types';
+import type { DesktopConversationState } from '../shared/types';
 import { mergeDesktopConversationState } from './useDesktopConversationState';
 
 function createDesktopConversationState(input: {

@@ -1,5 +1,5 @@
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 
 export function appendPendingInitialPromptBlock(
   messages: MessageBlock[] | undefined,

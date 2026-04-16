@@ -5,7 +5,7 @@ import 'katex/dist/katex.min.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './index.css';
-import { App } from './app/App';
+import { App } from './App';
 
 const desktopShellParams = new URLSearchParams(window.location.search);
 if (desktopShellParams.get('desktop-shell') === '1') {

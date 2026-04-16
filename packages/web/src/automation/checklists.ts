@@ -2,7 +2,7 @@ import type {
   ConversationAutomationTemplateTodoItem,
   ConversationAutomationTodoItem,
   ConversationAutomationWorkflowPreset,
-} from './types';
+} from '../shared/types';
 
 export interface ChecklistDraftItem {
   id: string;

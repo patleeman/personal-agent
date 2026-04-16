@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { DesktopEnvironmentState } from '../types';
+import type { DesktopEnvironmentState } from '../shared/types';
 
 function formatHostLabel(environment: DesktopEnvironmentState): string {
   if (environment.activeHostKind === 'local') {

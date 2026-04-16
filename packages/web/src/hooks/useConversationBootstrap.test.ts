@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ConversationBootstrapState, SessionDetail, SessionMeta } from '../types';
+import type { ConversationBootstrapState, SessionDetail, SessionMeta } from '../shared/types';
 import {
   buildConversationBootstrapVersionKey,
   mergeConversationBootstrapWithCachedSessionDetail,

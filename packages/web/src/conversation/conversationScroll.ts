@@ -1,4 +1,4 @@
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 
 const DEFAULT_SCROLL_TO_BOTTOM_THRESHOLD_PX = 40;
 const CONVERSATION_TAIL_SELECTOR = '[data-chat-tail="1"]';

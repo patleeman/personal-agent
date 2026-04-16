@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../client/api';
 import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
-import type { DurableRunDetailResult, DurableRunSseEvent } from '../types';
+import type { DurableRunDetailResult, DurableRunSseEvent } from '../shared/types';
 
 interface DurableRunStreamState {
   detail: DurableRunDetailResult | null;

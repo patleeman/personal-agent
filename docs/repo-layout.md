@@ -26,10 +26,10 @@ The web package is big enough that folder boundaries matter.
 
 Use these defaults:
 
-- `packages/web/src/app/` — app-shell composition and app-wide React contexts
+- `packages/web/src/app/` — app-shell composition, entrypoint/bootstrap files, global browser declarations, and app-wide React contexts
 - `packages/web/src/pages/` — route-level UI surfaces
 - `packages/web/src/components/` — reusable UI pieces
-- `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, and scheduled-task detail guards
+- `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, scheduled-task detail guards, and checklist draft helpers
 - `packages/web/src/client/` — browser-side API calls, API path helpers, app event normalization, and client perf diagnostics
 - `packages/web/src/commands/` — slash-command discovery, command palette ranking, and command-palette event helpers
 - `packages/web/src/conversation/` — conversation-specific client helpers, including draft/fork state, related-thread search, search state helpers, formatting helpers, and parsing logic
@@ -49,7 +49,7 @@ Use these defaults:
 
 If a file owns app-shell bootstrapping or app-wide React context wiring, keep it under `src/app/`.
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
-If it formats or validates automation and durable-run UI state, keep it under `src/automation/`.
+If it formats or validates automation and durable-run UI state, or supports automation checklist editing, keep it under `src/automation/`.
 If it owns browser-side API transport or client event normalization, keep it under `src/client/`.
 If it powers slash-command discovery or command-palette ranking/event wiring, keep it under `src/commands/`.
 If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.

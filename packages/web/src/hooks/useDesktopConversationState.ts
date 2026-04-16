@@ -9,7 +9,7 @@ import type {
   DesktopConversationState,
   PromptAttachmentRefInput,
   PromptImageInput,
-} from '../types';
+} from '../shared/types';
 import {
   detectConversationSurfaceType,
   getOrCreateConversationSurfaceId,

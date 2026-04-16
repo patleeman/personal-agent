@@ -1,4 +1,4 @@
-import type { DesktopWorkspaceServerState } from '../types';
+import type { DesktopWorkspaceServerState } from '../shared/types';
 
 export interface DesktopWorkspaceServerDraftState {
   enabled: boolean;

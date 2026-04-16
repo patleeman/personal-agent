@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import katex from 'katex';
 import { getLatexArtifactDisplayMode, looksLikeFullLatexDocument, normalizeLatexMathSource } from '../content/latexArtifacts';
-import type { ConversationArtifactRecord } from '../types';
+import type { ConversationArtifactRecord } from '../shared/types';
 import { ErrorState, LoadingState } from './ui';
 
 function buildArtifactDocument(content: string): string {

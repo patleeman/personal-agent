@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../client/api';
 import { useAppEvents } from '../app/contexts';
-import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../types';
+import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../shared/types';
 
 interface CachedSessionDetailEntry {
   detail: SessionDetail;

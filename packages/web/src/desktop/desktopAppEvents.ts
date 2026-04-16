@@ -1,5 +1,5 @@
 import { DESKTOP_APP_EVENTS_EVENT, getDesktopBridge } from './desktopBridge';
-import type { DesktopAppEvent } from '../types';
+import type { DesktopAppEvent } from '../shared/types';
 
 interface DesktopAppEventsEnvelope {
   subscriptionId: string;

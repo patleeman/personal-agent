@@ -1,4 +1,4 @@
-import type { DeferredResumeSummary } from '../types';
+import type { DeferredResumeSummary } from '../shared/types';
 
 export function buildDeferredResumeAutoResumeKey(input: {
   resumes: DeferredResumeSummary[];

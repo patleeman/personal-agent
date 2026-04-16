@@ -1,6 +1,6 @@
 import { summarizeConversationCwd } from '../conversation/conversationCwdHistory';
 import type { RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
-import { timeAgo } from '../utils';
+import { timeAgo } from '../shared/utils';
 import { Keycap, cx } from './ui';
 
 const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;

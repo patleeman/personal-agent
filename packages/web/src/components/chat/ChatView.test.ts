@@ -1,7 +1,7 @@
 import React, { Fragment, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock } from '../../types';
+import type { MessageBlock } from '../../shared/types';
 import {
   ChatView,
   getStreamingStatusLabel,

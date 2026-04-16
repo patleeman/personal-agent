@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 import { appendPendingInitialPromptBlock } from './pendingQueueMessages';
 
 describe('appendPendingInitialPromptBlock', () => {

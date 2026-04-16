@@ -6,7 +6,7 @@ import {
   formatDesktopWorkspaceServerStatus,
   labelDesktopWorkspaceServerTailnetUrl,
 } from '../desktop/desktopWorkspaceServer';
-import type { DesktopConnectionsState, DesktopHostRecord, DesktopWorkspaceServerState } from '../types';
+import type { DesktopConnectionsState, DesktopHostRecord, DesktopWorkspaceServerState } from '../shared/types';
 import { ToolbarButton, cx } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';

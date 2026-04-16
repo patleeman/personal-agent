@@ -49,7 +49,7 @@ import type {
   SessionMeta,
   ToolsState,
   VaultFileListResult,
-} from '../types';
+} from '../shared/types';
 
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';

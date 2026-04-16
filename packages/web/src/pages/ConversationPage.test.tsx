@@ -3,7 +3,7 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DurableRunRecord, MessageBlock, SessionMeta } from '../types';
+import type { DurableRunRecord, MessageBlock, SessionMeta } from '../shared/types';
 import {
   ConversationPage,
   buildConversationBackgroundRunIndicatorText,

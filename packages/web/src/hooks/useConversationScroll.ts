@@ -10,7 +10,7 @@ import {
   shouldContinueConversationBottomSettle,
   shouldRunConversationInitialScroll,
 } from '../conversation/conversationScroll';
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 
 const INITIAL_SCROLL_STABLE_FRAME_COUNT = 2;
 const INITIAL_SCROLL_MIN_FRAMES = 24;

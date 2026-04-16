@@ -1,4 +1,4 @@
-import type { ConversationBootstrapState } from '../types';
+import type { ConversationBootstrapState } from '../shared/types';
 
 interface PersistedConversationBootstrapEntry {
   key: string;

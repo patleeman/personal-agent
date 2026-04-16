@@ -1,4 +1,4 @@
-import type { MessageBlock } from '../types';
+import type { MessageBlock } from '../shared/types';
 
 export const CONVERSATION_RUN_QUERY_PARAM = 'run';
 

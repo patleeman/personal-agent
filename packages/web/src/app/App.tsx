@@ -47,7 +47,7 @@ import type {
   ScheduledTaskSummary,
   SessionMeta,
   WebUiState,
-} from '../types';
+} from '../shared/types';
 import { setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { getRunPrimaryConnection, type RunPresentationLookups } from '../automation/runPresentation';
 

@@ -4,7 +4,7 @@ import { api } from '../client/api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks';
-import { formatDate } from '../utils';
+import { formatDate } from '../shared/utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';
 import { ErrorState, LoadingState, cx } from './ui';
 

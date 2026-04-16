@@ -4,7 +4,7 @@ import {
   formatDesktopWorkspaceServerStatus,
   labelDesktopWorkspaceServerTailnetUrl,
 } from './desktopWorkspaceServer';
-import type { DesktopWorkspaceServerState } from '../types';
+import type { DesktopWorkspaceServerState } from '../shared/types';
 
 function createState(overrides: Partial<DesktopWorkspaceServerState> = {}): DesktopWorkspaceServerState {
   return {

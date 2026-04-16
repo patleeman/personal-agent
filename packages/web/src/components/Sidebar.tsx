@@ -17,7 +17,7 @@ import {
   readDraftConversationCwd,
 } from '../conversation/draftConversation';
 import { persistForkPromptDraft } from '../conversation/forking';
-import { timeAgoCompact } from '../utils';
+import { timeAgoCompact } from '../shared/utils';
 import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../session/sessionTabs';
 import {
   buildConversationGroupLabels,
@@ -39,7 +39,7 @@ import {
 import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
-import type { SessionMeta } from '../types';
+import type { SessionMeta } from '../shared/types';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (

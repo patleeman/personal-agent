@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildNoteSearch, filterMemories } from './noteWorkspaceState';
-import type { MemoryDocItem } from '../types';
+import type { MemoryDocItem } from '../shared/types';
 
 const MEMORIES: MemoryDocItem[] = [
   {

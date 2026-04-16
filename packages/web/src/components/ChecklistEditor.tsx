@@ -3,12 +3,12 @@ import {
   appendChecklistPresetItems,
   createChecklistDraftItem,
   type ChecklistDraftItem,
-} from '../checklists';
+} from '../automation/checklists';
 import { fuzzyScore } from '../commands/slashMenu';
 import type {
   ConversationAutomationSkillInfo,
   ConversationAutomationWorkflowPreset,
-} from '../types';
+} from '../shared/types';
 import { IconButton, cx } from './ui';
 
 const ITEM_TEXTAREA_CLASS = 'w-full min-h-[24px] resize-none border-0 bg-transparent px-0 py-0 text-[14px] leading-6 text-primary placeholder:text-dim/70 focus:outline-none disabled:opacity-50';
