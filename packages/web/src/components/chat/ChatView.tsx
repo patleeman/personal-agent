@@ -1,6 +1,6 @@
 import React, { Children, cloneElement, isValidElement, memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode, type RefObject } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { parseSkillBlock, type ParsedSkillBlock } from '../../skillBlock';
+import { parseSkillBlock, type ParsedSkillBlock } from '../../knowledge/skillBlock';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { readArtifactPresentation } from '../../conversation/conversationArtifacts';

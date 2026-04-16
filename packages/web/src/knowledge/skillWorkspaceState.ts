@@ -1,4 +1,4 @@
-import type { MemorySkillItem } from './types';
+import type { MemorySkillItem } from '../types';
 import { humanizeSkillName } from './memoryOverview';
 
 export const SKILL_SEARCH_PARAM = 'skill';

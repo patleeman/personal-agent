@@ -1,4 +1,4 @@
-import type { MentionItem } from './conversation/conversationMentions';
+import type { MentionItem } from '../conversation/conversationMentions';
 
 export type NodeMentionSurface = 'main' | 'compact';
 

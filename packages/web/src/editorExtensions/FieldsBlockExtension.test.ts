@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { stripMarkdownFrontmatter } from '../noteDocument';
+import { stripMarkdownFrontmatter } from '../knowledge/noteDocument';
 
 describe('legacy fields block markdown', () => {
   it('preserves unsupported :::fields blocks in the editable note body', () => {

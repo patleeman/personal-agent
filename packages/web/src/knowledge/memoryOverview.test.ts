@@ -7,7 +7,7 @@ import {
   formatUsageLabel,
   humanizeSkillName,
 } from './memoryOverview';
-import type { MemoryData } from './types';
+import type { MemoryData } from '../types';
 
 const MEMORY_DATA: MemoryData = {
   profile: 'datadog',

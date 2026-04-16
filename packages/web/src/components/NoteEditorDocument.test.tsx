@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readEditableNoteBody } from '../noteDocument';
+import { readEditableNoteBody } from '../knowledge/noteDocument';
 
 describe('note editor document helpers', () => {
   it('returns the body without frontmatter or the managed heading', () => {

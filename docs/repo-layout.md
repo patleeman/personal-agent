@@ -31,6 +31,7 @@ Use these defaults:
 - `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
 - `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
 - `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
+- `packages/web/src/knowledge/` — note/skill/note-mention helpers, markdown document helpers, and knowledge-workspace presentation utilities
 - `packages/web/src/local/` — browser-local storage, persisted UI state, saved workspace path helpers, and local-path detection helpers
 - `packages/web/src/model/` — model filtering, grouping, and model-preference presentation helpers
 - `packages/web/src/pending/` — pending prompt persistence and optimistic pending-message presentation helpers
@@ -41,6 +42,7 @@ Use these defaults:
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
 If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.
 If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
+If it manages markdown/note/skill/node-mention rendering for the knowledge surfaces, keep it under `src/knowledge/`.
 If it manages browser-local persistence or saved local workspace state, keep it under `src/local/`.
 If it manages model filtering or reusable model preference presentation logic, keep it under `src/model/`.
 If it manages pending prompt staging or optimistic pending-message state, keep it under `src/pending/`.

@@ -1,5 +1,5 @@
-import type { MemoryAgentsItem, MemoryData, MemoryDocItem, MemorySkillItem } from './types';
-import { timeAgo } from './utils';
+import type { MemoryAgentsItem, MemoryData, MemoryDocItem, MemorySkillItem } from '../types';
+import { timeAgo } from '../utils';
 
 export type MemoryLayer = 'overview' | 'identity' | 'capabilities' | 'knowledge';
 
