@@ -1,8 +1,8 @@
 import type { StorageLike } from '../local/reloadState';
 
 export const COMPOSER_HISTORY_STORAGE_KEY_PREFIX = 'pa:conversation-composer-history:';
-export const DRAFT_COMPOSER_HISTORY_SCOPE = 'draft';
-export const MAX_COMPOSER_HISTORY_ENTRIES = 100;
+const DRAFT_COMPOSER_HISTORY_SCOPE = 'draft';
+const MAX_COMPOSER_HISTORY_ENTRIES = 100;
 
 function getComposerHistoryStorage(storage?: StorageLike | null): StorageLike | null {
   if (storage !== undefined) {
@@ -51,7 +51,7 @@ function normalizeComposerHistoryEntries(values: unknown): string[] {
   return entries.slice(-MAX_COMPOSER_HISTORY_ENTRIES);
 }
 
-export function buildComposerHistoryStorageKey(scope?: string | null): string {
+function buildComposerHistoryStorageKey(scope?: string | null): string {
   return `${COMPOSER_HISTORY_STORAGE_KEY_PREFIX}${normalizeComposerHistoryScope(scope)}`;
 }
 

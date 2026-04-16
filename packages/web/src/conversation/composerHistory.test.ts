@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   appendComposerHistory,
-  buildComposerHistoryStorageKey,
-  DRAFT_COMPOSER_HISTORY_SCOPE,
-  MAX_COMPOSER_HISTORY_ENTRIES,
   readComposerHistory,
 } from './composerHistory';
 import type { StorageLike } from '../local/reloadState';
@@ -23,10 +20,19 @@ function createStorage(): StorageLike {
   };
 }
 
+const DRAFT_COMPOSER_HISTORY_STORAGE_KEY = 'pa:conversation-composer-history:draft';
+const SESSION_COMPOSER_HISTORY_STORAGE_KEY = 'pa:conversation-composer-history:session-123';
+const MAX_COMPOSER_HISTORY_ENTRIES = 100;
+
 describe('composerHistory', () => {
   it('uses the draft scope when no conversation id is provided', () => {
-    expect(buildComposerHistoryStorageKey()).toBe(`pa:conversation-composer-history:${DRAFT_COMPOSER_HISTORY_SCOPE}`);
-    expect(buildComposerHistoryStorageKey(' session-123 ')).toBe('pa:conversation-composer-history:session-123');
+    const storage = createStorage();
+
+    appendComposerHistory(undefined, 'draft entry', storage);
+    appendComposerHistory(' session-123 ', 'session entry', storage);
+
+    expect(storage.getItem(DRAFT_COMPOSER_HISTORY_STORAGE_KEY)).toBe(JSON.stringify(['draft entry']));
+    expect(storage.getItem(SESSION_COMPOSER_HISTORY_STORAGE_KEY)).toBe(JSON.stringify(['session entry']));
   });
 
   it('appends entries and normalizes line endings', () => {
@@ -40,7 +46,7 @@ describe('composerHistory', () => {
   it('ignores blank and malformed stored entries', () => {
     const storage = createStorage();
 
-    storage.setItem(buildComposerHistoryStorageKey('session-123'), JSON.stringify(['keep', '   ', null, 42, 'also keep']));
+    storage.setItem(SESSION_COMPOSER_HISTORY_STORAGE_KEY, JSON.stringify(['keep', '   ', null, 42, 'also keep']));
 
     expect(readComposerHistory('session-123', storage)).toEqual(['keep', 'also keep']);
   });

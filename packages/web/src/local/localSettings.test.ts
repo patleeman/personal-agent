@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildComposerHistoryStorageKey } from '../conversation/composerHistory';
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
@@ -34,6 +33,8 @@ function createStorage(): Storage {
 }
 
 const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
+const SESSION_COMPOSER_HISTORY_STORAGE_KEY = 'pa:conversation-composer-history:session-1';
+const DRAFT_COMPOSER_HISTORY_STORAGE_KEY = 'pa:conversation-composer-history:draft';
 
 describe('localSettings', () => {
   beforeEach(() => {
@@ -44,8 +45,8 @@ describe('localSettings', () => {
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-1']));
     localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['session-1']));
     localStorage.setItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY, JSON.stringify({ 'session-1': 3 }));
-    localStorage.setItem(buildComposerHistoryStorageKey('session-1'), JSON.stringify(['draft 1']));
-    localStorage.setItem(buildComposerHistoryStorageKey(), JSON.stringify(['draft 2']));
+    localStorage.setItem(SESSION_COMPOSER_HISTORY_STORAGE_KEY, JSON.stringify(['draft 1']));
+    localStorage.setItem(DRAFT_COMPOSER_HISTORY_STORAGE_KEY, JSON.stringify(['draft 2']));
     localStorage.setItem('pa:keep-me', 'yes');
 
     resetStoredConversationUiState();
@@ -53,8 +54,8 @@ describe('localSettings', () => {
     expect(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(ARCHIVED_SESSION_IDS_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY)).toBeNull();
-    expect(localStorage.getItem(buildComposerHistoryStorageKey('session-1'))).toBeNull();
-    expect(localStorage.getItem(buildComposerHistoryStorageKey())).toBeNull();
+    expect(localStorage.getItem(SESSION_COMPOSER_HISTORY_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(DRAFT_COMPOSER_HISTORY_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem('pa:keep-me')).toBe('yes');
   });
 
