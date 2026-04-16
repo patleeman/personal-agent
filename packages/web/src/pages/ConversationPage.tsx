@@ -37,6 +37,7 @@ import { parseWholeLineBashCommand } from '../conversation/conversationBashComma
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
+import { buildDeferredResumeAutoResumeKey, shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
@@ -2262,6 +2263,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }), [draft, id, location.state]);
   const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
   const skippedInitialDeferredResumeLocationKeyRef = useRef<string | null>(null);
+  const attemptedDeferredResumeAutoResumeKeyRef = useRef<string | null>(null);
   const appliedInitialDraftHydrationLocationKeyRef = useRef<string | null>(null);
   const appliedDraftAutoModeLocationKeyRef = useRef<string | null>(null);
   const [savedWorkspacePaths, setSavedWorkspacePaths] = useState<string[]>(() => readStoredWorkspacePaths());
@@ -3319,6 +3321,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const showActiveBackgroundRunDetails = showBackgroundRunDetails
     || activeConversationBackgroundRuns.some((run) => run.runId === selectedRunId);
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
+  const deferredResumeAutoResumeKey = useMemo(
+    () => buildDeferredResumeAutoResumeKey({
+      resumes: orderedDeferredResumes,
+      isLiveSession,
+      sessionFile: savedConversationSessionFile,
+    }),
+    [isLiveSession, orderedDeferredResumes, savedConversationSessionFile],
+  );
   const deferredResumeIndicatorText = useMemo(
     () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
     [orderedDeferredResumes, deferredResumeNowMs],
@@ -3501,17 +3511,23 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useInvalidateOnTopics(['workspace'], refetchSavedWorkspacePaths);
 
   const resumeDeferredConversation = useCallback(async () => {
-    if (!savedConversationSessionFile) {
+    if (!id || !savedConversationSessionFile) {
       throw new Error('Open the saved conversation before continuing deferred work.');
     }
 
-    await api.resumeSession(savedConversationSessionFile);
+    const recovered = await api.recoverConversation(id);
+    if (recovered.conversationId && recovered.conversationId !== id) {
+      ensureConversationTabOpen(recovered.conversationId);
+      navigate(`/conversations/${recovered.conversationId}`);
+      return;
+    }
+
     setConfirmedLive(true);
     stream.reconnect();
     window.setTimeout(() => {
       void refetchDeferredResumes().catch(() => {});
     }, 200);
-  }, [refetchDeferredResumes, savedConversationSessionFile, stream.reconnect]);
+  }, [id, navigate, refetchDeferredResumes, savedConversationSessionFile, stream.reconnect]);
 
   useEffect(() => {
     setConversationAttachments([]);
@@ -3576,6 +3592,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.clearInterval(intervalHandle);
     };
   }, [deferredResumes.length]);
+
+  useEffect(() => {
+    if (!shouldAutoResumeDeferredResumes({
+      autoResumeKey: deferredResumeAutoResumeKey,
+      lastAttemptedKey: attemptedDeferredResumeAutoResumeKeyRef.current,
+      draft,
+      isLiveSession,
+      deferredResumesBusy,
+      resumeConversationBusy,
+    })) {
+      return;
+    }
+
+    attemptedDeferredResumeAutoResumeKeyRef.current = deferredResumeAutoResumeKey;
+    void resumeDeferredConversation().catch((error) => {
+      console.error('Deferred resume auto-resume failed:', error);
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    });
+  }, [
+    deferredResumeAutoResumeKey,
+    deferredResumesBusy,
+    draft,
+    isLiveSession,
+    resumeConversationBusy,
+    resumeDeferredConversation,
+    showNotice,
+  ]);
 
   // Auto-resize textarea. Schedule the measurement once per frame so typing
   // does not force multiple synchronous layouts against a large transcript.

@@ -25,3 +25,26 @@ export function buildDeferredResumeAutoResumeKey(input: {
 
   return `${sessionFile}::${readyIds.join(',')}`;
 }
+
+export function shouldAutoResumeDeferredResumes(input: {
+  autoResumeKey: string | null;
+  lastAttemptedKey: string | null;
+  draft: boolean;
+  isLiveSession: boolean;
+  deferredResumesBusy: boolean;
+  resumeConversationBusy: boolean;
+}): boolean {
+  if (input.draft || input.isLiveSession) {
+    return false;
+  }
+
+  if (!input.autoResumeKey) {
+    return false;
+  }
+
+  if (input.deferredResumesBusy || input.resumeConversationBusy) {
+    return false;
+  }
+
+  return input.autoResumeKey !== input.lastAttemptedKey;
+}
