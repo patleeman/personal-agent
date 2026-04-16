@@ -16,7 +16,6 @@ import {
 } from '../local/localSettings';
 import {
   closeConversationTab,
-  commitConversationLayoutMerge,
   ensureConversationTabOpen,
   moveConversationToSection,
   pinConversationTab,
@@ -25,13 +24,9 @@ import {
   readOpenSessionIds,
   readPinnedSessionIds,
   reopenMostRecentlyArchivedConversation,
-  reorderOpenSessionIds,
   replaceConversationLayout,
-  replaceOpenConversationTabs,
-  replacePinnedConversationTabs,
   setConversationArchivedState,
   shiftConversationTab,
-  syncConversationLayoutMerge,
   unpinConversationTab,
 } from './sessionTabs';
 
@@ -120,47 +115,6 @@ describe('sessionTabs', () => {
       pinnedSessionIds: ['session-2'],
       archivedSessionIds: [],
     });
-  });
-
-  it('replaces the local open tab set from a durable snapshot', () => {
-    expect([...replaceOpenConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
-    expect([...readOpenSessionIds()]).toEqual(['session-2', 'session-1']);
-    expect([...readArchivedSessionIds()]).toEqual([]);
-    expect(dispatchEvent).toHaveBeenCalledTimes(1);
-  });
-
-  it('replaces the local pinned conversation set', () => {
-    expect([...replacePinnedConversationTabs([' session-2 ', 'session-1', 'session-2'])]).toEqual(['session-2', 'session-1']);
-    expect([...readPinnedSessionIds()]).toEqual(['session-2', 'session-1']);
-    expect([...readArchivedSessionIds()]).toEqual([]);
-    expect(dispatchEvent).toHaveBeenCalledTimes(1);
-  });
-
-  it('treats reordering as a meaningful tab update', () => {
-    replaceOpenConversationTabs(['session-1', 'session-2', 'session-3']);
-    dispatchEvent.mockReset();
-
-    expect([...replaceOpenConversationTabs(['session-3', 'session-1', 'session-2'])]).toEqual(['session-3', 'session-1', 'session-2']);
-    expect(dispatchEvent).toHaveBeenCalledTimes(1);
-    expect([...readOpenSessionIds()]).toEqual(['session-3', 'session-1', 'session-2']);
-  });
-
-  it('reorders session ids around a drop target', () => {
-    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-3', 'session-1', 'before')).toEqual([
-      'session-3',
-      'session-1',
-      'session-2',
-    ]);
-    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-1', 'session-2', 'after')).toEqual([
-      'session-2',
-      'session-1',
-      'session-3',
-    ]);
-    expect(reorderOpenSessionIds(['session-1', 'session-2', 'session-3'], 'session-2', 'session-2', 'before')).toEqual([
-      'session-1',
-      'session-2',
-      'session-3',
-    ]);
   });
 
   it('moves conversations between the open and pinned shelves while preserving archived overrides', () => {
@@ -378,87 +332,4 @@ describe('sessionTabs', () => {
     expect(dispatchEvent).not.toHaveBeenCalled();
   });
 
-  describe('syncConversationLayoutMerge', () => {
-    it('returns server state as source of truth, writes to server only (not localStorage)', async () => {
-      // localStorage has stale data
-      replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: ['local-pinned'], archivedSessionIds: ['local-archived'] });
-      dispatchEvent.mockReset();
-
-      // Server has different (authoritative) state
-      apiMocks.openConversationTabs.mockResolvedValue({
-        sessionIds: ['server-1'],
-        pinnedSessionIds: ['server-pinned'],
-        archivedSessionIds: ['server-archived'],
-      });
-
-      const result = await syncConversationLayoutMerge();
-
-      // Server is the source of truth — localStorage is cache only, never written
-      expect(result.sessionIds).toEqual(['server-1']);
-      expect(result.pinnedSessionIds).toEqual(['server-pinned']);
-      expect(result.archivedSessionIds).toEqual(['server-archived']);
-      expect(readOpenSessionIds()).toEqual(['local-1']); // cache untouched
-      expect(readPinnedSessionIds()).toEqual(['local-pinned']); // cache untouched
-      expect(readArchivedSessionIds()).toEqual(['local-archived']); // cache untouched
-
-      // Persisted server state back to server (write-through)
-      expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(
-        ['server-1'],
-        ['server-pinned'],
-        ['server-archived'],
-      );
-
-
-      // Dispatched event so components can refresh
-      expect(dispatchEvent).toHaveBeenCalled();
-    });
-
-    it('falls back to local state when the fetch fails', async () => {
-      replaceConversationLayout({ sessionIds: ['local-1'], pinnedSessionIds: [] });
-      dispatchEvent.mockReset();
-      apiMocks.openConversationTabs.mockRejectedValue(new Error('network error'));
-
-      const result = await syncConversationLayoutMerge();
-
-      // On network failure, return local state as best-effort fallback
-      expect(result.sessionIds).toEqual(['local-1']);
-      expect(readOpenSessionIds()).toEqual(['local-1']);
-    });
-  });
-
-  describe('commitConversationLayoutMerge', () => {
-    it('fetches server state, applies intended change as union, and writes merged result', async () => {
-      // Server has: open [server-1], pinned [server-pinned], archived []
-      apiMocks.openConversationTabs.mockResolvedValue({
-        sessionIds: ['server-1'],
-        pinnedSessionIds: ['server-pinned'],
-        archivedSessionIds: [],
-      });
-
-      // Intended: open local-tab-1, pinned [], archived []
-      const result = await commitConversationLayoutMerge({ sessionIds: ['local-tab-1'], pinnedSessionIds: [], archivedSessionIds: [] });
-
-      // Union: local tab + server tabs
-      expect(result.sessionIds).toEqual(['local-tab-1', 'server-1']);
-      expect(result.pinnedSessionIds).toEqual(['server-pinned']);
-      expect(result.archivedSessionIds).toEqual([]);
-
-      // Written to server only (localStorage is cache, not source of truth)
-      expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(
-        ['local-tab-1', 'server-1'],
-        ['server-pinned'],
-        [],
-      );
-    });
-
-    it('falls back to writing intended layout when fetch fails', async () => {
-      apiMocks.openConversationTabs.mockRejectedValue(new Error('network error'));
-      dispatchEvent.mockReset();
-
-      const result = await commitConversationLayoutMerge({ sessionIds: ['tab-1'], pinnedSessionIds: [] });
-
-      expect(result.sessionIds).toEqual(['tab-1']);
-      expect(dispatchEvent).toHaveBeenCalled();
-    });
-  });
 });

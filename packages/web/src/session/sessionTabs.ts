@@ -115,77 +115,6 @@ function persistConversationLayoutToServer(layout: ConversationLayout): void {
   });
 }
 
-export function syncOpenConversationTabsToServer(
-  sessionIds: Iterable<unknown>,
-  pinnedSessionIds: Iterable<unknown> = readPinnedSessionIds(),
-  archivedSessionIds: Iterable<unknown> = readArchivedSessionIds(),
-): void {
-  persistConversationLayoutToServer(normalizeConversationLayout({
-    sessionIds: normalizeSessionIds(sessionIds),
-    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
-    archivedSessionIds: normalizeSessionIds(archivedSessionIds),
-  }));
-}
-
-/**
- * Bidirectional tab sync: merges local state with the latest server state, then
- * pushes the merged result back. Neither client can overwrite the other's tabs.
- *
- * For open tabs:   union of local + server
- * For pinned tabs: union of local + server
- * For archived:   union of local + server (archived state is per-client too)
- */
-export async function syncConversationLayoutMerge(): Promise<ConversationLayout> {
-  try {
-    const serverLayout = await api.openConversationTabs() as ConversationLayout;
-
-    // Server is the source of truth. localStorage is read-only cache — never written.
-    persistConversationLayoutToServer(serverLayout);
-    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: serverLayout }));
-
-    return serverLayout;
-  } catch {
-    // On network failure, fall back to local state.
-    return readConversationLayout();
-  }
-}
-
-/**
- * Like `replaceConversationLayout` but merge-based: reads current server state,
- * computes the union with the intended local change, then pushes merged result to
- * server. Use this for tab mutations that may race with other clients so neither
- * side can overwrite the other's tabs.
- */
-export async function commitConversationLayoutMerge(
-  intended: ConversationLayoutInput,
-): Promise<ConversationLayout> {
-  try {
-    const serverLayout = await api.openConversationTabs() as ConversationLayout;
-
-    // Server is the source of truth. localStorage is read-only cache — never written.
-    const mergedOpen = [...new Set([...normalizeSessionIds(intended.sessionIds ?? []), ...serverLayout.sessionIds])];
-    const mergedPinned = [...new Set([...normalizeSessionIds(intended.pinnedSessionIds ?? []), ...serverLayout.pinnedSessionIds])];
-    const mergedArchived = [...new Set([...normalizeSessionIds(intended.archivedSessionIds ?? []), ...serverLayout.archivedSessionIds])];
-
-    const merged: ConversationLayout = {
-      sessionIds: mergedOpen,
-      pinnedSessionIds: mergedPinned,
-      archivedSessionIds: mergedArchived,
-    };
-
-    persistConversationLayoutToServer(merged);
-    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: merged }));
-
-    return merged;
-  } catch {
-    // On network failure, write directly without merging.
-    const direct: ConversationLayout = normalizeConversationLayout(intended);
-    persistConversationLayoutToServer(direct);
-    window.dispatchEvent(new CustomEvent(CONVERSATION_LAYOUT_CHANGED_EVENT, { detail: direct }));
-    return direct;
-  }
-}
-
 function readStoredSessionIds(storageKey: string): string[] {
   try {
     const raw = localStorage.getItem(storageKey);
@@ -257,20 +186,6 @@ export function replaceConversationLayout(layout: ConversationLayoutInput): Conv
   }
 
   return writeConversationLayout(next);
-}
-
-export function replaceOpenConversationTabs(sessionIds: Iterable<unknown>): string[] {
-  return replaceConversationLayout({
-    sessionIds: normalizeSessionIds(sessionIds),
-    pinnedSessionIds: readPinnedSessionIds(),
-  }).sessionIds;
-}
-
-export function replacePinnedConversationTabs(pinnedSessionIds: Iterable<unknown>): string[] {
-  return replaceConversationLayout({
-    sessionIds: readOpenSessionIds(),
-    pinnedSessionIds: normalizeSessionIds(pinnedSessionIds),
-  }).pinnedSessionIds;
 }
 
 export function ensureConversationTabOpen(sessionId: string | null | undefined): string[] {
@@ -375,35 +290,6 @@ export function unpinConversationTab(
     sessionIds: nextSessionIds,
     pinnedSessionIds: nextPinnedSessionIds,
   });
-}
-
-export function reorderOpenSessionIds(
-  sessionIds: readonly string[],
-  draggedSessionId: string,
-  targetSessionId: string,
-  position: OpenConversationDropPosition,
-): string[] {
-  const normalizedSessionIds = normalizeSessionIds(sessionIds);
-  const draggedId = normalizeSessionId(draggedSessionId);
-  const targetId = normalizeSessionId(targetSessionId);
-
-  if (!draggedId || !targetId || draggedId === targetId) {
-    return normalizedSessionIds;
-  }
-
-  if (!normalizedSessionIds.includes(draggedId) || !normalizedSessionIds.includes(targetId)) {
-    return normalizedSessionIds;
-  }
-
-  const reordered = normalizedSessionIds.filter((id) => id !== draggedId);
-  const targetIndex = reordered.indexOf(targetId);
-  if (targetIndex === -1) {
-    return normalizedSessionIds;
-  }
-
-  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1;
-  reordered.splice(insertIndex, 0, draggedId);
-  return reordered;
 }
 
 export function moveConversationToSection(
