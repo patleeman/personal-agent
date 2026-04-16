@@ -36,9 +36,9 @@ import {
   resolveConversationAdjacentPath,
   resolveConversationCloseRedirect,
 } from '../conversation/conversationRoutes';
-import { buildSidebarNavSectionStorageKey } from '../localSettings';
+import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
-import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
+import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import type { SessionMeta } from '../types';
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {

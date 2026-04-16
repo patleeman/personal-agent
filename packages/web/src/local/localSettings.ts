@@ -1,5 +1,5 @@
-import { isComposerHistoryStorageKey } from './composerHistory';
-import { isRailWidthStorageKey } from './layoutSizing';
+import { isComposerHistoryStorageKey } from '../composerHistory';
+import { isRailWidthStorageKey } from '../layoutSizing';
 
 export const THEME_STORAGE_KEY = 'pa-theme';
 export const OPEN_SESSION_IDS_STORAGE_KEY = 'pa:open-session-ids';

@@ -6,7 +6,7 @@ import {
   MAX_COMPOSER_HISTORY_ENTRIES,
   readComposerHistory,
 } from './composerHistory';
-import type { StorageLike } from './reloadState';
+import type { StorageLike } from './local/reloadState';
 
 function createStorage(): StorageLike {
   const map = new Map<string, string>();

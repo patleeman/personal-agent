@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { StorageLike } from './reloadState';
+import type { StorageLike } from './local/reloadState';
 import type { MessageBlock } from './types';
 import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 

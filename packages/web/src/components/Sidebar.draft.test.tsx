@@ -6,7 +6,7 @@ import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../cont
 import {
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
-} from '../localSettings.js';
+} from '../local/localSettings.js';
 import type { SessionMeta } from '../types';
 import { Sidebar } from './Sidebar.js';
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { StorageLike } from '../reloadState';
+import type { StorageLike } from '../local/reloadState';
 import { buildConversationComposerStorageKey } from '../forking';
 import {
   buildPendingConversationPromptDispatchingStorageKey,

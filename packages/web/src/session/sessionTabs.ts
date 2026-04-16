@@ -2,7 +2,7 @@ import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
-} from '../localSettings';
+} from '../local/localSettings';
 import { api } from '../api';
 
 export const CONVERSATION_LAYOUT_CHANGED_EVENT = 'pa:conversation-layout-changed';

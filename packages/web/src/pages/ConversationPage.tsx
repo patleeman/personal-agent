@@ -107,10 +107,10 @@ import {
   shouldShowQuestionSubmitAsPrimaryComposerAction,
 } from '../conversation/conversationComposerSubmit';
 import { insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
-import { useReloadState } from '../reloadState';
+import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
-import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
+import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 

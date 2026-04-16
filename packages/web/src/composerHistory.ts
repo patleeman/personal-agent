@@ -1,4 +1,4 @@
-import type { StorageLike } from './reloadState';
+import type { StorageLike } from './local/reloadState';
 
 export const COMPOSER_HISTORY_STORAGE_KEY_PREFIX = 'pa:conversation-composer-history:';
 export const DRAFT_COMPOSER_HISTORY_SCOPE = 'draft';

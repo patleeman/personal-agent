@@ -8,7 +8,7 @@ import {
   PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SKILL_IDS_STORAGE_KEY,
   PINNED_WORKSPACE_IDS_STORAGE_KEY,
-} from './localSettings';
+} from './local/localSettings';
 
 export const OPEN_RESOURCE_SHELVES_CHANGED_EVENT = 'pa:open-resource-shelves-changed';
 

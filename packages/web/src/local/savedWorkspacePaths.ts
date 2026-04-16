@@ -1,4 +1,4 @@
-import { normalizeConversationGroupCwd } from './conversation/conversationCwdGroups';
+import { normalizeConversationGroupCwd } from '../conversation/conversationCwdGroups';
 import { SAVED_WORKSPACE_PATHS_STORAGE_KEY } from './localSettings';
 
 export function normalizeWorkspacePaths(values: Iterable<unknown>): string[] {

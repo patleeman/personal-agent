@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { THEME_STORAGE_KEY } from './localSettings';
+import { THEME_STORAGE_KEY } from './local/localSettings';
 import { readStoredThemePreference, resolveThemePreference } from './theme';
 
 function createStorage(): Storage {

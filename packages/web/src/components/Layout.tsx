@@ -8,7 +8,7 @@ import { DesktopTopBar } from './DesktopTopBar';
 import { DesktopHostIndicator } from './DesktopHostIndicator';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../layoutSizing';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
-import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
+import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { readDesktopEnvironment } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState } from '../types';

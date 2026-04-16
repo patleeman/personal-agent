@@ -1,5 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent, ReactNode } from 'react';
-import { looksLikeLocalFilesystemPath } from './localPaths';
+import { looksLikeLocalFilesystemPath } from './local/localPaths';
 
 export type FilePathButtonVariant = 'text' | 'code' | 'pre';
 

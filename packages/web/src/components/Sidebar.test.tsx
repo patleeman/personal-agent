@@ -11,7 +11,7 @@ import {
   PINNED_SESSION_IDS_STORAGE_KEY,
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
-} from '../localSettings.js';
+} from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../types';
 import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
 
