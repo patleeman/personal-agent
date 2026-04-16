@@ -9,6 +9,7 @@ vi.mock('child_process', () => ({
 }));
 
 import {
+  readTailscaleServeProxyState,
   resolveTailscaleServeBaseUrl,
   resolveWebUiTailscaleUrl,
   syncTailscaleServeProxy,
@@ -31,7 +32,42 @@ function createServeStatusPayload(handlers: Record<string, string> = {}): string
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.spawnSync.mockReset();
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
+});
+
+describe('readTailscaleServeProxyState', () => {
+  it('reports published when the expected path points at the expected port', () => {
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: createServeStatusPayload({ '/codex': 'http://localhost:8390' }),
+      stderr: '',
+    });
+
+    expect(readTailscaleServeProxyState({ enabled: true, port: 8390, path: '/codex' })).toEqual({
+      status: 'published',
+      path: '/codex',
+      expectedProxyTarget: 'http://localhost:8390',
+      actualProxyTarget: 'http://localhost:8390',
+      message: 'Tailscale Serve exposes /codex -> localhost:8390.',
+    });
+  });
+
+  it('reports mismatch when the expected path points elsewhere', () => {
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: createServeStatusPayload({ '/codex': 'http://localhost:3741' }),
+      stderr: '',
+    });
+
+    expect(readTailscaleServeProxyState({ enabled: true, port: 8390, path: '/codex' })).toEqual({
+      status: 'mismatch',
+      path: '/codex',
+      expectedProxyTarget: 'http://localhost:8390',
+      actualProxyTarget: 'http://localhost:3741',
+      message: 'Tailscale Serve exposes /codex, but it points to http://localhost:3741 instead of localhost:8390.',
+    });
+  });
 });
 
 describe('syncTailscaleServeProxy', () => {
@@ -62,7 +98,7 @@ describe('syncTailscaleServeProxy', () => {
       .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({}), stderr: '' });
 
     expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' })).toThrow(
-      'did not expose /codex -> localhost:8390',
+      'does not currently expose /codex -> localhost:8390',
     );
   });
 

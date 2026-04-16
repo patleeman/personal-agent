@@ -29,11 +29,22 @@ export interface DesktopWorkspaceServerConfig {
   useTailscaleServe: boolean;
 }
 
+export type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
+
+export interface DesktopWorkspaceServerTailscalePublishState {
+  status: DesktopWorkspaceServerTailscalePublishStatus;
+  path: string;
+  expectedProxyTarget: string;
+  actualProxyTarget?: string;
+  message?: string;
+}
+
 export interface DesktopWorkspaceServerState extends DesktopWorkspaceServerConfig {
   running: boolean;
   websocketPath: string;
   localWebsocketUrl: string;
   tailnetWebsocketUrl?: string;
+  tailscalePublishState: DesktopWorkspaceServerTailscalePublishState;
   logFile: string;
   pid?: number;
   error?: string;

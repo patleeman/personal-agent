@@ -2,8 +2,10 @@ import { type ChildProcess } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveChildProcessEnv } from '@personal-agent/core';
 import {
+  readTailscaleServeProxyState,
   resolveTailscaleServeBaseUrl,
   syncTailscaleServeProxy,
+  type TailscaleServeProxyState,
 } from '@personal-agent/services';
 import type { DesktopConfig, DesktopWorkspaceServerConfig, DesktopWorkspaceServerState } from './hosts/types.js';
 import { resolveDesktopRuntimePaths, type DesktopRuntimePaths } from './desktop-env.js';
@@ -40,6 +42,7 @@ interface DesktopWorkspaceServerManagerOptions {
   stopChild?: typeof stopManagedChild;
   resolveChildEnv?: typeof resolveChildProcessEnv;
   syncTailscaleServe?: typeof syncTailscaleServeProxy;
+  readTailscaleServeState?: typeof readTailscaleServeProxyState;
   resolveTailscaleBaseUrl?: typeof resolveTailscaleServeBaseUrl;
   waitForHealthy?: (port: number, timeoutMs?: number) => Promise<void>;
 }
@@ -119,6 +122,7 @@ export class DesktopWorkspaceServerManager {
   private readonly stopChildImpl: typeof stopManagedChild;
   private readonly resolveChildEnvImpl: typeof resolveChildProcessEnv;
   private readonly syncTailscaleServeImpl: typeof syncTailscaleServeProxy;
+  private readonly readTailscaleServeStateImpl: typeof readTailscaleServeProxyState;
   private readonly resolveTailscaleBaseUrlImpl: typeof resolveTailscaleServeBaseUrl;
   private readonly waitForHealthyImpl: (port: number, timeoutMs?: number) => Promise<void>;
 
@@ -131,6 +135,7 @@ export class DesktopWorkspaceServerManager {
     this.stopChildImpl = options.stopChild ?? stopManagedChild;
     this.resolveChildEnvImpl = options.resolveChildEnv ?? resolveChildProcessEnv;
     this.syncTailscaleServeImpl = options.syncTailscaleServe ?? syncTailscaleServeProxy;
+    this.readTailscaleServeStateImpl = options.readTailscaleServeState ?? readTailscaleServeProxyState;
     this.resolveTailscaleBaseUrlImpl = options.resolveTailscaleBaseUrl ?? resolveTailscaleServeBaseUrl;
     this.waitForHealthyImpl = options.waitForHealthy ?? waitForWorkspaceServerHealthy;
   }
@@ -186,7 +191,15 @@ export class DesktopWorkspaceServerManager {
       this.lastError = null;
       await this.stopPublishedProxy();
       await this.stopChildProcess();
-      return this.buildState(config, false);
+      return this.buildState(
+        config,
+        false,
+        this.readTailscaleServeStateImpl({
+          enabled: false,
+          port: config.port,
+          path: DESKTOP_WORKSPACE_SERVER_PATH,
+        }),
+      );
     }
 
     try {
@@ -195,7 +208,15 @@ export class DesktopWorkspaceServerManager {
       this.resetRestartBackoff();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
-      return this.buildState(config, false);
+      return this.buildState(
+        config,
+        false,
+        this.readTailscaleServeStateImpl({
+          enabled: config.useTailscaleServe,
+          port: config.port,
+          path: DESKTOP_WORKSPACE_SERVER_PATH,
+        }),
+      );
     }
 
     if (config.useTailscaleServe) {
@@ -212,15 +233,24 @@ export class DesktopWorkspaceServerManager {
       await this.stopPublishedProxy();
     }
 
+    const tailscalePublishState = this.readTailscaleServeStateImpl({
+      enabled: config.useTailscaleServe,
+      port: config.port,
+      path: DESKTOP_WORKSPACE_SERVER_PATH,
+    });
     const running = await checkWorkspaceServerHealth(config.port);
     if (running && !this.lastError) {
       this.lastError = null;
     }
 
-    return this.buildState(config, running);
+    return this.buildState(config, running, tailscalePublishState);
   }
 
-  private buildState(config: DesktopWorkspaceServerConfig, running: boolean): DesktopWorkspaceServerState {
+  private buildState(
+    config: DesktopWorkspaceServerConfig,
+    running: boolean,
+    tailscalePublishState: TailscaleServeProxyState,
+  ): DesktopWorkspaceServerState {
     const runtime = this.resolveRuntimePathsImpl();
     const tailnetBaseUrl = config.useTailscaleServe ? this.resolveTailscaleBaseUrlImpl() : undefined;
 
@@ -230,6 +260,13 @@ export class DesktopWorkspaceServerManager {
       websocketPath: DESKTOP_WORKSPACE_SERVER_PATH,
       localWebsocketUrl: renderLocalWebsocketUrl(config.port),
       tailnetWebsocketUrl: tailnetBaseUrl ? renderTailnetWebsocketUrl(tailnetBaseUrl) : undefined,
+      tailscalePublishState: {
+        status: tailscalePublishState.status,
+        path: tailscalePublishState.path,
+        expectedProxyTarget: tailscalePublishState.expectedProxyTarget,
+        ...(tailscalePublishState.actualProxyTarget ? { actualProxyTarget: tailscalePublishState.actualProxyTarget } : {}),
+        ...(tailscalePublishState.message ? { message: tailscalePublishState.message } : {}),
+      },
       logFile: `${runtime.desktopLogsDir}/${DESKTOP_WORKSPACE_SERVER_LOG_FILE}`,
       pid: this.child?.child.pid,
       ...(this.lastError ? { error: this.lastError } : {}),

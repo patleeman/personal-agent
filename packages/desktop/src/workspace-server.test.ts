@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildProcess } from 'node:child_process';
+import type { TailscaleServeProxyState } from '@personal-agent/services';
 import type { DesktopConfig } from './hosts/types.js';
 import { DesktopWorkspaceServerManager } from './workspace-server.js';
 
@@ -31,6 +32,16 @@ function createRuntimePaths() {
     desktopConfigFile: '/state/desktop/config.json',
     trayTemplateIconFile: '/repo/packages/desktop/assets/iconTemplate.png',
     colorIconFile: '/repo/packages/desktop/assets/icon.png',
+  };
+}
+
+function createTailscaleServeProxyState(overrides: Partial<TailscaleServeProxyState> = {}): TailscaleServeProxyState {
+  return {
+    status: 'disabled',
+    path: '/codex',
+    expectedProxyTarget: 'http://localhost:8390',
+    message: 'Tailnet publishing is disabled.',
+    ...overrides,
   };
 }
 
@@ -105,6 +116,11 @@ describe('DesktopWorkspaceServerManager', () => {
       stopChild,
       resolveChildEnv: (env) => env ?? {},
       syncTailscaleServe,
+      readTailscaleServeState: vi.fn().mockReturnValue(createTailscaleServeProxyState({
+        status: 'published',
+        actualProxyTarget: 'http://localhost:8390',
+        message: 'Tailscale Serve exposes /codex -> localhost:8390.',
+      })),
       resolveTailscaleBaseUrl: () => 'https://desktop.tailnet.ts.net',
       waitForHealthy: vi.fn().mockResolvedValue(undefined),
     });
@@ -117,6 +133,13 @@ describe('DesktopWorkspaceServerManager', () => {
       websocketPath: '/codex',
       localWebsocketUrl: 'ws://127.0.0.1:8390/codex',
       tailnetWebsocketUrl: 'wss://desktop.tailnet.ts.net/codex',
+      tailscalePublishState: {
+        status: 'published',
+        path: '/codex',
+        expectedProxyTarget: 'http://localhost:8390',
+        actualProxyTarget: 'http://localhost:8390',
+        message: 'Tailscale Serve exposes /codex -> localhost:8390.',
+      },
       logFile: '/logs/codex-app-server.log',
       pid: 4242,
     });
@@ -169,6 +192,16 @@ describe('DesktopWorkspaceServerManager', () => {
       stopChild,
       resolveChildEnv: (env) => env ?? {},
       syncTailscaleServe,
+      readTailscaleServeState: vi.fn()
+        .mockReturnValueOnce(createTailscaleServeProxyState({
+          status: 'published',
+          actualProxyTarget: 'http://localhost:8390',
+          message: 'Tailscale Serve exposes /codex -> localhost:8390.',
+        }))
+        .mockReturnValueOnce(createTailscaleServeProxyState({
+          status: 'disabled',
+          message: 'Tailnet publishing is disabled.',
+        })),
       resolveTailscaleBaseUrl: () => 'https://desktop.tailnet.ts.net',
       waitForHealthy: vi.fn().mockResolvedValue(undefined),
     });
@@ -225,6 +258,10 @@ describe('DesktopWorkspaceServerManager', () => {
         stopChild: vi.fn().mockResolvedValue(undefined),
         resolveChildEnv: (env) => env ?? {},
         syncTailscaleServe: vi.fn(),
+        readTailscaleServeState: vi.fn().mockReturnValue(createTailscaleServeProxyState({
+          status: 'disabled',
+          message: 'Tailnet publishing is disabled.',
+        })),
         resolveTailscaleBaseUrl: () => 'https://desktop.tailnet.ts.net',
         waitForHealthy: vi.fn().mockResolvedValue(undefined),
       });
@@ -238,6 +275,9 @@ describe('DesktopWorkspaceServerManager', () => {
         enabled: true,
         running: true,
         pid: 4343,
+        tailscalePublishState: {
+          status: 'disabled',
+        },
       });
     } finally {
       vi.useRealTimers();
@@ -280,6 +320,10 @@ describe('DesktopWorkspaceServerManager', () => {
         stopChild,
         resolveChildEnv: (env) => env ?? {},
         syncTailscaleServe: vi.fn(),
+        readTailscaleServeState: vi.fn().mockReturnValue(createTailscaleServeProxyState({
+          status: 'disabled',
+          message: 'Tailnet publishing is disabled.',
+        })),
         resolveTailscaleBaseUrl: () => 'https://desktop.tailnet.ts.net',
         waitForHealthy: vi.fn().mockResolvedValue(undefined),
       });

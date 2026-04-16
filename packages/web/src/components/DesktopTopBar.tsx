@@ -50,6 +50,29 @@ function resolveConnectionsIndicator(state: DesktopWorkspaceServerState | null):
   }
 
   if (state?.enabled && state.running) {
+    if (state.useTailscaleServe) {
+      if (state.tailscalePublishState.status === 'missing') {
+        return {
+          className: 'ui-desktop-top-bar__connections-button--error',
+          statusLabel: 'desktop tailnet missing',
+        };
+      }
+
+      if (state.tailscalePublishState.status === 'mismatch') {
+        return {
+          className: 'ui-desktop-top-bar__connections-button--error',
+          statusLabel: 'desktop tailnet mismatch',
+        };
+      }
+
+      if (state.tailscalePublishState.status === 'unavailable') {
+        return {
+          className: 'ui-desktop-top-bar__connections-button--error',
+          statusLabel: 'desktop tailnet unknown',
+        };
+      }
+    }
+
     return {
       className: 'ui-desktop-top-bar__connections-button--running',
       statusLabel: 'desktop server on',

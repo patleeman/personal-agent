@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
 import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
 import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
+import {
+  describeDesktopWorkspaceServerTailnetPublish,
+  formatDesktopWorkspaceServerStatus,
+  labelDesktopWorkspaceServerTailnetUrl,
+} from '../desktopWorkspaceServer';
 import type { DesktopConnectionsState, DesktopHostRecord, DesktopWorkspaceServerState } from '../types';
 import { ToolbarButton, cx } from './ui';
 
@@ -112,37 +117,6 @@ function hostKindLabel(host: DesktopHostRecord): string {
   }
 
   return host.kind === 'web' ? 'WebSocket' : 'SSH';
-}
-
-function formatWorkspaceServerStatus(state: DesktopWorkspaceServerState | null, draft: DesktopWorkspaceServerDraft): {
-  label: string;
-  className: string;
-} {
-  if (state?.error) {
-    return {
-      label: 'Error',
-      className: 'text-danger',
-    };
-  }
-
-  if (state?.running) {
-    return {
-      label: 'On',
-      className: 'text-steel',
-    };
-  }
-
-  if (draft.enabled) {
-    return {
-      label: 'Starting…',
-      className: 'text-warning',
-    };
-  }
-
-  return {
-    label: 'Off',
-    className: 'text-secondary',
-  };
 }
 
 function formatActivityTime(timestamp: number): string {
@@ -538,14 +512,20 @@ export function DesktopConnectionsModal({
         port: parsedPort,
         useTailscaleServe: workspaceServerDraft.enabled && workspaceServerDraft.useTailscaleServe,
       });
+      const nextDraft = createDesktopWorkspaceServerDraft(nextState);
+      const nextTailnetPublish = describeDesktopWorkspaceServerTailnetPublish(nextState, nextDraft);
       setWorkspaceServerState(nextState);
-      setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(nextState));
+      setWorkspaceServerDraft(nextDraft);
       if (nextState.enabled) {
         setNotice(nextState.running
-          ? 'Desktop workspace server updated.'
+          ? nextState.useTailscaleServe && nextState.tailscalePublishState.status !== 'published'
+            ? `Desktop workspace server updated, but Tailnet publish is ${nextTailnetPublish.label.toLowerCase()}.`
+            : 'Desktop workspace server updated.'
           : 'Desktop workspace server settings saved, but the server is not healthy yet.');
         appendActivity('success', nextState.running
-          ? `Remote server running at ${nextState.localWebsocketUrl}.`
+          ? nextState.useTailscaleServe && nextState.tailscalePublishState.status !== 'published'
+            ? `Remote server is running locally, but Tailnet publish is ${nextTailnetPublish.label.toLowerCase()}.`
+            : `Remote server running at ${nextState.localWebsocketUrl}.`
           : 'Remote server settings saved, but the server is not healthy yet.');
       } else {
         setNotice('Remote server stopped.');
@@ -647,7 +627,8 @@ export function DesktopConnectionsModal({
     }
   }
 
-  const workspaceServerStatus = formatWorkspaceServerStatus(workspaceServerState, workspaceServerDraft);
+  const workspaceServerStatus = formatDesktopWorkspaceServerStatus(workspaceServerState, workspaceServerDraft);
+  const tailnetPublishSummary = describeDesktopWorkspaceServerTailnetPublish(workspaceServerState, workspaceServerDraft);
   const workspaceServerLogPath = workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log';
   const showWorkspaceServerDetails = workspaceServerDraft.enabled || Boolean(workspaceServerState?.error) || Boolean(workspaceServerState?.logFile);
   const remoteHosts = connections?.hosts.filter((host) => host.kind !== 'local') ?? [];
@@ -758,13 +739,19 @@ export function DesktopConnectionsModal({
                           void handleCopyValue('Local URL', workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`);
                         }}
                       />
+                      <div className="space-y-1">
+                        <ValueRow label="Tailnet publish" value={`${tailnetPublishSummary.label} · ${tailnetPublishSummary.value}`} />
+                        {tailnetPublishSummary.detail ? (
+                          <p className={cx('text-[12px]', tailnetPublishSummary.className)}>{tailnetPublishSummary.detail}</p>
+                        ) : null}
+                      </div>
                       {workspaceServerState?.tailnetWebsocketUrl ? (
                         <ValueRow
-                          label="Tailnet URL"
+                          label={labelDesktopWorkspaceServerTailnetUrl(workspaceServerState)}
                           value={workspaceServerState.tailnetWebsocketUrl}
                           actionLabel="Copy"
                           onAction={() => {
-                            void handleCopyValue('Tailnet URL', workspaceServerState.tailnetWebsocketUrl ?? '');
+                            void handleCopyValue(labelDesktopWorkspaceServerTailnetUrl(workspaceServerState), workspaceServerState.tailnetWebsocketUrl ?? '');
                           }}
                         />
                       ) : null}

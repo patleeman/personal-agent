@@ -11,6 +11,16 @@ export interface SyncWebUiTailscaleServeInput {
   port: number;
 }
 
+export type TailscaleServeProxyStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
+
+export interface TailscaleServeProxyState {
+  status: TailscaleServeProxyStatus;
+  path: string;
+  expectedProxyTarget: string;
+  actualProxyTarget?: string;
+  message?: string;
+}
+
 interface TailscaleStatusPayload {
   MagicDNSSuffix?: unknown;
   Self?: {
@@ -212,6 +222,10 @@ function readTailscaleStatusPayload(): { payload?: TailscaleStatusPayload; error
   }
 }
 
+function renderExpectedLocalProxyTarget(port: number): string {
+  return `http://localhost:${String(port)}`;
+}
+
 function findServeProxyTarget(payload: TailscaleStatusPayload, path: string): string | undefined {
   if (!isRecord(payload.Web)) {
     return undefined;
@@ -255,30 +269,87 @@ function proxyTargetMatchesLoopbackPort(proxyTarget: string, port: number): bool
   }
 }
 
-function verifyTailscaleServeProxyState(input: { enabled: boolean; port: number; path?: string }): void {
+export function readTailscaleServeProxyState(input: SyncTailscaleServeProxyInput): TailscaleServeProxyState {
   const normalizedPath = normalizeServePath(input.path);
+  const normalizedPort = normalizePort(input.port);
+  const expectedProxyTarget = renderExpectedLocalProxyTarget(normalizedPort);
+
+  if (!input.enabled) {
+    return {
+      status: 'disabled',
+      path: normalizedPath,
+      expectedProxyTarget,
+      message: 'Tailnet publishing is disabled.',
+    };
+  }
+
   const status = readTailscaleServeStatusPayload();
   if (!status.payload) {
-    throw new Error(status.error ?? 'Could not verify Tailscale Serve state.');
+    return {
+      status: 'unavailable',
+      path: normalizedPath,
+      expectedProxyTarget,
+      message: status.error ?? 'Could not verify Tailscale Serve state.',
+    };
   }
 
   const proxyTarget = findServeProxyTarget(status.payload, normalizedPath);
+  if (!proxyTarget) {
+    return {
+      status: 'missing',
+      path: normalizedPath,
+      expectedProxyTarget,
+      message: `Tailscale Serve does not currently expose ${normalizedPath} -> localhost:${String(normalizedPort)}.`,
+    };
+  }
 
-  if (input.enabled) {
-    if (!proxyTarget) {
-      throw new Error(`Tailscale Serve did not expose ${normalizedPath} -> localhost:${String(input.port)} after applying config.`);
+  if (!proxyTargetMatchesLoopbackPort(proxyTarget, normalizedPort)) {
+    return {
+      status: 'mismatch',
+      path: normalizedPath,
+      expectedProxyTarget,
+      actualProxyTarget: proxyTarget,
+      message: `Tailscale Serve exposes ${normalizedPath}, but it points to ${proxyTarget} instead of localhost:${String(normalizedPort)}.`,
+    };
+  }
+
+  return {
+    status: 'published',
+    path: normalizedPath,
+    expectedProxyTarget,
+    actualProxyTarget: proxyTarget,
+    message: `Tailscale Serve exposes ${normalizedPath} -> localhost:${String(normalizedPort)}.`,
+  };
+}
+
+function verifyTailscaleServeProxyState(input: { enabled: boolean; port: number; path?: string }): void {
+  const normalizedPath = normalizeServePath(input.path);
+  const normalizedPort = normalizePort(input.port);
+
+  if (!input.enabled) {
+    const status = readTailscaleServeStatusPayload();
+    if (!status.payload) {
+      throw new Error(status.error ?? 'Could not verify Tailscale Serve state.');
     }
 
-    if (!proxyTargetMatchesLoopbackPort(proxyTarget, input.port)) {
-      throw new Error(`Tailscale Serve exposed ${normalizedPath}, but it points to ${proxyTarget} instead of localhost:${String(input.port)}.`);
+    const proxyTarget = findServeProxyTarget(status.payload, normalizedPath);
+    if (proxyTarget) {
+      throw new Error(`Tailscale Serve still exposes ${normalizedPath} -> ${proxyTarget} after disabling it.`);
     }
-
     return;
   }
 
-  if (proxyTarget) {
-    throw new Error(`Tailscale Serve still exposes ${normalizedPath} -> ${proxyTarget} after disabling it.`);
+  const state = readTailscaleServeProxyState({
+    enabled: true,
+    port: normalizedPort,
+    path: normalizedPath,
+  });
+
+  if (state.status === 'published') {
+    return;
   }
+
+  throw new Error(state.message ?? 'Could not verify Tailscale Serve state.');
 }
 
 function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | undefined {

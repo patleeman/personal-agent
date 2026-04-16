@@ -7,6 +7,7 @@ import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '..
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
 import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
+import { describeDesktopWorkspaceServerTailnetPublish, labelDesktopWorkspaceServerTailnetUrl } from '../desktopWorkspaceServer';
 import { createDesktopAwareEventSource } from '../desktopEventSource';
 import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
@@ -863,11 +864,15 @@ function DesktopConnectionsSettingsPanel() {
         port: parsedPort,
         useTailscaleServe: workspaceServerDraft.enabled && workspaceServerDraft.useTailscaleServe,
       });
+      const nextDraft = createDesktopWorkspaceServerDraft(nextState);
+      const nextTailnetPublish = describeDesktopWorkspaceServerTailnetPublish(nextState, nextDraft);
       setWorkspaceServerState(nextState);
-      setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(nextState));
+      setWorkspaceServerDraft(nextDraft);
       setNotice(nextState.enabled
         ? nextState.running
-          ? 'Desktop workspace server updated.'
+          ? nextState.useTailscaleServe && nextState.tailscalePublishState.status !== 'published'
+            ? `Desktop workspace server updated, but Tailnet publish is ${nextTailnetPublish.label.toLowerCase()}.`
+            : 'Desktop workspace server updated.'
           : 'Desktop workspace server settings saved, but the server is not healthy yet.'
         : 'Stopped hosting this desktop as a remote workspace.');
     } catch (nextError) {
@@ -940,6 +945,8 @@ function DesktopConnectionsSettingsPanel() {
       setAction(null);
     }
   }
+
+  const tailnetPublishSummary = describeDesktopWorkspaceServerTailnetPublish(workspaceServerState, workspaceServerDraft);
 
   return (
     <SettingsSection
@@ -1284,8 +1291,12 @@ function DesktopConnectionsSettingsPanel() {
                 </label>
                 <div className="space-y-1">
                   <p className="ui-card-meta break-all">Local URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}</span></p>
+                  <p className="ui-card-meta break-all">Tailnet publish: <span className={cx('text-[11px] font-medium', tailnetPublishSummary.className)}>{tailnetPublishSummary.label}</span> · <span className="font-mono text-[11px] text-primary">{tailnetPublishSummary.value}</span></p>
+                  {tailnetPublishSummary.detail ? (
+                    <p className={cx('text-[12px]', tailnetPublishSummary.className)}>{tailnetPublishSummary.detail}</p>
+                  ) : null}
                   {workspaceServerState?.tailnetWebsocketUrl ? (
-                    <p className="ui-card-meta break-all">Tailnet URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState.tailnetWebsocketUrl}</span></p>
+                    <p className="ui-card-meta break-all">{labelDesktopWorkspaceServerTailnetUrl(workspaceServerState)}: <span className="font-mono text-[11px] text-primary">{workspaceServerState.tailnetWebsocketUrl}</span></p>
                   ) : null}
                   <p className="ui-card-meta break-all">Log: <span className="font-mono text-[11px]">{workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log'}</span></p>
                   {workspaceServerState?.error ? <p className="text-[12px] text-danger">{workspaceServerState.error}</p> : null}

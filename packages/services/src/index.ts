@@ -20,12 +20,15 @@ export {
   type WebUiServiceStatus,
 } from './service.js';
 export {
+  readTailscaleServeProxyState,
   resolveTailscaleServeBaseUrl,
   resolveWebUiTailscaleUrl,
   syncTailscaleServeProxy,
   syncWebUiTailscaleServe,
   type SyncTailscaleServeProxyInput,
   type SyncWebUiTailscaleServeInput,
+  type TailscaleServeProxyState,
+  type TailscaleServeProxyStatus,
 } from './tailscale-serve.js';
 export {
   ensureActiveWebUiRelease,

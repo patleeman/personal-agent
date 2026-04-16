@@ -848,6 +848,16 @@ export interface DesktopConnectionsState {
   hosts: DesktopHostRecord[];
 }
 
+export type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
+
+export interface DesktopWorkspaceServerTailscalePublishState {
+  status: DesktopWorkspaceServerTailscalePublishStatus;
+  path: string;
+  expectedProxyTarget: string;
+  actualProxyTarget?: string;
+  message?: string;
+}
+
 export interface DesktopWorkspaceServerState {
   enabled: boolean;
   port: number;
@@ -856,6 +866,7 @@ export interface DesktopWorkspaceServerState {
   websocketPath: string;
   localWebsocketUrl: string;
   tailnetWebsocketUrl?: string;
+  tailscalePublishState: DesktopWorkspaceServerTailscalePublishState;
   logFile: string;
   pid?: number;
   error?: string;

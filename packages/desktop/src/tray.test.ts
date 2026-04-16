@@ -23,6 +23,12 @@ function createWorkspaceServerState(overrides: Partial<DesktopWorkspaceServerSta
     running: false,
     websocketPath: '/codex',
     localWebsocketUrl: 'ws://127.0.0.1:8390/codex',
+    tailscalePublishState: {
+      status: 'disabled',
+      path: '/codex',
+      expectedProxyTarget: 'http://localhost:8390',
+      message: 'Tailnet publishing is disabled.',
+    },
     logFile: '/logs/codex-app-server.log',
     ...overrides,
   };
