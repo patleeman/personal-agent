@@ -87,11 +87,11 @@ function emitPendingConversationPromptChanged(
   ));
 }
 
-export function buildPendingConversationPromptStorageKey(sessionId: string): string {
+function buildPendingConversationPromptStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:pending-prompt`;
 }
 
-export function buildPendingConversationPromptDispatchingStorageKey(sessionId: string): string {
+function buildPendingConversationPromptDispatchingStorageKey(sessionId: string): string {
   return `pa:reload:conversation:${sessionId}:pending-prompt-dispatching`;
 }
 

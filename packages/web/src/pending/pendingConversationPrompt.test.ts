@@ -2,8 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { StorageLike } from '../local/reloadState';
 import { buildConversationComposerStorageKey } from '../conversation/forking';
 import {
-  buildPendingConversationPromptDispatchingStorageKey,
-  buildPendingConversationPromptStorageKey,
   clearPendingConversationPrompt,
   consumePendingConversationPrompt,
   isPendingConversationPromptDispatching,
@@ -27,10 +25,21 @@ function createStorage(): StorageLike {
   };
 }
 
+const PENDING_CONVERSATION_PROMPT_STORAGE_KEY = 'pa:reload:conversation:session-123:pending-prompt';
+const PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY = 'pa:reload:conversation:session-123:pending-prompt-dispatching';
+
 describe('pendingConversationPrompt helpers', () => {
   it('builds a stable storage key per session', () => {
-    expect(buildPendingConversationPromptStorageKey('session-123'))
-      .toBe('pa:reload:conversation:session-123:pending-prompt');
+    const storage = createStorage();
+
+    persistPendingConversationPrompt('session-123', {
+      text: 'hello world',
+      images: [],
+      attachmentRefs: [],
+    }, storage);
+
+    expect(storage.getItem(PENDING_CONVERSATION_PROMPT_STORAGE_KEY))
+      .toBe(JSON.stringify({ text: 'hello world', images: [], attachmentRefs: [] }));
   });
 
   it('persists and restores pending prompts', () => {
@@ -158,7 +167,7 @@ describe('pendingConversationPrompt helpers', () => {
   it('reuses recently persisted dispatching state across navigation but drops stale entries', () => {
     const storage = createStorage();
     const nowSpy = vi.spyOn(Date, 'now');
-    const key = buildPendingConversationPromptDispatchingStorageKey('session-123');
+    const key = PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY;
 
     nowSpy.mockReturnValue(1_000);
     setPendingConversationPromptDispatching('session-123', true, storage);
