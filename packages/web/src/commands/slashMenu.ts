@@ -11,7 +11,7 @@ export interface SlashMenuItem {
   kind: 'command' | 'skill';
 }
 
-export const BASE_SLASH_COMMANDS = [
+const BASE_SLASH_COMMANDS = [
   { cmd: '/model', icon: '⊕', desc: 'Select model (opens selector UI)' },
   { cmd: '/export', icon: '⇪', desc: 'Export session to HTML file' },
   { cmd: '/copy', icon: '⎘', desc: 'Copy last agent message to clipboard' },
@@ -28,7 +28,7 @@ export const BASE_SLASH_COMMANDS = [
   { cmd: '/resume', icon: '⏰', desc: 'Schedule this conversation to continue later' },
 ] as const;
 
-export interface ParsedSlashInput {
+interface ParsedSlashInput {
   command: string;
   argument: string;
 }

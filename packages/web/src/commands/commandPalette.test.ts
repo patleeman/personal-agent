@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scoreCommandPaletteItem, searchCommandPaletteItems, type CommandPaletteItem } from './commandPalette';
+import { searchCommandPaletteItems, type CommandPaletteItem } from './commandPalette';
 
 interface TestAction {
   kind: string;
@@ -45,12 +45,12 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
 ];
 
 describe('command palette search', () => {
-  it('scores title matches ahead of unrelated items', () => {
-    const score = scoreCommandPaletteItem(ITEMS[3], 'nightly');
-    const unrelated = scoreCommandPaletteItem(ITEMS[0], 'nightly');
+  it('filters title matches ahead of unrelated items', () => {
+    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly', scope: 'commands' });
 
-    expect(score).not.toBeNull();
-    expect(unrelated).toBeNull();
+    expect(results).toHaveLength(1);
+    expect(results[0]?.section).toBe('tasks');
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['task:nightly']);
   });
 
   it('matches across multiple tokens and keywords', () => {

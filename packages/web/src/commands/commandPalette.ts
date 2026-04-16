@@ -77,7 +77,7 @@ function scoreField(token: string, value: string | undefined, weight: number): n
   return Math.floor(weight / 3) + fuzzy;
 }
 
-export function scoreCommandPaletteItem<TAction>(item: CommandPaletteItem<TAction>, query: string): number | null {
+function scoreCommandPaletteItem<TAction>(item: CommandPaletteItem<TAction>, query: string): number | null {
   const tokens = tokenizeQuery(query);
   if (tokens.length === 0) {
     return 0;
