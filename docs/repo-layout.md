@@ -42,7 +42,6 @@ Use these defaults:
 - `packages/web/src/navigation/` — route redirects, lazy-route recovery, and URL search-param selection helpers for cross-page navigation
 - `packages/web/src/pending/` — pending prompt persistence and optimistic pending-message presentation helpers
 - `packages/web/src/session/` — session snapshot, tab layout, refresh scheduling, and session attention helpers
-- `packages/web/src/system/` — system-status presentation helpers, remote web UI access summaries, and other system-page support logic
 - `packages/web/src/transcript/` — transcript block transformation, interactive transcript tool-block helpers, and streaming status presentation
 - `packages/web/src/ui-state/` — browser-only theme, panel sizing, warm live-session cache, and open-shelf UI state helpers
 - `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
@@ -62,7 +61,6 @@ If it manages model filtering or reusable model preference presentation logic, k
 If it manages route redirects or search-param driven page navigation state, keep it under `src/navigation/`.
 If it manages pending prompt staging or optimistic pending-message state, keep it under `src/pending/`.
 If it manages session list, tab, or snapshot state, keep it under `src/session/`.
-If it exists to summarize or present system-service state for the system surfaces, keep it under `src/system/`.
 If it transforms or annotates transcript blocks for the chat surface, keep it under `src/transcript/`.
 If it manages browser-only theme or layout/view state, keep it under `src/ui-state/`.
 
