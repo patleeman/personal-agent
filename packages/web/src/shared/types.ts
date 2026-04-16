@@ -255,7 +255,7 @@ export interface ScheduledTaskSummary {
   lastAttemptCount?: number;
 }
 
-export type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
+type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
 
 export interface ScheduledTaskDetail {
   id: string;
@@ -278,13 +278,13 @@ export interface ScheduledTaskDetail {
   threadTitle?: string;
 }
 
-export interface DurableRunSource {
+interface DurableRunSource {
   type: string;
   id?: string;
   filePath?: string;
 }
 
-export interface DurableRunManifest {
+interface DurableRunManifest {
   version: number;
   id: string;
   kind: string;
@@ -294,7 +294,7 @@ export interface DurableRunManifest {
   source?: DurableRunSource;
 }
 
-export interface DurableRunStatusRecord {
+interface DurableRunStatusRecord {
   version: number;
   runId: string;
   status: string;
@@ -307,7 +307,7 @@ export interface DurableRunStatusRecord {
   lastError?: string;
 }
 
-export interface DurableRunCheckpoint {
+interface DurableRunCheckpoint {
   version: number;
   runId: string;
   updatedAt: string;
@@ -316,7 +316,7 @@ export interface DurableRunCheckpoint {
   payload?: Record<string, unknown>;
 }
 
-export interface DurableRunPaths {
+interface DurableRunPaths {
   root: string;
   manifestPath: string;
   statusPath: string;
@@ -339,7 +339,7 @@ export interface DurableRunRecord {
   attentionSignature?: string | null;
 }
 
-export interface DurableRunsSummary {
+interface DurableRunsSummary {
   total: number;
   recoveryActions: Record<string, number>;
   statuses: Record<string, number>;
@@ -358,12 +358,12 @@ export interface DurableRunDetailResult {
   run: DurableRunRecord;
 }
 
-export interface LogTail {
+interface LogTail {
   path?: string;
   lines: string[];
 }
 
-export interface DaemonServiceSummary {
+interface DaemonServiceSummary {
   platform: string;
   identifier: string;
   manifestPath: string;
@@ -373,7 +373,7 @@ export interface DaemonServiceSummary {
   error?: string;
 }
 
-export interface DaemonRuntimeSummary {
+interface DaemonRuntimeSummary {
   running: boolean;
   socketPath: string;
   pid?: number;
@@ -390,7 +390,7 @@ export interface DaemonState {
   log: LogTail;
 }
 
-export interface WebUiReleaseSummary {
+interface WebUiReleaseSummary {
   distDir: string;
   serverDir: string;
   serverEntryFile: string;
@@ -398,12 +398,12 @@ export interface WebUiReleaseSummary {
   revision?: string;
 }
 
-export interface WebUiDeploymentSummary {
+interface WebUiDeploymentSummary {
   stablePort: number;
   activeRelease?: WebUiReleaseSummary;
 }
 
-export interface WebUiServiceSummary {
+interface WebUiServiceSummary {
   platform: string;
   identifier: string;
   manifestPath: string;
