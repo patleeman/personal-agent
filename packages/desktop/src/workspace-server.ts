@@ -23,6 +23,7 @@ export const DESKTOP_WORKSPACE_SERVER_PATH = '/codex';
 const DESKTOP_WORKSPACE_SERVER_LOG_FILE = 'codex-app-server.log';
 const DEFAULT_COMMAND_START_TIMEOUT_MS = 15_000;
 const DEFAULT_HEALTHCHECK_TIMEOUT_MS = 2_000;
+const WORKSPACE_SERVER_RESTART_DELAY_MS = [1_000, 2_000, 5_000, 10_000] as const;
 
 export interface UpdateDesktopWorkspaceServerConfigInput {
   enabled?: boolean;
@@ -106,6 +107,9 @@ export class DesktopWorkspaceServerManager {
   private syncPromise?: Promise<DesktopWorkspaceServerState>;
   private publishedPort?: number;
   private lastError: string | null = null;
+  private restartTimer?: ReturnType<typeof setTimeout>;
+  private restartAttempt = 0;
+  private readonly expectedExitChildren = new WeakSet<ChildProcess>();
 
   private readonly loadConfigImpl: () => DesktopConfig;
   private readonly saveConfigImpl: (config: DesktopConfig) => void;
@@ -157,6 +161,7 @@ export class DesktopWorkspaceServerManager {
   }
 
   async stop(): Promise<void> {
+    this.resetRestartBackoff();
     await this.stopPublishedProxy();
     await this.stopChildProcess();
   }
@@ -177,6 +182,7 @@ export class DesktopWorkspaceServerManager {
     const config = normalizeWorkspaceServerConfig(this.loadConfigImpl().workspaceServer);
 
     if (!config.enabled) {
+      this.resetRestartBackoff();
       this.lastError = null;
       await this.stopPublishedProxy();
       await this.stopChildProcess();
@@ -186,6 +192,7 @@ export class DesktopWorkspaceServerManager {
     try {
       await this.ensureChildProcess(config.port);
       this.lastError = null;
+      this.resetRestartBackoff();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : String(error);
       return this.buildState(config, false);
@@ -256,18 +263,30 @@ export class DesktopWorkspaceServerManager {
 
   private attachExitLogging(child: ChildProcess, port: number): void {
     child.once('exit', (code, signal) => {
+      const expectedExit = this.expectedExitChildren.has(child);
+      this.expectedExitChildren.delete(child);
+
       if (this.child?.child === child) {
         this.child = undefined;
+      }
+
+      if (expectedExit) {
+        return;
       }
 
       const renderedCode = typeof code === 'number' ? String(code) : 'null';
       const renderedSignal = signal ?? 'none';
       this.lastError = `Workspace server exited on port ${String(port)} (code=${renderedCode}, signal=${renderedSignal}).`;
       console.warn(`[desktop] workspace server exited code=${renderedCode} signal=${renderedSignal}`);
+      this.scheduleRestart(port);
     });
   }
 
   private async stopChildProcess(): Promise<void> {
+    if (this.child?.child) {
+      this.expectedExitChildren.add(this.child.child);
+    }
+
     await this.stopChildImpl(this.child);
     this.child = undefined;
   }
@@ -284,6 +303,36 @@ export class DesktopWorkspaceServerManager {
     } finally {
       this.publishedPort = undefined;
     }
+  }
+
+  private resetRestartBackoff(): void {
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = undefined;
+    }
+    this.restartAttempt = 0;
+  }
+
+  private scheduleRestart(port: number): void {
+    const config = normalizeWorkspaceServerConfig(this.loadConfigImpl().workspaceServer);
+    if (!config.enabled || this.restartTimer) {
+      return;
+    }
+
+    const nextAttempt = this.restartAttempt;
+    const delayMs = WORKSPACE_SERVER_RESTART_DELAY_MS[Math.min(nextAttempt, WORKSPACE_SERVER_RESTART_DELAY_MS.length - 1)];
+    this.restartAttempt = nextAttempt + 1;
+
+    console.warn(`[desktop] scheduling workspace server restart on port ${String(port)} in ${String(delayMs)}ms (attempt ${String(this.restartAttempt)})`);
+    this.restartTimer = setTimeout(() => {
+      this.restartTimer = undefined;
+      void this.syncToConfig().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.lastError = message;
+        console.warn(`[desktop] workspace server restart failed: ${message}`);
+      });
+    }, delayMs);
+    this.restartTimer.unref?.();
   }
 }
 

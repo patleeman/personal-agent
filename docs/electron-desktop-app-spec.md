@@ -70,6 +70,7 @@ The desktop shell can host this machine as a remote workspace through a managed 
 
 - Desktop settings own an enable/disable toggle for the managed workspace server
 - Electron main spawns and monitors the bundled helper instead of requiring manual shell commands
+- unexpected helper exits should auto-restart with bounded backoff while the desktop tray app remains alive
 - the managed local endpoint is shown as an exact websocket URL, including the publish path (currently `/codex`)
 - optional Tailnet publishing uses `tailscale serve --set-path=/codex` and surfaces the exact `wss://.../codex` URL to copy into direct websocket remotes
 - this hosting path is machine-local desktop state, separate from saved remote workspace connection records
