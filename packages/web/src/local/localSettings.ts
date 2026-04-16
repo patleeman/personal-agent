@@ -6,23 +6,23 @@ export const OPEN_SESSION_IDS_STORAGE_KEY = 'pa:open-session-ids';
 export const PINNED_SESSION_IDS_STORAGE_KEY = 'pa:pinned-session-ids';
 export const ARCHIVED_SESSION_IDS_STORAGE_KEY = 'pa:archived-session-ids';
 export const SAVED_WORKSPACE_PATHS_STORAGE_KEY = 'pa:saved-workspace-paths';
-export const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
+const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
 export const SIDEBAR_WIDTH_STORAGE_KEY = 'pa:sidebar-width';
-export const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
-export const PINNED_NOTE_IDS_STORAGE_KEY = 'pa:pinned-note-ids';
-export const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
-export const PINNED_SKILL_IDS_STORAGE_KEY = 'pa:pinned-skill-ids';
-export const OPEN_WORKSPACE_IDS_STORAGE_KEY = 'pa:open-workspace-ids';
-export const PINNED_WORKSPACE_IDS_STORAGE_KEY = 'pa:pinned-workspace-ids';
-export const OPEN_NODE_IDS_STORAGE_KEY = 'pa:open-node-ids';
-export const PINNED_NODE_IDS_STORAGE_KEY = 'pa:pinned-node-ids';
-export const SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX = 'pa:sidebar-nav-section:';
+const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
+const PINNED_NOTE_IDS_STORAGE_KEY = 'pa:pinned-note-ids';
+const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
+const PINNED_SKILL_IDS_STORAGE_KEY = 'pa:pinned-skill-ids';
+const OPEN_WORKSPACE_IDS_STORAGE_KEY = 'pa:open-workspace-ids';
+const PINNED_WORKSPACE_IDS_STORAGE_KEY = 'pa:pinned-workspace-ids';
+const OPEN_NODE_IDS_STORAGE_KEY = 'pa:open-node-ids';
+const PINNED_NODE_IDS_STORAGE_KEY = 'pa:pinned-node-ids';
+const SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX = 'pa:sidebar-nav-section:';
 
 export function buildSidebarNavSectionStorageKey(sectionId: string): string {
   return `${SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX}${sectionId}`;
 }
 
-export function isSidebarNavSectionStorageKey(key: string): boolean {
+function isSidebarNavSectionStorageKey(key: string): boolean {
   return key.startsWith(SIDEBAR_NAV_SECTION_STORAGE_KEY_PREFIX);
 }
 

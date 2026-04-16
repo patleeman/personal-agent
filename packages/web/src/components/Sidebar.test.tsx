@@ -4,16 +4,17 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
 import {
-  OPEN_NOTE_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
-  OPEN_SKILL_IDS_STORAGE_KEY,
-  PINNED_NOTE_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
   SAVED_WORKSPACE_PATHS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
 } from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 import { Sidebar, resolveSidebarConversationHotkeyOrder } from './Sidebar.js';
+
+const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
+const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
+const PINNED_NOTE_IDS_STORAGE_KEY = 'pa:pinned-note-ids';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 

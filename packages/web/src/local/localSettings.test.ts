@@ -3,7 +3,6 @@ import { buildComposerHistoryStorageKey } from '../conversation/composerHistory'
 import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   buildSidebarNavSectionStorageKey,
-  CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   resetStoredConversationUiState,
   resetStoredLayoutPreferences,
@@ -33,6 +32,8 @@ function createStorage(): Storage {
     },
   } as Storage;
 }
+
+const CONVERSATION_SEEN_MESSAGE_COUNT_STORAGE_KEY = 'pa:conversation-seen-message-counts';
 
 describe('localSettings', () => {
   beforeEach(() => {
