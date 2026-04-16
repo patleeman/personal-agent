@@ -35,11 +35,6 @@ export function formatContextWindowLabel(contextWindow: number): string {
   return String(contextWindow);
 }
 
-export function formatContextShareLabel(label: string, value: number, contextWindow: number): string {
-  const pct = contextWindow > 0 ? (value / contextWindow) * 100 : 0;
-  return `${label}: ${pct.toFixed(1)}% of ctx`;
-}
-
 export function getContextUsagePercent(tokens: number | null, contextWindow: number): number | null {
   if (tokens === null || contextWindow <= 0) {
     return null;

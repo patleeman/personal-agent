@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatContextShareLabel, formatContextUsageLabel, formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel, getContextUsagePercent } from './conversationHeader.js';
+import { formatContextUsageLabel, formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel, getContextUsagePercent } from './conversationHeader.js';
 
 describe('conversation header helpers', () => {
   it('formats thinking level labels with a sensible fallback', () => {
@@ -22,10 +22,6 @@ describe('conversation header helpers', () => {
     expect(formatContextWindowLabel(1_500_000)).toBe('1.5M');
   });
 
-  it('formats context share labels for hover text', () => {
-    expect(formatContextShareLabel('assistant', 18_900, 272_000)).toBe('assistant: 6.9% of ctx');
-    expect(formatContextShareLabel('tool', 0, 272_000)).toBe('tool: 0.0% of ctx');
-  });
 
   it('formats current context usage labels, including unknown post-compaction state', () => {
     expect(getContextUsagePercent(27_200, 272_000)).toBe(10);

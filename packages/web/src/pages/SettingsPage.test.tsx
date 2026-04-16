@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../client/api';
 import { useApi } from '../hooks';
-import { useSseConnection, useSystemStatus } from '../app/contexts';
+import { useSseConnection } from '../app/contexts';
 import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage.js';
 
@@ -14,7 +14,6 @@ vi.mock('../hooks', () => ({
 
 vi.mock('../app/contexts', () => ({
   useSseConnection: vi.fn(),
-  useSystemStatus: vi.fn(),
 }));
 
 vi.mock('../ui-state/theme', () => ({
@@ -68,60 +67,6 @@ describe('SettingsPage', () => {
       status: 'open',
     });
 
-    vi.mocked(useSystemStatus).mockReturnValue({
-      daemon: {
-        warnings: [],
-        service: {
-          platform: 'launchctl',
-          identifier: 'app.personal-agent.daemon',
-          manifestPath: '/tmp/daemon.plist',
-          installed: true,
-          running: true,
-        },
-        runtime: {
-          running: true,
-          socketPath: '/tmp/daemon.sock',
-          pid: 123,
-          startedAt: '2026-03-28T00:00:00.000Z',
-          moduleCount: 8,
-          queueDepth: 1,
-          maxQueueDepth: 4,
-        },
-        log: {
-          lines: [],
-        },
-      },
-      webUi: {
-        warnings: [],
-        service: {
-          platform: 'launchctl',
-          identifier: 'app.personal-agent.web',
-          manifestPath: '/tmp/web-ui.plist',
-          installed: true,
-          running: true,
-          repoRoot: '/Users/patrick/workingdir/personal-agent',
-          port: 3000,
-          url: 'http://127.0.0.1:3000',
-          tailscaleServe: false,
-          resumeFallbackPrompt: 'Continue where you left off.',
-          deployment: {
-            stablePort: 3000,
-            activeRelease: {
-              distDir: '/Users/patrick/workingdir/personal-agent/packages/web/dist',
-              serverDir: '/Users/patrick/workingdir/personal-agent/packages/web/dist-server',
-              serverEntryFile: '/Users/patrick/workingdir/personal-agent/packages/web/dist-server/index.js',
-              sourceRepoRoot: '/Users/patrick/workingdir/personal-agent',
-              revision: 'abc123',
-            },
-          },
-        },
-        log: {
-          lines: [],
-        },
-      },
-      setDaemon: vi.fn(),
-      setWebUi: vi.fn(),
-    });
 
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
       if (fetcher === api.skillFolders) {

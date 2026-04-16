@@ -117,6 +117,3 @@ export const SystemStatusContext = createContext<SystemStatusContextValue>({
   setWebUi: () => {},
 });
 
-export function useSystemStatus() {
-  return useContext(SystemStatusContext);
-}

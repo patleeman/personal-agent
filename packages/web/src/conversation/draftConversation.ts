@@ -471,7 +471,4 @@ export function hasDraftConversationContextDocs(
   return readDraftConversationContextDocs(storage).length > 0;
 }
 
-export function isDraftConversationPath(pathname: string): boolean {
-  return pathname === DRAFT_CONVERSATION_ROUTE;
-}
 
