@@ -29,10 +29,12 @@ Use these defaults:
 - `packages/web/src/pages/` — route-level UI surfaces
 - `packages/web/src/components/` — reusable UI pieces
 - `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
+- `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
 - `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
 - `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
 
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
+If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
 
 ## Repo-level runtime resources
 

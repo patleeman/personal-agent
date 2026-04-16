@@ -1,4 +1,4 @@
-import type { PersonalAgentDesktopBridge } from './desktopBridge';
+import type { PersonalAgentDesktopBridge } from './desktop/desktopBridge';
 
 declare global {
   interface Window {

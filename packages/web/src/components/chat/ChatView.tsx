@@ -24,7 +24,7 @@ import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlin
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { readTerminalBashToolPresentation } from '../../terminalBashBlock';
 import { getStreamingThroughputLabel } from '../../streamingThroughput';
-import { getDesktopBridge } from '../../desktopBridge';
+import { getDesktopBridge } from '../../desktop/desktopBridge';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as R
 import { useLocation } from 'react-router-dom';
 import { getConversationRunIdFromSearch } from '../conversation/conversationRuns';
 import { clampPanelWidth, getRailLayoutPrefs } from '../layoutSizing';
-import { useDesktopChrome } from '../desktopChromeContext';
+import { useDesktopChrome } from '../desktop/desktopChromeContext';
 import { ContextRail } from './ContextRail';
 
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;

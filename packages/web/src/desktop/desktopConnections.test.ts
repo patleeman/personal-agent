@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveDesktopHostEditorSelection } from './desktopConnections.js';
-import type { DesktopConnectionsState } from './types';
+import type { DesktopConnectionsState } from '../types';
 
 function createConnectionsState(): DesktopConnectionsState {
   return {

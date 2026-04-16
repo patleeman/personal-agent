@@ -1,4 +1,4 @@
-import type { DesktopConnectionsState, DesktopHostRecord } from './types';
+import type { DesktopConnectionsState, DesktopHostRecord } from '../types';
 
 export type DesktopHostEditorMode = 'new' | 'existing';
 

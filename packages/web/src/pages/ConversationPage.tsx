@@ -16,7 +16,7 @@ import { useConversationEventVersion } from '../hooks/useConversationEventVersio
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../api';
-import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
+import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
 import { appendComposerHistory, readComposerHistory } from '../composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';

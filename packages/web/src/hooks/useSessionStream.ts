@@ -15,7 +15,7 @@ import type {
   SseEvent,
 } from '../types';
 import { api } from '../api';
-import { createDesktopAwareEventSource, type EventSourceLike } from '../desktopEventSource';
+import { createDesktopAwareEventSource, type EventSourceLike } from '../desktop/desktopEventSource';
 import { readWarmLiveSessionState, clearWarmLiveSessionState, writeWarmLiveSessionState } from '../liveSessionWarmth';
 import { displayBlockToMessageBlock } from '../messageBlocks';
 import { parseSkillBlock } from '../skillBlock';

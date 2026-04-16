@@ -29,7 +29,7 @@ import {
   getDesktopBridge,
   type DesktopConversationContextMenuAction,
   type DesktopConversationCwdGroupContextMenuAction,
-} from '../desktopBridge';
+} from '../desktop/desktopBridge';
 import {
   buildConversationDeeplink,
   buildConversationSurfacePath,

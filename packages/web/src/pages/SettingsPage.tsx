@@ -5,11 +5,11 @@ import { useApi } from '../hooks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
-import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
-import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
-import { describeDesktopWorkspaceServerTailnetPublish, labelDesktopWorkspaceServerTailnetUrl } from '../desktopWorkspaceServer';
-import { createDesktopAwareEventSource } from '../desktopEventSource';
-import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
+import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';
+import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktop/desktopConnections';
+import { describeDesktopWorkspaceServerTailnetPublish, labelDesktopWorkspaceServerTailnetUrl } from '../desktop/desktopWorkspaceServer';
+import { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
+import { subscribeDesktopProviderOAuthLogin } from '../desktop/desktopProviderOAuth';
 import type {
   DesktopAppPreferencesState,
   DesktopConnectionsState,

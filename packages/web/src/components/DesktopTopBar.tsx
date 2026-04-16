@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
-import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
+import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState, DesktopWorkspaceServerState } from '../types';
 import { cx, IconButton, ToolbarButton } from './ui';
 

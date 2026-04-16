@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
-import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
+import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
+import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktop/desktopConnections';
 import {
   describeDesktopWorkspaceServerTailnetPublish,
   formatDesktopWorkspaceServerStatus,
   labelDesktopWorkspaceServerTailnetUrl,
-} from '../desktopWorkspaceServer';
+} from '../desktop/desktopWorkspaceServer';
 import type { DesktopConnectionsState, DesktopHostRecord, DesktopWorkspaceServerState } from '../types';
 import { ToolbarButton, cx } from './ui';
 

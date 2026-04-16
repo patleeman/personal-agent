@@ -1,4 +1,4 @@
-import { isDesktopShell } from '../desktopBridge';
+import { isDesktopShell } from '../desktop/desktopBridge';
 import type { SystemComponentId } from '../systemSelection';
 import type { DesktopEnvironmentState } from '../types';
 import { SystemServiceSection } from './SystemContextPanel';

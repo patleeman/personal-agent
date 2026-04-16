@@ -4,7 +4,7 @@ import {
   DESKTOP_CONVERSATION_STATE_EVENT,
   getDesktopBridge,
   readDesktopEnvironment,
-} from '../desktopBridge';
+} from '../desktop/desktopBridge';
 import type {
   DesktopConversationState,
   PromptAttachmentRefInput,
