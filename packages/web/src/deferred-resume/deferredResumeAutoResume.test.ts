@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDeferredResumeAutoResumeKey } from './deferredResumeAutoResume';
-import type { DeferredResumeSummary } from './types';
+import type { DeferredResumeSummary } from '../types';
 
 function scheduled(id: string): DeferredResumeSummary {
   return {

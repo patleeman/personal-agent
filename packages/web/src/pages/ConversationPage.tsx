@@ -32,12 +32,12 @@ import { displayBlockToMessageBlock } from '../messageBlocks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
 import { filterModelPickerItems } from '../modelPicker';
-import { parseDeferredResumeSlashCommand } from '../deferredResumeSlashCommand';
+import { parseDeferredResumeSlashCommand } from '../deferred-resume/deferredResumeSlashCommand';
 import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
-import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferredResumeIndicator';
+import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
   findPendingAskUserQuestion,

@@ -1,4 +1,4 @@
-import type { DeferredResumeSummary } from './types';
+import type { DeferredResumeSummary } from '../types';
 
 export function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
   return Date.parse(resume.status === 'ready'

@@ -4,7 +4,7 @@ import {
   compareDeferredResumes,
   describeDeferredResumeStatus,
 } from './deferredResumeIndicator';
-import type { DeferredResumeSummary } from './types';
+import type { DeferredResumeSummary } from '../types';
 
 function scheduled(id: string, dueAt: string): DeferredResumeSummary {
   return {
