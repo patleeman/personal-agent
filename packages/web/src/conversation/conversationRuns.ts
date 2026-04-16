@@ -1,8 +1,8 @@
 import type { MessageBlock } from '../shared/types';
 
-export const CONVERSATION_RUN_QUERY_PARAM = 'run';
+const CONVERSATION_RUN_QUERY_PARAM = 'run';
 
-export interface ConversationRunMention {
+interface ConversationRunMention {
   runId: string;
   firstMessageIndex: number;
   lastMessageIndex: number;
@@ -74,7 +74,7 @@ function addRunId(target: string[], seen: Set<string>, value: string | undefined
   target.push(normalized);
 }
 
-export function extractDurableRunIdsFromText(text: string): string[] {
+function extractDurableRunIdsFromText(text: string): string[] {
   if (!text.trim()) {
     return [];
   }

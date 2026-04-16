@@ -1,8 +1,8 @@
 import type { ConversationArtifactToolDetails, MessageBlock } from '../shared/types';
 
-export const CONVERSATION_ARTIFACT_QUERY_PARAM = 'artifact';
+const CONVERSATION_ARTIFACT_QUERY_PARAM = 'artifact';
 
-export interface ConversationArtifactPresentation {
+interface ConversationArtifactPresentation {
   action: 'save' | 'get' | 'list' | 'delete';
   artifactId: string;
   title: string;

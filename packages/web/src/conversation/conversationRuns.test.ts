@@ -3,7 +3,6 @@ import {
   collectConversationRunMentions,
   createConversationLiveRunId,
   extractDurableRunIdsFromBlock,
-  extractDurableRunIdsFromText,
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
 } from './conversationRuns.js';
@@ -20,16 +19,20 @@ describe('conversationRuns helpers', () => {
     expect(createConversationLiveRunId('conv:123 / demo')).toBe('conversation-live-conv-123-demo');
   });
 
-  it('extracts durable run ids from tool-like text and ignores incidental file names', () => {
-    const text = [
-      'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
-      'Inspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
-      'Log path   /tmp/run-now.task.md',
-      '{"runId":"task-nightly-review-2026-03-13T17-45-00-000Z-12345678"}',
-      'conversation-live-conv-123',
-    ].join('\n');
+  it('extracts durable run ids from text blocks and ignores incidental file names', () => {
+    const block: Extract<MessageBlock, { type: 'text' }> = {
+      type: 'text',
+      ts: '2026-03-13T18:00:00.000Z',
+      text: [
+        'Run        run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
+        'Inspect    runId=run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
+        'Log path   /tmp/run-now.task.md',
+        '{"runId":"task-nightly-review-2026-03-13T17-45-00-000Z-12345678"}',
+        'conversation-live-conv-123',
+      ].join('\n'),
+    };
 
-    expect(extractDurableRunIdsFromText(text)).toEqual([
+    expect(extractDurableRunIdsFromBlock(block)).toEqual([
       'run-code-review-2026-03-13T17-42-11-000Z-abcd1234',
       'task-nightly-review-2026-03-13T17-45-00-000Z-12345678',
       'conversation-live-conv-123',

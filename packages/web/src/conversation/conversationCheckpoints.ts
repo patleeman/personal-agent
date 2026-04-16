@@ -1,9 +1,9 @@
 import type { ConversationCheckpointToolDetails, MessageBlock } from '../shared/types';
 
-export const CONVERSATION_CHECKPOINT_QUERY_PARAM = 'checkpoint';
-export const CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM = 'checkpointFile';
+const CONVERSATION_CHECKPOINT_QUERY_PARAM = 'checkpoint';
+const CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM = 'checkpointFile';
 
-export interface ConversationCheckpointPresentation {
+interface ConversationCheckpointPresentation {
   action: 'save' | 'get';
   checkpointId: string;
   commitSha: string;
