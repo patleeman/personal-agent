@@ -164,6 +164,52 @@ describe('ConversationCheckpointModal', () => {
     expect(html).toContain('Looks good.');
   });
 
+  it('renders local git commits as read-only reviews', () => {
+    mockUseApiResults({
+      'conv-123:checkpoint:abc1234def567890abc1234def567890abc12345': {
+        data: {
+          conversationId: 'conv-123',
+          checkpoint: {
+            id: 'abc1234def567890abc1234def567890abc12345',
+            conversationId: 'conv-123',
+            title: 'feat: local commit',
+            cwd: '/tmp/workspace',
+            commitSha: 'abc1234def567890abc1234def567890abc12345',
+            shortSha: 'abc1234',
+            subject: 'feat: local commit',
+            authorName: 'Patrick Lee',
+            committedAt: '2026-04-14T12:00:00.000Z',
+            createdAt: '2026-04-14T12:00:00.000Z',
+            updatedAt: '2026-04-14T12:00:00.000Z',
+            fileCount: 1,
+            linesAdded: 2,
+            linesDeleted: 0,
+            commentCount: 0,
+            sourceKind: 'git',
+            commentable: false,
+            comments: [],
+            files: [
+              {
+                path: 'README.md',
+                status: 'modified',
+                additions: 2,
+                deletions: 0,
+                patch: 'diff --git a/README.md b/README.md\n@@ -1 +1,2 @@\n hello\n+world\n',
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    const html = renderModal();
+
+    expect(html).toContain('Local git commit review is read-only.');
+    expect(html).toContain('Review');
+    expect(html).not.toContain('Add comment');
+    expect(html).not.toContain('Checkpoint comment');
+  });
+
   it('renders an error state when the checkpoint cannot be loaded', () => {
     mockUseApiResults({
       'conv-123:checkpoint:abc1234def567890abc1234def567890abc12345': {

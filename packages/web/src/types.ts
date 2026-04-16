@@ -92,6 +92,8 @@ export interface ConversationCommitCheckpointSummary {
 export interface ConversationCommitCheckpointRecord extends ConversationCommitCheckpointSummary {
   files: ConversationCommitCheckpointFile[];
   comments: ConversationCommitCheckpointComment[];
+  sourceKind?: 'checkpoint' | 'git';
+  commentable?: boolean;
 }
 
 export interface ConversationCheckpointToolDetails {

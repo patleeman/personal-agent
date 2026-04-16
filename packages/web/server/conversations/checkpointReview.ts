@@ -2,7 +2,13 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { getConversationCommitCheckpoint, type ConversationCommitCheckpointFile, type ConversationCommitCheckpointRecord } from '@personal-agent/core';
+import {
+  getConversationCommitCheckpoint,
+  listConversationCommitCheckpoints,
+  type ConversationCommitCheckpointFile,
+  type ConversationCommitCheckpointRecord,
+} from '@personal-agent/core';
+import { readSessionMeta } from './sessions.js';
 
 interface GitHubRepoRef {
   owner: string;
@@ -43,6 +49,22 @@ export interface ConversationCheckpointStructuralDiffResult {
 }
 
 const difftasticCommandCache = new Map<string, string | null>();
+const COMMIT_HASH_PATTERN = /^[a-f0-9]{7,64}$/i;
+
+interface ParsedCommitMetadata {
+  commitSha: string;
+  shortSha: string;
+  subject: string;
+  body?: string;
+  authorName: string;
+  authorEmail?: string;
+  committedAt: string;
+}
+
+export interface ReviewableConversationCommitCheckpointRecord extends ConversationCommitCheckpointRecord {
+  sourceKind?: 'checkpoint' | 'git';
+  commentable?: boolean;
+}
 
 function runGit(cwd: string, args: string[], options?: { encoding?: BufferEncoding | 'buffer'; timeout?: number }): string | Buffer | null {
   const result = spawnSync('git', args, {
@@ -55,6 +77,280 @@ function runGit(cwd: string, args: string[], options?: { encoding?: BufferEncodi
   }
 
   return result.stdout as string | Buffer;
+}
+
+function normalizeCommitHashInput(value: string): string | null {
+  const normalized = value.trim();
+  if (!COMMIT_HASH_PATTERN.test(normalized)) {
+    return null;
+  }
+
+  return normalized.toLowerCase();
+}
+
+function readRequiredCommitField(value: string, label: string): string {
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} is required.`);
+  }
+
+  return normalized;
+}
+
+function parseCommitMetadata(raw: string): ParsedCommitMetadata {
+  const [commitSha = '', shortSha = '', subject = '', body = '', authorName = '', authorEmail = '', committedAt = ''] = raw.split('\u0000');
+
+  return {
+    commitSha: readRequiredCommitField(commitSha, 'commitSha'),
+    shortSha: readRequiredCommitField(shortSha, 'shortSha'),
+    subject: readRequiredCommitField(subject, 'subject'),
+    ...(body.trim().length > 0 ? { body: body.trim() } : {}),
+    authorName: readRequiredCommitField(authorName, 'authorName'),
+    ...(authorEmail.trim().length > 0 ? { authorEmail: authorEmail.trim() } : {}),
+    committedAt: readRequiredCommitField(committedAt, 'committedAt'),
+  };
+}
+
+function unquoteGitPath(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    try {
+      return JSON.parse(trimmed) as string;
+    } catch {
+      return trimmed.slice(1, -1);
+    }
+  }
+
+  return trimmed;
+}
+
+function stripGitDiffPrefix(value: string, prefix: 'a/' | 'b/'): string {
+  const unquoted = unquoteGitPath(value);
+  if (unquoted === '/dev/null') {
+    return unquoted;
+  }
+
+  return unquoted.startsWith(prefix) ? unquoted.slice(prefix.length) : unquoted;
+}
+
+function parseDiffSections(rawPatch: string): ConversationCommitCheckpointFile[] {
+  const normalized = rawPatch.replace(/\r\n/g, '\n').trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const sections: string[] = [];
+  let current: string[] = [];
+
+  for (const line of normalized.split('\n')) {
+    if (line.startsWith('diff --git ')) {
+      if (current.length > 0) {
+        sections.push(current.join('\n').trimEnd());
+      }
+      current = [line];
+      continue;
+    }
+
+    if (current.length > 0) {
+      current.push(line);
+    }
+  }
+
+  if (current.length > 0) {
+    sections.push(current.join('\n').trimEnd());
+  }
+
+  return sections.map((section) => {
+    const lines = section.split('\n');
+    const header = lines[0] ?? '';
+    const match = header.match(/^diff --git (.+) (.+)$/);
+    if (!match) {
+      throw new Error('Could not parse git diff header for commit review.');
+    }
+
+    const originalPath = stripGitDiffPrefix(match[1] ?? '', 'a/');
+    const nextPath = stripGitDiffPrefix(match[2] ?? '', 'b/');
+    let path = nextPath === '/dev/null' ? originalPath : nextPath;
+    let previousPath: string | undefined;
+    let status: ConversationCommitCheckpointFile['status'] = originalPath === '/dev/null'
+      ? 'added'
+      : nextPath === '/dev/null'
+        ? 'deleted'
+        : 'modified';
+    let additions = 0;
+    let deletions = 0;
+
+    for (const line of lines.slice(1)) {
+      if (line.startsWith('new file mode ')) {
+        status = 'added';
+        path = nextPath;
+        continue;
+      }
+      if (line.startsWith('deleted file mode ')) {
+        status = 'deleted';
+        path = originalPath;
+        continue;
+      }
+      if (line.startsWith('rename from ')) {
+        status = 'renamed';
+        previousPath = line.slice('rename from '.length).trim();
+        continue;
+      }
+      if (line.startsWith('rename to ')) {
+        status = 'renamed';
+        path = line.slice('rename to '.length).trim();
+        continue;
+      }
+      if (line.startsWith('copy from ')) {
+        status = 'copied';
+        previousPath = line.slice('copy from '.length).trim();
+        continue;
+      }
+      if (line.startsWith('copy to ')) {
+        status = 'copied';
+        path = line.slice('copy to '.length).trim();
+        continue;
+      }
+      if (line.startsWith('+') && !line.startsWith('+++')) {
+        additions += 1;
+        continue;
+      }
+      if (line.startsWith('-') && !line.startsWith('---')) {
+        deletions += 1;
+      }
+    }
+
+    return {
+      path: path.replace(/\\/g, '/'),
+      ...(previousPath ? { previousPath: previousPath.replace(/\\/g, '/') } : {}),
+      status,
+      additions,
+      deletions,
+      patch: `${section}\n`,
+    } satisfies ConversationCommitCheckpointFile;
+  });
+}
+
+function annotateStoredCheckpoint(record: ConversationCommitCheckpointRecord): ReviewableConversationCommitCheckpointRecord {
+  return {
+    ...record,
+    sourceKind: 'checkpoint',
+    commentable: true,
+  };
+}
+
+function findSavedConversationCheckpointId(options: {
+  profile: string;
+  conversationId: string;
+  checkpointId: string;
+}): string | null {
+  const exact = getConversationCommitCheckpoint(options);
+  if (exact) {
+    return exact.id;
+  }
+
+  const normalizedInput = normalizeCommitHashInput(options.checkpointId);
+  if (!normalizedInput) {
+    return null;
+  }
+
+  const checkpoints = listConversationCommitCheckpoints({
+    profile: options.profile,
+    conversationId: options.conversationId,
+  });
+
+  const exactMatch = checkpoints.find((checkpoint) => {
+    const candidates = [checkpoint.id, checkpoint.commitSha, checkpoint.shortSha];
+    return candidates.some((candidate) => candidate.trim().toLowerCase() === normalizedInput);
+  });
+  if (exactMatch) {
+    return exactMatch.id;
+  }
+
+  const prefixMatches = checkpoints.filter((checkpoint) => {
+    const candidates = [checkpoint.id, checkpoint.commitSha, checkpoint.shortSha];
+    return candidates.some((candidate) => candidate.trim().toLowerCase().startsWith(normalizedInput));
+  });
+
+  return prefixMatches.length === 1 ? prefixMatches[0]?.id ?? null : null;
+}
+
+function buildGitCommitCheckpointRecord(cwd: string, commitHashInput: string, conversationId: string): ReviewableConversationCommitCheckpointRecord | null {
+  const resolvedCommit = runGit(cwd, ['rev-parse', '--verify', `${commitHashInput}^{commit}`]);
+  if (typeof resolvedCommit !== 'string') {
+    return null;
+  }
+
+  const commitSha = resolvedCommit.trim();
+  if (!COMMIT_HASH_PATTERN.test(commitSha)) {
+    return null;
+  }
+
+  const rawMetadata = runGit(cwd, ['show', '-s', `--format=%H%x00%h%x00%s%x00%B%x00%an%x00%ae%x00%cI`, commitSha]);
+  if (typeof rawMetadata !== 'string') {
+    return null;
+  }
+
+  const metadata = parseCommitMetadata(rawMetadata);
+  const rawPatchResult = runGit(cwd, ['show', '--format=', '--patch', '--find-renames', '--find-copies', '--no-color', '--unified=3', commitSha]);
+  const rawPatch = typeof rawPatchResult === 'string' ? rawPatchResult : '';
+  const files = parseDiffSections(rawPatch);
+  const linesAdded = files.reduce((sum, file) => sum + file.additions, 0);
+  const linesDeleted = files.reduce((sum, file) => sum + file.deletions, 0);
+
+  return {
+    id: metadata.commitSha,
+    conversationId,
+    title: metadata.subject,
+    cwd,
+    commitSha: metadata.commitSha,
+    shortSha: metadata.shortSha,
+    subject: metadata.subject,
+    ...(metadata.body ? { body: metadata.body } : {}),
+    authorName: metadata.authorName,
+    ...(metadata.authorEmail ? { authorEmail: metadata.authorEmail } : {}),
+    committedAt: metadata.committedAt,
+    createdAt: metadata.committedAt,
+    updatedAt: metadata.committedAt,
+    fileCount: files.length,
+    linesAdded,
+    linesDeleted,
+    commentCount: 0,
+    files,
+    comments: [],
+    sourceKind: 'git',
+    commentable: false,
+  };
+}
+
+export function resolveConversationCheckpointRecord(options: {
+  profile: string;
+  conversationId: string;
+  checkpointId: string;
+}): ReviewableConversationCommitCheckpointRecord | null {
+  const resolvedSavedCheckpointId = findSavedConversationCheckpointId(options);
+  if (resolvedSavedCheckpointId) {
+    const savedCheckpoint = getConversationCommitCheckpoint({
+      profile: options.profile,
+      conversationId: options.conversationId,
+      checkpointId: resolvedSavedCheckpointId,
+    });
+    if (savedCheckpoint) {
+      return annotateStoredCheckpoint(savedCheckpoint);
+    }
+  }
+
+  const normalizedCommitHash = normalizeCommitHashInput(options.checkpointId);
+  if (!normalizedCommitHash) {
+    return null;
+  }
+
+  const cwd = readSessionMeta(options.conversationId)?.cwd?.trim();
+  if (!cwd) {
+    return null;
+  }
+
+  return buildGitCommitCheckpointRecord(cwd, normalizedCommitHash, options.conversationId);
 }
 
 export function parseGitHubRemoteUrl(value: string): GitHubRepoRef | null {
@@ -298,7 +594,7 @@ export async function readConversationCheckpointReviewContext(options: {
   checkpointId: string;
   repoRoot?: string;
 }): Promise<ConversationCheckpointReviewContextResult | null> {
-  const checkpoint = getConversationCommitCheckpoint(options);
+  const checkpoint = resolveConversationCheckpointRecord(options);
   if (!checkpoint) {
     return null;
   }
@@ -324,7 +620,7 @@ export function readConversationCheckpointStructuralDiff(options: {
   display: 'inline' | 'side-by-side';
   repoRoot?: string;
 }): ConversationCheckpointStructuralDiffResult | null {
-  const checkpoint = getConversationCommitCheckpoint(options);
+  const checkpoint = resolveConversationCheckpointRecord(options);
   if (!checkpoint) {
     return null;
   }

@@ -10,6 +10,7 @@ const {
   readConversationAttachmentDownloadMock,
   saveConversationAttachmentMock,
   addConversationCommitCheckpointCommentMock,
+  resolveConversationCheckpointRecordMock,
   invalidateAppTopicsMock,
 } = vi.hoisted(() => ({
   deleteConversationArtifactMock: vi.fn(),
@@ -21,6 +22,7 @@ const {
   readConversationAttachmentDownloadMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
   addConversationCommitCheckpointCommentMock: vi.fn(),
+  resolveConversationCheckpointRecordMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
 }));
 
@@ -38,6 +40,12 @@ vi.mock('@personal-agent/core', () => ({
 
 vi.mock('../shared/appEvents.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
+}));
+
+vi.mock('./checkpointReview.js', () => ({
+  readConversationCheckpointReviewContext: vi.fn(),
+  readConversationCheckpointStructuralDiff: vi.fn(),
+  resolveConversationCheckpointRecord: resolveConversationCheckpointRecordMock,
 }));
 
 import {
@@ -65,6 +73,7 @@ beforeEach(() => {
   readConversationAttachmentDownloadMock.mockReset();
   saveConversationAttachmentMock.mockReset();
   addConversationCommitCheckpointCommentMock.mockReset();
+  resolveConversationCheckpointRecordMock.mockReset();
   invalidateAppTopicsMock.mockReset();
 
   listConversationArtifactsMock.mockReturnValue([{ id: 'artifact-1', title: 'Artifact 1' }]);
@@ -80,6 +89,7 @@ beforeEach(() => {
   });
   saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } });
   addConversationCommitCheckpointCommentMock.mockReturnValue({ id: 'checkpoint-1', subject: 'feat: checkpoint', commentCount: 1, comments: [{ id: 'comment-1', body: 'Ship it' }] });
+  resolveConversationCheckpointRecordMock.mockReturnValue({ id: 'checkpoint-1', subject: 'feat: checkpoint', comments: [], files: [], commentCount: 0, sourceKind: 'checkpoint', commentable: true });
   deleteConversationArtifactMock.mockReturnValue(true);
   deleteConversationAttachmentMock.mockReturnValue(true);
 });

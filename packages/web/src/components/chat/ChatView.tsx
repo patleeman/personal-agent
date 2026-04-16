@@ -35,43 +35,107 @@ function MentionPill({ text }: { text: string }) {
   return <span className="ui-markdown-mention">{text}</span>;
 }
 
-function splitMentionFragments(text: string): Array<{ text: string; mention: boolean }> {
-  const fragments: Array<{ text: string; mention: boolean }> = [];
-  const mentionRegex = /@[A-Za-z0-9_][A-Za-z0-9_./-]*/g;
+const INLINE_COMMIT_HASH_BUTTON_CLASS = 'inline-flex items-center font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere] transition-colors hover:bg-accent/12 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20';
+
+type EnhancedTextFragment = {
+  text: string;
+  kind: 'text' | 'mention' | 'commit';
+};
+
+function looksLikeCommitHash(value: string): boolean {
+  const normalized = value.trim();
+  return /^[a-f0-9]{7,64}$/i.test(normalized) && /[a-f]/i.test(normalized);
+}
+
+function CommitHashButton({
+  hash,
+  onOpenCheckpoint,
+}: {
+  hash: string;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+}) {
+  if (!onOpenCheckpoint) {
+    return <code className="font-mono text-[0.82em] bg-elevated px-1 py-0.5 rounded text-accent whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{hash}</code>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenCheckpoint(hash)}
+      className={INLINE_COMMIT_HASH_BUTTON_CLASS}
+      aria-label={`Open diff for commit ${hash}`}
+      title={`Open diff for commit ${hash}`}
+    >
+      {hash}
+    </button>
+  );
+}
+
+function splitEnhancedTextFragments(text: string): EnhancedTextFragment[] {
+  const fragments: EnhancedTextFragment[] = [];
+  const tokenRegex = /@[A-Za-z0-9_][A-Za-z0-9_./-]*|[A-Fa-f0-9]{7,64}/g;
   let cursor = 0;
   let match: RegExpExecArray | null = null;
 
-  while ((match = mentionRegex.exec(text)) !== null) {
-    const rawMention = match[0];
-    const mention = rawMention.replace(/[),.;:!?\]}>]+$/, '');
+  while ((match = tokenRegex.exec(text)) !== null) {
+    const rawToken = match[0];
     const start = match.index;
-    const end = start + mention.length;
     const previous = start > 0 ? text[start - 1] : '';
-    const shouldSkip = start > 0 && /[\w./+-]/.test(previous);
 
-    if (shouldSkip || mention === '@') {
+    if (rawToken.startsWith('@')) {
+      const mention = rawToken.replace(/[),.;:!?\]}>]+$/, '');
+      const end = start + mention.length;
+      const shouldSkip = start > 0 && /[\w./+-]/.test(previous);
+
+      if (shouldSkip || mention === '@') {
+        continue;
+      }
+
+      if (start > cursor) {
+        fragments.push({ text: text.slice(cursor, start), kind: 'text' });
+      }
+
+      fragments.push({ text: mention, kind: 'mention' });
+      cursor = end;
+      continue;
+    }
+
+    const end = start + rawToken.length;
+    const next = end < text.length ? text[end] : '';
+    const shouldSkip = (start > 0 && /[\w./+-]/.test(previous))
+      || (end < text.length && /[\w./+-]/.test(next))
+      || !looksLikeCommitHash(rawToken);
+
+    if (shouldSkip) {
       continue;
     }
 
     if (start > cursor) {
-      fragments.push({ text: text.slice(cursor, start), mention: false });
+      fragments.push({ text: text.slice(cursor, start), kind: 'text' });
     }
 
-    fragments.push({ text: mention, mention: true });
+    fragments.push({ text: rawToken, kind: 'commit' });
     cursor = end;
   }
 
   if (cursor < text.length) {
-    fragments.push({ text: text.slice(cursor), mention: false });
+    fragments.push({ text: text.slice(cursor), kind: 'text' });
   }
 
   return fragments;
 }
 
-function renderEnhancedTextFragments(text: string): ReactNode[] {
-  return splitMentionFragments(text).map((fragment, index) => {
-    if (fragment.mention) {
+function renderEnhancedTextFragments(
+  text: string,
+  options?: { onOpenCheckpoint?: (checkpointId: string) => void },
+): ReactNode[] {
+  return splitEnhancedTextFragments(text).map((fragment, index) => {
+    if (fragment.kind === 'mention') {
       return <MentionPill key={`${fragment.text}-${index}`} text={fragment.text} />;
+    }
+
+    if (fragment.kind === 'commit') {
+      return <CommitHashButton key={`${fragment.text}-${index}`} hash={fragment.text} onOpenCheckpoint={options?.onOpenCheckpoint} />;
     }
 
     return <React.Fragment key={`${index}-${fragment.text}`}>{fragment.text}</React.Fragment>;
@@ -132,10 +196,13 @@ function extractMarkdownCodeBlock(children: ReactNode): { className?: string; co
   return { content: extractMarkdownTextContent(children).replace(/\n$/, '') };
 }
 
-function renderChildrenWithMentions(children: ReactNode, onOpenFilePath?: (path: string) => void): ReactNode {
+function renderChildrenWithEnhancements(
+  children: ReactNode,
+  options?: { onOpenCheckpoint?: (checkpointId: string) => void },
+): ReactNode {
   return Children.map(children, (child, index) => {
     if (typeof child === 'string') {
-      return <React.Fragment key={index}>{renderEnhancedTextFragments(child, onOpenFilePath)}</React.Fragment>;
+      return <React.Fragment key={index}>{renderEnhancedTextFragments(child, options)}</React.Fragment>;
     }
 
     if (typeof child === 'number' || typeof child === 'bigint') {
@@ -156,7 +223,7 @@ function renderChildrenWithMentions(children: ReactNode, onOpenFilePath?: (path:
       return child;
     }
 
-    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithMentions(props.children, onOpenFilePath));
+    return cloneElement(child as ReactElement<{ children?: ReactNode }>, undefined, renderChildrenWithEnhancements(props.children, options));
   });
 }
 
@@ -170,7 +237,34 @@ function MarkdownCodeBlock({ children }: { children: ReactNode }) {
   );
 }
 
-const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text: string; onOpenFilePath?: (path: string) => void }) {
+function MarkdownInlineCodeWithCommitHash({
+  className,
+  children,
+  onOpenCheckpoint,
+}: {
+  className?: string;
+  children?: ReactNode;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+}) {
+  const content = extractMarkdownTextContent(children).replace(/\n$/, '');
+  const isBlock = content.includes('\n') || Boolean(className?.includes('language-'));
+
+  if (!isBlock && looksLikeCommitHash(content)) {
+    return <CommitHashButton hash={content} onOpenCheckpoint={onOpenCheckpoint} />;
+  }
+
+  return <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>;
+}
+
+const MarkdownText = memo(function MarkdownText({
+  text,
+  onOpenFilePath: _onOpenFilePath,
+  onOpenCheckpoint,
+}: {
+  text: string;
+  onOpenFilePath?: (path: string) => void;
+  onOpenCheckpoint?: (checkpointId: string) => void;
+}) {
   const footnoteId = useId();
   const footnotePrefix = `chat-${footnoteId.replace(/[^a-zA-Z0-9_-]+/g, '-')}-`;
 
@@ -180,16 +274,16 @@ const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text
         remarkPlugins={MARKDOWN_REMARK_PLUGINS}
         remarkRehypeOptions={{ clobberPrefix: footnotePrefix }}
         components={{
-          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h1>,
-          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h2>,
-          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h3>,
-          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h4>,
-          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h5>,
-          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</h6>,
-          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</p>,
-          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</li>,
-          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</th>,
-          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithMentions(children, onOpenFilePath)}</td>,
+          h1: ({ children, node: _node, ...props }) => <h1 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h1>,
+          h2: ({ children, node: _node, ...props }) => <h2 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h2>,
+          h3: ({ children, node: _node, ...props }) => <h3 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h3>,
+          h4: ({ children, node: _node, ...props }) => <h4 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h4>,
+          h5: ({ children, node: _node, ...props }) => <h5 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h5>,
+          h6: ({ children, node: _node, ...props }) => <h6 {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</h6>,
+          p: ({ children, node: _node, ...props }) => <p {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</p>,
+          li: ({ children, node: _node, ...props }) => <li {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</li>,
+          th: ({ children, node: _node, ...props }) => <th {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</th>,
+          td: ({ children, node: _node, ...props }) => <td {...props}>{renderChildrenWithEnhancements(children, { onOpenCheckpoint })}</td>,
           a: ({ href, children, title }) => {
             if (typeof href !== 'string' || href.trim().length === 0) {
               return <span title={title}>{children}</span>;
@@ -216,7 +310,7 @@ const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text
             </div>
           ),
           pre: ({ children }) => <MarkdownCodeBlock>{children}</MarkdownCodeBlock>,
-          code: ({ className, children }) => <InlineMarkdownCode className={className}>{children}</InlineMarkdownCode>,
+          code: ({ className, children }) => <MarkdownInlineCodeWithCommitHash className={className} onOpenCheckpoint={onOpenCheckpoint}>{children}</MarkdownInlineCodeWithCommitHash>,
           img: ({ src, alt, title }) => src
             ? <img src={src} alt={alt ?? ''} title={title} loading="lazy" />
             : <span className="text-dim">{alt ?? 'image'}</span>,
@@ -235,8 +329,14 @@ const MarkdownText = memo(function MarkdownText({ text, onOpenFilePath }: { text
   );
 });
 
-function renderMarkdownText(text: string, onOpenFilePath?: (path: string) => void) {
-  return <MarkdownText text={text} onOpenFilePath={onOpenFilePath} />;
+function renderMarkdownText(
+  text: string,
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
+) {
+  return <MarkdownText text={text} onOpenFilePath={options?.onOpenFilePath} onOpenCheckpoint={options?.onOpenCheckpoint} />;
 }
 
 function parseSkillContentSections(content: string): { relativeTo: string | null; body: string } {
@@ -270,28 +370,40 @@ function SkillInvocationCard({
       </summary>
       <div className="ui-skill-invocation-body">
         {relativeTo && <p className="ui-skill-invocation-meta">References resolve relative to {relativeTo}</p>}
-        {renderMarkdownText(`**${skillBlock.name}**\n\n${body}`, onOpenFilePath)}
+        {renderMarkdownText(`**${skillBlock.name}**\n\n${body}`, { onOpenFilePath })}
       </div>
     </details>
   );
 }
 
-function renderSkillAwareText(text: string, onOpenFilePath?: (path: string) => void) {
+function renderSkillAwareText(
+  text: string,
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
+) {
   const skillBlock = parseSkillBlock(text);
   if (!skillBlock) {
-    return renderMarkdownText(text, onOpenFilePath);
+    return renderMarkdownText(text, options);
   }
 
   return (
     <div className="space-y-3">
-      <SkillInvocationCard skillBlock={skillBlock} onOpenFilePath={onOpenFilePath} />
-      {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, onOpenFilePath)}
+      <SkillInvocationCard skillBlock={skillBlock} onOpenFilePath={options?.onOpenFilePath} />
+      {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, options)}
     </div>
   );
 }
 
-export function renderText(text: string, options?: { onOpenFilePath?: (path: string) => void }) {
-  return renderSkillAwareText(text, options?.onOpenFilePath);
+export function renderText(
+  text: string,
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
+) {
+  return renderSkillAwareText(text, options);
 }
 
 function getElementFromNode(node: Node | null): HTMLElement | null {
@@ -2618,6 +2730,7 @@ function UserMessage({
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenFilePath,
+  onOpenCheckpoint,
   onInspectImage,
   layout = 'default',
 }: {
@@ -2626,6 +2739,7 @@ function UserMessage({
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenFilePath?: (path: string) => void;
+  onOpenCheckpoint?: (checkpointId: string) => void;
   onInspectImage?: (image: InspectableImage) => void;
   layout?: ChatViewLayout;
 }) {
@@ -2665,11 +2779,11 @@ function UserMessage({
           {skillBlock ? (
             <div className="space-y-2 px-1.5 pb-0.5">
               <SkillInvocationCard skillBlock={skillBlock} className="ui-skill-invocation-user" onOpenFilePath={onOpenFilePath} />
-              {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, onOpenFilePath)}
+              {skillBlock.userMessage && renderMarkdownText(skillBlock.userMessage, { onOpenFilePath, onOpenCheckpoint })}
             </div>
           ) : hasText ? (
             <div className="px-1.5 pb-0.5">
-              {renderMarkdownText(block.text, onOpenFilePath)}
+              {renderMarkdownText(block.text, { onOpenFilePath, onOpenCheckpoint })}
             </div>
           ) : null}
         </div>
@@ -2687,6 +2801,7 @@ function AssistantMessage({
   onFork,
   onRewind,
   onOpenFilePath,
+  onOpenCheckpoint,
   onSelectionGesture,
   showCursor = false,
   layout = 'default',
@@ -2696,6 +2811,7 @@ function AssistantMessage({
   onFork?: () => Promise<void> | void;
   onRewind?: () => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
+  onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
   showCursor?: boolean;
   layout?: ChatViewLayout;
@@ -2714,7 +2830,7 @@ function AssistantMessage({
           {...replySelectionScopeProps}
           className="ui-message-card-assistant text-primary space-y-1"
         >
-          {renderText(block.text, { onOpenFilePath })}
+          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
           {shouldShowCursor && (
             <span
               className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 rounded-sm"
@@ -2736,11 +2852,13 @@ function ContextMessage({
   block,
   messageIndex,
   onOpenFilePath,
+  onOpenCheckpoint,
   onSelectionGesture,
 }: {
   block: Extract<MessageBlock, { type: 'context' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
+  onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
 }) {
   const label = formatInjectedContextLabel(block.customType);
@@ -2759,7 +2877,7 @@ function ContextMessage({
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
         </div>
         <div {...replySelectionScopeProps} className="pt-2 text-primary">
-          {renderText(block.text, { onOpenFilePath })}
+          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
         </div>
       </div>
     </div>
@@ -2799,11 +2917,13 @@ function SummaryMessage({
   block,
   messageIndex,
   onOpenFilePath,
+  onOpenCheckpoint,
   onSelectionGesture,
 }: {
   block: Extract<MessageBlock, { type: 'summary' }>;
   messageIndex?: number;
   onOpenFilePath?: (path: string) => void;
+  onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
 }) {
   const summaryPresentation = (() => {
@@ -2868,7 +2988,7 @@ function SummaryMessage({
                 {summaryPresentation.shouldCollapse && !expanded ? (
                   <p className="whitespace-pre-wrap text-[12px] leading-relaxed text-primary">{previewText}</p>
                 ) : (
-                  renderText(block.text, { onOpenFilePath })
+                  renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
                 )}
               </div>
             </div>
@@ -3682,6 +3802,7 @@ export const ChatView = memo(function ChatView({
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
               onOpenFilePath={onOpenFilePath}
+              onOpenCheckpoint={onOpenCheckpoint}
               onInspectImage={setSelectedImage}
               layout={layout}
             />
@@ -3695,14 +3816,15 @@ export const ChatView = memo(function ChatView({
               onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
               onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
               onOpenFilePath={onOpenFilePath}
+              onOpenCheckpoint={onOpenCheckpoint}
               onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
               layout={layout}
             />
           );
         case 'context':
-          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
+          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
         case 'summary':
-          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
+          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
         case 'thinking':
           return <ThinkingBlock block={block} autoOpen={autoOpen} />;
         case 'tool_use':

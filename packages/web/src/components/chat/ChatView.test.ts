@@ -154,6 +154,17 @@ describe('chat view streaming disclosure', () => {
     expect(html).not.toContain('href="packages/web/src/filePathLinks.tsx"');
   });
 
+  it('renders commit hashes as clickable transcript controls when a checkpoint opener is available', () => {
+    const html = renderToStaticMarkup(createElement(Fragment, null, renderText(
+      'Checkpoint saved: `93f02a21` and plain 93f02a21.',
+      { onOpenCheckpoint: () => undefined },
+    )));
+
+    expect(html).toContain('aria-label="Open diff for commit 93f02a21"');
+    expect(html.match(/Open diff for commit 93f02a21/g)).toHaveLength(2);
+    expect(html).toContain('type="button"');
+  });
+
   it('renders project mentions as pills inside markdown text', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Check @web-ui before touching @projects.')));
 

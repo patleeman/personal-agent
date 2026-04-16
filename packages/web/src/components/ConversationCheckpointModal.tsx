@@ -458,6 +458,9 @@ export function ConversationCheckpointModal({
   }, [refetch, refetchReviewContext, versions.checkpoints]);
 
   const checkpoint = data?.checkpoint ?? null;
+  const commentable = checkpoint?.commentable !== false;
+  const isReadOnlyCommit = checkpoint?.sourceKind === 'git' || !commentable;
+  const reviewLabel = isReadOnlyCommit ? 'Commit' : 'Checkpoint';
   const selectedFilePath = getConversationCheckpointFileFromSearch(location.search);
   const resolvedFilePath = selectedFilePath ?? activeFilePath ?? checkpoint?.files[0]?.path ?? null;
   const selectedFile = checkpoint?.files.find((file) => file.path === resolvedFilePath)
@@ -654,7 +657,7 @@ export function ConversationCheckpointModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Conversation checkpoint review"
+        aria-label={isReadOnlyCommit ? 'Local git commit review' : 'Conversation checkpoint review'}
         className="ui-dialog-shell"
         style={{ width: 'min(1440px, calc(100vw - 3rem))', height: 'min(90vh, 980px)', maxHeight: 'calc(100vh - 3rem)' }}
       >
@@ -662,7 +665,7 @@ export function ConversationCheckpointModal({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-dim/80">
-                <span>Checkpoint</span>
+                <span>{reviewLabel}</span>
                 {checkpoint ? <span className="rounded-full bg-success/12 px-2 py-0.5 font-mono text-success normal-case tracking-normal">{checkpoint.shortSha}</span> : null}
               </div>
               <h2 className="mt-1 text-pretty text-[16px] font-semibold text-primary" title={checkpoint?.subject ?? checkpointId}>
@@ -672,7 +675,7 @@ export function ConversationCheckpointModal({
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-secondary">
                   <span>{checkpoint.fileCount} file{checkpoint.fileCount === 1 ? '' : 's'}</span>
                   <span className="font-mono tabular-nums"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
-                  <span>{checkpoint.commentCount} comment{checkpoint.commentCount === 1 ? '' : 's'}</span>
+                  {commentable ? <span>{checkpoint.commentCount} comment{checkpoint.commentCount === 1 ? '' : 's'}</span> : null}
                   <span>committed {formatDate(checkpoint.committedAt)}</span>
                   {reviewContextError ? <span className="text-dim">GitHub info unavailable</span> : null}
                 </div>
@@ -796,55 +799,64 @@ export function ConversationCheckpointModal({
                   )}
                 </div>
                 <div className="border-t border-border-subtle px-4 py-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
+                  {commentable ? (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="ui-section-label">Comments</p>
+                          <p className="mt-1 text-[11px] text-dim">
+                            {checkpoint.commentCount > 0 ? `${checkpoint.commentCount} saved` : 'Add review notes to this checkpoint.'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px]">
+                          {commentSaveState === 'saved' ? <span className="text-success">Added</span> : null}
+                          {commentSaveState === 'error' ? <span className="text-danger">Couldn’t save</span> : null}
+                          {commentDraft.trim().length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCommentDraft('');
+                                setCommentSaveState('idle');
+                              }}
+                              className="ui-toolbar-button px-2 py-1 text-[10px]"
+                              disabled={commentSaveState === 'saving'}
+                            >
+                              Clear
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => { void saveComment(); }}
+                            className="ui-toolbar-button px-2 py-1 text-[10px] text-accent"
+                            disabled={commentDraft.trim().length === 0 || commentSaveState === 'saving'}
+                          >
+                            {commentSaveState === 'saving' ? 'Adding…' : 'Add comment'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="mt-3 max-h-44 overflow-y-auto pr-1">
+                        <CheckpointCommentList comments={checkpoint.comments} />
+                      </div>
+                      <textarea
+                        value={commentDraft}
+                        onChange={(event) => {
+                          setCommentDraft(event.target.value);
+                          setCommentSaveState((current) => current === 'saving' ? current : 'idle');
+                        }}
+                        rows={3}
+                        name="checkpointComment"
+                        aria-label="Checkpoint comment"
+                        placeholder="Add a checkpoint comment…"
+                        autoComplete="off"
+                        className={cx(COMMENT_TEXTAREA_CLASS, 'mt-3 resize-y')}
+                      />
+                    </>
+                  ) : (
                     <div>
-                      <p className="ui-section-label">Comments</p>
-                      <p className="mt-1 text-[11px] text-dim">
-                        {checkpoint.commentCount > 0 ? `${checkpoint.commentCount} saved` : 'Add review notes to this checkpoint.'}
-                      </p>
+                      <p className="ui-section-label">Review</p>
+                      <p className="mt-1 text-[11px] text-dim">Local git commit review is read-only. Save a checkpoint if you want comments attached to the conversation.</p>
                     </div>
-                    <div className="flex items-center gap-2 text-[11px]">
-                      {commentSaveState === 'saved' ? <span className="text-success">Added</span> : null}
-                      {commentSaveState === 'error' ? <span className="text-danger">Couldn’t save</span> : null}
-                      {commentDraft.trim().length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCommentDraft('');
-                            setCommentSaveState('idle');
-                          }}
-                          className="ui-toolbar-button px-2 py-1 text-[10px]"
-                          disabled={commentSaveState === 'saving'}
-                        >
-                          Clear
-                        </button>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => { void saveComment(); }}
-                        className="ui-toolbar-button px-2 py-1 text-[10px] text-accent"
-                        disabled={commentDraft.trim().length === 0 || commentSaveState === 'saving'}
-                      >
-                        {commentSaveState === 'saving' ? 'Adding…' : 'Add comment'}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="mt-3 max-h-44 overflow-y-auto pr-1">
-                    <CheckpointCommentList comments={checkpoint.comments} />
-                  </div>
-                  <textarea
-                    value={commentDraft}
-                    onChange={(event) => {
-                      setCommentDraft(event.target.value);
-                      setCommentSaveState((current) => current === 'saving' ? current : 'idle');
-                    }}
-                    rows={3}
-                    name="checkpointComment"
-                    aria-label="Checkpoint comment"
-                    placeholder="Add a checkpoint comment…"
-                    autoComplete="off"
-                    className={cx(COMMENT_TEXTAREA_CLASS, 'mt-3 resize-y')}
-                  />
+                  )}
                 </div>
               </>
             )}

@@ -4,7 +4,6 @@ import {
   deleteConversationAttachment,
   getConversationArtifact,
   getConversationAttachment,
-  getConversationCommitCheckpoint,
   listConversationArtifacts,
   listConversationAttachments,
   listConversationCommitCheckpoints,
@@ -15,6 +14,7 @@ import { invalidateAppTopics } from '../shared/appEvents.js';
 import {
   readConversationCheckpointReviewContext,
   readConversationCheckpointStructuralDiff,
+  resolveConversationCheckpointRecord,
 } from './checkpointReview.js';
 
 export class ConversationAssetCapabilityInputError extends Error {}
@@ -172,7 +172,7 @@ export function readConversationCommitCheckpointCapability(
 ) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
-  const checkpoint = getConversationCommitCheckpoint({ profile, conversationId, checkpointId });
+  const checkpoint = resolveConversationCheckpointRecord({ profile, conversationId, checkpointId });
   if (!checkpoint) {
     throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
   }
