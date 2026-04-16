@@ -9,7 +9,7 @@ export const THINKING_LEVEL_OPTIONS = [
   { value: 'xhigh', label: 'Extra high' },
 ] as const;
 
-export const SERVICE_TIER_OPTIONS = [
+const SERVICE_TIER_OPTIONS = [
   { value: '', label: 'Unset' },
   { value: 'auto', label: 'Auto' },
   { value: 'default', label: 'Default' },
@@ -18,7 +18,7 @@ export const SERVICE_TIER_OPTIONS = [
   { value: 'scale', label: 'Scale' },
 ] as const;
 
-export function getModelSupportedServiceTierOptions(model: Pick<ModelInfo, 'supportedServiceTiers'> | null | undefined) {
+function getModelSupportedServiceTierOptions(model: Pick<ModelInfo, 'supportedServiceTiers'> | null | undefined) {
   const supportedTiers = Array.isArray(model?.supportedServiceTiers) ? model.supportedServiceTiers : [];
   if (supportedTiers.length === 0) {
     return [];

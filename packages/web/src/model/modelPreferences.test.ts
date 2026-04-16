@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, getModelSupportedServiceTierOptions, groupModelsByProvider } from './modelPreferences';
+import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from './modelPreferences';
 
 describe('model preferences helpers', () => {
   it('exports the supported thinking levels in UI order', () => {
@@ -13,24 +13,20 @@ describe('model preferences helpers', () => {
     ]);
   });
 
-  it('exports the supported service tiers in UI order', () => {
-    expect(SERVICE_TIER_OPTIONS.map((option) => option.value)).toEqual([
-      '',
-      'auto',
-      'default',
-      'flex',
-      'priority',
-      'scale',
-    ]);
-  });
-
-  it('filters service tier options to the tiers supported by the selected model', () => {
-    expect(getModelSupportedServiceTierOptions({ supportedServiceTiers: ['priority', 'auto'] })).toEqual([
+  it('builds service tier options in UI order from the tiers supported by the selected model', () => {
+    expect(getModelSelectableServiceTierOptions(
+      { supportedServiceTiers: ['scale', 'priority', 'auto', 'default', 'flex'] },
+      { includeDefaultOption: true },
+    )).toEqual([
+      { value: '', label: 'Default' },
       { value: 'auto', label: 'Auto' },
+      { value: 'default', label: 'Default' },
+      { value: 'flex', label: 'Flex' },
       { value: 'priority', label: 'Priority' },
+      { value: 'scale', label: 'Scale' },
     ]);
-    expect(getModelSupportedServiceTierOptions({ supportedServiceTiers: [] })).toEqual([]);
-    expect(getModelSupportedServiceTierOptions(null)).toEqual([]);
+    expect(getModelSelectableServiceTierOptions({ supportedServiceTiers: [] })).toEqual([]);
+    expect(getModelSelectableServiceTierOptions(null)).toEqual([]);
   });
 
   it('builds selectable service tier options with an optional default choice', () => {

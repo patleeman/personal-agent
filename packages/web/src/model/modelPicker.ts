@@ -1,6 +1,6 @@
 import { fuzzyScore } from '../commands/slashMenu';
 
-export interface ModelPickerItem {
+interface ModelPickerItem {
   id: string;
   provider: string;
   name: string;
