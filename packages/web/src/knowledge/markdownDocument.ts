@@ -2,12 +2,12 @@ function normalizeNewlines(value: string): string {
   return value.replace(/\r\n/g, '\n');
 }
 
-export interface MarkdownDocumentParts {
+interface MarkdownDocumentParts {
   frontmatter: string | null;
   body: string;
 }
 
-export function splitMarkdownFrontmatter(content: string): MarkdownDocumentParts {
+function splitMarkdownFrontmatter(content: string): MarkdownDocumentParts {
   const normalized = normalizeNewlines(content);
   const match = normalized.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
 
