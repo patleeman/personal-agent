@@ -10,7 +10,7 @@ interface DesktopAppEventsEnvelope {
     | { type: 'close' };
 }
 
-export interface DesktopAppEventsListener {
+interface DesktopAppEventsListener {
   onopen?: () => void;
   onevent?: (event: DesktopAppEvent) => void;
   onerror?: () => void;

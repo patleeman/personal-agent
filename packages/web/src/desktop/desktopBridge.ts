@@ -72,9 +72,9 @@ export type DesktopConversationCwdGroupContextMenuAction =
   | 'archive-threads'
   | 'remove';
 
-export type DesktopSelectionContextMenuAction = 'reply' | 'copy';
+type DesktopSelectionContextMenuAction = 'reply' | 'copy';
 
-export interface DesktopConversationContextMenuRequest {
+interface DesktopConversationContextMenuRequest {
   x: number;
   y: number;
   pinAction?: 'pin' | 'unpin' | null;
@@ -87,7 +87,7 @@ export interface DesktopConversationContextMenuRequest {
   busyAction?: 'duplicate' | 'summarize' | null;
 }
 
-export interface DesktopConversationCwdGroupContextMenuRequest {
+interface DesktopConversationCwdGroupContextMenuRequest {
   x: number;
   y: number;
   canOpenInFinder?: boolean;

@@ -1,6 +1,6 @@
 import type { DesktopWorkspaceServerState } from '../shared/types';
 
-export interface DesktopWorkspaceServerDraftState {
+interface DesktopWorkspaceServerDraftState {
   enabled: boolean;
   useTailscaleServe: boolean;
   port: string;

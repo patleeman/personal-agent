@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 
-describe('DesktopApiEventSource', () => {
+describe('createDesktopAwareEventSource', () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
@@ -31,8 +31,8 @@ describe('DesktopApiEventSource', () => {
       }
     });
 
-    const { DesktopApiEventSource } = await import('./desktopEventSource');
-    const source = new DesktopApiEventSource('/api/live-sessions/live-1/events');
+    const { createDesktopAwareEventSource } = await import('./desktopEventSource');
+    const source = createDesktopAwareEventSource('/api/live-sessions/live-1/events');
     const onopen = vi.fn();
     const onmessage = vi.fn();
     source.onopen = onopen;

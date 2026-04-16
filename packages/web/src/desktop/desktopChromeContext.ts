@@ -5,7 +5,7 @@ export interface DesktopRightRailControl {
   toggleRail: () => void;
 }
 
-export interface DesktopChromeContextValue {
+interface DesktopChromeContextValue {
   setRightRailControl: (control: DesktopRightRailControl | null) => void;
 }
 

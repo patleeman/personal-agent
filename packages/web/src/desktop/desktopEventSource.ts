@@ -32,7 +32,7 @@ interface DesktopApiStreamEnvelope {
   };
 }
 
-export class DesktopApiEventSource implements EventSourceLike {
+class DesktopApiEventSource implements EventSourceLike {
   static readonly CONNECTING = 0;
   static readonly OPEN = 1;
   static readonly CLOSED = 2;
