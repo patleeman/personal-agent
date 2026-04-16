@@ -88,6 +88,8 @@ Async state now lives on the owning surface:
 
 The **Automations** route is the scheduled-task workspace.
 
+The overview now uses the same document-style shell as **Settings**: centered intro, section dividers, and a sticky right-side table of contents instead of a loose empty-state layout.
+
 Current capabilities:
 
 - create new automations in-app

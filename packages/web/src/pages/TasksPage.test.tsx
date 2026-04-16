@@ -60,8 +60,8 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Automations');
-    expect(html).toContain('Automation');
-    expect(html).toContain('Schedule');
+    expect(html).toContain('Scheduled prompts, run history, and thread ownership in one place.');
+    expect(html).toContain('On this page');
     expect(html).toContain('Daily report');
     expect(html).toContain('href="/automations/daily-report"');
     expect(html).not.toContain('Current');
@@ -91,9 +91,10 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Scheduled prompts for recurring work.');
+    expect(html).toContain('Scheduled prompts, run history, and thread ownership in one place.');
     expect(html).toContain('No automations yet.');
     expect(html).toContain('Use New automation to create one.');
+    expect(html).toContain('On this page');
     expect(html).not.toContain('Create the first scheduled workflow.');
     expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');
   });

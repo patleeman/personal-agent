@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversationRuns';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
-import { ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSseConnection } from '../contexts';
 import { useApi } from '../hooks';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../runPresentation';
@@ -192,6 +192,128 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
         <ScheduledTaskPanel id={id} initialMode="edit" onClose={onClose} />
       </div>
     </div>
+  );
+}
+
+const AUTOMATIONS_QUICK_LINKS = [
+  {
+    id: 'automations-overview',
+    label: 'Overview',
+    summary: 'Status, activity, and schedule coverage',
+  },
+  {
+    id: 'automations-list',
+    label: 'All automations',
+    summary: 'Inspect prompts, schedules, and run history',
+  },
+] as const;
+
+type AutomationsQuickLink = (typeof AUTOMATIONS_QUICK_LINKS)[number];
+type AutomationsQuickLinkId = AutomationsQuickLink['id'];
+
+function AutomationHero() {
+  return (
+    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 7.5v4.5l3 1.5" />
+        <path d="M16.5 4.5 18 3m-12 18L4.5 19.5" />
+      </svg>
+    </div>
+  );
+}
+
+function AutomationsSection({
+  id,
+  label,
+  description,
+  children,
+  className,
+}: {
+  id: string;
+  label: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section id={id} className={cx('scroll-mt-24 space-y-6', className)}>
+      <div className="space-y-2">
+        <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
+        {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
+      </div>
+      <div className="border-t border-border-subtle/65 pt-6">{children}</div>
+    </section>
+  );
+}
+
+function AutomationsPanel({
+  title,
+  description,
+  actions,
+  children,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cx('grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
+      <div className="min-w-0 space-y-2">
+        <div className="space-y-1.5">
+          <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
+          {description ? <p className="max-w-sm text-[12px] leading-5 text-secondary">{description}</p> : null}
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
+      </div>
+      <div className="min-w-0 space-y-3.5">{children}</div>
+    </section>
+  );
+}
+
+function AutomationsTableOfContents({
+  items,
+  activeId,
+  onNavigate,
+}: {
+  items: readonly AutomationsQuickLink[];
+  activeId: AutomationsQuickLinkId;
+  onNavigate: (sectionId: AutomationsQuickLinkId) => void;
+}) {
+  return (
+    <aside className="hidden lg:block lg:sticky lg:top-8 lg:self-start">
+      <nav aria-label="Automation sections" className="space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/85">On this page</p>
+        <div className="space-y-2">
+          {items.map((item) => {
+            const active = item.id === activeId;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onNavigate(item.id);
+                }}
+                className={cx(
+                  'block border-l py-1 pl-4 pr-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
+                  active ? 'border-accent text-primary' : 'border-border-subtle/60 text-secondary hover:border-border-default hover:text-primary',
+                )}
+                aria-current={active ? 'location' : undefined}
+              >
+                <span className="block text-[13px] font-medium">{item.label}</span>
+                <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
+                  {item.summary}
+                </span>
+              </a>
+            );
+          })}
+        </div>
+      </nav>
+    </aside>
   );
 }
 
@@ -550,62 +672,159 @@ function AutomationsOverview({
   tasks: ScheduledTaskSummary[];
   onCreate: () => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
   const runningCount = tasks.filter((task) => task.running).length;
   const attentionCount = tasks.filter((task) => task.lastStatus === 'failure').length;
   const enabledCount = tasks.filter((task) => task.enabled).length;
   const disabledCount = tasks.length - enabledCount;
+  const [activeSectionId, setActiveSectionId] = useState<AutomationsQuickLinkId>(AUTOMATIONS_QUICK_LINKS[0].id);
+
+  const pageMeta = useMemo(() => {
+    if (tasks.length === 0) {
+      return '0 enabled · ready for the first schedule';
+    }
+
+    const segments = [`${enabledCount} enabled`];
+    if (runningCount > 0) {
+      segments.push(`${runningCount} running`);
+    }
+    if (attentionCount > 0) {
+      segments.push(`${attentionCount} need review`);
+    } else {
+      segments.push('all clear');
+    }
+
+    return segments.join(' · ');
+  }, [attentionCount, enabledCount, runningCount, tasks.length]);
+
+  useEffect(() => {
+    const root = scrollRef.current;
+    if (!root || typeof IntersectionObserver === 'undefined') {
+      return;
+    }
+
+    const sections = AUTOMATIONS_QUICK_LINKS
+      .map((item) => root.querySelector<HTMLElement>(`#${item.id}`))
+      .filter((section): section is HTMLElement => Boolean(section));
+
+    if (sections.length === 0) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((left, right) => right.intersectionRatio - left.intersectionRatio);
+        const nextId = visible[0]?.target.id as AutomationsQuickLinkId | undefined;
+        if (nextId) {
+          setActiveSectionId(nextId);
+        }
+      },
+      {
+        root,
+        rootMargin: '-18% 0px -56% 0px',
+        threshold: [0.15, 0.35, 0.6],
+      },
+    );
+
+    sections.forEach((section) => observer.observe(section));
+    return () => observer.disconnect();
+  }, []);
+
+  const navigateToSection = useCallback((sectionId: AutomationsQuickLinkId) => {
+    setActiveSectionId(sectionId);
+    const section = scrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
+    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, []);
 
   return (
-    <div className="h-full overflow-y-auto px-8 py-10">
-      <div className="mx-auto max-w-5xl space-y-10">
-        <header className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-          <div className="max-w-2xl space-y-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Scheduled work</p>
-            <div className="space-y-2">
-              <h1 className="text-[46px] font-semibold tracking-[-0.05em] text-primary">Automations</h1>
-              <p className="text-[15px] leading-7 text-secondary">
-                Scheduled prompts for recurring work.
-              </p>
+    <div ref={scrollRef} className="h-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10">
+        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14">
+          <div className="min-w-0">
+            <div className="mx-auto flex w-full max-w-[58rem] flex-col gap-12">
+              <div className="space-y-6">
+                <div className="flex justify-end">
+                  <ToolbarButton
+                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                    onClick={onCreate}
+                  >
+                    + New automation
+                  </ToolbarButton>
+                </div>
+
+                <div className="mx-auto flex max-w-[38rem] flex-col items-center text-center">
+                  <AutomationHero />
+                  <h1 className="ui-page-title mt-5 text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Automations</h1>
+                  <p className="ui-page-meta mt-1.5 text-[12px]">{pageMeta}</p>
+                  <p className="mt-4 text-[14px] leading-7 text-secondary">
+                    Scheduled prompts, run history, and thread ownership in one place.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-12">
+                <AutomationsSection
+                  id="automations-overview"
+                  label="Overview"
+                  description="Status, activity, and schedule coverage across this workspace."
+                >
+                  <div className="space-y-0">
+                    <AutomationsPanel
+                      title="Status snapshot"
+                      description="Quick read on what is running, healthy, disabled, or waiting for review."
+                    >
+                      <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-4">
+                        <AutomationOverviewStat label="Automations" value={String(tasks.length)} meta="scheduled prompts in this workspace" />
+                        <AutomationOverviewStat label="Running" value={String(runningCount)} meta="currently executing through the daemon" />
+                        <AutomationOverviewStat label="Needs attention" value={String(attentionCount)} meta="last run failed or needs review" />
+                        <AutomationOverviewStat label="Disabled" value={String(disabledCount)} meta={enabledCount === 0 ? 'no enabled schedules right now' : `${enabledCount} enabled right now`} />
+                      </div>
+                    </AutomationsPanel>
+                  </div>
+                </AutomationsSection>
+
+                <AutomationsSection
+                  id="automations-list"
+                  label={tasks.length === 0 ? 'Get started' : 'All automations'}
+                  description={tasks.length === 0
+                    ? 'Create the first scheduled prompt for recurring work in this workspace.'
+                    : 'Open one to inspect its prompt, schedule, and run history.'}
+                >
+                  <div className="space-y-0">
+                    <AutomationsPanel
+                      title={tasks.length === 0 ? 'No automations yet.' : 'Automation list'}
+                      description={tasks.length === 0 ? 'Use New automation to create one.' : `${rows.length} total automation${rows.length === 1 ? '' : 's'} in this workspace.`}
+                    >
+                      {tasks.length === 0 ? (
+                        <div className="max-w-xl space-y-3">
+                          <p className="text-[14px] leading-6 text-secondary">Use New automation to create one.</p>
+                          <div>
+                            <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border-t border-border-subtle/70">
+                          {rows.map((task) => (
+                            <AutomationListRow key={task.id} task={task} />
+                          ))}
+                        </div>
+                      )}
+                    </AutomationsPanel>
+                  </div>
+                </AutomationsSection>
+              </div>
             </div>
           </div>
-          <ToolbarButton className="rounded-full px-4 py-2 text-[13px] text-primary" onClick={onCreate}>+ New automation</ToolbarButton>
-        </header>
 
-        {tasks.length === 0 ? (
-          <section className="max-w-2xl border-t border-border-subtle pt-10">
-            <h2 className="text-[24px] font-semibold tracking-tight text-primary">No automations yet.</h2>
-            <p className="mt-2 text-[15px] leading-7 text-secondary">Use New automation to create one.</p>
-            <div className="mt-5">
-              <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
-            </div>
-          </section>
-        ) : (
-          <>
-            <section className="grid gap-8 border-t border-border-subtle pt-8 sm:grid-cols-2 xl:grid-cols-4">
-              <AutomationOverviewStat label="Automations" value={String(tasks.length)} meta="scheduled prompts in this workspace" />
-              <AutomationOverviewStat label="Running" value={String(runningCount)} meta="currently executing through the daemon" />
-              <AutomationOverviewStat label="Needs attention" value={String(attentionCount)} meta="last run failed or needs review" />
-              <AutomationOverviewStat label="Disabled" value={String(disabledCount)} meta={enabledCount === 0 ? 'no enabled schedules right now' : `${enabledCount} enabled right now`} />
-            </section>
-
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">All automations</p>
-                  <p className="mt-1 text-[14px] leading-6 text-secondary">Open one to inspect its prompt, schedule, and run history.</p>
-                </div>
-                <p className="text-[12px] text-secondary">{rows.length} total</p>
-              </div>
-
-              <div className="border-t border-border-subtle">
-                {rows.map((task) => (
-                  <AutomationListRow key={task.id} task={task} />
-                ))}
-              </div>
-            </section>
-          </>
-        )}
+          <AutomationsTableOfContents
+            items={AUTOMATIONS_QUICK_LINKS}
+            activeId={activeSectionId}
+            onNavigate={navigateToSection}
+          />
+        </div>
       </div>
     </div>
   );
