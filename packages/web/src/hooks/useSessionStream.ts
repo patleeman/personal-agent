@@ -169,7 +169,7 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
   });
 }
 
-export function appendPendingQueueItem(
+function appendPendingQueueItem(
   state: StreamState,
   behavior: 'steer' | 'followUp',
   text: string,
@@ -194,7 +194,7 @@ export function appendPendingQueueItem(
   };
 }
 
-export function removePendingQueueItem(
+function removePendingQueueItem(
   state: StreamState,
   behavior: 'steer' | 'followUp',
   text: string,
@@ -215,7 +215,7 @@ export function removePendingQueueItem(
   };
 }
 
-export function removeOptimisticUserBlock(
+function removeOptimisticUserBlock(
   state: StreamState,
   optimisticBlockId: string,
 ): StreamState {
@@ -235,7 +235,7 @@ export function removeOptimisticUserBlock(
   };
 }
 
-export function selectVisibleStreamState(
+function selectVisibleStreamState(
   state: StreamState,
   stateSessionId: string | null,
   requestedSessionId: string | null,
@@ -249,7 +249,7 @@ function readInvokedSkillName(text: string): string | null {
   return skillName && skillName.length > 0 ? skillName : null;
 }
 
-export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, next: MessageBlock): boolean {
+function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, next: MessageBlock): boolean {
   if (previous?.type !== 'user' || next.type !== 'user') {
     return false;
   }
