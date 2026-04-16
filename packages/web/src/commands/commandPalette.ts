@@ -26,13 +26,6 @@ export interface CommandPaletteSectionResult<TAction = unknown> {
   total: number;
 }
 
-export const COMMAND_PALETTE_SECTION_ORDER: CommandPaletteSection[] = [
-  'nav',
-  'open',
-  'archived',
-  'tasks',
-];
-
 export const COMMAND_PALETTE_SCOPE_SECTIONS: Record<CommandPaletteScope, CommandPaletteSection[]> = {
   commands: ['nav', 'open', 'tasks'],
   threads: ['archived'],

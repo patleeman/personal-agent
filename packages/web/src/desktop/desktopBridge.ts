@@ -398,14 +398,6 @@ export function isDesktopShell(): boolean {
   return /Electron/i.test(navigator.userAgent);
 }
 
-export function isLocalDesktopHostShell(): boolean {
-  if (typeof window === 'undefined') {
-    return false;
-  }
-
-  return window.location.protocol === 'personal-agent:';
-}
-
 export async function readDesktopEnvironment(): Promise<DesktopEnvironmentState | null> {
   const bridge = getDesktopBridge();
   if (!bridge) {

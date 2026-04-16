@@ -142,13 +142,3 @@ export function buildChatRenderItems(messages: MessageBlock[]): ChatRenderItem[]
   return items;
 }
 
-export function getLatestUserMessage(messages: MessageBlock[]): Extract<MessageBlock, { type: 'user' }> | null {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages[index];
-    if (message?.type === 'user') {
-      return message;
-    }
-  }
-
-  return null;
-}

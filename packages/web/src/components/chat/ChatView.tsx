@@ -575,11 +575,6 @@ function toolMeta(t: string) {
 }
 
 type DisclosurePreference = 'auto' | 'open' | 'closed';
-export type ConversationViewMode = 'hybrid';
-
-export function normalizeConversationViewMode(_value: unknown): ConversationViewMode {
-  return 'hybrid';
-}
 
 export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {
   if (preference === 'open') return true;

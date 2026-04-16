@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getScheduledTaskBody, isScheduledTaskDetail } from './scheduledTaskDetail';
+import { isScheduledTaskDetail } from './scheduledTaskDetail';
 
 describe('scheduledTaskDetail helpers', () => {
   it('accepts a valid scheduled task detail payload', () => {
@@ -30,9 +30,4 @@ describe('scheduledTaskDetail helpers', () => {
     })).toBe(false);
   });
 
-  it('returns the stored prompt body as-is', () => {
-    expect(getScheduledTaskBody('Summarize the day.\n- Include blockers')).toBe(
-      'Summarize the day.\n- Include blockers',
-    );
-  });
 });

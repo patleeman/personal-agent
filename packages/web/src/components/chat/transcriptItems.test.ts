@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../shared/types';
 import {
   buildChatRenderItems,
-  getLatestUserMessage,
   isTraceConversationBlock,
   summarizeTraceCluster,
 } from './transcriptItems.js';
@@ -99,14 +98,4 @@ describe('chat transcript items', () => {
     ]);
   });
 
-  it('finds the latest user message for sticky reply context', () => {
-    const messages: MessageBlock[] = [
-      { type: 'user', ts: '2026-03-12T18:00:00.000Z', text: 'First prompt' },
-      { type: 'text', ts: '2026-03-12T18:00:01.000Z', text: 'First reply' },
-      { type: 'user', ts: '2026-03-12T18:00:02.000Z', text: 'Second prompt' },
-      { type: 'thinking', ts: '2026-03-12T18:00:03.000Z', text: 'Working…' },
-    ];
-
-    expect(getLatestUserMessage(messages)?.text).toBe('Second prompt');
-  });
 });

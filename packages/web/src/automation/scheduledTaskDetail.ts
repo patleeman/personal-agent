@@ -34,6 +34,3 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.threadTitle);
 }
 
-export function getScheduledTaskBody(prompt: string): string {
-  return prompt.trim();
-}

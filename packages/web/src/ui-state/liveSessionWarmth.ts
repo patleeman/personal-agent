@@ -1,4 +1,3 @@
-import { useSyncExternalStore } from 'react';
 import type { StreamState } from '../hooks/useSessionStream';
 
 const MAX_WARM_LIVE_SESSION_STATES = 24;
@@ -71,36 +70,3 @@ export function clearWarmLiveSessionState(sessionId: string | null | undefined):
   emitWarmLiveSessionStateChanged(normalizedSessionId);
 }
 
-export function subscribeWarmLiveSessionState(
-  sessionId: string | null | undefined,
-  listener: () => void,
-): () => void {
-  const normalizedSessionId = normalizeSessionId(sessionId);
-  if (!normalizedSessionId) {
-    return () => {};
-  }
-
-  const listeners = warmLiveSessionListeners.get(normalizedSessionId) ?? new Set<() => void>();
-  listeners.add(listener);
-  warmLiveSessionListeners.set(normalizedSessionId, listeners);
-
-  return () => {
-    const currentListeners = warmLiveSessionListeners.get(normalizedSessionId);
-    if (!currentListeners) {
-      return;
-    }
-
-    currentListeners.delete(listener);
-    if (currentListeners.size === 0) {
-      warmLiveSessionListeners.delete(normalizedSessionId);
-    }
-  };
-}
-
-export function useWarmLiveSessionState(sessionId: string | null | undefined): StreamState | null {
-  return useSyncExternalStore(
-    (onStoreChange) => subscribeWarmLiveSessionState(sessionId, onStoreChange),
-    () => readWarmLiveSessionState(sessionId),
-    () => null,
-  );
-}

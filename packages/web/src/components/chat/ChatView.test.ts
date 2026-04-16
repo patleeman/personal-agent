@@ -5,7 +5,6 @@ import type { MessageBlock } from '../../shared/types';
 import {
   ChatView,
   getStreamingStatusLabel,
-  normalizeConversationViewMode,
   renderText,
   resolveDisclosureOpen,
   shouldAutoOpenConversationBlock,
@@ -99,13 +98,6 @@ describe('chat view streaming disclosure', () => {
     expect(shouldAutoOpenTraceCluster(false, false)).toBe(false);
   });
 
-  it('forces the conversation view mode to hybrid', () => {
-    expect(normalizeConversationViewMode('transcript')).toBe('hybrid');
-    expect(normalizeConversationViewMode('hybrid')).toBe('hybrid');
-    expect(normalizeConversationViewMode('raw')).toBe('hybrid');
-    expect(normalizeConversationViewMode('unknown')).toBe('hybrid');
-    expect(normalizeConversationViewMode(null)).toBe('hybrid');
-  });
 
   it('renders rich markdown structures in assistant messages', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText([

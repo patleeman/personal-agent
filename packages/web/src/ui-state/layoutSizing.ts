@@ -124,14 +124,6 @@ export function getRailInitialWidth(input: {
   return clampPanelWidth(initialWidth, input.railMinWidth, input.railMaxWidth);
 }
 
-export function getArtifactRailTargetWidth(input: {
-  viewportWidth: number;
-  sidebarWidth: number;
-  resizeHandleWidth?: number;
-}): number {
-  return Math.floor(getMainViewportWidth(input) / 2);
-}
-
 export function getRailMaxWidth(input: {
   viewportWidth: number;
   sidebarWidth: number;
