@@ -7,6 +7,9 @@ import { ToolbarButton, cx } from './ui';
 const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button';
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
+const ACTIVITY_LIMIT = 14;
+
+let nextActivityEntryId = 1;
 
 interface DesktopHostDraft {
   id: string;
@@ -25,6 +28,19 @@ interface DesktopWorkspaceServerDraft {
   port: string;
   useTailscaleServe: boolean;
 }
+
+interface ActivityEntry {
+  id: number;
+  timestamp: number;
+  tone: 'info' | 'success' | 'error';
+  message: string;
+}
+
+const activityTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+});
 
 function createDesktopWorkspaceServerDraft(state?: DesktopWorkspaceServerState | null): DesktopWorkspaceServerDraft {
   return {
@@ -90,19 +106,186 @@ function formatDesktopHostDetails(host: DesktopHostRecord): string {
     .join(' · ');
 }
 
+function hostKindLabel(host: DesktopHostRecord): string {
+  if (host.kind === 'local') {
+    return 'Local';
+  }
+
+  return host.kind === 'web' ? 'WebSocket' : 'SSH';
+}
+
+function formatWorkspaceServerStatus(state: DesktopWorkspaceServerState | null, draft: DesktopWorkspaceServerDraft): {
+  label: string;
+  className: string;
+} {
+  if (state?.running) {
+    return {
+      label: 'Running',
+      className: 'text-success',
+    };
+  }
+
+  if (draft.enabled) {
+    return {
+      label: 'Starting or unhealthy',
+      className: 'text-warning',
+    };
+  }
+
+  return {
+    label: 'Off',
+    className: 'text-secondary',
+  };
+}
+
+function formatActivityTime(timestamp: number): string {
+  return activityTimeFormatter.format(timestamp);
+}
+
+function renderHostTargetMessage(host: DesktopHostRecord): string | null {
+  if (host.kind === 'web') {
+    return `Target ${host.websocketUrl}`;
+  }
+
+  if (host.kind === 'ssh') {
+    return `Target ${host.sshTarget} · port ${host.remotePort ?? 8390}`;
+  }
+
+  return null;
+}
+
+function schedulePendingActivityNotes(hostLabel: string, appendActivity: (tone: ActivityEntry['tone'], message: string) => void): () => void {
+  if (typeof window === 'undefined') {
+    return () => {};
+  }
+
+  const timers = [
+    window.setTimeout(() => {
+      appendActivity('info', `Still connecting to ${hostLabel}…`);
+    }, 1400),
+    window.setTimeout(() => {
+      appendActivity('info', `Still waiting for ${hostLabel} to answer…`);
+    }, 4200),
+  ];
+
+  return () => {
+    for (const timer of timers) {
+      window.clearTimeout(timer);
+    }
+  };
+}
+
+function ValueRow({
+  label,
+  value,
+  actionLabel,
+  onAction,
+}: {
+  label: string;
+  value: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0 space-y-1">
+        <p className="text-[12px] text-secondary">{label}</p>
+        <p className="break-all font-mono text-[12px] text-primary">{value}</p>
+      </div>
+      {actionLabel && onAction ? (
+        <ToolbarButton className="shrink-0" onClick={onAction}>
+          {actionLabel}
+        </ToolbarButton>
+      ) : null}
+    </div>
+  );
+}
+
 export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
   const [environment, setEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [editorMode, setEditorMode] = useState<DesktopHostEditorMode>('new');
   const [draft, setDraft] = useState<DesktopHostDraft>(() => createDesktopHostDraft());
+  const [showEditor, setShowEditor] = useState(false);
   const [workspaceServerState, setWorkspaceServerState] = useState<DesktopWorkspaceServerState | null>(null);
   const [workspaceServerDraft, setWorkspaceServerDraft] = useState<DesktopWorkspaceServerDraft>(() => createDesktopWorkspaceServerDraft());
   const [litterShimState, setLitterShimState] = useState<{ installed: boolean; shimPath: string; command: string } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'save-workspace-server' | 'install-shim' | 'uninstall-shim' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'save-workspace-server' | 'install-shim' | 'uninstall-shim' | 'open-log' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+
+  function appendActivity(tone: ActivityEntry['tone'], message: string) {
+    setActivity((current) => {
+      const nextEntry: ActivityEntry = {
+        id: nextActivityEntryId++,
+        timestamp: Date.now(),
+        tone,
+        message,
+      };
+      return [...current, nextEntry].slice(-ACTIVITY_LIMIT);
+    });
+  }
+
+  function requireBridge() {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      throw new Error('Desktop bridge unavailable. Restart the desktop app and try again.');
+    }
+
+    return bridge;
+  }
+
+  async function refreshDesktopState() {
+    const [nextEnvironment, nextConnections] = await Promise.all([
+      readDesktopEnvironment(),
+      readDesktopConnections(),
+    ]);
+    setEnvironment(nextEnvironment);
+    setConnections(nextConnections);
+  }
+
+  async function refreshHostingState() {
+    const bridge = requireBridge();
+    const [serverState, shimState] = await Promise.all([
+      bridge.readWorkspaceServerState(),
+      bridge.readLitterShimState(),
+    ]);
+    setWorkspaceServerState(serverState);
+    setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
+    setLitterShimState(shimState);
+  }
+
+  function resetEditor() {
+    setShowEditor(false);
+    setEditorMode('new');
+    setSelectedHostId('');
+    setDraft(createDesktopHostDraft());
+  }
+
+  function startNewHostDraft() {
+    setShowEditor(true);
+    setEditorMode('new');
+    setSelectedHostId('');
+    setDraft(createDesktopHostDraft());
+    setError(null);
+    setNotice(null);
+  }
+
+  function selectHost(host: DesktopHostRecord) {
+    if (host.kind === 'local') {
+      return;
+    }
+
+    setShowEditor(true);
+    setEditorMode('existing');
+    setSelectedHostId(host.id);
+    setDraft(createDesktopHostDraft(host));
+    setError(null);
+    setNotice(null);
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -125,14 +308,22 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
 
     let cancelled = false;
 
-    Promise.all([readDesktopEnvironment(), readDesktopConnections()])
-      .then(([nextEnvironment, nextConnections]) => {
+    Promise.all([
+      readDesktopEnvironment(),
+      readDesktopConnections(),
+      bridge.readWorkspaceServerState().catch(() => null),
+      bridge.readLitterShimState().catch(() => null),
+    ])
+      .then(([nextEnvironment, nextConnections, serverState, shimState]) => {
         if (cancelled) {
           return;
         }
 
         setEnvironment(nextEnvironment);
         setConnections(nextConnections);
+        setWorkspaceServerState(serverState);
+        setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
+        setLitterShimState(shimState);
         setLoading(false);
       })
       .catch((nextError) => {
@@ -164,205 +355,173 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
     setDraft(createDesktopHostDraft(resolved.selectedHost ?? undefined));
   }, [connections, editorMode, selectedHostId]);
 
-  useEffect(() => {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      setWorkspaceServerState(null);
-      setLitterShimState(null);
-      return;
-    }
-
-    let cancelled = false;
-    void Promise.all([
-      bridge.readWorkspaceServerState().catch(() => null),
-      bridge.readLitterShimState().catch(() => null),
-    ]).then(([serverState, shimState]) => {
-      if (cancelled) {
-        return;
-      }
-
-      setWorkspaceServerState(serverState);
-      setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
-      setLitterShimState(shimState);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  async function refreshDesktopState() {
-    const [nextEnvironment, nextConnections] = await Promise.all([
-      readDesktopEnvironment(),
-      readDesktopConnections(),
-    ]);
-    setEnvironment(nextEnvironment);
-    setConnections(nextConnections);
-  }
-
-  function startNewHostDraft() {
-    setEditorMode('new');
-    setSelectedHostId('');
-    setDraft(createDesktopHostDraft());
-    setError(null);
-    setNotice(null);
-  }
-
-  function selectHost(host: DesktopHostRecord) {
-    if (host.kind === 'local') {
-      startNewHostDraft();
-      return;
-    }
-
-    setEditorMode('existing');
-    setSelectedHostId(host.id);
-    setDraft(createDesktopHostDraft(host));
-    setError(null);
-    setNotice(null);
-  }
-
   async function handleConnect(hostId: string) {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    setAction('connect');
-    setError(null);
-    setNotice(null);
+    let cancelPendingNotes = () => {};
 
     try {
+      const bridge = requireBridge();
+      const host = connections?.hosts.find((entry) => entry.id === hostId);
+
+      setAction('connect');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', host ? `Connecting to ${host.label}…` : `Connecting to ${hostId}…`);
+      if (host) {
+        const targetMessage = renderHostTargetMessage(host);
+        if (targetMessage) {
+          appendActivity('info', targetMessage);
+        }
+        cancelPendingNotes = schedulePendingActivityNotes(host.label, appendActivity);
+      }
+
       await bridge.switchHost(hostId);
+      appendActivity('success', host ? `Connected to ${host.label}.` : `Connected to ${hostId}.`);
       onClose();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Connection failed: ${message}`);
+      setError(message);
       setAction(null);
+    } finally {
+      cancelPendingNotes();
     }
   }
 
   async function handleOpenWindow(hostId: string) {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    setAction('open');
-    setError(null);
-    setNotice(null);
+    let cancelPendingNotes = () => {};
 
     try {
+      const bridge = requireBridge();
+      const host = connections?.hosts.find((entry) => entry.id === hostId);
+
+      setAction('open');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', host ? `Opening ${host.label} in a new window…` : `Opening ${hostId} in a new window…`);
+      if (host) {
+        cancelPendingNotes = schedulePendingActivityNotes(host.label, appendActivity);
+      }
+
       await bridge.openHostWindow(hostId);
+      appendActivity('success', host ? `Opened ${host.label} in a new window.` : `Opened ${hostId} in a new window.`);
       onClose();
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Open window failed: ${message}`);
+      setError(message);
       setAction(null);
+    } finally {
+      cancelPendingNotes();
     }
   }
 
   async function handleSave() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    if (!draft.id.trim() || !draft.label.trim()) {
-      setError('Host id and label are required.');
-      return;
-    }
-
-    let host: Extract<DesktopHostRecord, { kind: 'web' | 'ssh' }>;
-    if (draft.kind === 'web') {
-      if (!draft.websocketUrl.trim()) {
-        setError('WebSocket URL is required for remote workspaces.');
-        return;
-      }
-
-      host = {
-        id: draft.id.trim(),
-        label: draft.label.trim(),
-        kind: 'web',
-        websocketUrl: draft.websocketUrl.trim(),
-        ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
-        autoConnect: draft.autoConnect,
-      };
-    } else {
-      if (!draft.sshTarget.trim()) {
-        setError('SSH target is required for SSH hosts.');
-        return;
-      }
-
-      const parsedPort = Number(draft.remotePort.trim());
-      host = {
-        id: draft.id.trim(),
-        label: draft.label.trim(),
-        kind: 'ssh',
-        sshTarget: draft.sshTarget.trim(),
-        ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
-        remoteRepoRoot: draft.remoteRepoRoot.trim() || undefined,
-        remotePort: Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : undefined,
-        autoConnect: draft.autoConnect,
-      };
-    }
-
-    setAction('save');
-    setError(null);
-    setNotice(null);
-
     try {
+      const bridge = requireBridge();
+
+      if (!draft.id.trim() || !draft.label.trim()) {
+        setError('Host id and label are required.');
+        return;
+      }
+
+      let host: Extract<DesktopHostRecord, { kind: 'web' | 'ssh' }>;
+      if (draft.kind === 'web') {
+        if (!draft.websocketUrl.trim()) {
+          setError('WebSocket URL is required for remote workspaces.');
+          return;
+        }
+
+        host = {
+          id: draft.id.trim(),
+          label: draft.label.trim(),
+          kind: 'web',
+          websocketUrl: draft.websocketUrl.trim(),
+          ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
+          autoConnect: draft.autoConnect,
+        };
+      } else {
+        if (!draft.sshTarget.trim()) {
+          setError('SSH target is required for SSH hosts.');
+          return;
+        }
+
+        const parsedPort = Number(draft.remotePort.trim());
+        host = {
+          id: draft.id.trim(),
+          label: draft.label.trim(),
+          kind: 'ssh',
+          sshTarget: draft.sshTarget.trim(),
+          ...(draft.workspaceRoot.trim() ? { workspaceRoot: draft.workspaceRoot.trim() } : {}),
+          remoteRepoRoot: draft.remoteRepoRoot.trim() || undefined,
+          remotePort: Number.isInteger(parsedPort) && parsedPort > 0 ? parsedPort : undefined,
+          autoConnect: draft.autoConnect,
+        };
+      }
+
+      setAction('save');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', `${editorMode === 'existing' ? 'Saving' : 'Adding'} ${host.label}…`);
+
       const nextConnections = await bridge.saveHost(host);
       setConnections(nextConnections);
       await refreshDesktopState();
       setEditorMode('existing');
       setSelectedHostId(host.id);
       setDraft(createDesktopHostDraft(host));
+      setShowEditor(true);
       setNotice(draft.kind === 'ssh' ? 'SSH workspace saved.' : 'Remote workspace saved.');
+      appendActivity('success', `${host.label} saved.`);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Save failed: ${message}`);
+      setError(message);
     } finally {
       setAction(null);
     }
   }
 
   async function handleDelete(hostId: string) {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    setAction('delete');
-    setError(null);
-    setNotice(null);
-
     try {
+      const bridge = requireBridge();
+      const host = connections?.hosts.find((entry) => entry.id === hostId);
+
+      setAction('delete');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', host ? `Deleting ${host.label}…` : `Deleting ${hostId}…`);
+
       const nextConnections = await bridge.deleteHost(hostId);
       setConnections(nextConnections);
       await refreshDesktopState();
-      startNewHostDraft();
+      resetEditor();
       setNotice('Remote workspace deleted.');
+      appendActivity('success', host ? `${host.label} deleted.` : `${hostId} deleted.`);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Delete failed: ${message}`);
+      setError(message);
     } finally {
       setAction(null);
     }
   }
 
   async function handleSaveWorkspaceServer() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    const parsedPort = Number(workspaceServerDraft.port.trim());
-    if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
-      setError('Workspace server port must be a number between 1 and 65535.');
-      return;
-    }
-
-    setAction('save-workspace-server');
-    setError(null);
-    setNotice(null);
-
     try {
+      const bridge = requireBridge();
+      const parsedPort = Number(workspaceServerDraft.port.trim());
+      if (!Number.isInteger(parsedPort) || parsedPort <= 0 || parsedPort > 65535) {
+        setError('Workspace server port must be a number between 1 and 65535.');
+        return;
+      }
+
+      setAction('save-workspace-server');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', workspaceServerDraft.enabled
+        ? `Updating this desktop's remote server on port ${parsedPort}…`
+        : 'Stopping this desktop\'s remote server…');
+
       const nextState = await bridge.updateWorkspaceServerConfig({
         enabled: workspaceServerDraft.enabled,
         port: parsedPort,
@@ -370,59 +529,115 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
       });
       setWorkspaceServerState(nextState);
       setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(nextState));
-      setNotice(nextState.enabled
-        ? nextState.running
+      if (nextState.enabled) {
+        setNotice(nextState.running
           ? 'Desktop workspace server updated.'
-          : 'Desktop workspace server settings saved, but the server is not healthy yet.'
-        : 'Stopped hosting this desktop as a remote workspace.');
+          : 'Desktop workspace server settings saved, but the server is not healthy yet.');
+        appendActivity('success', nextState.running
+          ? `Remote server running at ${nextState.localWebsocketUrl}.`
+          : 'Remote server settings saved, but the server is not healthy yet.');
+      } else {
+        setNotice('Stopped hosting this desktop as a remote workspace.');
+        appendActivity('success', 'Remote server stopped.');
+      }
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Server update failed: ${message}`);
+      setError(message);
     } finally {
       setAction(null);
     }
   }
 
-  async function handleInstallLitterShim() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
+  async function handleOpenWorkspaceServerLog() {
+    try {
+      const bridge = requireBridge();
+      const logPath = workspaceServerState?.logFile;
+      if (!logPath) {
+        setError('No workspace server log file is available yet.');
+        return;
+      }
+
+      setAction('open-log');
+      setError(null);
+      setNotice(null);
+      const result = await bridge.openPath(logPath);
+      if (!result.opened) {
+        throw new Error(result.error || `Could not open ${logPath}`);
+      }
+      setNotice('Opened workspace server log.');
+      appendActivity('info', `Opened log ${logPath}.`);
+    } catch (nextError) {
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Open log failed: ${message}`);
+      setError(message);
+    } finally {
+      setAction(null);
+    }
+  }
+
+  async function handleCopyValue(label: string, value: string) {
+    if (typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      setError('Clipboard copy is unavailable in this window.');
       return;
     }
 
-    setAction('install-shim');
-    setError(null);
-    setNotice(null);
-
     try {
+      await navigator.clipboard.writeText(value);
+      setNotice(`${label} copied.`);
+      appendActivity('info', `Copied ${label.toLowerCase()}.`);
+    } catch (nextError) {
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      setError(message);
+    }
+  }
+
+  async function handleInstallLitterShim() {
+    try {
+      const bridge = requireBridge();
+
+      setAction('install-shim');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', 'Installing the Litter SSH shim…');
+
       const state = await bridge.installLitterShim();
       setLitterShimState(state);
       setNotice(`Installed Litter Codex shim at ${state.shimPath}.`);
+      appendActivity('success', `Installed Litter shim at ${state.shimPath}.`);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Shim install failed: ${message}`);
+      setError(message);
     } finally {
       setAction(null);
     }
   }
 
   async function handleUninstallLitterShim() {
-    const bridge = getDesktopBridge();
-    if (!bridge) {
-      return;
-    }
-
-    setAction('uninstall-shim');
-    setError(null);
-    setNotice(null);
-
     try {
+      const bridge = requireBridge();
+
+      setAction('uninstall-shim');
+      setError(null);
+      setNotice(null);
+      appendActivity('info', 'Removing the Litter SSH shim…');
+
       const state = await bridge.uninstallLitterShim();
       setLitterShimState(state);
       setNotice(`Removed Litter Codex shim from ${state.shimPath}.`);
+      appendActivity('success', `Removed Litter shim from ${state.shimPath}.`);
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : String(nextError));
+      const message = nextError instanceof Error ? nextError.message : String(nextError);
+      appendActivity('error', `Shim removal failed: ${message}`);
+      setError(message);
     } finally {
       setAction(null);
     }
   }
+
+  const workspaceServerStatus = formatWorkspaceServerStatus(workspaceServerState, workspaceServerDraft);
+  const workspaceServerLogPath = workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log';
 
   return (
     <div
@@ -440,270 +655,51 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
         aria-label="Desktop connections"
         className="ui-dialog-shell"
         style={{
-          maxWidth: '1040px',
-          height: 'min(780px, calc(100vh - 4rem))',
+          maxWidth: '760px',
+          height: 'min(820px, calc(100vh - 3rem))',
           background: 'rgb(var(--color-surface) / 0.97)',
           backdropFilter: 'blur(22px)',
           overscrollBehavior: 'contain',
         }}
       >
-        <div className="flex items-start justify-between gap-6 border-b border-border-subtle px-6 py-5">
+        <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
           <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Desktop connections</p>
-            <h2 className="text-[22px] font-semibold tracking-tight text-primary">Connect to a remote workspace</h2>
-            <p className="max-w-2xl text-[13px] leading-6 text-secondary">
-              Open a saved workspace in this window or a dedicated remote window. Saved workspace connections stay machine-local to this desktop app.
-            </p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Connections</p>
+            <h2 className="text-[22px] font-semibold tracking-tight text-primary">Connections</h2>
+            <p className="text-[13px] text-secondary">Switch workspaces, host this desktop, & see connection activity.</p>
             {environment ? (
               <p className="text-[12px] text-secondary">
-                Active workspace: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
+                Active: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
               </p>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <ToolbarButton
-              onClick={startNewHostDraft}
-              disabled={action !== null}
-            >
-              New remote workspace
-            </ToolbarButton>
+          <div className="flex items-center gap-2">
+            <ToolbarButton onClick={startNewHostDraft} disabled={action !== null}>New workspace</ToolbarButton>
             <ToolbarButton onClick={onClose}>Close</ToolbarButton>
           </div>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
-          {loading ? <p className="ui-card-meta">Loading desktop connections…</p> : null}
+          {loading ? <p className="ui-card-meta">Loading connections…</p> : null}
           {!connections && !loading ? (
             <div className="rounded-2xl border border-border-subtle bg-surface px-4 py-4">
               <p className="text-[13px] font-medium text-primary">Desktop connections unavailable</p>
-              <p className="ui-card-meta mt-1">
-                The desktop shell loaded without its IPC bridge, so remote workspace management is unavailable in this window.
-              </p>
+              <p className="ui-card-meta mt-1">The desktop shell loaded without its IPC bridge, so connection controls are unavailable in this window.</p>
             </div>
           ) : null}
+
           {connections ? (
-            <div className="grid gap-8 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-              <section className="min-w-0 space-y-3">
-                <div className="space-y-1">
-                  <h3 className="text-[15px] font-medium text-primary">Saved workspaces</h3>
-                  <p className="ui-card-meta">Use Connect to move this window, or Open window to keep the workspace separate.</p>
-                </div>
-                <div className="space-y-px">
-                  {connections.hosts.map((host) => {
-                    const active = host.id === connections.activeHostId;
-                    const isDefault = host.id === connections.defaultHostId;
-                    return (
-                      <div key={host.id} className={cx('ui-list-row px-3 py-3', active && 'ui-list-row-selected')}>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="text-[13px] font-medium text-primary">{host.label}</span>
-                            <span className="ui-card-meta">{host.kind === 'local' ? 'local' : host.kind === 'web' ? 'websocket' : 'ssh'}</span>
-                            {active ? <span className="ui-card-meta">active</span> : null}
-                            {isDefault ? <span className="ui-card-meta">default on launch</span> : null}
-                          </div>
-                          <p className="ui-card-meta mt-1 break-all">{formatDesktopHostDetails(host)}</p>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {!active ? (
-                            <button
-                              type="button"
-                              onClick={() => { void handleConnect(host.id); }}
-                              disabled={action !== null}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              Connect
-                            </button>
-                          ) : null}
-                          {host.kind !== 'local' ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => { void handleOpenWindow(host.id); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Open window
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { selectHost(host); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { void handleDelete(host.id); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-
-              <section className="min-w-0 space-y-4 border-t border-border-subtle pt-5 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-                <div className="space-y-1">
-                  <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit remote workspace' : 'New remote workspace'}</h3>
-                  <p className="ui-card-meta">Save workspace preferences here so they are available from the top bar later.</p>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2 min-w-0">
-                    <label className="ui-card-meta" htmlFor="desktop-modal-host-id">Host id</label>
-                    <input
-                      id="desktop-modal-host-id"
-                      value={draft.id}
-                      onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
-                      disabled={action !== null || editorMode === 'existing'}
-                      className={`${INPUT_CLASS} font-mono text-[13px]`}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="home-tailnet"
-                    />
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <label className="ui-card-meta" htmlFor="desktop-modal-host-label">Label</label>
-                    <input
-                      id="desktop-modal-host-label"
-                      value={draft.label}
-                      onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
-                      disabled={action !== null}
-                      className={INPUT_CLASS}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="Home desktop"
-                    />
-                  </div>
-                  <div className="space-y-2 min-w-0">
-                    <label className="ui-card-meta" htmlFor="desktop-modal-host-kind">Connection type</label>
-                    <select
-                      id="desktop-modal-host-kind"
-                      value={draft.kind}
-                      onChange={(event) => setDraft((current) => ({ ...current, kind: event.target.value as 'web' | 'ssh' }))}
-                      disabled={action !== null}
-                      className={INPUT_CLASS}
-                    >
-                      <option value="web">WebSocket</option>
-                      <option value="ssh">SSH</option>
-                    </select>
-                  </div>
-                  {draft.kind === 'web' ? (
-                    <>
-                      <div className="space-y-2 min-w-0 md:col-span-2">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-host-base-url">WebSocket URL</label>
-                        <input
-                          id="desktop-modal-host-base-url"
-                          value={draft.websocketUrl}
-                          onChange={(event) => setDraft((current) => ({ ...current, websocketUrl: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="wss://my-machine.tailnet.ts.net/codex"
-                        />
-                        <p className="ui-card-meta">Point this at a live Codex-compatible app-server endpoint, not the normal Personal Agent web UI URL.</p>
-                      </div>
-                      <div className="space-y-2 min-w-0 md:col-span-2">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-web-workspace-root">Workspace root</label>
-                        <input
-                          id="desktop-modal-web-workspace-root"
-                          value={draft.workspaceRoot}
-                          onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="/workspace/project"
-                        />
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div className="space-y-2 min-w-0">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-host-ssh-target">SSH target</label>
-                        <input
-                          id="desktop-modal-host-ssh-target"
-                          value={draft.sshTarget}
-                          onChange={(event) => setDraft((current) => ({ ...current, sshTarget: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="patrick@desktop-gpu"
-                        />
-                      </div>
-                      <div className="space-y-2 min-w-0">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-host-workspace-root">Workspace root</label>
-                        <input
-                          id="desktop-modal-host-workspace-root"
-                          value={draft.workspaceRoot}
-                          onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="~/workingdir/project"
-                        />
-                      </div>
-                      <div className="space-y-2 min-w-0">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-host-remote-port">Remote codex port</label>
-                        <input
-                          id="desktop-modal-host-remote-port"
-                          value={draft.remotePort}
-                          onChange={(event) => setDraft((current) => ({ ...current, remotePort: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="8390"
-                        />
-                      </div>
-                      <div className="space-y-2 min-w-0 md:col-span-2">
-                        <label className="ui-card-meta" htmlFor="desktop-modal-host-repo-root">Remote repo root</label>
-                        <input
-                          id="desktop-modal-host-repo-root"
-                          value={draft.remoteRepoRoot}
-                          onChange={(event) => setDraft((current) => ({ ...current, remoteRepoRoot: event.target.value }))}
-                          disabled={action !== null}
-                          className={`${INPUT_CLASS} font-mono text-[13px]`}
-                          autoComplete="off"
-                          spellCheck={false}
-                          placeholder="~/workingdir/personal-agent"
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-
-                <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-host-auto-connect">
-                  <input
-                    id="desktop-modal-host-auto-connect"
-                    type="checkbox"
-                    checked={draft.autoConnect}
-                    onChange={(event) => setDraft((current) => ({ ...current, autoConnect: event.target.checked }))}
-                    disabled={action !== null}
-                    className={CHECKBOX_CLASS}
-                  />
-                  <span>Use as default workspace on launch</span>
-                </label>
-
-                <p className="ui-card-meta">
-                  The active workspace controls this window right now. The default workspace controls which connection opens the next time the desktop app launches.
-                </p>
-
-                <div className="space-y-3 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
+            <div className="space-y-6">
+              <section className="space-y-3 border-b border-border-subtle pb-6">
+                <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <p className="text-[13px] font-medium text-primary">Host this desktop as a remote workspace</p>
-                    <p className="ui-card-meta">Run the managed Codex-compatible server from the desktop app so direct WebSocket remotes and Tailnet publishing stop requiring manual shell nonsense.</p>
+                    <h3 className="text-[15px] font-medium text-primary">This desktop</h3>
+                    <p className="text-[13px] text-secondary">Run the built-in remote server here.</p>
                   </div>
+                  <p className={cx('text-[13px] font-medium', workspaceServerStatus.className)}>{workspaceServerStatus.label}</p>
+                </div>
+
+                <div className="space-y-4">
                   <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-workspace-server-enabled">
                     <input
                       id="desktop-modal-workspace-server-enabled"
@@ -719,25 +715,21 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                     />
                     <span>Host this desktop as a remote workspace</span>
                   </label>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2 min-w-0">
-                      <label className="ui-card-meta" htmlFor="desktop-modal-workspace-server-port">Local port</label>
-                      <input
-                        id="desktop-modal-workspace-server-port"
-                        value={workspaceServerDraft.port}
-                        onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, port: event.target.value }))}
-                        disabled={action !== null}
-                        className={`${INPUT_CLASS} font-mono text-[13px]`}
-                        autoComplete="off"
-                        spellCheck={false}
-                        placeholder="8390"
-                      />
-                    </div>
-                    <div className="space-y-2 min-w-0">
-                      <label className="ui-card-meta">Status</label>
-                      <p className="text-[13px] text-primary">{workspaceServerState?.running ? 'Running' : workspaceServerState?.enabled ? 'Starting or unhealthy' : 'Disabled'}</p>
-                    </div>
+
+                  <div className="space-y-2 min-w-0">
+                    <label className="ui-card-meta" htmlFor="desktop-modal-workspace-server-port">Port</label>
+                    <input
+                      id="desktop-modal-workspace-server-port"
+                      value={workspaceServerDraft.port}
+                      onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, port: event.target.value }))}
+                      disabled={action !== null}
+                      className={`${INPUT_CLASS} max-w-[180px] font-mono text-[13px]`}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="8390"
+                    />
                   </div>
+
                   <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-workspace-server-tailnet">
                     <input
                       id="desktop-modal-workspace-server-tailnet"
@@ -749,14 +741,31 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                     />
                     <span>Publish over Tailscale at <span className="font-mono text-[11px]">/codex</span></span>
                   </label>
-                  <div className="space-y-1">
-                    <p className="ui-card-meta break-all">Local URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}</span></p>
+
+                  <div className="space-y-3 rounded-2xl bg-base/35 px-4 py-4">
+                    <ValueRow
+                      label="Local URL"
+                      value={workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}
+                      actionLabel="Copy"
+                      onAction={() => {
+                        void handleCopyValue('Local URL', workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`);
+                      }}
+                    />
                     {workspaceServerState?.tailnetWebsocketUrl ? (
-                      <p className="ui-card-meta break-all">Tailnet URL: <span className="font-mono text-[11px] text-primary">{workspaceServerState.tailnetWebsocketUrl}</span></p>
+                      <ValueRow
+                        label="Tailnet URL"
+                        value={workspaceServerState.tailnetWebsocketUrl}
+                        actionLabel="Copy"
+                        onAction={() => {
+                          void handleCopyValue('Tailnet URL', workspaceServerState.tailnetWebsocketUrl ?? '');
+                        }}
+                      />
                     ) : null}
-                    <p className="ui-card-meta break-all">Log: <span className="font-mono text-[11px]">{workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log'}</span></p>
-                    {workspaceServerState?.error ? <p className="text-[12px] text-danger">{workspaceServerState.error}</p> : null}
+                    <ValueRow label="Log file" value={workspaceServerLogPath} actionLabel="Open" onAction={() => { void handleOpenWorkspaceServerLog(); }} />
                   </div>
+
+                  {workspaceServerState?.error ? <p className="text-[12px] text-danger">{workspaceServerState.error}</p> : null}
+
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -766,80 +775,335 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                     >
                       {action === 'save-workspace-server' ? 'Saving…' : 'Save server settings'}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => { void refreshHostingState().catch((nextError) => setError(nextError instanceof Error ? nextError.message : String(nextError))); }}
+                      disabled={action !== null}
+                      className={ACTION_BUTTON_CLASS}
+                    >
+                      Refresh
+                    </button>
                   </div>
+
+                  <details className="border-t border-border-subtle pt-4">
+                    <summary className="cursor-pointer text-[13px] font-medium text-primary">Litter SSH shim</summary>
+                    <div className="mt-3 space-y-3">
+                      <p className="ui-card-meta break-all">
+                        {litterShimState?.installed
+                          ? `Installed at ${litterShimState.shimPath}`
+                          : `Not installed. Expected path: ${litterShimState?.shimPath ?? '~/.litter/bin/codex'}`}
+                      </p>
+                      {litterShimState?.command ? (
+                        <p className="ui-card-meta break-all">Command: <span className="font-mono text-[11px]">{litterShimState.command}</span></p>
+                      ) : null}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { void handleInstallLitterShim(); }}
+                          disabled={action !== null}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          {action === 'install-shim' ? 'Installing…' : litterShimState?.installed ? 'Reinstall shim' : 'Install shim'}
+                        </button>
+                        {litterShimState?.installed ? (
+                          <button
+                            type="button"
+                            onClick={() => { void handleUninstallLitterShim(); }}
+                            disabled={action !== null}
+                            className={ACTION_BUTTON_CLASS}
+                          >
+                            {action === 'uninstall-shim' ? 'Removing…' : 'Remove shim'}
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </section>
+
+              <section className="space-y-3 border-b border-border-subtle pb-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-primary">Saved workspaces</h3>
+                    <p className="text-[13px] text-secondary">Connect this window or open a separate one.</p>
+                  </div>
+                  <ToolbarButton onClick={startNewHostDraft} disabled={action !== null}>New workspace</ToolbarButton>
                 </div>
 
-                <div className="space-y-2 rounded-2xl border border-border-subtle bg-surface px-4 py-4">
-                  <p className="text-[13px] font-medium text-primary">Litter SSH shim</p>
-                  <p className="ui-card-meta">
-                    Install a machine-local <span className="font-mono text-[11px]">~/.litter/bin/codex</span> shim so Litter can SSH in and launch the desktop app's Codex-compatible server.
-                  </p>
-                  <p className="ui-card-meta break-all">
-                    {litterShimState?.installed
-                      ? `Installed at ${litterShimState.shimPath}`
-                      : `Not installed. Expected path: ${litterShimState?.shimPath ?? '~/.litter/bin/codex'}`}
-                  </p>
-                  {litterShimState?.command ? (
-                    <p className="ui-card-meta break-all">Command: <span className="font-mono text-[11px]">{litterShimState.command}</span></p>
-                  ) : null}
+                <div className="space-y-px">
+                  {connections.hosts.map((host) => {
+                    const active = host.id === connections.activeHostId;
+                    const isDefault = host.id === connections.defaultHostId;
+                    return (
+                      <div key={host.id} className={cx('ui-list-row gap-3 px-3 py-3', active && 'ui-list-row-selected')}>
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                            <span className="text-[13px] font-medium text-primary">{host.label}</span>
+                            <span className="ui-card-meta">{hostKindLabel(host)}</span>
+                            {active ? <span className="ui-card-meta">active</span> : null}
+                            {isDefault ? <span className="ui-card-meta">launch default</span> : null}
+                          </div>
+                          <p className="ui-card-meta break-all">{formatDesktopHostDetails(host)}</p>
+                        </div>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {!active ? (
+                            <button
+                              type="button"
+                              onClick={() => { void handleConnect(host.id); }}
+                              disabled={action !== null}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              {action === 'connect' ? 'Connecting…' : 'Connect'}
+                            </button>
+                          ) : null}
+                          {host.kind !== 'local' ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => { void handleOpenWindow(host.id); }}
+                                disabled={action !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                {action === 'open' ? 'Opening…' : 'Open window'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { selectHost(host); }}
+                                disabled={action !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => { void handleDelete(host.id); }}
+                                disabled={action !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                {action === 'delete' ? 'Deleting…' : 'Delete'}
+                              </button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              {showEditor ? (
+                <section className="space-y-4 border-b border-border-subtle pb-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit workspace' : 'New workspace'}</h3>
+                      <p className="text-[13px] text-secondary">Saved only on this machine.</p>
+                    </div>
+                    <ToolbarButton onClick={resetEditor} disabled={action !== null}>Hide</ToolbarButton>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl bg-base/35 px-4 py-4">
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-modal-host-id">Host id</label>
+                      <input
+                        id="desktop-modal-host-id"
+                        value={draft.id}
+                        onChange={(event) => setDraft((current) => ({ ...current, id: event.target.value }))}
+                        disabled={action !== null || editorMode === 'existing'}
+                        className={`${INPUT_CLASS} font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="home-tailnet"
+                      />
+                    </div>
+
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-modal-host-label">Label</label>
+                      <input
+                        id="desktop-modal-host-label"
+                        value={draft.label}
+                        onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))}
+                        disabled={action !== null}
+                        className={INPUT_CLASS}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="Home desktop"
+                      />
+                    </div>
+
+                    <div className="space-y-2 min-w-0">
+                      <label className="ui-card-meta" htmlFor="desktop-modal-host-kind">Connection type</label>
+                      <select
+                        id="desktop-modal-host-kind"
+                        value={draft.kind}
+                        onChange={(event) => setDraft((current) => ({ ...current, kind: event.target.value as 'web' | 'ssh' }))}
+                        disabled={action !== null}
+                        className={INPUT_CLASS}
+                      >
+                        <option value="web">WebSocket</option>
+                        <option value="ssh">SSH</option>
+                      </select>
+                    </div>
+
+                    {draft.kind === 'web' ? (
+                      <>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-host-base-url">WebSocket URL</label>
+                          <input
+                            id="desktop-modal-host-base-url"
+                            value={draft.websocketUrl}
+                            onChange={(event) => setDraft((current) => ({ ...current, websocketUrl: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="wss://my-machine.tailnet.ts.net/codex"
+                          />
+                        </div>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-web-workspace-root">Workspace root</label>
+                          <input
+                            id="desktop-modal-web-workspace-root"
+                            value={draft.workspaceRoot}
+                            onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="/workspace/project"
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-host-ssh-target">SSH target</label>
+                          <input
+                            id="desktop-modal-host-ssh-target"
+                            value={draft.sshTarget}
+                            onChange={(event) => setDraft((current) => ({ ...current, sshTarget: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="patrick@desktop-gpu"
+                          />
+                        </div>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-host-workspace-root">Workspace root</label>
+                          <input
+                            id="desktop-modal-host-workspace-root"
+                            value={draft.workspaceRoot}
+                            onChange={(event) => setDraft((current) => ({ ...current, workspaceRoot: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="~/workingdir/project"
+                          />
+                        </div>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-host-remote-port">Remote codex port</label>
+                          <input
+                            id="desktop-modal-host-remote-port"
+                            value={draft.remotePort}
+                            onChange={(event) => setDraft((current) => ({ ...current, remotePort: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="8390"
+                          />
+                        </div>
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="desktop-modal-host-repo-root">Remote repo root</label>
+                          <input
+                            id="desktop-modal-host-repo-root"
+                            value={draft.remoteRepoRoot}
+                            onChange={(event) => setDraft((current) => ({ ...current, remoteRepoRoot: event.target.value }))}
+                            disabled={action !== null}
+                            className={`${INPUT_CLASS} font-mono text-[13px]`}
+                            autoComplete="off"
+                            spellCheck={false}
+                            placeholder="~/workingdir/personal-agent"
+                          />
+                        </div>
+                      </>
+                    )}
+
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-host-auto-connect">
+                      <input
+                        id="desktop-modal-host-auto-connect"
+                        type="checkbox"
+                        checked={draft.autoConnect}
+                        onChange={(event) => setDraft((current) => ({ ...current, autoConnect: event.target.checked }))}
+                        disabled={action !== null}
+                        className={CHECKBOX_CLASS}
+                      />
+                      <span>Use on launch</span>
+                    </label>
+                  </div>
+
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => { void handleInstallLitterShim(); }}
+                      onClick={() => { void handleSave(); }}
                       disabled={action !== null}
                       className={ACTION_BUTTON_CLASS}
                     >
-                      {action === 'install-shim' ? 'Installing…' : litterShimState?.installed ? 'Reinstall shim' : 'Install shim'}
+                      {action === 'save' ? 'Saving…' : editorMode === 'existing' ? 'Save workspace' : 'Add workspace'}
                     </button>
-                    {litterShimState?.installed ? (
+                    {editorMode === 'existing' ? (
                       <button
                         type="button"
-                        onClick={() => { void handleUninstallLitterShim(); }}
+                        onClick={startNewHostDraft}
                         disabled={action !== null}
                         className={ACTION_BUTTON_CLASS}
                       >
-                        {action === 'uninstall-shim' ? 'Removing…' : 'Remove shim'}
+                        New workspace
                       </button>
                     ) : null}
                   </div>
+                </section>
+              ) : null}
+
+              <section className="space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h3 className="text-[15px] font-medium text-primary">Activity</h3>
+                    <p className="text-[13px] text-secondary">Connection attempts & server changes.</p>
+                  </div>
+                  {activity.length > 0 ? (
+                    <ToolbarButton onClick={() => setActivity([])} disabled={action !== null}>Clear</ToolbarButton>
+                  ) : null}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => { void handleSave(); }}
-                    disabled={action !== null}
-                    className={ACTION_BUTTON_CLASS}
-                  >
-                    {action === 'save' ? 'Saving…' : editorMode === 'existing' ? 'Save host' : 'Add host'}
-                  </button>
-                  {editorMode === 'existing' ? (
-                    <button
-                      type="button"
-                      onClick={startNewHostDraft}
-                      disabled={action !== null}
-                      className={ACTION_BUTTON_CLASS}
-                    >
-                      New host
-                    </button>
-                  ) : null}
-                  {connections.activeHostId !== 'local' ? (
-                    <button
-                      type="button"
-                      onClick={() => { void handleConnect('local'); }}
-                      disabled={action !== null}
-                      className={ACTION_BUTTON_CLASS}
-                    >
-                      Switch to local
-                    </button>
-                  ) : null}
+                <div className="rounded-2xl border border-border-subtle bg-base/35 px-4 py-4" aria-live="polite">
+                  {activity.length > 0 ? (
+                    <ol className="space-y-2 font-mono text-[12px] text-primary">
+                      {activity.map((entry) => (
+                        <li key={entry.id} className="flex items-start gap-3">
+                          <span className="shrink-0 text-secondary">{formatActivityTime(entry.timestamp)}</span>
+                          <span className={cx(
+                            'min-w-0 break-words',
+                            entry.tone === 'success' && 'text-success',
+                            entry.tone === 'error' && 'text-danger',
+                          )}
+                          >
+                            {entry.message}
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="ui-card-meta">No recent activity.</p>
+                  )}
                 </div>
               </section>
             </div>
           ) : null}
 
-          {notice ? <p className="mt-4 text-[12px] text-success">{notice}</p> : null}
-          {error ? <p className="mt-4 text-[12px] text-danger">{error}</p> : null}
+          {notice ? <p className="mt-4 text-[12px] text-success" aria-live="polite">{notice}</p> : null}
+          {error ? <p className="mt-4 text-[12px] text-danger" aria-live="polite">{error}</p> : null}
         </div>
       </div>
     </div>

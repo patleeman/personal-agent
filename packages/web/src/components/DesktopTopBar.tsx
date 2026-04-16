@@ -3,7 +3,7 @@ import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
-import { ToolbarButton } from './ui';
+import { IconButton, ToolbarButton } from './ui';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -21,6 +21,17 @@ function RightRailToggleIcon({ open }: { open: boolean }) {
       <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
       <path d="M9.25 2v10" />
       {open ? <path d="M8 7H5.5" /> : <path d="M6.1 5.4 7.8 7l-1.7 1.6" />}
+    </svg>
+  );
+}
+
+function ConnectionsIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
+      <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
+      <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
+      <path d="M7.9 7.8 9.7 7.8 9.7 6" />
     </svg>
   );
 }
@@ -170,9 +181,14 @@ export function DesktopTopBar({
         <div className="ui-desktop-top-bar__center" />
         <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
           {showDesktopChrome ? (
-            <ToolbarButton className="ui-desktop-top-bar__action-button" onClick={() => setShowConnectionsModal(true)}>
-              Connect
-            </ToolbarButton>
+            <IconButton
+              className="ui-desktop-top-bar__icon-button"
+              onClick={() => setShowConnectionsModal(true)}
+              aria-label="Manage connections"
+              title="Manage connections"
+            >
+              <ConnectionsIcon />
+            </IconButton>
           ) : null}
           {showRailToggle ? (
             <ToolbarButton
