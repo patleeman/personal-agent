@@ -202,11 +202,6 @@ export interface ActivityEntry {
   notificationState?: string;
 }
 
-export interface ActivitySnapshot {
-  entries: ActivityEntry[];
-  unreadCount: number;
-}
-
 export interface AlertEntry {
   id: string;
   profile: string;
@@ -225,11 +220,6 @@ export interface AlertEntry {
   requiresAck: boolean;
   acknowledgedAt?: string;
   dismissedAt?: string;
-}
-
-export interface AlertSnapshot {
-  entries: AlertEntry[];
-  activeCount: number;
 }
 
 export interface ProjectMilestone {
@@ -277,11 +267,6 @@ export interface InvalidProjectRecord {
   error: string;
 }
 
-export interface ProjectDiagnostics {
-  profile: string;
-  invalidProjects: InvalidProjectRecord[];
-}
-
 export interface ProjectTask {
   id: string;
   status: string;
@@ -327,23 +312,6 @@ export interface ProjectTimelineEntry {
   createdAt: string;
   title: string;
   href?: string;
-}
-
-export interface ProjectDetail {
-  profile: string;
-  project: ProjectRecord;
-  taskCount: number;
-  fileCount: number;
-  attachmentCount: number;
-  artifactCount: number;
-  tasks: ProjectTask[];
-  document: ProjectDocumentRecord | null;
-  files: ProjectFile[];
-  attachments: ProjectFile[];
-  artifacts: ProjectFile[];
-  linkedConversations: ProjectLinkedConversation[];
-  timeline: ProjectTimelineEntry[];
-  links?: NodeLinks;
 }
 
 export interface ScheduledTaskSummary {
@@ -683,11 +651,6 @@ export interface LiveSessionContext {
   cwd: string;
   branch: string | null;
   git: GitWorkingTreeSummary | null;
-}
-
-export interface ConversationProjectLinks {
-  conversationId: string;
-  relatedProjectIds: string[];
 }
 
 export type ConversationBootstrapLiveState = { live: false } | ({ live: true } & LiveSessionMeta);
@@ -1058,13 +1021,6 @@ export interface AppStatus {
   webUiRevision?: string;
 }
 
-export interface ApplicationRestartRequestResult {
-  accepted: true;
-  message: string;
-  requestedAt: string;
-  logFile: string;
-}
-
 export type ModelServiceTier = 'auto' | 'default' | 'flex' | 'priority' | 'scale';
 
 export interface ModelInfo {
@@ -1287,29 +1243,6 @@ export interface McpServerToolSummary {
   description?: string;
 }
 
-export interface McpServerDetail {
-  server?: string;
-  transport?: string;
-  commandLine?: string;
-  toolCount?: number;
-  tools: McpServerToolSummary[];
-  rawOutput: string;
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
-export interface McpToolDetail {
-  server?: string;
-  tool?: string;
-  description?: string;
-  schema?: ToolParameterSchema;
-  rawOutput: string;
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-}
-
 export interface ConfiguredPackageSource {
   source: string;
   filtered: boolean;
@@ -1330,15 +1263,6 @@ export interface PackageInstallState {
   currentProfile: string;
   profileTargets: ProfilePackageSourceTargetState[];
   localTarget: PackageSourceTargetState;
-}
-
-export interface PackageInstallResult {
-  installed: boolean;
-  alreadyPresent: boolean;
-  source: string;
-  target: 'profile' | 'local';
-  settingsPath: string;
-  packageInstall: PackageInstallState;
 }
 
 export interface InjectedPromptMessage {
