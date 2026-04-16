@@ -10,7 +10,7 @@ function getErrorMessage(error: unknown): string {
   return String(error ?? '');
 }
 
-export function isRecoverableLazyRouteError(error: unknown): boolean {
+function isRecoverableLazyRouteError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase();
   return message.includes('failed to fetch dynamically imported module')
     || message.includes('error loading dynamically imported module')
@@ -22,7 +22,7 @@ function getRecoveryStorageKey(routeId: string): string {
   return `${LAZY_ROUTE_RECOVERY_PREFIX}${routeId}`;
 }
 
-export function clearLazyRouteRecovery(routeId: string): void {
+function clearLazyRouteRecovery(routeId: string): void {
   if (typeof window === 'undefined') {
     return;
   }
@@ -34,7 +34,7 @@ export function clearLazyRouteRecovery(routeId: string): void {
   }
 }
 
-export function attemptLazyRouteRecovery(routeId: string): boolean {
+function attemptLazyRouteRecovery(routeId: string): boolean {
   if (typeof window === 'undefined') {
     return false;
   }
