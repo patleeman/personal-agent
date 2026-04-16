@@ -34,6 +34,7 @@ Use these defaults:
 - `packages/web/src/conversation/` — conversation-specific client helpers, including draft/fork state, related-thread search, search state helpers, formatting helpers, and parsing logic
 - `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
 - `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
+- `packages/web/src/content/` — content rendering helpers for drawings, LaTeX artifacts, and file-path-aware rich text
 - `packages/web/src/knowledge/` — note/skill/note-mention helpers, markdown document helpers, and knowledge-workspace presentation utilities
 - `packages/web/src/local/` — browser-local storage, persisted UI state, saved workspace path helpers, and local-path detection helpers
 - `packages/web/src/model/` — model filtering, grouping, and model-preference presentation helpers
@@ -51,6 +52,7 @@ If it owns browser-side API transport or client event normalization, keep it und
 If it powers slash-command discovery or command-palette ranking/event wiring, keep it under `src/commands/`.
 If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.
 If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
+If it renders drawings, LaTeX artifacts, or file-path-aware content fragments, keep it under `src/content/`.
 If it manages markdown/note/skill/node-mention rendering for the knowledge surfaces, keep it under `src/knowledge/`.
 If it manages browser-local persistence or saved local workspace state, keep it under `src/local/`.
 If it manages model filtering or reusable model preference presentation logic, keep it under `src/model/`.

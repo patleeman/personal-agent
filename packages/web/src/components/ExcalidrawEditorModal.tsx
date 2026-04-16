@@ -1,7 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode, useEffect, useRef, useState } from 'react';
 import '@excalidraw/excalidraw/index.css';
-import type { ExcalidrawSceneData } from '../excalidrawUtils';
-import { buildDrawingFileNames, serializeExcalidrawScene } from '../excalidrawUtils';
+import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
+import { buildDrawingFileNames, serializeExcalidrawScene } from '../content/excalidrawUtils';
 import { useTheme } from '../ui-state/theme';
 
 export interface ExcalidrawEditorSavePayload {
