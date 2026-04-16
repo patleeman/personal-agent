@@ -19,7 +19,7 @@ export type ConversationSlashCommand =
   | { action: 'summarize' }
   | { action: 'think'; topic?: string };
 
-export type ConversationSlashParseResult =
+type ConversationSlashParseResult =
   | { kind: 'command'; command: ConversationSlashCommand }
   | { kind: 'invalid'; message: string };
 

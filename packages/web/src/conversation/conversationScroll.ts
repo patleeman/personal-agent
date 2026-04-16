@@ -5,7 +5,7 @@ const CONVERSATION_TAIL_SELECTOR = '[data-chat-tail="1"]';
 const DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT = 2;
 const DEFAULT_BOTTOM_SETTLE_MAX_FRAMES = 45;
 
-export interface ConversationScrollMetrics {
+interface ConversationScrollMetrics {
   scrollHeight: number;
   scrollTop: number;
   clientHeight: number;

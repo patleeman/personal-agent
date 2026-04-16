@@ -1,4 +1,4 @@
-export interface WholeLineBashCommand {
+interface WholeLineBashCommand {
   command: string;
   excludeFromContext: boolean;
 }

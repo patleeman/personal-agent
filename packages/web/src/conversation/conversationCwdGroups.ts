@@ -27,7 +27,7 @@ interface ConversationGroupLabelEntry {
   baseLabel: string;
 }
 
-export interface ConversationCwdGroup<T> {
+interface ConversationCwdGroup<T> {
   key: string;
   cwd: string | null;
   label: string;

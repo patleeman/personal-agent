@@ -1,4 +1,4 @@
-export interface ConversationComposerSubmitState {
+interface ConversationComposerSubmitState {
   label: 'Send' | 'Steer' | 'Follow up';
   behavior?: 'followUp';
 }

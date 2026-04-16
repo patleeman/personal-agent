@@ -1,4 +1,4 @@
-export interface ReplyQuoteInsertionResult {
+interface ReplyQuoteInsertionResult {
   text: string;
   selectionStart: number;
   selectionEnd: number;
