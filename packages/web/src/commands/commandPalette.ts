@@ -15,11 +15,11 @@ export interface CommandPaletteItem<TAction = unknown> {
   action: TAction;
 }
 
-export interface CommandPaletteResultItem<TAction = unknown> extends CommandPaletteItem<TAction> {
+interface CommandPaletteResultItem<TAction = unknown> extends CommandPaletteItem<TAction> {
   score: number;
 }
 
-export interface CommandPaletteSectionResult<TAction = unknown> {
+interface CommandPaletteSectionResult<TAction = unknown> {
   section: CommandPaletteSection;
   label: string;
   items: CommandPaletteResultItem<TAction>[];

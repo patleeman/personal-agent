@@ -19,7 +19,7 @@ import type {
 // ── Live title overrides ──────────────────────────────────────────────────────
 // ConversationPage pushes stream.title here; Sidebar reads it to update tabs/archive.
 
-export interface LiveTitlesContextValue {
+interface LiveTitlesContextValue {
   titles: Map<string, string>;
   setTitle: (id: string, title: string) => void;
 }
@@ -33,7 +33,7 @@ export function useLiveTitles() {
   return useContext(LiveTitlesContext);
 }
 
-export type AppEventVersions = Record<AppEventTopic, number>;
+type AppEventVersions = Record<AppEventTopic, number>;
 
 export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   sessions: 0,
@@ -49,7 +49,7 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   workspace: 0,
 };
 
-export interface AppEventsContextValue {
+interface AppEventsContextValue {
   versions: AppEventVersions;
   conversationVersions: ConversationScopedEventVersions;
 }
@@ -63,9 +63,9 @@ export function useAppEvents() {
   return useContext(AppEventsContext);
 }
 
-export type SseConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'offline';
+type SseConnectionStatus = 'connecting' | 'open' | 'reconnecting' | 'offline';
 
-export interface SseConnectionContextValue {
+interface SseConnectionContextValue {
   status: SseConnectionStatus;
 }
 
@@ -77,7 +77,7 @@ export function useSseConnection() {
   return useContext(SseConnectionContext);
 }
 
-export interface AppDataContextValue {
+interface AppDataContextValue {
   projects: ProjectRecord[] | null;
   sessions: SessionMeta[] | null;
   tasks: ScheduledTaskSummary[] | null;
@@ -103,7 +103,7 @@ export function useAppData() {
   return useContext(AppDataContext);
 }
 
-export interface SystemStatusContextValue {
+interface SystemStatusContextValue {
   daemon: DaemonState | null;
   webUi: WebUiState | null;
   setDaemon: (value: DaemonState) => void;

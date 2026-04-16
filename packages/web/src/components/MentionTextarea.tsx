@@ -9,7 +9,7 @@ interface MentionMatch {
   end: number;
 }
 
-export type MentionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> & {
+type MentionTextareaProps = Omit<TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'> & {
   value: string;
   onValueChange: (value: string) => void;
   mentionItems?: MentionItem[];

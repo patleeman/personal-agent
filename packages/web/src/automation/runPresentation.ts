@@ -5,7 +5,7 @@ export interface RunPresentationLookups {
   sessions?: SessionMeta[] | null;
 }
 
-export interface RunConnection {
+interface RunConnection {
   key: string;
   label: string;
   value: string;
@@ -13,12 +13,12 @@ export interface RunConnection {
   detail?: string;
 }
 
-export interface RunHeadline {
+interface RunHeadline {
   title: string;
   summary: string;
 }
 
-export interface RunMoment {
+interface RunMoment {
   label: 'completed' | 'updated' | 'started' | 'created';
   at?: string;
 }
