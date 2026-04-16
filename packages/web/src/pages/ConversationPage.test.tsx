@@ -13,7 +13,6 @@ import {
   isConversationSessionNotLiveError,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
-  resolveConversationPendingStatusLabel,
   resolveDisplayedConversationPendingStatusLabel,
   resolveConversationStreamTitleSync,
   resolveConversationAutocompleteCatalogDemand,
@@ -875,18 +874,6 @@ describe('conversation live state helpers', () => {
       isStreaming: true,
       usingStableTranscript: false,
     });
-  });
-
-  it('chooses an immediate pending status label for outbound prompts', () => {
-    expect(resolveConversationPendingStatusLabel({
-      isLiveSession: true,
-      hasVisibleSessionDetail: true,
-    })).toBe('Working…');
-
-    expect(resolveConversationPendingStatusLabel({
-      isLiveSession: false,
-      hasVisibleSessionDetail: true,
-    })).toBe('Resuming…');
   });
 
   it('keeps showing a pending status while a draft or initial prompt is still staging', () => {

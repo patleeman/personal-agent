@@ -265,7 +265,7 @@ export function isConversationSessionNotLiveError(error: unknown): boolean {
     || normalized.startsWith('session ') && normalized.endsWith(' is not live');
 }
 
-export function resolveConversationPendingStatusLabel(input: {
+function resolveConversationPendingStatusLabel(input: {
   isLiveSession: boolean;
   hasVisibleSessionDetail: boolean;
 }): string {
@@ -280,7 +280,7 @@ export function resolveConversationPendingStatusLabel(input: {
   return 'Sending…';
 }
 
-export function resolvePendingConversationPreparationStatusLabel(
+function resolvePendingConversationPreparationStatusLabel(
   prompt: PendingConversationPrompt | null | undefined,
 ): string | null {
   const relatedThreadCount = prompt?.relatedConversationIds?.length ?? 0;
