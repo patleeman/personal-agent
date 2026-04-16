@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { THEME_STORAGE_KEY } from '../local/localSettings';
-import { readStoredThemePreference, resolveThemePreference } from './theme';
+import { ThemeProvider, useTheme } from './theme';
 
 function createStorage(): Storage {
   const map = new Map<string, string>();
@@ -26,29 +28,77 @@ function createStorage(): Storage {
   } as Storage;
 }
 
+let lastThemeState: {
+  theme: string;
+  themePreference: string;
+} | null = null;
+
+function ThemeProbe() {
+  const themeState = useTheme();
+  lastThemeState = {
+    theme: themeState.theme,
+    themePreference: themeState.themePreference,
+  };
+  return null;
+}
+
+function renderThemeProbe() {
+  lastThemeState = null;
+  renderToStaticMarkup(
+    React.createElement(ThemeProvider, null, React.createElement(ThemeProbe)),
+  );
+  return lastThemeState;
+}
+
 describe('theme preferences', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createStorage());
   });
 
-  it('defaults to system when no browser preference is stored', () => {
-    expect(readStoredThemePreference()).toBe('system');
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    lastThemeState = null;
+  });
+
+  it('defaults to the system preference when nothing is stored', () => {
+    expect(renderThemeProbe()).toEqual({
+      theme: 'light',
+      themePreference: 'system',
+    });
   });
 
   it('reads an explicit stored theme preference', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'dark');
 
-    expect(readStoredThemePreference()).toBe('dark');
+    expect(renderThemeProbe()).toEqual({
+      theme: 'dark',
+      themePreference: 'dark',
+    });
   });
 
   it('falls back to system for invalid stored values', () => {
     localStorage.setItem(THEME_STORAGE_KEY, 'sepia');
 
-    expect(readStoredThemePreference()).toBe('system');
+    expect(renderThemeProbe()).toEqual({
+      theme: 'light',
+      themePreference: 'system',
+    });
   });
 
-  it('resolves system preference from the current system theme', () => {
-    expect(resolveThemePreference('system', 'dark')).toBe('dark');
-    expect(resolveThemePreference('system', 'light')).toBe('light');
+  it('resolves the system preference from a dark system theme', () => {
+    vi.stubGlobal('window', {
+      matchMedia: vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: undefined,
+        removeEventListener: undefined,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+      }),
+    });
+
+    expect(renderThemeProbe()).toEqual({
+      theme: 'dark',
+      themePreference: 'system',
+    });
   });
 });

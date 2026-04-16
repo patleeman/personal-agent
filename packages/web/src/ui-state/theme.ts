@@ -1,7 +1,7 @@
 import { createContext, createElement, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { THEME_STORAGE_KEY } from '../local/localSettings';
 
-export type Theme = 'light' | 'dark';
+type Theme = 'light' | 'dark';
 export type ThemePreference = Theme | 'system';
 
 const DEFAULT_THEME_PREFERENCE: ThemePreference = 'system';
@@ -36,11 +36,11 @@ function readSystemTheme(): Theme {
   return window.matchMedia(SYSTEM_THEME_QUERY).matches ? 'dark' : 'light';
 }
 
-export function resolveThemePreference(preference: ThemePreference, systemTheme: Theme = 'light'): Theme {
+function resolveThemePreference(preference: ThemePreference, systemTheme: Theme = 'light'): Theme {
   return preference === 'system' ? systemTheme : preference;
 }
 
-export function readStoredThemePreference(): ThemePreference {
+function readStoredThemePreference(): ThemePreference {
   try {
     const stored = localStorage.getItem(THEME_STORAGE_KEY);
     if (stored === 'system' || stored === 'light' || stored === 'dark') {
