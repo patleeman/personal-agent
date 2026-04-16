@@ -55,6 +55,7 @@ Then use this order:
 - [Native UI Automation](./native-ui-automation.md)
 - [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
 - [Release cycle](./release-cycle.md)
+- [Repo layout](./repo-layout.md)
 
 ## System surfaces
 
@@ -84,6 +85,7 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | --- | --- | --- |
 | What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
 | What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md), [Docs and Packages](./pages.md) |
+| How is the repo organized, and where should new code live? | [Repo layout](./repo-layout.md) | [How personal-agent works](./how-it-works.md), [Web server route modules](./web-server-routing.md) |
 | How do instruction files, docs, skills, and conversation context fit together? | [Knowledge Management System](./knowledge-system.md) | [Instruction Files, Docs, and Skills](./instructions-docs-skills.md), [Conversation Context Attachments](./conversation-context.md) |
 | Where should durable knowledge live? | [Docs and Packages](./pages.md) | [Knowledge Management System](./knowledge-system.md) |
 | How should a conversation keep stable KB context? | [Conversation Context Attachments](./conversation-context.md) | [Conversations](./conversations.md) |

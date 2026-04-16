@@ -93,6 +93,7 @@ The packaged app now carries the runtime data the desktop shell needs:
 
 - built `@personal-agent/daemon` and `@personal-agent/web` packages inside the packaged app
 - repo-level `defaults/`, `extensions/`, `internal-skills/`, and `prompt-catalog/` directories as extra resources
+- built-in extension dependencies from the root app install instead of nested extension-local package installs
 
 When packaged, the desktop shell launches the bundled daemon and web server with the Electron binary in `ELECTRON_RUN_AS_NODE` mode instead of relying on a separately installed `node` executable.
 

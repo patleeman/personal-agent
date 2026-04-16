@@ -28,6 +28,7 @@ It keeps repo-managed defaults in git, portable knowledge in an external vault, 
 Start with:
 
 - `docs/README.md` — docs map
+- `docs/repo-layout.md` — current monorepo boundaries and where code should live
 - `docs/getting-started.md` — install and first-run flow
 - `docs/decision-guide.md` — which surface to use
 - `docs/how-it-works.md` — durable-state mental model

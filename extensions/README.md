@@ -18,7 +18,7 @@ extensions/
 │   └── prompt-catalog.ts
 ├── web-tools/
 │   └── index.ts
-└── package.json
+└── ...other built-in extension entrypoints
 ```
 
 ## Notes
@@ -26,6 +26,7 @@ extensions/
 - `/reload` works with this structure.
 - Keep extension entrypoints at exactly one level under `extensions/`.
 - Support files without `index.ts` can live in helper dirs like `_shared/`.
-- Shared lightweight dependencies live in `extensions/package.json`.
-- Heavier extension-specific dependencies should live beside that extension (for example `web-tools/package.json`).
+- Built-in extensions resolve shared runtime dependencies from the repo root `package.json` and top-level `node_modules`.
+- Avoid adding nested extension package manifests unless an extension truly needs isolation from the main app dependency graph.
+- If an extension does need isolated dependencies later, keep the package local to that extension directory and document why.
 - `openai-native-compaction` is enabled by default for direct OpenAI Responses and ChatGPT/Codex responses models; set `PI_OPENAI_NATIVE_COMPACTION=0` to disable it or `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` to surface Codex/OpenAI compaction UI notices.

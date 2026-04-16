@@ -23,6 +23,8 @@ These ship with the repo and are shared through git:
 - `internal-skills/`
 - `prompt-catalog/`
 
+Built-in extensions in `extensions/` use the repo root dependency install; they are not separate workspace packages.
+
 ### 2. Durable knowledge vault
 
 By default, portable knowledge lives at:
