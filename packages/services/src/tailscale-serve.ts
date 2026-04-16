@@ -17,11 +17,16 @@ interface TailscaleStatusPayload {
     DNSName?: unknown;
     HostName?: unknown;
   };
+  Web?: unknown;
 }
 
 interface TailscaleCommandExecution {
   command: string;
   result: SpawnSyncReturns<string>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function normalizePort(port: number): number {
@@ -35,6 +40,15 @@ function normalizePort(port: number): number {
   }
 
   return parsed;
+}
+
+function normalizeServePath(path?: string): string {
+  const trimmed = typeof path === 'string' ? path.trim() : '';
+  if (!trimmed || trimmed === '/') {
+    return '/';
+  }
+
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
 }
 
 function normalizeDnsName(value: unknown): string | undefined {
@@ -69,13 +83,8 @@ function normalizeDnsSuffix(value: unknown): string | undefined {
 }
 
 function buildTailscaleServeArgs(input: { enabled: boolean; port: number; path?: string }): string[] {
-  const args = ['serve', '--bg'];
+  const args = ['serve', '--bg', `--set-path=${normalizeServePath(input.path)}`, `localhost:${input.port}`];
 
-  if (input.path) {
-    args.push(`--set-path=${input.path}`);
-  }
-
-  args.push(`localhost:${input.port}`);
   if (!input.enabled) {
     args.push('off');
   }
@@ -85,6 +94,13 @@ function buildTailscaleServeArgs(input: { enabled: boolean; port: number; path?:
 
 function formatCommand(command: string, args: string[]): string {
   return `${command} ${args.join(' ')}`.trim();
+}
+
+function renderTailscaleCommandFailure(execution: TailscaleCommandExecution): string {
+  const status = execution.result.status ?? 1;
+  return (execution.result.stderr ?? '').trim()
+    || (execution.result.stdout ?? '').trim()
+    || `exit code ${status}`;
 }
 
 function resolveTailscaleCommandCandidates(): string[] {
@@ -130,6 +146,141 @@ function runTailscaleCommand(args: string[]): TailscaleCommandExecution {
   );
 }
 
+function readTailscaleServeStatusPayload(): { payload?: TailscaleStatusPayload; error?: string } {
+  let execution: TailscaleCommandExecution;
+
+  try {
+    execution = runTailscaleCommand(['serve', 'status', '--json']);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if ((execution.result.status ?? 1) !== 0) {
+    return {
+      error: `Could not read \`tailscale serve status --json\`: ${renderTailscaleCommandFailure(execution)}`,
+    };
+  }
+
+  const raw = execution.result.stdout ?? '';
+  if (!raw.trim()) {
+    return { payload: {} };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(raw) as TailscaleStatusPayload,
+    };
+  } catch (error) {
+    return {
+      error: `Could not parse \`tailscale serve status --json\`: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function readTailscaleStatusPayload(): { payload?: TailscaleStatusPayload; error?: string } {
+  let execution: TailscaleCommandExecution;
+
+  try {
+    execution = runTailscaleCommand(['status', '--json']);
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+
+  if ((execution.result.status ?? 1) !== 0) {
+    return {
+      error: `Could not read \`tailscale status --json\`: ${renderTailscaleCommandFailure(execution)}`,
+    };
+  }
+
+  const raw = execution.result.stdout ?? '';
+  if (!raw.trim()) {
+    return { payload: {} };
+  }
+
+  try {
+    return {
+      payload: JSON.parse(raw) as TailscaleStatusPayload,
+    };
+  } catch (error) {
+    return {
+      error: `Could not parse \`tailscale status --json\`: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function findServeProxyTarget(payload: TailscaleStatusPayload, path: string): string | undefined {
+  if (!isRecord(payload.Web)) {
+    return undefined;
+  }
+
+  for (const service of Object.values(payload.Web)) {
+    if (!isRecord(service) || !isRecord(service.Handlers)) {
+      continue;
+    }
+
+    const handler = service.Handlers[path];
+    if (!isRecord(handler)) {
+      continue;
+    }
+
+    const proxy = typeof handler.Proxy === 'string' ? handler.Proxy.trim() : '';
+    if (proxy.length > 0) {
+      return proxy;
+    }
+  }
+
+  return undefined;
+}
+
+function proxyTargetMatchesLoopbackPort(proxyTarget: string, port: number): boolean {
+  const normalized = proxyTarget.includes('://') ? proxyTarget : `http://${proxyTarget}`;
+
+  try {
+    const url = new URL(normalized);
+    const hostname = url.hostname.replace(/^\[/, '').replace(/\]$/, '');
+    const resolvedPort = url.port
+      ? Number(url.port)
+      : url.protocol === 'https:'
+        ? 443
+        : 80;
+
+    return ['localhost', '127.0.0.1', '::1'].includes(hostname)
+      && resolvedPort === port;
+  } catch {
+    return false;
+  }
+}
+
+function verifyTailscaleServeProxyState(input: { enabled: boolean; port: number; path?: string }): void {
+  const normalizedPath = normalizeServePath(input.path);
+  const status = readTailscaleServeStatusPayload();
+  if (!status.payload) {
+    throw new Error(status.error ?? 'Could not verify Tailscale Serve state.');
+  }
+
+  const proxyTarget = findServeProxyTarget(status.payload, normalizedPath);
+
+  if (input.enabled) {
+    if (!proxyTarget) {
+      throw new Error(`Tailscale Serve did not expose ${normalizedPath} -> localhost:${String(input.port)} after applying config.`);
+    }
+
+    if (!proxyTargetMatchesLoopbackPort(proxyTarget, input.port)) {
+      throw new Error(`Tailscale Serve exposed ${normalizedPath}, but it points to ${proxyTarget} instead of localhost:${String(input.port)}.`);
+    }
+
+    return;
+  }
+
+  if (proxyTarget) {
+    throw new Error(`Tailscale Serve still exposes ${normalizedPath} -> ${proxyTarget} after disabling it.`);
+  }
+}
+
 function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | undefined {
   const directDnsName = normalizeDnsName(payload.Self?.DNSName);
   if (directDnsName) {
@@ -147,9 +298,7 @@ function resolveDnsNameFromStatus(payload: TailscaleStatusPayload): string | und
 
 export function syncTailscaleServeProxy(input: SyncTailscaleServeProxyInput): void {
   const normalizedPort = normalizePort(input.port);
-  const normalizedPath = typeof input.path === 'string' && input.path.trim().length > 0
-    ? input.path.trim()
-    : undefined;
+  const normalizedPath = normalizeServePath(input.path);
   const execution = runTailscaleCommand(buildTailscaleServeArgs({
     enabled: input.enabled,
     port: normalizedPort,
@@ -158,43 +307,33 @@ export function syncTailscaleServeProxy(input: SyncTailscaleServeProxyInput): vo
   const status = execution.result.status ?? 1;
 
   if (status !== 0) {
-    const detail = (execution.result.stderr ?? '').trim() || (execution.result.stdout ?? '').trim() || `exit code ${status}`;
     throw new Error(
-      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${normalizedPath ?? '/'} -> localhost:${normalizedPort}: ${detail}`,
+      `Could not ${input.enabled ? 'enable' : 'disable'} Tailscale Serve for ${normalizedPath} -> localhost:${normalizedPort}: ${renderTailscaleCommandFailure(execution)}`,
     );
   }
+
+  verifyTailscaleServeProxyState({
+    enabled: input.enabled,
+    port: normalizedPort,
+    path: normalizedPath,
+  });
 }
 
 export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
-  syncTailscaleServeProxy(input);
+  syncTailscaleServeProxy({
+    ...input,
+    path: '/',
+  });
 }
 
 export function resolveTailscaleServeBaseUrl(): string | undefined {
-  let execution: TailscaleCommandExecution;
-
-  try {
-    execution = runTailscaleCommand(['status', '--json']);
-  } catch {
+  const status = readTailscaleStatusPayload();
+  if (!status.payload) {
     return undefined;
   }
 
-  if ((execution.result.status ?? 1) !== 0) {
-    return undefined;
-  }
-
-  const raw = execution.result.stdout ?? '';
-  if (!raw.trim()) {
-    return undefined;
-  }
-
-  try {
-    const parsed = JSON.parse(raw) as TailscaleStatusPayload;
-    const dnsName = resolveDnsNameFromStatus(parsed);
-
-    return dnsName ? `https://${dnsName}` : undefined;
-  } catch {
-    return undefined;
-  }
+  const dnsName = resolveDnsNameFromStatus(status.payload);
+  return dnsName ? `https://${dnsName}` : undefined;
 }
 
 export function resolveWebUiTailscaleUrl(): string | undefined {

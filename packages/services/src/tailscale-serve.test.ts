@@ -15,6 +15,20 @@ import {
   syncWebUiTailscaleServe,
 } from './tailscale-serve.js';
 
+function createServeStatusPayload(handlers: Record<string, string> = {}): string {
+  const normalizedHandlers = Object.fromEntries(
+    Object.entries(handlers).map(([path, proxy]) => [path, { Proxy: proxy }]),
+  );
+
+  return JSON.stringify({
+    Web: {
+      'my-host.tailnet.ts.net:443': {
+        Handlers: normalizedHandlers,
+      },
+    },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.spawnSync.mockReturnValue({ status: 0, stdout: '', stderr: '' });
@@ -22,33 +36,91 @@ beforeEach(() => {
 
 describe('syncTailscaleServeProxy', () => {
   it('supports mounting a reverse proxy on a custom path', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({ '/codex': 'http://localhost:8390' }), stderr: '' });
+
     syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' });
 
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
+      1,
       'tailscale',
       ['serve', '--bg', '--set-path=/codex', 'localhost:8390'],
       { encoding: 'utf-8' },
+    );
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
+      2,
+      'tailscale',
+      ['serve', 'status', '--json'],
+      { encoding: 'utf-8' },
+    );
+  });
+
+  it('fails when the expected path is still missing after enabling it', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({}), stderr: '' });
+
+    expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' })).toThrow(
+      'did not expose /codex -> localhost:8390',
+    );
+  });
+
+  it('fails when the path points at the wrong local target after enabling it', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({ '/codex': 'http://localhost:3741' }), stderr: '' });
+
+    expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390, path: '/codex' })).toThrow(
+      'it points to http://localhost:3741 instead of localhost:8390',
+    );
+  });
+
+  it('fails when the path is still exposed after disabling it', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({ '/codex': 'http://localhost:8390' }), stderr: '' });
+
+    expect(() => syncTailscaleServeProxy({ enabled: false, port: 8390, path: '/codex' })).toThrow(
+      'still exposes /codex -> http://localhost:8390 after disabling it',
     );
   });
 });
 
 describe('syncWebUiTailscaleServe', () => {
-  it('enables tailscale serve for the provided web UI port', () => {
+  it('enables tailscale serve for the provided web UI port without clobbering sibling paths', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: createServeStatusPayload({
+          '/': 'http://localhost:3741',
+          '/codex': 'http://localhost:8390',
+        }),
+        stderr: '',
+      });
+
     syncWebUiTailscaleServe({ enabled: true, port: 3741 });
 
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
+      1,
       'tailscale',
-      ['serve', '--bg', 'localhost:3741'],
+      ['serve', '--bg', '--set-path=/', 'localhost:3741'],
       { encoding: 'utf-8' },
     );
   });
 
-  it('disables tailscale serve for the provided web UI port', () => {
+  it('disables only the root web UI path and leaves sibling paths alone', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({ status: 0, stdout: createServeStatusPayload({ '/codex': 'http://localhost:8390' }), stderr: '' });
+
     syncWebUiTailscaleServe({ enabled: false, port: 3741 });
 
-    expect(mocks.spawnSync).toHaveBeenCalledWith(
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
+      1,
       'tailscale',
-      ['serve', '--bg', 'localhost:3741', 'off'],
+      ['serve', '--bg', '--set-path=/', 'localhost:3741', 'off'],
       { encoding: 'utf-8' },
     );
   });
