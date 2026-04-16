@@ -20,6 +20,8 @@ The main machine-local config file is:
 Common top-level keys:
 
 - `vaultRoot`
+- `knowledgeBaseRepoUrl`
+- `knowledgeBaseBranch`
 - `instructionFiles`
 - `skillDirs`
 - `daemon`
@@ -30,6 +32,8 @@ Example:
 ```json
 {
   "vaultRoot": "~/Documents/personal-agent",
+  "knowledgeBaseRepoUrl": "https://github.com/you/knowledge-base.git",
+  "knowledgeBaseBranch": "main",
   "instructionFiles": [
     "~/Documents/personal-agent/instructions/base.md"
   ],
@@ -59,6 +63,26 @@ Example:
 ```
 
 Existing installs may still use `.../sync/tasks` instead of `.../sync/_tasks`; the runtime honors either.
+
+## Managed git-backed knowledge base
+
+If `knowledgeBaseRepoUrl` is set, PA manages a local git checkout for the KB under:
+
+```text
+~/.local/state/personal-agent/knowledge-base/repo
+```
+
+That managed checkout becomes the effective indexed root unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
+
+PA bootstraps a few boring defaults on first sync:
+
+- `skills/`
+- `notes/`
+- `.gitignore` for local junk such as `.DS_Store` and `.obsidian/`
+
+Everything else stays freeform.
+
+`knowledgeBaseBranch` defaults to `main`.
 
 ## Durable vault root
 
@@ -90,7 +114,7 @@ You can override the vault root with either:
 - `vaultRoot` in machine config
 - `PERSONAL_AGENT_VAULT_ROOT`
 
-The environment variable wins.
+The environment variable wins. If `knowledgeBaseRepoUrl` is configured and no env override is set, the managed checkout path wins over `vaultRoot`.
 
 ## Instruction files
 

@@ -156,6 +156,7 @@ import {
   resolveConversationAttachmentPromptFiles,
   saveConversationAttachment,
   summarizeConversationAttention,
+  startKnowledgeBaseSyncLoop,
 } from '@personal-agent/core';
 import {
   installPackageSource,
@@ -193,6 +194,7 @@ import {
 } from './automation/deferredResumes.js';
 
 hydrateProcessEnvFromShell();
+startKnowledgeBaseSyncLoop();
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const LOOPBACK_HOST = '127.0.0.1';

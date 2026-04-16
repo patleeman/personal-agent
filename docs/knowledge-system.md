@@ -79,6 +79,14 @@ By default, the durable vault is:
 
 That vault is the source of truth for portable knowledge.
 
+If you configure a git-backed KB repo in Settings, PA keeps a managed local mirror under:
+
+```text
+~/.local/state/personal-agent/knowledge-base/repo
+```
+
+That mirror becomes the effective indexed root while PA handles git sync in the background.
+
 Machine-local runtime state lives separately under `~/.local/state/personal-agent/`.
 
 ## Conversations and the vault

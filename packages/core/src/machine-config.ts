@@ -5,12 +5,15 @@ import { getConfigRoot } from './runtime/paths.js';
 export const DEFAULT_MACHINE_DEFAULT_PROFILE = 'shared';
 export const DEFAULT_WEB_UI_PORT = 3741;
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
+export const DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH = 'main';
 
 export type MachineConfigSectionKey = 'daemon' | 'webUi';
 
 export interface MachineConfigDocument {
   defaultProfile?: string;
   vaultRoot?: string;
+  knowledgeBaseRepoUrl?: string;
+  knowledgeBaseBranch?: string;
   instructionFiles?: string[];
   skillDirs?: string[];
   daemon?: Record<string, unknown>;
@@ -31,7 +34,12 @@ export interface MachineWebUiConfigState {
 export interface MachineVaultRootState {
   currentRoot: string;
   effectiveRoot: string;
-  source: 'env' | 'config' | 'default';
+  source: 'env' | 'config' | 'knowledge-base' | 'default';
+}
+
+export interface MachineKnowledgeBaseState {
+  repoUrl: string;
+  branch: string;
 }
 
 export interface WriteMachineWebUiConfigInput {
@@ -114,6 +122,12 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0
     ? document.vaultRoot.trim()
     : undefined;
+  const knowledgeBaseRepoUrl = typeof document.knowledgeBaseRepoUrl === 'string' && document.knowledgeBaseRepoUrl.trim().length > 0
+    ? document.knowledgeBaseRepoUrl.trim()
+    : undefined;
+  const knowledgeBaseBranch = typeof document.knowledgeBaseBranch === 'string' && document.knowledgeBaseBranch.trim().length > 0
+    ? document.knowledgeBaseBranch.trim()
+    : undefined;
   const instructionFiles = normalizeStringArray(document.instructionFiles);
   const skillDirs = normalizeStringArray(document.skillDirs);
   const daemon = normalizeSection(document.daemon);
@@ -122,6 +136,8 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   return {
     ...(defaultProfile ? { defaultProfile } : {}),
     ...(vaultRoot ? { vaultRoot } : {}),
+    ...(knowledgeBaseRepoUrl ? { knowledgeBaseRepoUrl } : {}),
+    ...(knowledgeBaseBranch ? { knowledgeBaseBranch } : {}),
     ...(instructionFiles ? { instructionFiles } : {}),
     ...(skillDirs ? { skillDirs } : {}),
     ...(daemon ? { daemon } : {}),
@@ -373,6 +389,41 @@ export function writeMachineVaultRoot(vaultRoot: string | null | undefined, opti
       next.vaultRoot = normalizedVaultRoot;
     } else {
       delete next.vaultRoot;
+    }
+    return next;
+  }, options);
+}
+
+export function readMachineKnowledgeBaseRepoUrl(options: MachineConfigOptions = {}): string {
+  return readMachineConfig(options).knowledgeBaseRepoUrl ?? '';
+}
+
+export function readMachineKnowledgeBaseBranch(options: MachineConfigOptions = {}): string {
+  return readMachineConfig(options).knowledgeBaseBranch ?? DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH;
+}
+
+export function readMachineKnowledgeBase(options: MachineConfigOptions = {}): MachineKnowledgeBaseState {
+  return {
+    repoUrl: readMachineKnowledgeBaseRepoUrl(options),
+    branch: readMachineKnowledgeBaseBranch(options),
+  };
+}
+
+export function writeMachineKnowledgeBase(input: {
+  repoUrl?: string | null;
+  branch?: string | null;
+}, options: MachineConfigOptions = {}): MachineConfigDocument {
+  const normalizedRepoUrl = typeof input.repoUrl === 'string' ? input.repoUrl.trim() : '';
+  const normalizedBranch = typeof input.branch === 'string' ? input.branch.trim() : DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH;
+
+  return updateMachineConfig((current) => {
+    const next: MachineConfigDocument = { ...current };
+    if (normalizedRepoUrl.length > 0) {
+      next.knowledgeBaseRepoUrl = normalizedRepoUrl;
+      next.knowledgeBaseBranch = normalizedBranch.length > 0 ? normalizedBranch : DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH;
+    } else {
+      delete next.knowledgeBaseRepoUrl;
+      delete next.knowledgeBaseBranch;
     }
     return next;
   }, options);

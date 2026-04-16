@@ -87,26 +87,32 @@ function getMachineConfigFilePathForRuntimePaths(): string {
   return join(resolve(getConfigRoot()), 'config.json');
 }
 
-function readConfiguredVaultRootFromMachineConfig(): string | undefined {
+function readMachineConfigRuntimeOverrides(): { vaultRoot?: string; knowledgeBaseRepoUrl?: string } {
   const filePath = getMachineConfigFilePathForRuntimePaths();
   if (!existsSync(filePath)) {
-    return undefined;
+    return {};
   }
 
   try {
     const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return undefined;
+      return {};
     }
 
-    const configured = (parsed as { vaultRoot?: unknown }).vaultRoot;
-    if (typeof configured !== 'string' || configured.trim().length === 0) {
-      return undefined;
-    }
+    const record = parsed as { vaultRoot?: unknown; knowledgeBaseRepoUrl?: unknown };
+    const vaultRoot = typeof record.vaultRoot === 'string' && record.vaultRoot.trim().length > 0
+      ? expandHomePath(record.vaultRoot.trim())
+      : undefined;
+    const knowledgeBaseRepoUrl = typeof record.knowledgeBaseRepoUrl === 'string' && record.knowledgeBaseRepoUrl.trim().length > 0
+      ? record.knowledgeBaseRepoUrl.trim()
+      : undefined;
 
-    return expandHomePath(configured.trim());
+    return {
+      ...(vaultRoot ? { vaultRoot } : {}),
+      ...(knowledgeBaseRepoUrl ? { knowledgeBaseRepoUrl } : {}),
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -120,6 +126,14 @@ export function getDefaultVaultRoot(): string {
   return join(homedir(), 'Documents', 'personal-agent');
 }
 
+export function getKnowledgeBaseStateDir(stateRoot: string = getStateRoot()): string {
+  return join(stateRoot, 'knowledge-base');
+}
+
+export function getManagedKnowledgeBaseRoot(stateRoot: string = getStateRoot()): string {
+  return join(getKnowledgeBaseStateDir(stateRoot), 'repo');
+}
+
 /**
  * Get the configured durable knowledge vault root directory.
  */
@@ -129,8 +143,12 @@ export function getVaultRoot(): string {
     return expandHomePath(explicit.trim());
   }
 
-  const configured = readConfiguredVaultRootFromMachineConfig();
-  return configured ?? getDefaultVaultRoot();
+  const configured = readMachineConfigRuntimeOverrides();
+  if (configured.knowledgeBaseRepoUrl) {
+    return getManagedKnowledgeBaseRoot();
+  }
+
+  return configured.vaultRoot ?? getDefaultVaultRoot();
 }
 
 /**

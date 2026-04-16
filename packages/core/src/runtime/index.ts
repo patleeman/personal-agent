@@ -14,6 +14,8 @@ export {
   getDefaultConfigRoot,
   getConfigRoot,
   getDefaultVaultRoot,
+  getKnowledgeBaseStateDir,
+  getManagedKnowledgeBaseRoot,
   getVaultRoot,
   getDefaultProfilesRoot,
   getProfilesRoot,

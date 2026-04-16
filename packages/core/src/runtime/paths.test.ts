@@ -7,6 +7,8 @@ import {
   getConfigRoot,
   getDefaultStateRoot,
   getDefaultVaultRoot,
+  getKnowledgeBaseStateDir,
+  getManagedKnowledgeBaseRoot,
   getLocalProfileDir,
   getProfilesRoot,
   getStateRoot,
@@ -105,6 +107,8 @@ describe('profile and config path helpers', () => {
 
     expect(getConfigRoot()).toBe('/runtime/state/config');
     expect(getDefaultVaultRoot()).toBe(join(homedir(), 'Documents', 'personal-agent'));
+    expect(getKnowledgeBaseStateDir()).toBe('/runtime/state/knowledge-base');
+    expect(getManagedKnowledgeBaseRoot()).toBe('/runtime/state/knowledge-base/repo');
     expect(getVaultRoot()).toBe(join(homedir(), 'Documents', 'personal-agent'));
     expect(getProfilesRoot()).toBe(join(homedir(), 'Documents', 'personal-agent', '_profiles'));
     expect(getSyncRoot()).toBe('/runtime/state/sync');
@@ -139,6 +143,19 @@ describe('profile and config path helpers', () => {
     expect(getDurableNotesDir()).toBe('/custom/vault/notes');
     expect(getDurableProjectsDir()).toBe('/custom/vault/projects');
     expect(getLocalProfileDir()).toBe('/custom/local');
+  });
+
+  it('prefers the managed knowledge base root when a knowledge base repo is configured', () => {
+    const configDir = mkdtempSync(join(tmpdir(), 'personal-agent-config-'));
+    const stateRoot = mkdtempSync(join(tmpdir(), 'personal-agent-state-'));
+    writeFileSync(join(configDir, 'config.json'), JSON.stringify({ knowledgeBaseRepoUrl: 'https://github.com/patleeman/kb.git' }));
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
+
+    expect(getVaultRoot()).toBe(join(stateRoot, 'knowledge-base', 'repo'));
+
+    rmSync(configDir, { recursive: true, force: true });
+    rmSync(stateRoot, { recursive: true, force: true });
   });
 
   it('reads vault root from machine config when no env override is set', () => {

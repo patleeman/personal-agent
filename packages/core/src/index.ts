@@ -20,6 +20,9 @@ export * from './sqlite.js';
 // Machine-local config exports
 export * from './machine-config.js';
 
+// Managed knowledge base sync exports
+export * from './knowledge-base.js';
+
 // Activity exports
 export * from './activity.js';
 

@@ -8,7 +8,21 @@ import { existsSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Express } from 'express';
-import { getDefaultVaultRoot, getMachineConfigFilePath, getVaultRoot, readMachineConfig, readMachineInstructionFiles, readMachineSkillDirs, updateMachineConfig, writeMachineInstructionFiles, writeMachineSkillDirs } from '@personal-agent/core';
+import {
+  getDefaultVaultRoot,
+  getMachineConfigFilePath,
+  getVaultRoot,
+  readKnowledgeBaseState,
+  readMachineConfig,
+  readMachineInstructionFiles,
+  readMachineKnowledgeBase,
+  readMachineSkillDirs,
+  syncKnowledgeBaseNow,
+  updateKnowledgeBase,
+  updateMachineConfig,
+  writeMachineInstructionFiles,
+  writeMachineSkillDirs,
+} from '@personal-agent/core';
 import type { ServerRouteContext } from './context.js';
 import {
   writeSavedModelPreferences,
@@ -74,6 +88,10 @@ function expandHomePath(value: string): string {
 function readConfiguredVaultRoot(): string {
   const config = readMachineConfig() as { vaultRoot?: unknown };
   return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
+}
+
+function readConfiguredKnowledgeBase() {
+  return readMachineKnowledgeBase();
 }
 
 function readInstructionFilesState() {
@@ -165,11 +183,14 @@ export function registerModelRoutes(
   router.get('/api/vault-root', (_req, res) => {
     try {
       const currentRoot = readConfiguredVaultRoot();
+      const knowledgeBase = readConfiguredKnowledgeBase();
       const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
         ? 'env'
-        : currentRoot.length > 0
-          ? 'config'
-          : 'default';
+        : knowledgeBase.repoUrl.length > 0
+          ? 'knowledge-base'
+          : currentRoot.length > 0
+            ? 'config'
+            : 'default';
       res.json({
         currentRoot,
         effectiveRoot: getVaultRoot(),
@@ -182,6 +203,51 @@ export function registerModelRoutes(
         stack: err instanceof Error ? err.stack : undefined,
       });
       res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.get('/api/knowledge-base', (_req, res) => {
+    try {
+      res.json(readKnowledgeBaseState());
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.patch('/api/knowledge-base', (req, res) => {
+    try {
+      const { repoUrl, branch } = req.body as { repoUrl?: unknown; branch?: unknown };
+      if (repoUrl !== undefined && repoUrl !== null && typeof repoUrl !== 'string') {
+        res.status(400).json({ error: 'repoUrl must be a string or null' });
+        return;
+      }
+      if (branch !== undefined && branch !== null && typeof branch !== 'string') {
+        res.status(400).json({ error: 'branch must be a string or null' });
+        return;
+      }
+
+      const nextState = updateKnowledgeBase({
+        ...(repoUrl !== undefined ? { repoUrl: repoUrl as string | null } : {}),
+        ...(branch !== undefined ? { branch: branch as string | null } : {}),
+      });
+      materializeWebProfileFn(getCurrentProfileFn());
+      res.json(nextState);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
+    }
+  });
+
+  router.post('/api/knowledge-base/sync', (_req, res) => {
+    try {
+      res.json(syncKnowledgeBaseNow());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      res.status(500).json({ error: message });
     }
   });
 
@@ -308,11 +374,14 @@ export function registerModelRoutes(
       materializeWebProfileFn(getCurrentProfileFn());
 
       const currentRoot = readConfiguredVaultRoot();
+      const knowledgeBase = readConfiguredKnowledgeBase();
       const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
         ? 'env'
-        : currentRoot.length > 0
-          ? 'config'
-          : 'default';
+        : knowledgeBase.repoUrl.length > 0
+          ? 'knowledge-base'
+          : currentRoot.length > 0
+            ? 'config'
+            : 'default';
       res.json({
         currentRoot,
         effectiveRoot: getVaultRoot(),

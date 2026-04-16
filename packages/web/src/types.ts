@@ -1131,7 +1131,21 @@ export interface VaultRootState {
   currentRoot: string;
   effectiveRoot: string;
   defaultRoot: string;
-  source: 'env' | 'config' | 'default';
+  source: 'env' | 'config' | 'knowledge-base' | 'default';
+}
+
+export interface KnowledgeBaseState {
+  repoUrl: string;
+  branch: string;
+  configured: boolean;
+  effectiveRoot: string;
+  managedRoot: string;
+  usesManagedRoot: boolean;
+  syncStatus: 'disabled' | 'idle' | 'syncing' | 'error';
+  lastSyncAt?: string;
+  lastError?: string;
+  recoveredEntryCount: number;
+  recoveryDir: string;
 }
 
 export interface SkillFoldersState {

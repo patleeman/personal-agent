@@ -10,6 +10,10 @@ const {
   getMachineConfigFilePathMock,
   getProviderOAuthLoginStateMock,
   getVaultRootMock,
+  readKnowledgeBaseStateMock,
+  readMachineKnowledgeBaseMock,
+  syncKnowledgeBaseNowMock,
+  updateKnowledgeBaseMock,
   readMachineInstructionFilesMock,
   readMachineSkillDirsMock,
   invalidateAppTopicsMock,
@@ -44,6 +48,10 @@ const {
   getMachineConfigFilePathMock: vi.fn(),
   getProviderOAuthLoginStateMock: vi.fn(),
   getVaultRootMock: vi.fn(),
+  readKnowledgeBaseStateMock: vi.fn(),
+  readMachineKnowledgeBaseMock: vi.fn(),
+  syncKnowledgeBaseNowMock: vi.fn(),
+  updateKnowledgeBaseMock: vi.fn(),
   readMachineInstructionFilesMock: vi.fn(),
   readMachineSkillDirsMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
@@ -77,9 +85,13 @@ vi.mock('@personal-agent/core', () => ({
   getDefaultVaultRoot: getDefaultVaultRootMock,
   getMachineConfigFilePath: getMachineConfigFilePathMock,
   getVaultRoot: getVaultRootMock,
+  readKnowledgeBaseState: readKnowledgeBaseStateMock,
   readMachineConfig: readMachineConfigMock,
   readMachineInstructionFiles: readMachineInstructionFilesMock,
+  readMachineKnowledgeBase: readMachineKnowledgeBaseMock,
   readMachineSkillDirs: readMachineSkillDirsMock,
+  syncKnowledgeBaseNow: syncKnowledgeBaseNowMock,
+  updateKnowledgeBase: updateKnowledgeBaseMock,
   updateMachineConfig: updateMachineConfigMock,
   writeMachineInstructionFiles: writeMachineInstructionFilesMock,
   writeMachineSkillDirs: writeMachineSkillDirsMock,
@@ -252,8 +264,12 @@ describe('model routes', () => {
     getMachineConfigFilePathMock.mockReset();
     getProviderOAuthLoginStateMock.mockReset();
     getVaultRootMock.mockReset();
+    readKnowledgeBaseStateMock.mockReset();
     readMachineInstructionFilesMock.mockReset();
+    readMachineKnowledgeBaseMock.mockReset();
     readMachineSkillDirsMock.mockReset();
+    syncKnowledgeBaseNowMock.mockReset();
+    updateKnowledgeBaseMock.mockReset();
     invalidateAppTopicsMock.mockReset();
     logErrorMock.mockReset();
     normalizeSavedModelPreferencesMock.mockReset();
@@ -285,7 +301,22 @@ describe('model routes', () => {
     getMachineConfigFilePathMock.mockReturnValue('/config/config.json');
     getProviderOAuthLoginStateMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     getVaultRootMock.mockReturnValue('/effective-vault');
+    readKnowledgeBaseStateMock.mockImplementation(() => ({
+      repoUrl: typeof machineConfig.knowledgeBaseRepoUrl === 'string' ? machineConfig.knowledgeBaseRepoUrl : '',
+      branch: typeof machineConfig.knowledgeBaseBranch === 'string' ? machineConfig.knowledgeBaseBranch : 'main',
+      configured: typeof machineConfig.knowledgeBaseRepoUrl === 'string' && machineConfig.knowledgeBaseRepoUrl.length > 0,
+      effectiveRoot: '/effective-vault',
+      managedRoot: '/runtime/knowledge-base/repo',
+      usesManagedRoot: typeof machineConfig.knowledgeBaseRepoUrl === 'string' && machineConfig.knowledgeBaseRepoUrl.length > 0,
+      syncStatus: 'idle',
+      recoveredEntryCount: 0,
+      recoveryDir: '/runtime/knowledge-base/recovered',
+    }));
     readMachineInstructionFilesMock.mockImplementation(() => [...((machineConfig.instructionFiles as string[] | undefined) ?? [])]);
+    readMachineKnowledgeBaseMock.mockImplementation(() => ({
+      repoUrl: typeof machineConfig.knowledgeBaseRepoUrl === 'string' ? machineConfig.knowledgeBaseRepoUrl : '',
+      branch: typeof machineConfig.knowledgeBaseBranch === 'string' ? machineConfig.knowledgeBaseBranch : 'main',
+    }));
     readMachineSkillDirsMock.mockImplementation(() => [...((machineConfig.skillDirs as string[] | undefined) ?? [])]);
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'model-a',
@@ -302,6 +333,23 @@ describe('model routes', () => {
     startProviderOAuthLoginMock.mockReturnValue({ id: 'login-1', status: 'pending' });
     submitProviderOAuthLoginInputMock.mockReturnValue({ id: 'login-1', status: 'waiting_input' });
     subscribeProviderOAuthLoginMock.mockImplementation(() => vi.fn());
+    syncKnowledgeBaseNowMock.mockImplementation(() => readKnowledgeBaseStateMock());
+    updateKnowledgeBaseMock.mockImplementation((input: { repoUrl?: string | null; branch?: string | null }) => {
+      const next = { ...machineConfig };
+      if (input.repoUrl !== undefined) {
+        if (typeof input.repoUrl === 'string' && input.repoUrl.trim().length > 0) {
+          next.knowledgeBaseRepoUrl = input.repoUrl.trim();
+          next.knowledgeBaseBranch = typeof input.branch === 'string' && input.branch.trim().length > 0 ? input.branch.trim() : 'main';
+        } else {
+          delete next.knowledgeBaseRepoUrl;
+          delete next.knowledgeBaseBranch;
+        }
+      } else if (typeof input.branch === 'string' && next.knowledgeBaseRepoUrl) {
+        next.knowledgeBaseBranch = input.branch.trim() || 'main';
+      }
+      machineConfig = next;
+      return readKnowledgeBaseStateMock();
+    });
     updateMachineConfigMock.mockImplementation((updater: (current: unknown) => unknown) => {
       machineConfig = updater(machineConfig) as Record<string, unknown>;
     });
@@ -422,6 +470,47 @@ describe('model routes', () => {
     expect(missingCwdRes.json).toHaveBeenCalledWith({ error: 'Directory does not exist: /missing' });
   });
 
+  it('reads, updates, and syncs the managed knowledge base repo state', () => {
+    const { patchHandler, getHandler, postHandler, materializeWebProfile } = createDesktopHarness(allocateFiles());
+
+    const readRes = createResponse();
+    getHandler('/api/knowledge-base')(createRequest(), readRes);
+    expect(readRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      repoUrl: '',
+      branch: 'main',
+      configured: false,
+      managedRoot: '/runtime/knowledge-base/repo',
+    }));
+
+    const invalidRepoUrlRes = createResponse();
+    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 123 } }), invalidRepoUrlRes);
+    expect(invalidRepoUrlRes.status).toHaveBeenCalledWith(400);
+    expect(invalidRepoUrlRes.json).toHaveBeenCalledWith({ error: 'repoUrl must be a string or null' });
+
+    const invalidBranchRes = createResponse();
+    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 123 } }), invalidBranchRes);
+    expect(invalidBranchRes.status).toHaveBeenCalledWith(400);
+    expect(invalidBranchRes.json).toHaveBeenCalledWith({ error: 'branch must be a string or null' });
+
+    const saveRes = createResponse();
+    patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' } }), saveRes);
+    expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' });
+    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(saveRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      repoUrl: 'https://github.com/patleeman/kb.git',
+      branch: 'trunk',
+      configured: true,
+    }));
+
+    const syncRes = createResponse();
+    postHandler('/api/knowledge-base/sync')(createRequest(), syncRes);
+    expect(syncKnowledgeBaseNowMock).toHaveBeenCalledTimes(1);
+    expect(syncRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      repoUrl: 'https://github.com/patleeman/kb.git',
+      branch: 'trunk',
+    }));
+  });
+
   it('reads and writes vault root state with source precedence and filesystem validation', () => {
     const { patchHandler, getHandler, materializeWebProfile } = createDesktopHarness(allocateFiles());
     const validDir = mkdtempSync(join(tmpdir(), 'pa-vault-root-'));
@@ -443,6 +532,14 @@ describe('model routes', () => {
     expect(configuredRes.json).toHaveBeenCalledWith(expect.objectContaining({
       currentRoot: '/config-vault',
       source: 'config',
+    }));
+
+    machineConfig.knowledgeBaseRepoUrl = 'https://github.com/patleeman/kb.git';
+    const knowledgeBaseRes = createResponse();
+    getHandler('/api/vault-root')(createRequest(), knowledgeBaseRes);
+    expect(knowledgeBaseRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      currentRoot: '/config-vault',
+      source: 'knowledge-base',
     }));
 
     process.env.PERSONAL_AGENT_VAULT_ROOT = ' /env-vault ';
@@ -478,7 +575,7 @@ describe('model routes', () => {
       currentRoot: validDir,
       effectiveRoot: validDir,
       defaultRoot: '/default-vault',
-      source: 'config',
+      source: 'knowledge-base',
     });
   });
 

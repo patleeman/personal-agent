@@ -1427,6 +1427,12 @@ export function SettingsPage() {
     refetch: refetchVaultRoot,
   } = useApi(api.vaultRoot);
   const {
+    data: knowledgeBaseState,
+    loading: knowledgeBaseLoading,
+    error: knowledgeBaseLoadError,
+    refetch: refetchKnowledgeBase,
+  } = useApi(api.knowledgeBase);
+  const {
     data: defaultCwdState,
     loading: defaultCwdLoading,
     error: defaultCwdLoadError,
@@ -1455,6 +1461,10 @@ export function SettingsPage() {
   const [vaultRootDraft, setVaultRootDraft] = useState('');
   const [savingVaultRoot, setSavingVaultRoot] = useState(false);
   const [vaultRootSaveError, setVaultRootSaveError] = useState<string | null>(null);
+  const [knowledgeBaseRepoUrlDraft, setKnowledgeBaseRepoUrlDraft] = useState('');
+  const [knowledgeBaseBranchDraft, setKnowledgeBaseBranchDraft] = useState('main');
+  const [knowledgeBaseAction, setKnowledgeBaseAction] = useState<'save' | 'sync' | null>(null);
+  const [knowledgeBaseSaveError, setKnowledgeBaseSaveError] = useState<string | null>(null);
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
@@ -1628,6 +1638,11 @@ export function SettingsPage() {
   const vaultRootDirty = vaultRootState
     ? vaultRootDraft.trim() !== vaultRootState.currentRoot
     : false;
+  const knowledgeBaseDirty = knowledgeBaseState
+    ? knowledgeBaseRepoUrlDraft.trim() !== knowledgeBaseState.repoUrl
+      || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
+    : false;
+  const vaultRootManagedByKnowledgeBase = vaultRootState?.source === 'knowledge-base';
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
@@ -1649,6 +1664,13 @@ export function SettingsPage() {
       setVaultRootDraft(vaultRootState.currentRoot);
     }
   }, [vaultRootState?.currentRoot]);
+
+  useEffect(() => {
+    if (knowledgeBaseState) {
+      setKnowledgeBaseRepoUrlDraft(knowledgeBaseState.repoUrl);
+      setKnowledgeBaseBranchDraft(knowledgeBaseState.branch);
+    }
+  }, [knowledgeBaseState?.repoUrl, knowledgeBaseState?.branch]);
 
   useEffect(() => {
     if (defaultCwdState) {
@@ -1982,7 +2004,7 @@ export function SettingsPage() {
   }
 
   async function handleVaultRootSave(nextRoot: string | null = vaultRootDraft) {
-    if (!vaultRootState || savingVaultRoot) {
+    if (!vaultRootState || savingVaultRoot || vaultRootManagedByKnowledgeBase) {
       return;
     }
 
@@ -2002,6 +2024,65 @@ export function SettingsPage() {
       setVaultRootSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingVaultRoot(false);
+    }
+  }
+
+  async function handleKnowledgeBaseSave(nextInput?: { repoUrl?: string | null; branch?: string | null }) {
+    if (!knowledgeBaseState || knowledgeBaseAction !== null) {
+      return;
+    }
+
+    const repoUrl = typeof nextInput?.repoUrl === 'string'
+      ? nextInput.repoUrl.trim()
+      : knowledgeBaseRepoUrlDraft.trim();
+    const branch = typeof nextInput?.branch === 'string'
+      ? nextInput.branch.trim()
+      : knowledgeBaseBranchDraft.trim();
+    if (!nextInput && !knowledgeBaseDirty) {
+      return;
+    }
+
+    setKnowledgeBaseSaveError(null);
+    setKnowledgeBaseAction('save');
+
+    try {
+      const saved = await api.updateKnowledgeBase({
+        repoUrl: repoUrl || null,
+        branch: branch || null,
+      });
+      setKnowledgeBaseRepoUrlDraft(saved.repoUrl);
+      setKnowledgeBaseBranchDraft(saved.branch);
+      await Promise.all([
+        refetchKnowledgeBase({ resetLoading: false }),
+        refetchVaultRoot({ resetLoading: false }),
+      ]);
+    } catch (error) {
+      setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setKnowledgeBaseAction(null);
+    }
+  }
+
+  async function handleKnowledgeBaseSync() {
+    if (!knowledgeBaseState || !knowledgeBaseState.configured || knowledgeBaseAction !== null) {
+      return;
+    }
+
+    setKnowledgeBaseSaveError(null);
+    setKnowledgeBaseAction('sync');
+
+    try {
+      const synced = await api.syncKnowledgeBase();
+      setKnowledgeBaseRepoUrlDraft(synced.repoUrl);
+      setKnowledgeBaseBranchDraft(synced.branch);
+      await Promise.all([
+        refetchKnowledgeBase({ resetLoading: false }),
+        refetchVaultRoot({ resetLoading: false }),
+      ]);
+    } catch (error) {
+      setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setKnowledgeBaseAction(null);
     }
   }
 
@@ -2030,7 +2111,7 @@ export function SettingsPage() {
   }
 
   async function handleVaultRootPick() {
-    if (!vaultRootState || savingVaultRoot || pickingVaultRoot) {
+    if (!vaultRootState || savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase) {
       return;
     }
 
@@ -2510,6 +2591,7 @@ export function SettingsPage() {
       refetchModels({ resetLoading: false }),
       refetchModelProviders({ resetLoading: false }),
       refetchVaultRoot({ resetLoading: false }),
+      refetchKnowledgeBase({ resetLoading: false }),
       refetchDefaultCwd({ resetLoading: false }),
       refetchConversationTitleSettings({ resetLoading: false }),
       refetchProviderAuth({ resetLoading: false }),
@@ -2893,6 +2975,105 @@ export function SettingsPage() {
               </SettingsPanel>
 
               <SettingsPanel
+                title="Knowledge base"
+                description="Point PA at a git repo and let it manage the local mirror and sync loop."
+              >
+                {knowledgeBaseLoading && !knowledgeBaseState ? (
+                  <p className="ui-card-meta">Loading knowledge base…</p>
+                ) : knowledgeBaseLoadError && !knowledgeBaseState ? (
+                  <p className="text-[12px] text-danger">Failed to load knowledge base: {knowledgeBaseLoadError}</p>
+                ) : knowledgeBaseState ? (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleKnowledgeBaseSave();
+                    }}
+                  >
+                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-repo">Repo URL</label>
+                    <input
+                      id="settings-knowledge-base-repo"
+                      value={knowledgeBaseRepoUrlDraft}
+                      onChange={(event) => {
+                        setKnowledgeBaseRepoUrlDraft(event.target.value);
+                        if (knowledgeBaseSaveError) {
+                          setKnowledgeBaseSaveError(null);
+                        }
+                      }}
+                      className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                      placeholder="https://github.com/you/knowledge-base.git"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={knowledgeBaseAction !== null}
+                    />
+                    <label className="ui-card-meta" htmlFor="settings-knowledge-base-branch">Branch</label>
+                    <input
+                      id="settings-knowledge-base-branch"
+                      value={knowledgeBaseBranchDraft}
+                      onChange={(event) => {
+                        setKnowledgeBaseBranchDraft(event.target.value);
+                        if (knowledgeBaseSaveError) {
+                          setKnowledgeBaseSaveError(null);
+                        }
+                      }}
+                      className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
+                      placeholder="main"
+                      autoComplete="off"
+                      spellCheck={false}
+                      disabled={knowledgeBaseAction !== null}
+                    />
+                    <p className="ui-card-meta break-all">Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span></p>
+                    <p className="ui-card-meta break-all">
+                      {knowledgeBaseAction === 'save'
+                        ? 'Saving knowledge base…'
+                        : knowledgeBaseAction === 'sync'
+                          ? 'Syncing knowledge base…'
+                          : knowledgeBaseState.syncStatus === 'error'
+                            ? `Last sync failed · ${knowledgeBaseState.lastError ?? 'Unknown error'}`
+                            : knowledgeBaseState.lastSyncAt
+                              ? `Last synced · ${new Date(knowledgeBaseState.lastSyncAt).toLocaleString()}`
+                              : knowledgeBaseState.configured
+                                ? 'Ready to sync.'
+                                : 'No managed knowledge base repo configured.'}
+                    </p>
+                    <p className="ui-card-meta break-all">Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> · {knowledgeBaseState.recoveredEntryCount} saved</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={knowledgeBaseAction !== null || !knowledgeBaseDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {knowledgeBaseAction === 'save' ? 'Saving…' : 'Save repo'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { void handleKnowledgeBaseSync(); }}
+                        disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {knowledgeBaseAction === 'sync' ? 'Syncing…' : 'Sync now'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setKnowledgeBaseRepoUrlDraft('');
+                          setKnowledgeBaseBranchDraft('main');
+                          void handleKnowledgeBaseSave({ repoUrl: '', branch: 'main' });
+                        }}
+                        disabled={knowledgeBaseAction !== null || !knowledgeBaseState.configured}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        Disable managed sync
+                      </button>
+                    </div>
+                    <p className="ui-card-meta">PA keeps a local clone under runtime state, syncs it in the background, and treats git as the backing store. Folder and file @ mentions read from that local mirror.</p>
+                  </form>
+                ) : null}
+
+                {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
+              </SettingsPanel>
+
+              <SettingsPanel
                 title="Indexed root"
                 description="Base path for notes, skills, root instructions, and folder-aware @ paths."
               >
@@ -2923,12 +3104,12 @@ export function SettingsPage() {
                         placeholder="~/Documents/personal-agent"
                         autoComplete="off"
                         spellCheck={false}
-                        disabled={savingVaultRoot || pickingVaultRoot}
+                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase}
                       />
                       <ToolbarButton
                         type="button"
                         onClick={() => { void handleVaultRootPick(); }}
-                        disabled={savingVaultRoot || pickingVaultRoot}
+                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase}
                         className="shrink-0 text-accent"
                         title="Choose indexed root"
                         aria-label="Choose indexed root"
@@ -2941,14 +3122,16 @@ export function SettingsPage() {
                         ? 'Saving indexed root…'
                         : vaultRootState.source === 'env'
                           ? `Env override active · ${vaultRootState.effectiveRoot}`
-                          : vaultRootState.currentRoot
-                            ? `Effective root · ${vaultRootState.effectiveRoot}`
-                            : `Default root · ${vaultRootState.defaultRoot}`}
+                          : vaultRootManagedByKnowledgeBase
+                            ? `Managed by knowledge base repo · ${vaultRootState.effectiveRoot}`
+                            : vaultRootState.currentRoot
+                              ? `Effective root · ${vaultRootState.effectiveRoot}`
+                              : `Default root · ${vaultRootState.defaultRoot}`}
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <button
                         type="submit"
-                        disabled={savingVaultRoot || pickingVaultRoot || !vaultRootDirty}
+                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase || !vaultRootDirty}
                         className={ACTION_BUTTON_CLASS}
                       >
                         {savingVaultRoot ? 'Saving…' : 'Save root'}
@@ -2956,14 +3139,16 @@ export function SettingsPage() {
                       <button
                         type="button"
                         onClick={() => { void handleVaultRootSave(''); }}
-                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootState.currentRoot.length === 0}
+                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase || vaultRootState.currentRoot.length === 0}
                         className={ACTION_BUTTON_CLASS}
                       >
                         Use default root
                       </button>
                     </div>
                     <p className="ui-card-meta">
-                      Sets the base path for indexed folders &amp; files. Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.
+                      {vaultRootManagedByKnowledgeBase
+                        ? <>A managed knowledge base repo is active, so PA uses its local mirror as the indexed root. Clear the repo above to override the root directly.</>
+                        : <>Sets the base path for indexed folders &amp; files. Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.</>}
                     </p>
                   </form>
                 ) : null}

@@ -7,11 +7,13 @@ import {
   getMachineConfigFilePath,
   readMachineConfigSection,
   readMachineInstructionFiles,
+  readMachineKnowledgeBase,
   readMachineSkillDirs,
   readMachineVaultRoot,
   updateMachineConfigSection,
   writeMachineDefaultProfile,
   writeMachineInstructionFiles,
+  writeMachineKnowledgeBase,
   writeMachineSkillDirs,
   writeMachineVaultRoot,
 } from './machine-config.js';
@@ -81,6 +83,27 @@ describe('machine config', () => {
 
     writeMachineVaultRoot('', { configRoot: configDir });
     expect(readMachineVaultRoot({ configRoot: configDir })).toBe('');
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
+  });
+
+  it('reads and writes the managed knowledge base repo in config.json', () => {
+    const configDir = createTempDir('pa-machine-config-');
+
+    writeMachineKnowledgeBase({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' }, { configRoot: configDir });
+    expect(readMachineKnowledgeBase({ configRoot: configDir })).toEqual({
+      repoUrl: 'https://github.com/patleeman/kb.git',
+      branch: 'trunk',
+    });
+    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({
+      knowledgeBaseRepoUrl: 'https://github.com/patleeman/kb.git',
+      knowledgeBaseBranch: 'trunk',
+    });
+
+    writeMachineKnowledgeBase({ repoUrl: '', branch: '' }, { configRoot: configDir });
+    expect(readMachineKnowledgeBase({ configRoot: configDir })).toEqual({
+      repoUrl: '',
+      branch: 'main',
+    });
     expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
   });
 

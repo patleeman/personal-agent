@@ -262,6 +262,21 @@ describe('SettingsPage', () => {
         });
       }
 
+      if (fetcher === api.knowledgeBase) {
+        return buildUseApiResult({
+          repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+          branch: 'main',
+          configured: true,
+          effectiveRoot: '/Users/patrick/Documents/personal-agent',
+          managedRoot: '/Users/patrick/.local/state/personal-agent/knowledge-base/repo',
+          usesManagedRoot: true,
+          syncStatus: 'idle',
+          lastSyncAt: '2026-04-16T12:00:00.000Z',
+          recoveredEntryCount: 1,
+          recoveryDir: '/Users/patrick/.local/state/personal-agent/knowledge-base/recovered',
+        });
+      }
+
       if (fetcher === api.defaultCwd) {
         return buildUseApiResult({
           currentCwd: '',
@@ -331,6 +346,8 @@ describe('SettingsPage', () => {
     expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
     expect(html).toContain('Skill folders');
+    expect(html).toContain('Knowledge base');
+    expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
     expect(html).toContain('Bundled MCP wrappers');
     expect(html).toContain('Bundled with dd-atlassian-mcp');
     expect(html).toContain('Callback');

@@ -73,6 +73,8 @@ Machine-local runtime state defaults to:
 
 Scheduled task files stay under the machine-local `sync/` subtree, not in the shared vault.
 
+If you prefer a managed git-backed KB instead of pointing at an existing local folder, set `knowledgeBaseRepoUrl` in Settings. PA will clone and sync it under `~/.local/state/personal-agent/knowledge-base/repo` and use that mirror as the indexed root.
+
 ## Start an interface
 
 ### TUI

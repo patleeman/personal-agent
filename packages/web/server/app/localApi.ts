@@ -7,7 +7,12 @@ import {
   getPiAgentRuntimeDir,
   getStateRoot,
   getVaultRoot,
+  readKnowledgeBaseState,
   readMachineConfig,
+  readMachineKnowledgeBase,
+  startKnowledgeBaseSyncLoop,
+  syncKnowledgeBaseNow,
+  updateKnowledgeBase,
   updateMachineConfig,
 } from '@personal-agent/core';
 import { readDaemonState } from '../automation/daemon.js';
@@ -579,6 +584,12 @@ function readConfiguredVaultRoot(): string {
   const config = readMachineConfig() as { vaultRoot?: unknown };
   return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
 }
+
+function readConfiguredKnowledgeBase() {
+  return readMachineKnowledgeBase();
+}
+
+startKnowledgeBaseSyncLoop();
 
 function renderStatusText(statusCode: number): string {
   switch (statusCode) {
@@ -1469,11 +1480,14 @@ export async function updateDesktopDefaultCwd(cwd: string | null) {
 
 export async function readDesktopVaultRoot() {
   const currentRoot = readConfiguredVaultRoot();
+  const knowledgeBase = readConfiguredKnowledgeBase();
   const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
     ? 'env'
-    : currentRoot.length > 0
-      ? 'config'
-      : 'default';
+    : knowledgeBase.repoUrl.length > 0
+      ? 'knowledge-base'
+      : currentRoot.length > 0
+        ? 'config'
+        : 'default';
 
   return {
     currentRoot,
@@ -1485,6 +1499,21 @@ export async function readDesktopVaultRoot() {
 
 export async function readDesktopVaultFiles() {
   return readVaultFilesCapability();
+}
+
+export async function readDesktopKnowledgeBase() {
+  return readKnowledgeBaseState();
+}
+
+export async function updateDesktopKnowledgeBase(input: { repoUrl?: string | null; branch?: string | null }) {
+  const state = updateKnowledgeBase(input);
+  const context = await getLocalServerRouteContext();
+  context.materializeWebProfile(context.getCurrentProfile());
+  return state;
+}
+
+export async function syncDesktopKnowledgeBase() {
+  return syncKnowledgeBaseNow();
 }
 
 export async function updateDesktopVaultRoot(root: string | null) {
