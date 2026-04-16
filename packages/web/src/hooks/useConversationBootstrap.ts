@@ -97,7 +97,7 @@ function stripConversationBootstrapTransientFlags(
   return rest;
 }
 
-export function mergeConversationBootstrapWithCachedSessionDetail(
+function mergeConversationBootstrapWithCachedSessionDetail(
   cached: ConversationBootstrapState | null,
   nextData: ConversationBootstrapState,
 ): ConversationBootstrapState {
@@ -277,7 +277,7 @@ export function buildConversationBootstrapVersionKey(input: {
   return `${input.sessionsVersion}:${input.sessionFilesVersion}`;
 }
 
-export function resolveConversationBootstrapSeed(
+function resolveConversationBootstrapSeed(
   conversationId: string | undefined,
   options?: { tailBlocks?: number },
 ): {
