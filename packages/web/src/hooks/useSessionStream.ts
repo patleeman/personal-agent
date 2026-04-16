@@ -38,7 +38,7 @@ export interface StreamState {
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
-export function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
+function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
   return {
     surfaces: [],
     controllerSurfaceId: null,
@@ -327,7 +327,7 @@ function readSeededSessionStreamState(sessionId: string | null): StreamState {
   return readWarmLiveSessionState(sessionId) ?? INITIAL_STREAM_STATE;
 }
 
-export function isLiveSessionSurfaceRegistered(presence: LiveSessionPresenceState, surfaceId: string): boolean {
+function isLiveSessionSurfaceRegistered(presence: LiveSessionPresenceState, surfaceId: string): boolean {
   const normalizedSurfaceId = surfaceId.trim();
   if (!normalizedSurfaceId) {
     return false;

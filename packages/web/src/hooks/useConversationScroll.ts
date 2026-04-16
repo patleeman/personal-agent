@@ -17,7 +17,7 @@ const INITIAL_SCROLL_MIN_FRAMES = 24;
 const INITIAL_SCROLL_MAX_FRAMES = 45;
 const SMOOTH_SCROLL_SETTLE_DELAY_MS = 360;
 
-export interface UseConversationScrollOptions {
+interface UseConversationScrollOptions {
   conversationId: string | null;
   messages: MessageBlock[] | undefined;
   scrollRef: RefObject<HTMLDivElement>;
@@ -27,7 +27,7 @@ export interface UseConversationScrollOptions {
   prependRestoreKey?: string | number | null;
 }
 
-export interface UseConversationScrollResult {
+interface UseConversationScrollResult {
   atBottom: boolean;
   syncScrollStateFromDom: () => void;
   scrollToBottom: (options?: { behavior?: ScrollBehavior }) => void;
