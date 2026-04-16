@@ -4,11 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageBlock } from '../../shared/types';
 import {
   ChatView,
-  getStreamingStatusLabel,
   renderText,
   resolveDisclosureOpen,
-  shouldAutoOpenConversationBlock,
-  shouldAutoOpenTraceCluster,
   toggleDisclosurePreference,
 } from './ChatView.js';
 
@@ -19,46 +16,77 @@ afterEach(() => {
 });
 
 describe('chat view streaming disclosure', () => {
-  it('auto-opens running tool blocks', () => {
-    const block: MessageBlock = {
-      type: 'tool_use',
-      ts: '2026-03-11T18:00:00.000Z',
-      tool: 'bash',
-      input: { command: 'sleep 1' },
-      output: '',
-      status: 'running',
-    };
+  it('auto-opens running tool blocks inside internal-work clusters', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'bash',
+        input: { command: 'sleep 1' },
+        output: '',
+        status: 'running',
+      }],
+      isStreaming: true,
+    }));
 
-    expect(shouldAutoOpenConversationBlock(block, 1, 3, true)).toBe(true);
+    expect(html).toContain('Working');
+    expect(html).toContain('running…');
+    expect(html).toContain('>input<');
   });
 
   it('only auto-opens the tail thinking block while the stream is active', () => {
-    const thinking: MessageBlock = {
-      type: 'thinking',
-      ts: '2026-03-11T18:00:00.000Z',
-      text: 'Working through the request…',
-    };
+    const tailHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'thinking',
+        ts: '2026-03-11T18:00:00.000Z',
+        text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
+      }],
+      isStreaming: true,
+    }));
+    const nonTailHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [
+        {
+          type: 'thinking',
+          ts: '2026-03-11T18:00:00.000Z',
+          text: 'Working through the request…\nSecond line stays hidden unless the block opens.',
+        },
+        {
+          type: 'tool_use',
+          ts: '2026-03-11T18:00:01.000Z',
+          tool: 'bash',
+          input: { command: 'pwd' },
+          output: '/repo',
+          status: 'ok',
+        },
+      ],
+      isStreaming: true,
+    }));
 
-    expect(shouldAutoOpenConversationBlock(thinking, 2, 3, true)).toBe(true);
-    expect(shouldAutoOpenConversationBlock(thinking, 1, 3, true)).toBe(false);
-    expect(shouldAutoOpenConversationBlock(thinking, 2, 3, false)).toBe(false);
+    expect(tailHtml).toContain('Second line stays hidden unless the block opens.');
+    expect(nonTailHtml).not.toContain('Second line stays hidden unless the block opens.');
   });
 
-  it('derives a live status label from the current tail block', () => {
-    expect(getStreamingStatusLabel([], false)).toBeNull();
-    expect(getStreamingStatusLabel([], true)).toBe('Working…');
+  it('derives the live status label from the current tail block in the rendered chat view', () => {
+    const workingHtml = renderToStaticMarkup(createElement(ChatView, { messages: [], isStreaming: true }));
+    const thinkingHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Working through the request…' }],
+      isStreaming: true,
+    }));
+    const toolHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'tool_use', ts: '2026-03-11T18:00:00.000Z', tool: 'bash', input: { command: 'sleep 1' }, output: '', status: 'running' }],
+      isStreaming: true,
+    }));
+    const textHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Half-finished response' }],
+      isStreaming: true,
+    }));
 
-    expect(getStreamingStatusLabel([
-      { type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Working through the request…' },
-    ], true)).toBe('Thinking…');
-
-    expect(getStreamingStatusLabel([
-      { type: 'tool_use', ts: '2026-03-11T18:00:00.000Z', tool: 'bash', input: { command: 'sleep 1' }, output: '', status: 'running' },
-    ], true)).toBe('Running bash…');
-
-    expect(getStreamingStatusLabel([
-      { type: 'text', ts: '2026-03-11T18:00:00.000Z', text: 'Half-finished response' },
-    ], true)).toBe('Responding…');
+    expect(workingHtml).toContain('Working…');
+    expect(thinkingHtml).toContain('Working');
+    expect(thinkingHtml).toContain('>Thinking<');
+    expect(toolHtml).toContain('Working');
+    expect(toolHtml).toContain('running…');
+    expect(textHtml).toContain('animation:cursorBlink');
   });
 
   it('renders a pending status indicator immediately even before live streaming starts', () => {
@@ -93,9 +121,22 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('auto-opens the internal-work cluster while live or when a running step remains', () => {
-    expect(shouldAutoOpenTraceCluster(true, false)).toBe(true);
-    expect(shouldAutoOpenTraceCluster(false, true)).toBe(true);
-    expect(shouldAutoOpenTraceCluster(false, false)).toBe(false);
+    const liveHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
+      isStreaming: true,
+    }));
+    const runningHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'tool_use', ts: '2026-03-11T18:00:00.000Z', tool: 'bash', input: { command: 'sleep 1' }, output: '', status: 'running' }],
+      isStreaming: false,
+    }));
+    const idleHtml = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{ type: 'thinking', ts: '2026-03-11T18:00:00.000Z', text: 'Thinking…' }],
+      isStreaming: false,
+    }));
+
+    expect(liveHtml).toContain('▲ hide');
+    expect(runningHtml).toContain('▲ hide');
+    expect(idleHtml).toContain('▼ show');
   });
 
 

@@ -586,11 +586,11 @@ export function toggleDisclosurePreference(autoOpen: boolean, preference: Disclo
   return resolveDisclosureOpen(autoOpen, preference) ? 'closed' : 'open';
 }
 
-export function shouldAutoOpenTraceCluster(live: boolean, hasRunning: boolean): boolean {
+function shouldAutoOpenTraceCluster(live: boolean, hasRunning: boolean): boolean {
   return live || hasRunning;
 }
 
-export function shouldAutoOpenConversationBlock(
+function shouldAutoOpenConversationBlock(
   block: MessageBlock,
   index: number,
   total: number,
@@ -607,7 +607,7 @@ export function shouldAutoOpenConversationBlock(
   return false;
 }
 
-export function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: boolean): string | null {
+function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: boolean): string | null {
   if (!isStreaming) {
     return null;
   }
