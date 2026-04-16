@@ -1,6 +1,6 @@
 import type { StorageLike } from '../local/reloadState';
 
-export const COMPOSER_HISTORY_STORAGE_KEY_PREFIX = 'pa:conversation-composer-history:';
+const COMPOSER_HISTORY_STORAGE_KEY_PREFIX = 'pa:conversation-composer-history:';
 const DRAFT_COMPOSER_HISTORY_SCOPE = 'draft';
 const MAX_COMPOSER_HISTORY_ENTRIES = 100;
 
