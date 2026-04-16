@@ -9,7 +9,7 @@ import { DesktopHostIndicator } from './DesktopHostIndicator';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
-import { useAppData, useAppEvents } from '../contexts';
+import { useAppData, useAppEvents } from '../app/contexts';
 import { readDesktopEnvironment } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState } from '../types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';

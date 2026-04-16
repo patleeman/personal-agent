@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
 import { api } from '../client/api';
-import { useAppEvents } from '../contexts';
+import { useAppEvents } from '../app/contexts';
 import type { SessionDetail, SessionDetailAppendOnlyResponse, SessionDetailResult } from '../types';
 
 interface CachedSessionDetailEntry {

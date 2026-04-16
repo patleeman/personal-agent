@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useAppEvents } from '../contexts';
+import { useAppEvents } from '../app/contexts';
 import type { AppEventTopic } from '../types';
 import type { RefetchOptions } from '../hooks';
 

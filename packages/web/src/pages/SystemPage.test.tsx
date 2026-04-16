@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { SseConnectionContext, SystemStatusContext } from '../contexts.js';
+import { SseConnectionContext, SystemStatusContext } from '../app/contexts.js';
 import { SystemSettingsContent } from '../components/SystemSettingsContent.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

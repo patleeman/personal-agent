@@ -26,6 +26,7 @@ The web package is big enough that folder boundaries matter.
 
 Use these defaults:
 
+- `packages/web/src/app/` — app-shell composition and app-wide React contexts
 - `packages/web/src/pages/` — route-level UI surfaces
 - `packages/web/src/components/` — reusable UI pieces
 - `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, and scheduled-task detail guards
@@ -46,6 +47,7 @@ Use these defaults:
 - `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
 - `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
 
+If a file owns app-shell bootstrapping or app-wide React context wiring, keep it under `src/app/`.
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
 If it formats or validates automation and durable-run UI state, keep it under `src/automation/`.
 If it owns browser-side API transport or client event normalization, keep it under `src/client/`.

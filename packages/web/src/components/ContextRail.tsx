@@ -40,7 +40,7 @@ import type {
   ScheduledTaskSummary,
 } from '../types';
 import { timeAgo } from '../utils';
-import { useAppData, useAppEvents } from '../contexts';
+import { useAppData, useAppEvents } from '../app/contexts';
 import { completeConversationOpenPhase } from '../client/perfDiagnostics';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';

@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppDataContext, SseConnectionContext } from '../contexts.js';
+import { AppDataContext, SseConnectionContext } from '../app/contexts.js';
 import { TasksPage } from './TasksPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;

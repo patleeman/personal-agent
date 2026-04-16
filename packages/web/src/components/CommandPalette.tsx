@@ -11,7 +11,7 @@ import {
   type CommandPaletteSection,
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
-import { useAppData } from '../contexts';
+import { useAppData } from '../app/contexts';
 import { useConversations } from '../hooks/useConversations';
 import type { ScheduledTaskSummary, SessionMeta } from '../types';
 import { timeAgo } from '../utils';

@@ -2,7 +2,7 @@ import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEff
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../client/api';
-import { useAppData } from '../contexts';
+import { useAppData } from '../app/contexts';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import {

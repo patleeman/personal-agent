@@ -11,7 +11,7 @@
  */
 import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../client/api';
-import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
+import { LiveTitlesContext, useAppData, useSseConnection } from '../app/contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
 import {

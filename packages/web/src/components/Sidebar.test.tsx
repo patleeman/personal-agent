@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../contexts.js';
+import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
 import {
   OPEN_NOTE_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,

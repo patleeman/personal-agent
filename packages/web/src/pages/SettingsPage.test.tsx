@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../client/api';
 import { useApi } from '../hooks';
-import { useSseConnection, useSystemStatus } from '../contexts';
+import { useSseConnection, useSystemStatus } from '../app/contexts';
 import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage.js';
 
@@ -12,7 +12,7 @@ vi.mock('../hooks', () => ({
   useApi: vi.fn(),
 }));
 
-vi.mock('../contexts', () => ({
+vi.mock('../app/contexts', () => ({
   useSseConnection: vi.fn(),
   useSystemStatus: vi.fn(),
 }));

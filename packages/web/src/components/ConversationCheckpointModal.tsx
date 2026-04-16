@@ -6,7 +6,7 @@ import {
   setConversationCheckpointFileInSearch,
   setConversationCheckpointIdInSearch,
 } from '../conversation/conversationCheckpoints';
-import { useAppEvents } from '../contexts';
+import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks';
 import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointComment, ConversationCommitCheckpointFile } from '../types';
 import { formatDate } from '../utils';

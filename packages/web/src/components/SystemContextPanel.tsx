@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../client/api';
-import { useSystemStatus } from '../contexts';
+import { useSystemStatus } from '../app/contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../navigation/systemSelection';
 import type { DaemonState, WebUiState } from '../types';
 import { timeAgo } from '../utils';

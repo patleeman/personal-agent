@@ -4,7 +4,7 @@ import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
-import { useAppData, useSseConnection } from '../contexts';
+import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
 import { formatTaskSchedule } from '../automation/taskSchedule';

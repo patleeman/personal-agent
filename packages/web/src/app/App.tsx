@@ -1,23 +1,23 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { resolveWebRouteRedirect } from './navigation/routes';
-import { api } from './client/api';
-import { buildApiPath } from './client/apiBase';
-import { normalizeAppEvent } from './client/appEventTransport';
-import { subscribeDesktopAppEvents } from './desktop/desktopAppEvents';
-import { readDesktopEnvironment } from './desktop/desktopBridge';
-import { createDesktopAwareEventSource } from './desktop/desktopEventSource';
-import { lazyRouteWithRecovery } from './navigation/lazyRouteRecovery';
-import { Layout } from './components/Layout';
-import { resolveConversationIndexRedirect } from './conversation/conversationRoutes';
+import { resolveWebRouteRedirect } from '../navigation/routes';
+import { api } from '../client/api';
+import { buildApiPath } from '../client/apiBase';
+import { normalizeAppEvent } from '../client/appEventTransport';
+import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
+import { readDesktopEnvironment } from '../desktop/desktopBridge';
+import { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
+import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
+import { Layout } from '../components/Layout';
+import { resolveConversationIndexRedirect } from '../conversation/conversationRoutes';
 import {
   hasDraftConversationAttachments,
   hasDraftConversationContextDocs,
   readDraftConversationComposer,
   readDraftConversationCwd,
-} from './conversation/draftConversation';
-import { useConversations } from './hooks/useConversations';
-import { fetchSessionsSnapshot } from './session/sessionSnapshot';
+} from '../conversation/draftConversation';
+import { useConversations } from '../hooks/useConversations';
+import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
 import {
   AppDataContext,
   AppEventsContext,
@@ -30,14 +30,14 @@ import {
 import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   bumpConversationScopedEventVersions,
-} from './conversation/conversationEventVersions';
+} from '../conversation/conversationEventVersions';
 import {
   mergeSessionSnapshotPreservingOrder,
   removeSessionMetaPreservingOrder,
   replaceSessionMetaPreservingOrder,
-} from './session/sessionListState';
-import { ThemeProvider } from './ui-state/theme';
-import { createSessionMetaRefreshScheduler } from './session/sessionMetaRefreshScheduler';
+} from '../session/sessionListState';
+import { ThemeProvider } from '../ui-state/theme';
+import { createSessionMetaRefreshScheduler } from '../session/sessionMetaRefreshScheduler';
 import type {
   AppEvent,
   DaemonState,
@@ -47,9 +47,9 @@ import type {
   ScheduledTaskSummary,
   SessionMeta,
   WebUiState,
-} from './types';
-import { setConversationRunIdInSearch } from './conversation/conversationRuns';
-import { getRunPrimaryConnection, type RunPresentationLookups } from './automation/runPresentation';
+} from '../types';
+import { setConversationRunIdInSearch } from '../conversation/conversationRuns';
+import { getRunPrimaryConnection, type RunPresentationLookups } from '../automation/runPresentation';
 
 function LegacyTaskRoutesRedirect() {
   const { id } = useParams<{ id?: string }>();
@@ -127,10 +127,10 @@ function DeletedStandaloneAdminRedirect() {
   return <Navigate to="/settings" replace />;
 }
 
-const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('./pages/TasksPage').then((module) => ({ default: module.TasksPage })));
-const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('./pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const SystemPage = lazyRouteWithRecovery('system-page', () => import('./pages/SystemPage').then((module) => ({ default: module.SystemPage })));
-const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('./pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('../pages/TasksPage').then((module) => ({ default: module.TasksPage })));
+const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
+const SystemPage = lazyRouteWithRecovery('system-page', () => import('../pages/SystemPage').then((module) => ({ default: module.SystemPage })));
+const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api } from '../client/api';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
-import { useAppEvents } from '../contexts';
+import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks';
 import { formatDate } from '../utils';
 import { ConversationArtifactViewer } from './ConversationArtifactViewer';

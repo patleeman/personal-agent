@@ -5,7 +5,7 @@ import { createContext, useContext } from 'react';
 import {
   INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS,
   type ConversationScopedEventVersions,
-} from './conversation/conversationEventVersions';
+} from '../conversation/conversationEventVersions';
 import type {
   AppEventTopic,
   DaemonState,
@@ -14,7 +14,7 @@ import type {
   ScheduledTaskSummary,
   SessionMeta,
   WebUiState,
-} from './types';
+} from '../types';
 
 // ── Live title overrides ──────────────────────────────────────────────────────
 // ConversationPage pushes stream.title here; Sidebar reads it to update tabs/archive.

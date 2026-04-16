@@ -4,7 +4,7 @@ import {
   readPersistedConversationBootstrapEntry,
   writePersistedConversationBootstrapEntry,
 } from '../conversation/conversationBootstrapPersistence';
-import { useAppEvents } from '../contexts';
+import { useAppEvents } from '../app/contexts';
 import type { ConversationBootstrapState, SessionDetail } from '../types';
 
 interface CachedConversationBootstrapEntry {
