@@ -1,4 +1,4 @@
-import { parseSlashInput } from '../slashMenu';
+import { parseSlashInput } from '../commands/slashMenu';
 
 export const DEFERRED_RESUME_SLASH_USAGE = 'Usage: /resume <delay> [--follow-up] [prompt]';
 const DEFERRED_RESUME_SLASH_COMMANDS = new Set(['/resume', '/defer']);

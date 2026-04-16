@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildSlashMenuItems, parseSlashInput } from './slashMenu';
-import type { MemorySkillItem } from './types';
+import type { MemorySkillItem } from '../types';
 
 const SKILLS: MemorySkillItem[] = [
   {

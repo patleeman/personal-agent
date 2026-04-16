@@ -4,7 +4,7 @@ import {
   createChecklistDraftItem,
   type ChecklistDraftItem,
 } from '../checklists';
-import { fuzzyScore } from '../slashMenu';
+import { fuzzyScore } from '../commands/slashMenu';
 import type {
   ConversationAutomationSkillInfo,
   ConversationAutomationWorkflowPreset,

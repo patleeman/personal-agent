@@ -1,4 +1,4 @@
-import { parseSlashInput } from '../slashMenu';
+import { parseSlashInput } from '../commands/slashMenu';
 
 export const CONVERSATION_MENU_SLASH_COMMANDS = [
   '/export',

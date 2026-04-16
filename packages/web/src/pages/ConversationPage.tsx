@@ -35,7 +35,7 @@ import { filterModelPickerItems } from '../model/modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferred-resume/deferredResumeSlashCommand';
 import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
-import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../slashMenu';
+import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
 import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
 import {

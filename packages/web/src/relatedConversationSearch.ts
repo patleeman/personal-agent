@@ -1,4 +1,4 @@
-import { fuzzyScore } from './slashMenu';
+import { fuzzyScore } from './commands/slashMenu';
 import type { SessionMeta } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;

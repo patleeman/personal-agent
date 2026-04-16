@@ -1,4 +1,4 @@
-import type { MemorySkillItem } from './types';
+import type { MemorySkillItem } from '../types';
 
 export interface SlashMenuItem {
   key: string;
