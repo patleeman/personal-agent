@@ -111,7 +111,7 @@ import { useReloadState } from '../reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
-import { rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';
+import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../excalidrawUtils';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
@@ -127,7 +127,7 @@ const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
 const MAX_RELATED_THREAD_HOTKEYS = 9;
-const MAX_VISIBLE_RELATED_THREAD_RESULTS = MAX_RELATED_THREAD_HOTKEYS;
+const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 
 type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
 type RelatedThreadHotkeyEvent = Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'key' | 'code' | 'isComposing'>;
@@ -3001,6 +3001,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => draft
       ? selectRecentConversationCandidates(sessions, {
           workspaceCwd: draftCwdValue || null,
+          closedOnly: true,
         })
       : [],
     [draft, draftCwdValue, sessions],
@@ -3023,7 +3024,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }),
     [debouncedRelatedThreadsQuery, draftCwdValue, relatedThreadCandidates, relatedThreadSearchIndex],
   );
+  const recentClosedThreadResults = useMemo(
+    () => listRecentConversationResults(relatedThreadCandidates, {
+      workspaceCwd: draftCwdValue || null,
+      recentWindowDays: null,
+      limit: MAX_VISIBLE_RELATED_THREAD_RESULTS,
+    }),
+    [draftCwdValue, relatedThreadCandidates],
+  );
   const visibleRelatedThreadResults = useMemo<RelatedConversationSearchResult[]>(() => {
+    const baseResults = debouncedRelatedThreadsQuery.trim().length > 0
+      ? relatedThreadSearchResults
+      : recentClosedThreadResults;
     const results: RelatedConversationSearchResult[] = [];
     const seen = new Set<string>();
 
@@ -3032,7 +3044,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         continue;
       }
 
-      const existing = relatedThreadSearchResults.find((result) => result.sessionId === sessionId);
+      const existing = baseResults.find((result) => result.sessionId === sessionId);
       if (existing) {
         results.push(existing);
         seen.add(sessionId);
@@ -3061,7 +3073,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       seen.add(sessionId);
     }
 
-    for (const result of relatedThreadSearchResults) {
+    for (const result of baseResults) {
       if (seen.has(result.sessionId)) {
         continue;
       }
@@ -3074,7 +3086,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     return results.slice(0, MAX_VISIBLE_RELATED_THREAD_RESULTS);
-  }, [draftCwdValue, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, selectedRelatedThreadIds]);
+  }, [debouncedRelatedThreadsQuery, draftCwdValue, recentClosedThreadResults, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, selectedRelatedThreadIds]);
   const toggleRelatedThreadSelection = useCallback((sessionId: string) => {
     setSelectedRelatedThreadIds((current) => {
       if (current.includes(sessionId)) {

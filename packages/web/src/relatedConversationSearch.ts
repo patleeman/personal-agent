@@ -4,6 +4,7 @@ import type { SessionMeta } from './types';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;
 const DEFAULT_CANDIDATE_LIMIT = 48;
+const DEFAULT_RECENT_RESULTS_LIMIT = 10;
 const COMMON_QUERY_STOPWORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'do', 'for', 'from', 'help', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'me', 'my', 'of', 'on', 'or', 'out', 'please', 'should', 'that', 'the', 'this', 'to', 'want', 'what', 'why', 'with', 'you', 'your',
 ]);
@@ -146,42 +147,88 @@ function buildSnippet(searchText: string | undefined, title: string, query: stri
   return clampSnippet(normalizedText, windowStart, maxLength);
 }
 
+function isClosedConversation(session: SessionMeta): boolean {
+  return session.isLive !== true && session.isRunning !== true;
+}
+
+function compareRecentConversationCandidates(left: SessionMeta, right: SessionMeta, workspaceCwd: string): number {
+  const leftWorkspace = workspaceCwd.length > 0 && normalizePath(left.cwd) === workspaceCwd;
+  const rightWorkspace = workspaceCwd.length > 0 && normalizePath(right.cwd) === workspaceCwd;
+  if (leftWorkspace !== rightWorkspace) {
+    return leftWorkspace ? -1 : 1;
+  }
+
+  const leftTimestamp = left.lastActivityAt ?? left.timestamp;
+  const rightTimestamp = right.lastActivityAt ?? right.timestamp;
+  const timestampCompare = rightTimestamp.localeCompare(leftTimestamp);
+  if (timestampCompare !== 0) {
+    return timestampCompare;
+  }
+
+  return left.title.localeCompare(right.title);
+}
+
 export function selectRecentConversationCandidates(
   sessions: SessionMeta[] | null | undefined,
   options: {
     workspaceCwd?: string | null;
     nowMs?: number;
-    recentWindowDays?: number;
+    recentWindowDays?: number | null;
     limit?: number;
+    closedOnly?: boolean;
   } = {},
 ): SessionMeta[] {
   const nowMs = options.nowMs ?? Date.now();
-  const recentWindowMs = (options.recentWindowDays ?? DEFAULT_RECENT_WINDOW_DAYS) * DAY_MS;
+  const recentWindowDays = options.recentWindowDays === undefined
+    ? DEFAULT_RECENT_WINDOW_DAYS
+    : options.recentWindowDays;
+  const recentWindowMs = recentWindowDays === null
+    ? null
+    : recentWindowDays * DAY_MS;
   const workspaceCwd = normalizePath(options.workspaceCwd);
 
   return [...(sessions ?? [])]
     .filter((session) => session.messageCount > 0)
+    .filter((session) => !options.closedOnly || isClosedConversation(session))
     .filter((session) => {
+      if (recentWindowMs === null) {
+        return true;
+      }
+
       const timestamp = Date.parse(session.lastActivityAt ?? session.timestamp);
       return Number.isFinite(timestamp) && nowMs - timestamp <= recentWindowMs;
     })
-    .sort((left, right) => {
-      const leftWorkspace = workspaceCwd.length > 0 && normalizePath(left.cwd) === workspaceCwd;
-      const rightWorkspace = workspaceCwd.length > 0 && normalizePath(right.cwd) === workspaceCwd;
-      if (leftWorkspace !== rightWorkspace) {
-        return leftWorkspace ? -1 : 1;
-      }
-
-      const leftTimestamp = left.lastActivityAt ?? left.timestamp;
-      const rightTimestamp = right.lastActivityAt ?? right.timestamp;
-      const timestampCompare = rightTimestamp.localeCompare(leftTimestamp);
-      if (timestampCompare !== 0) {
-        return timestampCompare;
-      }
-
-      return left.title.localeCompare(right.title);
-    })
+    .sort((left, right) => compareRecentConversationCandidates(left, right, workspaceCwd))
     .slice(0, Math.max(1, options.limit ?? DEFAULT_CANDIDATE_LIMIT));
+}
+
+export function listRecentConversationResults(
+  sessions: SessionMeta[] | null | undefined,
+  options: {
+    workspaceCwd?: string | null;
+    nowMs?: number;
+    recentWindowDays?: number | null;
+    limit?: number;
+    closedOnly?: boolean;
+  } = {},
+): RelatedConversationSearchResult[] {
+  const workspaceCwd = normalizePath(options.workspaceCwd);
+  const limit = Math.max(1, options.limit ?? DEFAULT_RECENT_RESULTS_LIMIT);
+
+  return selectRecentConversationCandidates(sessions, {
+    ...options,
+    recentWindowDays: options.recentWindowDays ?? null,
+    limit,
+  }).map((session, index) => ({
+    sessionId: session.id,
+    title: session.title,
+    cwd: session.cwd,
+    timestamp: session.lastActivityAt ?? session.timestamp,
+    snippet: '',
+    matchedTerms: [],
+    score: limit - index,
+    sameWorkspace: workspaceCwd.length > 0 && normalizePath(session.cwd) === workspaceCwd,
+  }));
 }
 
 export function rankRelatedConversationSessions(input: {

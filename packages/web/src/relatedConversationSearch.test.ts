@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from './types';
-import { rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
+import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
 
 function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'title' | 'cwd'>): SessionMeta {
   return {
@@ -13,6 +13,8 @@ function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' |
     title: overrides.title,
     messageCount: overrides.messageCount ?? 6,
     ...(overrides.lastActivityAt ? { lastActivityAt: overrides.lastActivityAt } : {}),
+    ...(overrides.isLive !== undefined ? { isLive: overrides.isLive } : {}),
+    ...(overrides.isRunning !== undefined ? { isRunning: overrides.isRunning } : {}),
   };
 }
 
@@ -46,6 +48,87 @@ describe('selectRecentConversationCandidates', () => {
       'recent-current',
       'recent-other',
     ]);
+  });
+
+  it('can keep only closed conversations when requested', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'closed-current',
+        title: 'Closed current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'live-current',
+        title: 'Live current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-13T08:00:00.000Z',
+        isLive: true,
+      }),
+      buildSession({
+        id: 'running-other',
+        title: 'Running other workspace',
+        cwd: '/repo/other',
+        lastActivityAt: '2026-04-13T07:00:00.000Z',
+        isRunning: true,
+      }),
+      buildSession({
+        id: 'closed-other',
+        title: 'Closed other workspace',
+        cwd: '/repo/other',
+        lastActivityAt: '2026-04-11T09:00:00.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      recentWindowDays: null,
+      closedOnly: true,
+    }).map((session) => session.id)).toEqual([
+      'closed-current',
+      'closed-other',
+    ]);
+  });
+});
+
+describe('listRecentConversationResults', () => {
+  it('lists the most recent closed conversations even when the draft query is blank', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'very-old-closed',
+        title: 'Very old closed thread',
+        cwd: '/repo/other',
+        lastActivityAt: '2026-03-10T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'live-current',
+        title: 'Live current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-13T08:00:00.000Z',
+        isLive: true,
+      }),
+    ];
+
+    const results = listRecentConversationResults(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      closedOnly: true,
+      limit: 5,
+    });
+
+    expect(results.map((result) => result.sessionId)).toEqual([
+      'recent-current',
+      'very-old-closed',
+    ]);
+    expect(results[0]?.sameWorkspace).toBe(true);
+    expect(results[0]?.matchedTerms).toEqual([]);
   });
 });
 
