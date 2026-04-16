@@ -1,14 +1,14 @@
 import type { MessageBlock } from '../shared/types';
 
-export type AskUserQuestionStyle = 'radio' | 'check';
+type AskUserQuestionStyle = 'radio' | 'check';
 
-export interface AskUserQuestionOption {
+interface AskUserQuestionOption {
   value: string;
   label: string;
   details?: string;
 }
 
-export interface AskUserQuestionPrompt {
+interface AskUserQuestionPrompt {
   id: string;
   label: string;
   details?: string;
@@ -21,7 +21,7 @@ export interface AskUserQuestionPresentation {
   questions: AskUserQuestionPrompt[];
 }
 
-export interface PendingAskUserQuestion {
+interface PendingAskUserQuestion {
   block: Extract<MessageBlock, { type: 'tool_use' }>;
   messageIndex: number;
   presentation: AskUserQuestionPresentation;
@@ -262,7 +262,7 @@ export function findPendingAskUserQuestion(messages: MessageBlock[] | undefined)
   return null;
 }
 
-export function resolveAskUserQuestionAnswerLabels(
+function resolveAskUserQuestionAnswerLabels(
   question: AskUserQuestionPrompt,
   selectedValues: string[],
 ): string[] {

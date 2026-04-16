@@ -6,7 +6,6 @@ import {
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
   readAskUserQuestionPresentation,
-  resolveAskUserQuestionAnswerLabels,
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionNavigationHotkey,
   resolveAskUserQuestionOptionHotkey,
@@ -183,7 +182,7 @@ describe('ask user questions', () => {
     ].join('\n'));
   });
 
-  it('tracks completion and resolves selected labels', () => {
+  it('tracks completion and formats selected labels', () => {
     const presentation = {
       questions: [
         {
@@ -212,7 +211,8 @@ describe('ask user questions', () => {
       target: ['prod'],
       notify: ['email'],
     })).toBe(true);
-    expect(resolveAskUserQuestionAnswerLabels(presentation.questions[1]!, ['sms', 'email'])).toEqual(['SMS', 'Email']);
+    expect(buildAskUserQuestionReplyText({ questions: [presentation.questions[1]!] }, { notify: ['sms', 'email'] }))
+      .toBe('Select notifications: SMS, Email');
   });
 
   it('resolves default option indices and wraps navigation indices', () => {
