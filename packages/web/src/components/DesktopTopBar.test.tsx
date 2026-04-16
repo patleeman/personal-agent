@@ -47,7 +47,7 @@ describe('DesktopTopBar', () => {
 
     const html = renderTopBar();
 
-    expect(html).toContain('aria-label="Manage connections');
+    expect(html).toContain('aria-label="Manage remotes');
   });
 
   it('renders a testing badge for command-line desktop launches', () => {
@@ -80,7 +80,7 @@ describe('DesktopTopBar', () => {
 
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
-    expect(html.indexOf('aria-label="Manage connections')).toBeLessThan(html.indexOf('Hide right sidebar'));
+    expect(html.indexOf('aria-label="Manage remotes')).toBeLessThan(html.indexOf('Hide right sidebar'));
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {
@@ -90,7 +90,7 @@ describe('DesktopTopBar', () => {
 
     const html = renderTopBar();
 
-    expect(html).not.toContain('aria-label="Manage connections');
+    expect(html).not.toContain('aria-label="Manage remotes');
     expect(html).not.toContain('Go back');
   });
 });

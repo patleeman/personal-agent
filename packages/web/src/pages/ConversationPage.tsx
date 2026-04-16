@@ -798,6 +798,17 @@ function FolderIcon({ className }: { className?: string }) {
   );
 }
 
+function RemoteExecutionIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
+      <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
+      <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
+      <path d="M7.9 7.8 9.7 7.8 9.7 6" />
+    </svg>
+  );
+}
+
 function ComposerQueuedSendIcon({ label, className }: { label: 'Steer' | 'Follow up'; className?: string }) {
   if (label === 'Follow up') {
     return (
@@ -1505,6 +1516,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [conversationExecutionOverride, setConversationExecutionOverride] = useState<Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null>(null);
   const [continueInBusy, setContinueInBusy] = useState(false);
   const [continueInOptions, setContinueInOptions] = useState<Array<{ value: string; label: string }>>([]);
+  const [draftExecutionTargetId, setDraftExecutionTargetId] = useState('local');
   const rawSessionSnapshot = useMemo(
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
@@ -1561,6 +1573,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, []);
+
+  const executionTargetOptions = useMemo(() => {
+    const baseOptions = continueInOptions.length > 0
+      ? [...continueInOptions]
+      : (getDesktopBridge() ? [{ value: 'local', label: 'Local project' }] : []);
+    const currentRemoteHostId = sessionSnapshot?.remoteHostId?.trim() || '';
+    const currentRemoteHostLabel = sessionSnapshot?.remoteHostLabel?.trim() || currentRemoteHostId;
+
+    if (currentRemoteHostId && !baseOptions.some((option) => option.value === currentRemoteHostId)) {
+      baseOptions.push({ value: currentRemoteHostId, label: currentRemoteHostLabel });
+    }
+
+    return baseOptions;
+  }, [continueInOptions, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel]);
+  const selectedExecutionTargetId = draft
+    ? draftExecutionTargetId
+    : sessionSnapshot?.remoteHostId?.trim() || 'local';
+  const selectedExecutionTargetOption = executionTargetOptions.find((option) => option.value === selectedExecutionTargetId)
+    ?? (selectedExecutionTargetId === 'local' ? { value: 'local', label: 'Local project' } : null);
+  const selectedExecutionTargetLabel = selectedExecutionTargetOption?.label
+    ?? (selectedExecutionTargetId === 'local' ? 'Local project' : selectedExecutionTargetId);
+  const remoteExecutionLabel = selectedExecutionTargetId !== 'local' ? selectedExecutionTargetLabel : null;
 
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
@@ -2410,8 +2444,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }, durationMs);
   }, []);
 
+  const applyDraftExecutionTarget = useCallback(async (conversationId: string) => {
+    const hostId = draftExecutionTargetId.trim();
+    if (!hostId || hostId === 'local') {
+      return null;
+    }
+
+    return api.continueConversationInHost(conversationId, hostId);
+  }, [draftExecutionTargetId]);
+
   const handleContinueConversationInHost = useCallback(async (hostId: string) => {
-    if (!id || continueInBusy) {
+    if (hostId === selectedExecutionTargetId) {
+      return;
+    }
+
+    if (!id) {
+      setDraftExecutionTargetId(hostId);
+      return;
+    }
+
+    if (continueInBusy) {
       return;
     }
 
@@ -2440,7 +2492,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setContinueInBusy(false);
     }
-  }, [continueInBusy, id, showNotice, streamReconnect]);
+  }, [continueInBusy, id, selectedExecutionTargetId, showNotice, streamReconnect]);
 
   useEffect(() => {
     if (draft || !id || !initialDraftHydrationState?.enableAutoModeOnLoad) {
@@ -3213,6 +3265,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [liveSessionContext?.git],
   );
   const hasGitSummary = gitSummaryPresentation.kind !== 'none';
+  const showExecutionTargetPicker = executionTargetOptions.length > 0;
+  const showComposerMeta = showExecutionTargetPicker
+    || Boolean(remoteExecutionLabel)
+    || Boolean(sessionTokens)
+    || (!draft && (Boolean(branchLabel) || hasGitSummary));
 
   useEffect(() => {
     const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
@@ -5406,6 +5463,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
+      const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -5448,11 +5506,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
             });
             createdSessionId = created.id;
-            primeCreatedConversationOpenCaches(created, {
-              tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-              bootstrapVersionKey: conversationVersionKey,
-              sessionDetailVersion: conversationEventVersion,
-            });
+            if (draftExecutionTarget === 'local') {
+              primeCreatedConversationOpenCaches(created, {
+                tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+                bootstrapVersionKey: conversationVersionKey,
+                sessionDetailVersion: conversationEventVersion,
+              });
+            } else {
+              await applyDraftExecutionTarget(created.id);
+            }
 
             const attachmentRefs = await persistPromptDrawings(created.id);
             await persistPromptContextDocs(created.id);
@@ -5522,17 +5584,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           isLiveSession: false,
           hasVisibleSessionDetail: false,
         }));
+        let createdSessionId: string | null = null;
+        let navigatedToCreatedConversation = false;
         try {
           const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
             ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
           });
-          primeCreatedConversationOpenCaches(created, {
-            tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-            bootstrapVersionKey: conversationVersionKey,
-            sessionDetailVersion: conversationEventVersion,
-          });
+          createdSessionId = created.id;
+          if (draftExecutionTarget === 'local') {
+            primeCreatedConversationOpenCaches(created, {
+              tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+              bootstrapVersionKey: conversationVersionKey,
+              sessionDetailVersion: conversationEventVersion,
+            });
+          } else {
+            await applyDraftExecutionTarget(created.id);
+          }
           const newId = created.id;
           const attachmentRefs = await persistPromptDrawings(newId);
           await persistPromptContextDocs(newId);
@@ -5573,6 +5642,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               },
             },
           });
+          navigatedToCreatedConversation = true;
 
           // Kick off the first turn immediately, but do not hold route
           // navigation open on the prompt-start roundtrip. The pending prompt
@@ -5591,6 +5661,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             console.error('Initial prompt failed:', error);
           });
         } catch (error) {
+          if (createdSessionId && !navigatedToCreatedConversation) {
+            await api.destroySession(createdSessionId).catch(() => {});
+          }
           setPendingAssistantStatusLabel(null);
           setDraftPendingPrompt(null);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
@@ -6367,11 +6440,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               cwdDraft={conversationCwdDraft}
               cwdError={conversationCwdError}
               cwdSaveBusy={conversationCwdBusy}
-              executionHostId={sessionSnapshot?.remoteHostId ?? null}
-              executionHostLabel={sessionSnapshot?.remoteHostLabel ?? null}
-              continueInOptions={continueInOptions}
-              continueInBusy={continueInBusy}
-              onContinueIn={id && continueInOptions.length > 1 ? (hostId) => { void handleContinueConversationInHost(hostId); } : undefined}
               onCwdDraftChange={(value) => {
                 setConversationCwdDraft(value);
                 if (conversationCwdError) {
@@ -7023,21 +7091,45 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             </div>
           </div>
 
-          {draft || ((!draft && (branchLabel || hasGitSummary)) || sessionTokens) ? (
-            <div
-              className="conversation-composer-meta mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim"
-              aria-hidden={draft && !sessionTokens ? true : undefined}
-            >
+          {showComposerMeta ? (
+            <div className="conversation-composer-meta mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim">
               <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                {sessionTokens && (
+                {showExecutionTargetPicker ? (
+                  <label className="relative inline-flex min-w-0 items-center">
+                    <span className="sr-only">Continue in</span>
+                    <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
+                    <select
+                      value={selectedExecutionTargetId}
+                      onChange={(event) => { void handleContinueConversationInHost(event.target.value); }}
+                      disabled={continueInBusy}
+                      aria-label="Continue in"
+                      className="h-7 min-w-[8.25rem] max-w-[12rem] appearance-none rounded-md bg-transparent pl-6 pr-7 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary disabled:opacity-50"
+                    >
+                      {executionTargetOptions.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 text-dim/70">
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </label>
+                ) : null}
+                {continueInBusy ? <span className="text-accent/80">Switching…</span> : null}
+                {sessionTokens ? (
                   <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
-                )}
+                ) : null}
               </div>
               <div className="flex min-w-0 items-center justify-end gap-2 overflow-hidden text-right">
-                {!draft && branchLabel && (
+                {remoteExecutionLabel ? (
+                  <span className="inline-flex min-w-0 items-center gap-1 text-accent" title={`Running on ${remoteExecutionLabel}`}>
+                    <RemoteExecutionIcon className="shrink-0" />
+                    <span className="truncate">{remoteExecutionLabel}</span>
+                  </span>
+                ) : null}
+                {!draft && branchLabel ? (
                   <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
-                )}
-                {!draft && hasGitSummary && (
+                ) : null}
+                {!draft && hasGitSummary ? (
                   gitSummaryPresentation.kind === 'diff' ? (
                     <span className="font-mono tabular-nums">
                       <span className="text-success">{gitSummaryPresentation.added}</span>
@@ -7047,7 +7139,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   ) : (
                     <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
                   )
-                )}
+                ) : null}
               </div>
             </div>
           ) : null}

@@ -53,16 +53,16 @@
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--running {
-    color: rgb(var(--color-success));
-    background-color: rgb(var(--color-success) / 0.12);
-    box-shadow: 0 0 0 1px rgb(var(--color-success) / 0.16), 0 0 14px rgb(var(--color-success) / 0.2);
+    color: rgb(var(--color-steel));
+    background-color: rgb(var(--color-steel) / 0.12);
+    box-shadow: 0 0 0 1px rgb(var(--color-steel) / 0.16), 0 0 14px rgb(var(--color-steel) / 0.2);
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--running:hover,
   .ui-icon-button.ui-desktop-top-bar__connections-button--running:focus-visible {
-    color: rgb(var(--color-success));
-    background-color: rgb(var(--color-success) / 0.16);
-    box-shadow: 0 0 0 1px rgb(var(--color-success) / 0.2), 0 0 16px rgb(var(--color-success) / 0.24);
+    color: rgb(var(--color-steel));
+    background-color: rgb(var(--color-steel) / 0.16);
+    box-shadow: 0 0 0 1px rgb(var(--color-steel) / 0.2), 0 0 16px rgb(var(--color-steel) / 0.24);
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--error {

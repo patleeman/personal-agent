@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { getDesktopBridge, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
+import { getDesktopBridge, readDesktopConnections } from '../desktopBridge';
 import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '../desktopConnections';
-import type { DesktopConnectionsState, DesktopEnvironmentState, DesktopHostRecord, DesktopWorkspaceServerState } from '../types';
+import type { DesktopConnectionsState, DesktopHostRecord, DesktopWorkspaceServerState } from '../types';
 import { ToolbarButton, cx } from './ui';
 
 const INPUT_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3.5 py-2.5 text-[14px] text-primary shadow-sm transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
@@ -118,16 +118,23 @@ function formatWorkspaceServerStatus(state: DesktopWorkspaceServerState | null, 
   label: string;
   className: string;
 } {
+  if (state?.error) {
+    return {
+      label: 'Error',
+      className: 'text-danger',
+    };
+  }
+
   if (state?.running) {
     return {
-      label: 'Running',
-      className: 'text-success',
+      label: 'On',
+      className: 'text-steel',
     };
   }
 
   if (draft.enabled) {
     return {
-      label: 'Starting or unhealthy',
+      label: 'Starting…',
       className: 'text-warning',
     };
   }
@@ -208,7 +215,6 @@ export function DesktopConnectionsModal({
   onClose: () => void;
   onWorkspaceServerStateChange?: (state: DesktopWorkspaceServerState | null) => void;
 }) {
-  const [environment, setEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
   const [selectedHostId, setSelectedHostId] = useState<string>('');
   const [editorMode, setEditorMode] = useState<DesktopHostEditorMode>('new');
@@ -244,12 +250,8 @@ export function DesktopConnectionsModal({
     return bridge;
   }
 
-  async function refreshDesktopState() {
-    const [nextEnvironment, nextConnections] = await Promise.all([
-      readDesktopEnvironment(),
-      readDesktopConnections(),
-    ]);
-    setEnvironment(nextEnvironment);
+  async function refreshConnectionsState() {
+    const nextConnections = await readDesktopConnections();
     setConnections(nextConnections);
   }
 
@@ -316,17 +318,15 @@ export function DesktopConnectionsModal({
     let cancelled = false;
 
     Promise.all([
-      readDesktopEnvironment(),
       readDesktopConnections(),
       bridge.readWorkspaceServerState().catch(() => null),
       bridge.readLitterShimState().catch(() => null),
     ])
-      .then(([nextEnvironment, nextConnections, serverState, shimState]) => {
+      .then(([nextConnections, serverState, shimState]) => {
         if (cancelled) {
           return;
         }
 
-        setEnvironment(nextEnvironment);
         setConnections(nextConnections);
         setWorkspaceServerState(serverState);
         setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
@@ -438,7 +438,7 @@ export function DesktopConnectionsModal({
       let host: Extract<DesktopHostRecord, { kind: 'web' | 'ssh' }>;
       if (draft.kind === 'web') {
         if (!draft.websocketUrl.trim()) {
-          setError('WebSocket URL is required for remote workspaces.');
+          setError('WebSocket URL is required for this remote.');
           return;
         }
 
@@ -476,12 +476,12 @@ export function DesktopConnectionsModal({
 
       const nextConnections = await bridge.saveHost(host);
       setConnections(nextConnections);
-      await refreshDesktopState();
+      await refreshConnectionsState();
       setEditorMode('existing');
       setSelectedHostId(host.id);
       setDraft(createDesktopHostDraft(host));
       setShowEditor(true);
-      setNotice(draft.kind === 'ssh' ? 'SSH workspace saved.' : 'Remote workspace saved.');
+      setNotice(draft.kind === 'ssh' ? 'SSH remote saved.' : 'Remote saved.');
       appendActivity('success', `${host.label} saved.`);
     } catch (nextError) {
       const message = nextError instanceof Error ? nextError.message : String(nextError);
@@ -504,9 +504,9 @@ export function DesktopConnectionsModal({
 
       const nextConnections = await bridge.deleteHost(hostId);
       setConnections(nextConnections);
-      await refreshDesktopState();
+      await refreshConnectionsState();
       resetEditor();
-      setNotice('Remote workspace deleted.');
+      setNotice('Remote deleted.');
       appendActivity('success', host ? `${host.label} deleted.` : `${hostId} deleted.`);
     } catch (nextError) {
       const message = nextError instanceof Error ? nextError.message : String(nextError);
@@ -548,7 +548,7 @@ export function DesktopConnectionsModal({
           ? `Remote server running at ${nextState.localWebsocketUrl}.`
           : 'Remote server settings saved, but the server is not healthy yet.');
       } else {
-        setNotice('Stopped hosting this desktop as a remote workspace.');
+        setNotice('Remote server stopped.');
         appendActivity('success', 'Remote server stopped.');
       }
     } catch (nextError) {
@@ -649,6 +649,7 @@ export function DesktopConnectionsModal({
 
   const workspaceServerStatus = formatWorkspaceServerStatus(workspaceServerState, workspaceServerDraft);
   const workspaceServerLogPath = workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log';
+  const showWorkspaceServerDetails = workspaceServerDraft.enabled || Boolean(workspaceServerState?.error) || Boolean(workspaceServerState?.logFile);
   const remoteHosts = connections?.hosts.filter((host) => host.kind !== 'local') ?? [];
   const localHostActive = connections?.activeHostId === 'local';
 
@@ -675,19 +676,12 @@ export function DesktopConnectionsModal({
           overscrollBehavior: 'contain',
         }}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
-          <div className="min-w-0 space-y-1">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Connections</p>
-            <h2 className="text-[22px] font-semibold tracking-tight text-primary">Connections</h2>
-            <p className="text-[13px] text-secondary">Switch workspaces, serve this desktop, & see connection activity.</p>
-            {environment ? (
-              <p className="text-[12px] text-secondary">
-                Active: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
-              </p>
-            ) : null}
+        <div className="flex items-center justify-between gap-4 border-b border-border-subtle px-6 py-4">
+          <div className="min-w-0">
+            <h2 className="text-[19px] font-semibold tracking-tight text-primary">Connections</h2>
           </div>
           <div className="flex items-center gap-2">
-            <ToolbarButton onClick={startNewHostDraft} disabled={action !== null}>New workspace</ToolbarButton>
+            <ToolbarButton onClick={startNewHostDraft} disabled={action !== null}>New remote</ToolbarButton>
             <ToolbarButton onClick={onClose}>Close</ToolbarButton>
           </div>
         </div>
@@ -704,11 +698,8 @@ export function DesktopConnectionsModal({
           {connections ? (
             <div className="space-y-6">
               <section className="space-y-3 border-b border-border-subtle pb-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-primary">Remote server</h3>
-                    <p className="text-[13px] text-secondary">Let other devices connect to this desktop.</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-[15px] font-medium text-primary">Remote server</h3>
                   <p className={cx('text-[13px] font-medium', workspaceServerStatus.className)}>{workspaceServerStatus.label}</p>
                 </div>
 
@@ -757,27 +748,29 @@ export function DesktopConnectionsModal({
                     <span>Publish on Tailscale at <span className="font-mono text-[11px]">/codex</span></span>
                   </label>
 
-                  <div className="space-y-3 rounded-2xl bg-base/35 px-4 py-4">
-                    <ValueRow
-                      label="Local URL"
-                      value={workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}
-                      actionLabel="Copy"
-                      onAction={() => {
-                        void handleCopyValue('Local URL', workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`);
-                      }}
-                    />
-                    {workspaceServerState?.tailnetWebsocketUrl ? (
+                  {showWorkspaceServerDetails ? (
+                    <div className="space-y-3 rounded-2xl bg-base/35 px-4 py-4">
                       <ValueRow
-                        label="Tailnet URL"
-                        value={workspaceServerState.tailnetWebsocketUrl}
+                        label="Local URL"
+                        value={workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`}
                         actionLabel="Copy"
                         onAction={() => {
-                          void handleCopyValue('Tailnet URL', workspaceServerState.tailnetWebsocketUrl ?? '');
+                          void handleCopyValue('Local URL', workspaceServerState?.localWebsocketUrl ?? `ws://127.0.0.1:${workspaceServerDraft.port || '8390'}/codex`);
                         }}
                       />
-                    ) : null}
-                    <ValueRow label="Log file" value={workspaceServerLogPath} actionLabel="Open" onAction={() => { void handleOpenWorkspaceServerLog(); }} />
-                  </div>
+                      {workspaceServerState?.tailnetWebsocketUrl ? (
+                        <ValueRow
+                          label="Tailnet URL"
+                          value={workspaceServerState.tailnetWebsocketUrl}
+                          actionLabel="Copy"
+                          onAction={() => {
+                            void handleCopyValue('Tailnet URL', workspaceServerState.tailnetWebsocketUrl ?? '');
+                          }}
+                        />
+                      ) : null}
+                      <ValueRow label="Log file" value={workspaceServerLogPath} actionLabel="Open" onAction={() => { void handleOpenWorkspaceServerLog(); }} />
+                    </div>
+                  ) : null}
 
                   {workspaceServerState?.error ? <p className="text-[12px] text-danger">{workspaceServerState.error}</p> : null}
 
@@ -837,11 +830,8 @@ export function DesktopConnectionsModal({
               </section>
 
               <section className="space-y-3 border-b border-border-subtle pb-6">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-primary">Saved workspaces</h3>
-                    <p className="text-[13px] text-secondary">Connect this window or open a separate one.</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-[15px] font-medium text-primary">Saved remotes</h3>
                   {!localHostActive ? (
                     <ToolbarButton onClick={() => { void handleConnect('local'); }} disabled={action !== null}>Use this desktop</ToolbarButton>
                   ) : null}
@@ -864,42 +854,30 @@ export function DesktopConnectionsModal({
                             <p className="ui-card-meta break-all">{formatDesktopHostDetails(host)}</p>
                           </div>
                           <div className="flex flex-wrap items-center justify-end gap-2">
-                            {!active ? (
-                              <button
-                                type="button"
-                                onClick={() => { void handleConnect(host.id); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {action === 'connect' ? 'Connecting…' : 'Connect'}
-                              </button>
-                            ) : null}
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => { void handleOpenWindow(host.id); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {action === 'open' ? 'Opening…' : 'Open window'}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { selectHost(host); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                Edit
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { void handleDelete(host.id); }}
-                                disabled={action !== null}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {action === 'delete' ? 'Deleting…' : 'Delete'}
-                              </button>
-                            </>
+                            <button
+                              type="button"
+                              onClick={() => { void handleOpenWindow(host.id); }}
+                              disabled={action !== null}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              {action === 'open' ? 'Opening…' : 'Open window'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { selectHost(host); }}
+                              disabled={action !== null}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { void handleDelete(host.id); }}
+                              disabled={action !== null}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              {action === 'delete' ? 'Deleting…' : 'Delete'}
+                            </button>
                           </div>
                         </div>
                       );
@@ -907,18 +885,15 @@ export function DesktopConnectionsModal({
                   </div>
                 ) : (
                   <div className="rounded-2xl bg-base/35 px-4 py-4">
-                    <p className="ui-card-meta">No saved remote workspaces yet.</p>
+                    <p className="ui-card-meta">No saved remotes yet.</p>
                   </div>
                 )}
               </section>
 
               {showEditor ? (
                 <section className="space-y-4 border-b border-border-subtle pb-6">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="space-y-1">
-                      <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit workspace' : 'New workspace'}</h3>
-                      <p className="text-[13px] text-secondary">Saved only on this machine.</p>
-                    </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-[15px] font-medium text-primary">{editorMode === 'existing' ? 'Edit remote' : 'New remote'}</h3>
                     <ToolbarButton onClick={resetEditor} disabled={action !== null}>Hide</ToolbarButton>
                   </div>
 
@@ -1071,7 +1046,7 @@ export function DesktopConnectionsModal({
                       disabled={action !== null}
                       className={ACTION_BUTTON_CLASS}
                     >
-                      {action === 'save' ? 'Saving…' : editorMode === 'existing' ? 'Save workspace' : 'Add workspace'}
+                      {action === 'save' ? 'Saving…' : editorMode === 'existing' ? 'Save remote' : 'Add remote'}
                     </button>
                     {editorMode === 'existing' ? (
                       <button
@@ -1080,7 +1055,7 @@ export function DesktopConnectionsModal({
                         disabled={action !== null}
                         className={ACTION_BUTTON_CLASS}
                       >
-                        New workspace
+                        New remote
                       </button>
                     ) : null}
                   </div>
@@ -1088,11 +1063,8 @@ export function DesktopConnectionsModal({
               ) : null}
 
               <section className="space-y-3">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-primary">Activity</h3>
-                    <p className="text-[13px] text-secondary">Connection attempts & server changes.</p>
-                  </div>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-[15px] font-medium text-primary">Activity</h3>
                   {activity.length > 0 ? (
                     <ToolbarButton onClick={() => setActivity([])} disabled={action !== null}>Clear</ToolbarButton>
                   ) : null}

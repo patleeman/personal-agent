@@ -27,11 +27,13 @@ function RightRailToggleIcon({ open }: { open: boolean }) {
 
 function ConnectionsIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
-      <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
-      <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
-      <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
-      <path d="M7.9 7.8 9.7 7.8 9.7 6" />
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.15" aria-hidden="true">
+      <rect x="2" y="2" width="10" height="4" rx="1.2" />
+      <rect x="2" y="8" width="10" height="4" rx="1.2" />
+      <path d="M4 4h3" />
+      <path d="M4 10h3" />
+      <circle cx="10.2" cy="4" r="0.55" fill="currentColor" stroke="none" />
+      <circle cx="10.2" cy="10" r="0.55" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -43,20 +45,20 @@ function resolveConnectionsIndicator(state: DesktopWorkspaceServerState | null):
   if (state?.error || (state?.enabled && !state.running)) {
     return {
       className: 'ui-desktop-top-bar__connections-button--error',
-      statusLabel: 'remote server error',
+      statusLabel: 'desktop server error',
     };
   }
 
   if (state?.enabled && state.running) {
     return {
       className: 'ui-desktop-top-bar__connections-button--running',
-      statusLabel: 'remote server running',
+      statusLabel: 'desktop server on',
     };
   }
 
   return {
     className: 'ui-desktop-top-bar__connections-button--off',
-    statusLabel: 'remote server off',
+    statusLabel: 'desktop server off',
   };
 }
 
@@ -199,7 +201,7 @@ export function DesktopTopBar({
     ? environment.launchLabel?.trim() || 'Testing'
     : null;
   const connectionsIndicator = resolveConnectionsIndicator(workspaceServerState);
-  const connectionsButtonLabel = `Manage connections · ${connectionsIndicator.statusLabel}`;
+  const connectionsButtonLabel = `Manage remotes · ${connectionsIndicator.statusLabel}`;
 
   return (
     <>
