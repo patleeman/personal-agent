@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getRunCategory,
   getRunConnections,
   getRunHeadline,
   getRunMoment,
-  getRunPrimaryActionLabel,
   getRunPrimaryConnection,
-  getRunSortTimestamp,
   getRunTimeline,
   isRunActive,
   listConnectedConversationBackgroundRuns,
   runNeedsAttention,
-  summarizeActiveRuns,
 } from './runPresentation';
 import type { DurableRunRecord, ScheduledTaskSummary, SessionMeta } from '../shared/types';
 
@@ -213,9 +209,8 @@ describe('runPresentation', () => {
     ]);
   });
 
-  it('classifies run categories and primary links', () => {
+  it('resolves primary links for scheduled, deferred, and background runs', () => {
     const scheduledRun = createRun();
-    expect(getRunCategory(scheduledRun)).toBe('scheduled');
     expect(getRunPrimaryConnection(scheduledRun, {
       tasks: [{
         id: 'daily-report',
@@ -229,7 +224,6 @@ describe('runPresentation', () => {
       label: 'Scheduled task',
       to: '/automations/daily-report',
     });
-    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(scheduledRun))).toBe('Open automation');
 
     const deferredRun = createRun({
       manifest: {
@@ -256,8 +250,10 @@ describe('runPresentation', () => {
         },
       },
     });
-    expect(getRunCategory(deferredRun)).toBe('deferred');
-    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(deferredRun))).toBe('Open conversation');
+    expect(getRunPrimaryConnection(deferredRun)).toMatchObject({
+      label: 'Conversation to reopen',
+      to: '/conversations/conv-123',
+    });
 
     const backgroundRun = createRun({
       manifest: {
@@ -275,7 +271,7 @@ describe('runPresentation', () => {
         },
       },
     });
-    expect(getRunCategory(backgroundRun)).toBe('background');
+    expect(getRunPrimaryConnection(backgroundRun)).toBeUndefined();
   });
 
   it('prefers a run transcript conversation while still linking back to the originating conversation', () => {
@@ -347,7 +343,6 @@ describe('runPresentation', () => {
       label: 'Conversation transcript',
       to: '/conversations/subagent-456',
     });
-    expect(getRunPrimaryActionLabel(getRunPrimaryConnection(run, { sessions }))).toBe('Open conversation');
   });
 
   it('finds connected conversation background runs before session metadata has loaded', () => {
@@ -566,201 +561,6 @@ describe('runPresentation', () => {
     });
   });
 
-  it('summarizes active runs from live task and conversation state', () => {
-    const activeRuns = summarizeActiveRuns({
-      tasks: [{
-        id: 'daily-report',
-        filePath: '/repo/profiles/assistant/agent/tasks/daily-report.task.md',
-        scheduleType: 'cron',
-        running: true,
-        enabled: true,
-        prompt: 'Summarize yesterday and today.',
-      }],
-      sessions: [{
-        id: 'conv-123',
-        file: '/tmp/sessions/conv-123.jsonl',
-        timestamp: '2026-03-12T20:00:00.000Z',
-        cwd: '/repo',
-        cwdSlug: 'repo',
-        model: 'openai/gpt-5',
-        title: 'Watch subagent run',
-        messageCount: 12,
-        isRunning: true,
-      }],
-      runs: {
-        scannedAt: '2026-03-12T20:35:00.000Z',
-        runsRoot: '/tmp/runs',
-        summary: {
-          total: 3,
-          recoveryActions: {},
-          statuses: { running: 3 },
-        },
-        runs: [
-          createRun({
-            status: {
-              version: 1,
-              runId: 'run-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-          createRun({
-            manifest: {
-              version: 1,
-              id: 'conversation-live-conv-123',
-              kind: 'conversation',
-              resumePolicy: 'continue',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              spec: {
-                conversationId: 'conv-123',
-              },
-              source: {
-                type: 'web-live-session',
-                id: 'conv-123',
-              },
-            },
-            status: {
-              version: 1,
-              runId: 'conversation-live-conv-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-          createRun({
-            runId: 'run-subagent-123',
-            manifest: {
-              version: 1,
-              id: 'run-subagent-123',
-              kind: 'background-run',
-              resumePolicy: 'manual',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              spec: {
-                taskSlug: 'subagent',
-              },
-              source: {
-                type: 'tool',
-                id: 'conv-123',
-              },
-            },
-            status: {
-              version: 1,
-              runId: 'run-subagent-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-        ],
-      },
-    });
-
-    expect(activeRuns).toEqual({
-      total: 3,
-      scheduled: 1,
-      conversation: 1,
-      deferred: 0,
-      background: 1,
-      other: 0,
-    });
-  });
-
-  it('ignores stale scheduled and conversation runs when live state says they are idle', () => {
-    const activeRuns = summarizeActiveRuns({
-      tasks: [],
-      sessions: [],
-      runs: {
-        scannedAt: '2026-03-12T20:35:00.000Z',
-        runsRoot: '/tmp/runs',
-        summary: {
-          total: 3,
-          recoveryActions: {},
-          statuses: { running: 3 },
-        },
-        runs: [
-          createRun({
-            status: {
-              version: 1,
-              runId: 'run-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-          createRun({
-            manifest: {
-              version: 1,
-              id: 'conversation-live-conv-123',
-              kind: 'conversation',
-              resumePolicy: 'continue',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              spec: {
-                conversationId: 'conv-123',
-              },
-              source: {
-                type: 'web-live-session',
-                id: 'conv-123',
-              },
-            },
-            status: {
-              version: 1,
-              runId: 'conversation-live-conv-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-          createRun({
-            runId: 'run-subagent-123',
-            manifest: {
-              version: 1,
-              id: 'run-subagent-123',
-              kind: 'background-run',
-              resumePolicy: 'manual',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              spec: {
-                taskSlug: 'subagent',
-              },
-              source: {
-                type: 'tool',
-                id: 'conv-123',
-              },
-            },
-            status: {
-              version: 1,
-              runId: 'run-subagent-123',
-              status: 'running',
-              createdAt: '2026-03-12T20:30:00.000Z',
-              updatedAt: '2026-03-12T20:35:00.000Z',
-              activeAttempt: 1,
-              startedAt: '2026-03-12T20:31:00.000Z',
-            },
-          }),
-        ],
-      },
-    });
-
-    expect(activeRuns).toEqual({
-      total: 1,
-      scheduled: 0,
-      conversation: 0,
-      deferred: 0,
-      background: 1,
-      other: 0,
-    });
-  });
-
   it('treats dismissed attention states as reviewed until the run changes again', () => {
     const run = createRun({
       status: {
@@ -787,7 +587,6 @@ describe('runPresentation', () => {
       label: 'completed',
       at: '2026-03-12T20:35:00.000Z',
     });
-    expect(getRunSortTimestamp(run)).toBe('2026-03-12T20:35:00.000Z');
     expect(getRunTimeline(run)).toEqual([
       { label: 'Created', at: '2026-03-12T20:30:00.000Z' },
       { label: 'Started', at: '2026-03-12T20:31:00.000Z' },

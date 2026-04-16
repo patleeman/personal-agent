@@ -23,18 +23,7 @@ export interface RunMoment {
   at?: string;
 }
 
-export type RunCategory = 'scheduled' | 'conversation' | 'deferred' | 'background' | 'other';
-export type RunLocation = 'local' | 'remote';
-export type RunImportState = 'not_ready' | 'ready' | 'imported' | 'failed' | null;
-
-export interface ActiveRunsSummary {
-  total: number;
-  scheduled: number;
-  conversation: number;
-  deferred: number;
-  background: number;
-  other: number;
-}
+type RunCategory = 'scheduled' | 'conversation' | 'deferred' | 'background' | 'other';
 
 export function isRunInProgress(run: DurableRunRecord): boolean {
   const status = run.status?.status;
@@ -58,46 +47,6 @@ export function runNeedsAttention(run: DurableRunRecord, options?: { includeDism
     || status === 'recovering';
 
   return options?.includeDismissed ? needsAttention : needsAttention && !run.attentionDismissed;
-}
-
-export function summarizeActiveRuns(input: {
-  tasks?: ScheduledTaskSummary[] | null;
-  sessions?: SessionMeta[] | null;
-  runs?: DurableRunListResult | null;
-}): ActiveRunsSummary {
-  const fallbackCounts = (input.runs?.runs ?? []).reduce<Record<RunCategory, number>>((counts, run) => {
-    if (!isRunInProgress(run)) {
-      return counts;
-    }
-
-    counts[getRunCategory(run)] += 1;
-    return counts;
-  }, {
-    scheduled: 0,
-    conversation: 0,
-    deferred: 0,
-    background: 0,
-    other: 0,
-  });
-
-  const scheduled = input.tasks
-    ? input.tasks.filter((task) => task.running).length
-    : fallbackCounts.scheduled;
-  const conversation = input.sessions
-    ? input.sessions.filter((session) => session.isRunning).length
-    : fallbackCounts.conversation;
-  const deferred = fallbackCounts.deferred;
-  const background = fallbackCounts.background;
-  const other = fallbackCounts.other;
-
-  return {
-    total: scheduled + conversation + deferred + background + other,
-    scheduled,
-    conversation,
-    deferred,
-    background,
-    other,
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -459,15 +408,7 @@ function conversationLabel(run: DurableRunRecord, lookups: RunPresentationLookup
   return {};
 }
 
-export function getRunLocation(run: DurableRunRecord): 'local' | 'remote' {
-  return run.location === 'remote' ? 'remote' : 'local';
-}
-
-export function getRunImportState(_run: DurableRunRecord): null {
-  return null;
-}
-
-export function getRunCategory(run: DurableRunRecord): RunCategory {
+function getRunCategory(run: DurableRunRecord): RunCategory {
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
     return 'scheduled';
   }
@@ -685,34 +626,11 @@ export function listConnectedConversationBackgroundRuns(input: {
     });
 }
 
-export function getRunConversationConnection(
-  run: DurableRunRecord,
-  lookups: RunPresentationLookups = {},
-): RunConnection | undefined {
-  return getRunConnections(run, lookups).find((connection) => connection.label.startsWith('Conversation') && connection.to);
-}
-
 export function getRunPrimaryConnection(
   run: DurableRunRecord,
   lookups: RunPresentationLookups = {},
 ): RunConnection | undefined {
   return getRunConnections(run, lookups).find((connection) => connection.label !== 'Source file' && connection.to);
-}
-
-export function getRunPrimaryActionLabel(connection: RunConnection | undefined): string | undefined {
-  if (!connection?.to) {
-    return undefined;
-  }
-
-  if (connection.label === 'Scheduled task') {
-    return 'Open automation';
-  }
-
-  if (connection.label.startsWith('Conversation')) {
-    return 'Open conversation';
-  }
-
-  return 'Open';
 }
 
 export function getRunMoment(run: DurableRunRecord): RunMoment {
@@ -731,7 +649,7 @@ export function getRunMoment(run: DurableRunRecord): RunMoment {
   return { label: 'created', at: run.manifest?.createdAt };
 }
 
-export function getRunSortTimestamp(run: DurableRunRecord): string {
+function getRunSortTimestamp(run: DurableRunRecord): string {
   return getRunMoment(run).at ?? run.manifest?.createdAt ?? '';
 }
 
