@@ -868,15 +868,6 @@ export interface MemoryAgentsItem {
   content?: string;
 }
 
-export type NodeLinkKind = 'note' | 'project' | 'skill';
-
-export interface NodeLinkSummary {
-  kind: NodeLinkKind;
-  id: string;
-  title: string;
-  summary?: string;
-}
-
 export interface MemorySkillItem {
   source: string;
   name: string;
