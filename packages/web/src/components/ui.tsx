@@ -1,5 +1,4 @@
 import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
-import { Link, type LinkProps } from 'react-router-dom';
 
 export function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(' ');
@@ -38,21 +37,6 @@ export function PageHeader({
       {leading && <div className="flex items-center shrink-0 pr-3">{leading}</div>}
       <div className="flex-1 min-w-0">{children}</div>
       {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
-    </div>
-  );
-}
-
-export function PageHeading({
-  title,
-  meta,
-}: {
-  title: ReactNode;
-  meta?: ReactNode;
-}) {
-  return (
-    <div>
-      <h1 className="ui-page-title">{title}</h1>
-      {meta && <div className="ui-page-meta">{meta}</div>}
     </div>
   );
 }
@@ -156,138 +140,4 @@ export function EmptyState({
   );
 }
 
-export function SectionLabel({
-  label,
-  count,
-  className,
-}: {
-  label: ReactNode;
-  count?: ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={cx('flex items-center gap-2', className)}>
-      <p className="ui-section-label">{label}</p>
-      {count !== undefined && <span className="ui-section-count">{count}</span>}
-    </div>
-  );
-}
-
-function rowClass(selected: boolean | undefined, className?: string) {
-  return cx('group', 'ui-list-row', selected ? 'ui-list-row-selected' : 'ui-list-row-hover', className);
-}
-
-export function browserRecordClass(selected: boolean | undefined, className?: string) {
-  return cx('group', 'ui-browser-entry', selected ? 'ui-browser-entry-selected' : 'ui-browser-entry-hover', className);
-}
-
-export function BrowserRecordContent({
-  label,
-  aside,
-  heading,
-  summary,
-  meta,
-  headerClassName,
-  titleClassName,
-  summaryClassName,
-  metaClassName,
-}: {
-  label?: ReactNode;
-  aside?: ReactNode;
-  heading: ReactNode;
-  summary?: ReactNode;
-  meta?: ReactNode;
-  headerClassName?: string;
-  titleClassName?: string;
-  summaryClassName?: string;
-  metaClassName?: string;
-}) {
-  return (
-    <>
-      {(label || aside) && (
-        <div className={cx('ui-browser-entry-header', headerClassName)}>
-          {label ? <p className="ui-browser-entry-label">{label}</p> : null}
-          {aside ? <p className="ui-browser-entry-aside">{aside}</p> : null}
-        </div>
-      )}
-      <p className={cx('ui-browser-entry-title', titleClassName)}>{heading}</p>
-      {summary ? <p className={cx('ui-browser-entry-summary', summaryClassName)}>{summary}</p> : null}
-      {meta ? <div className={cx('ui-browser-entry-meta', metaClassName)}>{meta}</div> : null}
-    </>
-  );
-}
-
-interface BaseRowProps {
-  selected?: boolean;
-  leading?: ReactNode;
-  trailing?: ReactNode;
-  className?: string;
-  children: ReactNode;
-}
-
-export function BrowserRecordRow({
-  to,
-  selected,
-  label,
-  aside,
-  heading,
-  summary,
-  meta,
-  className,
-  headerClassName,
-  titleClassName,
-  summaryClassName,
-  metaClassName,
-  ...props
-}: LinkProps & {
-  selected?: boolean;
-  label?: ReactNode;
-  aside?: ReactNode;
-  heading: ReactNode;
-  summary?: ReactNode;
-  meta?: ReactNode;
-  className?: string;
-  headerClassName?: string;
-  titleClassName?: string;
-  summaryClassName?: string;
-  metaClassName?: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className={browserRecordClass(selected, className)}
-      {...props}
-    >
-      <BrowserRecordContent
-        label={label}
-        aside={aside}
-        heading={heading}
-        summary={summary}
-        meta={meta}
-        headerClassName={headerClassName}
-        titleClassName={titleClassName}
-        summaryClassName={summaryClassName}
-        metaClassName={metaClassName}
-      />
-    </Link>
-  );
-}
-
-export function ListLinkRow({
-  to,
-  selected,
-  leading,
-  trailing,
-  className,
-  children,
-  ...props
-}: BaseRowProps & LinkProps) {
-  return (
-    <Link to={to} className={rowClass(selected, className)} {...props}>
-      {leading}
-      <div className="flex-1 min-w-0">{children}</div>
-      {trailing}
-    </Link>
-  );
-}
 
