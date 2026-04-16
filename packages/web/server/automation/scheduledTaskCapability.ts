@@ -43,6 +43,7 @@ function summarizePrompt(value: string): string {
 }
 
 function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntimeEntry) {
+  const threadDetail = buildScheduledTaskThreadDetail(task);
   return {
     id: task.id,
     title: task.title,
@@ -56,6 +57,8 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
     model: task.modelRef,
     thinkingLevel: task.thinkingLevel,
     cwd: task.cwd,
+    threadConversationId: threadDetail.threadConversationId,
+    threadTitle: threadDetail.threadTitle,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     lastSuccessAt: runtime?.lastSuccessAt,
@@ -92,7 +95,12 @@ export async function listScheduledTasksCapability(profile: string) {
     loaded.runtimeEntries.flatMap((task) => task.id ? [[task.id, task] as const] : []),
   );
 
-  return loaded.tasks.map((task) => buildScheduledTaskSummary(task, loaded.runtimeState[task.id] ?? runtimeById.get(task.id)));
+  return loaded.tasks.map((task) => {
+    const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
+      ? ensureAutomationThread(task.id)
+      : task;
+    return buildScheduledTaskSummary(taskWithThread, loaded.runtimeState[task.id] ?? runtimeById.get(task.id));
+  });
 }
 
 export async function readScheduledTaskCapability(profile: string, taskId: string) {

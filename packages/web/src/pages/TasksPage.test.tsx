@@ -81,6 +81,8 @@ describe('TasksPage', () => {
     expect(html).toContain('Automation: Daily report');
     expect(html).toContain('href="/automations/daily-report"');
     expect(html).toContain('href="/conversations/automation.daily-report"');
+    expect(html).not.toContain('Automation jobs');
+    expect(html).not.toContain('Automation threads');
     expect(html).not.toContain('On this page');
     expect(html).not.toContain('href="/settings"');
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
@@ -111,8 +113,10 @@ describe('TasksPage', () => {
     expect(html).toContain('Jobs');
     expect(html).toContain('Threads');
     expect(html).toContain('No jobs yet.');
-    expect(html).toContain('Create one to start recurring work.');
-    expect(html).toContain('No automation threads yet.');
+    expect(html).toContain('No associated threads yet.');
+    expect(html).not.toContain('Create one to start recurring work.');
+    expect(html).not.toContain('Automation jobs');
+    expect(html).not.toContain('Automation threads');
     expect(html).not.toContain('On this page');
     expect(html).not.toContain('Create the first scheduled workflow.');
     expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');

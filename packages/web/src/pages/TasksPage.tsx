@@ -198,50 +198,18 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
 function AutomationsSection({
   id,
   label,
-  description,
   children,
   className,
 }: {
   id: string;
   label: ReactNode;
-  description?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-6', className)}>
-      <div className="space-y-2">
-        <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
-        {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
-      </div>
-      <div className="border-t border-border-subtle/65 pt-6">{children}</div>
-    </section>
-  );
-}
-
-function AutomationsPanel({
-  title,
-  description,
-  actions,
-  children,
-  className,
-}: {
-  title: ReactNode;
-  description?: ReactNode;
-  actions?: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cx('grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
-      <div className="min-w-0 space-y-2">
-        <div className="space-y-1.5">
-          <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
-          {description ? <p className="max-w-sm text-[12px] leading-5 text-secondary">{description}</p> : null}
-        </div>
-        {actions ? <div className="flex flex-wrap items-center gap-2 pt-0.5">{actions}</div> : null}
-      </div>
-      <div className="min-w-0 space-y-3.5">{children}</div>
+    <section id={id} className={cx('scroll-mt-24 space-y-4', className)}>
+      <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
+      {children}
     </section>
   );
 }
@@ -386,7 +354,6 @@ function AutomationThreadRow({ thread }: { thread: AssociatedAutomationThread })
             {thread.title}
           </p>
           <p className="mt-1 max-w-3xl break-words text-[14px] leading-6 text-secondary">{automationSummary}</p>
-          {thread.cwd && <p className="mt-3 break-all text-[12px] text-secondary">{thread.cwd}</p>}
         </div>
         <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
       </div>
@@ -879,47 +846,33 @@ function AutomationsOverview({
         </div>
 
         <div className="mt-10 space-y-12">
-          <AutomationsSection
-            id="automation-jobs"
-            label="Jobs"
-            description="Scheduled automation jobs and their current status."
-          >
-            <AutomationsPanel
-              title={tasks.length === 0 ? 'No jobs yet.' : 'Automation jobs'}
-              description={tasks.length === 0 ? 'Create one to start recurring work.' : `${rows.length} automation job${rows.length === 1 ? '' : 's'}.`}
-              actions={tasks.length === 0 ? <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton> : undefined}
-            >
-              {tasks.length === 0 ? (
-                <p className="max-w-xl text-[14px] leading-6 text-secondary">Create one to start recurring work.</p>
-              ) : (
-                <div className="border-t border-border-subtle/70">
-                  {rows.map((task) => (
-                    <AutomationListRow key={task.id} task={task} />
-                  ))}
-                </div>
-              )}
-            </AutomationsPanel>
+          <AutomationsSection id="automation-jobs" label="Jobs">
+            {tasks.length === 0 ? (
+              <div className="space-y-4 border-t border-border-subtle/65 pt-6">
+                <p className="max-w-xl text-[14px] leading-6 text-secondary">No jobs yet.</p>
+                <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
+              </div>
+            ) : (
+              <div className="border-t border-border-subtle/70">
+                {rows.map((task) => (
+                  <AutomationListRow key={task.id} task={task} />
+                ))}
+              </div>
+            )}
           </AutomationsSection>
 
-          <AutomationsSection
-            id="automation-threads"
-            label="Threads"
-            description="Threads currently linked to automation jobs."
-          >
-            <AutomationsPanel
-              title={associatedThreads.length === 0 ? 'No automation threads yet.' : 'Automation threads'}
-              description={associatedThreads.length === 0 ? 'Dedicated threads and reused conversation threads show up here once a job is attached to one.' : `${associatedThreads.length} associated thread${associatedThreads.length === 1 ? '' : 's'}.`}
-            >
-              {associatedThreads.length === 0 ? (
-                <p className="max-w-xl text-[14px] leading-6 text-secondary">No automation threads yet.</p>
-              ) : (
-                <div className="border-t border-border-subtle/70">
-                  {associatedThreads.map((thread) => (
-                    <AutomationThreadRow key={thread.conversationId} thread={thread} />
-                  ))}
-                </div>
-              )}
-            </AutomationsPanel>
+          <AutomationsSection id="automation-threads" label="Threads">
+            {associatedThreads.length === 0 ? (
+              <div className="border-t border-border-subtle/65 pt-6">
+                <p className="max-w-xl text-[14px] leading-6 text-secondary">No associated threads yet.</p>
+              </div>
+            ) : (
+              <div className="border-t border-border-subtle/70">
+                {associatedThreads.map((thread) => (
+                  <AutomationThreadRow key={thread.conversationId} thread={thread} />
+                ))}
+              </div>
+            )}
           </AutomationsSection>
         </div>
       </div>

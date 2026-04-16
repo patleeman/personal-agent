@@ -78,21 +78,24 @@ export function registerTaskRoutes(
       );
 
       const tasks = loaded.tasks.map((task) => {
+        const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
+          ? ensureAutomationThread(task.id)
+          : task;
         const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
-        const threadDetail = buildScheduledTaskThreadDetail(task);
+        const threadDetail = buildScheduledTaskThreadDetail(taskWithThread);
         return {
-          id: task.id,
-          title: task.title,
-          filePath: task.legacyFilePath,
-          scheduleType: task.schedule.type,
+          id: taskWithThread.id,
+          title: taskWithThread.title,
+          filePath: taskWithThread.legacyFilePath,
+          scheduleType: taskWithThread.schedule.type,
           running: runtime?.running ?? false,
-          enabled: task.enabled,
-          cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
-          at: task.schedule.type === 'at' ? task.schedule.at : undefined,
-          prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
-          model: task.modelRef,
-          thinkingLevel: task.thinkingLevel,
-          cwd: task.cwd,
+          enabled: taskWithThread.enabled,
+          cron: taskWithThread.schedule.type === 'cron' ? taskWithThread.schedule.expression : undefined,
+          at: taskWithThread.schedule.type === 'at' ? taskWithThread.schedule.at : undefined,
+          prompt: taskWithThread.prompt.split('\n')[0]?.slice(0, 120) ?? '',
+          model: taskWithThread.modelRef,
+          thinkingLevel: taskWithThread.thinkingLevel,
+          cwd: taskWithThread.cwd,
           threadConversationId: threadDetail.threadConversationId,
           threadTitle: threadDetail.threadTitle,
           lastStatus: runtime?.lastStatus,

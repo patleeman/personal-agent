@@ -302,6 +302,28 @@ describe('registerTaskRoutes', () => {
     expect(failingRes.json).toHaveBeenCalledWith({ error: 'Error: list failed' });
   });
 
+  it('ensures dedicated threads before listing tasks when the binding is missing', () => {
+    const { listHandler } = createHarness();
+    loadScheduledTasksForProfileMock.mockReturnValue({
+      tasks: [createTask({ id: 'task-ensure', title: 'Ensure thread', threadConversationId: '' })],
+      runtimeState: {},
+      runtimeEntries: [],
+    });
+    ensureAutomationThreadMock.mockReturnValue(createTask({ id: 'task-ensure', title: 'Ensure thread' }));
+
+    const res = createResponse();
+    listHandler({}, res);
+
+    expect(ensureAutomationThreadMock).toHaveBeenCalledWith('task-ensure');
+    expect(res.json).toHaveBeenCalledWith([
+      expect.objectContaining({
+        id: 'task-ensure',
+        threadConversationId: 'automation.task-ensure',
+        threadTitle: 'Automation: Ensure thread',
+      }),
+    ]);
+  });
+
   it('creates tasks, invalidates topics, and falls back to stored or created task details', () => {
     const { createHandler } = createHarness();
     const createdTask = createTask({ id: 'task-created', title: 'Created task', prompt: 'Stored prompt' });

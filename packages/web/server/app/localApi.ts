@@ -15,8 +15,10 @@ import {
   updateKnowledgeBase,
   updateMachineConfig,
 } from '@personal-agent/core';
+import { ensureAutomationThread } from '@personal-agent/daemon';
 import { readDaemonState } from '../automation/daemon.js';
 import { loadScheduledTasksForProfile } from '../automation/scheduledTasks.js';
+import { buildScheduledTaskThreadDetail } from '../automation/scheduledTaskThreads.js';
 import { getDurableRunSnapshot, getDurableRunLogCursor, readDurableRunLogDelta } from '../automation/durableRuns.js';
 import {
   createScheduledTaskCapability,
@@ -487,19 +489,25 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
       );
 
       return loaded.tasks.map((task) => {
+        const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
+          ? ensureAutomationThread(task.id)
+          : task;
         const runtime = loaded.runtimeState[task.id] ?? runtimeById.get(task.id);
+        const threadDetail = buildScheduledTaskThreadDetail(taskWithThread);
         return {
-          id: task.id,
-          title: task.title,
-          filePath: task.legacyFilePath,
-          scheduleType: task.schedule.type,
+          id: taskWithThread.id,
+          title: taskWithThread.title,
+          filePath: taskWithThread.legacyFilePath,
+          scheduleType: taskWithThread.schedule.type,
           running: runtime?.running ?? false,
-          enabled: task.enabled,
-          cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
-          at: task.schedule.type === 'at' ? task.schedule.at : undefined,
-          prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
-          model: task.modelRef,
-          cwd: task.cwd,
+          enabled: taskWithThread.enabled,
+          cron: taskWithThread.schedule.type === 'cron' ? taskWithThread.schedule.expression : undefined,
+          at: taskWithThread.schedule.type === 'at' ? taskWithThread.schedule.at : undefined,
+          prompt: taskWithThread.prompt.split('\n')[0]?.slice(0, 120) ?? '',
+          model: taskWithThread.modelRef,
+          cwd: taskWithThread.cwd,
+          threadConversationId: threadDetail.threadConversationId,
+          threadTitle: threadDetail.threadTitle,
           lastStatus: runtime?.lastStatus,
           lastRunAt: runtime?.lastRunAt,
           lastSuccessAt: runtime?.lastSuccessAt,

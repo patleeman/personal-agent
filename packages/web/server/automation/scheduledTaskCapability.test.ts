@@ -234,6 +234,8 @@ describe('scheduledTaskCapability', () => {
         model: 'gpt-4o',
         thinkingLevel: 'high',
         cwd: '/repo',
+        threadConversationId: 'automation.task-1',
+        threadTitle: 'Automation: Cron task',
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
         lastSuccessAt: '2026-04-09T15:00:00.000Z',
@@ -252,12 +254,32 @@ describe('scheduledTaskCapability', () => {
         model: 'gpt-4o',
         thinkingLevel: 'high',
         cwd: '/repo',
+        threadConversationId: 'automation.task-2',
+        threadTitle: 'Automation: One-off task',
         lastStatus: 'idle',
         lastRunAt: '2026-04-08T00:00:00.000Z',
         lastSuccessAt: '2026-04-09T15:00:00.000Z',
         lastAttemptCount: 2,
       },
     ]);
+  });
+
+  it('ensures dedicated threads before listing tasks when the binding is missing', async () => {
+    loadScheduledTasksForProfileMock.mockReturnValue({
+      tasks: [createTask({ id: 'task-ensure', title: 'Ensure thread', threadConversationId: '' })],
+      runtimeState: {},
+      runtimeEntries: [],
+    });
+    ensureAutomationThreadMock.mockReturnValue(createTask({ id: 'task-ensure', title: 'Ensure thread' }));
+
+    await expect(listScheduledTasksCapability('assistant')).resolves.toEqual([
+      expect.objectContaining({
+        id: 'task-ensure',
+        threadConversationId: 'automation.task-ensure',
+        threadTitle: 'Automation: Ensure thread',
+      }),
+    ]);
+    expect(ensureAutomationThreadMock).toHaveBeenCalledWith('task-ensure');
   });
 
   it('builds, reads, creates, and updates task details', async () => {
