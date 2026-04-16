@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DurableRunRecord, MessageBlock } from '../shared/types';
-import { didConversationStopMidTurn, didConversationStopWithError, getConversationResumeState, hasPendingConversationOperation } from './conversationResume';
+import { didConversationStopMidTurn, didConversationStopWithError, getConversationResumeState } from './conversationResume';
 
 function createRun(input: {
   status?: string;
@@ -54,19 +54,6 @@ function createRun(input: {
 }
 
 describe('conversation resume helpers', () => {
-  it('detects replayable pending prompt operations', () => {
-    const run = createRun({
-      status: 'interrupted',
-      pendingOperation: {
-        type: 'prompt',
-        text: 'continue working',
-        enqueuedAt: '2026-03-13T12:04:59.000Z',
-      },
-    });
-
-    expect(hasPendingConversationOperation(run)).toBe(true);
-  });
-
   it('marks interrupted runs as resumable', () => {
     const state = getConversationResumeState({
       run: createRun({

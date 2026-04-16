@@ -1,6 +1,6 @@
 import { getKnowledgeSection } from './knowledgeSelection';
 
-export const WEB_SETTINGS_PATH = '/settings';
+const WEB_SETTINGS_PATH = '/settings';
 
 const LEGACY_KNOWLEDGE_PATH = '/knowledge';
 const LEGACY_NOTES_PATH = '/notes';

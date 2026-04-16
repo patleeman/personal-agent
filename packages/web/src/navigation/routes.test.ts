@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WEB_SETTINGS_PATH, resolveWebRouteRedirect } from './routes.js';
+import { resolveWebRouteRedirect } from './routes.js';
 
 describe('resolveWebRouteRedirect', () => {
   it('redirects legacy docs routes into a new conversation', () => {
@@ -30,7 +30,7 @@ describe('resolveWebRouteRedirect', () => {
   });
 
   it('ignores canonical and unrelated routes', () => {
-    expect(resolveWebRouteRedirect(WEB_SETTINGS_PATH)).toBeNull();
+    expect(resolveWebRouteRedirect('/settings')).toBeNull();
     expect(resolveWebRouteRedirect('/workspace/files')).toBeNull();
     expect(resolveWebRouteRedirect('/conversations')).toBeNull();
     expect(resolveWebRouteRedirect('/projects/continuous-conversations/extra')).toBeNull();

@@ -13,7 +13,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-export function hasPendingConversationOperation(run: DurableRunRecord | null | undefined): boolean {
+function hasPendingConversationOperation(run: DurableRunRecord | null | undefined): boolean {
   const payload = isRecord(run?.checkpoint?.payload) ? run.checkpoint.payload : undefined;
   const pendingOperation = payload?.pendingOperation;
 

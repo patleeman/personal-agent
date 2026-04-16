@@ -28,7 +28,7 @@ function normalizeConversationSurfaceId(value: unknown): string | null {
   return normalized;
 }
 
-export function buildConversationPath(id: string): string {
+function buildConversationPath(id: string): string {
   return `/conversations/${encodeURIComponent(id)}`;
 }
 
