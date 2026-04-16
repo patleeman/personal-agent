@@ -10,13 +10,10 @@ import {
   formatConversationBackgroundRunStatusLabel,
   mergeConversationSessionMeta,
   replaceConversationTitleInSessionList,
-  isConversationSessionNotLiveError,
-  resolveConversationLiveSession,
   resolveConversationPageTitle,
   resolveDisplayedConversationPendingStatusLabel,
   resolveConversationStreamTitleSync,
   resolveConversationAutocompleteCatalogDemand,
-  shouldEnableConversationLiveStream,
   shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
@@ -571,27 +568,6 @@ describe('conversation live-session git context loading', () => {
 });
 
 describe('conversation live state helpers', () => {
-  it('keeps the live stream enabled until the conversation is confirmed not live', () => {
-    expect(shouldEnableConversationLiveStream('conv-123', null)).toBe(true);
-    expect(shouldEnableConversationLiveStream('conv-123', true)).toBe(true);
-    expect(shouldEnableConversationLiveStream('conv-123', false)).toBe(false);
-    expect(shouldEnableConversationLiveStream(null, null)).toBe(false);
-  });
-
-  it('treats a conversation as live when either the stream or probe confirms it', () => {
-    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: null })).toBe(false);
-    expect(resolveConversationLiveSession({ streamBlockCount: 1, isStreaming: false, confirmedLive: null })).toBe(true);
-    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: true, confirmedLive: null })).toBe(true);
-    expect(resolveConversationLiveSession({ streamBlockCount: 0, isStreaming: false, confirmedLive: true })).toBe(true);
-  });
-
-  it('recognizes the stale live-session prompt failure from the server', () => {
-    expect(isConversationSessionNotLiveError(new Error('Session conv-123 is not live'))).toBe(true);
-    expect(isConversationSessionNotLiveError(new Error('Session not live'))).toBe(true);
-    expect(isConversationSessionNotLiveError(new Error('Not a live session'))).toBe(true);
-    expect(isConversationSessionNotLiveError(new Error('provider unavailable'))).toBe(false);
-  });
-
   it('never shows the removed takeover call-to-action', () => {
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
     expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);

@@ -242,14 +242,14 @@ export function formatQueuedPromptImageSummary(imageCount: number): string | nul
   return `${imageCount} image${imageCount === 1 ? '' : 's'} attached`;
 }
 
-export function shouldEnableConversationLiveStream(
+function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
   confirmedLive: boolean | null,
 ): boolean {
   return Boolean(conversationId) && confirmedLive !== false;
 }
 
-export function resolveConversationLiveSession(input: {
+function resolveConversationLiveSession(input: {
   streamBlockCount: number;
   isStreaming: boolean;
   confirmedLive: boolean | null;
@@ -257,7 +257,7 @@ export function resolveConversationLiveSession(input: {
   return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
 }
 
-export function isConversationSessionNotLiveError(error: unknown): boolean {
+function isConversationSessionNotLiveError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.trim().toLowerCase();
   return normalized === 'session not live'

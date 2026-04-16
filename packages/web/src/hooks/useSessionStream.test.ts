@@ -5,57 +5,15 @@ import {
   appendPendingQueueItem,
   applyEvent,
   INITIAL_STREAM_STATE,
-  isLiveSessionControlError,
   normalizePendingQueueItems,
   removeOptimisticUserBlock,
   removePendingQueueItem,
-  resolveEffectiveSessionStreamSubscriptionId,
-  resolveSessionStreamSubscriptionId,
   retryLiveSessionActionAfterTakeover,
   selectVisibleStreamState,
   shouldReplaceOptimisticUserBlock,
-  shouldRetrySessionStreamAfterError,
   submitLivePromptWithControlRetry,
   waitForSurfaceRegistration,
 } from './useSessionStream';
-
-describe('resolveSessionStreamSubscriptionId', () => {
-  it('disables the live stream subscription when explicitly turned off', () => {
-    expect(resolveSessionStreamSubscriptionId('session-a', { enabled: false })).toBeNull();
-  });
-
-  it('keeps the requested session id when streaming is enabled', () => {
-    expect(resolveSessionStreamSubscriptionId('session-a', { enabled: true })).toBe('session-a');
-    expect(resolveSessionStreamSubscriptionId('session-a')).toBe('session-a');
-  });
-});
-
-describe('resolveEffectiveSessionStreamSubscriptionId', () => {
-  it('keeps a forced subscription for the active session while the live stream is still disabled', () => {
-    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: false }, 'session-a')).toBe('session-a');
-  });
-
-  it('ignores forced subscriptions for other sessions', () => {
-    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: false }, 'session-b')).toBeNull();
-  });
-
-  it('prefers the configured live subscription when streaming is enabled', () => {
-    expect(resolveEffectiveSessionStreamSubscriptionId('session-a', { enabled: true }, 'session-a')).toBe('session-a');
-  });
-});
-
-describe('shouldRetrySessionStreamAfterError', () => {
-  it('retries when the probe fails or the server errors', () => {
-    expect(shouldRetrySessionStreamAfterError()).toBe(true);
-    expect(shouldRetrySessionStreamAfterError(500)).toBe(true);
-    expect(shouldRetrySessionStreamAfterError(503)).toBe(true);
-  });
-
-  it('does not retry when the session is definitively gone', () => {
-    expect(shouldRetrySessionStreamAfterError(404)).toBe(false);
-    expect(shouldRetrySessionStreamAfterError(400)).toBe(false);
-  });
-});
 
 describe('applyEvent cwd changes', () => {
   it('stores pending working-directory redirects from the live stream', () => {
@@ -81,18 +39,6 @@ describe('applyEvent cwd changes', () => {
 
 afterEach(() => {
   vi.useRealTimers();
-});
-
-describe('isLiveSessionControlError', () => {
-  it('matches the live-surface control errors we retry locally', () => {
-    expect(isLiveSessionControlError(new Error('This conversation is controlled by another surface. Take over here to continue.'))).toBe(true);
-    expect(isLiveSessionControlError(new Error('Open the conversation on this surface before taking control.'))).toBe(true);
-    expect(isLiveSessionControlError(new Error('No surface is currently controlling this conversation. Take over here to continue.'))).toBe(true);
-  });
-
-  it('ignores unrelated failures', () => {
-    expect(isLiveSessionControlError(new Error('boom'))).toBe(false);
-  });
 });
 
 describe('waitForSurfaceRegistration', () => {

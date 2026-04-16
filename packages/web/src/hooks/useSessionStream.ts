@@ -269,14 +269,14 @@ export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefi
   return previousImageCount === nextImageCount && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
 }
 
-export function resolveSessionStreamSubscriptionId(
+function resolveSessionStreamSubscriptionId(
   sessionId: string | null,
   options?: { enabled?: boolean },
 ): string | null {
   return options?.enabled === false ? null : sessionId;
 }
 
-export function resolveEffectiveSessionStreamSubscriptionId(
+function resolveEffectiveSessionStreamSubscriptionId(
   sessionId: string | null,
   options?: { enabled?: boolean },
   forcedSessionId?: string | null,
@@ -294,7 +294,7 @@ export function resolveEffectiveSessionStreamSubscriptionId(
   return forcedSessionId?.trim() === normalizedSessionId ? normalizedSessionId : null;
 }
 
-export function shouldRetrySessionStreamAfterError(status?: number): boolean {
+function shouldRetrySessionStreamAfterError(status?: number): boolean {
   if (typeof status !== 'number') {
     return true;
   }
@@ -336,7 +336,7 @@ function isLiveSessionSurfaceRegistered(presence: LiveSessionPresenceState, surf
   return presence.surfaces.some((surface) => surface.surfaceId === normalizedSurfaceId);
 }
 
-export function isLiveSessionControlError(error: unknown): boolean {
+function isLiveSessionControlError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.trim().toLowerCase();
 
