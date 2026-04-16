@@ -16,7 +16,7 @@ The desktop shell owns:
 - the packaged renderer entrypoint
 - the preload bridge for trusted local capabilities
 - host switching and local/remote connection state
-- desktop-specific integrations like file reveal/open and system notifications
+- desktop-specific integrations like file reveal/open, system notifications, login-item start-on-sign-in control, and updater behavior
 
 The renderer remains the same React app used for the web UI, but in local desktop mode it can call direct preload-backed capabilities instead of going through loopback HTTP for hot paths.
 
@@ -30,7 +30,7 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - read durable run lists/details/logs and cancel local runs without routing those hot paths through generic local API calls
 - read and manage local scheduled tasks without routing those operator flows through generic local API calls
 - read and manage local alerts and conversation attention without routing those operator flows through generic local API calls
-- read and manage local settings/operator flows such as instruction-file selection, model/runtime preferences, vault/default-cwd state, model providers, and provider auth without routing those flows through generic local API calls
+- read and manage local settings/operator flows such as instruction-file selection, model/runtime preferences, vault/default-cwd state, model providers, provider auth, and desktop app behavior preferences without routing those flows through generic local API calls
 
 - get desktop environment
 - get saved connections

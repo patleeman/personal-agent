@@ -152,6 +152,8 @@ That file holds:
 - default host selection
 - main window bounds
 - desktop open-on-launch preference
+- desktop auto-install-updates preference
+- desktop start-on-system-start preference
 
 ## Environment variables
 

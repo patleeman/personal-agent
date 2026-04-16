@@ -10,6 +10,7 @@ import { resolveDesktopHostEditorSelection, type DesktopHostEditorMode } from '.
 import { createDesktopAwareEventSource } from '../desktopEventSource';
 import { subscribeDesktopProviderOAuthLogin } from '../desktopProviderOAuth';
 import type {
+  DesktopAppPreferencesState,
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
@@ -33,7 +34,7 @@ const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
   { id: 'settings-general', label: 'General', summary: 'Defaults, prompt sources, and roots' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
-  { id: 'settings-desktop', label: 'Desktop', summary: 'Hosted workspace server and remote connections' },
+  { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior, hosted workspace server, and remotes' },
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
 ] as const;
 
@@ -453,6 +454,61 @@ function formatDesktopHostDetails(host: DesktopHostRecord): string {
     .join(' · ');
 }
 
+function formatDesktopUpdateSummary(state: DesktopAppPreferencesState | null): string {
+  if (!state || !state.available) {
+    return 'Desktop app settings are unavailable in this window.';
+  }
+
+  const update = state.update;
+  if (!update.supported) {
+    return 'Update checks are only available in packaged desktop builds.';
+  }
+
+  switch (update.status) {
+    case 'checking':
+      return 'Checking for updates…';
+    case 'downloading':
+      return update.availableVersion
+        ? `Downloading Personal Agent ${update.availableVersion}…`
+        : 'Downloading the latest Personal Agent build…';
+    case 'waiting-for-idle':
+      return update.downloadedVersion
+        ? `Personal Agent ${update.downloadedVersion} is ready. Auto-install will wait until the desktop goes idle.${update.waitingForIdleReason ? ` ${update.waitingForIdleReason}` : ''}`
+        : 'A downloaded update is waiting for the desktop to go idle.';
+    case 'ready':
+      return update.downloadedVersion
+        ? state.autoInstallUpdates
+          ? `Personal Agent ${update.downloadedVersion} is ready. It will install automatically once the desktop goes idle.`
+          : `Personal Agent ${update.downloadedVersion} is ready. Quit the app to finish installing it.`
+        : `Current version: ${update.currentVersion}.`;
+    case 'installing':
+      return update.downloadedVersion
+        ? `Installing Personal Agent ${update.downloadedVersion}…`
+        : 'Installing the downloaded update…';
+    case 'error':
+      return update.lastError
+        ? `Update error: ${update.lastError}`
+        : 'The last update action failed.';
+    case 'idle':
+    default:
+      return `Current version: ${update.currentVersion}.`;
+  }
+}
+
+function formatStartOnSystemStartSummary(state: DesktopAppPreferencesState | null): string {
+  if (!state || !state.available) {
+    return 'Desktop app settings are unavailable in this window.';
+  }
+
+  if (!state.supportsStartOnSystemStart) {
+    return 'Start on system start is only available in packaged desktop builds.';
+  }
+
+  return state.startOnSystemStart
+    ? 'Personal Agent will launch in the background when you sign in to this Mac.'
+    : 'Personal Agent only starts when you open it manually.';
+}
+
 function SettingsTableOfContents({
   items,
   activeId,
@@ -505,9 +561,11 @@ function DesktopConnectionsSettingsPanel() {
   const [workspaceServerState, setWorkspaceServerState] = useState<DesktopWorkspaceServerState | null>(null);
   const [workspaceServerDraft, setWorkspaceServerDraft] = useState<DesktopWorkspaceServerDraft>(() => createDesktopWorkspaceServerDraft());
   const [litterShimState, setLitterShimState] = useState<{ installed: boolean; shimPath: string; command: string } | null>(null);
+  const [appPreferencesState, setAppPreferencesState] = useState<DesktopAppPreferencesState | null>(null);
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'save-workspace-server' | 'install-shim' | 'uninstall-shim' | null>(null);
+  const [action, setAction] = useState<'connect' | 'open' | 'save' | 'delete' | 'save-workspace-server' | 'install-shim' | 'uninstall-shim' | 'save-app-preferences' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appPreferencesError, setAppPreferencesError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   useEffect(() => {
@@ -557,6 +615,7 @@ function DesktopConnectionsSettingsPanel() {
     if (!bridge) {
       setWorkspaceServerState(null);
       setLitterShimState(null);
+      setAppPreferencesState(null);
       return;
     }
 
@@ -573,6 +632,24 @@ function DesktopConnectionsSettingsPanel() {
       setWorkspaceServerDraft(createDesktopWorkspaceServerDraft(serverState));
       setLitterShimState(shimState);
     });
+
+    void bridge.readDesktopAppPreferences()
+      .then((preferencesState) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAppPreferencesState(preferencesState);
+        setAppPreferencesError(null);
+      })
+      .catch((nextError) => {
+        if (cancelled) {
+          return;
+        }
+
+        setAppPreferencesState(null);
+        setAppPreferencesError(nextError instanceof Error ? nextError.message : String(nextError));
+      });
 
     return () => {
       cancelled = true;
@@ -593,6 +670,18 @@ function DesktopConnectionsSettingsPanel() {
     ]);
     setEnvironment(nextEnvironment);
     setConnections(nextConnections);
+  }
+
+  async function refreshDesktopAppPreferences() {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      setAppPreferencesState(null);
+      return;
+    }
+
+    const nextPreferences = await bridge.readDesktopAppPreferences();
+    setAppPreferencesState(nextPreferences);
+    setAppPreferencesError(null);
   }
 
   function startNewHostDraft() {
@@ -830,13 +919,82 @@ function DesktopConnectionsSettingsPanel() {
     }
   }
 
+  async function handleUpdateAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) {
+    const bridge = getDesktopBridge();
+    if (!bridge) {
+      return;
+    }
+
+    setAction('save-app-preferences');
+    setAppPreferencesError(null);
+    setNotice(null);
+
+    try {
+      const nextState = await bridge.updateDesktopAppPreferences(input);
+      setAppPreferencesState(nextState);
+      setNotice('Desktop app settings saved.');
+      await refreshDesktopAppPreferences();
+    } catch (nextError) {
+      setAppPreferencesError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  }
+
   return (
     <SettingsSection
       id="settings-desktop"
       label="Desktop"
-      description="Manage local and remote workspace connections."
+      description="Manage local app behavior, hosted workspace access, and remote connections."
       className="order-4"
     >
+      <SettingsPanel
+        title="App behavior"
+        description="Control how the menu bar app starts and how downloaded updates install."
+      >
+        {!bridge && desktopShell ? (
+          <p className="text-[12px] text-danger">
+            Desktop bridge unavailable. Restart the desktop app and try again.
+          </p>
+        ) : null}
+        {appPreferencesState ? (
+          <div className="space-y-4">
+            <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-auto-install-updates">
+              <input
+                id="desktop-auto-install-updates"
+                type="checkbox"
+                checked={appPreferencesState.autoInstallUpdates}
+                onChange={(event) => {
+                  void handleUpdateAppPreferences({ autoInstallUpdates: event.target.checked });
+                }}
+                disabled={action !== null || !appPreferencesState.update.supported}
+                className={CHECKBOX_CLASS}
+              />
+              <span>Install downloaded updates automatically when the desktop is idle</span>
+            </label>
+            <p className="ui-card-meta break-words">{formatDesktopUpdateSummary(appPreferencesState)}</p>
+
+            <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-start-on-system-start">
+              <input
+                id="desktop-start-on-system-start"
+                type="checkbox"
+                checked={appPreferencesState.startOnSystemStart}
+                onChange={(event) => {
+                  void handleUpdateAppPreferences({ startOnSystemStart: event.target.checked });
+                }}
+                disabled={action !== null || !appPreferencesState.supportsStartOnSystemStart}
+                className={CHECKBOX_CLASS}
+              />
+              <span>Start Personal Agent when you sign in</span>
+            </label>
+            <p className="ui-card-meta break-words">{formatStartOnSystemStartSummary(appPreferencesState)}</p>
+          </div>
+        ) : (
+          <p className="ui-card-meta">Loading desktop app settings…</p>
+        )}
+        {appPreferencesError ? <p className="text-[12px] text-danger">{appPreferencesError}</p> : null}
+      </SettingsPanel>
+
       <SettingsPanel
         title="Connections"
         description="Switch workspace connections for the Electron app. WebSocket uses direct Codex URLs, and the hosting card below can publish this desktop at a managed local or Tailnet Codex endpoint."

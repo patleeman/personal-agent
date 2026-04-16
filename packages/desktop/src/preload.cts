@@ -69,6 +69,9 @@ const desktopBridge = {
     canCopy?: boolean;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-selection-context-menu`, input),
   openPath: (targetPath: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-path`, targetPath),
+  readDesktopAppPreferences: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-desktop-app-preferences`),
+  updateDesktopAppPreferences: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),

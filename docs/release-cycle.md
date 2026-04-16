@@ -81,7 +81,9 @@ The packaged desktop app uses `electron-updater` against the public release repo
 - it performs an automatic check shortly after launch and periodically while the app stays open
 - the tray menu also exposes `Check for Updates…` for an on-demand check
 - available updates download in the background
-- once the download finishes, the app prompts to restart and install the update
+- the Desktop settings page includes an **Install downloaded updates automatically when the desktop is idle** toggle
+- with auto-install off, the app prompts to restart and install when the download finishes
+- with auto-install on, the app waits until no runs, tasks, active conversations, or daemon queue work remain, then installs automatically
 - quitting after an update download should also install the update on the next app exit path
 - unpackaged development runs keep update checks disabled
 

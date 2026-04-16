@@ -24,6 +24,7 @@ import type {
   ConversationRecoveryResult,
   DesktopConnectionsState,
   DesktopWorkspaceServerState,
+  DesktopAppPreferencesState,
   DurableRunDetailResult,
   DurableRunListResult,
   DesktopEnvironmentState,
@@ -118,6 +119,8 @@ export interface PersonalAgentDesktopBridge {
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
   showSelectionContextMenu(input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
+  readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
+  updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }): Promise<DesktopAppPreferencesState>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readWebUiState(): Promise<WebUiState>;

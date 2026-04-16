@@ -39,6 +39,11 @@ export interface DesktopWorkspaceServerState extends DesktopWorkspaceServerConfi
   error?: string;
 }
 
+export interface DesktopAppPreferences {
+  autoInstallUpdates: boolean;
+  startOnSystemStart: boolean;
+}
+
 export interface DesktopConfig {
   version: 1;
   defaultHostId: string;
@@ -51,6 +56,7 @@ export interface DesktopConfig {
   };
   hosts: DesktopHostRecord[];
   workspaceServer?: DesktopWorkspaceServerConfig;
+  appPreferences?: DesktopAppPreferences;
 }
 
 export interface HostStatus {

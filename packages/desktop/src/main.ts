@@ -13,10 +13,11 @@ import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
-import { DesktopUpdateManager } from './updates/update-manager.js';
+import { type DesktopUpdateIdleState, DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
 import { loadCodexServerModule } from './codex-server-module.js';
 import { desktopWorkspaceServerManager } from './workspace-server.js';
+import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
@@ -25,6 +26,132 @@ let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isActiveDurableRunStatus(status: unknown): boolean {
+  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
+}
+
+function readStartOnSystemStartFromSystem(): boolean {
+  if (!app.isPackaged) {
+    return false;
+  }
+
+  try {
+    return app.getLoginItemSettings().openAtLogin === true;
+  } catch {
+    return false;
+  }
+}
+
+function applyStartOnSystemStart(enabled: boolean): boolean {
+  if (!app.isPackaged) {
+    if (!enabled) {
+      return false;
+    }
+
+    throw new Error('Start on system start is only available in packaged desktop builds.');
+  }
+
+  app.setLoginItemSettings({
+    openAtLogin: enabled,
+    openAsHidden: enabled,
+  });
+
+  return readStartOnSystemStartFromSystem();
+}
+
+async function inspectDesktopIdleState(): Promise<DesktopUpdateIdleState> {
+  if (!hostManager) {
+    return { idle: false, reason: 'The desktop runtime is still starting.' };
+  }
+
+  const localController = hostManager.getHostController('local');
+  const [runsState, sessionsState, daemonState, tasksState] = await Promise.all([
+    localController.readDurableRuns?.(),
+    localController.readSessions?.(),
+    localController.readDaemonState?.(),
+    localController.readScheduledTasks?.(),
+  ]);
+
+  const runs = isRecord(runsState) && Array.isArray(runsState.runs)
+    ? runsState.runs
+    : [];
+  if (runs.some((run) => isRecord(run) && isRecord(run.status) && isActiveDurableRunStatus(run.status.status))) {
+    return { idle: false, reason: 'Durable runs are still active.' };
+  }
+
+  const tasks = Array.isArray(tasksState) ? tasksState : [];
+  if (tasks.some((task) => isRecord(task) && task.running === true)) {
+    return { idle: false, reason: 'Scheduled tasks are still running.' };
+  }
+
+  const sessions = Array.isArray(sessionsState) ? sessionsState : [];
+  if (sessions.some((session) => isRecord(session) && (session.isRunning === true || session.hasPendingHiddenTurn === true))) {
+    return { idle: false, reason: 'A conversation is still active.' };
+  }
+
+  if (isRecord(daemonState) && isRecord(daemonState.runtime)) {
+    const queueDepth = typeof daemonState.runtime.queueDepth === 'number' ? daemonState.runtime.queueDepth : 0;
+    if (queueDepth > 0) {
+      return { idle: false, reason: 'The daemon queue is still busy.' };
+    }
+  }
+
+  return { idle: true };
+}
+
+function buildDesktopAppPreferencesState() {
+  const preferences = readDesktopAppPreferences(loadDesktopConfig());
+  return {
+    available: true as const,
+    supportsStartOnSystemStart: app.isPackaged,
+    autoInstallUpdates: preferences.autoInstallUpdates,
+    startOnSystemStart: readStartOnSystemStartFromSystem(),
+    update: updateManager?.getState() ?? {
+      supported: app.isPackaged,
+      currentVersion: app.getVersion(),
+      status: 'idle' as const,
+    },
+  };
+}
+
+async function updateDesktopAppPreferencesState(input: {
+  autoInstallUpdates?: boolean;
+  startOnSystemStart?: boolean;
+}) {
+  const nextPreferences = readDesktopAppPreferences(loadDesktopConfig());
+  let changed = false;
+
+  if (input.autoInstallUpdates !== undefined) {
+    if (typeof input.autoInstallUpdates !== 'boolean') {
+      throw new Error('autoInstallUpdates must be a boolean when provided.');
+    }
+
+    nextPreferences.autoInstallUpdates = input.autoInstallUpdates;
+    changed = true;
+  }
+
+  if (input.startOnSystemStart !== undefined) {
+    if (typeof input.startOnSystemStart !== 'boolean') {
+      throw new Error('startOnSystemStart must be a boolean when provided.');
+    }
+
+    nextPreferences.startOnSystemStart = applyStartOnSystemStart(input.startOnSystemStart);
+    changed = true;
+  }
+
+  if (!changed) {
+    throw new Error('Provide autoInstallUpdates and/or startOnSystemStart.');
+  }
+
+  updateDesktopAppPreferences(nextPreferences);
+  updateManager?.preferencesChanged();
+  return buildDesktopAppPreferencesState();
+}
 
 function readCommandLineOption(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -230,7 +357,16 @@ async function bootstrapDesktopApp(): Promise<void> {
     onBeforeQuitForUpdate: async () => {
       await prepareForQuit();
     },
+    shouldAutoInstallUpdates: () => readDesktopAppPreferences(loadDesktopConfig()).autoInstallUpdates,
+    checkIdleForAutoInstall: () => inspectDesktopIdleState(),
   });
+
+  try {
+    applyStartOnSystemStart(readDesktopAppPreferences(loadDesktopConfig()).startOnSystemStart);
+  } catch (error) {
+    logBootstrapError(error);
+  }
+
   applyDesktopAboutPanelOptions();
 
   const shellActions = {
@@ -324,6 +460,8 @@ async function bootstrapDesktopApp(): Promise<void> {
       trayController?.refresh();
     },
     onCheckForUpdates: () => checkForDesktopUpdates(),
+    readDesktopAppPreferences: () => buildDesktopAppPreferencesState(),
+    updateDesktopAppPreferences: (input) => updateDesktopAppPreferencesState(input ?? {}),
   });
 
   updateManager.start();

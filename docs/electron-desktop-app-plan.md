@@ -17,7 +17,7 @@ On macOS, the desktop shell is the intended local product surface. Background be
 - owns the local daemon for the local host and keeps core local API/event flows inside the Electron process
 - supports saved **web** and **ssh** remote hosts
 - lets you switch hosts or open a remote host in its own window
-- stores machine-local desktop config and window state
+- stores machine-local desktop config, app behavior preferences, and window state
 
 ## Daily use
 
@@ -112,7 +112,7 @@ By default, the desktop shell stores state in:
 
 Important files:
 
-- `config.json` — saved hosts, default host, window state
+- `config.json` — saved hosts, default host, window state, auto-install updates, and start-on-sign-in preferences
 - `logs/` — desktop shell and daemon-child logs
 
 ## Runtime controls in the app
@@ -122,6 +122,7 @@ In the desktop shell, the local daemon and packaged renderer are treated as inte
 That means:
 
 - the Settings page describes the local runtime instead of exposing launchd/systemd-style service controls
+- Desktop → App behavior owns auto-install-on-idle updates and start-on-sign-in behavior for the local menu bar app
 - quitting the app is the expected way to stop the local Mac runtime
 - background behavior comes from the menubar app staying open, not from separately managed OS services
 

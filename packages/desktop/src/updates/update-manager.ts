@@ -5,6 +5,25 @@ import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
+const IDLE_RECHECK_INTERVAL_MS = 30_000;
+
+export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
+
+export interface DesktopAppUpdateState {
+  supported: boolean;
+  currentVersion: string;
+  status: DesktopUpdateStatus;
+  availableVersion?: string;
+  downloadedVersion?: string;
+  waitingForIdleReason?: string;
+  lastCheckedAt?: string;
+  lastError?: string;
+}
+
+export interface DesktopUpdateIdleState {
+  idle: boolean;
+  reason?: string;
+}
 
 function logUpdateMessage(message: string): void {
   try {
@@ -31,22 +50,37 @@ function renderUpdateErrorMessage(error: unknown): string {
   return String(error);
 }
 
+function createDefaultDesktopAppUpdateState(currentVersion: string): DesktopAppUpdateState {
+  return {
+    supported: app.isPackaged,
+    currentVersion,
+    status: 'idle',
+  };
+}
+
 export class DesktopUpdateManager {
   private readonly currentVersion = app.getVersion();
   private readonly updater: AppUpdater | null;
+  private readonly state: DesktopAppUpdateState;
   private startupTimeoutHandle: NodeJS.Timeout | null = null;
   private intervalHandle: NodeJS.Timeout | null = null;
+  private idleWaitIntervalHandle: NodeJS.Timeout | null = null;
   private activeCheck: Promise<void> | null = null;
   private currentCheckUserInitiated = false;
   private currentCheckHadError = false;
   private downloadedUpdate: UpdateDownloadedEvent | null = null;
   private promptingForInstall = false;
+  private installingDownloadedUpdate = false;
 
   constructor(
     private readonly options: {
       onBeforeQuitForUpdate?: () => Promise<void> | void;
+      shouldAutoInstallUpdates?: () => boolean;
+      checkIdleForAutoInstall?: () => Promise<DesktopUpdateIdleState> | DesktopUpdateIdleState;
     } = {},
   ) {
+    this.state = createDefaultDesktopAppUpdateState(this.currentVersion);
+
     if (!app.isPackaged) {
       this.updater = null;
       logUpdateMessage('update checks disabled for unpackaged desktop runs');
@@ -55,6 +89,10 @@ export class DesktopUpdateManager {
 
     this.updater = createDesktopUpdater(this.currentVersion);
     this.registerUpdaterEvents();
+  }
+
+  getState(): DesktopAppUpdateState {
+    return { ...this.state };
   }
 
   start(): void {
@@ -79,6 +117,26 @@ export class DesktopUpdateManager {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;
     }
+    this.stopIdleWaitLoop();
+  }
+
+  preferencesChanged(): void {
+    if (!this.downloadedUpdate) {
+      return;
+    }
+
+    if (!this.shouldAutoInstallUpdates()) {
+      this.stopIdleWaitLoop();
+      this.setState({
+        status: 'ready',
+        downloadedVersion: this.downloadedUpdate.version,
+        waitingForIdleReason: undefined,
+        lastError: undefined,
+      });
+      return;
+    }
+
+    void this.maybeAutoInstallDownloadedUpdate();
   }
 
   async checkForUpdates(options: { userInitiated?: boolean } = {}): Promise<void> {
@@ -95,6 +153,11 @@ export class DesktopUpdateManager {
     }
 
     if (this.downloadedUpdate) {
+      if (this.shouldAutoInstallUpdates()) {
+        await this.maybeAutoInstallDownloadedUpdate();
+        return;
+      }
+
       if (options.userInitiated) {
         await this.promptToInstall(this.downloadedUpdate);
       }
@@ -107,12 +170,27 @@ export class DesktopUpdateManager {
 
     this.currentCheckUserInitiated = Boolean(options.userInitiated);
     this.currentCheckHadError = false;
+    this.setState({
+      status: 'checking',
+      availableVersion: undefined,
+      downloadedVersion: undefined,
+      waitingForIdleReason: undefined,
+      lastCheckedAt: new Date().toISOString(),
+      lastError: undefined,
+    });
+
     this.activeCheck = this.performCheck()
       .catch(async (error) => {
         const message = renderUpdateErrorMessage(error);
         if (!this.currentCheckHadError) {
           logUpdateMessage(`check failed: ${message}`);
         }
+        this.setState({
+          status: 'error',
+          lastCheckedAt: new Date().toISOString(),
+          waitingForIdleReason: undefined,
+          lastError: message,
+        });
         if (this.currentCheckUserInitiated && !this.currentCheckHadError) {
           await dialog.showMessageBox({
             type: 'error',
@@ -142,6 +220,14 @@ export class DesktopUpdateManager {
 
     this.updater.on('update-available', (info: UpdateInfo) => {
       logUpdateMessage(`update ${info.version} is available; download started`);
+      this.setState({
+        status: 'downloading',
+        availableVersion: info.version,
+        downloadedVersion: undefined,
+        waitingForIdleReason: undefined,
+        lastCheckedAt: new Date().toISOString(),
+        lastError: undefined,
+      });
       if (this.currentCheckUserInitiated) {
         void dialog.showMessageBox({
           type: 'info',
@@ -158,6 +244,15 @@ export class DesktopUpdateManager {
 
     this.updater.on('update-not-available', (info: UpdateInfo) => {
       logUpdateMessage(`no newer release found; current=${this.currentVersion} latest=${info.version}`);
+      this.stopIdleWaitLoop();
+      this.setState({
+        status: 'idle',
+        availableVersion: undefined,
+        downloadedVersion: undefined,
+        waitingForIdleReason: undefined,
+        lastCheckedAt: new Date().toISOString(),
+        lastError: undefined,
+      });
       if (this.currentCheckUserInitiated) {
         void dialog.showMessageBox({
           type: 'info',
@@ -171,6 +266,20 @@ export class DesktopUpdateManager {
     this.updater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
       this.downloadedUpdate = info;
       logUpdateMessage(`update ${info.version} finished downloading`);
+      this.setState({
+        status: 'ready',
+        availableVersion: info.version,
+        downloadedVersion: info.version,
+        waitingForIdleReason: undefined,
+        lastCheckedAt: new Date().toISOString(),
+        lastError: undefined,
+      });
+
+      if (this.shouldAutoInstallUpdates()) {
+        void this.maybeAutoInstallDownloadedUpdate();
+        return;
+      }
+
       void this.promptToInstall(info);
     });
 
@@ -178,6 +287,13 @@ export class DesktopUpdateManager {
       const message = renderUpdateErrorMessage(error);
       this.currentCheckHadError = true;
       logUpdateMessage(`update error: ${message}`);
+      this.stopIdleWaitLoop();
+      this.setState({
+        status: 'error',
+        lastCheckedAt: new Date().toISOString(),
+        waitingForIdleReason: undefined,
+        lastError: message,
+      });
       if (this.currentCheckUserInitiated) {
         void dialog.showMessageBox({
           type: 'error',
@@ -197,8 +313,68 @@ export class DesktopUpdateManager {
     await this.updater.checkForUpdates();
   }
 
+  private shouldAutoInstallUpdates(): boolean {
+    return this.options.shouldAutoInstallUpdates?.() === true;
+  }
+
+  private startIdleWaitLoop(): void {
+    if (this.idleWaitIntervalHandle) {
+      return;
+    }
+
+    this.idleWaitIntervalHandle = setInterval(() => {
+      void this.maybeAutoInstallDownloadedUpdate();
+    }, IDLE_RECHECK_INTERVAL_MS);
+  }
+
+  private stopIdleWaitLoop(): void {
+    if (!this.idleWaitIntervalHandle) {
+      return;
+    }
+
+    clearInterval(this.idleWaitIntervalHandle);
+    this.idleWaitIntervalHandle = null;
+  }
+
+  private async maybeAutoInstallDownloadedUpdate(): Promise<void> {
+    if (!this.updater || !this.downloadedUpdate || this.promptingForInstall || this.installingDownloadedUpdate) {
+      return;
+    }
+
+    if (!this.shouldAutoInstallUpdates()) {
+      this.stopIdleWaitLoop();
+      return;
+    }
+
+    let idleState: DesktopUpdateIdleState;
+    try {
+      idleState = await this.options.checkIdleForAutoInstall?.() ?? { idle: true };
+    } catch (error) {
+      const message = renderUpdateErrorMessage(error);
+      logUpdateMessage(`could not confirm idle state for auto install: ${message}`);
+      idleState = {
+        idle: false,
+        reason: `Could not confirm whether the desktop is idle: ${message}`,
+      };
+    }
+
+    if (!idleState.idle) {
+      this.startIdleWaitLoop();
+      this.setState({
+        status: 'waiting-for-idle',
+        downloadedVersion: this.downloadedUpdate.version,
+        waitingForIdleReason: idleState.reason?.trim() || 'Local runs or conversations are still active.',
+        lastError: undefined,
+      });
+      return;
+    }
+
+    this.stopIdleWaitLoop();
+    await this.installDownloadedUpdate(this.downloadedUpdate);
+  }
+
   private async promptToInstall(info: UpdateDownloadedEvent): Promise<void> {
-    if (!this.updater || this.promptingForInstall) {
+    if (!this.updater || this.promptingForInstall || this.installingDownloadedUpdate) {
       return;
     }
 
@@ -219,15 +395,45 @@ export class DesktopUpdateManager {
 
       if (response.response !== 1) {
         logUpdateMessage(`update ${info.version} downloaded; install postponed`);
+        this.setState({
+          status: 'ready',
+          downloadedVersion: info.version,
+          waitingForIdleReason: undefined,
+        });
         return;
       }
 
+      await this.installDownloadedUpdate(info);
+    } finally {
+      this.promptingForInstall = false;
+    }
+  }
+
+  private async installDownloadedUpdate(info: UpdateDownloadedEvent): Promise<void> {
+    if (!this.updater || this.installingDownloadedUpdate) {
+      return;
+    }
+
+    this.installingDownloadedUpdate = true;
+    this.setState({
+      status: 'installing',
+      downloadedVersion: info.version,
+      waitingForIdleReason: undefined,
+      lastError: undefined,
+    });
+
+    try {
       logUpdateMessage(`installing downloaded update ${info.version}`);
       await this.options.onBeforeQuitForUpdate?.();
       this.updater.quitAndInstall();
     } catch (error) {
       const message = renderUpdateErrorMessage(error);
       logUpdateMessage(`failed to install downloaded update: ${message}`);
+      this.setState({
+        status: 'error',
+        downloadedVersion: info.version,
+        lastError: message,
+      });
       await dialog.showMessageBox({
         type: 'error',
         buttons: ['OK'],
@@ -235,7 +441,11 @@ export class DesktopUpdateManager {
         detail: message,
       });
     } finally {
-      this.promptingForInstall = false;
+      this.installingDownloadedUpdate = false;
     }
+  }
+
+  private setState(patch: Partial<DesktopAppUpdateState>): void {
+    Object.assign(this.state, patch);
   }
 }

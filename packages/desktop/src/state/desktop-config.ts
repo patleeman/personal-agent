@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import type { DesktopConfig, DesktopHostRecord, DesktopWorkspaceServerConfig } from '../hosts/types.js';
+import type { DesktopAppPreferences, DesktopConfig, DesktopHostRecord, DesktopWorkspaceServerConfig } from '../hosts/types.js';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const DEFAULT_WINDOW_STATE = {
@@ -14,6 +14,13 @@ function createDefaultWorkspaceServerConfig(): DesktopWorkspaceServerConfig {
     enabled: false,
     port: DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT,
     useTailscaleServe: false,
+  };
+}
+
+function createDefaultDesktopAppPreferences(): DesktopAppPreferences {
+  return {
+    autoInstallUpdates: false,
+    startOnSystemStart: false,
   };
 }
 
@@ -97,6 +104,18 @@ function normalizeWorkspaceServerConfig(value: unknown): DesktopWorkspaceServerC
   };
 }
 
+function normalizeDesktopAppPreferences(value: unknown): DesktopAppPreferences {
+  if (!value || typeof value !== 'object') {
+    return createDefaultDesktopAppPreferences();
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    autoInstallUpdates: candidate.autoInstallUpdates === true,
+    startOnSystemStart: candidate.startOnSystemStart === true,
+  };
+}
+
 function normalizeDesktopConfig(value: unknown): DesktopConfig {
   if (!value || typeof value !== 'object') {
     return createDefaultDesktopConfig();
@@ -125,6 +144,7 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
       : { ...DEFAULT_WINDOW_STATE },
     hosts,
     workspaceServer: normalizeWorkspaceServerConfig(input.workspaceServer),
+    appPreferences: normalizeDesktopAppPreferences(input.appPreferences),
   };
 }
 
@@ -136,6 +156,7 @@ export function createDefaultDesktopConfig(): DesktopConfig {
     windowState: { ...DEFAULT_WINDOW_STATE },
     hosts: [createDefaultLocalHost()],
     workspaceServer: createDefaultWorkspaceServerConfig(),
+    appPreferences: createDefaultDesktopAppPreferences(),
   };
 }
 
@@ -165,6 +186,24 @@ export function saveDesktopConfig(config: DesktopConfig): void {
   const { desktopConfigFile, desktopStateDir } = resolveDesktopRuntimePaths();
   mkdirSync(desktopStateDir, { recursive: true, mode: 0o700 });
   writeFileSync(desktopConfigFile, `${JSON.stringify(normalizeDesktopConfig(config), null, 2)}\n`, 'utf-8');
+}
+
+export function readDesktopAppPreferences(config = loadDesktopConfig()): DesktopAppPreferences {
+  return normalizeDesktopAppPreferences(config.appPreferences);
+}
+
+export function updateDesktopAppPreferences(appPreferences: Partial<DesktopAppPreferences>): DesktopConfig {
+  const current = loadDesktopConfig();
+  const next: DesktopConfig = {
+    ...current,
+    appPreferences: {
+      ...readDesktopAppPreferences(current),
+      ...(appPreferences.autoInstallUpdates !== undefined ? { autoInstallUpdates: appPreferences.autoInstallUpdates } : {}),
+      ...(appPreferences.startOnSystemStart !== undefined ? { startOnSystemStart: appPreferences.startOnSystemStart } : {}),
+    },
+  };
+  saveDesktopConfig(next);
+  return next;
 }
 
 export function updateDesktopWindowState(windowState: NonNullable<DesktopConfig['windowState']>): DesktopConfig {

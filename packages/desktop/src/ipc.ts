@@ -19,6 +19,8 @@ export function registerDesktopIpc(options: {
   windowController: DesktopWindowController;
   onHostStateChanged?: () => void;
   onCheckForUpdates?: () => Promise<void> | void;
+  readDesktopAppPreferences?: () => Promise<unknown> | unknown;
+  updateDesktopAppPreferences?: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) => Promise<unknown> | unknown;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
   const conversationStateSubscriptions = new Map<string, () => void>();
@@ -157,6 +159,22 @@ export function registerDesktopIpc(options: {
       opened: error.length === 0,
       ...(error ? { error } : {}),
     };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-desktop-app-preferences`, async () => {
+    if (!options.readDesktopAppPreferences) {
+      throw new Error('Desktop app preferences are unavailable.');
+    }
+
+    return options.readDesktopAppPreferences();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, async (_event, input) => {
+    if (!options.updateDesktopAppPreferences) {
+      throw new Error('Desktop app preferences are unavailable.');
+    }
+
+    return options.updateDesktopAppPreferences(input ?? {});
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {

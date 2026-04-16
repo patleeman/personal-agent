@@ -11,7 +11,12 @@ vi.mock('../desktop-env.js', () => ({
   resolveDesktopRuntimePaths: mocks.resolveDesktopRuntimePaths,
 }));
 
-import { loadDesktopConfig, DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT } from './desktop-config.js';
+import {
+  loadDesktopConfig,
+  readDesktopAppPreferences,
+  updateDesktopAppPreferences,
+  DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT,
+} from './desktop-config.js';
 
 describe('desktop-config', () => {
   let dir: string;
@@ -44,5 +49,20 @@ describe('desktop-config', () => {
     expect(config.hosts).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'ssh-1', remotePort: DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT }),
     ]));
+  });
+
+  it('defaults desktop app preferences and persists updates', () => {
+    const initial = loadDesktopConfig();
+    expect(readDesktopAppPreferences(initial)).toEqual({
+      autoInstallUpdates: false,
+      startOnSystemStart: false,
+    });
+
+    updateDesktopAppPreferences({ autoInstallUpdates: true, startOnSystemStart: true });
+
+    expect(readDesktopAppPreferences(loadDesktopConfig())).toEqual({
+      autoInstallUpdates: true,
+      startOnSystemStart: true,
+    });
   });
 });

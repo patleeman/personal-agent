@@ -859,6 +859,27 @@ export interface DesktopWorkspaceServerState {
   error?: string;
 }
 
+export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
+
+export interface DesktopAppUpdateState {
+  supported: boolean;
+  currentVersion: string;
+  status: DesktopUpdateStatus;
+  availableVersion?: string;
+  downloadedVersion?: string;
+  waitingForIdleReason?: string;
+  lastCheckedAt?: string;
+  lastError?: string;
+}
+
+export interface DesktopAppPreferencesState {
+  available: boolean;
+  supportsStartOnSystemStart: boolean;
+  autoInstallUpdates: boolean;
+  startOnSystemStart: boolean;
+  update: DesktopAppUpdateState;
+}
+
 export interface DesktopNavigationState {
   canGoBack: boolean;
   canGoForward: boolean;
