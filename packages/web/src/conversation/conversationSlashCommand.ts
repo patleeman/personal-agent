@@ -1,25 +1,5 @@
 import { parseSlashInput } from '../commands/slashMenu';
 
-export const CONVERSATION_MENU_SLASH_COMMANDS = [
-  '/export',
-  '/copy',
-  '/name',
-  '/session',
-  '/fork',
-  '/summarize-fork',
-  '/new',
-  '/compact',
-  '/reload',
-  '/draw',
-  '/drawings',
-] as const;
-
-export const EXTERNAL_MENU_SLASH_COMMANDS = [
-  '/model',
-  '/page',
-  '/resume',
-] as const;
-
 export type ConversationSlashCommand =
   | { action: 'clear' }
   | { action: 'compact'; customInstructions?: string }

@@ -6,7 +6,6 @@ import {
   buildDraftConversationCwdStorageKey,
   buildDraftConversationModelStorageKey,
   buildDraftConversationServiceTierStorageKey,
-  buildDraftConversationSessionMeta,
   buildDraftConversationThinkingLevelStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
@@ -14,8 +13,6 @@ import {
   clearDraftConversationModel,
   clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
-  DRAFT_CONVERSATION_ID,
-  DRAFT_CONVERSATION_ROUTE,
   hasDraftConversationAttachments,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
@@ -29,7 +26,6 @@ import {
   readDraftConversationModel,
   readDraftConversationServiceTier,
   readDraftConversationThinkingLevel,
-  shouldShowDraftConversationTab,
 } from './draftConversation';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
@@ -199,37 +195,4 @@ describe('draftConversation', () => {
     expect(storage.getItem(buildDraftConversationAttachmentsStorageKey())).toBeNull();
   });
 
-  it('shows the draft tab while the draft route is active or has saved draft state', () => {
-    expect(shouldShowDraftConversationTab(DRAFT_CONVERSATION_ROUTE, '')).toBe(true);
-    expect(shouldShowDraftConversationTab('/conversations/abc', 'Saved draft')).toBe(true);
-    expect(shouldShowDraftConversationTab('/conversations/abc', '', '~/workingdir/personal-agent')).toBe(true);
-    expect(shouldShowDraftConversationTab('/conversations/abc', '', '', true)).toBe(true);
-    expect(shouldShowDraftConversationTab('/conversations/abc', '   ')).toBe(false);
-  });
-
-  it('builds a synthetic draft session meta entry', () => {
-    expect(buildDraftConversationSessionMeta('2026-03-13T12:00:00.000Z')).toEqual({
-      id: DRAFT_CONVERSATION_ID,
-      file: '',
-      timestamp: '2026-03-13T12:00:00.000Z',
-      cwd: 'Draft',
-      cwdSlug: 'draft',
-      model: '',
-      title: 'New Conversation',
-      messageCount: 0,
-    });
-  });
-
-  it('uses the saved draft cwd in the synthetic draft session meta entry', () => {
-    expect(buildDraftConversationSessionMeta('2026-03-13T12:00:00.000Z', '~/workingdir/personal-agent')).toEqual({
-      id: DRAFT_CONVERSATION_ID,
-      file: '',
-      timestamp: '2026-03-13T12:00:00.000Z',
-      cwd: '~/workingdir/personal-agent',
-      cwdSlug: 'draft',
-      model: '',
-      title: 'New Conversation',
-      messageCount: 0,
-    });
-  });
 });

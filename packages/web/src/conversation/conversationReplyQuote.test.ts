@@ -3,7 +3,6 @@ import {
   formatReplyQuoteMarkdown,
   insertReplyQuoteIntoComposer,
   normalizeReplyQuoteSelection,
-  prependReplyQuoteToPrompt,
 } from './conversationReplyQuote';
 
 describe('normalizeReplyQuoteSelection', () => {
@@ -23,20 +22,6 @@ describe('formatReplyQuoteMarkdown', () => {
 
   it('returns an empty string for an empty selection', () => {
     expect(formatReplyQuoteMarkdown('   ')).toBe('');
-  });
-});
-
-describe('prependReplyQuoteToPrompt', () => {
-  it('prepends the formatted quote before the typed reply', () => {
-    expect(prependReplyQuoteToPrompt('Here is my follow-up.', 'Important line')).toBe('> Important line\n\nHere is my follow-up.');
-  });
-
-  it('returns only the quote when the prompt body is empty', () => {
-    expect(prependReplyQuoteToPrompt('', 'Important line')).toBe('> Important line');
-  });
-
-  it('leaves the prompt unchanged when there is no quote', () => {
-    expect(prependReplyQuoteToPrompt('Plain reply', null)).toBe('Plain reply');
   });
 });
 

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_SLASH_COMMANDS } from '../commands/slashMenu';
-import {
-  CONVERSATION_MENU_SLASH_COMMANDS,
-  EXTERNAL_MENU_SLASH_COMMANDS,
-  parseConversationSlashCommand,
-} from './conversationSlashCommand';
+import { parseConversationSlashCommand } from './conversationSlashCommand';
 
 describe('parseConversationSlashCommand', () => {
   it('parses compact with optional custom instructions', () => {
@@ -79,14 +74,5 @@ describe('parseConversationSlashCommand', () => {
     expect(parseConversationSlashCommand('/project')).toBeNull();
     expect(parseConversationSlashCommand('/resume 10m')).toBeNull();
     expect(parseConversationSlashCommand('/model')).toBeNull();
-  });
-});
-
-describe('slash menu command coverage', () => {
-  it('keeps every built-in slash menu command wired to a handler path', () => {
-    const menuCommands = BASE_SLASH_COMMANDS.map((command) => command.cmd).sort();
-    const coveredCommands = [...CONVERSATION_MENU_SLASH_COMMANDS, ...EXTERNAL_MENU_SLASH_COMMANDS].sort();
-
-    expect(coveredCommands).toEqual(menuCommands);
   });
 });

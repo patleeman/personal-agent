@@ -1,7 +1,6 @@
 import type { ExcalidrawSceneData } from '../content/excalidrawUtils';
-import { NEW_CONVERSATION_TITLE } from './conversationTitle';
 import { clearStoredState, getSessionStorage, persistStoredState, readStoredState, type StorageLike } from '../local/reloadState';
-import type { ConversationContextDocRef, PromptImageInput, SessionMeta } from '../shared/types';
+import type { ConversationContextDocRef, PromptImageInput } from '../shared/types';
 
 export const DRAFT_CONVERSATION_ID = 'new';
 export const DRAFT_CONVERSATION_ROUTE = '/conversations/new';
@@ -476,27 +475,3 @@ export function isDraftConversationPath(pathname: string): boolean {
   return pathname === DRAFT_CONVERSATION_ROUTE;
 }
 
-export function shouldShowDraftConversationTab(
-  pathname: string,
-  composerText: string,
-  cwd = '',
-  hasAttachments = false,
-): boolean {
-  return isDraftConversationPath(pathname)
-    || composerText.trim().length > 0
-    || cwd.trim().length > 0
-    || hasAttachments;
-}
-
-export function buildDraftConversationSessionMeta(timestamp = new Date().toISOString(), cwd = ''): SessionMeta {
-  return {
-    id: DRAFT_CONVERSATION_ID,
-    file: '',
-    timestamp,
-    cwd: cwd.trim() || 'Draft',
-    cwdSlug: 'draft',
-    model: '',
-    title: NEW_CONVERSATION_TITLE,
-    messageCount: 0,
-  };
-}

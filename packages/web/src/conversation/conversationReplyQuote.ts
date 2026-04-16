@@ -26,16 +26,6 @@ export function formatReplyQuoteMarkdown(text: string): string {
     .join('\n');
 }
 
-export function prependReplyQuoteToPrompt(promptText: string, replyQuoteText: string | null | undefined): string {
-  const quote = formatReplyQuoteMarkdown(replyQuoteText ?? '');
-  if (!quote) {
-    return promptText;
-  }
-
-  const normalizedPrompt = promptText.replace(/\r\n?/g, '\n').trim();
-  return normalizedPrompt.length > 0 ? `${quote}\n\n${normalizedPrompt}` : quote;
-}
-
 export function insertReplyQuoteIntoComposer(
   promptText: string,
   replyQuoteText: string | null | undefined,
