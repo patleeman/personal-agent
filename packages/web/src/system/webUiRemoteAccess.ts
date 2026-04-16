@@ -1,4 +1,4 @@
-import type { WebUiServiceSummary } from './shared/types';
+import type { WebUiServiceSummary } from '../shared/types';
 
 export interface WebUiRemoteAccessSummary {
   localUrl: string;

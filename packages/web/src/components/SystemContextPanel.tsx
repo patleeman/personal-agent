@@ -4,7 +4,7 @@ import { useSystemStatus } from '../app/contexts';
 import { getSystemComponentLabel, type SystemComponentId } from '../navigation/systemSelection';
 import type { DaemonState, WebUiState } from '../shared/types';
 import { timeAgo } from '../shared/utils';
-import { buildWebUiRemoteAccessSummary } from '../webUiRemoteAccess';
+import { buildWebUiRemoteAccessSummary } from '../system/webUiRemoteAccess';
 import { useApi } from '../hooks';
 import { ErrorState, LoadingState, Pill, ToolbarButton, cx, type PillTone } from './ui';
 
