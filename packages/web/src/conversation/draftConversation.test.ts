@@ -1,12 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from '../local/reloadState';
 import {
-  buildDraftConversationAttachmentsStorageKey,
-  buildDraftConversationComposerStorageKey,
-  buildDraftConversationCwdStorageKey,
-  buildDraftConversationModelStorageKey,
-  buildDraftConversationServiceTierStorageKey,
-  buildDraftConversationThinkingLevelStorageKey,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
@@ -37,14 +31,42 @@ function createStorage(): StorageLike & { getItem(key: string): string | null } 
   };
 }
 
+const DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY = 'pa:reload:conversation:draft:composer';
+const DRAFT_CONVERSATION_CWD_STORAGE_KEY = 'pa:reload:conversation:draft:cwd';
+const DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY = 'pa:reload:conversation:draft:attachments';
+const DRAFT_CONVERSATION_MODEL_STORAGE_KEY = 'pa:reload:conversation:draft:model';
+const DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY = 'pa:reload:conversation:draft:thinking-level';
+const DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY = 'pa:reload:conversation:draft:service-tier';
+
 describe('draftConversation', () => {
   it('uses dedicated draft storage keys', () => {
-    expect(buildDraftConversationComposerStorageKey()).toBe('pa:reload:conversation:draft:composer');
-    expect(buildDraftConversationCwdStorageKey()).toBe('pa:reload:conversation:draft:cwd');
-    expect(buildDraftConversationAttachmentsStorageKey()).toBe('pa:reload:conversation:draft:attachments');
-    expect(buildDraftConversationModelStorageKey()).toBe('pa:reload:conversation:draft:model');
-    expect(buildDraftConversationThinkingLevelStorageKey()).toBe('pa:reload:conversation:draft:thinking-level');
-    expect(buildDraftConversationServiceTierStorageKey()).toBe('pa:reload:conversation:draft:service-tier');
+    const storage = createStorage();
+
+    persistDraftConversationComposer('composer', storage);
+    persistDraftConversationCwd('/tmp/project', storage);
+    persistDraftConversationAttachments({ images: [], drawings: [{
+      localId: 'drawing-1',
+      title: 'Wireframe',
+      sourceData: 'source-data',
+      sourceMimeType: 'application/json',
+      sourceName: 'wireframe.excalidraw',
+      previewData: 'preview-data',
+      previewMimeType: 'image/png',
+      previewName: 'wireframe.png',
+      previewUrl: 'data:image/png;base64,preview-data',
+      scene: { elements: [], appState: {}, files: {} },
+      dirty: true,
+    }] }, storage);
+    persistDraftConversationModel('gpt-5.4', storage);
+    persistDraftConversationThinkingLevel('high', storage);
+    persistDraftConversationServiceTier('priority', storage);
+
+    expect(storage.getItem(DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY)).toBe(JSON.stringify('composer'));
+    expect(storage.getItem(DRAFT_CONVERSATION_CWD_STORAGE_KEY)).toBe(JSON.stringify('/tmp/project'));
+    expect(storage.getItem(DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY)).not.toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_MODEL_STORAGE_KEY)).toBe(JSON.stringify('gpt-5.4'));
+    expect(storage.getItem(DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY)).toBe(JSON.stringify('high'));
+    expect(storage.getItem(DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY)).toBe(JSON.stringify('priority'));
   });
 
   it('persists and reads the draft composer text', () => {
@@ -53,7 +75,7 @@ describe('draftConversation', () => {
     persistDraftConversationComposer('Keep this unsent note', storage);
 
     expect(readDraftConversationComposer(storage)).toBe('Keep this unsent note');
-    expect(storage.getItem(buildDraftConversationComposerStorageKey())).toBe(JSON.stringify('Keep this unsent note'));
+    expect(storage.getItem(DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY)).toBe(JSON.stringify('Keep this unsent note'));
   });
 
   it('clears the stored draft composer text', () => {
@@ -63,7 +85,7 @@ describe('draftConversation', () => {
     clearDraftConversationComposer(storage);
 
     expect(readDraftConversationComposer(storage)).toBe('');
-    expect(storage.getItem(buildDraftConversationComposerStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_COMPOSER_STORAGE_KEY)).toBeNull();
   });
 
   it('persists and reads the draft cwd', () => {
@@ -72,7 +94,7 @@ describe('draftConversation', () => {
     persistDraftConversationCwd('~/workingdir/personal-agent', storage);
 
     expect(readDraftConversationCwd(storage)).toBe('~/workingdir/personal-agent');
-    expect(storage.getItem(buildDraftConversationCwdStorageKey())).toBe(JSON.stringify('~/workingdir/personal-agent'));
+    expect(storage.getItem(DRAFT_CONVERSATION_CWD_STORAGE_KEY)).toBe(JSON.stringify('~/workingdir/personal-agent'));
   });
 
   it('clears the stored draft cwd', () => {
@@ -82,7 +104,7 @@ describe('draftConversation', () => {
     clearDraftConversationCwd(storage);
 
     expect(readDraftConversationCwd(storage)).toBe('');
-    expect(storage.getItem(buildDraftConversationCwdStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_CWD_STORAGE_KEY)).toBeNull();
   });
 
   it('persists and reads the draft model', () => {
@@ -91,7 +113,7 @@ describe('draftConversation', () => {
     persistDraftConversationModel('gpt-5.4', storage);
 
     expect(readDraftConversationModel(storage)).toBe('gpt-5.4');
-    expect(storage.getItem(buildDraftConversationModelStorageKey())).toBe(JSON.stringify('gpt-5.4'));
+    expect(storage.getItem(DRAFT_CONVERSATION_MODEL_STORAGE_KEY)).toBe(JSON.stringify('gpt-5.4'));
   });
 
   it('clears the stored draft model', () => {
@@ -101,7 +123,7 @@ describe('draftConversation', () => {
     clearDraftConversationModel(storage);
 
     expect(readDraftConversationModel(storage)).toBe('');
-    expect(storage.getItem(buildDraftConversationModelStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_MODEL_STORAGE_KEY)).toBeNull();
   });
 
   it('persists and reads the draft thinking level', () => {
@@ -110,7 +132,7 @@ describe('draftConversation', () => {
     persistDraftConversationThinkingLevel('high', storage);
 
     expect(readDraftConversationThinkingLevel(storage)).toBe('high');
-    expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBe(JSON.stringify('high'));
+    expect(storage.getItem(DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY)).toBe(JSON.stringify('high'));
   });
 
   it('clears the stored draft thinking level', () => {
@@ -120,7 +142,7 @@ describe('draftConversation', () => {
     clearDraftConversationThinkingLevel(storage);
 
     expect(readDraftConversationThinkingLevel(storage)).toBe('');
-    expect(storage.getItem(buildDraftConversationThinkingLevelStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY)).toBeNull();
   });
 
   it('persists and reads the draft service tier', () => {
@@ -129,7 +151,7 @@ describe('draftConversation', () => {
     persistDraftConversationServiceTier('priority', storage);
 
     expect(readDraftConversationServiceTier(storage)).toBe('priority');
-    expect(storage.getItem(buildDraftConversationServiceTierStorageKey())).toBe(JSON.stringify('priority'));
+    expect(storage.getItem(DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY)).toBe(JSON.stringify('priority'));
   });
 
   it('clears the stored draft service tier', () => {
@@ -139,7 +161,7 @@ describe('draftConversation', () => {
     clearDraftConversationServiceTier(storage);
 
     expect(readDraftConversationServiceTier(storage)).toBe('');
-    expect(storage.getItem(buildDraftConversationServiceTierStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY)).toBeNull();
   });
 
   it('persists and reads draft attachments', () => {
@@ -192,7 +214,7 @@ describe('draftConversation', () => {
 
     expect(readDraftConversationAttachments(storage)).toEqual({ images: [], drawings: [] });
     expect(hasDraftConversationAttachments(storage)).toBe(false);
-    expect(storage.getItem(buildDraftConversationAttachmentsStorageKey())).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY)).toBeNull();
   });
 
 });

@@ -32,7 +32,7 @@ export interface DraftConversationDrawingAttachment {
   dirty: boolean;
 }
 
-export interface DraftConversationAttachments {
+interface DraftConversationAttachments {
   images: PromptImageInput[];
   drawings: DraftConversationDrawingAttachment[];
 }
@@ -45,23 +45,23 @@ export function buildDraftConversationCwdStorageKey(): string {
   return DRAFT_CONVERSATION_CWD_STORAGE_KEY;
 }
 
-export function buildDraftConversationAttachmentsStorageKey(): string {
+function buildDraftConversationAttachmentsStorageKey(): string {
   return DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY;
 }
 
-export function buildDraftConversationModelStorageKey(): string {
+function buildDraftConversationModelStorageKey(): string {
   return DRAFT_CONVERSATION_MODEL_STORAGE_KEY;
 }
 
-export function buildDraftConversationThinkingLevelStorageKey(): string {
+function buildDraftConversationThinkingLevelStorageKey(): string {
   return DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY;
 }
 
-export function buildDraftConversationServiceTierStorageKey(): string {
+function buildDraftConversationServiceTierStorageKey(): string {
   return DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY;
 }
 
-export function buildDraftConversationContextDocsStorageKey(): string {
+function buildDraftConversationContextDocsStorageKey(): string {
   return DRAFT_CONVERSATION_CONTEXT_DOCS_STORAGE_KEY;
 }
 
