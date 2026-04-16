@@ -1,4 +1,4 @@
-export interface MessageImage {
+interface MessageImage {
   alt: string;
   src?: string;
   mimeType?: string;
@@ -20,7 +20,7 @@ export interface PromptAttachmentRefInput {
   revision?: number;
 }
 
-export type ConversationArtifactKind = 'html' | 'mermaid' | 'latex';
+type ConversationArtifactKind = 'html' | 'mermaid' | 'latex';
 
 export interface ConversationArtifactSummary {
   id: string;
@@ -115,7 +115,7 @@ export interface ConversationCheckpointToolDetails {
   paths?: string[];
 }
 
-export interface ConversationCheckpointGithubInfo {
+interface ConversationCheckpointGithubInfo {
   provider: 'github';
   repoUrl: string;
   commitUrl: string;
@@ -143,9 +143,9 @@ export interface ConversationCheckpointStructuralDiffResult {
   content?: string;
 }
 
-export type ConversationAttachmentKind = 'excalidraw';
+type ConversationAttachmentKind = 'excalidraw';
 
-export interface ConversationAttachmentRevision {
+interface ConversationAttachmentRevision {
   revision: number;
   createdAt: string;
   sourceName: string;
@@ -189,20 +189,20 @@ export type MessageBlock =
   | { type: 'image';     id?: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';     id?: string; ts: string; tool?: string; message: string };
 
-export interface ProjectMilestone {
+interface ProjectMilestone {
   id: string;
   title: string;
   status: string;
   summary?: string;
 }
 
-export interface ProjectPlan {
+interface ProjectPlan {
   currentMilestoneId?: string;
   milestones: ProjectMilestone[];
   tasks: ProjectTask[];
 }
 
-export interface ProjectRequirements {
+interface ProjectRequirements {
   goal: string;
   acceptanceCriteria: string[];
 }
@@ -227,7 +227,7 @@ export interface ProjectRecord {
   plan: ProjectPlan;
 }
 
-export interface ProjectTask {
+interface ProjectTask {
   id: string;
   status: string;
   title: string;
@@ -475,7 +475,7 @@ export type DisplayBlock =
   | { type: 'image';    id: string; ts: string; alt: string; src?: string; mimeType?: string; width?: number; height?: number; caption?: string; deferred?: boolean }
   | { type: 'error';    id: string; ts: string; tool?: string; message: string };
 
-export type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
+type ContextUsageSegmentKey = 'system' | 'user' | 'assistant' | 'tool' | 'summary' | 'other';
 
 export interface ContextUsageSegment {
   key: ContextUsageSegmentKey;
@@ -500,7 +500,7 @@ export interface SessionDetail {
   signature?: string;
 }
 
-export interface SessionDetailUnchangedResponse {
+interface SessionDetailUnchangedResponse {
   unchanged: true;
   sessionId: string;
   signature: string | null;
@@ -573,7 +573,7 @@ export interface LiveSessionContext {
   git: GitWorkingTreeSummary | null;
 }
 
-export type ConversationBootstrapLiveState = { live: false } | ({ live: true } & LiveSessionMeta);
+type ConversationBootstrapLiveState = { live: false } | ({ live: true } & LiveSessionMeta);
 
 export interface ConversationBootstrapState {
   conversationId: string;
@@ -659,7 +659,7 @@ export interface LiveSessionExportResult {
   path: string;
 }
 
-export interface RemoteAccessSessionSummary {
+interface RemoteAccessSessionSummary {
   id: string;
   deviceLabel: string;
   createdAt: string;
@@ -757,7 +757,7 @@ export interface DesktopWorkspaceServerState {
 
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
 
-export interface DesktopAppUpdateState {
+interface DesktopAppUpdateState {
   supported: boolean;
   currentVersion: string;
   status: DesktopUpdateStatus;
@@ -783,7 +783,7 @@ export interface DesktopNavigationState {
 
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
 
-export interface LiveSessionPresence {
+interface LiveSessionPresence {
   surfaceId: string;
   surfaceType: LiveSessionSurfaceType;
   connectedAt: string;
@@ -1071,7 +1071,7 @@ export interface ConversationTitleSettingsState {
   effectiveModel: string;
 }
 
-export interface ToolParameterSchema {
+interface ToolParameterSchema {
   type?: string;
   description?: string;
   properties?: Record<string, ToolParameterSchema>;
@@ -1091,7 +1091,7 @@ export interface AgentToolInfo {
   active: boolean;
 }
 
-export interface CliBinaryState {
+interface CliBinaryState {
   available: boolean;
   command: string;
   path?: string;
@@ -1099,7 +1099,7 @@ export interface CliBinaryState {
   error?: string;
 }
 
-export interface DependentCliToolState {
+interface DependentCliToolState {
   id: string;
   name: string;
   description: string;
@@ -1108,7 +1108,7 @@ export interface DependentCliToolState {
   binary: CliBinaryState;
 }
 
-export interface McpSkillBundleState {
+interface McpSkillBundleState {
   skillName: string;
   skillPath: string;
   manifestPath: string;
@@ -1135,7 +1135,7 @@ export interface McpServerConfig {
   raw: Record<string, unknown>;
 }
 
-export interface McpState {
+interface McpState {
   configPath: string;
   configExists: boolean;
   searchedPaths: string[];
@@ -1143,23 +1143,23 @@ export interface McpState {
   bundledSkills: McpSkillBundleState[];
 }
 
-export interface ConfiguredPackageSource {
+interface ConfiguredPackageSource {
   source: string;
   filtered: boolean;
 }
 
-export interface PackageSourceTargetState {
+interface PackageSourceTargetState {
   target: 'profile' | 'local';
   settingsPath: string;
   packages: ConfiguredPackageSource[];
 }
 
-export interface ProfilePackageSourceTargetState extends PackageSourceTargetState {
+interface ProfilePackageSourceTargetState extends PackageSourceTargetState {
   profileName: string;
   current: boolean;
 }
 
-export interface PackageInstallState {
+interface PackageInstallState {
   currentProfile: string;
   profileTargets: ProfilePackageSourceTargetState[];
   localTarget: PackageSourceTargetState;
