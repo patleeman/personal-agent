@@ -12,7 +12,7 @@ import { SIDEBAR_WIDTH_STORAGE_KEY } from '../localSettings';
 import { useAppData, useAppEvents } from '../contexts';
 import { readDesktopEnvironment } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState } from '../types';
-import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../sessionTabs';
+import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';

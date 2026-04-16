@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./api', () => ({
+vi.mock('../api', () => ({
   api: {
     sessions: vi.fn(),
   },
 }));
 
-import { api } from './api';
+import { api } from '../api';
 import { fetchSessionsSnapshot } from './sessionSnapshot';
 
 describe('fetchSessionsSnapshot', () => {

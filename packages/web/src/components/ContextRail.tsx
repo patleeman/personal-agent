@@ -42,7 +42,7 @@ import type {
 import { timeAgo } from '../utils';
 import { useAppData, useAppEvents } from '../contexts';
 import { completeConversationOpenPhase } from '../perfDiagnostics';
-import { sessionNeedsAttention } from '../sessionIndicators';
+import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
 

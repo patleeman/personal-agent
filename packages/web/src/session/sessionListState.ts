@@ -1,4 +1,4 @@
-import type { SessionMeta } from './types';
+import type { SessionMeta } from '../types';
 
 export function mergeSessionSnapshotPreservingOrder(
   previousSessions: readonly SessionMeta[] | null,

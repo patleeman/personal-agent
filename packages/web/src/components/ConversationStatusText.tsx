@@ -1,4 +1,4 @@
-import { sessionNeedsAttention } from '../sessionIndicators';
+import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { cx } from './ui';
 
 export function ConversationStatusText({

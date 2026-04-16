@@ -4,7 +4,7 @@ import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../api';
 import { useAppData } from '../contexts';
 import { useConversations } from '../hooks/useConversations';
-import { sessionNeedsAttention } from '../sessionIndicators';
+import { sessionNeedsAttention } from '../session/sessionIndicators';
 import {
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
@@ -18,7 +18,7 @@ import {
 } from '../draftConversation';
 import { persistForkPromptDraft } from '../forking';
 import { timeAgoCompact } from '../utils';
-import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../sessionTabs';
+import { replaceConversationLayout, type ConversationShelf, type OpenConversationDropPosition } from '../session/sessionTabs';
 import {
   buildConversationGroupLabels,
   getConversationGroupLabel,

@@ -13,7 +13,7 @@ import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
-import { fetchSessionsSnapshot } from '../sessionSnapshot';
+import { fetchSessionsSnapshot } from '../session/sessionSnapshot';
 import {
   closeConversationTab,
   moveConversationTab,
@@ -32,7 +32,7 @@ import {
   type ConversationShelf,
   type OpenConversationDropPosition,
   unpinConversationTab,
-} from '../sessionTabs';
+} from '../session/sessionTabs';
 import type { SessionMeta } from '../types';
 
 function applyLayoutState(layout: ConversationLayout, setters: {

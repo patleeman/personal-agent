@@ -108,7 +108,7 @@ import {
 } from '../conversation/conversationComposerSubmit';
 import { insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
 import { useReloadState } from '../reloadState';
-import { closeConversationTab, ensureConversationTabOpen } from '../sessionTabs';
+import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../savedWorkspacePaths';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../relatedConversationSearch';

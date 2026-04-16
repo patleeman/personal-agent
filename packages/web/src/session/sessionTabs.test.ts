@@ -5,7 +5,7 @@ const apiMocks = vi.hoisted(() => ({
   setOpenConversationTabs: vi.fn(),
 }));
 
-vi.mock('./api', () => ({
+vi.mock('../api', () => ({
   api: apiMocks,
 }));
 
@@ -13,7 +13,7 @@ import {
   ARCHIVED_SESSION_IDS_STORAGE_KEY,
   OPEN_SESSION_IDS_STORAGE_KEY,
   PINNED_SESSION_IDS_STORAGE_KEY,
-} from './localSettings';
+} from '../localSettings';
 import {
   closeConversationTab,
   commitConversationLayoutMerge,

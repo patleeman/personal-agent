@@ -31,12 +31,14 @@ Use these defaults:
 - `packages/web/src/conversation/` — conversation-specific client helpers, search state helpers, formatting helpers, and parsing logic
 - `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
 - `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
+- `packages/web/src/session/` — session snapshot, tab layout, refresh scheduling, and session attention helpers
 - `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
 - `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
 
 If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
 If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.
 If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
+If it manages session list, tab, or snapshot state, keep it under `src/session/`.
 
 ## Repo-level runtime resources
 

@@ -17,7 +17,7 @@ import {
   readDraftConversationCwd,
 } from './draftConversation';
 import { useConversations } from './hooks/useConversations';
-import { fetchSessionsSnapshot } from './sessionSnapshot';
+import { fetchSessionsSnapshot } from './session/sessionSnapshot';
 import {
   AppDataContext,
   AppEventsContext,
@@ -35,9 +35,9 @@ import {
   mergeSessionSnapshotPreservingOrder,
   removeSessionMetaPreservingOrder,
   replaceSessionMetaPreservingOrder,
-} from './sessionListState';
+} from './session/sessionListState';
 import { ThemeProvider } from './theme';
-import { createSessionMetaRefreshScheduler } from './sessionMetaRefreshScheduler';
+import { createSessionMetaRefreshScheduler } from './session/sessionMetaRefreshScheduler';
 import type {
   AppEvent,
   DaemonState,
