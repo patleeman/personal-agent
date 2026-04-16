@@ -731,9 +731,9 @@ export interface DesktopConnectionsState {
   hosts: DesktopHostRecord[];
 }
 
-export type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
+type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
 
-export interface DesktopWorkspaceServerTailscalePublishState {
+interface DesktopWorkspaceServerTailscalePublishState {
   status: DesktopWorkspaceServerTailscalePublishStatus;
   path: string;
   expectedProxyTarget: string;
@@ -755,7 +755,7 @@ export interface DesktopWorkspaceServerState {
   error?: string;
 }
 
-export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
+type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
 
 export interface DesktopAppUpdateState {
   supported: boolean;
@@ -926,7 +926,7 @@ export interface AppStatus {
   webUiRevision?: string;
 }
 
-export type ModelServiceTier = 'auto' | 'default' | 'flex' | 'priority' | 'scale';
+type ModelServiceTier = 'auto' | 'default' | 'flex' | 'priority' | 'scale';
 
 export interface ModelInfo {
   id: string;
@@ -944,9 +944,9 @@ export interface ModelState {
 }
 
 export type ModelProviderApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
-export type ModelProviderInputType = 'text' | 'image';
+type ModelProviderInputType = 'text' | 'image';
 
-export interface ModelProviderCostConfig {
+interface ModelProviderCostConfig {
   input: number;
   output: number;
   cacheRead: number;
@@ -1021,7 +1021,7 @@ export interface InstructionFilesState {
   instructionFiles: string[];
 }
 
-export type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
+type ProviderAuthType = 'none' | 'api_key' | 'oauth' | 'environment';
 
 export interface ProviderAuthSummary {
   id: string;
@@ -1039,9 +1039,9 @@ export interface ProviderAuthState {
   providers: ProviderAuthSummary[];
 }
 
-export type ProviderOAuthLoginStatus = 'running' | 'completed' | 'failed' | 'cancelled';
+type ProviderOAuthLoginStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
-export interface ProviderOAuthPromptState {
+interface ProviderOAuthPromptState {
   message: string;
   placeholder: string;
   allowEmpty: boolean;
