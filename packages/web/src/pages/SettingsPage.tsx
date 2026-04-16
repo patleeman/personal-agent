@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSupportedServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
+import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktopBridge';
@@ -1418,7 +1418,7 @@ export function SettingsPage() {
   }, [modelState]);
 
   const selectedModelServiceTierOptions = useMemo(
-    () => getModelSupportedServiceTierOptions(selectedModel),
+    () => getModelSelectableServiceTierOptions(selectedModel),
     [selectedModel],
   );
 
@@ -2699,15 +2699,15 @@ export function SettingsPage() {
                         <label className="ui-card-meta pt-1" htmlFor="settings-service-tier">Service tier</label>
                         <select
                           id="settings-service-tier"
-                          value={modelState.currentServiceTier}
+                          value={modelState.currentServiceTier || 'auto'}
                           onChange={(event) => {
-                            void handleModelPreferenceChange({ serviceTier: event.target.value }, 'serviceTier');
+                            void handleModelPreferenceChange({ serviceTier: event.target.value === 'auto' ? '' : event.target.value }, 'serviceTier');
                           }}
                           disabled={savingPreference !== null}
                           className={INPUT_CLASS}
                         >
-                          {SERVICE_TIER_OPTIONS.filter((option) => option.value.length === 0 || selectedModelServiceTierOptions.some((candidate) => candidate.value === option.value)).map((option) => (
-                            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                          {selectedModelServiceTierOptions.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
                           ))}
                         </select>
                         <p className="ui-card-meta">

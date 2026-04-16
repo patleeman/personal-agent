@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSupportedServiceTierOptions, groupModelsByProvider } from './modelPreferences';
+import { SERVICE_TIER_OPTIONS, THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, getModelSupportedServiceTierOptions, groupModelsByProvider } from './modelPreferences';
 
 describe('model preferences helpers', () => {
   it('exports the supported thinking levels in UI order', () => {
@@ -31,6 +31,21 @@ describe('model preferences helpers', () => {
     ]);
     expect(getModelSupportedServiceTierOptions({ supportedServiceTiers: [] })).toEqual([]);
     expect(getModelSupportedServiceTierOptions(null)).toEqual([]);
+  });
+
+  it('builds selectable service tier options with an optional default choice', () => {
+    expect(getModelSelectableServiceTierOptions({ supportedServiceTiers: ['priority', 'auto'] })).toEqual([
+      { value: 'auto', label: 'Auto' },
+      { value: 'priority', label: 'Priority' },
+    ]);
+    expect(getModelSelectableServiceTierOptions(
+      { supportedServiceTiers: ['priority', 'auto'] },
+      { includeDefaultOption: true },
+    )).toEqual([
+      { value: '', label: 'Default' },
+      { value: 'auto', label: 'Auto' },
+      { value: 'priority', label: 'Priority' },
+    ]);
   });
 
   it('groups models by provider while preserving original order', () => {

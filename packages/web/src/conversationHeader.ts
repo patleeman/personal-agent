@@ -17,7 +17,7 @@ export function formatServiceTierLabel(tier?: string): string {
     case 'scale':
       return 'scale';
     default:
-      return 'default';
+      return 'auto';
   }
 }
 

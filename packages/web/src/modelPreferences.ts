@@ -27,6 +27,21 @@ export function getModelSupportedServiceTierOptions(model: Pick<ModelInfo, 'supp
   return SERVICE_TIER_OPTIONS.filter((option) => option.value.length > 0 && supportedTiers.includes(option.value));
 }
 
+export function getModelSelectableServiceTierOptions(
+  model: Pick<ModelInfo, 'supportedServiceTiers'> | null | undefined,
+  options?: {
+    includeDefaultOption?: boolean;
+    defaultLabel?: string;
+  },
+) {
+  const supportedOptions = getModelSupportedServiceTierOptions(model);
+  if (!options?.includeDefaultOption) {
+    return supportedOptions;
+  }
+
+  return [{ value: '', label: options.defaultLabel ?? 'Default' }, ...supportedOptions];
+}
+
 export function groupModelsByProvider<T extends Pick<ModelInfo, 'provider'>>(models: T[]): Array<[string, T[]]> {
   const groups = new Map<string, T[]>();
 
