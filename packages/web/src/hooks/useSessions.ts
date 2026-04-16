@@ -44,7 +44,7 @@ function mergeAppendOnlySessionDetail(
   };
 }
 
-export function mergeSessionDetailResultWithCachedDetail(
+function mergeSessionDetailResultWithCachedDetail(
   cached: SessionDetail | null,
   result: SessionDetailResult,
 ): SessionDetail | null {
@@ -154,7 +154,7 @@ export function fetchSessionDetailCached(
   return request;
 }
 
-export function resolveSessionDetailSeed(
+function resolveSessionDetailSeed(
   sessionId: string | undefined,
   options?: { tailBlocks?: number },
 ): {

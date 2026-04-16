@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionDetail, SessionMeta } from '../shared/types';
-import {
-  mergeSessionDetailResultWithCachedDetail,
-  primeSessionDetailCache,
-  resolveSessionDetailSeed,
-} from './useSessions';
+
+const apiMocks = vi.hoisted(() => ({
+  sessionDetail: vi.fn(),
+}));
+
+vi.mock('../client/api', () => ({
+  api: apiMocks,
+}));
+
+import { fetchSessionDetailCached, primeSessionDetailCache } from './useSessions';
 
 function createSessionMeta(id = 'conv-1'): SessionMeta {
   return {
@@ -19,10 +24,10 @@ function createSessionMeta(id = 'conv-1'): SessionMeta {
   };
 }
 
-function createSessionDetail(signature = 'sig-1', id = 'conv-1'): SessionDetail {
+function createSessionDetail(signature = 'sig-1', id = 'conv-1', text = 'Cached reply'): SessionDetail {
   return {
     meta: createSessionMeta(id),
-    blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text: 'Cached reply' }],
+    blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text }],
     blockOffset: 0,
     totalBlocks: 1,
     contextUsage: null,
@@ -30,9 +35,9 @@ function createSessionDetail(signature = 'sig-1', id = 'conv-1'): SessionDetail 
   };
 }
 
-function createWindowedSessionDetail(signature = 'sig-1'): SessionDetail {
+function createWindowedSessionDetail(id = 'conv-1', signature = 'sig-1'): SessionDetail {
   return {
-    meta: createSessionMeta(),
+    meta: createSessionMeta(id),
     blocks: [
       { type: 'text', id: 'assistant-1', ts: '2026-04-06T12:00:01.000Z', text: 'Reply 1' },
       { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
@@ -45,61 +50,78 @@ function createWindowedSessionDetail(signature = 'sig-1'): SessionDetail {
   };
 }
 
-describe('resolveSessionDetailSeed', () => {
-  it('returns an idle empty state when there is no session id', () => {
-    expect(resolveSessionDetailSeed(undefined)).toEqual({
-      detail: null,
-      loading: false,
-    });
+describe('useSessions cache helpers', () => {
+  beforeEach(() => {
+    apiMocks.sessionDetail.mockReset();
   });
 
-  it('reports a loading state when the session detail is not cached yet', () => {
-    expect(resolveSessionDetailSeed('conv-detail-seed-miss', { tailBlocks: 120 })).toEqual({
-      detail: null,
-      loading: true,
-    });
-  });
-
-  it('reuses the in-memory session detail cache synchronously', () => {
+  it('reuses the in-memory session detail cache synchronously', async () => {
     const sessionId = 'conv-detail-seed-hit';
     const detail = createSessionDetail('sig-seed', sessionId);
     primeSessionDetailCache(sessionId, detail, { tailBlocks: 120 }, 9);
 
-    expect(resolveSessionDetailSeed(sessionId, { tailBlocks: 120 })).toEqual({
-      detail,
-      loading: false,
-    });
+    await expect(fetchSessionDetailCached(sessionId, { tailBlocks: 120 }, 9)).resolves.toEqual(detail);
+    expect(apiMocks.sessionDetail).not.toHaveBeenCalled();
   });
-});
 
-describe('mergeSessionDetailResultWithCachedDetail', () => {
-  it('reuses the cached transcript when the session detail response is unchanged', () => {
-    const cached = createSessionDetail();
+  it('fetches uncached session detail from the api', async () => {
+    const sessionId = 'conv-detail-cache-miss';
+    const detail = createSessionDetail('sig-fresh', sessionId, 'Fresh reply');
+    apiMocks.sessionDetail.mockResolvedValueOnce(detail);
 
-    const merged = mergeSessionDetailResultWithCachedDetail(cached, {
+    await expect(fetchSessionDetailCached(sessionId, { tailBlocks: 120 }, 1)).resolves.toEqual(detail);
+    expect(apiMocks.sessionDetail).toHaveBeenCalledWith(sessionId, { tailBlocks: 120 });
+  });
+
+  it('reuses the cached transcript when the session detail response is unchanged', async () => {
+    const sessionId = 'conv-detail-unchanged';
+    const cached = createSessionDetail('sig-1', sessionId);
+    primeSessionDetailCache(sessionId, cached, { tailBlocks: 120 }, 0);
+    apiMocks.sessionDetail.mockResolvedValueOnce({
       unchanged: true,
-      sessionId: cached.meta.id,
+      sessionId,
       signature: 'sig-1',
     });
 
-    expect(merged).toBe(cached);
-  });
-
-  it('drops the reuse path when the server reports a different signature', () => {
-    const merged = mergeSessionDetailResultWithCachedDetail(createSessionDetail('sig-1'), {
-      unchanged: true,
-      sessionId: 'conv-1',
-      signature: 'sig-2',
+    await expect(fetchSessionDetailCached(sessionId, { tailBlocks: 120 }, 1)).resolves.toBe(cached);
+    expect(apiMocks.sessionDetail).toHaveBeenCalledWith(sessionId, {
+      tailBlocks: 120,
+      knownSessionSignature: 'sig-1',
+      knownBlockOffset: 0,
+      knownTotalBlocks: 1,
+      knownLastBlockId: 'assistant-1',
     });
-
-    expect(merged).toBeNull();
   });
 
-  it('merges append-only transcript updates onto the cached window', () => {
-    const cached = createWindowedSessionDetail('sig-1');
-    const merged = mergeSessionDetailResultWithCachedDetail(cached, {
+  it('falls back to a fresh transcript payload when cached reuse is no longer valid', async () => {
+    const sessionId = 'conv-detail-fallback';
+    primeSessionDetailCache(sessionId, createSessionDetail('sig-1', sessionId), { tailBlocks: 120 }, 0);
+    const fresh = createSessionDetail('sig-2', sessionId, 'Fresh fallback');
+    apiMocks.sessionDetail
+      .mockResolvedValueOnce({
+        unchanged: true,
+        sessionId,
+        signature: 'sig-2',
+      })
+      .mockResolvedValueOnce(fresh);
+
+    await expect(fetchSessionDetailCached(sessionId, { tailBlocks: 120 }, 1)).resolves.toEqual(fresh);
+    expect(apiMocks.sessionDetail).toHaveBeenNthCalledWith(1, sessionId, {
+      tailBlocks: 120,
+      knownSessionSignature: 'sig-1',
+      knownBlockOffset: 0,
+      knownTotalBlocks: 1,
+      knownLastBlockId: 'assistant-1',
+    });
+    expect(apiMocks.sessionDetail).toHaveBeenNthCalledWith(2, sessionId, { tailBlocks: 120 });
+  });
+
+  it('merges append-only transcript updates onto the cached window', async () => {
+    const sessionId = 'conv-detail-append-only';
+    primeSessionDetailCache(sessionId, createWindowedSessionDetail(sessionId, 'sig-1'), { tailBlocks: 120 }, 0);
+    apiMocks.sessionDetail.mockResolvedValueOnce({
       appendOnly: true,
-      meta: cached.meta,
+      meta: createSessionMeta(sessionId),
       blocks: [{ type: 'text', id: 'assistant-4', ts: '2026-04-06T12:00:04.000Z', text: 'Reply 4' }],
       blockOffset: 3,
       totalBlocks: 6,
@@ -107,8 +129,8 @@ describe('mergeSessionDetailResultWithCachedDetail', () => {
       signature: 'sig-2',
     });
 
-    expect(merged).toEqual({
-      meta: cached.meta,
+    await expect(fetchSessionDetailCached(sessionId, { tailBlocks: 120 }, 1)).resolves.toEqual({
+      meta: createSessionMeta(sessionId),
       blocks: [
         { type: 'text', id: 'assistant-2', ts: '2026-04-06T12:00:02.000Z', text: 'Reply 2' },
         { type: 'text', id: 'assistant-3', ts: '2026-04-06T12:00:03.000Z', text: 'Reply 3' },
@@ -119,10 +141,5 @@ describe('mergeSessionDetailResultWithCachedDetail', () => {
       contextUsage: null,
       signature: 'sig-2',
     });
-  });
-
-  it('passes through full detail payloads unchanged', () => {
-    const detail = createSessionDetail('sig-3');
-    expect(mergeSessionDetailResultWithCachedDetail(null, detail)).toEqual(detail);
   });
 });
