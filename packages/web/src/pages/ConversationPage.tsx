@@ -29,9 +29,9 @@ import {
 } from '../conversation/conversationScroll';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { displayBlockToMessageBlock } from '../messageBlocks';
-import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
+import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../contexts';
-import { filterModelPickerItems } from '../modelPicker';
+import { filterModelPickerItems } from '../model/modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferred-resume/deferredResumeSlashCommand';
 import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';

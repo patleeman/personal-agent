@@ -1,4 +1,4 @@
-import type { ModelInfo } from './types';
+import type { ModelInfo } from '../types';
 
 export const THINKING_LEVEL_OPTIONS = [
   { value: '', label: 'Unset' },

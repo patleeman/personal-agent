@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { useAppData } from '../contexts';
 import { useApi } from '../hooks';
-import { THINKING_LEVEL_OPTIONS } from '../modelPreferences';
+import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import { isScheduledTaskDetail } from '../scheduledTaskDetail';
 import {
   buildCronFromEasyTaskSchedule,

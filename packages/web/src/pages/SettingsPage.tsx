@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../api';
 import { useApi } from '../hooks';
-import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../modelPreferences';
+import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../localSettings';
 import { type ThemePreference, useTheme } from '../theme';
 import { getDesktopBridge, isDesktopShell, readDesktopConnections, readDesktopEnvironment } from '../desktop/desktopBridge';

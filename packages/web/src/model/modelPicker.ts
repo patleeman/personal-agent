@@ -1,4 +1,4 @@
-import { fuzzyScore } from './slashMenu';
+import { fuzzyScore } from '../slashMenu';
 
 export interface ModelPickerItem {
   id: string;
