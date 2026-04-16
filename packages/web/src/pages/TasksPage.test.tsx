@@ -26,13 +26,25 @@ describe('TasksPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders the automation overview without the shared settings navigation rail', () => {
+  it('renders jobs and associated automation threads on the overview page', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
           <AppDataContext.Provider value={{
             projects: null,
-            sessions: null,
+            sessions: [{
+              id: 'automation.daily-report',
+              file: '/tmp/automation.daily-report.jsonl',
+              timestamp: '2026-03-18T00:00:00.000Z',
+              lastActivityAt: '2026-03-18T00:05:00.000Z',
+              cwd: '/repo/project',
+              cwdSlug: 'repo-project',
+              model: 'openai/gpt-5.4',
+              title: 'Automation: Daily report',
+              messageCount: 12,
+              automationTaskId: 'daily-report',
+              automationTitle: 'Daily report',
+            }],
             runs: null,
             tasks: [{
               id: 'daily-report',
@@ -43,6 +55,9 @@ describe('TasksPage', () => {
               cron: '0 9 * * 1-5',
               prompt: 'Send the daily report.',
               model: 'openai/gpt-5.4',
+              cwd: '/repo/project',
+              threadConversationId: 'automation.daily-report',
+              threadTitle: 'Automation: Daily report',
               lastStatus: 'success',
               lastRunAt: '2026-03-18T00:00:00.000Z',
             }],
@@ -60,16 +75,18 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Automations');
-    expect(html).toContain('Scheduled prompts, run history, and thread ownership in one place.');
-    expect(html).toContain('On this page');
+    expect(html).toContain('Jobs');
+    expect(html).toContain('Threads');
     expect(html).toContain('Daily report');
+    expect(html).toContain('Automation: Daily report');
     expect(html).toContain('href="/automations/daily-report"');
-    expect(html).not.toContain('Current');
+    expect(html).toContain('href="/conversations/automation.daily-report"');
+    expect(html).not.toContain('On this page');
     expect(html).not.toContain('href="/settings"');
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
   });
 
-  it('renders a leaner empty state copy', () => {
+  it('renders lean empty states for jobs and threads', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -91,10 +108,12 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Scheduled prompts, run history, and thread ownership in one place.');
-    expect(html).toContain('No automations yet.');
-    expect(html).toContain('Use New automation to create one.');
-    expect(html).toContain('On this page');
+    expect(html).toContain('Jobs');
+    expect(html).toContain('Threads');
+    expect(html).toContain('No jobs yet.');
+    expect(html).toContain('Create one to start recurring work.');
+    expect(html).toContain('No automation threads yet.');
+    expect(html).not.toContain('On this page');
     expect(html).not.toContain('Create the first scheduled workflow.');
     expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');
   });
@@ -181,6 +200,45 @@ describe('TasksPage', () => {
     expect(html).toContain('Hide run details');
   });
 
+  it('does not repeat the prompt summary above the full prompt body on the detail page', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations/morning-briefing']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            projects: null,
+            sessions: [],
+            runs: null,
+            tasks: [{
+              id: 'morning-briefing',
+              title: 'Morning Briefing',
+              scheduleType: 'cron',
+              running: false,
+              enabled: true,
+              cron: '0 8 * * 1-5',
+              prompt: 'Check calendar for important meetings.\n\nSummarize important email.',
+              model: 'openai/gpt-5.4',
+              lastStatus: 'success',
+            }],
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations/:id" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Morning Briefing');
+    expect(html).toContain('Prompt');
+    expect(html).toContain('Check calendar for important meetings.');
+    expect(html).toContain('Summarize important email.');
+    expect(html).not.toContain('Check calendar for important meetings. Summarize important email.');
+  });
+
   it('renders the create automation form in a modal when requested', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations?new=1']}>
@@ -207,7 +265,7 @@ describe('TasksPage', () => {
     expect(html).toContain('Automation title');
     expect(html).toContain('Select project');
     expect(html).toContain('Worktree');
-    expect(html).toContain('No automations yet.');
+    expect(html).toContain('No jobs yet.');
   });
 
   it('uses existing conversation workspaces as project options in the create form', () => {

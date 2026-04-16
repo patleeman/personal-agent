@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
@@ -195,34 +195,6 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-const AUTOMATIONS_QUICK_LINKS = [
-  {
-    id: 'automations-overview',
-    label: 'Overview',
-    summary: 'Status, activity, and schedule coverage',
-  },
-  {
-    id: 'automations-list',
-    label: 'All automations',
-    summary: 'Inspect prompts, schedules, and run history',
-  },
-] as const;
-
-type AutomationsQuickLink = (typeof AUTOMATIONS_QUICK_LINKS)[number];
-type AutomationsQuickLinkId = AutomationsQuickLink['id'];
-
-function AutomationHero() {
-  return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="8" />
-        <path d="M12 7.5v4.5l3 1.5" />
-        <path d="M16.5 4.5 18 3m-12 18L4.5 19.5" />
-      </svg>
-    </div>
-  );
-}
-
 function AutomationsSection({
   id,
   label,
@@ -271,49 +243,6 @@ function AutomationsPanel({
       </div>
       <div className="min-w-0 space-y-3.5">{children}</div>
     </section>
-  );
-}
-
-function AutomationsTableOfContents({
-  items,
-  activeId,
-  onNavigate,
-}: {
-  items: readonly AutomationsQuickLink[];
-  activeId: AutomationsQuickLinkId;
-  onNavigate: (sectionId: AutomationsQuickLinkId) => void;
-}) {
-  return (
-    <aside className="hidden lg:block lg:sticky lg:top-8 lg:self-start">
-      <nav aria-label="Automation sections" className="space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/85">On this page</p>
-        <div className="space-y-2">
-          {items.map((item) => {
-            const active = item.id === activeId;
-            return (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onNavigate(item.id);
-                }}
-                className={cx(
-                  'block border-l py-1 pl-4 pr-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base',
-                  active ? 'border-accent text-primary' : 'border-border-subtle/60 text-secondary hover:border-border-default hover:text-primary',
-                )}
-                aria-current={active ? 'location' : undefined}
-              >
-                <span className="block text-[13px] font-medium">{item.label}</span>
-                <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
-                  {item.summary}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      </nav>
-    </aside>
   );
 }
 
@@ -393,24 +322,6 @@ function DeleteTaskModal({
   );
 }
 
-function AutomationOverviewStat({
-  label,
-  value,
-  meta,
-}: {
-  label: string;
-  value: string;
-  meta: string;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</p>
-      <p className="text-[30px] font-semibold tracking-[-0.04em] text-primary">{value}</p>
-      <p className="text-[12px] leading-5 text-secondary">{meta}</p>
-    </div>
-  );
-}
-
 function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
   const { text, cls } = statusText(task);
   const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
@@ -440,6 +351,42 @@ function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
             <span>{lastRunLabel}</span>
             <span>{modelLabel}</span>
           </div>
+        </div>
+        <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
+      </div>
+    </Link>
+  );
+}
+
+interface AssociatedAutomationThread {
+  conversationId: string;
+  title: string;
+  cwd?: string;
+  lastActivityAt?: string;
+  automationTitles: string[];
+}
+
+function AutomationThreadRow({ thread }: { thread: AssociatedAutomationThread }) {
+  const automationCountLabel = `${thread.automationTitles.length} automation${thread.automationTitles.length === 1 ? '' : 's'}`;
+  const automationSummary = thread.automationTitles.join(' · ');
+  const lastActivityLabel = thread.lastActivityAt ? `Last active ${timeAgo(thread.lastActivityAt)}` : 'No activity yet';
+
+  return (
+    <Link
+      to={`/conversations/${encodeURIComponent(thread.conversationId)}`}
+      className="group block border-t border-border-subtle py-5 first:border-t-0"
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-secondary">
+            <span>{automationCountLabel}</span>
+            <span>{lastActivityLabel}</span>
+          </div>
+          <p className="mt-2 break-words text-[18px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
+            {thread.title}
+          </p>
+          <p className="mt-1 max-w-3xl break-words text-[14px] leading-6 text-secondary">{automationSummary}</p>
+          {thread.cwd && <p className="mt-3 break-all text-[12px] text-secondary">{thread.cwd}</p>}
         </div>
         <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
       </div>
@@ -686,7 +633,6 @@ function AutomationDetailView({
               </div>
               <div>
                 <h1 className="text-[46px] font-semibold tracking-[-0.04em] text-primary">{title}</h1>
-                <p className="mt-3 max-w-3xl text-[16px] leading-7 text-secondary">{summarizePrompt(prompt) || 'No prompt yet.'}</p>
               </div>
             </section>
 
@@ -808,17 +754,15 @@ function AutomationsOverview({
   tasks: ScheduledTaskSummary[];
   onCreate: () => void;
 }) {
-  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const { sessions } = useAppData();
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
   const runningCount = tasks.filter((task) => task.running).length;
   const attentionCount = tasks.filter((task) => task.lastStatus === 'failure').length;
   const enabledCount = tasks.filter((task) => task.enabled).length;
-  const disabledCount = tasks.length - enabledCount;
-  const [activeSectionId, setActiveSectionId] = useState<AutomationsQuickLinkId>(AUTOMATIONS_QUICK_LINKS[0].id);
 
   const pageMeta = useMemo(() => {
     if (tasks.length === 0) {
-      return '0 enabled · ready for the first schedule';
+      return 'No automation jobs yet.';
     }
 
     const segments = [`${enabledCount} enabled`];
@@ -827,139 +771,156 @@ function AutomationsOverview({
     }
     if (attentionCount > 0) {
       segments.push(`${attentionCount} need review`);
-    } else {
-      segments.push('all clear');
     }
 
     return segments.join(' · ');
   }, [attentionCount, enabledCount, runningCount, tasks.length]);
 
-  useEffect(() => {
-    const root = scrollRef.current;
-    if (!root || typeof IntersectionObserver === 'undefined') {
-      return;
+  const associatedThreads = useMemo(() => {
+    const sessionsById = new Map((sessions ?? []).map((session) => [session.id, session] as const));
+    const tasksById = new Map(rows.map((task) => [task.id, task] as const));
+    const byConversationId = new Map<string, {
+      conversationId: string;
+      title: string;
+      cwd?: string;
+      lastActivityAt?: string;
+      automationTitles: string[];
+    }>();
+
+    function upsertThread(conversationId: string, input: {
+      title?: string;
+      cwd?: string;
+      lastActivityAt?: string;
+      automationTitle?: string;
+    }) {
+      const existing = byConversationId.get(conversationId);
+      if (!existing) {
+        byConversationId.set(conversationId, {
+          conversationId,
+          title: input.title?.trim() || conversationId,
+          cwd: input.cwd,
+          lastActivityAt: input.lastActivityAt,
+          automationTitles: input.automationTitle ? [input.automationTitle] : [],
+        });
+        return;
+      }
+
+      if ((!existing.title || existing.title === conversationId) && input.title?.trim()) {
+        existing.title = input.title.trim();
+      }
+      if (!existing.cwd && input.cwd) {
+        existing.cwd = input.cwd;
+      }
+      if (input.lastActivityAt && (!existing.lastActivityAt || input.lastActivityAt > existing.lastActivityAt)) {
+        existing.lastActivityAt = input.lastActivityAt;
+      }
+      if (input.automationTitle && !existing.automationTitles.includes(input.automationTitle)) {
+        existing.automationTitles.push(input.automationTitle);
+      }
     }
 
-    const sections = AUTOMATIONS_QUICK_LINKS
-      .map((item) => root.querySelector<HTMLElement>(`#${item.id}`))
-      .filter((section): section is HTMLElement => Boolean(section));
+    rows.forEach((task) => {
+      if (!task.threadConversationId) {
+        return;
+      }
 
-    if (sections.length === 0) {
-      return;
-    }
+      const session = sessionsById.get(task.threadConversationId);
+      upsertThread(task.threadConversationId, {
+        title: session?.title || task.threadTitle || formatTaskName(task),
+        cwd: session?.cwd || task.cwd,
+        lastActivityAt: session?.lastActivityAt || session?.timestamp,
+        automationTitle: formatTaskName(task),
+      });
+    });
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((left, right) => right.intersectionRatio - left.intersectionRatio);
-        const nextId = visible[0]?.target.id as AutomationsQuickLinkId | undefined;
-        if (nextId) {
-          setActiveSectionId(nextId);
-        }
-      },
-      {
-        root,
-        rootMargin: '-18% 0px -56% 0px',
-        threshold: [0.15, 0.35, 0.6],
-      },
-    );
+    (sessions ?? []).forEach((session) => {
+      if (!session.automationTaskId && !session.automationTitle) {
+        return;
+      }
 
-    sections.forEach((section) => observer.observe(section));
-    return () => observer.disconnect();
-  }, []);
+      const linkedTask = session.automationTaskId ? tasksById.get(session.automationTaskId) : undefined;
+      upsertThread(session.id, {
+        title: session.title,
+        cwd: session.cwd,
+        lastActivityAt: session.lastActivityAt || session.timestamp,
+        automationTitle: linkedTask ? formatTaskName(linkedTask) : session.automationTitle,
+      });
+    });
 
-  const navigateToSection = useCallback((sectionId: AutomationsQuickLinkId) => {
-    setActiveSectionId(sectionId);
-    const section = scrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
-    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }, []);
+    return Array.from(byConversationId.values())
+      .map((thread) => ({
+        ...thread,
+        automationTitles: [...thread.automationTitles].sort((left, right) => left.localeCompare(right)),
+      }))
+      .sort((left, right) => {
+        const leftActivity = left.lastActivityAt ?? '';
+        const rightActivity = right.lastActivityAt ?? '';
+        return rightActivity.localeCompare(leftActivity) || left.title.localeCompare(right.title);
+      }) satisfies AssociatedAutomationThread[];
+  }, [rows, sessions]);
 
   return (
-    <div ref={scrollRef} className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14">
-          <div className="min-w-0">
-            <div className="mx-auto flex w-full max-w-[58rem] flex-col gap-12">
-              <div className="space-y-6">
-                <div className="flex justify-end">
-                  <ToolbarButton
-                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                    onClick={onCreate}
-                  >
-                    + New automation
-                  </ToolbarButton>
-                </div>
-
-                <div className="mx-auto flex max-w-[38rem] flex-col items-center text-center">
-                  <AutomationHero />
-                  <h1 className="ui-page-title mt-5 text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Automations</h1>
-                  <p className="ui-page-meta mt-1.5 text-[12px]">{pageMeta}</p>
-                  <p className="mt-4 text-[14px] leading-7 text-secondary">
-                    Scheduled prompts, run history, and thread ownership in one place.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-12">
-                <AutomationsSection
-                  id="automations-overview"
-                  label="Overview"
-                  description="Status, activity, and schedule coverage across this workspace."
-                >
-                  <div className="space-y-0">
-                    <AutomationsPanel
-                      title="Status snapshot"
-                      description="Quick read on what is running, healthy, disabled, or waiting for review."
-                    >
-                      <div className="grid gap-8 sm:grid-cols-2 xl:grid-cols-4">
-                        <AutomationOverviewStat label="Automations" value={String(tasks.length)} meta="scheduled prompts in this workspace" />
-                        <AutomationOverviewStat label="Running" value={String(runningCount)} meta="currently executing through the daemon" />
-                        <AutomationOverviewStat label="Needs attention" value={String(attentionCount)} meta="last run failed or needs review" />
-                        <AutomationOverviewStat label="Disabled" value={String(disabledCount)} meta={enabledCount === 0 ? 'no enabled schedules right now' : `${enabledCount} enabled right now`} />
-                      </div>
-                    </AutomationsPanel>
-                  </div>
-                </AutomationsSection>
-
-                <AutomationsSection
-                  id="automations-list"
-                  label={tasks.length === 0 ? 'Get started' : 'All automations'}
-                  description={tasks.length === 0
-                    ? 'Create the first scheduled prompt for recurring work in this workspace.'
-                    : 'Open one to inspect its prompt, schedule, and run history.'}
-                >
-                  <div className="space-y-0">
-                    <AutomationsPanel
-                      title={tasks.length === 0 ? 'No automations yet.' : 'Automation list'}
-                      description={tasks.length === 0 ? 'Use New automation to create one.' : `${rows.length} total automation${rows.length === 1 ? '' : 's'} in this workspace.`}
-                    >
-                      {tasks.length === 0 ? (
-                        <div className="max-w-xl space-y-3">
-                          <p className="text-[14px] leading-6 text-secondary">Use New automation to create one.</p>
-                          <div>
-                            <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="border-t border-border-subtle/70">
-                          {rows.map((task) => (
-                            <AutomationListRow key={task.id} task={task} />
-                          ))}
-                        </div>
-                      )}
-                    </AutomationsPanel>
-                  </div>
-                </AutomationsSection>
-              </div>
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto w-full max-w-[72rem] px-4 py-8 sm:px-6 sm:py-10">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 space-y-2">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Automations</p>
+            <div className="space-y-1">
+              <h1 className="text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Automations</h1>
+              <p className="text-[13px] text-secondary">{pageMeta}</p>
             </div>
           </div>
+          <ToolbarButton
+            className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+            onClick={onCreate}
+          >
+            + New automation
+          </ToolbarButton>
+        </div>
 
-          <AutomationsTableOfContents
-            items={AUTOMATIONS_QUICK_LINKS}
-            activeId={activeSectionId}
-            onNavigate={navigateToSection}
-          />
+        <div className="mt-10 space-y-12">
+          <AutomationsSection
+            id="automation-jobs"
+            label="Jobs"
+            description="Scheduled automation jobs and their current status."
+          >
+            <AutomationsPanel
+              title={tasks.length === 0 ? 'No jobs yet.' : 'Automation jobs'}
+              description={tasks.length === 0 ? 'Create one to start recurring work.' : `${rows.length} automation job${rows.length === 1 ? '' : 's'}.`}
+              actions={tasks.length === 0 ? <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton> : undefined}
+            >
+              {tasks.length === 0 ? (
+                <p className="max-w-xl text-[14px] leading-6 text-secondary">Create one to start recurring work.</p>
+              ) : (
+                <div className="border-t border-border-subtle/70">
+                  {rows.map((task) => (
+                    <AutomationListRow key={task.id} task={task} />
+                  ))}
+                </div>
+              )}
+            </AutomationsPanel>
+          </AutomationsSection>
+
+          <AutomationsSection
+            id="automation-threads"
+            label="Threads"
+            description="Threads currently linked to automation jobs."
+          >
+            <AutomationsPanel
+              title={associatedThreads.length === 0 ? 'No automation threads yet.' : 'Automation threads'}
+              description={associatedThreads.length === 0 ? 'Dedicated threads and reused conversation threads show up here once a job is attached to one.' : `${associatedThreads.length} associated thread${associatedThreads.length === 1 ? '' : 's'}.`}
+            >
+              {associatedThreads.length === 0 ? (
+                <p className="max-w-xl text-[14px] leading-6 text-secondary">No automation threads yet.</p>
+              ) : (
+                <div className="border-t border-border-subtle/70">
+                  {associatedThreads.map((thread) => (
+                    <AutomationThreadRow key={thread.conversationId} thread={thread} />
+                  ))}
+                </div>
+              )}
+            </AutomationsPanel>
+          </AutomationsSection>
         </div>
       </div>
     </div>
