@@ -2,30 +2,37 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCronFromEasyTaskSchedule,
   createCronEditorState,
-  humanizeCronExpression,
-  parseCronToEasyTaskSchedule,
+  formatTaskSchedule,
 } from './taskSchedule';
 
 describe('taskSchedule helpers', () => {
-  it('parses every-n-hours cron expressions for the builder', () => {
-    expect(parseCronToEasyTaskSchedule('11 */4 * * *')).toEqual({
-      cadence: 'interval',
-      minute: 11,
-      hour: 0,
-      intervalHours: 4,
-      weekdays: [1],
-      dayOfMonth: 1,
+  it('parses supported cron expressions into builder state', () => {
+    expect(createCronEditorState('11 */4 * * *')).toEqual({
+      mode: 'builder',
+      builder: {
+        cadence: 'interval',
+        minute: 11,
+        hour: 0,
+        intervalHours: 4,
+        weekdays: [1],
+        dayOfMonth: 1,
+      },
+      rawCron: '11 */4 * * *',
+      supported: true,
     });
-  });
 
-  it('parses weekday cron expressions for the builder', () => {
-    expect(parseCronToEasyTaskSchedule('0 9 * * 1-5')).toEqual({
-      cadence: 'weekdays',
-      minute: 0,
-      hour: 9,
-      intervalHours: 4,
-      weekdays: [1, 2, 3, 4, 5],
-      dayOfMonth: 1,
+    expect(createCronEditorState('0 9 * * 1-5')).toEqual({
+      mode: 'builder',
+      builder: {
+        cadence: 'weekdays',
+        minute: 0,
+        hour: 9,
+        intervalHours: 4,
+        weekdays: [1, 2, 3, 4, 5],
+        dayOfMonth: 1,
+      },
+      rawCron: '0 9 * * 1-5',
+      supported: true,
     });
   });
 
@@ -40,9 +47,9 @@ describe('taskSchedule helpers', () => {
     })).toBe('30 8 * * 1,3,5');
   });
 
-  it('humanizes supported cron expressions', () => {
-    expect(humanizeCronExpression('11 */4 * * *')).toBe('every 4h at :11');
-    expect(humanizeCronExpression('0 9 * * 1-5')).toBe('weekdays at 09:00');
+  it('formats supported schedules for display', () => {
+    expect(formatTaskSchedule({ cron: '11 */4 * * *' })).toBe('every 4h at :11');
+    expect(formatTaskSchedule({ cron: '0 9 * * 1-5' })).toBe('weekdays at 09:00');
   });
 
   it('falls back to raw mode for unsupported cron expressions', () => {
