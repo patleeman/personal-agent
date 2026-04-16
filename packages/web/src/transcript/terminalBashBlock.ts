@@ -1,8 +1,8 @@
 import type { MessageBlock } from '../shared/types';
 
-export const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
+const TERMINAL_BASH_DISPLAY_MODE = 'terminal';
 
-export interface TerminalBashToolPresentation {
+interface TerminalBashToolPresentation {
   command: string;
   exitCode?: number;
   cancelled: boolean;
