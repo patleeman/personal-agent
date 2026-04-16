@@ -2,16 +2,31 @@ import React, { Fragment, createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MessageBlock } from '../../shared/types';
-import {
-  ChatView,
-  renderText,
-} from './ChatView.js';
+import { ChatView } from './ChatView.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
 afterEach(() => {
   vi.useRealTimers();
 });
+
+function renderAssistantText(
+  text: string,
+  options?: {
+    onOpenFilePath?: (path: string) => void;
+    onOpenCheckpoint?: (checkpointId: string) => void;
+  },
+) {
+  return renderToStaticMarkup(createElement(ChatView, {
+    messages: [{
+      type: 'text',
+      ts: '2026-03-11T18:00:00.000Z',
+      text,
+    }],
+    onOpenFilePath: options?.onOpenFilePath,
+    onOpenCheckpoint: options?.onOpenCheckpoint,
+  }));
+}
 
 describe('chat view streaming disclosure', () => {
   it('auto-opens running tool blocks inside internal-work clusters', () => {
@@ -128,7 +143,7 @@ describe('chat view streaming disclosure', () => {
 
 
   it('renders rich markdown structures in assistant messages', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
+    const html = renderAssistantText([
       '# Preview title',
       '',
       'Paragraph with **bold**, `inline code`, and a [link](https://example.com).',
@@ -145,7 +160,7 @@ describe('chat view streaming disclosure', () => {
       '```ts',
       'const value = 1;',
       '```',
-    ].join('\n'))));
+    ].join('\n'));
 
     expect(html).toContain('<h1');
     expect(html).toContain('<ul');
@@ -158,13 +173,13 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('does not auto-link file paths inside assistant message text', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
+    const html = renderAssistantText([
       'Touch packages/web/src/app/App.tsx next.',
       '',
       '`packages/web/src/app/main.tsx`',
       '',
       '[relative file](packages/web/src/content/latexArtifacts.ts)',
-    ].join('\n'), { onOpenFilePath: () => undefined })));
+    ].join('\n'), { onOpenFilePath: () => undefined });
 
     expect(html).toContain('packages/web/src/app/App.tsx');
     expect(html).toContain('packages/web/src/app/main.tsx');
@@ -175,10 +190,10 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders commit hashes as clickable transcript controls when a checkpoint opener is available', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText(
+    const html = renderAssistantText(
       'Checkpoint saved: `93f02a21` and plain 93f02a21.',
       { onOpenCheckpoint: () => undefined },
-    )));
+    );
 
     expect(html).toContain('aria-label="Open diff for commit 93f02a21"');
     expect(html.match(/Open diff for commit 93f02a21/g)).toHaveLength(2);
@@ -186,7 +201,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders project mentions as pills inside markdown text', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Check @web-ui before touching @projects.')));
+    const html = renderAssistantText('Check @web-ui before touching @projects.');
 
     expect(html).toContain('@web-ui');
     expect(html).toContain('@projects');
@@ -194,14 +209,14 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('does not turn email addresses into mention pills', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Email patrick@example.com and ping @web-ui for follow-up.')));
+    const html = renderAssistantText('Email patrick@example.com and ping @web-ui for follow-up.');
 
     expect(html).toContain('patrick@example.com');
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
   });
 
   it('renders vault file mentions as a single pill', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Open @_profiles/datadog/AGENTS.md before editing.')));
+    const html = renderAssistantText('Open @_profiles/datadog/AGENTS.md before editing.');
 
     expect(html).toContain('@_profiles/datadog/AGENTS.md');
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
@@ -957,7 +972,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('preserves inline code content without stringifying React nodes', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @web-ui.')));
+    const html = renderAssistantText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @web-ui.');
 
     expect(html).toContain('artifact');
     expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');
@@ -965,7 +980,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders local paths as plain inline code without path actions', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Open `/Users/patrick/notes.md` soon.')));
+    const html = renderAssistantText('Open `/Users/patrick/notes.md` soon.');
 
     expect(html).toContain('/Users/patrick/notes.md');
     expect(html).not.toContain('role="tooltip"');
@@ -974,7 +989,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders slash commands as plain inline code without actions', () => {
-    const html = renderToStaticMarkup(createElement(Fragment, null, renderText('Use `/model` before opening `/Users/patrick/notes.md`.')));
+    const html = renderAssistantText('Use `/model` before opening `/Users/patrick/notes.md`.');
 
     expect(html).toContain('/model');
     expect(html).toContain('/Users/patrick/notes.md');

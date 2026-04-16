@@ -396,7 +396,7 @@ function renderSkillAwareText(
   );
 }
 
-export function renderText(
+function renderText(
   text: string,
   options?: {
     onOpenFilePath?: (path: string) => void;
