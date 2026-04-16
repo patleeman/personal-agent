@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { DesktopWorkspaceServerState } from './hosts/types.js';
 import { buildDesktopTrayMenuTemplate, type DesktopTrayActions } from './tray.js';
 
 function createActions(): DesktopTrayActions {
@@ -14,28 +15,66 @@ function createActions(): DesktopTrayActions {
   };
 }
 
+function createWorkspaceServerState(overrides: Partial<DesktopWorkspaceServerState> = {}): DesktopWorkspaceServerState {
+  return {
+    enabled: false,
+    port: 8390,
+    useTailscaleServe: false,
+    running: false,
+    websocketPath: '/codex',
+    localWebsocketUrl: 'ws://127.0.0.1:8390/codex',
+    logFile: '/logs/codex-app-server.log',
+    ...overrides,
+  };
+}
+
 describe('buildDesktopTrayMenuTemplate', () => {
-  it('shows the connected host when the desktop backend is ready', () => {
+  it('shows the remote api status when the desktop backend is ready', () => {
     const template = buildDesktopTrayMenuTemplate({
       activeHostLabel: 'Local',
       startupState: { kind: 'ready' },
+      workspaceServerState: createWorkspaceServerState(),
       actions: createActions(),
     });
 
     expect(template).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Connected to: Local', enabled: false }),
+      expect.objectContaining({ label: 'Remote API: Off', enabled: false }),
       expect.objectContaining({ label: 'Show Personal Agent', enabled: true }),
       expect.objectContaining({ label: 'New Conversation', enabled: true }),
       expect.objectContaining({ label: 'Settings…', enabled: true }),
       expect.objectContaining({ label: 'Restart Runtime', enabled: true }),
       expect.objectContaining({ label: 'Quit Personal Agent' }),
     ]));
+    expect(template.map((item) => item.label)).not.toContain('Connected to: Local');
   });
 
-  it('shows recent conversations ahead of the main actions', () => {
+  it('shows the hosted remote api endpoint when it is serving', () => {
     const template = buildDesktopTrayMenuTemplate({
       activeHostLabel: 'Local',
       startupState: { kind: 'ready' },
+      workspaceServerState: createWorkspaceServerState({
+        enabled: true,
+        running: true,
+        useTailscaleServe: true,
+        tailnetWebsocketUrl: 'wss://desktop.tailnet.ts.net/codex',
+      }),
+      actions: createActions(),
+    });
+
+    expect(template).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        label: 'Remote API: On',
+        sublabel: 'wss://desktop.tailnet.ts.net/codex',
+        enabled: false,
+      }),
+    ]));
+  });
+
+  it('does not show recent conversations anymore', () => {
+    const template = buildDesktopTrayMenuTemplate({
+      activeHostLabel: 'Local',
+      startupState: { kind: 'ready' },
+      workspaceServerState: createWorkspaceServerState(),
       recentConversationsState: {
         kind: 'ready',
         totalCount: 2,
@@ -60,49 +99,23 @@ describe('buildDesktopTrayMenuTemplate', () => {
       actions: createActions(),
     });
 
-    expect(template).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Recent', enabled: false }),
-      expect.objectContaining({ label: 'Fix desktop tray menu ordering', sublabel: 'personal-agent · running', enabled: true }),
-      expect.objectContaining({ label: 'Review release notes', sublabel: 'release-notes · attention', enabled: true }),
-      expect.objectContaining({ label: 'Show Personal Agent', enabled: true }),
-    ]));
-  });
-
-  it('limits the recent conversation section to the top 10 and exposes a more action', () => {
-    const template = buildDesktopTrayMenuTemplate({
-      activeHostLabel: 'Local',
-      startupState: { kind: 'ready' },
-      recentConversationsState: {
-        kind: 'ready',
-        totalCount: 12,
-        conversations: Array.from({ length: 10 }, (_, index) => ({
-          id: `conversation-${String(index + 1)}`,
-          title: `Conversation ${String(index + 1)}`,
-          cwd: `/tmp/project-${String(index + 1)}`,
-          timestamp: `2026-04-${String(10 - index).padStart(2, '0')}T10:00:00.000Z`,
-        })),
-      },
-      actions: createActions(),
-    });
-
-    expect(template.filter((item) => item.label?.startsWith('Conversation '))).toHaveLength(10);
-    expect(template).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Conversation 10' }),
-      expect.objectContaining({ label: 'More Conversations…', enabled: true }),
-    ]));
-    expect(template).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Conversation 11' }),
-    ]));
+    const labels = template.map((item) => item.label);
+    expect(labels).not.toContain('Recent');
+    expect(labels).not.toContain('Fix desktop tray menu ordering');
+    expect(labels).not.toContain('Review release notes');
+    expect(labels).not.toContain('More Conversations…');
   });
 
   it('surfaces startup failures with retry and log actions', () => {
     const template = buildDesktopTrayMenuTemplate({
       activeHostLabel: 'Local',
       startupState: { kind: 'error', message: 'Port 3741 on 127.0.0.1 is already in use.' },
+      workspaceServerState: createWorkspaceServerState(),
       actions: createActions(),
     });
 
     expect(template).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Remote API: Off', enabled: false }),
       expect.objectContaining({ label: 'Startup failed: Local', enabled: false }),
       expect.objectContaining({ label: 'Port 3741 on 127.0.0.1 is already in use.', enabled: false }),
       expect.objectContaining({ label: 'Retry Personal Agent', enabled: true }),
@@ -118,6 +131,7 @@ describe('buildDesktopTrayMenuTemplate', () => {
       appName: 'Personal Agent Testing',
       activeHostLabel: 'Local',
       startupState: { kind: 'ready' },
+      workspaceServerState: createWorkspaceServerState(),
       actions: createActions(),
     });
 

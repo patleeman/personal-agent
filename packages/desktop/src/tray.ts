@@ -1,9 +1,8 @@
-import { basename } from 'node:path';
 import { Menu, Tray, app, nativeImage, type MenuItemConstructorOptions, type NativeImage } from 'electron';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import type { HostManager } from './hosts/host-manager.js';
-
-const MAX_RECENT_CONVERSATIONS = 10;
+import type { DesktopWorkspaceServerState } from './hosts/types.js';
+import { desktopWorkspaceServerManager } from './workspace-server.js';
 
 export type DesktopTrayStartupState =
   | { kind: 'starting' }
@@ -66,100 +65,42 @@ function truncateMenuLabel(value: string, maxLength = 90): string {
   return `${normalized.slice(0, maxLength - 1).trimEnd()}…`;
 }
 
-function readRecentConversationSortTimestamp(conversation: DesktopTrayRecentConversation): string {
-  const lastActivityAt = conversation.lastActivityAt?.trim();
-  return lastActivityAt && lastActivityAt.length > 0
-    ? lastActivityAt
-    : conversation.timestamp;
-}
+function buildWorkspaceServerStatus(options: {
+  state: DesktopWorkspaceServerState | null;
+  loading: boolean;
+}): { label: string; sublabel?: string } {
+  const { state, loading } = options;
 
-function buildRecentConversationSublabel(conversation: DesktopTrayRecentConversation): string | undefined {
-  const normalizedCwd = conversation.cwd.trim();
-  const projectLabel = normalizedCwd
-    ? basename(normalizedCwd) || normalizedCwd
-    : '';
-  const parts = [projectLabel].filter((value) => value.length > 0);
-
-  if (conversation.isRunning) {
-    parts.push('running');
+  if (!state) {
+    return {
+      label: loading ? 'Remote API: Checking…' : 'Remote API: Unknown',
+    };
   }
 
-  if (conversation.needsAttention) {
-    parts.push('attention');
+  if (state.error) {
+    return {
+      label: 'Remote API: Error',
+      sublabel: truncateMenuLabel(state.error),
+    };
   }
 
-  if (parts.length === 0) {
-    return undefined;
+  if (state.running) {
+    return {
+      label: 'Remote API: On',
+      sublabel: truncateMenuLabel(state.tailnetWebsocketUrl ?? state.localWebsocketUrl),
+    };
   }
 
-  return truncateMenuLabel(parts.join(' · '), 90);
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function normalizeRecentConversation(value: unknown): DesktopTrayRecentConversation | null {
-  if (!isRecord(value)) {
-    return null;
-  }
-
-  const id = typeof value.id === 'string' ? value.id.trim() : '';
-  const title = typeof value.title === 'string' ? value.title.trim() : '';
-  const cwd = typeof value.cwd === 'string' ? value.cwd.trim() : '';
-  const timestamp = typeof value.timestamp === 'string' ? value.timestamp.trim() : '';
-  const lastActivityAt = typeof value.lastActivityAt === 'string' ? value.lastActivityAt.trim() : '';
-
-  if (!id || !title || !timestamp) {
-    return null;
+  if (state.enabled) {
+    return {
+      label: 'Remote API: Starting…',
+      sublabel: truncateMenuLabel(state.localWebsocketUrl),
+    };
   }
 
   return {
-    id,
-    title,
-    cwd,
-    timestamp,
-    ...(lastActivityAt ? { lastActivityAt } : {}),
-    ...(typeof value.isRunning === 'boolean' ? { isRunning: value.isRunning } : {}),
-    ...(typeof value.needsAttention === 'boolean' ? { needsAttention: value.needsAttention } : {}),
+    label: 'Remote API: Off',
   };
-}
-
-function normalizeRecentConversations(value: unknown): { conversations: DesktopTrayRecentConversation[]; totalCount: number } {
-  if (!Array.isArray(value)) {
-    return { conversations: [], totalCount: 0 };
-  }
-
-  const conversations = value
-    .map((entry) => normalizeRecentConversation(entry))
-    .filter((entry): entry is DesktopTrayRecentConversation => entry !== null)
-    .sort((left, right) => readRecentConversationSortTimestamp(right).localeCompare(readRecentConversationSortTimestamp(left)));
-
-  return {
-    conversations: conversations.slice(0, MAX_RECENT_CONVERSATIONS),
-    totalCount: conversations.length,
-  };
-}
-
-function sameRecentConversations(
-  left: DesktopTrayRecentConversation[],
-  right: DesktopTrayRecentConversation[],
-): boolean {
-  if (left.length !== right.length) {
-    return false;
-  }
-
-  return left.every((entry, index) => {
-    const other = right[index];
-    return other
-      && entry.id === other.id
-      && entry.title === other.title
-      && entry.cwd === other.cwd
-      && entry.timestamp === other.timestamp
-      && entry.lastActivityAt === other.lastActivityAt
-      && entry.isRunning === other.isRunning
-      && entry.needsAttention === other.needsAttention;
-  });
 }
 
 export function buildDesktopTrayMenuTemplate(options: {
@@ -167,6 +108,8 @@ export function buildDesktopTrayMenuTemplate(options: {
   activeHostLabel: string;
   startupState: DesktopTrayStartupState;
   recentConversationsState?: DesktopTrayRecentConversationsState;
+  workspaceServerState?: DesktopWorkspaceServerState | null;
+  workspaceServerLoading?: boolean;
   actions: DesktopTrayActions;
 }): MenuItemConstructorOptions[] {
   const {
@@ -174,20 +117,21 @@ export function buildDesktopTrayMenuTemplate(options: {
     activeHostLabel,
     startupState,
     actions,
-    recentConversationsState = { kind: 'hidden', conversations: [], totalCount: 0 },
+    workspaceServerState = null,
+    workspaceServerLoading = false,
   } = options;
   const controlsReady = startupState.kind === 'ready';
   const canRetry = startupState.kind !== 'starting';
-  const statusLabel = startupState.kind === 'ready'
-    ? `Connected to: ${activeHostLabel}`
-    : startupState.kind === 'starting'
-      ? `Starting: ${activeHostLabel}`
-      : `Startup failed: ${activeHostLabel}`;
+  const workspaceServerStatus = buildWorkspaceServerStatus({
+    state: workspaceServerState,
+    loading: workspaceServerLoading,
+  });
 
   const template: MenuItemConstructorOptions[] = [
     {
-      label: statusLabel,
+      label: workspaceServerStatus.label,
       enabled: false,
+      ...(workspaceServerStatus.sublabel ? { sublabel: workspaceServerStatus.sublabel } : {}),
     },
   ];
 
@@ -199,48 +143,16 @@ export function buildDesktopTrayMenuTemplate(options: {
   }
 
   if (startupState.kind === 'error') {
-    template.push({
-      label: truncateMenuLabel(startupState.message),
-      enabled: false,
-    });
-  }
-
-  if (recentConversationsState.kind !== 'hidden') {
     template.push(
-      { type: 'separator' },
       {
-        label: 'Recent',
+        label: `Startup failed: ${activeHostLabel}`,
+        enabled: false,
+      },
+      {
+        label: truncateMenuLabel(startupState.message),
         enabled: false,
       },
     );
-
-    if (recentConversationsState.conversations.length > 0) {
-      for (const conversation of recentConversationsState.conversations) {
-        template.push({
-          label: truncateMenuLabel(conversation.title, 72),
-          sublabel: buildRecentConversationSublabel(conversation),
-          click: () => {
-            actions.onOpenConversation(conversation.id);
-          },
-          enabled: controlsReady,
-        });
-      }
-    } else {
-      template.push({
-        label: recentConversationsState.kind === 'loading'
-          ? 'Loading recent conversations…'
-          : 'No recent conversations yet',
-        enabled: false,
-      });
-    }
-
-    if (recentConversationsState.totalCount > recentConversationsState.conversations.length) {
-      template.push({
-        label: 'More Conversations…',
-        click: actions.onOpen,
-        enabled: controlsReady,
-      });
-    }
   }
 
   template.push(
@@ -292,12 +204,8 @@ export function buildDesktopTrayMenuTemplate(options: {
 export class DesktopTrayController {
   private tray: Tray;
   private startupState: DesktopTrayStartupState = { kind: 'starting' };
-  private recentConversations: DesktopTrayRecentConversation[] = [];
-  private recentConversationTotalCount = 0;
-  private recentConversationsLoadedHostId: string | null = null;
-  private recentConversationsLoadingHostId: string | null = null;
-  private recentConversationsLoadingPromise: Promise<void> | null = null;
-  private recentConversationsRequestId = 0;
+  private workspaceServerState: DesktopWorkspaceServerState | null = null;
+  private workspaceServerLoadingPromise: Promise<void> | null = null;
 
   constructor(
     private readonly options: {
@@ -326,7 +234,7 @@ export class DesktopTrayController {
 
   refresh(): void {
     this.renderMenu();
-    void this.ensureRecentConversationsLoaded();
+    void this.ensureWorkspaceServerStateLoaded();
   }
 
   destroy(): void {
@@ -334,7 +242,7 @@ export class DesktopTrayController {
   }
 
   private async showContextMenu(): Promise<void> {
-    await this.ensureRecentConversationsLoaded({ force: true });
+    await this.ensureWorkspaceServerStateLoaded({ force: true });
     this.renderMenu();
     this.tray.popUpContextMenu();
   }
@@ -349,101 +257,38 @@ export class DesktopTrayController {
       appName,
       activeHostLabel: activeHost.label,
       startupState: this.startupState,
-      recentConversationsState: this.getRecentConversationsState(),
+      workspaceServerState: this.workspaceServerState,
+      workspaceServerLoading: this.workspaceServerLoadingPromise !== null,
       actions: this.options,
     }));
 
     this.tray.setContextMenu(menu);
   }
 
-  private getRecentConversationsState(): DesktopTrayRecentConversationsState {
-    if (this.startupState.kind !== 'ready') {
-      return { kind: 'hidden', conversations: [], totalCount: 0 };
-    }
-
-    const activeHostId = this.options.hostManager.getActiveHostId();
-    const hasLoadedCurrentHost = this.recentConversationsLoadedHostId === activeHostId;
-    const isLoadingCurrentHost = this.recentConversationsLoadingHostId === activeHostId;
-
-    if (isLoadingCurrentHost) {
-      return {
-        kind: 'loading',
-        conversations: hasLoadedCurrentHost ? this.recentConversations : [],
-        totalCount: hasLoadedCurrentHost ? this.recentConversationTotalCount : 0,
-      };
-    }
-
-    if (hasLoadedCurrentHost) {
-      return {
-        kind: 'ready',
-        conversations: this.recentConversations,
-        totalCount: this.recentConversationTotalCount,
-      };
-    }
-
-    return { kind: 'loading', conversations: [], totalCount: 0 };
-  }
-
-  private async ensureRecentConversationsLoaded(options: { force?: boolean } = {}): Promise<void> {
-    if (this.startupState.kind !== 'ready') {
+  private async ensureWorkspaceServerStateLoaded(options: { force?: boolean } = {}): Promise<void> {
+    if (this.workspaceServerLoadingPromise) {
+      await this.workspaceServerLoadingPromise;
       return;
     }
 
-    const activeHostId = this.options.hostManager.getActiveHostId();
-    if (this.recentConversationsLoadingHostId === activeHostId && this.recentConversationsLoadingPromise) {
-      await this.recentConversationsLoadingPromise;
+    if (!options.force && this.workspaceServerState) {
       return;
     }
-
-    if (!options.force && this.recentConversationsLoadedHostId === activeHostId) {
-      return;
-    }
-
-    const requestId = ++this.recentConversationsRequestId;
-    const previouslyLoadedCurrentHost = this.recentConversationsLoadedHostId === activeHostId;
-    this.recentConversationsLoadingHostId = activeHostId;
-    this.renderMenu();
 
     const loadPromise = (async () => {
       try {
-        const sessions = await this.options.hostManager.getActiveHostController().invokeLocalApi('GET', '/api/sessions');
-        if (requestId !== this.recentConversationsRequestId || activeHostId !== this.options.hostManager.getActiveHostId()) {
-          return;
-        }
-
-        const normalized = normalizeRecentConversations(sessions);
-        const changed = this.recentConversationsLoadedHostId !== activeHostId
-          || this.recentConversationTotalCount !== normalized.totalCount
-          || !sameRecentConversations(this.recentConversations, normalized.conversations);
-
-        this.recentConversations = normalized.conversations;
-        this.recentConversationTotalCount = normalized.totalCount;
-        this.recentConversationsLoadedHostId = activeHostId;
-
-        if (changed) {
-          this.renderMenu();
-        }
+        const nextState = await desktopWorkspaceServerManager.readState();
+        this.workspaceServerState = nextState;
       } catch {
-        if (requestId !== this.recentConversationsRequestId || activeHostId !== this.options.hostManager.getActiveHostId()) {
-          return;
-        }
-
-        if (!previouslyLoadedCurrentHost) {
-          this.recentConversations = [];
-          this.recentConversationTotalCount = 0;
-          this.recentConversationsLoadedHostId = activeHostId;
-          this.renderMenu();
-        }
+        // Keep the last known workspace server state when reads fail.
       } finally {
-        if (requestId === this.recentConversationsRequestId) {
-          this.recentConversationsLoadingHostId = null;
-          this.recentConversationsLoadingPromise = null;
-          this.renderMenu();
-        }
+        this.workspaceServerLoadingPromise = null;
+        this.renderMenu();
       }
     })();
 
-    this.recentConversationsLoadingPromise = loadPromise;
+    this.workspaceServerLoadingPromise = loadPromise;
+    this.renderMenu();
     await loadPromise;
   }
 }
