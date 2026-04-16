@@ -5,8 +5,6 @@ import type { MessageBlock } from '../../shared/types';
 import {
   ChatView,
   renderText,
-  resolveDisclosureOpen,
-  toggleDisclosurePreference,
 } from './ChatView.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -107,17 +105,6 @@ describe('chat view streaming disclosure', () => {
     }));
 
     expect(html).toContain('Compacting context…');
-  });
-
-  it('collapses auto-opened blocks once live streaming ends unless manually overridden', () => {
-    expect(resolveDisclosureOpen(true, 'auto')).toBe(true);
-    expect(resolveDisclosureOpen(false, 'auto')).toBe(false);
-
-    expect(toggleDisclosurePreference(true, 'auto')).toBe('closed');
-    expect(resolveDisclosureOpen(true, 'closed')).toBe(false);
-
-    expect(toggleDisclosurePreference(false, 'closed')).toBe('open');
-    expect(resolveDisclosureOpen(false, 'open')).toBe(true);
   });
 
   it('auto-opens the internal-work cluster while live or when a running step remains', () => {

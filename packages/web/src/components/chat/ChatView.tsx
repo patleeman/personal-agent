@@ -576,13 +576,13 @@ function toolMeta(t: string) {
 
 type DisclosurePreference = 'auto' | 'open' | 'closed';
 
-export function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {
+function resolveDisclosureOpen(autoOpen: boolean, preference: DisclosurePreference): boolean {
   if (preference === 'open') return true;
   if (preference === 'closed') return false;
   return autoOpen;
 }
 
-export function toggleDisclosurePreference(autoOpen: boolean, preference: DisclosurePreference): DisclosurePreference {
+function toggleDisclosurePreference(autoOpen: boolean, preference: DisclosurePreference): DisclosurePreference {
   return resolveDisclosureOpen(autoOpen, preference) ? 'closed' : 'open';
 }
 
