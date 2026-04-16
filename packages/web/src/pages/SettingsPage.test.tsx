@@ -3,12 +3,12 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../client/api';
-import { useApi } from '../hooks';
+import { useApi } from '../hooks/useApi';
 import { useSseConnection } from '../app/contexts';
 import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage.js';
 
-vi.mock('../hooks', () => ({
+vi.mock('../hooks/useApi', () => ({
   useApi: vi.fn(),
 }));
 

@@ -4,7 +4,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import type { NodeMentionSurface } from '../../knowledge/nodeMentionRoutes';
 import { buildMentionLookup, renderChildrenWithMentionLinks } from '../../knowledge/mentionRendering';
-import { useNodeMentionItems } from '../../hooks';
+import { useNodeMentionItems } from '../../hooks/useNodeMentionItems';
 import { InlineMarkdownCode } from '../MarkdownInlineCode';
 import { cx } from '../ui';
 import { stripMarkdownFrontmatter } from '../../knowledge/markdownDocument';

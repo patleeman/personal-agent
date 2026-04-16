@@ -28,7 +28,7 @@ import {
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
-import { useApi } from '../hooks';
+import { useApi } from '../hooks/useApi';
 import { useDurableRunStream } from '../hooks/useDurableRunStream';
 import { useConversations } from '../hooks/useConversations';
 import { fetchSessionDetailCached } from '../hooks/useSessions';

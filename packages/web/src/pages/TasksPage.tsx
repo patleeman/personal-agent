@@ -5,7 +5,7 @@ import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '..
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSseConnection } from '../app/contexts';
-import { useApi } from '../hooks';
+import { useApi } from '../hooks/useApi';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
 import { formatTaskSchedule } from '../automation/taskSchedule';
 import type { DurableRunRecord, ScheduledTaskSummary } from '../shared/types';

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type SelectHTMLAttributes } from 
 import { useNavigate } from 'react-router-dom';
 import { api } from '../client/api';
 import { useAppData } from '../app/contexts';
-import { useApi } from '../hooks';
+import { useApi } from '../hooks/useApi';
 import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import { isScheduledTaskDetail } from '../automation/scheduledTaskDetail';
 import {

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppEvents } from '../app/contexts';
 import type { AppEventTopic } from '../shared/types';
-import type { RefetchOptions } from '../hooks';
+import type { RefetchOptions } from './useApi';
 
 export function useInvalidateOnTopics(
   topics: AppEventTopic[],

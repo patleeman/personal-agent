@@ -1,7 +1,7 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
-import { useApi } from '../hooks';
+import { useApi } from '../hooks/useApi';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
 import { type ThemePreference, useTheme } from '../ui-state/theme';

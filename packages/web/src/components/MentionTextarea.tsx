@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState, type KeyboardEventHandler, type TextareaHTMLAttributes } from 'react';
 import { filterMentionItems, MAX_MENTION_MENU_ITEMS, type MentionItem } from '../conversation/conversationMentions';
-import { useNodeMentionItems } from '../hooks';
+import { useNodeMentionItems } from '../hooks/useNodeMentionItems';
 import { Pill, cx } from './ui';
 
 interface MentionMatch {
