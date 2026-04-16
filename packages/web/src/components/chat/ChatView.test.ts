@@ -139,19 +139,19 @@ describe('chat view streaming disclosure', () => {
 
   it('does not auto-link file paths inside assistant message text', () => {
     const html = renderToStaticMarkup(createElement(Fragment, null, renderText([
-      'Touch packages/web/src/App.tsx next.',
+      'Touch packages/web/src/app/App.tsx next.',
       '',
-      '`packages/web/src/main.tsx`',
+      '`packages/web/src/app/main.tsx`',
       '',
-      '[relative file](packages/web/src/filePathLinks.tsx)',
+      '[relative file](packages/web/src/content/latexArtifacts.ts)',
     ].join('\n'), { onOpenFilePath: () => undefined })));
 
-    expect(html).toContain('packages/web/src/App.tsx');
-    expect(html).toContain('packages/web/src/main.tsx');
+    expect(html).toContain('packages/web/src/app/App.tsx');
+    expect(html).toContain('packages/web/src/app/main.tsx');
     expect(html).toContain('relative file');
     expect(html).not.toContain('data-file-path-link=');
     expect(html).not.toContain('role="button"');
-    expect(html).not.toContain('href="packages/web/src/filePathLinks.tsx"');
+    expect(html).not.toContain('href="packages/web/src/content/latexArtifacts.ts"');
   });
 
   it('renders commit hashes as clickable transcript controls when a checkpoint opener is available', () => {
@@ -360,16 +360,16 @@ describe('chat view streaming disclosure', () => {
         type: 'tool_use',
         ts: '2026-03-11T18:00:00.000Z',
         tool: 'bash',
-        input: { command: 'cat packages/web/src/App.tsx' },
-        output: 'Updated packages/web/src/App.tsx',
+        input: { command: 'cat packages/web/src/app/App.tsx' },
+        output: 'Updated packages/web/src/app/App.tsx',
         status: 'running',
       }],
       isStreaming: true,
       onOpenFilePath: () => undefined,
     }));
 
-    expect(html).toContain('cat packages/web/src/App.tsx');
-    expect(html).toContain('Updated packages/web/src/App.tsx');
+    expect(html).toContain('cat packages/web/src/app/App.tsx');
+    expect(html).toContain('Updated packages/web/src/app/App.tsx');
     expect(html).not.toContain('data-file-path-link=');
     expect(html).not.toContain('role="button"');
   });
