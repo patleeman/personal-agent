@@ -29,7 +29,7 @@ const {
   uninstallWebUiServiceMock: vi.fn(),
 }));
 
-vi.mock('@personal-agent/services', () => ({
+vi.mock('@personal-agent/daemon', () => ({
   getWebUiDeploymentSummary: getWebUiDeploymentSummaryMock,
   getWebUiServiceStatus: getWebUiServiceStatusMock,
   installWebUiService: installWebUiServiceMock,

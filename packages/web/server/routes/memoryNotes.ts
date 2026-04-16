@@ -6,7 +6,7 @@ import type { Express, Request } from 'express';
 import type { ServerRouteContext } from './context.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { getDurableAgentFilePath, getProfilesRoot, getVaultRoot } from '@personal-agent/core';
-import { listProfiles, resolveResourceProfile } from '@personal-agent/resources';
+import { listProfiles, resolveResourceProfile } from '@personal-agent/core';
 import {
   buildRecentReadUsage,
   listMemoryDocs,

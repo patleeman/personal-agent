@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { getRepoRoot } from '@personal-agent/resources';
+import { getRepoRoot } from '@personal-agent/core';
 
 interface CodexServerModule {
   startCodexAppServer(input: { listenUrl: string }): Promise<{ websocketUrl: string; close(): Promise<void> }>;

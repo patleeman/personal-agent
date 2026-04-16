@@ -15,17 +15,13 @@
     "forceConsistentCasingInFileNames": true,
     "paths": {
       "@personal-agent/core": ["./packages/core/src"],
-      "@personal-agent/daemon": ["./packages/daemon/src"],
-      "@personal-agent/resources": ["./packages/resources/src"],
-      "@personal-agent/services": ["./packages/services/src"]
+      "@personal-agent/daemon": ["./packages/daemon/src"]
     }
   },
   "references": [
     { "path": "./packages/core" },
     { "path": "./packages/daemon" },
     { "path": "./packages/cli" },
-    { "path": "./packages/resources" },
-    { "path": "./packages/services" },
     { "path": "./packages/desktop" }
   ],
   "files": [],

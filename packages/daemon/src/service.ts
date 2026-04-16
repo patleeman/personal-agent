@@ -4,7 +4,8 @@ import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { getStateRoot, resolveChildProcessEnv } from '@personal-agent/core';
-import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
+import { loadDaemonConfig } from './config.js';
+import { resolveDaemonPaths } from './paths.js';
 import {
   ensureActiveWebUiRelease,
   getWebUiDeploymentSummary,

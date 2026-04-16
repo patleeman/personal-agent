@@ -11,10 +11,9 @@ import {
   getDurableSettingsDir as getCanonicalLegacyDurableSettingsDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
   getVaultRoot,
-  listUnifiedSkillNodeDirs,
-  readMachineInstructionFiles,
-  readMachineSkillDirs,
-} from '@personal-agent/core';
+} from './runtime/paths.js';
+import { listUnifiedSkillNodeDirs } from './nodes.js';
+import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
 import { homedir } from 'os';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -279,22 +278,22 @@ function resolveLegacyProfileSettingsFilePath(profileName: string, options: Reso
 
 function resolveLegacyProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return join(getProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
+  return join(resolveProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
 }
 
 export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return getDurableProfileSettingsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getDurableProfileSettingsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 export function resolveProfileModelsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return getDurableProfileModelsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getDurableProfileModelsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 export function resolveProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return getDurableProfileAgentFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getDurableProfileAgentFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
@@ -464,7 +463,7 @@ export function getRepoDefaultsAgentDir(explicitRepoRoot?: string): string {
   return join(getRepoRoot(explicitRepoRoot), 'defaults', 'agent');
 }
 
-export function getProfilesRoot(options: ResolveProfileOptions = {}): string {
+function resolveProfilesRoot(options: ResolveProfileOptions = {}): string {
   const explicit = options.profilesRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
     return resolve(expandHomePath(explicit.trim()));
@@ -478,19 +477,19 @@ function getSyncRootFromProfilesRoot(profilesRoot: string): string {
 }
 
 function getLegacySettingsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalLegacyDurableSettingsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getCanonicalLegacyDurableSettingsDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 function getLegacyModelsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalLegacyDurableModelsDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getCanonicalLegacyDurableModelsDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 function getProfileDir(profileName: string, options: ResolveProfileOptions = {}): string {
-  return getDurableProfileDir(profileName || 'shared', getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getDurableProfileDir(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 function getNodesRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableNodesDir(getSyncRootFromProfilesRoot(getProfilesRoot(options)));
+  return getCanonicalDurableNodesDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
 }
 
 function listProfilesInRoot(root: string): string[] {
@@ -556,7 +555,7 @@ function rootHasSharedDurableResources(root: string, extensions: string[]): bool
 }
 
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
-  const profilesRoot = getProfilesRoot(options);
+  const profilesRoot = resolveProfilesRoot(options);
   const repoRoot = getRepoRoot(options.repoRoot);
   const profiles = new Set<string>([
     ...listProfilesInRoot(profilesRoot),
@@ -795,7 +794,7 @@ function validateProfileName(profileName: string): void {
 }
 
 function resolveSharedVaultAgentFile(options: ResolveProfileOptions = {}): string | undefined {
-  return existingFile(getDurableAgentFilePath(getSyncRootFromProfilesRoot(getProfilesRoot(options))));
+  return existingFile(getDurableAgentFilePath(getSyncRootFromProfilesRoot(resolveProfilesRoot(options))));
 }
 
 function resolveDurableAgentFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
@@ -871,7 +870,7 @@ export function resolveResourceProfile(
   validateProfileName(profileName);
 
   const repoRoot = getRepoRoot(options.repoRoot);
-  const profilesRoot = getProfilesRoot(options);
+  const profilesRoot = resolveProfilesRoot(options);
   const syncRoot = getSyncRootFromProfilesRoot(profilesRoot);
   const declaredProfiles = listProfilesInRoot(profilesRoot);
   if (profileName !== 'shared' && !declaredProfiles.includes(profileName)) {

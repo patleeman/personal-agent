@@ -54,14 +54,11 @@ const {
 vi.mock('@personal-agent/core', () => ({
   getProfilesRoot: getProfilesRootMock,
   getStateRoot: getStateRootMock,
-  writeMergedMcpConfigFile: writeMergedMcpConfigFileMock,
-}));
-
-vi.mock('@personal-agent/resources', () => ({
   listProfiles: listProfilesMock,
   materializeProfileToAgentDir: materializeProfileToAgentDirMock,
   resolveProfileSettingsFilePath: resolveProfileSettingsFilePathMock,
   resolveResourceProfile: resolveResourceProfileMock,
+  writeMergedMcpConfigFile: writeMergedMcpConfigFileMock,
 }));
 
 vi.mock('../extensions/artifactAgentExtension.js', () => ({

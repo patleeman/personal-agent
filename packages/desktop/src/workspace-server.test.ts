@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChildProcess } from 'node:child_process';
-import type { TailscaleServeProxyState } from '@personal-agent/services';
+import type { TailscaleServeProxyState } from '@personal-agent/daemon';
 import type { DesktopConfig } from './hosts/types.js';
 import { DesktopWorkspaceServerManager } from './workspace-server.js';
 

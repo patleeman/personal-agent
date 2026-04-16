@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from 'express';
-import { listProfiles, readPackageSourceTargetState } from '@personal-agent/resources';
+import { listProfiles, readPackageSourceTargetState } from '@personal-agent/core';
 import {
   buildMergedMcpConfigDocument,
   inspectCliBinary,

@@ -6,7 +6,7 @@ import {
   resolveTailscaleServeBaseUrl,
   syncTailscaleServeProxy,
   type TailscaleServeProxyState,
-} from '@personal-agent/services';
+} from '@personal-agent/daemon';
 import type { DesktopConfig, DesktopWorkspaceServerConfig, DesktopWorkspaceServerState } from './hosts/types.js';
 import { resolveDesktopRuntimePaths, type DesktopRuntimePaths } from './desktop-env.js';
 import { resolveCodexServerInvocation } from './codex-server-invocation.js';

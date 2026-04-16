@@ -17,7 +17,7 @@ import {
   loadMemoryPackageReferences,
   loadUnifiedNodes,
 } from '@personal-agent/core';
-import { resolveResourceProfile } from '@personal-agent/resources';
+import { resolveResourceProfile } from '@personal-agent/core';
 import { parseDocument, stringify as stringifyYaml } from 'yaml';
 
 // ── Memory path utilities ─────────────────────────────────────────────────────

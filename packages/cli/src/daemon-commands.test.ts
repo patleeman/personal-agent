@@ -26,19 +26,12 @@ const { serviceMocks, daemonMocks } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock('@personal-agent/services', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
-  return {
-    ...actual,
-    getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
-    restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
-  };
-});
-
 vi.mock('@personal-agent/daemon', async () => {
   const actual = await vi.importActual<typeof import('@personal-agent/daemon')>('@personal-agent/daemon');
   return {
     ...actual,
+    getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
+    restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
     startDaemonDetached: daemonMocks.startDaemonDetached,
     stopDaemonGracefully: daemonMocks.stopDaemonGracefully,
   };

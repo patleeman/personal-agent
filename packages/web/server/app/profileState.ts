@@ -8,7 +8,7 @@ import {
   materializeProfileToAgentDir,
   resolveProfileSettingsFilePath,
   resolveResourceProfile,
-} from '@personal-agent/resources';
+} from '@personal-agent/core';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
 import { createAskUserQuestionAgentExtension } from '../extensions/askUserQuestionAgentExtension.js';
 import { createCheckpointAgentExtension } from '../extensions/checkpointAgentExtension.js';

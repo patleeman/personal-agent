@@ -87,6 +87,10 @@ export * from './memory-store.js';
 // Unified durable nodes
 export * from './nodes.js';
 
+// Profile/resource resolution helpers
+export * from './resources.js';
+export * from './prompt-catalog.js';
+
 // Codex compatibility transport helpers
 export * from './codex-compat.js';
 

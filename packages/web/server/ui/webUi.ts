@@ -25,7 +25,7 @@ import {
   syncWebUiTailscaleServe,
   uninstallWebUiService,
   type WebUiDeploymentSummary,
-} from '@personal-agent/services';
+} from '@personal-agent/daemon';
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 
 interface LogTail {

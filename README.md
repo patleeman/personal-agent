@@ -17,11 +17,9 @@ It keeps repo-managed defaults in git, portable knowledge in an external vault, 
 
 ## Packages
 
-- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers
-- `@personal-agent/resources` — resource resolution, layered materialization, Pi resource args
+- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, profile/resource resolution
 - `@personal-agent/cli` — `pa` command
-- `@personal-agent/daemon` — background daemon, scheduled tasks, durable runs, deferred resumes
-- `@personal-agent/services` — launchd/systemd helpers for daemon and web UI
+- `@personal-agent/daemon` — background daemon, scheduled tasks, durable runs, deferred resumes, and managed service helpers
 - `@personal-agent/web` — web UI client and server
 - `@personal-agent/desktop` — Electron desktop shell
 

@@ -8,20 +8,18 @@ import {
 import { join } from 'node:path';
 import {
   getDaemonStatus,
+  getManagedDaemonServiceStatus,
+  installManagedDaemonService,
   loadDaemonConfig,
   pingDaemon,
   resolveDaemonPaths,
-} from '@personal-agent/daemon';
-import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
-import { getStateRoot } from '@personal-agent/core';
-import {
-  getManagedDaemonServiceStatus,
-  installManagedDaemonService,
   restartManagedDaemonServiceIfInstalled,
   startManagedDaemonService,
   stopManagedDaemonService,
   uninstallManagedDaemonService,
-} from '@personal-agent/services';
+} from '@personal-agent/daemon';
+import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
+import { getStateRoot } from '@personal-agent/core';
 
 interface LogTail {
   path?: string;

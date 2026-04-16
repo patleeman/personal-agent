@@ -29,7 +29,7 @@ import {
   materializeProfileToAgentDir,
   mergeJsonFiles,
   resolveResourceProfile,
-} from '@personal-agent/resources';
+} from '@personal-agent/core';
 import {
   daemonStatusJson,
   emitDaemonEventNonFatal,
@@ -58,7 +58,7 @@ import {
   uninstallWebUiService,
   type WebUiServiceOptions,
   type WebUiServiceStatus,
-} from '@personal-agent/services';
+} from '@personal-agent/daemon';
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { mcpCommand } from './mcp-command.js';

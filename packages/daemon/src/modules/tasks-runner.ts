@@ -21,7 +21,7 @@ import {
   materializeProfileToAgentDir,
   resolveResourceProfile,
   type ResolvedResourceProfile,
-} from '@personal-agent/resources';
+} from '@personal-agent/core';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
 export interface TaskRunThreadBinding {

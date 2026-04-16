@@ -22,16 +22,13 @@ vi.mock('child_process', () => ({
   spawn: mocks.spawn,
 }));
 
-vi.mock('@personal-agent/resources', () => ({
-  buildPiResourceArgs: mocks.buildPiResourceArgs,
-  materializeProfileToAgentDir: mocks.materializeProfileToAgentDir,
-  resolveResourceProfile: mocks.resolveResourceProfile,
-}));
-
 vi.mock('@personal-agent/core', () => ({
   bootstrapStateOrThrow: mocks.bootstrapStateOrThrow,
+  buildPiResourceArgs: mocks.buildPiResourceArgs,
+  materializeProfileToAgentDir: mocks.materializeProfileToAgentDir,
   preparePiAgentDir: mocks.preparePiAgentDir,
   resolveChildProcessEnv: mocks.resolveChildProcessEnv,
+  resolveResourceProfile: mocks.resolveResourceProfile,
   resolveStatePaths: mocks.resolveStatePaths,
   validateStatePathsOutsideRepo: mocks.validateStatePathsOutsideRepo,
 }));

@@ -161,7 +161,7 @@ import {
 import {
   installPackageSource,
   readPackageSourceTargetState,
-} from '@personal-agent/resources';
+} from '@personal-agent/core';
 import {
   completeDeferredResumeConversationRun,
   listPendingBackgroundRunResults,

@@ -10,11 +10,11 @@ const requiredArtifacts = [
   'packages/core/dist/index.js',
   'packages/core/dist/profile/index.js',
   'packages/core/dist/runtime/index.js',
-  'packages/resources/dist/index.js',
-  'packages/resources/dist/prompt-catalog.js',
+  'packages/core/dist/resources.js',
+  'packages/core/dist/prompt-catalog.js',
   'packages/cli/dist/index.js',
   'packages/daemon/dist/index.js',
-  'packages/services/dist/index.js',
+  'packages/daemon/dist/service.js',
   'packages/web/dist-server/index.js',
 ];
 

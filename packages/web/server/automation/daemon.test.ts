@@ -30,14 +30,11 @@ const {
 
 vi.mock('@personal-agent/daemon', () => ({
   getDaemonStatus: getDaemonStatusMock,
+  getManagedDaemonServiceStatus: getManagedDaemonServiceStatusMock,
+  installManagedDaemonService: installManagedDaemonServiceMock,
   loadDaemonConfig: loadDaemonConfigMock,
   pingDaemon: pingDaemonMock,
   resolveDaemonPaths: resolveDaemonPathsMock,
-}));
-
-vi.mock('@personal-agent/services', () => ({
-  getManagedDaemonServiceStatus: getManagedDaemonServiceStatusMock,
-  installManagedDaemonService: installManagedDaemonServiceMock,
   restartManagedDaemonServiceIfInstalled: restartManagedDaemonServiceIfInstalledMock,
   startManagedDaemonService: startManagedDaemonServiceMock,
   stopManagedDaemonService: stopManagedDaemonServiceMock,

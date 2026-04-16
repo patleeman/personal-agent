@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { completeSimple, type Api, type Model, type ThinkingLevel } from '@mariozechner/pi-ai';
-import { requirePromptCatalogEntry } from '@personal-agent/resources';
+import { requirePromptCatalogEntry } from '@personal-agent/core';
 
 const DEFAULT_PROVIDER = 'openai-codex';
 const DEFAULT_MODEL = 'gpt-5.4-mini';

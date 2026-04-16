@@ -23,8 +23,8 @@ vi.mock('child_process', async () => {
   };
 });
 
-vi.mock('@personal-agent/services', async () => {
-  const actual = await vi.importActual<typeof import('@personal-agent/services')>('@personal-agent/services');
+vi.mock('@personal-agent/daemon', async () => {
+  const actual = await vi.importActual<typeof import('@personal-agent/daemon')>('@personal-agent/daemon');
   return {
     ...actual,
     getWebUiServiceStatus: serviceMocks.getWebUiServiceStatus,

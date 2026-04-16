@@ -10,7 +10,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
-import { getWebUiServiceStatus } from '@personal-agent/services';
+import { getWebUiServiceStatus } from '@personal-agent/daemon';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
 const DESKTOP_WEB_UI_RESTART_MESSAGE = 'Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';

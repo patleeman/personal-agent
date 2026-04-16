@@ -22,7 +22,6 @@
   },
   "dependencies": {
     "@personal-agent/core": "*",
-    "@personal-agent/resources": "*",
     "better-sqlite3": "^11.10.0",
     "yaml": "^2.8.2"
   },

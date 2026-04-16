@@ -20,16 +20,13 @@ const {
   readPackageSourceTargetStateMock: vi.fn(),
 }));
 
-vi.mock('@personal-agent/resources', () => ({
-  listProfiles: listProfilesMock,
-  readPackageSourceTargetState: readPackageSourceTargetStateMock,
-}));
-
 vi.mock('@personal-agent/core', () => ({
   buildMergedMcpConfigDocument: buildMergedMcpConfigDocumentMock,
   inspectCliBinary: inspectCliBinaryMock,
+  listProfiles: listProfilesMock,
   readBundledSkillMcpManifests: readBundledSkillMcpManifestsMock,
   readMcpConfigDocument: readMcpConfigDocumentMock,
+  readPackageSourceTargetState: readPackageSourceTargetStateMock,
 }));
 
 vi.mock('../conversations/liveSessions.js', () => ({

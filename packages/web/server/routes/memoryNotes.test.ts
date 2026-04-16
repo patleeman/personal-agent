@@ -43,9 +43,6 @@ vi.mock('@personal-agent/core', () => ({
   getDurableAgentFilePath: getDurableAgentFilePathMock,
   getProfilesRoot: getProfilesRootMock,
   getVaultRoot: getVaultRootMock,
-}));
-
-vi.mock('@personal-agent/resources', () => ({
   listProfiles: listProfilesMock,
   resolveResourceProfile: resolveResourceProfileMock,
 }));
