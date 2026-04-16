@@ -201,7 +201,13 @@ function ValueRow({
   );
 }
 
-export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
+export function DesktopConnectionsModal({
+  onClose,
+  onWorkspaceServerStateChange,
+}: {
+  onClose: () => void;
+  onWorkspaceServerStateChange?: (state: DesktopWorkspaceServerState | null) => void;
+}) {
   const [environment, setEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [connections, setConnections] = useState<DesktopConnectionsState | null>(null);
   const [selectedHostId, setSelectedHostId] = useState<string>('');
@@ -301,6 +307,7 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const bridge = getDesktopBridge();
     if (!bridge) {
+      onWorkspaceServerStateChange?.(null);
       setError('Desktop bridge unavailable. Restart the desktop app and try again.');
       setLoading(false);
       return;
@@ -354,6 +361,10 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
     }
     setDraft(createDesktopHostDraft(resolved.selectedHost ?? undefined));
   }, [connections, editorMode, selectedHostId]);
+
+  useEffect(() => {
+    onWorkspaceServerStateChange?.(workspaceServerState);
+  }, [onWorkspaceServerStateChange, workspaceServerState]);
 
   async function handleConnect(hostId: string) {
     let cancelPendingNotes = () => {};
@@ -638,6 +649,8 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
 
   const workspaceServerStatus = formatWorkspaceServerStatus(workspaceServerState, workspaceServerDraft);
   const workspaceServerLogPath = workspaceServerState?.logFile ?? 'desktop/logs/codex-app-server.log';
+  const remoteHosts = connections?.hosts.filter((host) => host.kind !== 'local') ?? [];
+  const localHostActive = connections?.activeHostId === 'local';
 
   return (
     <div
@@ -666,7 +679,7 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
           <div className="min-w-0 space-y-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim">Connections</p>
             <h2 className="text-[22px] font-semibold tracking-tight text-primary">Connections</h2>
-            <p className="text-[13px] text-secondary">Switch workspaces, host this desktop, & see connection activity.</p>
+            <p className="text-[13px] text-secondary">Switch workspaces, serve this desktop, & see connection activity.</p>
             {environment ? (
               <p className="text-[12px] text-secondary">
                 Active: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
@@ -693,41 +706,43 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
               <section className="space-y-3 border-b border-border-subtle pb-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
-                    <h3 className="text-[15px] font-medium text-primary">This desktop</h3>
-                    <p className="text-[13px] text-secondary">Run the built-in remote server here.</p>
+                    <h3 className="text-[15px] font-medium text-primary">Remote server</h3>
+                    <p className="text-[13px] text-secondary">Let other devices connect to this desktop.</p>
                   </div>
                   <p className={cx('text-[13px] font-medium', workspaceServerStatus.className)}>{workspaceServerStatus.label}</p>
                 </div>
 
                 <div className="space-y-4">
-                  <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-workspace-server-enabled">
-                    <input
-                      id="desktop-modal-workspace-server-enabled"
-                      type="checkbox"
-                      checked={workspaceServerDraft.enabled}
-                      onChange={(event) => setWorkspaceServerDraft((current) => ({
-                        ...current,
-                        enabled: event.target.checked,
-                        useTailscaleServe: event.target.checked ? current.useTailscaleServe : false,
-                      }))}
-                      disabled={action !== null}
-                      className={CHECKBOX_CLASS}
-                    />
-                    <span>Host this desktop as a remote workspace</span>
-                  </label>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-workspace-server-enabled">
+                      <input
+                        id="desktop-modal-workspace-server-enabled"
+                        type="checkbox"
+                        checked={workspaceServerDraft.enabled}
+                        onChange={(event) => setWorkspaceServerDraft((current) => ({
+                          ...current,
+                          enabled: event.target.checked,
+                          useTailscaleServe: event.target.checked ? current.useTailscaleServe : false,
+                        }))}
+                        disabled={action !== null}
+                        className={CHECKBOX_CLASS}
+                      />
+                      <span>Allow remote connections</span>
+                    </label>
 
-                  <div className="space-y-2 min-w-0">
-                    <label className="ui-card-meta" htmlFor="desktop-modal-workspace-server-port">Port</label>
-                    <input
-                      id="desktop-modal-workspace-server-port"
-                      value={workspaceServerDraft.port}
-                      onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, port: event.target.value }))}
-                      disabled={action !== null}
-                      className={`${INPUT_CLASS} max-w-[180px] font-mono text-[13px]`}
-                      autoComplete="off"
-                      spellCheck={false}
-                      placeholder="8390"
-                    />
+                    <div className="flex items-center gap-2">
+                      <label className="ui-card-meta" htmlFor="desktop-modal-workspace-server-port">Port</label>
+                      <input
+                        id="desktop-modal-workspace-server-port"
+                        value={workspaceServerDraft.port}
+                        onChange={(event) => setWorkspaceServerDraft((current) => ({ ...current, port: event.target.value }))}
+                        disabled={action !== null}
+                        className={`${INPUT_CLASS} w-[116px] px-3 py-2 font-mono text-[13px]`}
+                        autoComplete="off"
+                        spellCheck={false}
+                        placeholder="8390"
+                      />
+                    </div>
                   </div>
 
                   <label className="inline-flex items-center gap-3 text-[14px] text-primary" htmlFor="desktop-modal-workspace-server-tailnet">
@@ -739,7 +754,7 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                       disabled={action !== null || !workspaceServerDraft.enabled}
                       className={CHECKBOX_CLASS}
                     />
-                    <span>Publish over Tailscale at <span className="font-mono text-[11px]">/codex</span></span>
+                    <span>Publish on Tailscale at <span className="font-mono text-[11px]">/codex</span></span>
                   </label>
 
                   <div className="space-y-3 rounded-2xl bg-base/35 px-4 py-4">
@@ -773,7 +788,7 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                       disabled={action !== null}
                       className={ACTION_BUTTON_CLASS}
                     >
-                      {action === 'save-workspace-server' ? 'Saving…' : 'Save server settings'}
+                      {action === 'save-workspace-server' ? 'Saving…' : 'Save'}
                     </button>
                     <button
                       type="button"
@@ -827,36 +842,38 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                     <h3 className="text-[15px] font-medium text-primary">Saved workspaces</h3>
                     <p className="text-[13px] text-secondary">Connect this window or open a separate one.</p>
                   </div>
-                  <ToolbarButton onClick={startNewHostDraft} disabled={action !== null}>New workspace</ToolbarButton>
+                  {!localHostActive ? (
+                    <ToolbarButton onClick={() => { void handleConnect('local'); }} disabled={action !== null}>Use this desktop</ToolbarButton>
+                  ) : null}
                 </div>
 
-                <div className="space-y-px">
-                  {connections.hosts.map((host) => {
-                    const active = host.id === connections.activeHostId;
-                    const isDefault = host.id === connections.defaultHostId;
-                    return (
-                      <div key={host.id} className={cx('ui-list-row gap-3 px-3 py-3', active && 'ui-list-row-selected')}>
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                            <span className="text-[13px] font-medium text-primary">{host.label}</span>
-                            <span className="ui-card-meta">{hostKindLabel(host)}</span>
-                            {active ? <span className="ui-card-meta">active</span> : null}
-                            {isDefault ? <span className="ui-card-meta">launch default</span> : null}
+                {remoteHosts.length > 0 ? (
+                  <div className="space-y-px">
+                    {remoteHosts.map((host) => {
+                      const active = host.id === connections.activeHostId;
+                      const isDefault = host.id === connections.defaultHostId;
+                      return (
+                        <div key={host.id} className={cx('ui-list-row gap-3 px-3 py-3', active ? 'bg-surface/60' : 'ui-list-row-hover')}>
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                              <span className="text-[13px] font-medium text-primary">{host.label}</span>
+                              <span className="ui-card-meta">{hostKindLabel(host)}</span>
+                              {active ? <span className="ui-card-meta">active</span> : null}
+                              {isDefault ? <span className="ui-card-meta">launch default</span> : null}
+                            </div>
+                            <p className="ui-card-meta break-all">{formatDesktopHostDetails(host)}</p>
                           </div>
-                          <p className="ui-card-meta break-all">{formatDesktopHostDetails(host)}</p>
-                        </div>
-                        <div className="flex flex-wrap items-center justify-end gap-2">
-                          {!active ? (
-                            <button
-                              type="button"
-                              onClick={() => { void handleConnect(host.id); }}
-                              disabled={action !== null}
-                              className={ACTION_BUTTON_CLASS}
-                            >
-                              {action === 'connect' ? 'Connecting…' : 'Connect'}
-                            </button>
-                          ) : null}
-                          {host.kind !== 'local' ? (
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            {!active ? (
+                              <button
+                                type="button"
+                                onClick={() => { void handleConnect(host.id); }}
+                                disabled={action !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                {action === 'connect' ? 'Connecting…' : 'Connect'}
+                              </button>
+                            ) : null}
                             <>
                               <button
                                 type="button"
@@ -883,12 +900,16 @@ export function DesktopConnectionsModal({ onClose }: { onClose: () => void }) {
                                 {action === 'delete' ? 'Deleting…' : 'Delete'}
                               </button>
                             </>
-                          ) : null}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl bg-base/35 px-4 py-4">
+                    <p className="ui-card-meta">No saved remote workspaces yet.</p>
+                  </div>
+                )}
               </section>
 
               {showEditor ? (

@@ -43,8 +43,39 @@
     @apply rounded-md border border-accent/25 bg-accent/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-accent;
   }
 
-  .ui-toolbar-button.ui-desktop-top-bar__icon-button {
+  .ui-toolbar-button.ui-desktop-top-bar__icon-button,
+  .ui-icon-button.ui-desktop-top-bar__icon-button {
     @apply h-7 min-h-0 min-w-[26px] rounded-md border-0 bg-transparent px-1.5 text-[11px] text-secondary shadow-none transition-colors hover:border-0 hover:bg-elevated/55 hover:text-primary disabled:border-0 disabled:bg-transparent disabled:text-dim disabled:opacity-100;
+  }
+
+  .ui-icon-button.ui-desktop-top-bar__connections-button--off {
+    color: rgb(var(--color-secondary));
+  }
+
+  .ui-icon-button.ui-desktop-top-bar__connections-button--running {
+    color: rgb(var(--color-success));
+    background-color: rgb(var(--color-success) / 0.12);
+    box-shadow: 0 0 0 1px rgb(var(--color-success) / 0.16), 0 0 14px rgb(var(--color-success) / 0.2);
+  }
+
+  .ui-icon-button.ui-desktop-top-bar__connections-button--running:hover,
+  .ui-icon-button.ui-desktop-top-bar__connections-button--running:focus-visible {
+    color: rgb(var(--color-success));
+    background-color: rgb(var(--color-success) / 0.16);
+    box-shadow: 0 0 0 1px rgb(var(--color-success) / 0.2), 0 0 16px rgb(var(--color-success) / 0.24);
+  }
+
+  .ui-icon-button.ui-desktop-top-bar__connections-button--error {
+    color: rgb(var(--color-danger));
+    background-color: rgb(var(--color-danger) / 0.12);
+    box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.16), 0 0 14px rgb(var(--color-danger) / 0.2);
+  }
+
+  .ui-icon-button.ui-desktop-top-bar__connections-button--error:hover,
+  .ui-icon-button.ui-desktop-top-bar__connections-button--error:focus-visible {
+    color: rgb(var(--color-danger));
+    background-color: rgb(var(--color-danger) / 0.16);
+    box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.2), 0 0 16px rgb(var(--color-danger) / 0.24);
   }
 
   .ui-desktop-top-bar__center {

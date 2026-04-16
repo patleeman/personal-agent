@@ -2,8 +2,8 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktopBridge';
-import type { DesktopEnvironmentState, DesktopNavigationState } from '../types';
-import { IconButton, ToolbarButton } from './ui';
+import type { DesktopEnvironmentState, DesktopNavigationState, DesktopWorkspaceServerState } from '../types';
+import { cx, IconButton, ToolbarButton } from './ui';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -34,6 +34,30 @@ function ConnectionsIcon() {
       <path d="M7.9 7.8 9.7 7.8 9.7 6" />
     </svg>
   );
+}
+
+function resolveConnectionsIndicator(state: DesktopWorkspaceServerState | null): {
+  className: string;
+  statusLabel: string;
+} {
+  if (state?.error || (state?.enabled && !state.running)) {
+    return {
+      className: 'ui-desktop-top-bar__connections-button--error',
+      statusLabel: 'remote server error',
+    };
+  }
+
+  if (state?.enabled && state.running) {
+    return {
+      className: 'ui-desktop-top-bar__connections-button--running',
+      statusLabel: 'remote server running',
+    };
+  }
+
+  return {
+    className: 'ui-desktop-top-bar__connections-button--off',
+    statusLabel: 'remote server off',
+  };
 }
 
 function readBrowserNavigationState(): DesktopNavigationState {
@@ -82,6 +106,7 @@ export function DesktopTopBar({
     canGoForward: false,
   });
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
+  const [workspaceServerState, setWorkspaceServerState] = useState<DesktopWorkspaceServerState | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -109,6 +134,30 @@ export function DesktopTopBar({
   }, [location.key, location.pathname, location.search]);
 
   const bridge = getDesktopBridge();
+
+  useEffect(() => {
+    if (!bridge) {
+      setWorkspaceServerState(null);
+      return;
+    }
+
+    let cancelled = false;
+    bridge.readWorkspaceServerState()
+      .then((state) => {
+        if (!cancelled) {
+          setWorkspaceServerState(state);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspaceServerState(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [bridge]);
   const desktopShell = isDesktopShell();
   const showDesktopChrome = bridge !== null || environment !== null || desktopShell;
 
@@ -149,6 +198,8 @@ export function DesktopTopBar({
   const launchBadgeLabel = environment?.launchMode === 'testing'
     ? environment.launchLabel?.trim() || 'Testing'
     : null;
+  const connectionsIndicator = resolveConnectionsIndicator(workspaceServerState);
+  const connectionsButtonLabel = `Manage connections · ${connectionsIndicator.statusLabel}`;
 
   return (
     <>
@@ -182,10 +233,10 @@ export function DesktopTopBar({
         <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
           {showDesktopChrome ? (
             <IconButton
-              className="ui-desktop-top-bar__icon-button"
+              className={cx('ui-desktop-top-bar__icon-button', connectionsIndicator.className)}
               onClick={() => setShowConnectionsModal(true)}
-              aria-label="Manage connections"
-              title="Manage connections"
+              aria-label={connectionsButtonLabel}
+              title={connectionsButtonLabel}
             >
               <ConnectionsIcon />
             </IconButton>
@@ -202,7 +253,12 @@ export function DesktopTopBar({
           ) : null}
         </div>
       </div>
-      {showConnectionsModal ? <DesktopConnectionsModal onClose={() => setShowConnectionsModal(false)} /> : null}
+      {showConnectionsModal ? (
+        <DesktopConnectionsModal
+          onClose={() => setShowConnectionsModal(false)}
+          onWorkspaceServerStateChange={setWorkspaceServerState}
+        />
+      ) : null}
     </>
   );
 }
