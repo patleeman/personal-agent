@@ -348,14 +348,6 @@ export function shouldShowMissingConversationState(input: {
     && !input.hasPendingInitialPrompt;
 }
 
-export function shouldShowConversationTakeoverBanner(_input: {
-  draft: boolean;
-  isLiveSession: boolean;
-  conversationNeedsTakeover: boolean;
-}): boolean {
-  return false;
-}
-
 export function shouldAutoDispatchPendingInitialPrompt(input: {
   draft: boolean;
   conversationId: string | null | undefined;

@@ -3,7 +3,7 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DurableRunRecord, MessageBlock, SessionMeta } from '../shared/types';
+import type { MessageBlock, SessionMeta } from '../shared/types';
 import {
   ConversationPage,
   mergeConversationSessionMeta,
@@ -12,7 +12,6 @@ import {
   resolveDisplayedConversationPendingStatusLabel,
   resolveConversationStreamTitleSync,
   resolveConversationAutocompleteCatalogDemand,
-  shouldShowConversationTakeoverBanner,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
@@ -63,66 +62,6 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
   }
 
   return null;
-}
-
-function hasAncestorWithClass(node: ParsedNode | null | undefined, className: string): boolean {
-  let current = node?.parentNode ?? null;
-  while (current) {
-    if (getNodeClassList(current).includes(className)) {
-      return true;
-    }
-    current = current.parentNode ?? null;
-  }
-  return false;
-}
-
-function createBackgroundRun(overrides: Partial<DurableRunRecord> = {}): DurableRunRecord {
-  return {
-    runId: 'run-background-123',
-    paths: {
-      root: '/tmp/run-background-123',
-      manifestPath: '/tmp/run-background-123/manifest.json',
-      statusPath: '/tmp/run-background-123/status.json',
-      checkpointPath: '/tmp/run-background-123/checkpoint.json',
-      eventsPath: '/tmp/run-background-123/events.jsonl',
-      outputLogPath: '/tmp/run-background-123/output.log',
-      resultPath: '/tmp/run-background-123/result.json',
-    },
-    manifest: {
-      version: 1,
-      id: 'run-background-123',
-      kind: 'background-run',
-      resumePolicy: 'manual',
-      createdAt: '2026-03-29T00:00:00.000Z',
-      spec: {
-        taskSlug: 'deploy-check',
-        shellCommand: 'npm run deploy:check',
-      },
-      source: {
-        type: 'tool',
-        id: 'conv-123',
-      },
-    },
-    status: {
-      version: 1,
-      runId: 'run-background-123',
-      status: 'running',
-      createdAt: '2026-03-29T00:00:00.000Z',
-      updatedAt: '2026-03-29T00:01:00.000Z',
-      activeAttempt: 1,
-      startedAt: '2026-03-29T00:00:10.000Z',
-    },
-    checkpoint: {
-      version: 1,
-      runId: 'run-background-123',
-      updatedAt: '2026-03-29T00:01:00.000Z',
-      step: 'running',
-      payload: {},
-    },
-    problems: [],
-    recoveryAction: 'none',
-    ...overrides,
-  };
 }
 
 describe('related thread hotkeys', () => {
@@ -563,13 +502,6 @@ describe('conversation live-session git context loading', () => {
 });
 
 describe('conversation live state helpers', () => {
-  it('never shows the removed takeover call-to-action', () => {
-    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
-    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: true, conversationNeedsTakeover: false })).toBe(false);
-    expect(shouldShowConversationTakeoverBanner({ draft: true, isLiveSession: true, conversationNeedsTakeover: true })).toBe(false);
-    expect(shouldShowConversationTakeoverBanner({ draft: false, isLiveSession: false, conversationNeedsTakeover: true })).toBe(false);
-  });
-
   it('does not show the missing state until session discovery has loaded', () => {
     expect(shouldShowMissingConversationState({
       draft: false,
@@ -1141,7 +1073,7 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('right rail');
   });
 
-  it('renders the composer context row below the input shell', () => {
+  it('omits the composer context row for a bare draft conversation', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/conversations/new']}>
         <ConversationPage draft />
@@ -1153,12 +1085,7 @@ describe('ConversationPage', () => {
     const composerMeta = findFirstNodeByClass(tree, 'conversation-composer-meta');
 
     expect(inputShell).toBeTruthy();
-    expect(composerMeta).toBeTruthy();
-    expect(hasAncestorWithClass(composerMeta, 'ui-input-shell')).toBe(false);
-    expect(composerMeta?.parentNode).toBe(inputShell?.parentNode);
-
-    const siblings = inputShell?.parentNode?.childNodes?.filter((node) => node.nodeName !== '#text') ?? [];
-    expect(siblings.indexOf(inputShell as ParsedNode)).toBeLessThan(siblings.indexOf(composerMeta as ParsedNode));
+    expect(composerMeta).toBeNull();
   });
 
   it('keeps the saved conversation composer constrained to the main content column without the old header fork button', () => {
