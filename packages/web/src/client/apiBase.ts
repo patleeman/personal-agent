@@ -1,6 +1,6 @@
-export const DESKTOP_API_PREFIX = '/api';
+const DESKTOP_API_PREFIX = '/api';
 
-export function resolveApiPrefix(_pathname: string | null | undefined): string {
+function resolveApiPrefix(_pathname: string | null | undefined): string {
   return DESKTOP_API_PREFIX;
 }
 
