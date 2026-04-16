@@ -1,5 +1,5 @@
-export const EXCALIDRAW_SOURCE_MIME_TYPE = 'application/vnd.excalidraw+json';
-export const EXCALIDRAW_PREVIEW_MIME_TYPE = 'image/png';
+const EXCALIDRAW_SOURCE_MIME_TYPE = 'application/vnd.excalidraw+json';
+const EXCALIDRAW_PREVIEW_MIME_TYPE = 'image/png';
 
 const DEFAULT_PREVIEW_BACKGROUND = '#ffffff';
 const DEFAULT_PREVIEW_EXPORT_PADDING = 16;
@@ -18,7 +18,7 @@ export interface ExcalidrawSceneData {
   files: ExcalidrawFiles;
 }
 
-export interface SerializedExcalidrawScene {
+interface SerializedExcalidrawScene {
   sourceData: string;
   sourceMimeType: string;
   previewData: string;
@@ -26,7 +26,7 @@ export interface SerializedExcalidrawScene {
   previewUrl: string;
 }
 
-export interface ExcalidrawPreviewFrameSize {
+interface ExcalidrawPreviewFrameSize {
   width: number;
   height: number;
 }
