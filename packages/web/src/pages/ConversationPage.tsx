@@ -1661,37 +1661,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const streamTakeover = stream.takeover;
   const currentSurfaceId = stream.surfaceId;
 
-  const handleContinueConversationInHost = useCallback(async (hostId: string) => {
-    if (!id || continueInBusy) {
-      return;
-    }
-
-    setContinueInBusy(true);
-    try {
-      const result = await api.continueConversationInHost(id, hostId);
-      setConversationExecutionOverride(
-        result.remoteHostId && result.remoteConversationId
-          ? {
-              remoteHostId: result.remoteHostId,
-              remoteHostLabel: result.remoteHostLabel,
-              remoteConversationId: result.remoteConversationId,
-            }
-          : null,
-      );
-      showNotice(
-        'accent',
-        result.remoteHostId
-          ? `Continuing on ${result.remoteHostLabel ?? result.remoteHostId}.`
-          : 'Continuing locally.',
-        3000,
-      );
-      streamReconnect();
-    } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-    } finally {
-      setContinueInBusy(false);
-    }
-  }, [continueInBusy, id, showNotice, streamReconnect]);
 
   useEffect(() => {
     const pendingCwdChange = stream.cwdChange;
@@ -2433,6 +2402,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       noticeTimeoutRef.current = null;
     }, durationMs);
   }, []);
+
+  const handleContinueConversationInHost = useCallback(async (hostId: string) => {
+    if (!id || continueInBusy) {
+      return;
+    }
+
+    setContinueInBusy(true);
+    try {
+      const result = await api.continueConversationInHost(id, hostId);
+      setConversationExecutionOverride(
+        result.remoteHostId && result.remoteConversationId
+          ? {
+              remoteHostId: result.remoteHostId,
+              remoteHostLabel: result.remoteHostLabel,
+              remoteConversationId: result.remoteConversationId,
+            }
+          : null,
+      );
+      showNotice(
+        'accent',
+        result.remoteHostId
+          ? `Continuing on ${result.remoteHostLabel ?? result.remoteHostId}.`
+          : 'Continuing locally.',
+        3000,
+      );
+      streamReconnect();
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setContinueInBusy(false);
+    }
+  }, [continueInBusy, id, showNotice, streamReconnect]);
 
   useEffect(() => {
     if (draft || !id || !initialDraftHydrationState?.enableAutoModeOnLoad) {

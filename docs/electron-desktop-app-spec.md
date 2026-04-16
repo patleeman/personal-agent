@@ -63,6 +63,8 @@ That means:
 - SSH remote workspaces tunnel a remote `pa codex app-server --listen ...` process
 - the preload bridge remains the renderer boundary; the remote transport is now the Codex protocol, not a custom desktop-only websocket surface
 - the Codex surface should implement both thread/turn methods and standalone `command/exec` so Litter and other clients can browse workspaces and run helper commands without falling back to custom APIs
+- conversation execution targeting should be per-thread, not per-window: a local desktop conversation can continue in a linked remote host while the local UI stays on the normal conversation route
+- linked remote-target conversations should keep their local thread metadata and also create a real remote thread id on the target host for execution and visibility there
 
 ## Hosted workspace server
 

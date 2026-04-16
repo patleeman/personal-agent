@@ -191,6 +191,10 @@ function translateConversationScopedPath(path: string, localConversationId: stri
     return path.replace(conversationPathPrefix, `/api/conversations/${encodeURIComponent(remoteConversationId)}`);
   }
 
+  if (path === `${conversationPathPrefix}/cwd` || path.startsWith(`${conversationPathPrefix}/cwd?`)) {
+    return path.replace(conversationPathPrefix, `/api/conversations/${encodeURIComponent(remoteConversationId)}`);
+  }
+
   if (path === `${liveSessionPathPrefix}`
     || path.startsWith(`${liveSessionPathPrefix}/`)
     || path.startsWith(`${liveSessionPathPrefix}?`)) {
@@ -330,6 +334,10 @@ export async function continueConversationInHost(
     remoteHostLabel: hostRecord.label,
     remoteConversationId,
   });
+
+  if (typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true && localController.destroyLiveSession) {
+    await localController.destroyLiveSession(conversationId).catch(() => undefined);
+  }
 
   return {
     conversationId,
