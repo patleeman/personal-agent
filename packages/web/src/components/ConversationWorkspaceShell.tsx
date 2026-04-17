@@ -161,23 +161,28 @@ export function ConversationWorkspaceShell({
   useEffect(() => {
     if (hasSelectedRun) {
       setRailOpen(true);
+      return;
     }
+
+    setRailOpen(false);
   }, [hasSelectedRun]);
 
   const toggleRail = useCallback(() => {
-    if (contextRailEnabled) {
-      setRailOpen((current) => !current);
+    if (!contextRailEnabled || !hasSelectedRun) {
+      return;
     }
-  }, [contextRailEnabled]);
 
-  const effectiveRailOpen = contextRailEnabled && railOpen;
+    setRailOpen((current) => !current);
+  }, [contextRailEnabled, hasSelectedRun]);
+
+  const effectiveRailOpen = contextRailEnabled && hasSelectedRun && railOpen;
   const controls = useMemo<ConversationWorkspaceShellControls>(() => ({
     railOpen: effectiveRailOpen,
     toggleRail,
   }), [effectiveRailOpen, toggleRail]);
 
   useEffect(() => {
-    if (!contextRailEnabled) {
+    if (!contextRailEnabled || !hasSelectedRun) {
       setRightRailControl(null);
       return;
     }
@@ -190,7 +195,7 @@ export function ConversationWorkspaceShell({
     return () => {
       setRightRailControl(null);
     };
-  }, [contextRailEnabled, effectiveRailOpen, setRightRailControl, toggleRail]);
+  }, [contextRailEnabled, effectiveRailOpen, hasSelectedRun, setRightRailControl, toggleRail]);
 
   return (
     <div className="flex h-full min-h-0 overflow-hidden">

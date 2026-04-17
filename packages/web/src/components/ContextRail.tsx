@@ -4,7 +4,6 @@ import { api } from '../client/api';
 import { setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import {
   collectConversationRunMentions,
-  createConversationLiveRunId,
   getConversationRunIdFromSearch,
   setConversationRunIdInSearch,
 } from '../conversation/conversationRuns';
@@ -906,13 +905,11 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   }, [id]);
 
   const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const currentConversationRunId = createConversationLiveRunId(id);
   const connectedBackgroundRuns = useMemo(() => listConnectedConversationBackgroundRuns({
     conversationId: id,
     runs,
     lookups: runLookups,
-    excludeConversationRunId: currentConversationRunId,
-  }), [currentConversationRunId, id, runLookups, runs]);
+  }), [id, runLookups, runs]);
   const visibleRunMentions = useMemo(() => {
     const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();
@@ -937,8 +934,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
       });
     };
 
-    push(currentConversationRunId, 'This conversation', 'Tracks this conversation state and recovery metadata.', 'conversation');
-
     for (const run of connectedBackgroundRuns) {
       push(run.runId, 'Background work', 'Started from this conversation.', 'background');
     }
@@ -951,7 +946,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     }
 
     return next;
-  }, [connectedBackgroundRuns, currentConversationRunId, detectedRunMentions, selectedRunId]);
+  }, [connectedBackgroundRuns, detectedRunMentions, selectedRunId]);
 
   const visibleRunCards = useMemo<ConversationRelatedWorkCard[]>(() => {
     return visibleRunMentions.map((mention) => {
@@ -1111,25 +1106,6 @@ function LiveSessionContextPanel({ id }: { id: string }) {
           </div>
         )}
       </Section>
-
-      <details className="ui-disclosure">
-        <summary className="ui-disclosure-summary">
-          <span>Details</span>
-          <span className="ui-disclosure-meta">Conversation id and execution</span>
-        </summary>
-        <div className="ui-disclosure-body">
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Conversation</p>
-              <p className="break-all font-mono text-[12px] text-secondary">{id}</p>
-            </div>
-            <div className="space-y-1">
-              <p className="text-[10px] uppercase tracking-[0.14em] text-dim">Execution</p>
-              <p className="text-[12px] text-secondary">Local</p>
-            </div>
-          </div>
-        </div>
-      </details>
 
     </div>
   );
