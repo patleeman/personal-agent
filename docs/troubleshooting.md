@@ -155,6 +155,13 @@ The local desktop backend intentionally refuses to start if:
 
 If a separate daemon is already healthy, the desktop shell now reuses it instead of treating that as a startup failure.
 
+That reuse has one important consequence: quitting the desktop app does **not** stop the external daemon. If you want the whole local stack off, stop or uninstall it explicitly:
+
+```bash
+pa daemon stop
+pa daemon service uninstall
+```
+
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 
 Recent desktop builds also try to surface the failure inside the main window:

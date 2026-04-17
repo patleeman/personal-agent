@@ -26,10 +26,25 @@ interface LogTail {
   lines: string[];
 }
 
-const DESKTOP_DAEMON_SERVICE_MESSAGE = 'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.';
+const DESKTOP_DAEMON_SERVICE_MESSAGE = 'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.';
+
+type DesktopDaemonOwnership = 'owned' | 'external';
 
 function isDesktopRuntime(): boolean {
   return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
+}
+
+function readDesktopDaemonOwnership(): DesktopDaemonOwnership | undefined {
+  const value = process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP?.trim().toLowerCase();
+  if (value === 'owned' || value === 'external') {
+    return value;
+  }
+
+  return undefined;
+}
+
+function isDesktopUsingExternalDaemon(): boolean {
+  return isDesktopRuntime() && readDesktopDaemonOwnership() === 'external';
 }
 
 function assertManagedDaemonServiceLifecycleAvailable(): void {
@@ -115,16 +130,49 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
   }
 }
 
+function buildDesktopOwnedDaemonServiceSummary(): DaemonServiceSummary {
+  return {
+    platform: 'desktop',
+    identifier: 'desktop-local-daemon',
+    manifestPath: 'desktop menubar runtime',
+    installed: true,
+    running: true,
+    logFile: getDesktopDaemonLogFile() ?? join(getStateRoot(), 'desktop', 'logs', 'daemon.log'),
+  };
+}
+
+function buildDesktopExternalDaemonServiceSummary(defaultLogFile: string): DaemonServiceSummary {
+  try {
+    const status = getManagedDaemonServiceStatus();
+    if (status.installed || status.running) {
+      return {
+        platform: resolveDaemonServicePlatform(),
+        identifier: status.identifier,
+        manifestPath: status.manifestPath,
+        installed: status.installed,
+        running: status.running,
+        logFile: status.logFile ?? defaultLogFile,
+      };
+    }
+  } catch {
+    // Fall through to a generic external-daemon summary when launchd/systemd state is unavailable.
+  }
+
+  return {
+    platform: 'desktop',
+    identifier: 'desktop-external-daemon',
+    manifestPath: 'external daemon runtime',
+    installed: true,
+    running: true,
+    logFile: defaultLogFile,
+  };
+}
+
 function readDaemonServiceSummary(defaultLogFile: string): DaemonServiceSummary {
   if (isDesktopRuntime()) {
-    return {
-      platform: 'desktop',
-      identifier: 'desktop-local-daemon',
-      manifestPath: 'desktop menubar runtime',
-      installed: true,
-      running: true,
-      logFile: getDesktopDaemonLogFile() ?? join(getStateRoot(), 'desktop', 'logs', 'daemon.log'),
-    };
+    return isDesktopUsingExternalDaemon()
+      ? buildDesktopExternalDaemonServiceSummary(defaultLogFile)
+      : buildDesktopOwnedDaemonServiceSummary();
   }
 
   try {
@@ -186,6 +234,10 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
     warnings.push('Daemon service is installed but not running.');
   } else if (!isDesktopRuntime() && !service.installed && !runtime.running) {
     warnings.push('Daemon service is not installed. Install it from this page or run `pa daemon service install`.');
+  }
+
+  if (isDesktopUsingExternalDaemon()) {
+    warnings.push('Desktop is attached to an external daemon. Quitting the menu bar app will not stop it.');
   }
 
   if (runtimeInspectionError) {

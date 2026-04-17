@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   pingDaemon: vi.fn(),
@@ -26,6 +26,7 @@ vi.mock('./child-process.js', () => ({
 }));
 
 import { LocalBackendProcesses } from './local-backend-processes.js';
+import { readDesktopDaemonOwnership } from './daemon-ownership.js';
 
 function createManagedChild(label: string) {
   return {
@@ -39,8 +40,13 @@ function createManagedChild(label: string) {
 }
 
 describe('LocalBackendProcesses', () => {
+  afterEach(() => {
+    delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
 
     mocks.resolveDesktopRuntimePaths.mockReturnValue({
       repoRoot: '/repo',
@@ -80,6 +86,7 @@ describe('LocalBackendProcesses', () => {
     await expect(backend.ensureStarted()).resolves.toBeUndefined();
 
     expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
+    expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
   it('adopts a daemon that becomes reachable during startup instead of failing bootstrap', async () => {
@@ -93,6 +100,36 @@ describe('LocalBackendProcesses', () => {
 
     expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
     expect(mocks.waitForDaemonHealthy).not.toHaveBeenCalled();
+    expect(readDesktopDaemonOwnership()).toBe('external');
+  });
+
+  it('records ownership when status checks discover an external daemon before bootstrap', async () => {
+    mocks.pingDaemon.mockResolvedValue(true);
+    const backend = new LocalBackendProcesses();
+
+    await expect(backend.getStatus()).resolves.toEqual({
+      daemonHealthy: true,
+      daemonOwnership: 'external',
+    });
+    expect(readDesktopDaemonOwnership()).toBe('external');
+  });
+
+  it('marks owned daemons and clears ownership on stop or exit', async () => {
+    const backend = new LocalBackendProcesses();
+
+    await backend.ensureStarted();
+    expect(readDesktopDaemonOwnership()).toBe('owned');
+
+    await backend.stop();
+    expect(readDesktopDaemonOwnership()).toBeUndefined();
+
+    mocks.spawnLoggedChild.mockReturnValueOnce(createManagedChild('daemon-restart'));
+    await backend.ensureStarted();
+    expect(readDesktopDaemonOwnership()).toBe('owned');
+
+    const daemonExitHandler = mocks.spawnLoggedChild.mock.results[1]?.value.child.once.mock.calls[0]?.[1];
+    daemonExitHandler?.(1, null);
+    expect(readDesktopDaemonOwnership()).toBeUndefined();
   });
 
   it('clears owned child references on exit so the next ensureStarted can recover', async () => {
@@ -109,5 +146,15 @@ describe('LocalBackendProcesses', () => {
     await backend.ensureStarted();
 
     expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects desktop runtime restarts when attached to an external daemon', async () => {
+    mocks.pingDaemon.mockResolvedValue(true);
+    const backend = new LocalBackendProcesses();
+
+    await expect(backend.restart()).rejects.toThrow(
+      'The desktop app is attached to an external daemon. Restart it with `pa daemon restart` or stop the external daemon service first.',
+    );
+    expect(readDesktopDaemonOwnership()).toBe('external');
   });
 });

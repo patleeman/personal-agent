@@ -81,6 +81,7 @@ describe('automation daemon', () => {
     process.env = { ...originalEnv };
     delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE;
+    delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
     getDaemonStatusMock.mockReset();
     getManagedDaemonServiceStatusMock.mockReset();
     installManagedDaemonServiceMock.mockReset();
@@ -250,23 +251,75 @@ describe('automation daemon', () => {
     });
   });
 
+  it('surfaces external daemon ownership in desktop runtime mode', async () => {
+    const dir = createTempDir();
+    const logFile = join(dir, 'personal-agentd.log');
+    writeFileSync(logFile, 'daemon ready\n', 'utf-8');
+
+    process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
+    process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP = 'external';
+
+    loadDaemonConfigMock.mockReturnValue({ ipc: { socketPath: join(dir, 'daemon.sock') } });
+    resolveDaemonPathsMock.mockReturnValue({ root: dir, socketPath: '/tmp/runtime.sock', logFile });
+    getManagedDaemonServiceStatusMock.mockReturnValue({
+      identifier: 'io.personal-agent.daemon',
+      manifestPath: '/tmp/io.personal-agent.daemon.plist',
+      installed: true,
+      running: true,
+      logFile,
+    });
+    pingDaemonMock.mockResolvedValue(true);
+    getDaemonStatusMock.mockResolvedValue({
+      socketPath: '/tmp/runtime.sock',
+      pid: 84,
+      startedAt: '2026-04-17T19:13:36.254Z',
+      modules: [{ id: 'tasks' }],
+      queue: { currentDepth: 0, maxDepth: 5 },
+    });
+
+    await expect(readDaemonState()).resolves.toEqual({
+      warnings: ['Desktop is attached to an external daemon. Quitting the menu bar app will not stop it.'],
+      service: {
+        platform: expectedServicePlatform(),
+        identifier: 'io.personal-agent.daemon',
+        manifestPath: '/tmp/io.personal-agent.daemon.plist',
+        installed: true,
+        running: true,
+        logFile,
+      },
+      runtime: {
+        running: true,
+        socketPath: '/tmp/runtime.sock',
+        pid: 84,
+        startedAt: '2026-04-17T19:13:36.254Z',
+        moduleCount: 1,
+        queueDepth: 0,
+        maxQueueDepth: 5,
+      },
+      log: {
+        path: logFile,
+        lines: ['daemon ready'],
+      },
+    });
+  });
+
   it('rejects daemon managed service lifecycle actions in desktop runtime mode', async () => {
     process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
 
     await expect(installDaemonServiceAndReadState()).rejects.toThrow(
-      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+      'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.',
     );
     await expect(startDaemonServiceAndReadState()).rejects.toThrow(
-      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+      'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.',
     );
     await expect(restartDaemonServiceAndReadState()).rejects.toThrow(
-      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+      'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.',
     );
     await expect(stopDaemonServiceAndReadState()).rejects.toThrow(
-      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+      'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.',
     );
     await expect(uninstallDaemonServiceAndReadState()).rejects.toThrow(
-      'Managed daemon service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local daemon runtime.',
+      'Managed daemon service lifecycle is unavailable in desktop runtime. Use the CLI to manage any external daemon service.',
     );
 
     expect(installManagedDaemonServiceMock).not.toHaveBeenCalled();

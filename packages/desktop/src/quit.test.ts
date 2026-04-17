@@ -14,6 +14,20 @@ describe('buildDesktopQuitConfirmationOptions', () => {
     });
   });
 
+  it('mentions an external daemon when the desktop app is attached to one', () => {
+    expect(buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
+      keepsExternalDaemonRunning: true,
+    })).toEqual({
+      type: 'question',
+      buttons: ['Cancel', 'Quit Personal Agent'],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      message: 'Quit Personal Agent?',
+      detail: 'Closing the window only hides it. Quitting closes the menu bar app, but an external daemon will keep running for automations until you stop it separately.',
+    });
+  });
+
   it('includes the app icon when one is provided', () => {
     expect(buildDesktopQuitConfirmationOptions('Personal Agent', '/tmp/personal-agent-icon.png')).toEqual({
       type: 'question',
@@ -44,5 +58,18 @@ describe('confirmDesktopQuit', () => {
     };
 
     await expect(confirmDesktopQuit(dialogLike, 'Personal Agent')).resolves.toBe(false);
+  });
+
+  it('passes external-daemon context through to the dialog options', async () => {
+    const dialogLike = {
+      showMessageBox: vi.fn().mockResolvedValue({ response: 0 }),
+    };
+
+    await expect(confirmDesktopQuit(dialogLike, 'Personal Agent', undefined, {
+      keepsExternalDaemonRunning: true,
+    })).resolves.toBe(false);
+    expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
+      keepsExternalDaemonRunning: true,
+    }));
   });
 });

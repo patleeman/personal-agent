@@ -15,6 +15,7 @@ import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
 import { type DesktopUpdateIdleState, DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
+import { readDesktopDaemonOwnership } from './backend/daemon-ownership.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
 
 let hostManager: HostManager | undefined;
@@ -467,7 +468,12 @@ async function requestAppQuit(): Promise<void> {
 
   quitRequestPromise = (async () => {
     try {
-      const confirmed = await confirmDesktopQuit(dialog, app.name, resolveDesktopRuntimePaths().colorIconFile);
+      const confirmed = await confirmDesktopQuit(
+        dialog,
+        app.name,
+        resolveDesktopRuntimePaths().colorIconFile,
+        { keepsExternalDaemonRunning: readDesktopDaemonOwnership() === 'external' },
+      );
       if (!confirmed) {
         return;
       }
