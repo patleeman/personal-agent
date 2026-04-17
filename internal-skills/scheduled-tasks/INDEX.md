@@ -9,12 +9,13 @@ tools:
 
 # Scheduled Tasks
 
-Scheduled tasks let `personal-agent` run prompts automatically through the daemon.
+Scheduled tasks are the durable automation system behind saved scheduled prompts.
 
 Use them when something should happen:
 
 - later
 - on a recurring schedule
+- as either a background job or a conversation-thread wakeup
 - without an active conversation open
 
 ## When to use scheduled tasks
@@ -24,6 +25,7 @@ Good fits:
 - morning reports
 - recurring reviews
 - unattended background prompts
+- durable conversation wakeups that should resume a thread later
 - automation that should surface attention on its owning thread
 - task-style work that may optionally callback into a conversation later
 
@@ -79,10 +81,11 @@ The Automations page exposes the same core fields as Codex-style scheduled promp
 
 - title
 - prompt
+- target (`background-agent` or `conversation`)
 - working directory (`cwd`)
 - schedule (`cron` or one-time `at`)
 
-Model and timeout still exist internally, but the default UI flow is intentionally narrow.
+Model and timeout still exist internally for background-agent targets, but the default UI flow is intentionally narrow.
 
 ## Frontmatter reference
 
@@ -135,9 +138,11 @@ One-time tasks resolve once and do not run again.
 
 ## Run model
 
-Tasks run as direct daemon-managed subprocesses.
+Background-agent automations run as direct daemon-managed subprocesses.
 
-Each run still writes a durable run record, log, and final result under the daemon state root.
+Conversation-target automations create a durable automation execution record and a wakeup back into the bound thread.
+
+Each execution still writes a durable run record under the daemon state root.
 
 ## Conversation callbacks
 

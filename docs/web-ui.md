@@ -89,20 +89,23 @@ Async state now lives on the owning surface:
 
 ## Automations
 
-The **Automations** route is the scheduled-task workspace.
+The **Automations** route is the durable scheduling workspace.
 
-The overview now uses the same document-style shell as **Settings**: centered intro, section dividers, and a sticky right-side table of contents instead of a loose empty-state layout.
+The overview is intentionally lean: a simple header plus two sections — **Jobs** for scheduled background-agent prompts and **Threads** for conversations currently attached to automations.
 
 Current capabilities:
 
 - create new automations in-app
-- edit existing task definitions
-- choose whether an automation uses a dedicated thread, an existing thread, or no thread
+- edit existing automation definitions
+- choose whether an automation targets a background job or a conversation thread
+- choose whether an automation uses a dedicated thread, an existing thread, or no thread when that target allows it
 - open the automation-owned thread directly from the detail view
-- enable / disable tasks
+- enable / disable automations
 - delete automations with an in-app confirmation step
-- run a task immediately and watch the automation state refresh in place
+- run an automation immediately and watch the automation state refresh in place
 - inspect recent automation-owned run history directly from the automation detail view
+
+Time-based `conversation_queue` entries and scheduled `run.start_agent` prompts now land here as saved automations. Transient `after_turn` queue entries still stay conversation-local and do not appear in Automations.
 
 ## Settings
 

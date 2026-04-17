@@ -11,14 +11,14 @@ tools:
 
 Runs are durable daemon-backed background jobs started on demand.
 
-Use a run when you want detached work to start **now**, **later**, **recurring**, or **looping**.
+Use a run when you want detached work to start **now** or **loop** immediately.
 
 ## When to use runs
 
 Good fits:
 
 - long-running shell commands you do not want to block on
-- focused background agent jobs (now, later, or recurring)
+- focused background agent jobs that should start now
 - subagent work that should outlive the current turn
 - local detached work you want to inspect later by run id
 - looping agents that schedule their own next iteration
@@ -40,9 +40,9 @@ Start a detached shell command with the `run` tool:
 }
 ```
 
-## Agent run (with scheduling)
+## Agent run
 
-Start a detached background agent prompt:
+Start a detached background agent prompt immediately:
 
 ```json
 {
@@ -52,7 +52,7 @@ Start a detached background agent prompt:
 }
 ```
 
-Add scheduling with `defer`, `cron`, or `at`:
+Add scheduling with `defer`, `cron`, or `at` when you want a saved automation instead of an immediate run:
 
 ```json
 {
@@ -124,11 +124,11 @@ A run is:
 - detached
 - durable enough to inspect later
 - daemon-owned
-- started explicitly, not on a schedule
+- started explicitly now
 
 If you want "start now and track it later," use a run.
 
-If you want "run this tomorrow" or "run this every hour," use a scheduled task instead.
+If you want "run this tomorrow" or "run this every hour," use a scheduled task / automation instead.
 
 ## Durable state
 
@@ -176,13 +176,13 @@ If the outcome should eventually drive user attention, pair that behavior with t
 
 | Tool | Use case | Example |
 |------|----------|----------|
-| `run` | Ad-hoc prompts, now/defer/cron/loop | "check deployment in 1h" |
+| `run` | Ad-hoc prompts that start now, plus loop mode | "start a code review now" |
 | `conversation_queue` | Continue same conversation later | "resume this thread in 30m" |
-| `scheduled_task` | Persistent task definitions | "morning report every weekday" |
+| `scheduled_task` | Persistent task definitions / automations | "morning report every weekday" |
 | `reminder` | Direct human reminders | "remind me tomorrow" |
 
-For "run this prompt later," use `run` with `--defer`.
-For "run this every hour," use `run` with `--cron`.
+For "run this prompt later," use `run` with `--defer` to create a saved automation.
+For "run this every hour," use `run` with `--cron` to create a saved automation.
 For "run this and have it loop," use `run` with `--loop`.
 For "continue this conversation later" with no detached job, use `conversation_queue`.
 For "persistent automation from a file," use `scheduled_task`.

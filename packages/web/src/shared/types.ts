@@ -239,6 +239,7 @@ export interface ScheduledTaskSummary {
   title?: string;
   filePath?: string;
   scheduleType: string;
+  targetType?: string;
   running: boolean;
   enabled: boolean;
   cron?: string;
@@ -264,6 +265,7 @@ export interface ScheduledTaskDetail {
   running: boolean;
   enabled: boolean;
   scheduleType: string;
+  targetType?: string;
   cron?: string;
   at?: string;
   model?: string;

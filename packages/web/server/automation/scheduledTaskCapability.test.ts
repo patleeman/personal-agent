@@ -12,6 +12,7 @@ const {
   readFileSyncMock,
   startScheduledTaskRunMock,
   toScheduledTaskMetadataMock,
+  normalizeAutomationTargetTypeForSelectionMock,
   updateStoredAutomationMock,
   applyScheduledTaskThreadBindingMock,
   buildScheduledTaskThreadDetailMock,
@@ -28,6 +29,7 @@ const {
   readFileSyncMock: vi.fn(),
   startScheduledTaskRunMock: vi.fn(),
   toScheduledTaskMetadataMock: vi.fn(),
+  normalizeAutomationTargetTypeForSelectionMock: vi.fn((value: string | null | undefined) => value === 'conversation' ? 'conversation' : 'background-agent'),
   updateStoredAutomationMock: vi.fn(),
   applyScheduledTaskThreadBindingMock: vi.fn(),
   buildScheduledTaskThreadDetailMock: vi.fn(),
@@ -47,6 +49,7 @@ vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
   deleteStoredAutomation: deleteStoredAutomationMock,
   ensureAutomationThread: ensureAutomationThreadMock,
+  normalizeAutomationTargetTypeForSelection: normalizeAutomationTargetTypeForSelectionMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
 }));
@@ -164,6 +167,7 @@ describe('scheduledTaskCapability', () => {
     readFileSyncMock.mockReset();
     startScheduledTaskRunMock.mockReset();
     toScheduledTaskMetadataMock.mockReset();
+    normalizeAutomationTargetTypeForSelectionMock.mockClear();
     updateStoredAutomationMock.mockReset();
     applyScheduledTaskThreadBindingMock.mockReset();
     buildScheduledTaskThreadDetailMock.mockReset();
@@ -380,6 +384,7 @@ describe('scheduledTaskCapability', () => {
       cwd: '/tmp/work',
       timeoutSeconds: 45,
       prompt: 'Body',
+      targetType: 'background-agent',
     });
     expect(applyScheduledTaskThreadBindingMock).toHaveBeenNthCalledWith(1, 'task-created', {
       threadMode: 'dedicated',

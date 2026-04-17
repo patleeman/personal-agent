@@ -1941,6 +1941,7 @@ export async function createDesktopScheduledTask(input: {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt?: string;
+  targetType?: 'background-agent' | 'conversation' | null;
   threadMode?: 'dedicated' | 'existing' | 'none' | null;
   threadConversationId?: string | null;
 }) {
@@ -1963,6 +1964,7 @@ export async function updateDesktopScheduledTask(input: {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt?: string;
+  targetType?: 'background-agent' | 'conversation' | null;
   threadMode?: 'dedicated' | 'existing' | 'none' | null;
   threadConversationId?: string | null;
 }) {

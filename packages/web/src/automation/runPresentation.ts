@@ -470,9 +470,10 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const taskId = getRunTaskId(run);
     const task = taskById(lookups, taskId);
     const title = task?.title ?? excerpt(task?.prompt) ?? taskId ?? run.runId;
+    const kindLabel = task?.targetType === 'conversation' ? 'Thread automation' : 'Scheduled task';
     const summary = task?.title && taskId && task.title !== taskId
-      ? `Scheduled task · ${task.title}`
-      : taskId ? `Scheduled task · ${taskId}` : 'Scheduled task';
+      ? `${kindLabel} · ${task.title}`
+      : taskId ? `${kindLabel} · ${taskId}` : kindLabel;
     return { title, summary };
   }
 

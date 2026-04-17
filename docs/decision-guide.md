@@ -15,7 +15,7 @@ If you are not sure which surface to use, start here.
 - **reminder** = tell me later
 - **conversation queue** = continue this conversation later
 - **run** = detached work started now
-- **scheduled task** = work that should run later or on a schedule
+- **scheduled task / automation** = saved scheduled prompt that should run later or on a schedule
 
 ## Use this, not that
 
@@ -31,7 +31,7 @@ If you are not sure which surface to use, start here.
 | Tell the user later | reminder | machine-local wakeup + alert state | scheduled task if no automation is needed |
 | Continue the same conversation later | conversation queue | live queue state or machine-local wakeup state | reminder |
 | Run something detached right now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` | scheduled task |
-| Run something later or repeatedly | scheduled task | `~/.local/state/personal-agent/sync/{_tasks|tasks}/**` | run |
+| Save a scheduled prompt that runs later or repeatedly | scheduled task / automation | `~/.local/state/personal-agent/daemon/runtime.db` | run |
 | Produce a rendered report or diagram in the current thread | conversation artifact | conversation artifact state | copying screenshots into chat |
 | Work on repo files | editor / terminal / file manager | local filesystem | trying to turn the KB into a file browser |
 
@@ -57,11 +57,15 @@ Use a **reminder** when a human-facing nudge matters.
 
 Use **conversation queue** when the right outcome is “wake this conversation back up” or “queue the next step after this turn.”
 
+Use `conversation_queue` with `after_turn` for transient immediate follow-up. Use `delay` or `at` when you want that continuation saved as a durable automation.
+
 ### Run vs scheduled task
 
 Use a **run** when the work starts now and should continue detached from the current thread.
 
-Use a **scheduled task** when the work should happen later, once, or repeatedly.
+Use a **scheduled task / automation** when the prompt should happen later, once, or repeatedly.
+
+`run.start_agent` with no schedule still starts work immediately. `run.start_agent` with `defer`, `at`, or `cron` now creates a saved automation instead of a detached run record.
 
 ## Practical rules
 

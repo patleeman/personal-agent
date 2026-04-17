@@ -19,6 +19,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && typeof record.running === 'boolean'
     && typeof record.enabled === 'boolean'
     && typeof record.scheduleType === 'string'
+    && isOptionalString(record.targetType)
     && typeof record.prompt === 'string'
     && typeof record.threadMode === 'string'
     && isOptionalString(record.filePath)

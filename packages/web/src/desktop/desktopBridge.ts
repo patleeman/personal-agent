@@ -210,6 +210,7 @@ export interface PersonalAgentDesktopBridge {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }): Promise<{ ok: true; task: ScheduledTaskDetail }>;
@@ -224,6 +225,7 @@ export interface PersonalAgentDesktopBridge {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }): Promise<{ ok: true; task: ScheduledTaskDetail }>;

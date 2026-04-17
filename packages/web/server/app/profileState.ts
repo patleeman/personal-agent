@@ -139,7 +139,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         getCurrentProfile,
       }),
       createConversationAutoModeAgentExtension(),
-      createConversationQueueAgentExtension(),
+      createConversationQueueAgentExtension({ getCurrentProfile }),
       createReminderAgentExtension(),
     ];
   }

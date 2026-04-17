@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import {
   closeAutomationDbs,
+  createStoredAutomation,
   loadAutomationRuntimeStateMap,
   loadAutomationSchedulerState,
   saveAutomationSchedulerState,
@@ -913,6 +914,148 @@ Run hourly task
       status: 'ready',
       title: 'Scheduled task @watch-prod completed',
     }));
+
+    await module.stop?.(context);
+  });
+
+  it('creates ready wakeups for one-time conversation automations without spawning background runs', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'conversation-check',
+      profile: 'assistant',
+      title: 'Conversation check',
+      enabled: true,
+      at: '2026-03-02T10:00:05.000Z',
+      cwd: '/tmp/workspace',
+      prompt: 'Check the deployment again.',
+      targetType: 'conversation',
+      conversationBehavior: 'followUp',
+    });
+
+    let currentTime = new Date('2026-03-02T10:00:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:10.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    await waitForCondition(() => {
+      const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+      return Object.keys(state.resumes).length === 1;
+    });
+
+    const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+    const wakeup = Object.values(deferredState.resumes)[0];
+    expect(wakeup).toEqual(expect.objectContaining({
+      status: 'ready',
+      prompt: 'Check the deployment again.',
+      behavior: 'followUp',
+      source: expect.objectContaining({ kind: 'automation-schedule', id: 'conversation-check' }),
+    }));
+
+    await waitForCondition(() => {
+      const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
+      return runtimeState['conversation-check']?.lastStatus === 'success';
+    });
+
+    const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
+    expect(runtimeState['conversation-check']).toEqual(expect.objectContaining({
+      lastStatus: 'success',
+      lastAttemptCount: 1,
+      oneTimeResolvedStatus: 'success',
+    }));
+    expect(runTask).not.toHaveBeenCalled();
+
+    await module.stop?.(context);
+  });
+
+  it('skips recurring conversation automations while a prior wakeup is still pending', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'hourly-check',
+      profile: 'assistant',
+      title: 'Hourly check',
+      enabled: true,
+      cron: '0 * * * *',
+      cwd: '/tmp/workspace',
+      prompt: 'Check the deployment again.',
+      targetType: 'conversation',
+    });
+
+    let currentTime = new Date('2026-03-02T09:59:00.000Z');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    currentTime = new Date('2026-03-02T10:00:00.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+    await waitForCondition(() => {
+      const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+      return Object.keys(state.resumes).length === 1;
+    });
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { runningTasks?: number; successfulRuns?: number };
+      return (status.runningTasks ?? 0) === 0 && (status.successfulRuns ?? 0) === 1;
+    });
+
+    currentTime = new Date('2026-03-02T11:00:00.000Z');
+    await module.handleEvent(createTimerEvent(), context);
+
+    const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+    expect(Object.keys(deferredState.resumes)).toHaveLength(1);
+
+    const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
+    expect(runtimeState['hourly-check']).toEqual(expect.objectContaining({
+      lastStatus: 'skipped',
+      lastError: 'Task skipped because a previous conversation wakeup is still pending',
+    }));
+    const status = module.getStatus?.() as { skippedRuns?: number; successfulRuns?: number };
+    expect(status.skippedRuns).toBe(1);
+    expect(status.successfulRuns).toBe(1);
+    expect(runTask).not.toHaveBeenCalled();
 
     await module.stop?.(context);
   });

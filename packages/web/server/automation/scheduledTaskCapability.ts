@@ -4,6 +4,7 @@ import {
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
+  normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   updateStoredAutomation,
   type StoredAutomation,
@@ -23,6 +24,7 @@ export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadI
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt: string;
+  targetType?: string | null;
 }
 
 export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadInput {
@@ -36,6 +38,7 @@ export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadI
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt?: string;
+  targetType?: string | null;
 }
 
 function summarizePrompt(value: string): string {
@@ -49,6 +52,7 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
     title: task.title,
     filePath: task.legacyFilePath,
     scheduleType: task.schedule.type,
+    targetType: task.targetType,
     running: runtime?.running ?? false,
     enabled: task.enabled,
     cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
@@ -74,6 +78,7 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     title: metadata.title,
     filePath: task.legacyFilePath,
     scheduleType: metadata.scheduleType,
+    targetType: metadata.targetType,
     running: runtime?.running ?? false,
     enabled: metadata.enabled,
     cron: metadata.cron,
@@ -117,11 +122,15 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
 }
 
 export async function createScheduledTaskCapability(profile: string, input: ScheduledTaskCreateCapabilityInput) {
+  const targetType = normalizeAutomationTargetTypeForSelection(input.targetType);
   const threadSelection = resolveScheduledTaskThreadBinding({
-    threadMode: input.threadMode,
+    threadMode: targetType === 'conversation' && input.threadMode === 'none' ? 'dedicated' : input.threadMode,
     threadConversationId: input.threadConversationId,
     cwd: input.cwd,
   });
+  if (targetType === 'conversation' && threadSelection.mode === 'none') {
+    throw new Error('Conversation automations need a thread.');
+  }
 
   const createdTask = createStoredAutomation({
     profile,
@@ -134,6 +143,7 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     cwd: input.cwd,
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt ?? '',
+    targetType,
   });
 
   const task = applyScheduledTaskThreadBinding(createdTask.id, {
@@ -159,11 +169,19 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     throw new Error('Task not found');
   }
 
+  const targetType = input.targetType === undefined
+    ? resolvedTask.task.targetType
+    : normalizeAutomationTargetTypeForSelection(input.targetType);
   const threadSelection = resolveScheduledTaskThreadBinding({
-    threadMode: input.threadMode,
+    threadMode: targetType === 'conversation' && input.threadMode === 'none'
+      ? 'dedicated'
+      : (input.threadMode ?? resolvedTask.task.threadMode),
     threadConversationId: input.threadConversationId,
     cwd: input.cwd ?? resolvedTask.task.cwd,
   });
+  if (targetType === 'conversation' && threadSelection.mode === 'none') {
+    throw new Error('Conversation automations need a thread.');
+  }
 
   const updatedTask = updateStoredAutomation(resolvedTask.task.id, {
     title: input.title,
@@ -175,6 +193,7 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     cwd: input.cwd,
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt,
+    targetType,
   });
 
   const task = applyScheduledTaskThreadBinding(updatedTask.id, {

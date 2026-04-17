@@ -12,6 +12,7 @@ import {
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
+  normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   updateStoredAutomation,
   type StoredAutomation,
@@ -47,6 +48,7 @@ function buildTaskDetailResponse(
     title: metadata.title,
     filePath: task.legacyFilePath,
     scheduleType: metadata.scheduleType,
+    targetType: metadata.targetType,
     running: runtime?.running ?? false,
     enabled: metadata.enabled,
     cron: metadata.cron,
@@ -88,6 +90,7 @@ export function registerTaskRoutes(
           title: taskWithThread.title,
           filePath: taskWithThread.legacyFilePath,
           scheduleType: taskWithThread.schedule.type,
+          targetType: taskWithThread.targetType,
           running: runtime?.running ?? false,
           enabled: taskWithThread.enabled,
           cron: taskWithThread.schedule.type === 'cron' ? taskWithThread.schedule.expression : undefined,
@@ -127,15 +130,20 @@ export function registerTaskRoutes(
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
+        targetType?: string | null;
         threadMode?: string | null;
         threadConversationId?: string | null;
       };
       const profile = getCurrentProfileFn();
+      const targetType = normalizeAutomationTargetTypeForSelection(body.targetType);
       const threadSelection = resolveScheduledTaskThreadBinding({
-        threadMode: body.threadMode,
+        threadMode: targetType === 'conversation' && body.threadMode === 'none' ? 'dedicated' : body.threadMode,
         threadConversationId: body.threadConversationId,
         cwd: body.cwd,
       });
+      if (targetType === 'conversation' && threadSelection.mode === 'none') {
+        throw new Error('Conversation automations need a thread.');
+      }
       const createdTask = createStoredAutomation({
         profile,
         title: body.title ?? '',
@@ -147,6 +155,7 @@ export function registerTaskRoutes(
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt ?? '',
+        targetType,
       });
       const task = applyScheduledTaskThreadBinding(createdTask.id, {
         threadMode: threadSelection.mode,
@@ -183,17 +192,26 @@ export function registerTaskRoutes(
         cwd?: string | null;
         timeoutSeconds?: number | null;
         prompt?: string;
+        targetType?: string | null;
         threadMode?: string | null;
         threadConversationId?: string | null;
       };
       const resolvedTask = findTaskForProfile(getCurrentProfileFn(), req.params.id);
       if (!resolvedTask) { res.status(404).json({ error: 'Task not found' }); return; }
 
+      const targetType = body.targetType === undefined
+        ? resolvedTask.task.targetType
+        : normalizeAutomationTargetTypeForSelection(body.targetType);
       const threadSelection = resolveScheduledTaskThreadBinding({
-        threadMode: body.threadMode,
+        threadMode: targetType === 'conversation' && body.threadMode === 'none'
+          ? 'dedicated'
+          : (body.threadMode ?? resolvedTask.task.threadMode),
         threadConversationId: body.threadConversationId,
         cwd: body.cwd ?? resolvedTask.task.cwd,
       });
+      if (targetType === 'conversation' && threadSelection.mode === 'none') {
+        throw new Error('Conversation automations need a thread.');
+      }
 
       const updatedTask = updateStoredAutomation(resolvedTask.task.id, {
         title: body.title,
@@ -205,6 +223,7 @@ export function registerTaskRoutes(
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
         prompt: body.prompt,
+        targetType,
       });
       const task = applyScheduledTaskThreadBinding(updatedTask.id, {
         threadMode: threadSelection.mode,

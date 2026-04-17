@@ -53,6 +53,7 @@ import {
 import { runTaskInIsolatedPi, type TaskRunRequest, type TaskRunResult } from './tasks-runner.js';
 
 const MISSED_RUN_EXAMPLE_LIMIT = 5;
+const AUTOMATION_WAKEUP_SOURCE_KIND = 'automation-schedule';
 
 interface MissedTaskRunSummary {
   count: number;
@@ -258,6 +259,21 @@ function ensureTaskRecord(taskState: TaskStateFile, task: ParsedTaskDefinition):
   return created;
 }
 
+function collectPendingConversationAutomationIds(stateRoot: string): Set<string> {
+  const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
+  const pending = new Set<string>();
+
+  for (const entry of Object.values(deferredState.resumes)) {
+    if (entry.source?.kind !== AUTOMATION_WAKEUP_SOURCE_KIND || !entry.source.id) {
+      continue;
+    }
+
+    pending.add(entry.source.id);
+  }
+
+  return pending;
+}
+
 export function createTasksModule(
   config: TasksModuleConfig,
   dependencies: TasksModuleDependencies = {},
@@ -430,7 +446,7 @@ export function createTasksModule(
   };
 
   const createDurableTaskRunRecord = async (
-    task: ParsedTaskDefinition,
+    task: StoredAutomation,
     record: TaskRuntimeState,
     startedAt: string,
     runIdOverride?: string,
@@ -454,8 +470,12 @@ export function createTasksModule(
         profile: task.profile,
         scheduleType: task.schedule.type,
         schedule: formatTaskSchedule(task),
+        targetType: task.targetType,
+        ...(task.conversationBehavior ? { conversationBehavior: task.conversationBehavior } : {}),
         cwd: task.cwd,
         modelRef: task.modelRef,
+        ...(task.threadConversationId ? { threadConversationId: task.threadConversationId } : {}),
+        ...(task.threadSessionFile ? { threadSessionFile: task.threadSessionFile } : {}),
       },
       source: {
         type: 'scheduled-task',
@@ -501,6 +521,215 @@ export function createTasksModule(
     return { runId, runPaths, attemptsRoot };
   };
 
+  const executeConversationTaskRun = async (
+    task: StoredAutomation,
+    record: TaskRuntimeState,
+    context: { logger: { info: (message: string) => void; warn: (message: string) => void }; publish: (type: string, payload?: Record<string, unknown>) => boolean; paths: { root: string; stateRoot: string } },
+    options: { runIdOverride?: string } = {},
+  ): Promise<void> => {
+    const runnableTask = ensureAutomationThread(task.id, { dbPath: runtimeDbPath, stateRoot: context.paths.stateRoot });
+    if (runnableTask.threadMode === 'none' || !runnableTask.threadSessionFile) {
+      throw new Error(`Conversation automation @${runnableTask.id} requires a thread.`);
+    }
+
+    const startedAt = record.runningStartedAt ?? now().toISOString();
+    const durableRun = await createDurableTaskRunRecord(runnableTask, record, startedAt, options.runIdOverride);
+    const wakeupId = `automation-${durableRun.runId}`;
+
+    record.lastAttemptCount = 1;
+    record.lastRunAt = startedAt;
+    state.lastRunAt = startedAt;
+    state.totalRuns += 1;
+
+    try {
+      const deferredResumeStateFile = resolveDeferredResumeStateFile(context.paths.stateRoot);
+      const deferredState = loadDeferredResumeState(deferredResumeStateFile);
+      const entry = createReadyDeferredResume(deferredState, {
+        id: wakeupId,
+        sessionFile: runnableTask.threadSessionFile,
+        prompt: runnableTask.prompt,
+        dueAt: startedAt,
+        createdAt: startedAt,
+        readyAt: startedAt,
+        attempts: 0,
+        title: runnableTask.title ?? runnableTask.id,
+        behavior: runnableTask.conversationBehavior,
+        source: {
+          kind: AUTOMATION_WAKEUP_SOURCE_KIND,
+          id: runnableTask.id,
+        },
+        delivery: {
+          alertLevel: 'passive',
+          autoResumeIfOpen: true,
+          requireAck: false,
+        },
+      });
+      saveDeferredResumeState(deferredState, deferredResumeStateFile);
+
+      await markDeferredResumeConversationRunReady({
+        daemonRoot: context.paths.root,
+        deferredResumeId: entry.id,
+        sessionFile: entry.sessionFile,
+        prompt: entry.prompt,
+        dueAt: entry.dueAt,
+        createdAt: entry.createdAt,
+        readyAt: entry.readyAt ?? startedAt,
+        profile: runnableTask.profile,
+        conversationId: runnableTask.threadConversationId,
+        cwd: runnableTask.cwd,
+      });
+
+      surfaceReadyDeferredResume({
+        entry,
+        profile: runnableTask.profile,
+        stateRoot: context.paths.stateRoot,
+        conversationId: runnableTask.threadConversationId,
+      });
+
+      record.activeRunId = undefined;
+      record.lastStatus = 'success';
+      record.lastSuccessAt = startedAt;
+      record.lastError = undefined;
+      record.running = false;
+      record.runningStartedAt = undefined;
+      state.successfulRuns += 1;
+
+      if (runnableTask.schedule.type === 'at') {
+        record.oneTimeResolvedAt = startedAt;
+        record.oneTimeResolvedStatus = 'success';
+        record.oneTimeCompletedAt = startedAt;
+      }
+
+      saveDurableRunCheckpoint(durableRun.runPaths.checkpointPath, {
+        version: 1,
+        runId: durableRun.runId,
+        updatedAt: startedAt,
+        step: 'completed',
+        payload: {
+          taskId: runnableTask.id,
+          targetType: runnableTask.targetType,
+          wakeupId,
+          sessionFile: runnableTask.threadSessionFile,
+          conversationId: runnableTask.threadConversationId,
+          behavior: runnableTask.conversationBehavior,
+        },
+      });
+
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'completed',
+        createdAt: startedAt,
+        updatedAt: startedAt,
+        activeAttempt: 1,
+        startedAt,
+        completedAt: startedAt,
+      }));
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: startedAt,
+        type: 'run.completed',
+        payload: {
+          taskId: runnableTask.id,
+          wakeupId,
+          targetType: runnableTask.targetType,
+        },
+      });
+
+      writeJsonFile(durableRun.runPaths.resultPath, {
+        taskId: runnableTask.id,
+        runId: durableRun.runId,
+        startedAt,
+        finishedAt: startedAt,
+        attemptCount: 1,
+        success: true,
+        targetType: runnableTask.targetType,
+        wakeupId,
+        sessionFile: runnableTask.threadSessionFile,
+        conversationId: runnableTask.threadConversationId,
+      });
+
+      context.publish('tasks.run.completed', {
+        taskId: runnableTask.id,
+        filePath: runnableTask.filePath,
+        completedAt: startedAt,
+        runId: durableRun.runId,
+        wakeupId,
+      });
+      context.logger.info(`task completed id=${runnableTask.id} run=${durableRun.runId} wakeup=${wakeupId}`);
+    } catch (error) {
+      const message = (error as Error).message;
+      record.activeRunId = undefined;
+      record.lastStatus = 'failed';
+      record.lastFailureAt = startedAt;
+      record.lastError = message;
+      record.running = false;
+      record.runningStartedAt = undefined;
+      state.failedRuns += 1;
+
+      if (runnableTask.schedule.type === 'at') {
+        record.oneTimeResolvedAt = startedAt;
+        record.oneTimeResolvedStatus = 'failed';
+      }
+
+      saveDurableRunCheckpoint(durableRun.runPaths.checkpointPath, {
+        version: 1,
+        runId: durableRun.runId,
+        updatedAt: startedAt,
+        step: 'failed',
+        payload: {
+          taskId: runnableTask.id,
+          targetType: runnableTask.targetType,
+          error: message,
+        },
+      });
+
+      saveDurableRunStatus(durableRun.runPaths.statusPath, createInitialDurableRunStatus({
+        runId: durableRun.runId,
+        status: 'failed',
+        createdAt: startedAt,
+        updatedAt: startedAt,
+        activeAttempt: 1,
+        startedAt,
+        completedAt: startedAt,
+        lastError: message,
+      }));
+
+      await appendDurableRunEvent(durableRun.runPaths.eventsPath, {
+        version: 1,
+        runId: durableRun.runId,
+        timestamp: startedAt,
+        type: 'run.failed',
+        payload: {
+          taskId: runnableTask.id,
+          error: message,
+          targetType: runnableTask.targetType,
+        },
+      });
+
+      writeJsonFile(durableRun.runPaths.resultPath, {
+        taskId: runnableTask.id,
+        runId: durableRun.runId,
+        startedAt,
+        finishedAt: startedAt,
+        attemptCount: 1,
+        success: false,
+        error: message,
+        targetType: runnableTask.targetType,
+      });
+
+      context.publish('tasks.run.failed', {
+        taskId: runnableTask.id,
+        filePath: runnableTask.filePath,
+        failedAt: startedAt,
+        error: message,
+        runId: durableRun.runId,
+      });
+      context.logger.warn(`task failed id=${runnableTask.id} run=${durableRun.runId} error=${message}`);
+    }
+  };
+
   const executeTaskRun = async (
     task: StoredAutomation,
     record: TaskRuntimeState,
@@ -508,6 +737,11 @@ export function createTasksModule(
     controller: AbortController,
     options: { runIdOverride?: string } = {},
   ): Promise<void> => {
+    if (task.targetType === 'conversation') {
+      await executeConversationTaskRun(task, record, context, options);
+      return;
+    }
+
     const runnableTask = ensureAutomationThread(task.id, { dbPath: runtimeDbPath, stateRoot: context.paths.stateRoot });
     const startedAt = record.runningStartedAt ?? now().toISOString();
     const durableRun = await createDurableTaskRunRecord(runnableTask, record, startedAt, options.runIdOverride);
@@ -808,6 +1042,11 @@ export function createTasksModule(
         return;
       }
 
+      if (task.targetType === 'conversation' && collectPendingConversationAutomationIds(context.paths.stateRoot).has(task.id)) {
+        context.logger.warn(`ignoring requested conversation automation run while wakeup exists id=${task.id}`);
+        return;
+      }
+
       context.logger.info(`starting requested task run id=${task.id}${runIdOverride ? ` run=${runIdOverride}` : ''}`);
       startTaskRun(task, record, context, { runIdOverride });
       persistState(context.logger);
@@ -965,6 +1204,7 @@ export function createTasksModule(
         ? new Date(lastEvaluatedAtMs)
         : undefined;
       const minuteKey = toMinuteKey(tickTime);
+      const pendingConversationAutomationIds = collectPendingConversationAutomationIds(context.paths.stateRoot);
 
       for (const task of parsedTasks) {
         const record = ensureTaskRecord(taskState, task);
@@ -1008,6 +1248,14 @@ export function createTasksModule(
             continue;
           }
 
+          if (task.targetType === 'conversation' && pendingConversationAutomationIds.has(task.id)) {
+            record.lastStatus = 'skipped';
+            record.lastRunAt = nowIso;
+            record.lastError = 'Task skipped because a previous conversation wakeup is still pending';
+            state.skippedRuns += 1;
+            continue;
+          }
+
           startTaskRun(task, record, context);
           continue;
         }
@@ -1036,6 +1284,14 @@ export function createTasksModule(
           record.lastStatus = 'skipped';
           record.lastRunAt = nowIso;
           record.lastError = 'Task skipped because a previous run is still active';
+          state.skippedRuns += 1;
+          continue;
+        }
+
+        if (task.targetType === 'conversation' && pendingConversationAutomationIds.has(task.id)) {
+          record.lastStatus = 'skipped';
+          record.lastRunAt = nowIso;
+          record.lastError = 'Task skipped because a previous conversation wakeup is still pending';
           state.skippedRuns += 1;
           continue;
         }

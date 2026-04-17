@@ -30,6 +30,7 @@ export interface ScheduledTaskFileMetadata {
   title: string;
   enabled: boolean;
   scheduleType: ParsedTaskDefinition['schedule']['type'];
+  targetType: 'background-agent' | 'conversation';
   cron?: string;
   at?: string;
   model?: string;
@@ -103,6 +104,7 @@ function hydrateMetadata(task: StoredAutomation): ScheduledTaskFileMetadata {
     title: task.title,
     enabled: task.enabled,
     scheduleType: task.schedule.type,
+    targetType: task.targetType,
     cron: task.schedule.type === 'cron' ? task.schedule.expression : undefined,
     at: task.schedule.type === 'at' ? task.schedule.at : undefined,
     model: task.modelRef,
@@ -178,6 +180,7 @@ export function readScheduledTaskFileMetadata(filePath: string): ScheduledTaskFi
     title: parsed.title ?? parsed.id,
     enabled: parsed.enabled,
     scheduleType: parsed.schedule.type,
+    targetType: 'background-agent',
     cron: parsed.schedule.type === 'cron' ? parsed.schedule.expression : undefined,
     at: parsed.schedule.type === 'at' ? parsed.schedule.at : undefined,
     model: parsed.modelRef,

@@ -2,13 +2,13 @@
 
 `personal-agentd` is the shared background process behind unattended behavior.
 
-If you care about scheduled tasks, deferred resumes, or daemon-backed durable runs, you usually want the daemon running.
+If you care about scheduled tasks / automations, deferred resumes, or daemon-backed durable runs, you usually want the daemon running.
 
 ## What the daemon does
 
 The daemon owns background automation such as:
 
-- scheduled tasks
+- scheduled tasks / automations
 - deferred resume wakeups
 - durable background runs
 - maintenance and cleanup
@@ -37,7 +37,7 @@ Important pieces:
 
 Keep the daemon on if you use:
 
-- scheduled tasks
+- scheduled tasks / automations
 - deferred resumes
 - durable runs
 - unattended background workflows that should survive the current shell
@@ -83,7 +83,7 @@ Managed services use:
 When the daemon is unavailable:
 
 - direct live conversation work can still continue
-- scheduled tasks do not run
+- scheduled tasks / automations do not run
 - deferred resumes do not fire
 - daemon-backed runs cannot be managed normally
 - some surfaces fall back to degraded behavior instead of hard-failing

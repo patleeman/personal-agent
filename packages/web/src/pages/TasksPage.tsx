@@ -38,6 +38,10 @@ function formatTaskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>): strin
   return task.title?.trim() || task.id;
 }
 
+function automationTargetLabel(task: Pick<ScheduledTaskSummary, 'targetType'>): string {
+  return task.targetType === 'conversation' ? 'Thread' : 'Job';
+}
+
 function formatThreadModeLabel(mode: 'dedicated' | 'existing' | 'none'): string {
   switch (mode) {
     case 'existing':
@@ -293,7 +297,10 @@ function DeleteTaskModal({
 function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
   const { text, cls } = statusText(task);
   const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
-  const modelLabel = task.model?.split('/').pop() ?? 'Default model';
+  const targetLabel = automationTargetLabel(task);
+  const modelLabel = task.targetType === 'conversation'
+    ? (task.threadTitle ? `Thread · ${task.threadTitle}` : 'Conversation wakeup')
+    : (task.model?.split('/').pop() ?? 'Default model');
   const lastRunLabel = task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Never run';
   const summary = summarizePrompt(task.prompt) || 'No prompt yet.';
 
@@ -310,6 +317,7 @@ function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
               {text}
             </span>
             <span className="text-[12px] text-secondary">{scheduleLabel}</span>
+            <span className="text-[12px] text-secondary">{targetLabel}</span>
           </div>
           <p className="mt-2 break-words text-[18px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
             {formatTaskName(task)}
@@ -430,6 +438,7 @@ function AutomationDetailView({
     title: detail.title,
     filePath: detail.filePath,
     scheduleType: detail.scheduleType,
+    targetType: detail.targetType,
     running: detail.running,
     enabled: detail.enabled,
     cron: detail.cron,
@@ -445,6 +454,7 @@ function AutomationDetailView({
   const prompt = detail?.prompt ?? effectiveSummary?.prompt ?? '';
   const title = detail?.title ?? effectiveSummary?.title ?? id ?? 'Automation';
   const scheduleLabel = detail ? formatTaskSchedule(detail) : effectiveSummary ? formatTaskSchedule(effectiveSummary) : 'Manual';
+  const targetLabel = automationTargetLabel(detail ?? effectiveSummary ?? { targetType: 'background-agent' });
   const lastRunLabel = effectiveSummary?.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : null;
   const lastSuccessLabel = effectiveSummary?.lastSuccessAt ? timeAgo(effectiveSummary.lastSuccessAt) : null;
   const threadModeLabel = formatThreadModeLabel(detail?.threadMode ?? 'dedicated');
@@ -458,7 +468,9 @@ function AutomationDetailView({
     ? (selectedRunId ? 'Opening run details…' : 'No runs yet')
     : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`;
   const folderLabel = detail?.cwd || effectiveSummary?.cwd || 'Current workspace';
-  const modelLabel = detail?.model || effectiveSummary?.model || 'Default';
+  const modelLabel = detail?.targetType === 'conversation'
+    ? 'Not used for thread wakeups'
+    : (detail?.model || effectiveSummary?.model || 'Default');
   const definitionLabel = detail?.filePath ? detail.filePath.split('/').slice(-1)[0] : null;
 
   const setSelectedRun = useCallback((runId: string | null) => {
@@ -597,6 +609,7 @@ function AutomationDetailView({
                   {status.text}
                 </span>
                 <span className="text-dim">{scheduleLabel}</span>
+                <span className="text-dim">{targetLabel}</span>
               </div>
               <div>
                 <h1 className="text-[46px] font-semibold tracking-[-0.04em] text-primary">{title}</h1>
@@ -605,11 +618,12 @@ function AutomationDetailView({
 
             <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
               <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
+              <DetailMetaBlock label="Target" value={targetLabel} hint={detail?.targetType === 'conversation' ? 'injects the prompt back into a thread' : 'runs the prompt as a background automation'} />
               <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
               <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
               <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
               <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
-              <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning'} />
+              <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'thread wakeups reuse the thread context instead' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
             </section>
 
             <section className="space-y-4 border-t border-border-subtle pt-6">

@@ -605,6 +605,7 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt: string;
+    targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }) => {
@@ -633,6 +634,7 @@ export const api = {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }) => {

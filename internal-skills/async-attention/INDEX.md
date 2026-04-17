@@ -106,7 +106,7 @@ This is the right fit for:
 
 Use conversation_queue when the user does **not** need a direct reminder. If the user explicitly wants "tell me later," use a reminder instead.
 
-For time-based follow-up, conversation_queue uses wakeup state under the hood. For immediate continuation after the current turn, it uses the live conversation queue.
+For time-based follow-up, `conversation_queue` now creates a saved automation targeting the same conversation thread. For immediate continuation after the current turn, it still uses the live conversation queue.
 
 ## Scheduled-task callbacks
 

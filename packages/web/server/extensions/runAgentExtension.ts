@@ -1,6 +1,8 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import { startBackgroundRun } from '@personal-agent/daemon';
+import { parseDeferredResumeDelayMs, setTaskCallbackBinding } from '@personal-agent/core';
+import { createStoredAutomation, startBackgroundRun } from '@personal-agent/daemon';
+import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import { ensureDaemonAvailable } from '../automation/daemonToolUtils.js';
 import { cancelDurableRun, followUpDurableRun, getDurableRun, getDurableRunLog, listDurableRuns, rerunDurableRun } from '../automation/durableRuns.js';
@@ -30,13 +32,40 @@ const RunToolParams = Type.Object({
   loopMaxIterations: Type.Optional(Type.Number({ description: 'Maximum number of loop iterations. Use with start_agent and loop=true.' })),
 });
 
-function readRequiredString(value: string | undefined, label: string): string {
+function readOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
+  return normalized ? normalized : undefined;
+}
+
+function readRequiredString(value: string | undefined, label: string): string {
+  const normalized = readOptionalString(value);
   if (!normalized) {
     throw new Error(`${label} is required.`);
   }
 
   return normalized;
+}
+
+function resolveScheduledAt(input: { defer?: string; at?: string }): string | undefined {
+  if (input.defer) {
+    const delayMs = parseDeferredResumeDelayMs(input.defer);
+    if (!delayMs) {
+      throw new Error('Invalid defer value. Use forms like 30s, 10m, 2h, or 1d.');
+    }
+
+    return new Date(Date.now() + delayMs).toISOString();
+  }
+
+  if (!input.at) {
+    return undefined;
+  }
+
+  const atMs = Date.parse(input.at);
+  if (!Number.isFinite(atMs)) {
+    throw new Error(`Invalid at timestamp: ${input.at}`);
+  }
+
+  return new Date(atMs).toISOString();
 }
 
 function formatRunList(result: Awaited<ReturnType<typeof listDurableRuns>>): string {
@@ -91,10 +120,10 @@ export function createRunAgentExtension(options: {
         'Prefer one focused run per independent task slug.',
         'Use start for detached shell work, start_agent for detached subagents, rerun to replay a stopped run, follow_up to continue a stopped background agent run, get/logs for inspection, and cancel to stop a run.',
         'Runs are detached by default. Only set deliverResultToConversation=true when the result should flow back to this conversation.',
-        'For time-based runs, use defer/cron/at with start_agent.',
+        'For time-based runs, use defer/cron/at with start_agent; scheduled agent prompts become automations.',
         'For looping agents, use loop=true with start_agent.',
         'For pure conversation follow-up later, prefer conversation_queue with trigger="after_turn", "delay", or "at" instead.',
-        'For persistent task-file-based automation, prefer scheduled_task instead.',
+        'For editing or inspecting saved automations directly, use scheduled_task or the Automations UI.',
       ],
       parameters: RunToolParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -223,7 +252,7 @@ export function createRunAgentExtension(options: {
               const prompt = readRequiredString(params.prompt, 'prompt');
               const cwd = readRequiredString(params.cwd ?? ctx.cwd, 'cwd');
               const conversationId = ctx.sessionManager.getSessionId();
-              const conversationFile = ctx.sessionManager.getSessionFile();
+              const conversationFile = readOptionalString(ctx.sessionManager.getSessionFile());
               const deliverResultToConversation = params.deliverResultToConversation === true;
               if (deliverResultToConversation && !conversationFile) {
                 throw new Error('deliverResultToConversation requires an active persisted conversation.');
@@ -237,21 +266,94 @@ export function createRunAgentExtension(options: {
                     repoRoot: options.repoRoot,
                   }
                 : undefined;
-              const model = params.model?.trim();
-              const profile = params.profile?.trim() || options.getCurrentProfile();
-              const defer = params.defer?.trim();
-              const cron = params.cron?.trim();
-              const at = params.at?.trim();
+              const model = readOptionalString(params.model);
+              const profile = readOptionalString(params.profile) || options.getCurrentProfile();
+              const defer = readOptionalString(params.defer);
+              const cron = readOptionalString(params.cron);
+              const at = readOptionalString(params.at);
               const loop = params.loop === true;
-              const loopDelay = params.loopDelay?.trim();
+              const loopDelay = readOptionalString(params.loopDelay);
               const loopMaxIterations = params.loopMaxIterations;
+              const scheduleCount = Number(Boolean(defer)) + Number(Boolean(cron)) + Number(Boolean(at));
 
-              // Build trigger info for the response
-              const triggerInfo: string[] = [];
-              if (defer) triggerInfo.push(`defer ${defer}`);
-              if (cron) triggerInfo.push(`cron ${cron}`);
-              if (at) triggerInfo.push(`at ${at}`);
-              if (loop) triggerInfo.push(`loop`);
+              if (scheduleCount > 1) {
+                throw new Error('Use only one scheduling trigger: defer, cron, or at.');
+              }
+
+              if (scheduleCount > 0) {
+                if (loop) {
+                  throw new Error('loop cannot be combined with defer, cron, or at.');
+                }
+
+                const scheduledAt = resolveScheduledAt({ defer, at });
+                await ensureDaemonAvailable();
+                const automation = createStoredAutomation({
+                  id: taskSlug,
+                  profile,
+                  title: taskSlug,
+                  enabled: true,
+                  cron,
+                  at: scheduledAt,
+                  modelRef: model,
+                  cwd,
+                  prompt,
+                  targetType: 'background-agent',
+                });
+
+                const task = applyScheduledTaskThreadBinding(automation.id, conversationFile
+                  ? {
+                      threadMode: ctx.cwd === cwd ? 'existing' : 'dedicated',
+                      threadConversationId: ctx.cwd === cwd ? conversationId : undefined,
+                      threadSessionFile: ctx.cwd === cwd ? conversationFile : undefined,
+                      cwd,
+                    }
+                  : {
+                      threadMode: 'none',
+                      cwd,
+                    });
+
+                if (deliverResultToConversation && conversationFile) {
+                  setTaskCallbackBinding({
+                    profile,
+                    taskId: task.id,
+                    conversationId,
+                    sessionFile: conversationFile,
+                    deliverOnSuccess: true,
+                    deliverOnFailure: true,
+                    notifyOnSuccess: 'passive',
+                    notifyOnFailure: 'disruptive',
+                    requireAck: false,
+                    autoResumeIfOpen: true,
+                  });
+                }
+
+                invalidateAppTopics('tasks');
+
+                const triggerInfo = defer
+                  ? `defer ${defer}`
+                  : cron
+                    ? `cron ${cron}`
+                    : `at ${scheduledAt}`;
+                return {
+                  content: [{
+                    type: 'text' as const,
+                    text: `Saved automation @${task.id} for ${taskSlug} [${triggerInfo}].`,
+                  }],
+                  details: {
+                    action: 'start_agent',
+                    scheduled: true,
+                    automationId: task.id,
+                    taskSlug,
+                    cwd,
+                    model,
+                    profile,
+                    ...(defer ? { defer } : {}),
+                    ...(cron ? { cron } : {}),
+                    ...(scheduledAt ? { at: scheduledAt } : {}),
+                    deliverResultToConversation,
+                  },
+                };
+              }
 
               await ensureDaemonAvailable();
               const result = await startBackgroundRun({
@@ -270,9 +372,6 @@ export function createRunAgentExtension(options: {
                 ...(callbackConversation ? { callbackConversation } : {}),
                 checkpointPayload: {
                   ...(deliverResultToConversation ? { resumeParentOnExit: true } : {}),
-                  ...(defer ? { defer } : {}),
-                  ...(cron ? { cron } : {}),
-                  ...(at ? { at } : {}),
                   ...(loop ? { loop: true } : {}),
                   ...(loopDelay ? { loopDelay } : {}),
                   ...(loopMaxIterations !== undefined ? { loopMaxIterations } : {}),
@@ -285,10 +384,9 @@ export function createRunAgentExtension(options: {
 
               invalidateAppTopics('runs');
 
-              // Build response message
               let message = `Started durable agent run ${result.runId} for ${taskSlug}`;
-              if (triggerInfo.length > 0) {
-                message += ` [${triggerInfo.join(', ')}]`;
+              if (loop) {
+                message += ' [loop]';
               }
               message += '.';
 
@@ -305,9 +403,6 @@ export function createRunAgentExtension(options: {
                   model,
                   profile,
                   logPath: result.logPath,
-                  ...(defer ? { defer } : {}),
-                  ...(cron ? { cron } : {}),
-                  ...(at ? { at } : {}),
                   ...(loop ? { loop: true } : {}),
                   deliverResultToConversation,
                 },

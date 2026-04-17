@@ -104,7 +104,7 @@ The desktop app wraps the web UI, owns a local backend while it is running, and 
 
 ### Daemon
 
-The daemon provides scheduled tasks, deferred resumes, and daemon-backed durable runs.
+The daemon provides scheduled tasks / automations, deferred resumes, and daemon-backed durable runs.
 
 ## Rules that keep the system coherent
 

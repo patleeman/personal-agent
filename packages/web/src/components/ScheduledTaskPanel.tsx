@@ -35,6 +35,7 @@ const FIELD_HELP_CLASS = 'text-[12px] leading-relaxed text-secondary';
 
 interface TaskFormState {
   title: string;
+  targetType: 'background-agent' | 'conversation';
   scheduleMode: 'cron' | 'at';
   cronEditor: CronEditorState;
   atValue: string;
@@ -57,6 +58,7 @@ function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: string 
 function createDefaultTaskFormState(): TaskFormState {
   return {
     title: '',
+    targetType: 'background-agent',
     scheduleMode: 'cron',
     cronEditor: createCronEditorState('0 9 * * 1-5'),
     atValue: '',
@@ -73,6 +75,7 @@ function createDefaultTaskFormState(): TaskFormState {
 function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
   return {
     title: task.title ?? task.id,
+    targetType: task.targetType === 'conversation' ? 'conversation' : 'background-agent',
     scheduleMode: task.at ? 'at' : 'cron',
     cronEditor: createCronEditorState(task.cron),
     atValue: toDateTimeLocalValue(task.at),
@@ -159,6 +162,10 @@ function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): strin
     return 'Choose an existing thread.';
   }
 
+  if (state.targetType === 'conversation' && state.threadMode === 'none') {
+    return 'Thread automations need a thread.';
+  }
+
   return null;
 }
 
@@ -171,6 +178,7 @@ function createTaskMutationPayload(state: TaskFormState) {
     thinkingLevel: state.thinkingLevel.trim() || null,
     cwd: state.runIn === 'worktree' ? (state.projectPath.trim() || null) : null,
     prompt: state.prompt,
+    targetType: state.targetType,
     threadMode: state.threadMode,
     threadConversationId: state.threadMode === 'existing' ? (state.threadConversationId.trim() || null) : null,
   };
@@ -382,6 +390,10 @@ function isFilesystemRootPath(path: string): boolean {
   return normalized === '/' || /^[A-Za-z]:\/$/.test(normalized);
 }
 
+function formatTargetTypeLabel(targetType: TaskFormState['targetType'] | string | undefined): string {
+  return targetType === 'conversation' ? 'Thread' : 'Job';
+}
+
 function formatThreadModeLabel(mode: TaskFormState['threadMode']): string {
   switch (mode) {
     case 'existing':
@@ -439,10 +451,28 @@ function TaskAdvancedMenu({
   existingThreadOptions: Array<{ id: string; label: string; cwd?: string }>;
   onChange: (patch: Partial<TaskFormState>) => void;
 }) {
+  const targetLabel = formatTargetTypeLabel(value.targetType);
   return (
     <div className="absolute top-full right-0 z-20 mt-2 w-[20rem] rounded-xl border border-border-default bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
       <div className="space-y-3">
         <p className={FIELD_LABEL_CLASS}>More options</p>
+
+        <div className="space-y-1.5">
+          <span className={FIELD_LABEL_CLASS}>Target</span>
+          <InlineSelect
+            value={value.targetType}
+            onChange={(event) => onChange({
+              targetType: event.target.value as TaskFormState['targetType'],
+              ...(event.target.value === 'conversation' && value.threadMode === 'none' ? { threadMode: 'dedicated' as const } : {}),
+            })}
+            className="w-full"
+            name="targetType"
+            aria-label="Automation target"
+          >
+            <option value="background-agent">Background job</option>
+            <option value="conversation">Conversation thread</option>
+          </InlineSelect>
+        </div>
 
         {value.scheduleMode === 'cron' && (
           <div className="space-y-1.5">
@@ -461,7 +491,7 @@ function TaskAdvancedMenu({
         )}
 
         <div className="space-y-1.5">
-          <span className={FIELD_LABEL_CLASS}>Thread</span>
+          <span className={FIELD_LABEL_CLASS}>{targetLabel} thread</span>
           <InlineSelect
             value={value.threadMode}
             onChange={(event) => onChange({
@@ -474,7 +504,7 @@ function TaskAdvancedMenu({
           >
             <option value="dedicated">Dedicated thread</option>
             <option value="existing">Existing thread</option>
-            <option value="none">No thread</option>
+            {value.targetType !== 'conversation' && <option value="none">No thread</option>}
           </InlineSelect>
           {value.threadMode === 'existing' && (
             <InlineSelect
@@ -495,36 +525,40 @@ function TaskAdvancedMenu({
           )}
         </div>
 
-        <div className="space-y-1.5">
-          <span className={FIELD_LABEL_CLASS}>Model</span>
-          <InlineSelect
-            value={value.model}
-            onChange={(event) => onChange({ model: event.target.value })}
-            className="w-full"
-            name="model"
-            aria-label="Automation model"
-          >
-            <option value="">Default</option>
-            {modelOptions.map((model) => (
-              <option key={model.id} value={model.id}>{model.id}</option>
-            ))}
-          </InlineSelect>
-        </div>
+        {value.targetType !== 'conversation' && (
+          <>
+            <div className="space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Model</span>
+              <InlineSelect
+                value={value.model}
+                onChange={(event) => onChange({ model: event.target.value })}
+                className="w-full"
+                name="model"
+                aria-label="Automation model"
+              >
+                <option value="">Default</option>
+                {modelOptions.map((model) => (
+                  <option key={model.id} value={model.id}>{model.id}</option>
+                ))}
+              </InlineSelect>
+            </div>
 
-        <div className="space-y-1.5">
-          <span className={FIELD_LABEL_CLASS}>Reasoning</span>
-          <InlineSelect
-            value={value.thinkingLevel}
-            onChange={(event) => onChange({ thinkingLevel: event.target.value })}
-            className="w-full"
-            name="thinkingLevel"
-            aria-label="Automation reasoning level"
-          >
-            {THINKING_LEVEL_OPTIONS.map((option) => (
-              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-            ))}
-          </InlineSelect>
-        </div>
+            <div className="space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Reasoning</span>
+              <InlineSelect
+                value={value.thinkingLevel}
+                onChange={(event) => onChange({ thinkingLevel: event.target.value })}
+                className="w-full"
+                name="thinkingLevel"
+                aria-label="Automation reasoning level"
+              >
+                {THINKING_LEVEL_OPTIONS.map((option) => (
+                  <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+                ))}
+              </InlineSelect>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -675,11 +709,12 @@ function TaskEditorForm({
   const selectedExistingThread = existingThreadOptions.find((option) => option.id === value.threadConversationId);
   const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
   const advancedSummaryParts = [
+    formatTargetTypeLabel(value.targetType),
     value.threadMode === 'existing'
       ? (selectedExistingThread?.label ?? 'Existing thread')
       : (value.threadMode === 'none' ? 'No thread' : null),
-    value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
-    value.thinkingLevel.trim() ? thinkingLabel : null,
+    value.targetType !== 'conversation' && value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
+    value.targetType !== 'conversation' && value.thinkingLevel.trim() ? thinkingLabel : null,
   ].filter((entry): entry is string => Boolean(entry));
   const advancedSummary = advancedSummaryParts.length > 0 ? advancedSummaryParts.join(' · ') : null;
   const visibleError = error ?? (submitAttempted ? validationError : null);

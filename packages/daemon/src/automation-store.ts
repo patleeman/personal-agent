@@ -14,9 +14,13 @@ import {
 } from './modules/tasks-parser.js';
 
 export type AutomationThreadMode = 'dedicated' | 'existing' | 'none';
+export type AutomationTargetType = 'background-agent' | 'conversation';
+export type AutomationConversationBehavior = 'steer' | 'followUp';
 
 export interface StoredAutomation extends ParsedTaskDefinition {
   title: string;
+  targetType: AutomationTargetType;
+  conversationBehavior?: AutomationConversationBehavior;
   createdAt: string;
   updatedAt: string;
   legacyFilePath?: string;
@@ -42,6 +46,8 @@ export interface AutomationMutationInput {
   cwd?: string | null;
   timeoutSeconds?: number | null;
   prompt: string;
+  targetType?: AutomationTargetType | null;
+  conversationBehavior?: AutomationConversationBehavior | null;
 }
 
 export interface AutomationSchedulerState {
@@ -61,6 +67,8 @@ type StoredAutomationRow = {
   model_ref: string | null;
   thinking_level: string | null;
   timeout_seconds: number;
+  target_type: string | null;
+  conversation_behavior: string | null;
   created_at: string;
   updated_at: string;
   legacy_file_path: string | null;
@@ -125,6 +133,14 @@ function normalizeAutomationThreadMode(value: string | null | undefined): Automa
   return 'dedicated';
 }
 
+export function normalizeAutomationTargetTypeForSelection(value: string | null | undefined): AutomationTargetType {
+  return value === 'conversation' ? 'conversation' : 'background-agent';
+}
+
+function readAutomationConversationBehavior(value: string | null | undefined): AutomationConversationBehavior | undefined {
+  return value === 'steer' || value === 'followUp' ? value : undefined;
+}
+
 function automationFileName(input: { id: string; legacyFilePath?: string }): string {
   return input.legacyFilePath ? basename(input.legacyFilePath) : `${input.id}.automation.md`;
 }
@@ -177,6 +193,8 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
       model_ref TEXT,
       thinking_level TEXT,
       timeout_seconds INTEGER NOT NULL,
+      target_type TEXT NOT NULL DEFAULT 'background-agent',
+      conversation_behavior TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       legacy_file_path TEXT,
@@ -227,6 +245,12 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   if (!automationColumnNames.has('thinking_level')) {
     db.exec('ALTER TABLE automations ADD COLUMN thinking_level TEXT');
   }
+  if (!automationColumnNames.has('target_type')) {
+    db.exec("ALTER TABLE automations ADD COLUMN target_type TEXT NOT NULL DEFAULT 'background-agent'");
+  }
+  if (!automationColumnNames.has('conversation_behavior')) {
+    db.exec('ALTER TABLE automations ADD COLUMN conversation_behavior TEXT');
+  }
   if (!automationColumnNames.has('thread_mode')) {
     db.exec("ALTER TABLE automations ADD COLUMN thread_mode TEXT NOT NULL DEFAULT 'dedicated'");
   }
@@ -236,6 +260,8 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
   if (!automationColumnNames.has('thread_conversation_id')) {
     db.exec('ALTER TABLE automations ADD COLUMN thread_conversation_id TEXT');
   }
+  db.exec("UPDATE automations SET target_type = 'background-agent' WHERE target_type IS NULL OR trim(target_type) = ''");
+  db.exec("UPDATE automations SET conversation_behavior = NULL WHERE conversation_behavior IS NOT NULL AND trim(conversation_behavior) NOT IN ('steer', 'followUp')");
   db.exec("UPDATE automations SET thread_mode = 'dedicated' WHERE thread_mode IS NULL OR trim(thread_mode) = ''");
 
   dbCache.set(resolved, db);
@@ -282,6 +308,8 @@ function rowToStoredAutomation(row: StoredAutomationRow): StoredAutomation {
     thinkingLevel: readOptionalString(row.thinking_level),
     cwd: readOptionalString(row.cwd),
     timeoutSeconds: row.timeout_seconds,
+    targetType: normalizeAutomationTargetTypeForSelection(row.target_type),
+    conversationBehavior: readAutomationConversationBehavior(row.conversation_behavior),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     legacyFilePath,
@@ -345,7 +373,7 @@ function collectLegacyTaskFiles(taskDir: string): string[] {
 function readStoredAutomationRows(db: SqliteDatabase, profile?: string): StoredAutomationRow[] {
   if (profile) {
     return db.prepare(`
-      SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+      SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
       FROM automations
       WHERE profile = ?
       ORDER BY title COLLATE NOCASE ASC, created_at ASC, id ASC
@@ -353,7 +381,7 @@ function readStoredAutomationRows(db: SqliteDatabase, profile?: string): StoredA
   }
 
   return db.prepare(`
-    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     ORDER BY profile ASC, title COLLATE NOCASE ASC, created_at ASC, id ASC
   `).all() as StoredAutomationRow[];
@@ -390,6 +418,8 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
   thinkingLevel?: string;
   cwd?: string;
   timeoutSeconds: number;
+  targetType: AutomationTargetType;
+  conversationBehavior?: AutomationConversationBehavior;
 } {
   const profile = readRequiredString(input.profile, 'profile');
   const title = readRequiredString(input.title, 'title');
@@ -411,6 +441,11 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
     throw new Error(`Invalid at timestamp: ${at}`);
   }
 
+  const targetType = normalizeAutomationTargetTypeForSelection(input.targetType ?? undefined);
+  const conversationBehavior = targetType === 'conversation'
+    ? readAutomationConversationBehavior(input.conversationBehavior ?? undefined)
+    : undefined;
+
   return {
     id: readOptionalString(input.id ?? undefined),
     profile,
@@ -423,6 +458,8 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
     thinkingLevel: readOptionalString(input.thinkingLevel ?? undefined),
     cwd: readOptionalString(input.cwd ?? undefined),
     timeoutSeconds,
+    targetType,
+    conversationBehavior,
   };
 }
 
@@ -438,7 +475,7 @@ export function listStoredAutomations(options: { profile?: string; dbPath?: stri
 export function getStoredAutomation(id: string, options: { profile?: string; dbPath?: string } = {}): StoredAutomation | undefined {
   const db = openAutomationDb(options.dbPath);
   const row = db.prepare(`
-    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    SELECT id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
     FROM automations
     WHERE id = ?
   `).get(id) as StoredAutomationRow | undefined;
@@ -459,8 +496,8 @@ export function createStoredAutomation(input: AutomationMutationInput & { dbPath
 
   db.prepare(`
     INSERT INTO automations (
-      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'dedicated', NULL, NULL)
+      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'dedicated', NULL, NULL)
   `).run(
     id,
     normalized.profile,
@@ -474,6 +511,8 @@ export function createStoredAutomation(input: AutomationMutationInput & { dbPath
     normalized.modelRef ?? null,
     normalized.thinkingLevel ?? null,
     normalized.timeoutSeconds,
+    normalized.targetType,
+    normalized.conversationBehavior ?? null,
     now,
     now,
   );
@@ -503,13 +542,15 @@ export function updateStoredAutomation(id: string, input: Partial<Omit<Automatio
     cwd: input.cwd !== undefined ? input.cwd : existing.cwd,
     timeoutSeconds: input.timeoutSeconds !== undefined ? input.timeoutSeconds : existing.timeoutSeconds,
     prompt: input.prompt ?? existing.prompt,
+    targetType: input.targetType !== undefined ? input.targetType : existing.targetType,
+    conversationBehavior: input.conversationBehavior !== undefined ? input.conversationBehavior : existing.conversationBehavior,
   });
 
   const db = openAutomationDb(input.dbPath);
   const updatedAt = new Date().toISOString();
   db.prepare(`
     UPDATE automations
-    SET title = ?, enabled = ?, schedule_type = ?, cron = ?, at = ?, prompt = ?, cwd = ?, model_ref = ?, thinking_level = ?, timeout_seconds = ?, updated_at = ?
+    SET title = ?, enabled = ?, schedule_type = ?, cron = ?, at = ?, prompt = ?, cwd = ?, model_ref = ?, thinking_level = ?, timeout_seconds = ?, target_type = ?, conversation_behavior = ?, updated_at = ?
     WHERE id = ?
   `).run(
     normalized.title,
@@ -522,6 +563,8 @@ export function updateStoredAutomation(id: string, input: Partial<Omit<Automatio
     normalized.modelRef ?? null,
     normalized.thinkingLevel ?? null,
     normalized.timeoutSeconds,
+    normalized.targetType,
+    normalized.conversationBehavior ?? null,
     updatedAt,
     id,
   );
@@ -702,8 +745,8 @@ export function ensureLegacyTaskImports(options: {
 
   const insertAutomation = db.prepare(`
     INSERT INTO automations (
-      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dedicated', NULL, NULL)
+      id, profile, title, enabled, schedule_type, cron, at, prompt, cwd, model_ref, thinking_level, timeout_seconds, target_type, conversation_behavior, created_at, updated_at, legacy_file_path, thread_mode, thread_session_file, thread_conversation_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'dedicated', NULL, NULL)
   `);
   const markImported = db.prepare(`
     INSERT INTO legacy_automation_imports (legacy_file_path, automation_id, imported_at)
@@ -737,6 +780,8 @@ export function ensureLegacyTaskImports(options: {
           parsed.modelRef ?? null,
           parsed.thinkingLevel ?? null,
           parsed.timeoutSeconds,
+          'background-agent',
+          null,
           importedAt,
           importedAt,
           filePath,

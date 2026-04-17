@@ -1,19 +1,20 @@
 import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
+import { loadAutomationRuntimeStateMap, createStoredAutomation, deleteStoredAutomation, listStoredAutomations } from '@personal-agent/daemon';
+import { getSessionDeferredResumeEntries, loadDeferredResumeState, parseDeferredResumeDelayMs } from '@personal-agent/core';
 import {
   cancelDeferredResumeForSessionFile,
   DEFAULT_DEFERRED_RESUME_PROMPT,
-  listDeferredResumesForSessionFile,
-  scheduleDeferredResumeForSessionFile,
   type DeferredResumeSummary,
 } from '../automation/deferredResumes.js';
+import { applyScheduledTaskThreadBinding } from '../automation/scheduledTaskThreads.js';
 import {
   cancelQueuedPrompt,
   listQueuedPromptPreviews,
   promptSession,
   type QueuedPromptPreview,
 } from '../conversations/liveSessions.js';
-import { publishAppEvent } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 
 const CONVERSATION_QUEUE_ACTION_VALUES = ['add', 'list', 'cancel'] as const;
 const CONVERSATION_QUEUE_TRIGGER_VALUES = ['after_turn', 'delay', 'at'] as const;
@@ -40,7 +41,7 @@ const ConversationQueueToolParams = Type.Object({
 
 interface ConversationQueueItem {
   id: string;
-  source: 'live-queue' | 'deferred-resume';
+  source: 'live-queue' | 'automation' | 'deferred-resume';
   status: 'queued' | 'scheduled' | 'ready';
   trigger: 'after_turn' | 'time';
   prompt: string;
@@ -76,6 +77,25 @@ function buildLiveQueueItem(
     trigger: 'after_turn',
     prompt: preview.text,
     deliverAs: behavior,
+  };
+}
+
+function buildAutomationQueueItem(task: {
+  id: string;
+  title: string;
+  prompt: string;
+  schedule: { type: 'cron' | 'at'; at?: string };
+  conversationBehavior?: 'steer' | 'followUp';
+}): ConversationQueueItem {
+  return {
+    id: task.id,
+    source: 'automation',
+    status: 'scheduled',
+    trigger: 'time',
+    prompt: task.prompt,
+    title: task.title,
+    deliverAs: task.conversationBehavior,
+    dueAt: task.schedule.type === 'at' ? task.schedule.at : undefined,
   };
 }
 
@@ -115,7 +135,31 @@ function collectConversationQueueItems(input: {
 
   const sessionFile = readOptionalString(input.sessionFile);
   if (sessionFile) {
-    items.push(...listDeferredResumesForSessionFile(sessionFile).map(buildDeferredResumeQueueItem));
+    const runtimeState = loadAutomationRuntimeStateMap();
+    const automations = listStoredAutomations()
+      .filter((task) => task.targetType === 'conversation' && task.threadSessionFile === sessionFile)
+      .filter((task) => {
+        const runtime = runtimeState[task.id];
+        return task.schedule.type === 'cron' || !runtime?.oneTimeResolvedAt;
+      });
+    items.push(...automations.map(buildAutomationQueueItem));
+
+    const resumes = getSessionDeferredResumeEntries(loadDeferredResumeState(), sessionFile)
+      .map((resume) => ({
+        id: resume.id,
+        sessionFile: resume.sessionFile,
+        prompt: resume.prompt,
+        dueAt: resume.dueAt,
+        createdAt: resume.createdAt,
+        attempts: resume.attempts,
+        status: resume.status,
+        readyAt: resume.readyAt,
+        kind: resume.kind,
+        title: resume.title,
+        behavior: resume.behavior,
+        delivery: resume.delivery,
+      } satisfies DeferredResumeSummary));
+    items.push(...resumes.map(buildDeferredResumeQueueItem));
   }
 
   return items.sort((left, right) => {
@@ -203,6 +247,51 @@ function publishSessionMetaChanged(sessionId: string | undefined): void {
   publishAppEvent({ type: 'session_meta_changed', sessionId: normalizedSessionId });
 }
 
+function summarizeAutomationTitle(prompt: string, title?: string): string {
+  const normalizedTitle = readOptionalString(title);
+  if (normalizedTitle) {
+    return normalizedTitle;
+  }
+
+  const summary = prompt.split('\n')[0]?.trim() ?? '';
+  return summary.slice(0, 80) || 'Queued continuation';
+}
+
+function resolveScheduledAt(input: { delay?: string; at?: string }): string {
+  if (input.delay && input.at) {
+    throw new Error('Specify only one of delay or at.');
+  }
+
+  if (!input.delay && !input.at) {
+    throw new Error('One of delay or at is required.');
+  }
+
+  if (input.delay) {
+    const delayMs = parseDeferredResumeDelayMs(input.delay);
+    if (!delayMs) {
+      throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
+    }
+
+    return new Date(Date.now() + delayMs).toISOString();
+  }
+
+  const atMs = Date.parse(input.at as string);
+  if (!Number.isFinite(atMs)) {
+    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+  }
+
+  const dueAt = new Date(atMs);
+  if (dueAt.getTime() <= Date.now()) {
+    throw new Error('Queue time must be in the future.');
+  }
+
+  return dueAt.toISOString();
+}
+
+function findConversationAutomation(id: string, sessionFile: string) {
+  return listStoredAutomations().find((task) => task.id === id && task.targetType === 'conversation' && task.threadSessionFile === sessionFile);
+}
+
 function readAddTrigger(value: ConversationQueueTrigger | undefined): ConversationQueueTrigger {
   if (value === 'after_turn' || value === 'delay' || value === 'at') {
     return value;
@@ -211,7 +300,7 @@ function readAddTrigger(value: ConversationQueueTrigger | undefined): Conversati
   throw new Error('trigger is required for add. Use after_turn, delay, or at.');
 }
 
-export function createConversationQueueAgentExtension(): (pi: ExtensionAPI) => void {
+export function createConversationQueueAgentExtension(options: { getCurrentProfile: () => string }): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
       name: 'conversation_queue',
@@ -221,7 +310,7 @@ export function createConversationQueueAgentExtension(): (pi: ExtensionAPI) => v
       promptGuidelines: [
         'Use this tool when the current conversation should keep going later instead of inventing a standalone task.',
         'Use trigger="after_turn" to queue work behind the current turn while the agent is still working.',
-        'Use trigger="delay" or trigger="at" for time-based follow-up in the same conversation.',
+        'Use trigger="delay" or trigger="at" for time-based follow-up in the same conversation; those become saved automations.',
         'Keep queued prompts short and concrete about the exact next step.',
         'Use action="list" or action="cancel" to inspect or clean up queued continuation work.',
       ],
@@ -270,42 +359,46 @@ export function createConversationQueueAgentExtension(): (pi: ExtensionAPI) => v
               };
             }
 
-            if (!sessionFile) {
-              throw new Error('Time-based queue entries require a persisted session file.');
+            if (!sessionFile || !sessionId) {
+              throw new Error('Time-based queue entries require a persisted conversation.');
             }
 
-            const resume = trigger === 'delay'
-              ? await scheduleDeferredResumeForSessionFile({
-                  sessionFile,
-                  conversationId: sessionId,
-                  delay: readRequiredString(params.delay, 'delay'),
-                  prompt,
-                  title: params.title,
-                  behavior: deliverAs,
-                })
-              : await scheduleDeferredResumeForSessionFile({
-                  sessionFile,
-                  conversationId: sessionId,
-                  at: readRequiredString(params.at, 'at'),
-                  prompt,
-                  title: params.title,
-                  behavior: deliverAs,
-                });
+            const scheduledAt = resolveScheduledAt({
+              delay: trigger === 'delay' ? readRequiredString(params.delay, 'delay') : undefined,
+              at: trigger === 'at' ? readRequiredString(params.at, 'at') : undefined,
+            });
+            const automation = createStoredAutomation({
+              profile: options.getCurrentProfile(),
+              title: summarizeAutomationTitle(prompt, params.title),
+              enabled: true,
+              at: scheduledAt,
+              prompt,
+              cwd: ctx.cwd,
+              targetType: 'conversation',
+              conversationBehavior: deliverAs,
+            });
+            const task = applyScheduledTaskThreadBinding(automation.id, {
+              threadMode: 'existing',
+              threadConversationId: sessionId,
+              threadSessionFile: sessionFile,
+              cwd: ctx.cwd,
+            });
 
+            invalidateAppTopics('tasks');
             publishSessionMetaChanged(sessionId);
             return {
               content: [{
                 type: 'text' as const,
-                text: `Queued conversation continuation ${resume.id} (${trigger === 'delay' ? `in ${params.delay}` : `for ${resume.dueAt}`}).`,
+                text: `Queued conversation continuation ${task.id} (${trigger === 'delay' ? `in ${params.delay}` : `for ${scheduledAt}`}).`,
               }],
               details: {
                 action: 'add',
                 trigger,
                 sessionId,
                 sessionFile,
-                id: resume.id,
-                prompt: resume.prompt,
-                dueAt: resume.dueAt,
+                id: task.id,
+                prompt: task.prompt,
+                dueAt: scheduledAt,
                 ...(deliverAs ? { deliverAs } : {}),
               },
             };
@@ -334,6 +427,23 @@ export function createConversationQueueAgentExtension(): (pi: ExtensionAPI) => v
 
             if (!sessionFile) {
               throw new Error('Deferred queue cancellation requires a persisted session file.');
+            }
+
+            const automation = findConversationAutomation(id, sessionFile);
+            if (automation) {
+              deleteStoredAutomation(automation.id);
+              invalidateAppTopics('tasks');
+              publishSessionMetaChanged(sessionId);
+              return {
+                content: [{ type: 'text' as const, text: `Cancelled queued continuation ${automation.id}.` }],
+                details: {
+                  action: 'cancel',
+                  sessionId,
+                  sessionFile,
+                  id: automation.id,
+                  prompt: automation.prompt,
+                },
+              };
             }
 
             const cancelled = await cancelDeferredResumeForSessionFile({

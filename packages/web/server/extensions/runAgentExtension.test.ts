@@ -10,6 +10,9 @@ const {
   followUpDurableRunMock,
   ensureDaemonAvailableMock,
   startBackgroundRunMock,
+  createStoredAutomationMock,
+  applyScheduledTaskThreadBindingMock,
+  setTaskCallbackBindingMock,
 } = vi.hoisted(() => ({
   listDurableRunsMock: vi.fn(),
   getDurableRunMock: vi.fn(),
@@ -19,6 +22,9 @@ const {
   followUpDurableRunMock: vi.fn(),
   ensureDaemonAvailableMock: vi.fn(),
   startBackgroundRunMock: vi.fn(),
+  createStoredAutomationMock: vi.fn(),
+  applyScheduledTaskThreadBindingMock: vi.fn(),
+  setTaskCallbackBindingMock: vi.fn(),
 }));
 
 vi.mock('../automation/durableRuns.js', () => ({
@@ -36,7 +42,26 @@ vi.mock('../automation/daemonToolUtils.js', () => ({
 
 vi.mock('@personal-agent/daemon', () => ({
   startBackgroundRun: startBackgroundRunMock,
+  createStoredAutomation: createStoredAutomationMock,
 }));
+
+vi.mock('../automation/scheduledTaskThreads.js', () => ({
+  applyScheduledTaskThreadBinding: applyScheduledTaskThreadBindingMock,
+}));
+
+vi.mock('@personal-agent/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@personal-agent/core')>();
+  return {
+    ...actual,
+    parseDeferredResumeDelayMs: (value: string) => {
+      if (value === '30m') return 30 * 60 * 1000;
+      if (value === '10m') return 10 * 60 * 1000;
+      if (value === 'bad') return undefined;
+      return undefined;
+    },
+    setTaskCallbackBinding: setTaskCallbackBindingMock,
+  };
+});
 
 function registerRunTool() {
   let registeredTool:
@@ -77,8 +102,24 @@ beforeEach(() => {
   cancelDurableRunMock.mockReset();
   ensureDaemonAvailableMock.mockReset();
   startBackgroundRunMock.mockReset();
+  createStoredAutomationMock.mockReset();
+  applyScheduledTaskThreadBindingMock.mockReset();
+  setTaskCallbackBindingMock.mockReset();
   rerunDurableRunMock.mockReset();
   followUpDurableRunMock.mockReset();
+
+  createStoredAutomationMock.mockImplementation((input: Record<string, unknown>) => ({
+    id: String(input.id ?? 'automation-1'),
+    title: String(input.title ?? input.id ?? 'automation-1'),
+    prompt: String(input.prompt ?? ''),
+    schedule: input.cron
+      ? { type: 'cron', expression: String(input.cron) }
+      : { type: 'at', at: String(input.at ?? '2026-04-10T09:00:00.000Z') },
+  }));
+  applyScheduledTaskThreadBindingMock.mockImplementation((taskId: string) => ({
+    id: taskId,
+    prompt: 'Watch the deployment and report back.',
+  }));
 });
 
 afterEach(() => {
@@ -222,58 +263,118 @@ describe('run agent extension', () => {
     });
   });
 
-  it('passes trimmed scheduling options to detached agent runs without a persisted conversation', async () => {
+  it('creates a saved automation for scheduled agent prompts', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-10T08:30:00Z'));
     ensureDaemonAvailableMock.mockResolvedValue(undefined);
-    startBackgroundRunMock.mockResolvedValue({
-      accepted: true,
-      runId: 'run-agent-loop',
-      logPath: '/tmp/run-agent-loop.log',
+    createStoredAutomationMock.mockReturnValue({
+      id: 'monitor-build',
+      title: 'monitor-build',
+      prompt: 'Watch the deployment and report back.',
+      schedule: { type: 'at', at: '2026-04-10T09:00:00.000Z' },
     });
+    applyScheduledTaskThreadBindingMock.mockReturnValue({ id: 'monitor-build', prompt: 'Watch the deployment and report back.' });
 
-    const runTool = registerRunTool();
-    const result = await runTool.execute(
-      'tool-1',
-      {
-        action: 'start_agent',
-        taskSlug: '  monitor-build  ',
-        prompt: '  Watch the deployment and report back.  ',
-        model: '   ',
-        profile: '   ',
-        cwd: '  /tmp/other-workspace  ',
-        defer: ' 30m ',
-        cron: ' 0 9 * * 1-5 ',
-        at: ' 2026-04-10T09:00:00Z ',
-        loop: true,
-        loopDelay: ' 1h ',
-        loopMaxIterations: 5,
-      },
-      undefined,
-      undefined,
-      createToolContext('conv-loop', ''),
-    );
+    try {
+      const runTool = registerRunTool();
+      const result = await runTool.execute(
+        'tool-1',
+        {
+          action: 'start_agent',
+          taskSlug: '  monitor-build  ',
+          prompt: '  Watch the deployment and report back.  ',
+          model: '   ',
+          profile: '   ',
+          cwd: '  /tmp/other-workspace  ',
+          defer: ' 30m ',
+        },
+        undefined,
+        undefined,
+        createToolContext('conv-loop', ''),
+      );
 
-    expect(result.isError).not.toBe(true);
-    expect(startBackgroundRunMock).toHaveBeenCalledWith({
-      taskSlug: 'monitor-build',
-      cwd: '/tmp/other-workspace',
-      agent: {
-        prompt: 'Watch the deployment and report back.',
+      expect(result.isError).not.toBe(true);
+      expect(createStoredAutomationMock).toHaveBeenCalledWith({
+        id: 'monitor-build',
         profile: 'assistant',
-      },
-      source: {
-        type: 'tool',
-        id: 'conv-loop',
-      },
-      checkpointPayload: {
-        defer: '30m',
-        cron: '0 9 * * 1-5',
-        at: '2026-04-10T09:00:00Z',
-        loop: true,
-        loopDelay: '1h',
-        loopMaxIterations: 5,
-      },
+        title: 'monitor-build',
+        enabled: true,
+        cron: undefined,
+        at: '2026-04-10T09:00:00.000Z',
+        modelRef: undefined,
+        cwd: '/tmp/other-workspace',
+        prompt: 'Watch the deployment and report back.',
+        targetType: 'background-agent',
+      });
+      expect(applyScheduledTaskThreadBindingMock).toHaveBeenCalledWith('monitor-build', {
+        threadMode: 'none',
+        cwd: '/tmp/other-workspace',
+      });
+      expect(startBackgroundRunMock).not.toHaveBeenCalled();
+      expect(result.content[0]?.text).toContain('Saved automation @monitor-build');
+      expect(result.details).toMatchObject({
+        action: 'start_agent',
+        scheduled: true,
+        automationId: 'monitor-build',
+        at: '2026-04-10T09:00:00.000Z',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('binds scheduled automations back to the current conversation when requested', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-10T08:00:00Z'));
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    createStoredAutomationMock.mockReturnValue({
+      id: 'deploy-watch',
+      title: 'deploy-watch',
+      prompt: 'Watch the deployment and report back.',
+      schedule: { type: 'cron', expression: '0 9 * * 1-5' },
     });
-    expect(result.content[0]?.text).toContain('[defer 30m, cron 0 9 * * 1-5, at 2026-04-10T09:00:00Z, loop]');
+    applyScheduledTaskThreadBindingMock.mockReturnValue({ id: 'deploy-watch', prompt: 'Watch the deployment and report back.' });
+
+    try {
+      const runTool = registerRunTool();
+      const result = await runTool.execute(
+        'tool-1',
+        {
+          action: 'start_agent',
+          taskSlug: 'deploy-watch',
+          prompt: 'Watch the deployment and report back.',
+          cron: '0 9 * * 1-5',
+          deliverResultToConversation: true,
+        },
+        undefined,
+        undefined,
+        createToolContext('conv-callback', '/tmp/sessions/conv-callback.jsonl'),
+      );
+
+      expect(result.isError).not.toBe(true);
+      expect(applyScheduledTaskThreadBindingMock).toHaveBeenCalledWith('deploy-watch', {
+        threadMode: 'existing',
+        threadConversationId: 'conv-callback',
+        threadSessionFile: '/tmp/sessions/conv-callback.jsonl',
+        cwd: '/tmp/workspace',
+      });
+      expect(setTaskCallbackBindingMock).toHaveBeenCalledWith({
+        profile: 'assistant',
+        taskId: 'deploy-watch',
+        conversationId: 'conv-callback',
+        sessionFile: '/tmp/sessions/conv-callback.jsonl',
+        deliverOnSuccess: true,
+        deliverOnFailure: true,
+        notifyOnSuccess: 'passive',
+        notifyOnFailure: 'disruptive',
+        requireAck: false,
+        autoResumeIfOpen: true,
+      });
+      expect(result.content[0]?.text).toContain('Saved automation @deploy-watch');
+      expect(startBackgroundRunMock).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('can opt into delivering run results back to the current conversation', async () => {
