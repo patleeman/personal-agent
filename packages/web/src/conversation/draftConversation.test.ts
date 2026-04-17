@@ -1,19 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from '../local/reloadState';
 import {
+  clearConversationAttachments,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationModel,
   clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
+  hasConversationAttachments,
   hasDraftConversationAttachments,
+  persistConversationAttachments,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationCwd,
   persistDraftConversationModel,
   persistDraftConversationServiceTier,
   persistDraftConversationThinkingLevel,
+  readConversationAttachments,
   readDraftConversationAttachments,
   readDraftConversationComposer,
   readDraftConversationCwd,
@@ -203,6 +207,34 @@ describe('draftConversation', () => {
     expect(hasDraftConversationAttachments(storage)).toBe(true);
   });
 
+  it('persists attachments per conversation thread', () => {
+    const storage = createStorage();
+
+    persistConversationAttachments('session-123', {
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [],
+    }, storage);
+    persistConversationAttachments('session-456', {
+      images: [{ mimeType: 'image/png', data: 'xyz', name: 'other.png' }],
+      drawings: [],
+    }, storage);
+
+    expect(storage.getItem('pa:reload:conversation:session-123:attachments')).toBe(JSON.stringify({
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [],
+    }));
+    expect(readConversationAttachments('session-123', storage)).toEqual({
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [],
+    });
+    expect(readConversationAttachments('session-456', storage)).toEqual({
+      images: [{ mimeType: 'image/png', data: 'xyz', name: 'other.png' }],
+      drawings: [],
+    });
+    expect(hasConversationAttachments('session-123', storage)).toBe(true);
+    expect(hasConversationAttachments('session-456', storage)).toBe(true);
+  });
+
   it('clears stored draft attachments', () => {
     const storage = createStorage();
 
@@ -217,4 +249,25 @@ describe('draftConversation', () => {
     expect(storage.getItem(DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY)).toBeNull();
   });
 
+  it('clears stored conversation attachments without touching other threads', () => {
+    const storage = createStorage();
+
+    persistConversationAttachments('session-123', {
+      images: [{ mimeType: 'image/png', data: 'abc' }],
+      drawings: [],
+    }, storage);
+    persistConversationAttachments('session-456', {
+      images: [{ mimeType: 'image/png', data: 'xyz' }],
+      drawings: [],
+    }, storage);
+    clearConversationAttachments('session-123', storage);
+
+    expect(readConversationAttachments('session-123', storage)).toEqual({ images: [], drawings: [] });
+    expect(hasConversationAttachments('session-123', storage)).toBe(false);
+    expect(readConversationAttachments('session-456', storage)).toEqual({
+      images: [{ mimeType: 'image/png', data: 'xyz' }],
+      drawings: [],
+    });
+    expect(storage.getItem('pa:reload:conversation:session-123:attachments')).toBeNull();
+  });
 });

@@ -53,6 +53,7 @@ import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBra
 import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
+  clearConversationAttachments,
   clearDraftConversationAttachments,
   clearDraftConversationComposer,
   clearDraftConversationContextDocs,
@@ -63,6 +64,7 @@ import {
   DRAFT_CONVERSATION_ROUTE,
   DRAFT_CONVERSATION_STATE_CHANGED_EVENT,
   isDraftConversationAttachmentsMutationCurrent,
+  persistConversationAttachments,
   persistDraftConversationAttachments,
   persistDraftConversationComposer,
   persistDraftConversationContextDocs,
@@ -70,6 +72,7 @@ import {
   persistDraftConversationModel,
   persistDraftConversationServiceTier,
   persistDraftConversationThinkingLevel,
+  readConversationAttachments,
   readDraftConversationAttachments,
   readDraftConversationContextDocs,
   readDraftConversationCwd,
@@ -1187,6 +1190,18 @@ function restoreQueuedImageFiles(
   return normalizedImages.map((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
+    return base64ToFile(image.data, image.mimeType, name);
+  });
+}
+
+function restoreComposerImageFiles(
+  images: PromptImageInput[] | undefined | null,
+  fallbackNamePrefix: string,
+): File[] {
+  const normalizedImages = Array.isArray(images) ? images : [];
+  return normalizedImages.map((image, imageIndex) => {
+    const extension = fileExtensionForMimeType(image.mimeType);
+    const name = image.name?.trim() || `${fallbackNamePrefix}-${imageIndex + 1}.${extension}`;
     return base64ToFile(image.data, image.mimeType, name);
   });
 }
@@ -2532,36 +2547,35 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
   const composerHistoryDraftRef = useRef('');
-  const draftAttachmentsHydratedRef = useRef(!draft);
-  const lastDraftModeRef = useRef(draft);
+  const composerAttachmentScopeKey = draft ? 'draft' : (id ? `conversation:${id}` : null);
+  const composerAttachmentsHydratedRef = useRef(false);
+  const lastComposerAttachmentScopeKeyRef = useRef<string | null>(composerAttachmentScopeKey);
 
-  if (lastDraftModeRef.current !== draft) {
-    lastDraftModeRef.current = draft;
-    draftAttachmentsHydratedRef.current = false;
+  if (lastComposerAttachmentScopeKeyRef.current !== composerAttachmentScopeKey) {
+    lastComposerAttachmentScopeKeyRef.current = composerAttachmentScopeKey;
+    composerAttachmentsHydratedRef.current = false;
   }
 
   useLayoutEffect(() => {
-    if (!draft) {
-      return;
-    }
+    const storedAttachments = draft
+      ? readDraftConversationAttachments()
+      : (id ? readConversationAttachments(id) : { images: [], drawings: [] });
+    const fallbackNamePrefix = draft
+      ? 'draft-image'
+      : (id ? `conversation-${id}-image` : 'conversation-image');
 
-    const storedAttachments = readDraftConversationAttachments();
-    setAttachments(storedAttachments.images.map((image, index) => {
-      const extension = fileExtensionForMimeType(image.mimeType);
-      const name = image.name?.trim() || `draft-image-${index + 1}.${extension}`;
-      return base64ToFile(image.data, image.mimeType, name);
-    }));
+    setAttachments(restoreComposerImageFiles(storedAttachments.images, fallbackNamePrefix));
     setDrawingAttachments(storedAttachments.drawings);
     setEditingDrawingLocalId(null);
     setDrawingsPickerOpen(false);
     setConversationAttachments([]);
-    setAttachedContextDocs(readDraftConversationContextDocs());
+    setAttachedContextDocs(draft ? readDraftConversationContextDocs() : []);
     setDrawingsError(null);
     setDragOver(false);
     setSlashIdx(0);
     setMentionIdx(0);
-    draftAttachmentsHydratedRef.current = true;
-  }, [draft]);
+    composerAttachmentsHydratedRef.current = true;
+  }, [draft, id]);
 
   // Track keyboard open/close via visualViewport (mobile keyboard)
   useEffect(() => {
@@ -2592,7 +2606,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, []);
 
   useEffect(() => {
-    if (!draft || !draftAttachmentsHydratedRef.current) {
+    if (!composerAttachmentsHydratedRef.current || (!draft && !id)) {
       return;
     }
 
@@ -2604,15 +2618,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           return;
         }
 
-        persistDraftConversationAttachments({
+        const nextAttachments = {
           images,
           drawings: drawingAttachments,
-        });
+        };
+
+        if (draft) {
+          persistDraftConversationAttachments(nextAttachments);
+          return;
+        }
+
+        if (id) {
+          persistConversationAttachments(id, nextAttachments);
+        }
       })
       .catch(() => {
-        // Ignore draft attachment persistence failures.
+        // Ignore composer attachment persistence failures.
       });
-  }, [attachments, draft, drawingAttachments]);
+  }, [attachments, draft, drawingAttachments, id]);
 
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
@@ -2652,6 +2675,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setComposerHistoryIndex(null);
     composerHistoryDraftRef.current = '';
   }, [composerHistory, composerHistoryIndex, input]);
+
+  const restoreComposerDraft = useCallback(async (
+    nextInput: string,
+    nextAttachments: File[],
+    nextDrawingAttachments: ComposerDrawingAttachment[],
+  ) => {
+    try {
+      const images = await buildPromptImages(nextAttachments);
+      const persistedAttachments = {
+        images,
+        drawings: nextDrawingAttachments,
+      };
+
+      if (draft) {
+        persistDraftConversationAttachments(persistedAttachments);
+      } else if (id) {
+        if (nextAttachments.length === 0 && nextDrawingAttachments.length === 0) {
+          clearConversationAttachments(id);
+        } else {
+          persistConversationAttachments(id, persistedAttachments);
+        }
+      }
+    } catch {
+      // Ignore composer attachment draft restoration failures.
+    }
+
+    setInput(nextInput);
+    setAttachments(nextAttachments);
+    setDrawingAttachments(nextDrawingAttachments);
+  }, [draft, id, setInput]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -3005,7 +3058,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     setAttachedContextDocs(currentSessionMeta?.attachedContextDocs ?? []);
-  }, [currentSessionMeta?.attachedContextDocs, draft]);
+  }, [currentSessionMeta?.attachedContextDocs, draft, id]);
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
   const currentCwd = useMemo(
     () => draft
@@ -5610,9 +5663,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               await api.destroySession(createdSessionId).catch(() => {});
             }
             showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-            setInput(inputSnapshot);
-            setAttachments(pendingImageAttachments);
-            setDrawingAttachments(pendingDrawingAttachments);
+            await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
           } finally {
             setPreparingRelatedThreadContext(false);
             setPendingAssistantStatusLabel(null);
@@ -5714,9 +5765,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setPendingAssistantStatusLabel(null);
           setDraftPendingPrompt(null);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
-          setInput(inputSnapshot);
-          setAttachments(pendingImageAttachments);
-          setDrawingAttachments(pendingDrawingAttachments);
+          await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
         }
         return;
       }
@@ -5727,9 +5776,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       if (!isLiveSession && !visibleSessionDetail) {
         showNotice('danger', 'Conversation is still loading. Try sending again in a moment.', 4000);
-        setInput(inputSnapshot);
-        setAttachments(pendingImageAttachments);
-        setDrawingAttachments(pendingDrawingAttachments);
+        await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
         return;
       }
 
@@ -5792,18 +5839,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         } catch (error) {
           console.error('Auto-resume failed:', error);
           setPendingAssistantStatusLabel(null);
-          setInput(inputSnapshot);
-          setAttachments(pendingImageAttachments);
-          setDrawingAttachments(pendingDrawingAttachments);
+          await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
         }
       }
     } catch (error) {
       console.error('Failed to prepare attachments:', error);
       setPendingAssistantStatusLabel(null);
-      setInput(inputSnapshot);
-      setAttachments(pendingImageAttachments);
-      setDrawingAttachments(pendingDrawingAttachments);
+      await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
   }

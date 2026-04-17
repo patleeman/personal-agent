@@ -49,6 +49,10 @@ function buildDraftConversationAttachmentsStorageKey(): string {
   return DRAFT_CONVERSATION_ATTACHMENTS_STORAGE_KEY;
 }
 
+function buildConversationAttachmentsStorageKey(sessionId: string): string {
+  return `pa:reload:conversation:${sessionId}:attachments`;
+}
+
 function buildDraftConversationModelStorageKey(): string {
   return DRAFT_CONVERSATION_MODEL_STORAGE_KEY;
 }
@@ -397,6 +401,22 @@ export function readDraftConversationAttachments(
   });
 }
 
+export function readConversationAttachments(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): DraftConversationAttachments {
+  if (!sessionId.trim()) {
+    return { images: [], drawings: [] };
+  }
+
+  return readStoredState<DraftConversationAttachments>({
+    key: buildConversationAttachmentsStorageKey(sessionId),
+    fallback: { images: [], drawings: [] },
+    storage,
+    deserialize: (raw) => normalizeDraftConversationAttachments(JSON.parse(raw) as unknown),
+  });
+}
+
 export function persistDraftConversationAttachments(
   attachments: DraftConversationAttachments,
   storage: StorageLike | null = getSessionStorage(),
@@ -408,6 +428,23 @@ export function persistDraftConversationAttachments(
     shouldPersist: (value) => value.images.length > 0 || value.drawings.length > 0,
   });
   emitDraftConversationStateChanged();
+}
+
+export function persistConversationAttachments(
+  sessionId: string,
+  attachments: DraftConversationAttachments,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  if (!sessionId.trim()) {
+    return;
+  }
+
+  persistStoredState({
+    key: buildConversationAttachmentsStorageKey(sessionId),
+    value: attachments,
+    storage,
+    shouldPersist: (value) => value.images.length > 0 || value.drawings.length > 0,
+  });
 }
 
 export function beginDraftConversationAttachmentsMutation(): number {
@@ -427,10 +464,30 @@ export function clearDraftConversationAttachments(
   emitDraftConversationStateChanged();
 }
 
+export function clearConversationAttachments(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  if (!sessionId.trim()) {
+    return;
+  }
+
+  beginDraftConversationAttachmentsMutation();
+  clearStoredState(storage, buildConversationAttachmentsStorageKey(sessionId));
+}
+
 export function hasDraftConversationAttachments(
   storage: StorageLike | null = getSessionStorage(),
 ): boolean {
   const attachments = readDraftConversationAttachments(storage);
+  return attachments.images.length > 0 || attachments.drawings.length > 0;
+}
+
+export function hasConversationAttachments(
+  sessionId: string,
+  storage: StorageLike | null = getSessionStorage(),
+): boolean {
+  const attachments = readConversationAttachments(sessionId, storage);
   return attachments.images.length > 0 || attachments.drawings.length > 0;
 }
 

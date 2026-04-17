@@ -154,6 +154,15 @@ function suspendRoute(element: React.ReactNode) {
   );
 }
 
+function DraftConversationRoute() {
+  return suspendRoute(<ConversationPage key="draft" draft />);
+}
+
+function SavedConversationRoute() {
+  const { id } = useParams<{ id?: string }>();
+  return suspendRoute(<ConversationPage key={id ?? 'conversation'} />);
+}
+
 function defaultRemoteAccessDeviceLabel(): string {
   if (typeof navigator === 'undefined') {
     return 'Remote desktop';
@@ -578,8 +587,8 @@ export function App() {
                     <Route path="/" element={<Layout />}>
                       <Route index element={<Navigate to="/conversations/new" replace />} />
                       <Route path="conversations" element={<ConversationsRouteRedirect />} />
-                      <Route path="conversations/new" element={suspendRoute(<ConversationPage draft />)} />
-                      <Route path="conversations/:id" element={suspendRoute(<ConversationPage />)} />
+                      <Route path="conversations/new" element={<DraftConversationRoute />} />
+                      <Route path="conversations/:id" element={<SavedConversationRoute />} />
                       <Route path="workspace" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="workspace/*" element={<Navigate to="/conversations/new" replace />} />
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
