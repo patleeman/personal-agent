@@ -22,6 +22,7 @@ import { api } from '../../client/api';
 import { useAppData } from '../../app/contexts';
 import {
   getRunHeadline,
+  getRunMoment,
   getRunTargetCommand,
   getRunTargetModel,
   getRunTargetProfile,
@@ -32,7 +33,7 @@ import {
   isRunActive,
   type RunPresentationLookups,
 } from '../../automation/runPresentation';
-import type { DurableRunDetailResult, MessageBlock } from '../../shared/types';
+import type { DurableRunDetailResult, DurableRunRecord, MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
 import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlineCode';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
@@ -2037,6 +2038,83 @@ function collectTraceClusterLinkedRuns(blocks: TraceConversationBlock[]): Linked
   return next;
 }
 
+function extractLinkedTaskSlugFromRunId(runId: string): string | null {
+  const normalized = runId.trim();
+  if (!normalized.startsWith('run-')) {
+    return null;
+  }
+
+  const timestampIndex = normalized.search(/-\d{4}-\d{2}-\d{2}T/i);
+  if (timestampIndex <= 4) {
+    return null;
+  }
+
+  const taskSlug = normalized.slice(4, timestampIndex).trim();
+  return taskSlug.length > 0 ? taskSlug : null;
+}
+
+function pickBestResolvedLinkedRunCandidate(candidates: DurableRunRecord[]): DurableRunRecord | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return [...candidates].sort((left, right) => {
+    const leftActive = isRunActive(left) ? 1 : 0;
+    const rightActive = isRunActive(right) ? 1 : 0;
+    if (leftActive !== rightActive) {
+      return rightActive - leftActive;
+    }
+
+    const leftAt = getRunMoment(left).at ?? '';
+    const rightAt = getRunMoment(right).at ?? '';
+    return rightAt.localeCompare(leftAt) || left.runId.localeCompare(right.runId);
+  })[0] ?? null;
+}
+
+function resolveLinkedRunRecord(
+  linkedRun: LinkedRunPresentation,
+  runs: DurableRunRecord[] | null | undefined,
+  lookups: RunPresentationLookups,
+): DurableRunRecord | null {
+  if (!runs || runs.length === 0) {
+    return null;
+  }
+
+  const exactMatch = runs.find((candidate) => candidate.runId === linkedRun.runId);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const linkedTaskSlug = extractLinkedTaskSlugFromRunId(linkedRun.runId);
+  if (linkedTaskSlug) {
+    const linkedTaskSlugNormalized = normalizeRunLabel(linkedTaskSlug);
+    const taskSlugMatches = runs.filter((candidate) => {
+      const candidateTaskSlug = getRunTaskSlug(candidate);
+      return candidateTaskSlug ? normalizeRunLabel(candidateTaskSlug) === linkedTaskSlugNormalized : false;
+    });
+
+    const taskSlugResolved = pickBestResolvedLinkedRunCandidate(taskSlugMatches);
+    if (taskSlugResolved) {
+      return taskSlugResolved;
+    }
+  }
+
+  const linkedTitleNormalized = normalizeRunLabel(linkedRun.title);
+  if (linkedTitleNormalized) {
+    const titleMatches = runs.filter((candidate) => {
+      const candidateHeadline = getRunHeadline(candidate, lookups);
+      return normalizeRunLabel(candidateHeadline.title) === linkedTitleNormalized;
+    });
+
+    const titleResolved = pickBestResolvedLinkedRunCandidate(titleMatches);
+    if (titleResolved) {
+      return titleResolved;
+    }
+  }
+
+  return null;
+}
+
 function InlineRunMetadataRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid grid-cols-[auto,minmax(0,1fr)] items-start gap-2">
@@ -2055,8 +2133,13 @@ function InlineTraceRunCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const { tasks, sessions } = useAppData();
+  const { tasks, sessions, runs } = useAppData();
   const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [tasks, sessions]);
+  const resolvedRunRecord = useMemo(
+    () => resolveLinkedRunRecord(run, runs?.runs, runLookups),
+    [run, runLookups, runs?.runs],
+  );
+  const resolvedRunId = resolvedRunRecord?.runId ?? run.runId;
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [isVisible, setIsVisible] = useState(true);
 
@@ -2087,11 +2170,11 @@ function InlineTraceRunCard({
   }, [expanded]);
 
   const pollEnabled = expanded && isVisible;
-  const snapshot = usePolledDurableRunSnapshot(run.runId, pollEnabled, {
+  const snapshot = usePolledDurableRunSnapshot(resolvedRunId, pollEnabled, {
     tail: INLINE_RUN_LOG_TAIL_LINES,
     pollIntervalMs: INLINE_RUN_POLL_INTERVAL_MS,
   });
-  const detailRun = snapshot.detail?.run ?? null;
+  const detailRun = snapshot.detail?.run ?? resolvedRunRecord ?? null;
   const headline = detailRun ? getRunHeadline(detailRun, runLookups) : {
     title: run.title,
     summary: run.detail ?? 'Linked run',
@@ -2110,6 +2193,7 @@ function InlineTraceRunCard({
   const targetProfile = detailRun ? getRunTargetProfile(detailRun) : null;
   const timeline = detailRun ? getRunTimeline(detailRun) : [];
   const latestTimelinePoint = timeline.at(-1);
+  const resolvedFromMention = resolvedRunId !== run.runId;
 
   return (
     <div ref={cardRef} className="rounded-lg border border-border-subtle/70 bg-elevated/35 overflow-hidden">
@@ -2136,6 +2220,12 @@ function InlineTraceRunCard({
           <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-dim">
             <span className={pollEnabled ? 'text-accent' : 'text-dim'}>{pollEnabled ? 'Polling live log' : 'Polling paused (off-screen)'}</span>
             {snapshot.refreshing && <span>· refreshing…</span>}
+            {resolvedFromMention && (
+              <>
+                <span className="opacity-40">·</span>
+                <span className="font-mono text-dim/80" title={`${run.runId} → ${resolvedRunId}`}>{resolvedRunId}</span>
+              </>
+            )}
             {latestTimelinePoint?.at && (
               <>
                 <span className="opacity-40">·</span>

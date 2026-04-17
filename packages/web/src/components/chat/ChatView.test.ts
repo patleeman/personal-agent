@@ -1,6 +1,7 @@
 import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AppDataContext } from '../../app/contexts.js';
 import { ChatView } from './ChatView.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -374,6 +375,84 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('runs');
     expect(html).toContain('Inspect git diff');
     expect(html).toContain('show');
+  });
+
+  it('resolves legacy linked run ids to current durable run records using task slug', () => {
+    const html = renderToStaticMarkup(createElement(AppDataContext.Provider, {
+      value: {
+        projects: null,
+        sessions: null,
+        tasks: null,
+        runs: {
+          scannedAt: '2026-03-11T18:00:10.000Z',
+          runsRoot: '/tmp/runs',
+          summary: {
+            total: 1,
+            recoveryActions: {},
+            statuses: { running: 1 },
+          },
+          runs: [
+            {
+              runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+              paths: {
+                root: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                manifestPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/manifest.json',
+                statusPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/status.json',
+                checkpointPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/checkpoint.json',
+                eventsPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/events.jsonl',
+                outputLogPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/output.log',
+                resultPath: '/tmp/runs/run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4/result.json',
+              },
+              manifest: {
+                version: 1,
+                id: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                kind: 'background-run',
+                resumePolicy: 'continue',
+                createdAt: '2026-04-14T01:23:19.371Z',
+                spec: {
+                  metadata: {
+                    taskSlug: 'ui-preview-check',
+                  },
+                },
+                source: {
+                  type: 'tool',
+                  id: 'conv-123',
+                },
+              },
+              status: {
+                version: 1,
+                runId: 'run-f1844efc-3748-49f9-aa62-d625fd1ccbe9-2026-04-14T01-23-19-371Z-3f40e1b4',
+                status: 'running',
+                createdAt: '2026-04-14T01:23:19.371Z',
+                updatedAt: '2026-04-14T01:24:01.000Z',
+                activeAttempt: 1,
+                startedAt: '2026-04-14T01:23:19.900Z',
+              },
+              problems: [],
+              recoveryAction: 'none',
+            },
+          ],
+        },
+        setProjects: () => {},
+        setSessions: () => {},
+        setTasks: () => {},
+        setRuns: () => {},
+      },
+    }, createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-04-14T01:24:05.000Z',
+        tool: 'bash',
+        input: { command: 'echo run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b' },
+        output: 'run-ui-preview-check-2026-03-25T00-53-25-347Z-903aa31b',
+        status: 'ok',
+      }],
+      isStreaming: false,
+    })));
+
+    expect(html).toContain('ui-preview-check');
+    expect(html).toContain('running');
+    expect(html).not.toContain('linked Ui preview check');
   });
 
   it('limits listed runs in the transcript to 5 rows by default', () => {
