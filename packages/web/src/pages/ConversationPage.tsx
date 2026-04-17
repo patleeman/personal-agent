@@ -2723,6 +2723,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id]);
 
   const [pendingAssistantStatusLabel, setPendingAssistantStatusLabel] = useState<string | null>(null);
+  const [wholeLineBashRunning, setWholeLineBashRunning] = useState(false);
+  const wholeLineBashRunningRef = useRef(false);
   const [showBackgroundRunDetails, setShowBackgroundRunDetails] = useState(false);
 
   useEffect(() => {
@@ -5328,12 +5330,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [input, setInput]);
 
   async function runWholeLineBashCommand(inputSnapshot: string, command: { command: string; excludeFromContext: boolean }) {
+    if (wholeLineBashRunningRef.current) {
+      return;
+    }
+
     const normalizedCommand = command.command.trim();
     if (!normalizedCommand) {
       showNotice('danger', 'Usage: !<command>', 4000);
       return;
     }
 
+    wholeLineBashRunningRef.current = true;
+    setWholeLineBashRunning(true);
     setPendingAssistantStatusLabel('Running bash…');
     setInput('');
     rememberComposerInput(inputSnapshot);
@@ -5395,6 +5403,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setInput(inputSnapshot);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
+      wholeLineBashRunningRef.current = false;
+      setWholeLineBashRunning(false);
       setPendingAssistantStatusLabel(null);
     }
   }
@@ -6063,7 +6073,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     liveSessionHasPendingHiddenTurn,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
-  const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext;
+  const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext || wholeLineBashRunning;
   const renameConversationDisabled = conversationNeedsTakeover
     || conversationCwdEditorOpen
     || conversationCwdBusy;
