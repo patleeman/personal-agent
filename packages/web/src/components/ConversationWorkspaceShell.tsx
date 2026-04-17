@@ -8,7 +8,7 @@ import { ContextRail } from './ContextRail';
 const CONVERSATION_WORKSPACE_RAIL_MIN_WIDTH = 280;
 const CONVERSATION_WORKSPACE_RAIL_MAX_WIDTH = 520;
 
-export interface ConversationWorkspaceShellControls {
+interface ConversationWorkspaceShellControls {
   railOpen: boolean;
   toggleRail: () => void;
 }
