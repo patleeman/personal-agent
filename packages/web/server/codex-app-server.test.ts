@@ -529,6 +529,107 @@ describe('codex app server', () => {
     socket.close();
   });
 
+  it('accepts image-only turn/start prompts without requiring text input', async () => {
+    mocks.readDesktopModels.mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'medium',
+      models: [
+        { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', reasoning: true },
+      ],
+    });
+    mocks.createDesktopLiveSession.mockResolvedValue({
+      id: 'live-1',
+      sessionFile: '/sessions/live-1.jsonl',
+      bootstrap: {
+        conversationId: 'live-1',
+        sessionDetail: {
+          meta: {
+            id: 'live-1',
+            file: '/sessions/live-1.jsonl',
+            timestamp: '2026-04-14T10:00:00.000Z',
+            cwd: '/repo',
+            cwdSlug: 'repo',
+            model: 'gpt-5.4',
+            title: 'Live workspace',
+            messageCount: 0,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: '2026-04-14T10:00:00.000Z',
+          },
+          blocks: [],
+          blockOffset: 0,
+          totalBlocks: 0,
+          contextUsage: null,
+          signature: 'sig-live',
+        },
+        liveSession: {
+          live: true,
+          id: 'live-1',
+          cwd: '/repo',
+          sessionFile: '/sessions/live-1.jsonl',
+          isStreaming: false,
+        },
+      },
+    });
+    mocks.submitDesktopLiveSessionPrompt.mockResolvedValue({
+      ok: true,
+      accepted: true,
+      delivery: 'started',
+      referencedTaskIds: [],
+      referencedMemoryDocIds: [],
+      referencedVaultFileIds: [],
+      referencedAttachmentIds: [],
+    });
+
+    server = await startCodexAppServer({ listenUrl: 'ws://127.0.0.1:0' });
+    const socket = await connectWebSocket(server.websocketUrl);
+    socket.send(JSON.stringify({
+      id: 1,
+      method: 'initialize',
+      params: { clientInfo: { name: 'test-client', title: 'Test Client', version: '0.0.1' } },
+    }));
+    await readJsonMessage(socket);
+    socket.send(JSON.stringify({ method: 'initialized', params: {} }));
+
+    await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 2,
+        method: 'thread/start',
+        params: { cwd: '/repo', model: 'gpt-5.4' },
+      }));
+    });
+
+    const turnMessages = await collectJsonMessages(socket, () => {
+      socket.send(JSON.stringify({
+        id: 3,
+        method: 'turn/start',
+        params: {
+          threadId: 'live-1',
+          input: [],
+          images: [{ data: 'abc123', mimeType: 'image/png', name: 'screen.png' }],
+        },
+      }));
+    }) as Array<{ id?: number; result?: { turn?: { id: string; status: string } } }>;
+
+    expect(turnMessages).toEqual(expect.arrayContaining([
+      {
+        id: 3,
+        result: {
+          turn: expect.objectContaining({ id: 'live-1:active-turn:1', status: 'inProgress' }),
+        },
+      },
+    ]));
+
+    expect(mocks.submitDesktopLiveSessionPrompt).toHaveBeenCalledWith(expect.objectContaining({
+      conversationId: 'live-1',
+      text: '',
+      behavior: 'followUp',
+      images: [{ data: 'abc123', mimeType: 'image/png', name: 'screen.png' }],
+    }));
+
+    socket.close();
+  });
+
   it('filters archived threads and archives threads', async () => {
     mocks.readDesktopModels.mockResolvedValue({
       currentModel: 'gpt-5.4',
