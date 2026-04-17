@@ -54,28 +54,24 @@
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--running {
     color: rgb(var(--color-steel));
-    background-color: rgb(var(--color-steel) / 0.12);
-    box-shadow: 0 0 0 1px rgb(var(--color-steel) / 0.16), 0 0 14px rgb(var(--color-steel) / 0.2);
+    background-color: rgb(var(--color-steel) / 0.08);
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--running:hover,
   .ui-icon-button.ui-desktop-top-bar__connections-button--running:focus-visible {
     color: rgb(var(--color-steel));
-    background-color: rgb(var(--color-steel) / 0.16);
-    box-shadow: 0 0 0 1px rgb(var(--color-steel) / 0.2), 0 0 16px rgb(var(--color-steel) / 0.24);
+    background-color: rgb(var(--color-steel) / 0.14);
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--error {
     color: rgb(var(--color-danger));
-    background-color: rgb(var(--color-danger) / 0.12);
-    box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.16), 0 0 14px rgb(var(--color-danger) / 0.2);
+    background-color: rgb(var(--color-danger) / 0.08);
   }
 
   .ui-icon-button.ui-desktop-top-bar__connections-button--error:hover,
   .ui-icon-button.ui-desktop-top-bar__connections-button--error:focus-visible {
     color: rgb(var(--color-danger));
-    background-color: rgb(var(--color-danger) / 0.16);
-    box-shadow: 0 0 0 1px rgb(var(--color-danger) / 0.2), 0 0 16px rgb(var(--color-danger) / 0.24);
+    background-color: rgb(var(--color-danger) / 0.14);
   }
 
   .ui-desktop-top-bar__center {
