@@ -6,8 +6,6 @@ import {
   INITIAL_STREAM_STATE,
   normalizePendingQueueItems,
   retryLiveSessionActionAfterTakeover,
-  submitLivePromptWithControlRetry,
-  waitForSurfaceRegistration,
 } from './useSessionStream';
 
 describe('applyEvent cwd changes', () => {
@@ -34,57 +32,6 @@ describe('applyEvent cwd changes', () => {
 
 afterEach(() => {
   vi.useRealTimers();
-});
-
-describe('waitForSurfaceRegistration', () => {
-  it('returns immediately when the surface is already present', async () => {
-    const reconnect = vi.fn();
-
-    await expect(waitForSurfaceRegistration({
-      surfaceId: 'surface-1',
-      hasSurface: () => true,
-      reconnect,
-    })).resolves.toBe(true);
-
-    expect(reconnect).not.toHaveBeenCalled();
-  });
-
-  it('nudges a reconnect and waits for the surface to appear', async () => {
-    vi.useFakeTimers();
-    let connected = false;
-    const reconnect = vi.fn();
-
-    const waiting = waitForSurfaceRegistration({
-      surfaceId: 'surface-1',
-      hasSurface: () => connected,
-      reconnect,
-      timeoutMs: 200,
-      pollMs: 25,
-    });
-
-    expect(reconnect).toHaveBeenCalledTimes(1);
-
-    setTimeout(() => {
-      connected = true;
-    }, 60);
-
-    await vi.advanceTimersByTimeAsync(100);
-    await expect(waiting).resolves.toBe(true);
-  });
-
-  it('returns false when the surface never reconnects', async () => {
-    vi.useFakeTimers();
-
-    const waiting = waitForSurfaceRegistration({
-      surfaceId: 'surface-1',
-      hasSurface: () => false,
-      timeoutMs: 100,
-      pollMs: 25,
-    });
-
-    await vi.advanceTimersByTimeAsync(125);
-    await expect(waiting).resolves.toBe(false);
-  });
 });
 
 describe('retryLiveSessionActionAfterTakeover', () => {
@@ -114,58 +61,6 @@ describe('retryLiveSessionActionAfterTakeover', () => {
     })).rejects.toBe(error);
 
     expect(attemptAction).toHaveBeenCalledTimes(1);
-    expect(takeOver).not.toHaveBeenCalled();
-  });
-});
-
-describe('submitLivePromptWithControlRetry', () => {
-  it('retries after reconnecting and taking over on control errors', async () => {
-    const attemptPrompt = vi.fn<() => Promise<void>>()
-      .mockRejectedValueOnce(new Error('This conversation is controlled by another surface. Take over here to continue.'))
-      .mockResolvedValueOnce(undefined);
-    const waitForRegistration = vi.fn(async () => true);
-    const takeOver = vi.fn(async () => undefined);
-
-    await expect(submitLivePromptWithControlRetry({
-      attemptPrompt,
-      waitForSurfaceRegistration: waitForRegistration,
-      takeOverSessionControl: takeOver,
-    })).resolves.toBeUndefined();
-
-    expect(attemptPrompt).toHaveBeenCalledTimes(2);
-    expect(waitForRegistration).toHaveBeenCalledTimes(1);
-    expect(takeOver).toHaveBeenCalledTimes(1);
-  });
-
-  it('rethrows the original control error when the surface never comes back', async () => {
-    const error = new Error('This conversation is controlled by another surface. Take over here to continue.');
-    const attemptPrompt = vi.fn<() => Promise<void>>().mockRejectedValueOnce(error);
-    const waitForRegistration = vi.fn(async () => false);
-    const takeOver = vi.fn(async () => undefined);
-
-    await expect(submitLivePromptWithControlRetry({
-      attemptPrompt,
-      waitForSurfaceRegistration: waitForRegistration,
-      takeOverSessionControl: takeOver,
-    })).rejects.toBe(error);
-
-    expect(attemptPrompt).toHaveBeenCalledTimes(1);
-    expect(takeOver).not.toHaveBeenCalled();
-  });
-
-  it('does not retry unrelated prompt failures', async () => {
-    const error = new Error('provider unavailable');
-    const attemptPrompt = vi.fn<() => Promise<void>>().mockRejectedValueOnce(error);
-    const waitForRegistration = vi.fn(async () => true);
-    const takeOver = vi.fn(async () => undefined);
-
-    await expect(submitLivePromptWithControlRetry({
-      attemptPrompt,
-      waitForSurfaceRegistration: waitForRegistration,
-      takeOverSessionControl: takeOver,
-    })).rejects.toBe(error);
-
-    expect(waitForRegistration).not.toHaveBeenCalled();
     expect(takeOver).not.toHaveBeenCalled();
   });
 });

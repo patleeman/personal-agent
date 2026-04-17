@@ -352,7 +352,7 @@ function wait(ms: number): Promise<void> {
   });
 }
 
-export async function waitForSurfaceRegistration(input: {
+async function waitForSurfaceRegistration(input: {
   surfaceId: string;
   hasSurface: () => boolean;
   reconnect?: () => void;
@@ -400,7 +400,7 @@ export async function retryLiveSessionActionAfterTakeover<T>(input: {
   return input.attemptAction();
 }
 
-export async function submitLivePromptWithControlRetry(input: {
+async function submitLivePromptWithControlRetry(input: {
   attemptPrompt: () => Promise<void>;
   waitForSurfaceRegistration: () => Promise<boolean>;
   takeOverSessionControl: () => Promise<unknown>;
