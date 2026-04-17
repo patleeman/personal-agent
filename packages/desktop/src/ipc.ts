@@ -1117,6 +1117,17 @@ export function registerDesktopIpc(options: {
     return controller.submitLiveSessionPrompt(input);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:submit-live-session-parallel-prompt`, async (event, input) => {
+    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
+      ?? options.hostManager.getActiveHostId();
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.submitLiveSessionParallelPrompt) {
+      throw new Error('Dedicated desktop live-session parallel prompt delivery is only available for the local host.');
+    }
+
+    return controller.submitLiveSessionParallelPrompt(input);
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:abort-live-session`, async (event, conversationId: string) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

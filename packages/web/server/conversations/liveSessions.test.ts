@@ -34,6 +34,7 @@ import {
   requestConversationWorkingDirectoryChange,
   resolveLastCompletedConversationEntryId,
   resolvePersistentSessionDir,
+  resolveStableForkEntryId,
   resolveStableSessionTitle,
   restoreQueuedMessage,
   resumeSession,
@@ -170,6 +171,99 @@ describe('resolveLastCompletedConversationEntryId', () => {
     ].join('\n'));
 
     expect(resolveLastCompletedConversationEntryId(sessionFile)).toBeNull();
+  });
+});
+
+describe('resolveStableForkEntryId', () => {
+  it('forks from the previous completed turn while a visible user turn is in progress', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-stable-fork-visible-turn.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-stable-fork-visible-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'First prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'First answer' }], stopReason: 'stop' },
+      }),
+      JSON.stringify({
+        type: 'custom_message',
+        id: 'ctx-1',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        customType: 'referenced_context',
+        content: [{ type: 'text', text: 'Hidden context for the next turn.' }],
+        display: false,
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-2',
+        parentId: 'ctx-1',
+        timestamp: '2026-03-13T18:00:04.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Current prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-tool-2',
+        parentId: 'user-2',
+        timestamp: '2026-03-13T18:00:05.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Using a tool…' }], stopReason: 'toolUse' },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'tool-2',
+        parentId: 'assistant-tool-2',
+        timestamp: '2026-03-13T18:00:06.000Z',
+        message: { role: 'toolResult', content: [{ type: 'text', text: 'partial tool output' }] },
+      }),
+      '',
+    ].join('\n'));
+
+    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
+  });
+
+  it('forks from the latest completed assistant while a hidden turn is active', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-stable-fork-hidden-turn.jsonl');
+    writeFileSync(sessionFile, [
+      JSON.stringify({ type: 'session', id: 'session-stable-fork-hidden-turn', timestamp: '2026-03-13T18:00:00.000Z', cwd: '/tmp/workspace' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'user-1',
+        parentId: null,
+        timestamp: '2026-03-13T18:00:01.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'Visible prompt' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        parentId: 'user-1',
+        timestamp: '2026-03-13T18:00:02.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'Visible answer' }], stopReason: 'stop' },
+      }),
+      JSON.stringify({
+        type: 'custom_message',
+        id: 'hidden-turn-1',
+        parentId: 'assistant-1',
+        timestamp: '2026-03-13T18:00:03.000Z',
+        customType: 'conversation_automation_post_turn_review',
+        content: [{ type: 'text', text: 'Hidden review prompt.' }],
+        display: false,
+      }),
+      '',
+    ].join('\n'));
+
+    expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
   });
 });
 
@@ -603,7 +697,8 @@ describe('live session subscriptions', () => {
     expect(events[1]).toEqual({ type: 'title_update', title: 'How do I fix this?' });
     expect(events[2]).toEqual({ type: 'context_usage', usage: null });
     expect(events[3]).toEqual({ type: 'queue_state', steering: [], followUp: [] });
-    expect(events[4]).toEqual({ type: 'agent_start' });
+    expect(events[4]).toEqual({ type: 'parallel_state', jobs: [] });
+    expect(events[5]).toEqual({ type: 'agent_start' });
   });
 
   it('does not replay agent_start while a generic hidden turn is active', () => {

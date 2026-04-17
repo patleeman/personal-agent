@@ -804,6 +804,15 @@ export interface QueuedPromptPreview {
   pending?: boolean;
 }
 
+export interface ParallelPromptPreview {
+  id: string;
+  prompt: string;
+  childConversationId: string;
+  status: 'running' | 'ready' | 'failed' | 'importing';
+  resultPreview?: string;
+  error?: string;
+}
+
 interface DesktopConversationStreamState {
   blocks: MessageBlock[];
   blockOffset: number;
@@ -817,6 +826,7 @@ interface DesktopConversationStreamState {
   cost: number | null;
   contextUsage: SessionContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
@@ -839,6 +849,7 @@ export type SseEvent =
   | { type: 'cwd_changed';     newConversationId: string; cwd: string; autoContinued: boolean }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
+  | { type: 'parallel_state';  jobs: ParallelPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }
   | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta';      delta: string }

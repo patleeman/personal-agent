@@ -21,7 +21,7 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
-import { stream, streamSimple, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
+import { stream, streamSimple, type Api, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
   applyConversationModelPreferencesToLiveSession,
@@ -69,7 +69,7 @@ export function resolvePersistentSessionDir(cwd: string): string {
 
 function resolveConversationPreferenceStateForSession(
   sessionManager: Pick<SessionManager, 'buildSessionContext' | 'getBranch'>,
-  availableModels: Model<any>[],
+  availableModels: Model<Api>[],
 ): ConversationModelPreferenceState {
   return resolveConversationModelPreferenceState(
     readConversationModelPreferenceSnapshot(sessionManager),
@@ -82,7 +82,7 @@ function buildServiceTierAwareStreamFn(
   modelRegistry: ModelRegistry,
   serviceTier: string,
 ) {
-  return async (model: Model<any>, context: Context, options?: SimpleStreamOptions) => {
+  return async (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
     const auth = await modelRegistry.getApiKeyAndHeaders(model);
     if (!auth.ok) {
       throw new Error(auth.error);
@@ -140,6 +140,15 @@ export interface QueuedPromptPreview {
   restorable?: boolean;
 }
 
+export interface ParallelPromptPreview {
+  id: string;
+  prompt: string;
+  childConversationId: string;
+  status: 'running' | 'ready' | 'failed' | 'importing';
+  resultPreview?: string;
+  error?: string;
+}
+
 export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
 
 interface LiveSurfacePresenceRecord {
@@ -177,6 +186,7 @@ export type SseEvent =
   | { type: 'cwd_changed';     newConversationId: string; cwd: string; autoContinued: boolean }
   | { type: 'user_message';    block: Extract<DisplayBlock, { type: 'user' }> }
   | { type: 'queue_state';     steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] }
+  | { type: 'parallel_state';  jobs: ParallelPromptPreview[] }
   | { type: 'presence_state';  state: LiveSessionPresenceState }
   | { type: 'auto_mode_state'; state: ConversationAutoModeState }
   | { type: 'text_delta';      delta: string }
@@ -219,6 +229,7 @@ interface LiveEntry {
   autoTitleRequested: boolean;
   lastContextUsageJson: string | null;
   lastQueueStateJson: string | null;
+  lastParallelStateJson?: string | null;
   lastAutoModeStateJson?: string | null;
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
@@ -229,9 +240,20 @@ interface LiveEntry {
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
   isCompacting?: boolean;
+  parallelJobs?: ParallelPromptJob[];
+  importingParallelJobs?: boolean;
   presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
   controllerSurfaceId?: string | null;
   controllerAcquiredAt?: string | null;
+}
+
+interface ParallelPromptJob {
+  id: string;
+  prompt: string;
+  childConversationId: string;
+  status: 'running' | 'ready' | 'failed' | 'importing';
+  resultText?: string;
+  error?: string;
 }
 
 export interface LiveSessionLifecycleEvent {
@@ -256,6 +278,7 @@ export interface LiveSessionStateSnapshot {
   cost: number | null;
   contextUsage: LiveContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
@@ -767,6 +790,41 @@ export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedP
   return readQueueState(entry.session);
 }
 
+const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
+let parallelPromptJobCounter = 0;
+
+function createParallelPromptJobId(): string {
+  parallelPromptJobCounter += 1;
+  return `parallel-${parallelPromptJobCounter}`;
+}
+
+function truncateParallelPreviewText(text: string, maxLength = 240): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.length > maxLength
+    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
+    : normalized;
+}
+
+function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPreview {
+  return {
+    id: job.id,
+    prompt: truncateParallelPreviewText(job.prompt),
+    childConversationId: job.childConversationId,
+    status: job.status,
+    ...(job.resultText ? { resultPreview: truncateParallelPreviewText(job.resultText) } : {}),
+    ...(job.error ? { error: truncateParallelPreviewText(job.error) } : {}),
+  };
+}
+
+function readParallelState(entry: Pick<LiveEntry, 'parallelJobs'>): ParallelPromptPreview[] {
+  const jobs = Array.isArray(entry.parallelJobs) ? entry.parallelJobs : [];
+  return jobs.map((job) => buildParallelPromptPreview(job));
+}
+
 function removeQueuedUserMessage(
   queue: InternalQueuedAgentMessage[],
   input: { index: number; previewId?: string },
@@ -1224,6 +1282,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
     cost,
     contextUsage: readContextUsagePayload(entry.session),
     pendingQueue: readQueueState(entry.session),
+    parallelJobs: readParallelState(entry),
     presence: buildPresenceState(entry),
     autoModeState: readConversationAutoModeState(entry),
     cwdChange: null,
@@ -1362,6 +1421,17 @@ function broadcastQueueState(entry: LiveEntry, force = false): void {
 
   entry.lastQueueStateJson = nextJson;
   broadcast(entry, { type: 'queue_state', ...queueState });
+}
+
+function broadcastParallelState(entry: LiveEntry, force = false): void {
+  const jobs = readParallelState(entry);
+  const nextJson = JSON.stringify(jobs);
+  if (!force && entry.lastParallelStateJson === nextJson) {
+    return;
+  }
+
+  entry.lastParallelStateJson = nextJson;
+  broadcast(entry, { type: 'parallel_state', jobs });
 }
 
 function readConversationAutoModeState(entry: Pick<LiveEntry, 'session'>): ConversationAutoModeState {
@@ -1595,6 +1665,7 @@ function wireSession(
     autoTitleRequested: options.autoTitleRequested ?? false,
     lastContextUsageJson: null,
     lastQueueStateJson: null,
+    lastParallelStateJson: null,
     currentTurnError: null,
     pendingHiddenTurnCustomTypes: [],
     activeHiddenTurnCustomType: null,
@@ -1602,6 +1673,8 @@ function wireSession(
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
     isCompacting: false,
+    parallelJobs: [],
+    importingParallelJobs: false,
     presenceBySurfaceId: new Map(),
     controllerSurfaceId: null,
     controllerAcquiredAt: null,
@@ -1730,6 +1803,10 @@ function wireSession(
 
     if ((event.type === 'turn_end' || event.type === 'agent_end') && entry.activeHiddenTurnCustomType) {
       entry.activeHiddenTurnCustomType = null;
+    }
+
+    if (event.type === 'turn_end' || event.type === 'agent_end') {
+      void tryImportReadyParallelJobs(entry);
     }
   });
 
@@ -2484,6 +2561,7 @@ export function subscribe(
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
+  listener({ type: 'parallel_state', jobs: readParallelState(entry) });
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     listener({ type: 'presence_state', state: buildPresenceState(entry) });
   }
@@ -2726,7 +2804,150 @@ export async function appendVisibleCustomMessage(
     display: true,
     details,
   });
+  broadcastSnapshot(entry);
   publishSessionMetaChanged(sessionId);
+}
+
+async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
+  entry.parallelJobs ??= [];
+  if (entry.importingParallelJobs || entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
+    return;
+  }
+
+  const nextJob = entry.parallelJobs[0];
+  if (!nextJob || (nextJob.status !== 'ready' && nextJob.status !== 'failed')) {
+    return;
+  }
+
+  entry.importingParallelJobs = true;
+  try {
+    while (!entry.session.isStreaming && !hasQueuedOrActiveHiddenTurn(entry)) {
+      const currentJob = entry.parallelJobs[0];
+      if (!currentJob || (currentJob.status !== 'ready' && currentJob.status !== 'failed')) {
+        break;
+      }
+
+      currentJob.status = 'importing';
+      broadcastParallelState(entry, true);
+
+      await appendVisibleCustomMessage(
+        entry.sessionId,
+        PARALLEL_RESULT_CUSTOM_TYPE,
+        buildParallelImportedContent(currentJob),
+        {
+          childConversationId: currentJob.childConversationId,
+          status: currentJob.error?.trim() ? 'failed' : 'complete',
+        },
+      );
+
+      entry.parallelJobs.shift();
+      broadcastParallelState(entry, true);
+    }
+  } finally {
+    entry.importingParallelJobs = false;
+  }
+}
+
+export async function startParallelPromptSession(
+  sessionId: string,
+  input: {
+    text: string;
+    images?: PromptImageAttachment[];
+    contextMessages?: Array<{ customType: string; content: string }>;
+  },
+  options: LiveSessionLoaderOptions = {},
+): Promise<{ jobId: string; childConversationId: string }> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const text = input.text.trim();
+  if (!text && (!input.images || input.images.length === 0)) {
+    throw new Error('text or images required');
+  }
+
+  const sourceSessionFile = entry.session.sessionFile?.trim();
+  if (!sourceSessionFile) {
+    throw new Error('Parallel prompts require a persisted session file.');
+  }
+
+  const activeTurnInProgress = entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry);
+  const stableEntryId = resolveStableForkEntryId(sourceSessionFile, { activeTurnInProgress });
+  const forked = stableEntryId
+    ? await forkSession(sessionId, stableEntryId, {
+        preserveSource: true,
+        ...options,
+      })
+    : await createSession(entry.cwd, {
+        ...options,
+        initialModel: options.initialModel === undefined ? entry.session.model?.id ?? null : options.initialModel,
+        initialThinkingLevel: options.initialThinkingLevel === undefined
+          ? entry.session.thinkingLevel ?? null
+          : options.initialThinkingLevel,
+        initialServiceTier: options.initialServiceTier === undefined
+          ? resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()).currentServiceTier || null
+          : options.initialServiceTier,
+      });
+
+  const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
+  const job: ParallelPromptJob = {
+    id: createParallelPromptJobId(),
+    prompt: text,
+    childConversationId,
+    status: 'running',
+  };
+  entry.parallelJobs ??= [];
+  entry.parallelJobs.push(job);
+  broadcastParallelState(entry, true);
+
+  try {
+    for (const message of input.contextMessages ?? []) {
+      await queuePromptContext(childConversationId, message.customType, message.content);
+    }
+
+    const submitted = await submitPromptSession(childConversationId, text, undefined, input.images);
+    void submitted.completion.then(async () => {
+      const currentEntry = registry.get(sessionId);
+      if (!currentEntry?.parallelJobs) {
+        return;
+      }
+
+      const currentJob = currentEntry.parallelJobs.find((candidate) => candidate.id === job.id);
+      if (!currentJob) {
+        return;
+      }
+
+      currentJob.resultText = extractLatestAssistantReplyText(forked.sessionFile) ?? '';
+      currentJob.status = 'ready';
+      broadcastParallelState(currentEntry, true);
+      await tryImportReadyParallelJobs(currentEntry);
+    }).catch(async (error: unknown) => {
+      const currentEntry = registry.get(sessionId);
+      if (!currentEntry?.parallelJobs) {
+        return;
+      }
+
+      const currentJob = currentEntry.parallelJobs.find((candidate) => candidate.id === job.id);
+      if (!currentJob) {
+        return;
+      }
+
+      currentJob.error = error instanceof Error ? error.message : String(error);
+      currentJob.status = 'failed';
+      broadcastParallelState(currentEntry, true);
+      await tryImportReadyParallelJobs(currentEntry);
+    });
+
+    return {
+      jobId: job.id,
+      childConversationId,
+    };
+  } catch (error) {
+    entry.parallelJobs = entry.parallelJobs.filter((candidate) => candidate.id !== job.id);
+    broadcastParallelState(entry, true);
+    throw error;
+  }
 }
 
 function resolvePromptBehavior(
@@ -3303,6 +3524,195 @@ export function resolveLastCompletedConversationEntryId(sessionFile: string): st
   }
 
   return null;
+}
+
+interface StableForkBranchEntry {
+  id?: string;
+  parentId?: string | null;
+  type?: string;
+  display?: boolean;
+  message?: {
+    role?: string;
+    content?: unknown;
+    stopReason?: string;
+  };
+}
+
+function isHiddenCustomMessageEntry(entry: StableForkBranchEntry | undefined): boolean {
+  return entry?.type === 'custom_message' && entry.display === false;
+}
+
+function getStableForkBranchEntries(sessionFile: string): StableForkBranchEntry[] {
+  try {
+    return readFileSync(sessionFile, 'utf-8')
+      .split(/\r?\n/)
+      .flatMap((line): StableForkBranchEntry[] => {
+        const rawLine = line.trim();
+        if (!rawLine) {
+          return [];
+        }
+
+        try {
+          const entry = JSON.parse(rawLine) as StableForkBranchEntry;
+          return typeof entry.id === 'string' && entry.id.trim().length > 0
+            ? [{
+                ...entry,
+                id: entry.id.trim(),
+                parentId: typeof entry.parentId === 'string' ? entry.parentId.trim() : entry.parentId ?? null,
+              }]
+            : [];
+        } catch {
+          return [];
+        }
+      });
+  } catch {
+    return [];
+  }
+}
+
+function isStableCompletedBranchEntry(entry: StableForkBranchEntry | undefined): boolean {
+  if (!entry) {
+    return false;
+  }
+
+  if (entry.type === 'custom_message') {
+    return entry.display === true;
+  }
+
+  if (entry.type === 'compaction' || entry.type === 'branch_summary') {
+    return true;
+  }
+
+  if (entry.type !== 'message') {
+    return false;
+  }
+
+  if (entry.message?.role !== 'assistant') {
+    return false;
+  }
+
+  return entry.message.stopReason !== 'toolUse';
+}
+
+export function resolveStableForkEntryId(
+  sessionFile: string,
+  options: { activeTurnInProgress?: boolean } = {},
+): string | null {
+  const branch = getStableForkBranchEntries(sessionFile);
+  if (branch.length === 0) {
+    return null;
+  }
+
+  if (!options.activeTurnInProgress) {
+    return branch[branch.length - 1]?.id?.trim() || null;
+  }
+
+  const branchById = new Map(
+    branch
+      .filter((entry): entry is StableForkBranchEntry & { id: string } => typeof entry.id === 'string' && entry.id.trim().length > 0)
+      .map((entry) => [entry.id.trim(), entry]),
+  );
+
+  let latestUserIndex = -1;
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry?.type === 'message' && entry.message?.role === 'user') {
+      latestUserIndex = index;
+      break;
+    }
+  }
+
+  if (latestUserIndex >= 0) {
+    const latestUserEntry = branch[latestUserIndex];
+    const hasStableCompletedEntryAfterLatestUser = branch
+      .slice(latestUserIndex + 1)
+      .some((entry) => isStableCompletedBranchEntry(entry));
+
+    if (!hasStableCompletedEntryAfterLatestUser) {
+      let current: StableForkBranchEntry | undefined = latestUserEntry?.parentId ? branchById.get(latestUserEntry.parentId) : undefined;
+      while (current && isHiddenCustomMessageEntry(current)) {
+        current = current.parentId ? branchById.get(current.parentId) : undefined;
+      }
+      return current?.id?.trim() || null;
+    }
+  }
+
+  let current: StableForkBranchEntry | undefined = branch[branch.length - 1];
+  while (current && isHiddenCustomMessageEntry(current)) {
+    current = current.parentId ? branchById.get(current.parentId) : undefined;
+  }
+
+  return current?.id?.trim() || null;
+}
+
+function extractTextFromMessageContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (!Array.isArray(content)) {
+    return '';
+  }
+
+  return content
+    .flatMap((part) => (
+      part
+      && typeof part === 'object'
+      && (part as { type?: unknown }).type === 'text'
+      && typeof (part as { text?: unknown }).text === 'string'
+        ? [(part as { text: string }).text]
+        : []
+    ))
+    .join('\n')
+    .trim();
+}
+
+function extractLatestAssistantReplyText(sessionFile: string): string | null {
+  const branch = getStableForkBranchEntries(sessionFile);
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry?.type !== 'message' || entry.message?.role !== 'assistant') {
+      continue;
+    }
+
+    const text = extractTextFromMessageContent(entry.message.content);
+    if (text) {
+      return text;
+    }
+  }
+
+  return null;
+}
+
+function formatParallelQuotedSection(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => line.length > 0 ? `> ${line}` : '>')
+    .join('\n');
+}
+
+function buildParallelImportedContent(job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error'>): string {
+  const childHref = `/conversations/${encodeURIComponent(job.childConversationId)}`;
+  const promptText = job.prompt.trim().length > 0 ? job.prompt.trim() : '(image-only prompt)';
+  const sections = [
+    '### Parallel response',
+    '',
+    `[Open side thread](${childHref})`,
+    '',
+    '**Prompt**',
+    '',
+    formatParallelQuotedSection(promptText),
+    '',
+  ];
+
+  if (job.error?.trim()) {
+    sections.push('**Status**', '', 'Failed', '');
+    sections.push('**Error**', '', job.error.trim());
+  } else {
+    sections.push('**Reply**', '', job.resultText?.trim() || '(No text reply. Open the side thread for the full result.)');
+  }
+
+  return sections.join('\n');
 }
 
 export async function summarizeAndForkSession(

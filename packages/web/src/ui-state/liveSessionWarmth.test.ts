@@ -21,6 +21,7 @@ function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
     cost: null,
     contextUsage: null,
     pendingQueue: { steering: [], followUp: [] },
+    parallelJobs: [],
     presence: {
       surfaces: [],
       controllerSurfaceId: null,

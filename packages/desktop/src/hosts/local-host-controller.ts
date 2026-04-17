@@ -21,6 +21,8 @@ import type {
   DesktopLiveSessionCreateRequest,
   DesktopLiveSessionExportRequest,
   DesktopLiveSessionForkRequest,
+  DesktopLiveSessionParallelPromptRequest,
+  DesktopLiveSessionParallelPromptResult,
   DesktopLiveSessionPromptRequest,
   DesktopLiveSessionPromptResult,
   DesktopLiveSessionQueueRestoreRequest,
@@ -592,6 +594,11 @@ export class LocalHostController implements HostController {
   async submitLiveSessionPrompt(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult> {
     const module = await this.loadLocalApi();
     return module.submitDesktopLiveSessionPrompt(input);
+  }
+
+  async submitLiveSessionParallelPrompt(input: DesktopLiveSessionParallelPromptRequest): Promise<DesktopLiveSessionParallelPromptResult> {
+    const module = await this.loadLocalApi();
+    return module.submitDesktopLiveSessionParallelPrompt(input);
   }
 
   async abortLiveSession(conversationId: string): Promise<{ ok: true }> {

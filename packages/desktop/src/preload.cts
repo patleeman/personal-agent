@@ -278,6 +278,14 @@ const desktopBridge = {
     contextMessages?: Array<{ customType: string; content: string }>;
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
+  submitLiveSessionParallelPrompt: (input: {
+    conversationId: string;
+    text?: string;
+    images?: Array<{ data: string; mimeType: string; name?: string }>;
+    attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
+    contextMessages?: Array<{ customType: string; content: string }>;
+    surfaceId?: string;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-parallel-prompt`, input),
   abortLiveSession: (conversationId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:abort-live-session`, conversationId),
   subscribeConversationState: (input: {
     conversationId: string;

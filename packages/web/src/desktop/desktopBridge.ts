@@ -341,6 +341,23 @@ export interface PersonalAgentDesktopBridge {
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
   }>;
+  submitLiveSessionParallelPrompt(input: {
+    conversationId: string;
+    text?: string;
+    images?: PromptImageInput[];
+    attachmentRefs?: PromptAttachmentRefInput[];
+    contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>;
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    accepted: true;
+    jobId: string;
+    childConversationId: string;
+    referencedTaskIds: string[];
+    referencedMemoryDocIds: string[];
+    referencedVaultFileIds: string[];
+    referencedAttachmentIds: string[];
+  }>;
   abortLiveSession(conversationId: string): Promise<{ ok: true }>;
   subscribeConversationState(input: {
     conversationId: string;

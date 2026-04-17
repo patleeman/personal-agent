@@ -37,6 +37,7 @@ import {
   reloadSessionResources as reloadLiveSessionResources,
   restoreQueuedMessage as restoreQueuedLiveSessionMessage,
   resumeSession as resumeLocalSession,
+  startParallelPromptSession,
   submitPromptSession as submitLocalPromptSession,
   summarizeAndForkSession as summarizeAndForkLiveSession,
   takeOverSessionControl,
@@ -131,6 +132,15 @@ export interface SubmitLiveSessionPromptCapabilityInput {
   conversationId: string;
   text?: string;
   behavior?: 'steer' | 'followUp';
+  images?: Array<{ data: string; mimeType: string; name?: string }>;
+  attachmentRefs?: unknown;
+  contextMessages?: unknown;
+  surfaceId?: string;
+}
+
+export interface SubmitLiveSessionParallelPromptCapabilityInput {
+  conversationId: string;
+  text?: string;
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   contextMessages?: unknown;
@@ -432,18 +442,37 @@ export async function resumeLiveSessionCapability(
   return result;
 }
 
-export async function submitLiveSessionPromptCapability(
-  input: SubmitLiveSessionPromptCapabilityInput,
+interface PreparedLiveSessionPrompt {
+  conversationId: string;
+  text: string;
+  surfaceId?: string;
+  currentProfile: string;
+  promptReferences: {
+    projectIds: string[];
+    taskIds: string[];
+    memoryDocIds: string[];
+    skillNames: string[];
+    profileIds: string[];
+  };
+  referencedVaultFiles: Array<{ id: string; path: string }>;
+  referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>;
+  normalizedContextMessages: Array<{ customType: string; content: string }>;
+  promptImages: PromptImageAttachment[] | undefined;
+  backgroundRunContextEntries: Array<{ id: string; prompt: string }>;
+  sourceSessionFile?: string;
+}
+
+async function prepareLiveSessionPrompt(
+  input: {
+    conversationId: string;
+    text?: string;
+    images?: Array<{ data: string; mimeType: string; name?: string }>;
+    attachmentRefs?: unknown;
+    contextMessages?: unknown;
+    surfaceId?: string;
+  },
   context: LiveSessionCapabilityContext,
-): Promise<{
-  ok: true;
-  accepted: true;
-  delivery: 'started' | 'queued';
-  referencedTaskIds: string[];
-  referencedMemoryDocIds: string[];
-  referencedVaultFileIds: string[];
-  referencedAttachmentIds: string[];
-}> {
+): Promise<PreparedLiveSessionPrompt> {
   const conversationId = input.conversationId.trim();
   if (!conversationId) {
     throw new LiveSessionCapabilityInputError('conversationId required');
@@ -558,10 +587,44 @@ export async function submitLiveSessionPromptCapability(
         }]
       : []),
   ];
-  const liveConversationId = await ensureConversationPromptTargetLive(conversationId, context);
+
+  return {
+    conversationId,
+    text,
+    surfaceId,
+    currentProfile,
+    promptReferences,
+    referencedVaultFiles: referencedVaultFiles.map((file) => ({ id: file.id, path: file.path })),
+    referencedAttachments,
+    normalizedContextMessages,
+    promptImages: input.images?.map((image) => ({
+      type: 'image',
+      data: image.data,
+      mimeType: image.mimeType,
+      ...(image.name ? { name: image.name } : {}),
+    })),
+    backgroundRunContextEntries,
+    sourceSessionFile: sessionFile,
+  };
+}
+
+export async function submitLiveSessionPromptCapability(
+  input: SubmitLiveSessionPromptCapabilityInput,
+  context: LiveSessionCapabilityContext,
+): Promise<{
+  ok: true;
+  accepted: true;
+  delivery: 'started' | 'queued';
+  referencedTaskIds: string[];
+  referencedMemoryDocIds: string[];
+  referencedVaultFileIds: string[];
+  referencedAttachmentIds: string[];
+}> {
+  const prepared = await prepareLiveSessionPrompt(input, context);
+  const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
 
-  for (const message of normalizedContextMessages) {
+  for (const message of prepared.normalizedContextMessages) {
     await queuePromptContext(liveConversationId, message.customType, message.content);
   }
 
@@ -571,11 +634,11 @@ export async function submitLiveSessionPromptCapability(
       sessionFile: recoveredLiveEntry.session.sessionFile,
       cwd: recoveredLiveEntry.cwd,
       title: recoveredLiveEntry.title,
-      profile: currentProfile,
+      profile: prepared.currentProfile,
       state: 'running',
       pendingOperation: {
         type: 'prompt',
-        text,
+        text: prepared.text,
         ...(input.behavior ? { behavior: input.behavior } : {}),
         ...(input.images && input.images.length > 0
           ? {
@@ -587,9 +650,9 @@ export async function submitLiveSessionPromptCapability(
               })),
             }
           : {}),
-        ...(normalizedContextMessages.length > 0
+        ...(prepared.normalizedContextMessages.length > 0
           ? {
-              contextMessages: normalizedContextMessages,
+              contextMessages: prepared.normalizedContextMessages,
             }
           : {}),
         enqueuedAt: new Date().toISOString(),
@@ -597,38 +660,33 @@ export async function submitLiveSessionPromptCapability(
     });
   }
 
-  const promptImages: PromptImageAttachment[] | undefined = input.images?.map((image) => ({
-    type: 'image',
-    data: image.data,
-    mimeType: image.mimeType,
-    ...(image.name ? { name: image.name } : {}),
-  }));
   const submittedPrompt = await submitLocalPromptSession(
     liveConversationId,
-    text,
+    prepared.text,
     input.behavior,
-    promptImages,
-    surfaceId,
+    prepared.promptImages,
+    prepared.surfaceId,
   );
   const promptPromise = submittedPrompt.completion;
+  const daemonRunsRoot = resolveDurableRunsRoot(resolveDaemonRoot());
 
   void promptPromise.then(async () => {
-    if (!sessionFile || backgroundRunContextEntries.length === 0) {
+    if (!prepared.sourceSessionFile || prepared.backgroundRunContextEntries.length === 0) {
       return;
     }
 
     try {
       const deliveredIds = markBackgroundRunResultsDelivered({
         runsRoot: daemonRunsRoot,
-        sessionFile,
-        resultIds: backgroundRunContextEntries.map((entry) => entry.id),
+        sessionFile: prepared.sourceSessionFile,
+        resultIds: prepared.backgroundRunContextEntries.map((entry) => entry.id),
       });
       if (deliveredIds.length > 0) {
         invalidateAppTopics('runs');
       }
     } catch (error) {
       logWarn('background run context completion error', {
-        sessionId: conversationId,
+        sessionId: prepared.conversationId,
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
       });
@@ -640,7 +698,7 @@ export async function submitLiveSessionPromptCapability(
         sessionFile: recoveredLiveEntry.session.sessionFile,
         cwd: recoveredLiveEntry.cwd,
         title: recoveredLiveEntry.title,
-        profile: currentProfile,
+        profile: prepared.currentProfile,
         state: 'failed',
         lastError: error instanceof Error ? error.message : String(error),
       });
@@ -657,10 +715,47 @@ export async function submitLiveSessionPromptCapability(
     ok: true,
     accepted: true,
     delivery: submittedPrompt.acceptedAs,
-    referencedTaskIds: promptReferences.taskIds,
-    referencedMemoryDocIds: promptReferences.memoryDocIds,
-    referencedVaultFileIds: referencedVaultFiles.map((file) => file.id),
-    referencedAttachmentIds: referencedAttachments.map((attachment) => attachment.attachmentId),
+    referencedTaskIds: prepared.promptReferences.taskIds,
+    referencedMemoryDocIds: prepared.promptReferences.memoryDocIds,
+    referencedVaultFileIds: prepared.referencedVaultFiles.map((file) => file.id),
+    referencedAttachmentIds: prepared.referencedAttachments.map((attachment) => attachment.attachmentId),
+  };
+}
+
+export async function submitLiveSessionParallelPromptCapability(
+  input: SubmitLiveSessionParallelPromptCapabilityInput,
+  context: LiveSessionCapabilityContext,
+): Promise<{
+  ok: true;
+  accepted: true;
+  jobId: string;
+  childConversationId: string;
+  referencedTaskIds: string[];
+  referencedMemoryDocIds: string[];
+  referencedVaultFileIds: string[];
+  referencedAttachmentIds: string[];
+}> {
+  const prepared = await prepareLiveSessionPrompt(input, context);
+  const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
+  const parallel = await startParallelPromptSession(
+    liveConversationId,
+    {
+      text: prepared.text,
+      images: prepared.promptImages,
+      contextMessages: prepared.normalizedContextMessages,
+    },
+    buildLiveSessionOptions(context),
+  );
+
+  return {
+    ok: true,
+    accepted: true,
+    jobId: parallel.jobId,
+    childConversationId: parallel.childConversationId,
+    referencedTaskIds: prepared.promptReferences.taskIds,
+    referencedMemoryDocIds: prepared.promptReferences.memoryDocIds,
+    referencedVaultFileIds: prepared.referencedVaultFiles.map((file) => file.id),
+    referencedAttachmentIds: prepared.referencedAttachments.map((attachment) => attachment.attachmentId),
   };
 }
 

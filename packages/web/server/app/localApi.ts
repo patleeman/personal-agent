@@ -131,6 +131,7 @@ import {
   reloadLiveSessionCapability,
   restoreQueuedLiveSessionMessageCapability,
   resumeLiveSessionCapability,
+  submitLiveSessionParallelPromptCapability,
   submitLiveSessionPromptCapability,
   summarizeAndForkLiveSessionCapability,
   takeOverLiveSessionCapability,
@@ -2562,6 +2563,26 @@ export async function submitDesktopLiveSessionPrompt(input: {
   referencedAttachmentIds: string[];
 }> {
   return submitLiveSessionPromptCapability(input, await getLocalLiveSessionCapabilityContext());
+}
+
+export async function submitDesktopLiveSessionParallelPrompt(input: {
+  conversationId: string;
+  text?: string;
+  images?: Array<{ data: string; mimeType: string; name?: string }>;
+  attachmentRefs?: unknown;
+  contextMessages?: Array<{ customType: string; content: string }>;
+  surfaceId?: string;
+}): Promise<{
+  ok: true;
+  accepted: true;
+  jobId: string;
+  childConversationId: string;
+  referencedTaskIds: string[];
+  referencedMemoryDocIds: string[];
+  referencedVaultFileIds: string[];
+  referencedAttachmentIds: string[];
+}> {
+  return submitLiveSessionParallelPromptCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
 export async function takeOverDesktopLiveSession(input: {

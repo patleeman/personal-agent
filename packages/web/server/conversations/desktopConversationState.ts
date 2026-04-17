@@ -2,6 +2,7 @@ import type {
   LiveContextUsage,
   LiveSessionPresenceState,
   LiveSessionStateSnapshot,
+  ParallelPromptPreview,
   QueuedPromptPreview,
   SseEvent,
 } from './liveSessions.js';
@@ -61,6 +62,7 @@ export interface DesktopConversationStreamState {
   cost: number | null;
   contextUsage: LiveContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
@@ -104,6 +106,7 @@ export function createEmptyDesktopConversationStreamState(): DesktopConversation
     cost: null,
     contextUsage: null,
     pendingQueue: { steering: [], followUp: [] },
+    parallelJobs: [],
     presence: {
       surfaces: [],
       controllerSurfaceId: null,
@@ -231,6 +234,7 @@ export function createDesktopConversationStreamStateFromSnapshot(
     cost: snapshot.cost,
     contextUsage: snapshot.contextUsage,
     pendingQueue: snapshot.pendingQueue,
+    parallelJobs: snapshot.parallelJobs,
     presence: snapshot.presence,
     autoModeState: snapshot.autoModeState,
     cwdChange: snapshot.cwdChange,
@@ -300,6 +304,9 @@ export function applyDesktopConversationStreamEvent(
 
     case 'queue_state':
       return { ...prev, pendingQueue: { steering: event.steering, followUp: event.followUp } };
+
+    case 'parallel_state':
+      return { ...prev, parallelJobs: event.jobs };
 
     case 'presence_state':
       return { ...prev, presence: event.state };

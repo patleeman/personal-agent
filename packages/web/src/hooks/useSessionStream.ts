@@ -8,6 +8,7 @@ import type {
   LiveSessionPresenceState,
   LiveSessionSurfaceType,
   MessageBlock,
+  ParallelPromptPreview,
   PromptAttachmentRefInput,
   PromptImageInput,
   QueuedPromptPreview,
@@ -33,6 +34,7 @@ export interface StreamState {
   cost: number | null;
   contextUsage: SessionContextUsage | null;
   pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
+  parallelJobs: ParallelPromptPreview[];
   presence: LiveSessionPresenceState;
   autoModeState: ConversationAutoModeState | null;
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
@@ -60,6 +62,7 @@ const INITIAL_STREAM_STATE: StreamState = {
   cost: null,
   contextUsage: null,
   pendingQueue: { steering: [], followUp: [] },
+  parallelJobs: [],
   presence: createEmptyLiveSessionPresenceState(),
   autoModeState: null,
   cwdChange: null,
@@ -313,6 +316,7 @@ function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
     || state.contextUsage !== null
     || state.pendingQueue.steering.length > 0
     || state.pendingQueue.followUp.length > 0
+    || state.parallelJobs.length > 0
     || state.presence.surfaces.length > 0
     || state.presence.controllerSurfaceId !== null
     || state.presence.controllerSurfaceType !== null
@@ -539,6 +543,24 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     }
   }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
+  const parallel = useCallback(async (
+    text: string,
+    images?: PromptImageInput[],
+    attachmentRefs?: PromptAttachmentRefInput[],
+    contextMessages?: Array<{ customType: string; content: string }>,
+  ) => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    ensureRequestedSubscription();
+    await submitLivePromptWithControlRetry({
+      attemptPrompt: () => api.parallelPromptSession(normalizedSessionId, text, images, attachmentRefs, surfaceId, contextMessages).then(() => undefined),
+      waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
+      takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
+    });
+  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
+
   const abort = useCallback(async () => {
     if (!normalizedSessionId) return;
     await api.abortSession(normalizedSessionId, surfaceId);
@@ -653,8 +675,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
   return useMemo(
-    () => ({ ...visibleState, surfaceId, takeover, send, abort, reconnect }),
-    [visibleState, surfaceId, takeover, send, abort, reconnect],
+    () => ({ ...visibleState, surfaceId, takeover, send, parallel, abort, reconnect }),
+    [visibleState, surfaceId, takeover, send, parallel, abort, reconnect],
   );
 }
 
@@ -752,6 +774,10 @@ function applyEvent(
       const steering = normalizePendingQueueItems(event.steering);
       const followUp = normalizePendingQueueItems(event.followUp);
       return { ...prev, pendingQueue: { steering, followUp } };
+    }
+
+    case 'parallel_state': {
+      return { ...prev, parallelJobs: Array.isArray(event.jobs) ? event.jobs : [] };
     }
 
     case 'presence_state': {

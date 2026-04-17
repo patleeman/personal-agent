@@ -1139,6 +1139,45 @@ export const api = {
       })),
     });
   },
+  parallelPromptSession: async (
+    id: string,
+    text: string,
+    images?: PromptImageInput[],
+    attachmentRefs?: PromptAttachmentRefInput[],
+    surfaceId?: string,
+    contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>,
+  ) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+      return desktopBridge.submitLiveSessionParallelPrompt({
+        conversationId: id,
+        text,
+        ...(surfaceId ? { surfaceId } : {}),
+        images,
+        attachmentRefs,
+        contextMessages,
+      });
+    }
+
+    return post<{ ok: boolean; accepted: boolean; jobId: string; childConversationId: string }>(`/live-sessions/${id}/parallel-prompt`, {
+      text,
+      ...(surfaceId ? { surfaceId } : {}),
+      images: images?.map((image) => ({
+        type: 'image' as const,
+        data: image.data,
+        mimeType: image.mimeType,
+        ...(image.name ? { name: image.name } : {}),
+      })),
+      attachmentRefs: attachmentRefs?.map((attachmentRef) => ({
+        attachmentId: attachmentRef.attachmentId,
+        ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
+      })),
+      contextMessages: contextMessages?.map((message) => ({
+        customType: message.customType,
+        content: message.content,
+      })),
+    });
+  },
   relatedConversationContext: async (sessionIds: string[], prompt: string) => {
     return post<{ contextMessages: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> }>(
       '/live-sessions/related-context',

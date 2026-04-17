@@ -40,6 +40,7 @@ A conversation can carry:
 - one-shot `@` mentions for the current turn
 - persistent attached docs that stay in scope across turns
 - an optional auto mode toggle in the composer controls for hands-off follow-up
+- live composer controls for direct send, queued steer / follow-up prompts, and temporary parallel fork prompts that reintegrate back into the main thread when the active turn finishes
 
 That is useful execution context, but it still should not replace the durable vault.
 

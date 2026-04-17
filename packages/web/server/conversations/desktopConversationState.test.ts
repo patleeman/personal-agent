@@ -61,6 +61,10 @@ describe('desktopConversationState reducer', () => {
       steering: [{ id: 'steer-1', text: 'Nudge', imageCount: 0 }],
       followUp: [{ id: 'follow-1', text: 'Later', imageCount: 1 }],
     } as never);
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'parallel_state',
+      jobs: [{ id: 'parallel-1', prompt: 'Check the docs', childConversationId: 'child-1', status: 'running' }],
+    } as never);
 
     expect(state.isStreaming).toBe(true);
     expect(state.blocks).toEqual([
@@ -80,6 +84,9 @@ describe('desktopConversationState reducer', () => {
       steering: [{ id: 'steer-1', text: 'Nudge', imageCount: 0 }],
       followUp: [{ id: 'follow-1', text: 'Later', imageCount: 1 }],
     });
+    expect(state.parallelJobs).toEqual([
+      { id: 'parallel-1', prompt: 'Check the docs', childConversationId: 'child-1', status: 'running' },
+    ]);
   });
 
   it('preserves terminal-style metadata for direct bang bash runs', async () => {
@@ -209,6 +216,7 @@ describe('readDesktopConversationState', () => {
       cost: 0.01,
       contextUsage: { tokens: 3 },
       pendingQueue: { steering: [], followUp: [] },
+      parallelJobs: [],
       presence: {
         surfaces: [],
         controllerSurfaceId: null,
@@ -266,6 +274,7 @@ describe('readDesktopConversationState', () => {
         cost: 0.01,
         contextUsage: { tokens: 3 },
         pendingQueue: { steering: [], followUp: [] },
+        parallelJobs: [],
         presence: {
           surfaces: [],
           controllerSurfaceId: null,

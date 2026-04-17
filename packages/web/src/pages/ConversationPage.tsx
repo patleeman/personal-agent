@@ -244,6 +244,19 @@ function formatQueuedPromptImageSummary(imageCount: number): string | null {
   return `${imageCount} image${imageCount === 1 ? '' : 's'} attached`;
 }
 
+function formatParallelJobStatusLabel(status: 'running' | 'ready' | 'failed' | 'importing'): string {
+  switch (status) {
+    case 'running':
+      return 'running';
+    case 'ready':
+      return 'queued';
+    case 'failed':
+      return 'failed';
+    case 'importing':
+      return 'appending';
+  }
+}
+
 function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
   confirmedLive: boolean | null,
@@ -1673,11 +1686,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         surfaceId: desktopConversation.surfaceId,
         reconnect: desktopConversation.reconnect,
         send: desktopConversation.send,
+        parallel: desktopConversation.parallel,
         abort: desktopConversation.abort,
         takeover: desktopConversation.takeover,
       }
     : webStream;
   const streamSend = stream.send;
+  const streamParallel = stream.parallel;
   const streamAbort = stream.abort;
   const streamReconnect = stream.reconnect;
   const streamTakeover = stream.takeover;
@@ -1891,6 +1906,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       })),
     ];
   }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
+  const parallelJobs = useMemo(() => Array.isArray(stream.parallelJobs) ? stream.parallelJobs : [], [stream.parallelJobs]);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
   // JSONL + live deltas only when we have at least one source of blocks.
@@ -5851,6 +5867,62 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function submitParallelComposer() {
+    if (draft || !id || !isLiveSession) {
+      showNotice('danger', 'Parallel prompts require a live conversation.', 4000);
+      return;
+    }
+
+    if (!stream.isStreaming && !liveSessionHasPendingHiddenTurn) {
+      showNotice('danger', 'Parallel prompts are only available while this conversation is busy.', 4000);
+      return;
+    }
+
+    const inputSnapshot = input;
+    const text = inputSnapshot.trim();
+    const pendingImageAttachments = attachments;
+    const pendingDrawingAttachments = drawingAttachments;
+    if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
+      return;
+    }
+
+    try {
+      const filePromptImages = await buildPromptImages(pendingImageAttachments);
+      const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
+      const promptImages = [...filePromptImages, ...drawingPromptImages];
+
+      const persistPromptDrawings = async (): Promise<PromptAttachmentRefInput[]> => {
+        if (pendingDrawingAttachments.length === 0) {
+          return [];
+        }
+
+        setDrawingsBusy(true);
+        try {
+          const persistedDrawings = await persistDrawingsForConversation(id, pendingDrawingAttachments);
+          return persistedDrawings
+            .map((drawing) => drawingAttachmentToPromptRef(drawing))
+            .filter((attachmentRef): attachmentRef is PromptAttachmentRefInput => attachmentRef !== null);
+        } finally {
+          setDrawingsBusy(false);
+        }
+      };
+
+      const attachmentRefs = await persistPromptDrawings();
+      rememberComposerInput(inputSnapshot);
+      setInput('');
+      setAttachments([]);
+      setDrawingAttachments([]);
+      setDrawingsError(null);
+
+      await streamParallel(text, promptImages, attachmentRefs);
+      await refetchConversationAttachments();
+      showNotice('accent', 'Parallel prompt started.', 2500);
+    } catch (error) {
+      await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number, previewId?: string) {
     if (!id || !isLiveSession) {
       showNotice('danger', 'Queued prompts can only be restored from a live session.', 4000);
@@ -6054,6 +6126,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
     }
 
+    if (
+      e.key === 'Enter'
+      && e.ctrlKey
+      && !e.metaKey
+      && !e.altKey
+      && !e.shiftKey
+      && !e.nativeEvent.isComposing
+      && (stream.isStreaming || liveSessionHasPendingHiddenTurn)
+    ) {
+      e.preventDefault();
+      await submitParallelComposer();
+      return;
+    }
+
     if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       await submitComposer(resolveConversationComposerSubmitState(
@@ -6154,6 +6240,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const hasComposerShelfContent = attachedContextDocs.length > 0
     || draftMentionItems.length > 0
     || pendingQueue.length > 0
+    || parallelJobs.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
   const hasComposerAttachmentShelfContent = attachments.length > 0
@@ -6734,6 +6821,41 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </div>
                 )}
 
+                {parallelJobs.length > 0 && (
+                  <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
+                    <span className="ui-section-label">Parallel</span>
+                    {parallelJobs.map((job) => (
+                      <div key={job.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
+                        <Pill tone={job.status === 'failed' ? 'danger' : job.status === 'running' ? 'steel' : 'accent'} className="mt-0.5">
+                          ⇄ {formatParallelJobStatusLabel(job.status)}
+                        </Pill>
+                        <div className="min-w-0">
+                          <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
+                            {truncateConversationShelfText(job.prompt || '(empty prompt)')}
+                          </p>
+                          {job.status === 'failed' && job.error ? (
+                            <p className="mt-0.5 text-[11px] text-danger">{truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}</p>
+                          ) : job.resultPreview ? (
+                            <p className="mt-0.5 text-[11px] text-dim">{truncateConversationShelfText(job.resultPreview, { maxChars: 140, maxLines: 2 })}</p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            ensureConversationTabOpen(job.childConversationId);
+                            navigate(`/conversations/${job.childConversationId}`);
+                          }}
+                          className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary"
+                          title="Open side thread"
+                          aria-label="Open side thread"
+                        >
+                          open
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {!draft && activeConversationBackgroundRuns.length > 0 && (
                   <>
                     <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
@@ -6998,7 +7120,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         : 'Message… (/ for commands, @ to reference notes, tasks, and indexed folders/files)'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                        : 'Ctrl+C clears the composer. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                        : 'Ctrl+C clears the composer. Ctrl+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
                       style={{ minHeight: '44px', maxHeight: '180px' }}
                     />
                   </div>
@@ -7082,6 +7204,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                               </button>
                             );
                           })()}
+                          {composerHasContent ? (
+                            <button
+                              type="button"
+                              onClick={() => { void submitParallelComposer(); }}
+                              disabled={composerDisabled}
+                              className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-steel/12 px-3 text-[11px] font-medium text-steel transition-colors hover:bg-steel/20 disabled:cursor-default disabled:opacity-40"
+                              title="Parallel (Ctrl+Enter)"
+                              aria-label="Parallel"
+                            >
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M7 7h10" />
+                                <path d="M7 12h10" />
+                                <path d="M7 17h10" />
+                                <path d="m15 5 4 2-4 2" />
+                                <path d="m9 15-4 2 4 2" />
+                              </svg>
+                              <span>Parallel</span>
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => { void stream.abort(); }}

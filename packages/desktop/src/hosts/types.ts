@@ -266,6 +266,26 @@ export interface DesktopLiveSessionPromptResult {
   referencedAttachmentIds: string[];
 }
 
+export interface DesktopLiveSessionParallelPromptRequest {
+  conversationId: string;
+  text?: string;
+  images?: Array<{ data: string; mimeType: string; name?: string }>;
+  attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
+  contextMessages?: Array<{ customType: string; content: string }>;
+  surfaceId?: string;
+}
+
+export interface DesktopLiveSessionParallelPromptResult {
+  ok: true;
+  accepted: true;
+  jobId: string;
+  childConversationId: string;
+  referencedTaskIds: string[];
+  referencedMemoryDocIds: string[];
+  referencedVaultFileIds: string[];
+  referencedAttachmentIds: string[];
+}
+
 export interface DesktopLiveSessionQueueRestoreRequest {
   conversationId: string;
   behavior: 'steer' | 'followUp';
@@ -447,6 +467,7 @@ export interface HostController {
   forkLiveSession?(input: DesktopLiveSessionForkRequest): Promise<{ newSessionId: string; sessionFile: string }>;
   summarizeAndForkLiveSession?(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt?(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult>;
+  submitLiveSessionParallelPrompt?(input: DesktopLiveSessionParallelPromptRequest): Promise<DesktopLiveSessionParallelPromptResult>;
   abortLiveSession?(conversationId: string): Promise<{ ok: true }>;
   subscribeConversationState?(
     input: DesktopConversationStateSubscriptionRequest,

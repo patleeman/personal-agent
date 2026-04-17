@@ -264,6 +264,23 @@ export interface LocalApiModule {
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
   }>;
+  submitDesktopLiveSessionParallelPrompt(input: {
+    conversationId: string;
+    text?: string;
+    images?: Array<{ data: string; mimeType: string; name?: string }>;
+    attachmentRefs?: unknown;
+    contextMessages?: Array<{ customType: string; content: string }>;
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    accepted: true;
+    jobId: string;
+    childConversationId: string;
+    referencedTaskIds: string[];
+    referencedMemoryDocIds: string[];
+    referencedVaultFileIds: string[];
+    referencedAttachmentIds: string[];
+  }>;
   takeOverDesktopLiveSession(input: {
     conversationId: string;
     surfaceId: string;

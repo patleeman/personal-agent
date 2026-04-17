@@ -23,6 +23,7 @@ import {
   reloadLiveSessionCapability,
   restoreQueuedLiveSessionMessageCapability,
   resumeLiveSessionCapability,
+  submitLiveSessionParallelPromptCapability,
   submitLiveSessionPromptCapability,
   summarizeAndForkLiveSessionCapability,
   takeOverLiveSessionCapability,
@@ -155,6 +156,39 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
       conversationId: req.params.id,
       text: typeof req.body?.text === 'string' ? req.body.text : '',
       behavior: req.body?.behavior,
+      images: Array.isArray(req.body?.images)
+        ? req.body.images.map((image: { data: string; mimeType: string; name?: string }) => ({
+            data: image.data,
+            mimeType: image.mimeType,
+            ...(image.name ? { name: image.name } : {}),
+          }))
+        : undefined,
+      attachmentRefs: req.body?.attachmentRefs,
+      contextMessages: req.body?.contextMessages,
+      surfaceId: readRequestSurfaceId(req.body),
+    }, getLiveSessionCapabilityContext());
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (err instanceof LiveSessionCapabilityInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    res.status(500).json({ error: String(err) });
+  }
+}
+
+export async function handleLiveSessionParallelPrompt(req: Request, res: Response): Promise<void> {
+  try {
+    const result = await submitLiveSessionParallelPromptCapability({
+      conversationId: req.params.id,
+      text: typeof req.body?.text === 'string' ? req.body.text : '',
       images: Array.isArray(req.body?.images)
         ? req.body.images.map((image: { data: string; mimeType: string; name?: string }) => ({
             data: image.data,
@@ -384,6 +418,7 @@ export function registerLiveSessionRoutes(
   });
 
   router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
+  router.post('/api/live-sessions/:id/parallel-prompt', handleLiveSessionParallelPrompt);
 
   router.post('/api/live-sessions/:id/bash', async (req, res) => {
     try {

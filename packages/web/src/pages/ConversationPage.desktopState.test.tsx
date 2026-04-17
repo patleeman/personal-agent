@@ -78,6 +78,7 @@ describe('ConversationPage desktop local state', () => {
             cost: null,
             contextUsage: { tokens: 12 },
             pendingQueue: { steering: [], followUp: [] },
+            parallelJobs: [],
             presence: {
               surfaces: [],
               controllerSurfaceId: null,
