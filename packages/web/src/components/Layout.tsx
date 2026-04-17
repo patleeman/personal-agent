@@ -5,7 +5,6 @@ import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { DesktopTopBar } from './DesktopTopBar';
-import { DesktopHostIndicator } from './DesktopHostIndicator';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
@@ -570,8 +569,6 @@ export function Layout() {
             railOpen={activeRightRailControl?.railOpen ?? false}
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
           />
-          <DesktopHostIndicator environment={desktopEnvironment} />
-
           <div className="flex min-h-0 flex-1 overflow-hidden">
           {sidebarOpen ? (
             <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">

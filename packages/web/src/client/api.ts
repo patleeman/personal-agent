@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, RemoteAccessAdminState, RemoteAccessPairingCodeResult, RemoteAccessSessionState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState, WebUiState } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -723,6 +723,14 @@ export const api = {
 
     return post<FolderPickerResult>('/folder-picker', request);
   },
+  remoteDirectory: async (hostId: string, path?: string | null) => {
+    const desktopBridge = getDesktopBridge();
+    if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
+      throw new Error('Remote directory browsing is only available in the desktop app.');
+    }
+
+    return desktopBridge.readRemoteDirectory({ hostId, ...(path !== undefined ? { path } : {}) }) as Promise<DesktopRemoteDirectoryListing>;
+  },
   pickFiles: async (cwd?: string) => post<FilePickerResult>('/file-picker', cwd !== undefined ? { cwd } : {}),
 
   // ── Memory browser ────────────────────────────────────────────────────────
@@ -1055,13 +1063,13 @@ export const api = {
 
     return post<ConversationRecoveryResult>(`/conversations/${encodeURIComponent(id)}/recover`);
   },
-  continueConversationInHost: async (id: string, hostId: string) => {
+  continueConversationInHost: async (id: string, hostId: string, cwd?: string | null) => {
     const desktopBridge = getDesktopBridge();
     if (!desktopBridge || !await shouldUseDesktopLocalCapabilities()) {
       throw new Error('Continue in is only available in the desktop app.');
     }
 
-    return desktopBridge.continueConversationInHost({ conversationId: id, hostId });
+    return desktopBridge.continueConversationInHost({ conversationId: id, hostId, ...(cwd !== undefined ? { cwd } : {}) });
   },
 
   createLiveSession: async (
@@ -1247,7 +1255,7 @@ export const api = {
   },
   summarizeAndForkSession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.summarizeAndForkLiveSession(id);
     }
 
@@ -1283,7 +1291,7 @@ export const api = {
 
   destroySession: async (id: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.destroyLiveSession(id);
     }
 
@@ -1292,7 +1300,7 @@ export const api = {
 
   forkEntries: async (id: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.readLiveSessionForkEntries(id);
     }
 
@@ -1300,7 +1308,7 @@ export const api = {
   },
   branchSession: async (id: string, entryId: string, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.branchLiveSession({ conversationId: id, entryId });
     }
 
@@ -1308,7 +1316,7 @@ export const api = {
   },
   forkSession: async (id: string, entryId: string, options?: { preserveSource?: boolean; beforeEntry?: boolean }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
       return desktopBridge.forkLiveSession({
         conversationId: id,
         entryId,

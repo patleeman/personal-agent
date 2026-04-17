@@ -53,37 +53,19 @@ Otherwise, prefer the shared server route/API surface.
 
 ## Remote mode
 
-Remote desktop connections are workspace-scoped and use a Codex-compatible app-server protocol instead of the old `pa-app-server-v1` desktop bridge.
+Remote desktop connections are SSH-only and run plain Pi on the remote machine.
 
 That means:
 
-- Electron windows still render the packaged `personal-agent://app/` UI for remote workspaces
-- remote `/api/*` requests and SSE-style streams are adapted in Electron main onto Codex app-server requests and notifications
-- direct remote workspaces connect to a `ws://` / `wss://` Codex-compatible endpoint
-- SSH remote workspaces tunnel a remote `pa codex app-server --listen ...` process
-- the preload bridge remains the renderer boundary; the remote transport is now the Codex protocol, not a custom desktop-only websocket surface
-- the Codex surface should implement both thread/turn methods and standalone `command/exec` so Litter and other clients can browse workspaces and run helper commands without falling back to custom APIs
-- conversation execution targeting should be per-thread, not per-window: a local desktop conversation can continue in a linked remote host while the local UI stays on the normal conversation route
-- linked remote-target conversations should keep their local thread metadata and also create a real remote thread id on the target host for execution and visibility there
+- Electron always keeps rendering the local packaged `personal-agent://app/` UI
+- saved remotes contain only SSH connection details; there is no direct websocket remote mode
+- when a conversation targets a remote, the desktop app downloads the matching Pi release binary locally and copies it to the remote cache on demand
+- the desktop app also copies a small transient helper binary that keeps a detached remote Pi RPC session alive across disconnects and lets the desktop reattach later
+- remote cwd browsing is real remote browsing, not a local folder picker with a remote label
+- conversation execution targeting remains per-thread, not per-window: a local desktop conversation can continue on an SSH remote while the local UI stays on the normal conversation route
+- linked remote-target conversations keep their local thread metadata while the live execution state runs through remote Pi RPC over SSH
 
-## Hosted workspace server
-
-The desktop shell can host this machine as a remote workspace through a managed local Codex-compatible server.
-
-- Desktop settings own an enable/disable toggle for the managed workspace server
-- Electron main spawns and monitors the bundled helper instead of requiring manual shell commands
-- unexpected helper exits should auto-restart with bounded backoff while the desktop tray app remains alive
-- the managed local endpoint is shown as an exact websocket URL, including the publish path (currently `/codex`)
-- optional Tailnet publishing uses `tailscale serve --set-path=/codex` and surfaces the exact `wss://.../codex` URL to copy into direct websocket remotes
-- this hosting path is machine-local desktop state, separate from saved remote workspace connection records
-
-## Litter compatibility
-
-The desktop app owns installation of the local Litter SSH shim at `~/.litter/bin/codex`.
-
-- the shim delegates `codex app-server ...` to the same bundled desktop helper path used by the managed workspace server
-- the same server implementation also backs direct websocket remotes and SSH-bootstrapped remote workspaces
-- local Litter connectivity should not require replacing the system `codex` binary globally
+There is no hosted desktop remote server, no Tailnet remote transport, and no Codex app-server dependency in the desktop remote model anymore.
 
 ## UI shape
 

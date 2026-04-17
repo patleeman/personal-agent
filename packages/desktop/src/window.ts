@@ -123,8 +123,7 @@ export function buildWindowTitle(host: DesktopHostRecord): string {
     return appName;
   }
 
-  const kindLabel = host.kind === 'web' ? 'WebSocket workspace' : 'SSH workspace';
-  return `${appName} — ${host.label} (${kindLabel})`;
+  return `${appName} — ${host.label} (SSH remote)`;
 }
 
 function intersectRectangleArea(left: DesktopRectangle, right: DesktopRectangle): number {
@@ -217,11 +216,6 @@ export class DesktopWindowController {
 
   async openMainWindow(pathname = '/'): Promise<void> {
     await this.openWindowForHost(this.hostManager.getActiveHostId(), pathname, 'main');
-  }
-
-  async openHostWindow(hostId: string, pathname = '/'): Promise<void> {
-    const role: ManagedWindowRole = hostId === this.hostManager.getActiveHostId() ? 'main' : 'remote';
-    await this.openWindowForHost(hostId, pathname, role);
   }
 
   async openAbsoluteUrl(url: string): Promise<void> {

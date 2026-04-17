@@ -7,7 +7,8 @@
   "main": "./dist/main.js",
   "scripts": {
     "prepare:difftastic": "node scripts/prepare-difftastic-bundle.mjs",
-    "build:deps": "npm run prepare:difftastic && npm --prefix ../core run build && npm --prefix ../daemon run build && npm --prefix ../web run build",
+    "prepare:remote-helper": "node scripts/prepare-remote-helper-bundle.mjs",
+    "build:deps": "npm run prepare:difftastic && npm run prepare:remote-helper && npm --prefix ../core run build && npm --prefix ../daemon run build && npm --prefix ../web run build",
     "build": "npm run clean && npm run build:deps && tsc --build --force",
     "launch": "node scripts/launch-dev-app.mjs",
     "start": "npm run build && npm run launch",

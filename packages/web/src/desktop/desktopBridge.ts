@@ -23,7 +23,6 @@ import type {
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
   DesktopConnectionsState,
-  DesktopWorkspaceServerState,
   DesktopAppPreferencesState,
   DurableRunDetailResult,
   DurableRunListResult,
@@ -32,6 +31,7 @@ import type {
   ScheduledTaskSummary,
   DesktopHostRecord,
   DesktopNavigationState,
+  DesktopRemoteDirectoryListing,
   DisplayBlock,
   LiveSessionContext,
   LiveSessionCreateResult,
@@ -100,8 +100,7 @@ export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
   getConnections(): Promise<DesktopConnectionsState>;
   getNavigationState(): Promise<DesktopNavigationState>;
-  switchHost(hostId: string): Promise<void>;
-  continueConversationInHost(input: { conversationId: string; hostId: string }): Promise<{
+  continueConversationInHost(input: { conversationId: string; hostId: string; cwd?: string | null }): Promise<{
     conversationId: string;
     remoteHostId?: string;
     remoteHostLabel?: string;
@@ -109,11 +108,7 @@ export interface PersonalAgentDesktopBridge {
   }>;
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
-  readWorkspaceServerState(): Promise<DesktopWorkspaceServerState>;
-  updateWorkspaceServerConfig(input: { enabled?: boolean; port?: number; useTailscaleServe?: boolean }): Promise<DesktopWorkspaceServerState>;
-  readLitterShimState(): Promise<{ installed: boolean; shimPath: string; command: string }>;
-  installLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;
-  uninstallLitterShim(): Promise<{ installed: boolean; shimPath: string; command: string }>;
+  readRemoteDirectory(input: { hostId: string; path?: string | null }): Promise<DesktopRemoteDirectoryListing>;
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
@@ -379,7 +374,6 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
   subscribeAppEvents(): Promise<{ subscriptionId: string }>;
   unsubscribeAppEvents(subscriptionId: string): Promise<void>;
-  openHostWindow(hostId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;

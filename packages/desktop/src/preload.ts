@@ -31,16 +31,10 @@ const desktopBridge = {
   getEnvironment: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-environment`),
   getConnections: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-connections`),
   getNavigationState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:get-navigation-state`),
-  switchHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:switch-host`, hostId),
-  continueConversationInHost: (input: { conversationId: string; hostId: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:continue-conversation-in-host`, input),
+  continueConversationInHost: (input: { conversationId: string; hostId: string; cwd?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:continue-conversation-in-host`, input),
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
-  readWorkspaceServerState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-workspace-server-state`),
-  updateWorkspaceServerConfig: (input: { enabled?: boolean; port?: number; useTailscaleServe?: boolean }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-workspace-server-config`, input),
-  readLitterShimState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-litter-shim-state`),
-  installLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:install-litter-shim`),
-  uninstallLitterShim: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:uninstall-litter-shim`),
+  readRemoteDirectory: (input: { hostId: string; path?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-remote-directory`, input),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
   showConversationContextMenu: (input: {
     x: number;
@@ -304,7 +298,6 @@ const desktopBridge = {
   unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   subscribeAppEvents: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-app-events`),
   unsubscribeAppEvents: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-app-events`, subscriptionId),
-  openHostWindow: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-host-window`, hostId),
   showConnectionsWindow: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-connections`),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),

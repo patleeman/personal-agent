@@ -1,7 +1,12 @@
 import { Buffer } from 'node:buffer';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import type { HostManager } from './hosts/host-manager.js';
 import type { HostApiDispatchResult } from './hosts/types.js';
+import {
+  clearSessionRemoteTarget,
+  setSessionCwd,
+  setSessionRemoteTarget,
+} from './conversation-session-header.js';
 
 interface LocalConversationMeta {
   id: string;
@@ -38,17 +43,6 @@ interface ConversationExecutionTargetState {
   remoteConversationId?: string;
 }
 
-interface SessionHeaderRecord {
-  type: 'session';
-  id: string;
-  timestamp: string;
-  cwd: string;
-  version?: number;
-  parentSession?: string;
-  remoteHostId?: string;
-  remoteHostLabel?: string;
-  remoteConversationId?: string;
-}
 
 function parseJsonBody<T = unknown>(response: HostApiDispatchResult): T | null {
   const contentType = response.headers['content-type'] ?? response.headers['Content-Type'] ?? '';
@@ -130,70 +124,6 @@ async function resolveConversationRemoteTarget(hostManager: HostManager, convers
   };
 }
 
-function readSessionHeader(filePath: string): { lines: string[]; headerIndex: number; header: SessionHeaderRecord } {
-  const raw = readFileSync(filePath, 'utf-8');
-  const lines = raw.split(/\r?\n/);
-  const headerIndex = lines.findIndex((line) => line.trim().length > 0);
-  if (headerIndex === -1) {
-    throw new Error(`Conversation header missing in ${filePath}`);
-  }
-
-  const parsed = JSON.parse(lines[headerIndex] ?? '') as Partial<SessionHeaderRecord>;
-  if (parsed.type !== 'session' || typeof parsed.id !== 'string' || typeof parsed.timestamp !== 'string' || typeof parsed.cwd !== 'string') {
-    throw new Error(`Conversation header missing in ${filePath}`);
-  }
-
-  return {
-    lines,
-    headerIndex,
-    header: parsed as SessionHeaderRecord,
-  };
-}
-
-function writeSessionHeader(filePath: string, header: SessionHeaderRecord, lines: string[], headerIndex: number): void {
-  lines[headerIndex] = JSON.stringify(header);
-  writeFileSync(filePath, `${lines.filter((line) => line.length > 0).join('\n')}\n`, 'utf-8');
-}
-
-function setSessionRemoteTarget(filePath: string, input: {
-  remoteHostId: string;
-  remoteHostLabel?: string;
-  remoteConversationId: string;
-}): void {
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  writeSessionHeader(filePath, {
-    ...header,
-    remoteHostId: input.remoteHostId,
-    ...(input.remoteHostLabel ? { remoteHostLabel: input.remoteHostLabel } : {}),
-    remoteConversationId: input.remoteConversationId,
-  }, lines, headerIndex);
-}
-
-function clearSessionRemoteTarget(filePath: string): void {
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  const nextHeader = { ...header };
-  delete nextHeader.remoteHostId;
-  delete nextHeader.remoteHostLabel;
-  delete nextHeader.remoteConversationId;
-  writeSessionHeader(filePath, nextHeader, lines, headerIndex);
-}
-
-function setSessionCwd(filePath: string, cwd: string): void {
-  const normalizedCwd = cwd.trim();
-  if (!normalizedCwd) {
-    return;
-  }
-
-  const { lines, headerIndex, header } = readSessionHeader(filePath);
-  if (header.cwd === normalizedCwd) {
-    return;
-  }
-
-  writeSessionHeader(filePath, {
-    ...header,
-    cwd: normalizedCwd,
-  }, lines, headerIndex);
-}
 
 function isPlaceholderConversationTitle(title: string | undefined): boolean {
   const normalized = title?.trim().toLowerCase();
@@ -370,7 +300,7 @@ function rewriteConversationScopedResponse(
 
 export async function continueConversationInHost(
   hostManager: HostManager,
-  input: { conversationId?: string; hostId?: string },
+  input: { conversationId?: string; hostId?: string; cwd?: string | null },
 ): Promise<ConversationExecutionTargetState> {
   const conversationId = input.conversationId?.trim() || '';
   const hostId = input.hostId?.trim() || '';
@@ -396,6 +326,15 @@ export async function continueConversationInHost(
   }
 
   if (hostId === 'local') {
+    const existingTarget = await resolveConversationRemoteTarget(hostManager, conversationId);
+    if (existingTarget?.hostId) {
+      const remoteController = hostManager.getHostController(existingTarget.hostId);
+      await remoteController.dispatchApiRequest({
+        method: 'DELETE',
+        path: `/api/live-sessions/${encodeURIComponent(existingTarget.remoteConversationId)}`,
+      }).catch(() => undefined);
+    }
+
     clearSessionRemoteTarget(sessionFile);
     return { conversationId };
   }
@@ -428,7 +367,14 @@ export async function continueConversationInHost(
       };
     }
   }
-  const created = await remoteController.invokeLocalApi('POST', '/api/live-sessions', cwd ? { cwd } : {});
+  const requestedRemoteCwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
+  const remoteCwd = requestedRemoteCwd || cwd;
+  const sessionContent = readFileSync(sessionFile, 'utf-8');
+  const created = await remoteController.invokeLocalApi('POST', '/api/live-sessions', {
+    conversationId,
+    ...(remoteCwd ? { cwd: remoteCwd } : {}),
+    sessionContent,
+  });
   const remoteConversationId = typeof (created as { id?: unknown } | null | undefined)?.id === 'string'
     ? ((created as { id: string }).id).trim()
     : '';
@@ -445,7 +391,7 @@ export async function continueConversationInHost(
   setSessionRemoteTarget(sessionFile, {
     remoteHostId: hostId,
     remoteHostLabel: hostRecord.label,
-    remoteConversationId,
+    remoteConversationId: remoteConversationId || conversationId,
   });
 
   const remoteMetaResponse = await remoteController.dispatchApiRequest({
@@ -455,6 +401,8 @@ export async function continueConversationInHost(
   const remoteMeta = remoteMetaResponse ? parseJsonBody<{ cwd?: unknown }>(remoteMetaResponse) : null;
   if (typeof remoteMeta?.cwd === 'string') {
     setSessionCwd(sessionFile, remoteMeta.cwd);
+  } else if (remoteCwd) {
+    setSessionCwd(sessionFile, remoteCwd);
   }
 
   if (typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true && localController.destroyLiveSession) {

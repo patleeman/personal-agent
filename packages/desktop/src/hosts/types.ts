@@ -9,45 +9,19 @@ export type DesktopHostRecord =
       label: string;
       kind: 'ssh';
       sshTarget: string;
-      workspaceRoot?: string;
-      remoteRepoRoot?: string;
-      remotePort?: number;
-      autoConnect?: boolean;
-    }
-  | {
-      id: string;
-      label: string;
-      kind: 'web';
-      websocketUrl: string;
-      workspaceRoot?: string;
-      autoConnect?: boolean;
     };
 
-export interface DesktopWorkspaceServerConfig {
-  enabled: boolean;
-  port: number;
-  useTailscaleServe: boolean;
-}
-
-export type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
-
-export interface DesktopWorkspaceServerTailscalePublishState {
-  status: DesktopWorkspaceServerTailscalePublishStatus;
+export interface DesktopRemoteDirectoryEntry {
+  name: string;
   path: string;
-  expectedProxyTarget: string;
-  actualProxyTarget?: string;
-  message?: string;
+  isDir: boolean;
+  isHidden: boolean;
 }
 
-export interface DesktopWorkspaceServerState extends DesktopWorkspaceServerConfig {
-  running: boolean;
-  websocketPath: string;
-  localWebsocketUrl: string;
-  tailnetWebsocketUrl?: string;
-  tailscalePublishState: DesktopWorkspaceServerTailscalePublishState;
-  logFile: string;
-  pid?: number;
-  error?: string;
+export interface DesktopRemoteDirectoryListing {
+  path: string;
+  parent?: string;
+  entries: DesktopRemoteDirectoryEntry[];
 }
 
 export interface DesktopAppPreferences {
@@ -56,8 +30,7 @@ export interface DesktopAppPreferences {
 }
 
 export interface DesktopConfig {
-  version: 1;
-  defaultHostId: string;
+  version: 2;
   openWindowOnLaunch: boolean;
   windowState?: {
     x?: number;
@@ -66,13 +39,12 @@ export interface DesktopConfig {
     height: number;
   };
   hosts: DesktopHostRecord[];
-  workspaceServer?: DesktopWorkspaceServerConfig;
   appPreferences?: DesktopAppPreferences;
 }
 
 export interface HostStatus {
   reachable: boolean;
-  mode: 'local-child-process' | 'ssh-tunnel' | 'ws-remote';
+  mode: 'local-child-process' | 'ssh-tunnel';
   summary: string;
   webUrl?: string;
   daemonHealthy?: boolean;
@@ -363,6 +335,7 @@ export interface HostController {
   readVaultFiles?(): Promise<unknown>;
   updateVaultRoot?(root: string | null): Promise<unknown>;
   pickFolder?(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
+  readDirectory?(path?: string | null): Promise<DesktopRemoteDirectoryListing>;
   readConversationTitleSettings?(): Promise<unknown>;
   updateConversationTitleSettings?(input: { enabled?: boolean; model?: string | null }): Promise<unknown>;
   readConversationPlansWorkspace?(): Promise<unknown>;
@@ -505,7 +478,5 @@ export interface DesktopEnvironmentState {
 }
 
 export interface DesktopConnectionsState {
-  activeHostId: string;
-  defaultHostId: string;
-  hosts: DesktopHostRecord[];
+  hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
 }

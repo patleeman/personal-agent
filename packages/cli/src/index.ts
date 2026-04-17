@@ -62,7 +62,6 @@ import {
 import { hasOption } from './args.js';
 import { readTailLines } from './file-utils.js';
 import { mcpCommand } from './mcp-command.js';
-import { codexCommand } from './codex-command.js';
 import { readConfig, setDefaultProfile } from './config.js';
 import { waitForWebUiHealthy } from './web-ui-health.js';
 import {
@@ -1916,8 +1915,6 @@ async function restartCommand(args: string[]): Promise<number> {
     console.log(keyValue('web ui', summary.webUiStatus));
 
     return 0;
-  } catch (error) {
-    throw error;
   } finally {
     clearOwnedApplicationCommandLock('restart');
   }
@@ -2001,8 +1998,6 @@ async function updateCommand(args: string[]): Promise<number> {
     console.log(keyValue('web ui', summary.webUiStatus));
 
     return 0;
-  } catch (error) {
-    throw error;
   } finally {
     clearOwnedApplicationCommandLock('update');
   }
@@ -2751,14 +2746,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       description: 'Inspect and call MCP servers',
       disableBuiltInHelp: true,
       run: mcpCommand,
-    },
-    {
-      name: 'codex',
-      category: 'system',
-      usage: 'codex [app-server|help] [args...]',
-      description: 'Run Codex-compatible app-server helpers',
-      disableBuiltInHelp: true,
-      run: codexCommand,
     },
   ];
 

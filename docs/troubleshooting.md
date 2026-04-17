@@ -170,26 +170,16 @@ Desktop logs live under:
 
 If a macOS dev launch opens a white window or spinner and the Electron helpers crash with `icudtl.dat not found in bundle`, the generated dev app bundle is usually stale or was copied incorrectly. Remove `dist/dev-desktop/` and relaunch so the desktop script rebuilds the app bundle with the expected framework links intact.
 
-## Direct web remote desktop host will not connect
-
-Check:
-
-- the saved base URL is correct
-- the remote host's managed web UI is up
-- if the host uses Tailnet remote-access auth, this saved desktop host has been paired and still has a valid stored bearer token
-
-If needed, generate a new pairing code on the remote host and pair the saved desktop host again.
-
 ## SSH remote desktop host will not connect
 
 Check:
 
-- `ssh` works manually to the target host
-- the remote repo root is correct
-- the remote machine has `pa` available
-- the remote web UI port is reachable through the tunnel
-
-The desktop SSH controller defaults the remote repo root to `~/workingdir/personal-agent` and the remote web UI port to `3741` unless you override them.
+- `ssh` works manually to the target host without password prompts in the desktop context
+- the remote machine is macOS or Linux on `x64` or `arm64`
+- the remote user can write to `~/.cache/personal-agent/ssh-runtime/`
+- the desktop machine can download the matching Pi GitHub release asset locally
+- the remote helper and Pi binaries were copied successfully to the remote cache
+- the remote cwd you selected actually exists on the remote machine
 
 ## MCP auth problems
 

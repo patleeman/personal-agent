@@ -5,8 +5,9 @@ import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
+import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -1528,8 +1529,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // ── Live session detection ─────────────────────────────────────────────────
   const [conversationExecutionOverride, setConversationExecutionOverride] = useState<Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null>(null);
   const [continueInBusy, setContinueInBusy] = useState(false);
+  const [desktopConnectionsState, setDesktopConnectionsState] = useState<DesktopConnectionsState | null>(null);
   const [continueInOptions, setContinueInOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState('local');
+  const [remoteDirectoryBrowserState, setRemoteDirectoryBrowserState] = useState<null | { kind: 'draft' | 'conversation'; initialPath?: string | null }>(null);
   const rawSessionSnapshot = useMemo(
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
@@ -1558,6 +1561,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     const bridge = getDesktopBridge();
     if (!bridge) {
+      setDesktopConnectionsState(null);
       setContinueInOptions([]);
       return;
     }
@@ -1569,15 +1573,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           return;
         }
 
+        setDesktopConnectionsState(connections);
         setContinueInOptions([
           { value: 'local', label: 'Local project' },
-          ...connections.hosts
-            .filter((host) => host.kind !== 'local')
-            .map((host) => ({ value: host.id, label: host.label })),
+          ...connections.hosts.map((host) => ({ value: host.id, label: host.label })),
         ]);
       })
       .catch(() => {
         if (!cancelled) {
+          setDesktopConnectionsState(null);
           setContinueInOptions([]);
         }
       });
@@ -1603,6 +1607,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId
     : sessionSnapshot?.remoteHostId?.trim() || 'local';
+  const selectedExecutionTargetHost = useMemo<Extract<DesktopHostRecord, { kind: 'ssh' }> | null>(
+    () => selectedExecutionTargetId === 'local'
+      ? null
+      : desktopConnectionsState?.hosts.find((host) => host.id === selectedExecutionTargetId) ?? null,
+    [desktopConnectionsState, selectedExecutionTargetId],
+  );
+  const selectedExecutionTargetLabel = selectedExecutionTargetHost?.label
+    ?? executionTargetOptions.find((option) => option.value === selectedExecutionTargetId)?.label
+    ?? (selectedExecutionTargetId === 'local' ? 'Local project' : selectedExecutionTargetId);
+  const selectedExecutionTargetIsRemote = selectedExecutionTargetId !== 'local';
 
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
@@ -2458,13 +2472,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }, durationMs);
   }, []);
 
-  const applyDraftExecutionTarget = useCallback(async (conversationId: string) => {
+  const applyDraftExecutionTarget = useCallback(async (conversationId: string, cwd?: string | null) => {
     const hostId = draftExecutionTargetId.trim();
     if (!hostId || hostId === 'local') {
       return null;
     }
 
-    return api.continueConversationInHost(conversationId, hostId);
+    return api.continueConversationInHost(conversationId, hostId, cwd);
   }, [draftExecutionTargetId]);
 
   const handleContinueConversationInHost = useCallback(async (hostId: string) => {
@@ -4186,6 +4200,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    if (selectedExecutionTargetIsRemote) {
+      openRemoteDirectoryBrowser('conversation', conversationCwdDraft.trim() || currentCwd || undefined);
+      return;
+    }
+
     setConversationCwdPickBusy(true);
     setConversationCwdError(null);
 
@@ -4205,7 +4224,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationCwdPickBusy(false);
     }
-  }, [conversationCwdBusy, conversationCwdDraft, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id]);
+  }, [conversationCwdBusy, conversationCwdDraft, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id, openRemoteDirectoryBrowser, selectedExecutionTargetIsRemote]);
 
   const beginConversationCwdEdit = useCallback(() => {
     if (draft || !id || conversationCwdBusy) {
@@ -4366,16 +4385,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return id;
     }
 
-    const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+    const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
+    const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : (draftCwdValue || null);
+    if (draftExecutionTarget !== 'local' && !draftRemoteCwd) {
+      throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
+    }
+
+    const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
       ...(currentModel ? { model: currentModel } : {}),
       ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
       ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
     });
-    primeCreatedConversationOpenCaches(created, {
-      tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
-      bootstrapVersionKey: conversationVersionKey,
-      sessionDetailVersion: conversationEventVersion,
-    });
+    if (draftExecutionTarget === 'local') {
+      primeCreatedConversationOpenCaches(created, {
+        tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
+        bootstrapVersionKey: conversationVersionKey,
+        sessionDetailVersion: conversationEventVersion,
+      });
+    } else {
+      await applyDraftExecutionTarget(created.id, draftRemoteCwd);
+    }
 
     const newId = created.id;
     if (input.length > 0) {
@@ -5140,8 +5169,44 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDraftCwdValue(normalizedCwd);
   }, []);
 
+  function openRemoteDirectoryBrowser(kind: 'draft' | 'conversation', initialPath?: string | null) {
+    if (!selectedExecutionTargetHost) {
+      const message = 'Choose an SSH remote first.';
+      if (kind === 'draft') {
+        setDraftCwdError(message);
+      } else {
+        setConversationCwdError(message);
+      }
+      return;
+    }
+
+    setRemoteDirectoryBrowserState({ kind, initialPath });
+  }
+
+  function handleRemoteDirectorySelected(path: string) {
+    if (remoteDirectoryBrowserState?.kind === 'draft') {
+      const nextWorkspacePaths = syncSavedWorkspacePaths([...savedWorkspacePaths, path]);
+      void api.setSavedWorkspacePaths(nextWorkspacePaths).catch(() => {
+        // Ignore best-effort sync failures.
+      });
+      setDraftConversationCwd(path);
+      setDraftCwdError(null);
+    } else {
+      setConversationCwdDraft(path);
+      setConversationCwdEditorOpen(true);
+      setConversationCwdError(null);
+    }
+
+    setRemoteDirectoryBrowserState(null);
+  }
+
   const pickDraftConversationCwd = useCallback(async () => {
     if (!draft || draftCwdPickBusy) {
+      return;
+    }
+
+    if (selectedExecutionTargetIsRemote) {
+      openRemoteDirectoryBrowser('draft', draftCwdValue || undefined);
       return;
     }
 
@@ -5166,7 +5231,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setDraftCwdPickBusy(false);
     }
-  }, [draft, draftCwdPickBusy, draftCwdValue, savedWorkspacePaths, setDraftConversationCwd, syncSavedWorkspacePaths]);
+  }, [draft, draftCwdPickBusy, draftCwdValue, openRemoteDirectoryBrowser, savedWorkspacePaths, selectedExecutionTargetIsRemote, setDraftConversationCwd, syncSavedWorkspacePaths]);
 
   const selectDraftConversationWorkspace = useCallback((workspacePath: string) => {
     const normalizedWorkspacePath = workspacePath.trim();
@@ -5466,12 +5531,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       let conversationId = id ?? null;
 
       if (!conversationId) {
-        const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+        const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
+        const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : (draftCwdValue || null);
+        if (draftExecutionTarget !== 'local' && !draftRemoteCwd) {
+          throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
+        }
+
+        const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
           ...(currentModel ? { model: currentModel } : {}),
           ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
           ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
         });
         conversationId = created.id;
+        if (draftExecutionTarget !== 'local') {
+          await applyDraftExecutionTarget(created.id, draftRemoteCwd);
+        }
       } else {
         conversationId = await ensureConversationIsLive('run bash commands');
       }
@@ -5596,6 +5670,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
       const queuedBehavior = normalizeConversationComposerBehavior(requestedBehavior, allowQueuedPrompts);
       const draftExecutionTarget = draftExecutionTargetId.trim() || 'local';
+      const draftRemoteCwd = draftExecutionTarget === 'local' ? undefined : (draftCwdValue || null);
+      if (!id && !visibleSessionDetail && draftExecutionTarget !== 'local' && !draftRemoteCwd) {
+        showNotice('danger', `Choose a remote directory on ${selectedExecutionTargetLabel} first.`, 4000);
+        setInput(inputSnapshot);
+        setAttachments(pendingImageAttachments);
+        setDrawingAttachments(pendingDrawingAttachments);
+        return;
+      }
 
       const persistPromptDrawings = async (conversationId: string): Promise<PromptAttachmentRefInput[]> => {
         if (pendingDrawingAttachments.length === 0) {
@@ -5632,7 +5714,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setPendingAssistantStatusLabel('Creating conversation…');
 
           try {
-            const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+            const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
               ...(currentModel ? { model: currentModel } : {}),
               ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
               ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
@@ -5645,7 +5727,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 sessionDetailVersion: conversationEventVersion,
               });
             } else {
-              await applyDraftExecutionTarget(created.id);
+              await applyDraftExecutionTarget(created.id, draftRemoteCwd);
             }
 
             const attachmentRefs = await persistPromptDrawings(created.id);
@@ -5717,7 +5799,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         let createdSessionId: string | null = null;
         let navigatedToCreatedConversation = false;
         try {
-          const created = await api.createLiveSession(draftCwdValue || undefined, undefined, {
+          const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
             ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
@@ -5730,7 +5812,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               sessionDetailVersion: conversationEventVersion,
             });
           } else {
-            await applyDraftExecutionTarget(created.id);
+            await applyDraftExecutionTarget(created.id, draftRemoteCwd);
           }
           const newId = created.id;
           const attachmentRefs = await persistPromptDrawings(newId);
@@ -6421,56 +6503,79 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   <span>Workspace</span>
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-center gap-1.5">
-                  <label className="relative min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
-                    <span className="sr-only">Saved workspace</span>
-                    <select
-                      value={draftCwdValue}
-                      onChange={(event) => {
-                        const nextWorkspacePath = event.target.value.trim();
-                        if (!nextWorkspacePath) {
-                          clearDraftConversationCwdSelection();
-                          return;
-                        }
+                  {selectedExecutionTargetIsRemote ? (
+                    <label className="min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+                      <span className="sr-only">Remote workspace path</span>
+                      <input
+                        value={draftCwdValue}
+                        onChange={(event) => {
+                          setDraftConversationCwd(event.target.value);
+                          if (draftCwdError) {
+                            setDraftCwdError(null);
+                          }
+                        }}
+                        className="h-10 w-full bg-transparent font-mono text-[13px] text-primary outline-none placeholder:text-secondary/70"
+                        aria-label="Remote workspace path"
+                        placeholder="~/workingdir/project"
+                        spellCheck={false}
+                      />
+                    </label>
+                  ) : (
+                    <label className="relative min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+                      <span className="sr-only">Saved workspace</span>
+                      <select
+                        value={draftCwdValue}
+                        onChange={(event) => {
+                          const nextWorkspacePath = event.target.value.trim();
+                          if (!nextWorkspacePath) {
+                            clearDraftConversationCwdSelection();
+                            return;
+                          }
 
-                        selectDraftConversationWorkspace(nextWorkspacePath);
-                      }}
-                      className={cx(
-                        EMPTY_STATE_WORKSPACE_SELECT_CLASS,
-                        hasDraftCwd ? 'font-mono text-primary' : 'text-secondary',
-                      )}
-                      aria-label="Saved workspace"
-                      title={hasDraftCwd
-                        ? draftCwdValue
-                        : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
-                      disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
-                    >
-                      <option value="">
-                        {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0
-                          ? 'Loading workspaces…'
-                          : 'Use saved default workspace'}
-                      </option>
-                      {availableDraftWorkspacePaths.map((workspacePath) => (
-                        <option key={workspacePath} value={workspacePath}>
-                          {workspacePath}
+                          selectDraftConversationWorkspace(nextWorkspacePath);
+                        }}
+                        className={cx(
+                          EMPTY_STATE_WORKSPACE_SELECT_CLASS,
+                          hasDraftCwd ? 'font-mono text-primary' : 'text-secondary',
+                        )}
+                        aria-label="Saved workspace"
+                        title={hasDraftCwd
+                          ? draftCwdValue
+                          : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
+                        disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
+                      >
+                        <option value="">
+                          {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0
+                            ? 'Loading workspaces…'
+                            : 'Use saved default workspace'}
                         </option>
-                      ))}
-                    </select>
-                    <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70">
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </label>
+                        {availableDraftWorkspacePaths.map((workspacePath) => (
+                          <option key={workspacePath} value={workspacePath}>
+                            {workspacePath}
+                          </option>
+                        ))}
+                      </select>
+                      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-dim/70">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </label>
+                  )}
 
                   <button
                     type="button"
                     onClick={() => { void pickDraftConversationCwd(); }}
                     disabled={draftCwdPickBusy}
                     className="ui-action-button shrink-0 px-2.5 py-1.5 text-[11px]"
-                    title={draftCwdPickBusy ? 'Choosing workspace…' : 'Choose workspace folder'}
-                    aria-label="Choose workspace folder"
+                    title={draftCwdPickBusy ? 'Choosing workspace…' : selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
+                    aria-label={selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
                   >
                     {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
                   </button>
                 </div>
+
+                {selectedExecutionTargetIsRemote ? (
+                  <p className="text-center text-[11px] text-secondary">Remote path on {selectedExecutionTargetLabel}.</p>
+                ) : null}
 
                 {draftCwdError && (
                   <p className="text-center text-[11px] text-danger/80">{draftCwdError}</p>
@@ -7430,27 +7535,58 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 {draft ? (
                   <div className="flex min-w-0 items-center gap-1.5">
                     <FolderIcon className="shrink-0 text-dim/70" />
-                    <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
-                    <select
-                      id="draft-composer-cwd"
-                      value={draftCwdValue}
-                      onChange={(event) => { setDraftConversationCwd(event.target.value); }}
-                      className="h-7 min-w-[12rem] max-w-[22rem] truncate appearance-none rounded-md bg-transparent pl-1 pr-2 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
-                    >
-                      <option value="">Default workspace</option>
-                      {availableDraftWorkspacePaths.map((workspacePath) => (
-                        <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => { void pickDraftConversationCwd(); }}
-                      disabled={draftCwdPickBusy}
-                      className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
-                      title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                    >
-                      {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
-                    </button>
+                    {selectedExecutionTargetIsRemote ? (
+                      <>
+                        <label className="sr-only" htmlFor="draft-composer-remote-cwd">Remote workspace path</label>
+                        <input
+                          id="draft-composer-remote-cwd"
+                          value={draftCwdValue}
+                          onChange={(event) => {
+                            setDraftConversationCwd(event.target.value);
+                            if (draftCwdError) {
+                              setDraftCwdError(null);
+                            }
+                          }}
+                          placeholder="~/workingdir/project"
+                          spellCheck={false}
+                          className="h-7 min-w-[12rem] max-w-[22rem] rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50"
+                          aria-label="Remote workspace path"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => { void pickDraftConversationCwd(); }}
+                          disabled={draftCwdPickBusy}
+                          className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
+                          title={draftCwdPickBusy ? 'Choosing folder…' : `Choose directory on ${selectedExecutionTargetLabel}`}
+                        >
+                          {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
+                        <select
+                          id="draft-composer-cwd"
+                          value={draftCwdValue}
+                          onChange={(event) => { setDraftConversationCwd(event.target.value); }}
+                          className="h-7 min-w-[12rem] max-w-[22rem] truncate appearance-none rounded-md bg-transparent pl-1 pr-2 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
+                        >
+                          <option value="">Default workspace</option>
+                          {availableDraftWorkspacePaths.map((workspacePath) => (
+                            <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => { void pickDraftConversationCwd(); }}
+                          disabled={draftCwdPickBusy}
+                          className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
+                          title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
+                        >
+                          {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
+                        </button>
+                      </>
+                    )}
                   </div>
                 ) : conversationCwdEditorOpen ? (
                   <form
@@ -7539,6 +7675,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </div>
       </div>
       )}
+
+      {remoteDirectoryBrowserState && selectedExecutionTargetHost ? (
+        <RemoteDirectoryBrowserModal
+          hostId={selectedExecutionTargetHost.id}
+          hostLabel={selectedExecutionTargetHost.label}
+          initialPath={remoteDirectoryBrowserState.initialPath}
+          title={remoteDirectoryBrowserState.kind === 'draft' ? 'Choose remote workspace' : 'Choose remote working directory'}
+          onSelect={handleRemoteDirectorySelected}
+          onClose={() => setRemoteDirectoryBrowserState(null)}
+        />
+      ) : null}
 
       {selectedArtifactId && id && (
         <Suspense fallback={null}>

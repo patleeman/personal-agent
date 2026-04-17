@@ -700,18 +700,6 @@ export type DesktopHostRecord =
       label: string;
       kind: 'ssh';
       sshTarget: string;
-      workspaceRoot?: string;
-      remoteRepoRoot?: string;
-      remotePort?: number;
-      autoConnect?: boolean;
-    }
-  | {
-      id: string;
-      label: string;
-      kind: 'web';
-      websocketUrl: string;
-      workspaceRoot?: string;
-      autoConnect?: boolean;
     };
 
 export interface DesktopEnvironmentState {
@@ -726,33 +714,20 @@ export interface DesktopEnvironmentState {
 }
 
 export interface DesktopConnectionsState {
-  activeHostId: string;
-  defaultHostId: string;
-  hosts: DesktopHostRecord[];
+  hosts: Array<Extract<DesktopHostRecord, { kind: 'ssh' }>>;
 }
 
-type DesktopWorkspaceServerTailscalePublishStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
-
-interface DesktopWorkspaceServerTailscalePublishState {
-  status: DesktopWorkspaceServerTailscalePublishStatus;
+export interface DesktopRemoteDirectoryEntry {
+  name: string;
   path: string;
-  expectedProxyTarget: string;
-  actualProxyTarget?: string;
-  message?: string;
+  isDir: boolean;
+  isHidden: boolean;
 }
 
-export interface DesktopWorkspaceServerState {
-  enabled: boolean;
-  port: number;
-  useTailscaleServe: boolean;
-  running: boolean;
-  websocketPath: string;
-  localWebsocketUrl: string;
-  tailnetWebsocketUrl?: string;
-  tailscalePublishState: DesktopWorkspaceServerTailscalePublishState;
-  logFile: string;
-  pid?: number;
-  error?: string;
+export interface DesktopRemoteDirectoryListing {
+  path: string;
+  parent?: string;
+  entries: DesktopRemoteDirectoryEntry[];
 }
 
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';

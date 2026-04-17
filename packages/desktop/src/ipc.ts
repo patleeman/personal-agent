@@ -4,8 +4,6 @@ import { showConversationCwdGroupContextMenu } from './conversation-cwd-group-co
 import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
-import { installLitterShim, readLitterShimState, uninstallLitterShim } from './litter-shim.js';
-import { desktopWorkspaceServerManager } from './workspace-server.js';
 import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
@@ -98,12 +96,6 @@ export function registerDesktopIpc(options: {
     return options.windowController.getNavigationStateForWebContents(event.sender.id);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:switch-host`, async (_event, hostId: string) => {
-    await options.hostManager.switchHost(hostId);
-    options.onHostStateChanged?.();
-    await options.windowController.openMainWindow('/');
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:continue-conversation-in-host`, async (_event, input) => {
     return continueConversationInHost(options.hostManager, input ?? {});
   });
@@ -121,17 +113,22 @@ export function registerDesktopIpc(options: {
     return options.hostManager.getConnectionsState();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-workspace-server-state`, async () => desktopWorkspaceServerManager.readState());
-  ipcMain.handle(`${CHANNEL_PREFIX}:update-workspace-server-config`, async (_event, input) => desktopWorkspaceServerManager.updateConfig(input ?? {}));
+  ipcMain.handle(`${CHANNEL_PREFIX}:read-remote-directory`, async (_event, input) => {
+    const hostId = typeof input?.hostId === 'string' ? input.hostId.trim() : '';
+    if (!hostId) {
+      throw new Error('hostId is required.');
+    }
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-litter-shim-state`, async () => readLitterShimState());
-  ipcMain.handle(`${CHANNEL_PREFIX}:install-litter-shim`, async () => installLitterShim());
-  ipcMain.handle(`${CHANNEL_PREFIX}:uninstall-litter-shim`, async () => uninstallLitterShim());
+    const controller = options.hostManager.getHostController(hostId);
+    if (!controller.readDirectory) {
+      throw new Error(`Host ${hostId} does not support directory browsing.`);
+    }
+
+    return controller.readDirectory(typeof input?.path === 'string' ? input.path : undefined);
+  });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const url = await options.hostManager.openNewConversationForHost(hostId);
+    const url = await options.hostManager.openNewConversation();
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
@@ -1248,10 +1245,6 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {
     await options.windowController.openMainWindow('/settings#desktop-connections');
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:open-host-window`, async (_event, hostId: string) => {
-    await options.windowController.openHostWindow(hostId);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:go-back`, async (event) => {

@@ -15,7 +15,6 @@ import {
   loadDesktopConfig,
   readDesktopAppPreferences,
   updateDesktopAppPreferences,
-  DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT,
 } from './desktop-config.js';
 
 describe('desktop-config', () => {
@@ -34,24 +33,7 @@ describe('desktop-config', () => {
     vi.clearAllMocks();
   });
 
-  it('migrates legacy SSH remote ports from the old web-ui default to the codex default', () => {
-    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
-      version: 1,
-      defaultHostId: 'ssh-1',
-      openWindowOnLaunch: true,
-      hosts: [
-        { id: 'local', label: 'Local', kind: 'local' },
-        { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'patrick@gpu', remotePort: 3741 },
-      ],
-    }, null, 2)}\n`, 'utf-8');
-
-    const config = loadDesktopConfig();
-    expect(config.hosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ssh-1', remotePort: DEFAULT_DESKTOP_WORKSPACE_SERVER_PORT }),
-    ]));
-  });
-
-  it('migrates tailscale websocket URLs to include the codex upstream path', () => {
+  it('drops legacy local and websocket host records while keeping ssh remotes', () => {
     writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
       version: 1,
       defaultHostId: 'tailnet',
@@ -59,13 +41,15 @@ describe('desktop-config', () => {
       hosts: [
         { id: 'local', label: 'Local', kind: 'local' },
         { id: 'tailnet', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex' },
+        { id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'patrick@gpu' },
       ],
     }, null, 2)}\n`, 'utf-8');
 
     const config = loadDesktopConfig();
-    expect(config.hosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'tailnet', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex/codex' }),
-    ]));
+    expect(config).toEqual(expect.objectContaining({
+      version: 2,
+      hosts: [{ id: 'ssh-1', label: 'GPU', kind: 'ssh', sshTarget: 'patrick@gpu' }],
+    }));
   });
 
   it('defaults desktop app preferences and persists updates', () => {

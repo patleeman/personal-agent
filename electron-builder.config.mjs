@@ -72,6 +72,10 @@ const electronBuilderConfig = {
       from: 'packages/desktop/vendor/difftastic',
       to: 'vendor/difftastic',
     },
+    {
+      from: 'packages/desktop/vendor/remote-helper',
+      to: 'vendor/remote-helper',
+    },
   ],
   mac: {
     category: 'public.app-category.developer-tools',

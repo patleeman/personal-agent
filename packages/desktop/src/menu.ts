@@ -8,8 +8,6 @@ export interface DesktopApplicationMenuActions {
   onReopenClosedConversation: () => void;
   onPreviousConversation: () => void;
   onNextConversation: () => void;
-  onPreviousHost: () => void;
-  onNextHost: () => void;
   onToggleConversationPin: () => void;
   onToggleConversationArchive: () => void;
   onRenameConversation: () => void;
@@ -73,16 +71,6 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Next Conversation',
         accelerator: 'CommandOrControl+]',
         click: actions.onNextConversation,
-      },
-      {
-        label: 'Previous Host',
-        accelerator: 'CommandOrControl+Alt+,',
-        click: actions.onPreviousHost,
-      },
-      {
-        label: 'Next Host',
-        accelerator: 'CommandOrControl+Alt+.',
-        click: actions.onNextHost,
       },
       {
         label: 'Toggle Pinned',

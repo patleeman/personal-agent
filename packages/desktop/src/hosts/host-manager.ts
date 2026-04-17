@@ -8,17 +8,14 @@ import type {
 } from './types.js';
 import { LocalHostController } from './local-host-controller.js';
 import { SshHostController } from './ssh-host-controller.js';
-import { WebHostController } from './web-host-controller.js';
 import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 
 export class HostManager {
   private config: DesktopConfig;
-  private activeHostId: string;
   private controllers = new Map<string, HostController>();
 
   constructor() {
     this.config = loadDesktopConfig();
-    this.activeHostId = this.config.defaultHostId;
   }
 
   getConfig(): DesktopConfig {
@@ -26,106 +23,52 @@ export class HostManager {
   }
 
   getActiveHostId(): string {
-    return this.activeHostId;
+    return 'local';
   }
 
   async ensureActiveHostRunning(): Promise<void> {
-    await this.ensureHostRunning(this.activeHostId);
+    await this.ensureHostRunning('local');
   }
 
   async ensureHostRunning(hostId: string): Promise<void> {
-    await this.getController(this.getHostRecordById(hostId)).ensureRunning();
+    await this.getHostController(hostId).ensureRunning();
   }
 
   async getActiveHostBaseUrl(): Promise<string> {
-    return this.getHostBaseUrl(this.activeHostId);
+    return this.getHostBaseUrl('local');
   }
 
   async getHostBaseUrl(hostId: string): Promise<string> {
-    return this.getController(this.getHostRecordById(hostId)).getBaseUrl();
+    return this.getHostController(hostId).getBaseUrl();
   }
 
   async openNewConversation(): Promise<string> {
-    return this.openNewConversationForHost(this.activeHostId);
+    return this.getActiveHostController().openNewConversation();
   }
 
   async openNewConversationForHost(hostId: string): Promise<string> {
-    return this.getController(this.getHostRecordById(hostId)).openNewConversation();
+    return this.getHostController(hostId).openNewConversation();
   }
 
   async restartActiveHost(): Promise<void> {
-    await this.restartHost(this.activeHostId);
+    await this.getActiveHostController().restart();
   }
 
   async restartHost(hostId: string): Promise<void> {
-    await this.getController(this.getHostRecordById(hostId)).restart();
-  }
-
-  async switchHost(hostId: string): Promise<void> {
-    if (!this.config.hosts.some((host) => host.id === hostId)) {
-      throw new Error(`Unknown desktop host: ${hostId}`);
-    }
-
-    if (hostId === this.activeHostId) {
-      return;
-    }
-
-    const nextController = this.getController(this.getHostRecordById(hostId));
-    await nextController.ensureRunning();
-    await this.getActiveHostController().dispose();
-    this.activeHostId = hostId;
-  }
-
-  async switchRelativeHost(direction: -1 | 1): Promise<DesktopHostRecord> {
-    const hostIds = this.config.hosts.map((host) => host.id);
-    const currentIndex = hostIds.indexOf(this.activeHostId);
-    if (currentIndex === -1 || hostIds.length === 0) {
-      throw new Error(`Unknown desktop host: ${this.activeHostId}`);
-    }
-
-    const nextIndex = (currentIndex + direction + hostIds.length) % hostIds.length;
-    await this.switchHost(hostIds[nextIndex]);
-    return this.getActiveHostRecord();
+    await this.getHostController(hostId).restart();
   }
 
   async saveHost(record: DesktopHostRecord): Promise<void> {
-    if (record.kind === 'local') {
-      throw new Error('The local desktop host is managed automatically and cannot be edited here.');
+    if (record.kind !== 'ssh') {
+      throw new Error('Only SSH remotes can be saved here.');
     }
 
     const existing = this.config.hosts.find((host) => host.id === record.id);
-    const nextDefaultHostId = record.autoConnect
-      ? record.id
-      : this.config.defaultHostId === record.id
-        ? 'local'
-        : this.config.defaultHostId;
-    const nextHosts = existing
-      ? this.config.hosts.map((host) => {
-          if (host.id === record.id) {
-            return record;
-          }
-
-          if (host.kind === 'local') {
-            return host;
-          }
-
-          return {
-            ...host,
-            autoConnect: record.autoConnect ? false : host.autoConnect,
-          };
-        })
-      : [
-          ...this.config.hosts.map((host) => host.kind === 'local' ? host : {
-            ...host,
-            autoConnect: record.autoConnect ? false : host.autoConnect,
-          }),
-          record,
-        ];
-
     this.config = {
       ...this.config,
-      defaultHostId: nextDefaultHostId,
-      hosts: nextHosts,
+      hosts: existing
+        ? this.config.hosts.map((host) => host.id === record.id ? record : host)
+        : [...this.config.hosts, record],
     };
 
     if (existing) {
@@ -137,67 +80,70 @@ export class HostManager {
   }
 
   async deleteHost(hostId: string): Promise<void> {
-    if (hostId === 'local') {
-      throw new Error('The local desktop host cannot be deleted.');
-    }
-
     const existing = this.config.hosts.find((host) => host.id === hostId);
     if (!existing) {
       return;
     }
 
-    if (this.activeHostId === hostId) {
-      await this.getActiveHostController().dispose();
-      this.activeHostId = 'local';
-    } else {
-      await this.disposeController(hostId);
-    }
-
+    await this.disposeController(hostId);
     this.config = {
       ...this.config,
-      defaultHostId: this.activeHostId,
       hosts: this.config.hosts.filter((host) => host.id !== hostId),
     };
     saveDesktopConfig(this.config);
-  }
-
-  getActiveHostRecord(): DesktopHostRecord {
-    return this.getHostRecordById(this.activeHostId);
+    this.config = loadDesktopConfig();
   }
 
   getHostRecord(hostId: string): DesktopHostRecord {
-    return this.getHostRecordById(hostId);
+    if (hostId === 'local') {
+      return { id: 'local', label: 'Local', kind: 'local' };
+    }
+
+    const record = this.config.hosts.find((host) => host.id === hostId);
+    if (!record) {
+      throw new Error(`Unknown desktop host: ${hostId}`);
+    }
+
+    return record;
+  }
+
+  getActiveHostRecord(): DesktopHostRecord {
+    return this.getHostRecord('local');
   }
 
   getActiveHostController(): HostController {
-    return this.getController(this.getActiveHostRecord());
+    return this.getHostController('local');
   }
 
   getHostController(hostId: string): HostController {
-    return this.getController(this.getHostRecordById(hostId));
+    const existing = this.controllers.get(hostId);
+    if (existing) {
+      return existing;
+    }
+
+    const record = this.getHostRecord(hostId);
+    const controller = record.kind === 'local'
+      ? new LocalHostController(record)
+      : new SshHostController(record);
+    this.controllers.set(hostId, controller);
+    return controller;
   }
 
   getConnectionsState(): DesktopConnectionsState {
     return {
-      activeHostId: this.activeHostId,
-      defaultHostId: this.config.defaultHostId,
-      hosts: this.config.hosts,
+      hosts: this.config.hosts.filter((host): host is Extract<DesktopHostRecord, { kind: 'ssh' }> => host.kind === 'ssh'),
     };
   }
 
   async getDesktopEnvironment(): Promise<DesktopEnvironmentState> {
-    return this.getDesktopEnvironmentForHost(this.activeHostId);
-  }
-
-  async getDesktopEnvironmentForHost(hostId: string): Promise<DesktopEnvironmentState> {
-    const controller = this.getHostController(hostId);
+    const controller = this.getActiveHostController();
     const status = await controller.getStatus();
     const launchPresentation = resolveDesktopLaunchPresentation();
     return {
       isElectron: true,
-      activeHostId: controller.id,
-      activeHostLabel: controller.label,
-      activeHostKind: controller.kind,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
       activeHostSummary: status.summary,
       launchMode: launchPresentation.mode,
       launchLabel: launchPresentation.launchLabel,
@@ -205,17 +151,12 @@ export class HostManager {
     };
   }
 
-  async dispose(): Promise<void> {
-    await Promise.all([...this.controllers.values()].map((controller) => controller.dispose()));
+  async getDesktopEnvironmentForHost(_hostId: string): Promise<DesktopEnvironmentState> {
+    return this.getDesktopEnvironment();
   }
 
-  private getHostRecordById(hostId: string): DesktopHostRecord {
-    const record = this.config.hosts.find((host) => host.id === hostId);
-    if (!record) {
-      throw new Error(`Unknown desktop host: ${hostId}`);
-    }
-
-    return record;
+  async dispose(): Promise<void> {
+    await Promise.all([...this.controllers.values()].map((controller) => controller.dispose()));
   }
 
   private async disposeController(hostId: string): Promise<void> {
@@ -226,24 +167,5 @@ export class HostManager {
 
     await controller.dispose();
     this.controllers.delete(hostId);
-  }
-
-  private getController(record: DesktopHostRecord): HostController {
-    const existing = this.controllers.get(record.id);
-    if (existing) {
-      return existing;
-    }
-
-    let controller: HostController;
-    if (record.kind === 'local') {
-      controller = new LocalHostController(record);
-    } else if (record.kind === 'ssh') {
-      controller = new SshHostController(record);
-    } else {
-      controller = new WebHostController(record);
-    }
-
-    this.controllers.set(record.id, controller);
-    return controller;
   }
 }

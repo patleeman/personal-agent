@@ -5,7 +5,6 @@ const mocks = vi.hoisted(() => ({
   saveDesktopConfig: vi.fn(),
   LocalHostController: vi.fn(),
   SshHostController: vi.fn(),
-  WebHostController: vi.fn(),
 }));
 
 vi.mock('../state/desktop-config.js', () => ({
@@ -21,13 +20,9 @@ vi.mock('./ssh-host-controller.js', () => ({
   SshHostController: mocks.SshHostController,
 }));
 
-vi.mock('./web-host-controller.js', () => ({
-  WebHostController: mocks.WebHostController,
-}));
-
 import { HostManager } from './host-manager.js';
 
-function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' = 'local') {
+function createController(id: string, label = id, kind: 'local' | 'ssh' = 'local') {
   return {
     id,
     label,
@@ -36,16 +31,12 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' 
     getBaseUrl: vi.fn().mockResolvedValue(`http://${id}.example.test`),
     getStatus: vi.fn().mockResolvedValue({
       reachable: true,
-      mode: kind === 'local' ? 'local-child-process' : kind === 'ssh' ? 'ssh-tunnel' : 'ws-remote',
+      mode: kind === 'local' ? 'local-child-process' : 'ssh-tunnel',
       summary: `${label} ready`,
     }),
     openNewConversation: vi.fn().mockResolvedValue(`http://${id}.example.test/conversations/new`),
-    dispatchApiRequest: vi.fn().mockResolvedValue({
-      statusCode: 200,
-      headers: { 'content-type': 'application/json; charset=utf-8' },
-      body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
-    }),
-    invokeLocalApi: vi.fn().mockResolvedValue({ ok: true }),
+    dispatchApiRequest: vi.fn(),
+    invokeLocalApi: vi.fn(),
     restart: vi.fn().mockResolvedValue(undefined),
     stop: vi.fn().mockResolvedValue(undefined),
     dispose: vi.fn().mockResolvedValue(undefined),
@@ -53,108 +44,80 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' | 'web' 
 }
 
 describe('HostManager', () => {
+  let config: {
+    version: 2;
+    openWindowOnLaunch: boolean;
+    windowState: { width: number; height: number };
+    hosts: Array<{ id: string; label: string; kind: 'ssh'; sshTarget: string }>;
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.loadDesktopConfig.mockReturnValue({
-      version: 1,
-      defaultHostId: 'web-1',
+    config = {
+      version: 2,
       openWindowOnLaunch: true,
       windowState: { width: 1440, height: 960 },
       hosts: [
-        { id: 'local', label: 'Local', kind: 'local' },
-        { id: 'web-1', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://tailnet.example.ts.net/codex', workspaceRoot: '/workspace/home', autoConnect: true },
         { id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' },
       ],
+    };
+    mocks.loadDesktopConfig.mockImplementation(() => config);
+    mocks.saveDesktopConfig.mockImplementation((next) => {
+      config = next;
     });
 
     mocks.LocalHostController.mockImplementation(function LocalHostController(record) {
       return createController(record.id, record.label, 'local');
-    });
-    mocks.WebHostController.mockImplementation(function WebHostController(record) {
-      return createController(record.id, record.label, 'web');
     });
     mocks.SshHostController.mockImplementation(function SshHostController(record) {
       return createController(record.id, record.label, 'ssh');
     });
   });
 
-  it('starts on the configured default host but does not persist a temporary switch', async () => {
+  it('always reports the local desktop as the active host', async () => {
     const manager = new HostManager();
 
-    expect(manager.getConnectionsState().activeHostId).toBe('web-1');
-    expect(manager.getConnectionsState().defaultHostId).toBe('web-1');
-
-    await manager.switchHost('local');
-
-    expect(manager.getConnectionsState().activeHostId).toBe('local');
-    expect(manager.getConnectionsState().defaultHostId).toBe('web-1');
-    expect(mocks.saveDesktopConfig).not.toHaveBeenCalled();
-  });
-
-  it('cycles through hosts in config order when switching relative to the active host', async () => {
-    const manager = new HostManager();
-
-    await expect(manager.switchRelativeHost(1)).resolves.toMatchObject({ id: 'ssh-1' });
-    expect(manager.getConnectionsState().activeHostId).toBe('ssh-1');
-
-    await expect(manager.switchRelativeHost(1)).resolves.toMatchObject({ id: 'local' });
-    expect(manager.getConnectionsState().activeHostId).toBe('local');
-
-    await expect(manager.switchRelativeHost(-1)).resolves.toMatchObject({ id: 'ssh-1' });
-    expect(manager.getConnectionsState().activeHostId).toBe('ssh-1');
-  });
-
-  it('can resolve environment and conversation URLs for a non-active host', async () => {
-    const manager = new HostManager();
-
-    await expect(manager.openNewConversationForHost('local')).resolves.toBe('http://local.example.test/conversations/new');
-    await expect(manager.getDesktopEnvironmentForHost('local')).resolves.toMatchObject({
+    expect(manager.getActiveHostId()).toBe('local');
+    await expect(manager.getDesktopEnvironment()).resolves.toMatchObject({
       activeHostId: 'local',
       activeHostLabel: 'Local',
       activeHostKind: 'local',
     });
   });
 
-  it('persists default-on-launch when saving an auto-connect host', async () => {
+  it('returns only saved SSH remotes in connections state', () => {
+    const manager = new HostManager();
+    expect(manager.getConnectionsState()).toEqual({
+      hosts: [{ id: 'ssh-1', label: 'GPU box', kind: 'ssh', sshTarget: 'patrick@gpu-box' }],
+    });
+  });
+
+  it('saves SSH remotes and rejects non-SSH records', async () => {
     const manager = new HostManager();
 
     await manager.saveHost({
-      id: 'ssh-gpu',
-      label: 'GPU box',
+      id: 'ssh-2',
+      label: 'Bender',
       kind: 'ssh',
-      sshTarget: 'patrick@gpu-box',
-      autoConnect: true,
+      sshTarget: 'patrick@bender',
     });
 
-    expect(mocks.saveDesktopConfig).toHaveBeenCalledTimes(1);
-    const savedConfig = mocks.saveDesktopConfig.mock.calls[0]?.[0];
-    expect(savedConfig.defaultHostId).toBe('ssh-gpu');
-    expect(savedConfig.hosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'web-1', autoConnect: false }),
-      expect.objectContaining({ id: 'ssh-gpu', autoConnect: true }),
-    ]));
+    expect(mocks.saveDesktopConfig).toHaveBeenCalledWith(expect.objectContaining({
+      hosts: expect.arrayContaining([
+        expect.objectContaining({ id: 'ssh-1' }),
+        expect.objectContaining({ id: 'ssh-2', sshTarget: 'patrick@bender' }),
+      ]),
+    }));
+
+    await expect(manager.saveHost({ id: 'local', label: 'Local', kind: 'local' })).rejects.toThrow('Only SSH remotes');
   });
 
-  it('disposes active controllers when deleting a host', async () => {
+  it('deletes saved SSH remotes and disposes existing controllers', async () => {
     const manager = new HostManager();
-    await manager.switchHost('ssh-1');
+    manager.getHostController('ssh-1');
+
     await manager.deleteHost('ssh-1');
-    expect(manager.getConnectionsState().hosts.some((host) => host.id === 'ssh-1')).toBe(false);
-  });
 
-  it('keeps saving websocket workspace connections', async () => {
-    const manager = new HostManager();
-    await manager.saveHost({
-      id: 'ws-1',
-      label: 'Studio',
-      kind: 'web',
-      websocketUrl: 'wss://studio.example/codex',
-      workspaceRoot: '/workspace/studio',
-    });
-    const savedConfig = mocks.saveDesktopConfig.mock.calls.at(-1)?.[0];
-    expect(savedConfig.hosts).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'ws-1', websocketUrl: 'wss://studio.example/codex', workspaceRoot: '/workspace/studio' }),
-    ]));
+    expect(manager.getConnectionsState()).toEqual({ hosts: [] });
   });
-
 });

@@ -85,22 +85,18 @@ The local desktop host:
 - does not expose any separate companion/mobile surface from the packaged desktop shell
 - refuses to start if another daemon is already running
 
-### Web remote host
-
-A web remote host is a reachable personal-agent instance that exposes the app-server WebSocket surface from its managed web UI.
-
-The desktop shell still probes `/api/status`, but it now keeps rendering the local packaged UI over `personal-agent://app/` and forwards `/api/*` work to the remote instance over app-server.
-
-When that remote host is protected behind Tailnet remote-access auth, the desktop pairs once with a short-lived pairing code and stores a revocable bearer token for future app-server connections.
-
 ### SSH remote host
+
+Remote hosts are SSH-only.
 
 An SSH remote host:
 
-- opens an SSH tunnel to a local forwarded port
-- probes the remote web UI through the tunnel
-- can bootstrap the remote daemon and web UI if needed
-- forwards remote `/api/*` requests and streams over app-server once the tunnel is up
+- stores only SSH connection details in desktop settings
+- lets the desktop detect remote macOS/Linux platform details over SSH
+- receives the matching Pi release binary and a transient helper binary on demand
+- starts a detached per-conversation remote Pi RPC runtime that survives disconnects
+- lets the desktop reconnect to that runtime later over SSH without requiring Personal Agent to be installed on the remote machine
+- exposes real remote directory browsing for cwd selection before and after a conversation is linked remotely
 
 ## Machine-local desktop state
 

@@ -2,8 +2,8 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
-import type { DesktopEnvironmentState, DesktopNavigationState, DesktopWorkspaceServerState } from '../shared/types';
-import { cx, IconButton, ToolbarButton } from './ui';
+import type { DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
+import { IconButton, ToolbarButton } from './ui';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -36,53 +36,6 @@ function ConnectionsIcon() {
       <circle cx="10.2" cy="10" r="0.55" fill="currentColor" stroke="none" />
     </svg>
   );
-}
-
-function resolveConnectionsIndicator(state: DesktopWorkspaceServerState | null): {
-  className: string;
-  statusLabel: string;
-} {
-  if (state?.error || (state?.enabled && !state.running)) {
-    return {
-      className: 'ui-desktop-top-bar__connections-button--error',
-      statusLabel: 'desktop server error',
-    };
-  }
-
-  if (state?.enabled && state.running) {
-    if (state.useTailscaleServe) {
-      if (state.tailscalePublishState.status === 'missing') {
-        return {
-          className: 'ui-desktop-top-bar__connections-button--error',
-          statusLabel: 'desktop tailnet missing',
-        };
-      }
-
-      if (state.tailscalePublishState.status === 'mismatch') {
-        return {
-          className: 'ui-desktop-top-bar__connections-button--error',
-          statusLabel: 'desktop tailnet mismatch',
-        };
-      }
-
-      if (state.tailscalePublishState.status === 'unavailable') {
-        return {
-          className: 'ui-desktop-top-bar__connections-button--error',
-          statusLabel: 'desktop tailnet unknown',
-        };
-      }
-    }
-
-    return {
-      className: 'ui-desktop-top-bar__connections-button--running',
-      statusLabel: 'desktop server on',
-    };
-  }
-
-  return {
-    className: 'ui-desktop-top-bar__connections-button--off',
-    statusLabel: 'desktop server off',
-  };
 }
 
 function readBrowserNavigationState(): DesktopNavigationState {
@@ -131,7 +84,6 @@ export function DesktopTopBar({
     canGoForward: false,
   });
   const [showConnectionsModal, setShowConnectionsModal] = useState(false);
-  const [workspaceServerState, setWorkspaceServerState] = useState<DesktopWorkspaceServerState | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -159,30 +111,6 @@ export function DesktopTopBar({
   }, [location.key, location.pathname, location.search]);
 
   const bridge = getDesktopBridge();
-
-  useEffect(() => {
-    if (!bridge) {
-      setWorkspaceServerState(null);
-      return;
-    }
-
-    let cancelled = false;
-    bridge.readWorkspaceServerState()
-      .then((state) => {
-        if (!cancelled) {
-          setWorkspaceServerState(state);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setWorkspaceServerState(null);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [bridge]);
   const desktopShell = isDesktopShell();
   const showDesktopChrome = bridge !== null || environment !== null || desktopShell;
 
@@ -217,18 +145,13 @@ export function DesktopTopBar({
   }
 
   const noDragStyle = { WebkitAppRegion: 'no-drag' } as CSSProperties;
-  const topBarClassName = environment?.activeHostKind && environment.activeHostKind !== 'local'
-    ? 'ui-desktop-top-bar ui-desktop-top-bar--remote'
-    : 'ui-desktop-top-bar';
   const launchBadgeLabel = environment?.launchMode === 'testing'
     ? environment.launchLabel?.trim() || 'Testing'
     : null;
-  const connectionsIndicator = resolveConnectionsIndicator(workspaceServerState);
-  const connectionsButtonLabel = `Manage remotes · ${connectionsIndicator.statusLabel}`;
 
   return (
     <>
-      <div className={topBarClassName}>
+      <div className="ui-desktop-top-bar">
         <div className="ui-desktop-top-bar__drag-region" />
         <div className="ui-desktop-top-bar__leading">
           <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
@@ -256,16 +179,14 @@ export function DesktopTopBar({
         </div>
         <div className="ui-desktop-top-bar__center" />
         <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
-          {showDesktopChrome ? (
-            <IconButton
-              className={cx('ui-desktop-top-bar__icon-button', connectionsIndicator.className)}
-              onClick={() => setShowConnectionsModal(true)}
-              aria-label={connectionsButtonLabel}
-              title={connectionsButtonLabel}
-            >
-              <ConnectionsIcon />
-            </IconButton>
-          ) : null}
+          <IconButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={() => setShowConnectionsModal(true)}
+            aria-label="Manage remotes"
+            title="Manage remotes"
+          >
+            <ConnectionsIcon />
+          </IconButton>
           {showRailToggle ? (
             <ToolbarButton
               className="ui-desktop-top-bar__icon-button"
@@ -279,10 +200,7 @@ export function DesktopTopBar({
         </div>
       </div>
       {showConnectionsModal ? (
-        <DesktopConnectionsModal
-          onClose={() => setShowConnectionsModal(false)}
-          onWorkspaceServerStateChange={setWorkspaceServerState}
-        />
+        <DesktopConnectionsModal onClose={() => setShowConnectionsModal(false)} />
       ) : null}
     </>
   );

@@ -15,8 +15,6 @@ import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
 import { type DesktopUpdateIdleState, DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
-import { loadCodexServerModule } from './codex-server-module.js';
-import { desktopWorkspaceServerManager } from './workspace-server.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
 
 let hostManager: HostManager | undefined;
@@ -152,17 +150,6 @@ async function updateDesktopAppPreferencesState(input: {
   updateManager?.preferencesChanged();
   return buildDesktopAppPreferencesState();
 }
-
-function readCommandLineOption(name: string): string | null {
-  const index = process.argv.indexOf(name);
-  if (index === -1) {
-    return null;
-  }
-
-  return typeof process.argv[index + 1] === 'string' ? process.argv[index + 1] : '';
-}
-
-const codexAppServerMode = process.argv.includes('--codex-app-server');
 
 app.setName(resolveDesktopLaunchPresentation().appName);
 
@@ -304,24 +291,6 @@ async function openConversation(conversationId: string): Promise<void> {
   await openMainRoute(`/conversations/${encodeURIComponent(normalizedConversationId)}`);
 }
 
-async function switchRelativeHost(delta: 1 | -1): Promise<void> {
-  if (!hostManager || !windowController) {
-    return;
-  }
-
-  const route = windowController.getMainWindowRoute() || '/';
-  trayController?.setStartupState({ kind: 'starting' });
-
-  try {
-    await hostManager.switchRelativeHost(delta);
-    trayController?.setStartupState({ kind: 'ready' });
-    trayController?.refresh();
-    await windowController.openMainWindow(route);
-  } catch (error) {
-    reportDesktopError(error);
-  }
-}
-
 async function restartActiveHost(): Promise<void> {
   if (!hostManager || !windowController) {
     return;
@@ -391,12 +360,6 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNextConversation: () => {
       windowController?.sendShortcutToFocusedWindow('next-conversation');
     },
-    onPreviousHost: () => {
-      void switchRelativeHost(-1);
-    },
-    onNextHost: () => {
-      void switchRelativeHost(1);
-    },
     onToggleConversationPin: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-conversation-pin');
     },
@@ -465,7 +428,6 @@ async function bootstrapDesktopApp(): Promise<void> {
   });
 
   updateManager.start();
-  await desktopWorkspaceServerManager.readState();
 
   const ready = await ensureDesktopBackendAvailable();
   if (ready && hostManager.getConfig().openWindowOnLaunch) {
@@ -482,7 +444,6 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
-  await desktopWorkspaceServerManager.stop();
   await hostManager?.dispose();
 }
 
@@ -542,25 +503,6 @@ app.on('activate', () => {
 app.whenReady()
   .then(async () => {
     configureDesktopRuntimeEnvironment();
-
-    if (codexAppServerMode) {
-      const listenUrl = readCommandLineOption('--listen') || 'ws://127.0.0.1:8390';
-      const module = await loadCodexServerModule();
-      const handle = await module.startCodexAppServer({ listenUrl });
-      console.log(`personal-agent codex app-server listening on ${handle.websocketUrl}`);
-      const shutdown = async () => {
-        await handle.close();
-        app.exit(0);
-      };
-      process.once('SIGINT', () => {
-        void shutdown();
-      });
-      process.once('SIGTERM', () => {
-        void shutdown();
-      });
-      return;
-    }
-
     applyDesktopApplicationIcon(process.platform, app, resolveDesktopRuntimePaths().colorIconFile);
     applyDesktopShellAppMode(process.platform, app);
     await bootstrapDesktopApp();

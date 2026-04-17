@@ -1,38 +1,67 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { setTimeout as delay } from 'node:timers/promises';
+import { Buffer } from 'node:buffer';
+import { readFileSync } from 'node:fs';
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
-import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import { getAvailableTcpPort } from '../backend/ports.js';
-import { parseApiDispatchResult } from './api-dispatch.js';
-import { CodexAppServerClient } from './codex-app-server-client.js';
-import { CodexWorkspaceApiAdapter } from './codex-workspace-api.js';
+import { loadLocalApiModule, type LocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
+  HostApiDispatchResult,
   HostController,
   HostStatus,
 } from './types.js';
+import { parseApiDispatchResult } from './api-dispatch.js';
+import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
+import { runSshCommand } from '../system-ssh.js';
 
-function getRemoteBaseUrl(port: number): string {
-  return `ws://127.0.0.1:${String(port)}`;
+function jsonResult(statusCode: number, body: unknown): HostApiDispatchResult {
+  return {
+    statusCode,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+    body: Uint8Array.from(Buffer.from(JSON.stringify(body), 'utf-8')),
+  };
 }
 
-async function waitForCodexServer(client: CodexAppServerClient, timeoutMs = 15_000): Promise<void> {
-  const startedAt = Date.now();
-  let lastError: Error | null = null;
+function parsePath(path: string): { pathname: string; query: URLSearchParams } {
+  const parsed = new URL(path, 'http://127.0.0.1');
+  return {
+    pathname: parsed.pathname,
+    query: parsed.searchParams,
+  };
+}
 
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      await client.ensureConnected();
-      return;
-    } catch (error) {
-      lastError = error instanceof Error ? error : new Error(String(error));
-    }
-
-    await delay(300);
+function parseJsonBody<T = unknown>(response: HostApiDispatchResult): T | null {
+  const contentType = response.headers['content-type'] ?? response.headers['Content-Type'] ?? '';
+  if (!contentType.toLowerCase().includes('application/json')) {
+    return null;
   }
 
-  throw new Error(`Timed out waiting for SSH remote codex server.${lastError ? ` ${lastError.message}` : ''}`);
+  try {
+    return JSON.parse(Buffer.from(response.body).toString('utf-8')) as T;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeThinkingLevel(value: unknown): string {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : 'medium';
+}
+
+function normalizeModel(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+function readModelId(value: Record<string, unknown>): string {
+  const model = value.model;
+  if (!model || typeof model !== 'object') {
+    return '';
+  }
+
+  return normalizeModel((model as { id?: unknown }).id);
+}
+
+function readConversationId(pathname: string, prefix: RegExp): string {
+  const match = pathname.match(prefix);
+  return typeof match?.[1] === 'string' ? decodeURIComponent(match[1]) : '';
 }
 
 export class SshHostController implements HostController {
@@ -40,81 +69,44 @@ export class SshHostController implements HostController {
   readonly label: string;
   readonly kind = 'ssh' as const;
 
-  private tunnelProcess?: ChildProcess;
-  private forwardedPort?: number;
-  private codexClient?: CodexAppServerClient;
-  private apiAdapter?: CodexWorkspaceApiAdapter;
+  private readonly runtimes = new Map<string, SshRemoteConversationRuntime>();
+  private localApiPromise: Promise<LocalApiModule> | null = null;
 
-  constructor(private readonly record: Extract<DesktopHostRecord, { kind: 'ssh' }>) {
+  constructor(
+    private readonly record: Extract<DesktopHostRecord, { kind: 'ssh' }>,
+    private readonly loadLocalApi: LocalApiModuleLoader = loadLocalApiModule,
+  ) {
     this.id = record.id;
     this.label = record.label;
   }
 
   async ensureRunning(): Promise<void> {
-    if (this.codexClient && this.forwardedPort) {
-      try {
-        await this.codexClient.ensureConnected();
-        return;
-      } catch {
-        await this.disposeTunnel();
-      }
-    }
-
-    const forwardedPort = await getAvailableTcpPort();
-    const remotePort = this.record.remotePort ?? 8390;
-    await this.startTunnel(forwardedPort, remotePort);
-    this.forwardedPort = forwardedPort;
-    this.codexClient = new CodexAppServerClient({ websocketUrl: getRemoteBaseUrl(forwardedPort) });
-    this.apiAdapter = new CodexWorkspaceApiAdapter(this.codexClient, {
-      workspaceRoot: this.record.workspaceRoot,
-    });
-
-    try {
-      await waitForCodexServer(this.codexClient);
-    } catch {
-      await this.bootstrapRemoteHost(remotePort);
-      await waitForCodexServer(this.codexClient);
-    }
+    runSshCommand(this.record.sshTarget, 'printf ok');
   }
 
   async getBaseUrl(): Promise<string> {
-    await this.ensureRunning();
     return getDesktopAppBaseUrl();
   }
 
   async getStatus(): Promise<HostStatus> {
-    const webUrl = this.forwardedPort ? getRemoteBaseUrl(this.forwardedPort) : undefined;
     try {
-      if (this.codexClient) {
-        await this.codexClient.ensureConnected();
-        return {
-          reachable: true,
-          mode: 'ssh-tunnel',
-          summary: `SSH workspace tunnel active via ${this.record.sshTarget}${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
-          webUrl,
-        };
-      }
+      await this.ensureRunning();
+      return {
+        reachable: true,
+        mode: 'ssh-tunnel',
+        summary: `SSH remote ${this.record.sshTarget} is reachable.`,
+      };
     } catch (error) {
       return {
         reachable: false,
         mode: 'ssh-tunnel',
-        summary: `SSH workspace ${this.record.sshTarget} is configured but not currently reachable${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
-        webUrl,
+        summary: `SSH remote ${this.record.sshTarget} is not reachable.`,
         lastError: error instanceof Error ? error.message : String(error),
       };
     }
-
-    return {
-      reachable: false,
-      mode: 'ssh-tunnel',
-      summary: `SSH workspace ${this.record.sshTarget} is configured and not connected yet${this.record.workspaceRoot ? ` · ${this.record.workspaceRoot}` : ''}.`,
-      webUrl,
-      lastError: 'SSH workspace is not currently reachable.',
-    };
   }
 
   async openNewConversation(): Promise<string> {
-    await this.ensureRunning();
     return new URL('/conversations/new', getDesktopAppBaseUrl()).toString();
   }
 
@@ -123,12 +115,269 @@ export class SshHostController implements HostController {
     path: string;
     body?: unknown;
     headers?: Record<string, string>;
-  }) {
-    await this.ensureRunning();
-    if (!this.apiAdapter) {
-      throw new Error('SSH workspace codex adapter is unavailable.');
+  }): Promise<HostApiDispatchResult> {
+    const { pathname, query } = parsePath(input.path);
+
+    if (input.method === 'POST' && pathname === '/api/live-sessions') {
+      const body = (input.body as { conversationId?: unknown; cwd?: unknown; sessionContent?: unknown } | undefined) ?? {};
+      const conversationId = typeof body.conversationId === 'string' ? body.conversationId.trim() : '';
+      const cwd = typeof body.cwd === 'string' ? body.cwd.trim() : '';
+      const sessionContent = typeof body.sessionContent === 'string' ? body.sessionContent : undefined;
+      if (!conversationId) {
+        return jsonResult(400, { error: 'conversationId required' });
+      }
+      if (!cwd) {
+        return jsonResult(400, { error: 'cwd required' });
+      }
+
+      const runtime = await this.getRuntime(conversationId);
+      await runtime.ensureRuntime({ conversationId, cwd, sessionContent });
+      return jsonResult(200, {
+        id: conversationId,
+        sessionFile: await this.readLocalSessionFile(conversationId),
+      });
     }
-    return this.apiAdapter.dispatchApiRequest(input);
+
+    const conversationId = readConversationId(pathname, /^\/api\/(?:conversations|live-sessions|sessions)\/([^/]+)/);
+    if (!conversationId) {
+      return jsonResult(501, { error: `SSH remote route not supported: ${pathname}` });
+    }
+
+    if (pathname === `/api/conversations/${encodeURIComponent(conversationId)}/title` && input.method === 'PATCH') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const body = (input.body as { name?: unknown } | undefined) ?? {};
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) {
+        return jsonResult(400, { error: 'name required' });
+      }
+      await runtime.requestHelper({ type: 'rpc', command: { type: 'set_session_name', name } });
+      return jsonResult(200, { ok: true, title: name });
+    }
+
+    if (pathname === `/api/conversations/${encodeURIComponent(conversationId)}/model-preferences`) {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      if (input.method === 'GET') {
+        const state = await this.readPiState(runtime);
+        return jsonResult(200, {
+          currentModel: readModelId(state),
+          currentThinkingLevel: normalizeThinkingLevel(state.thinkingLevel),
+          currentServiceTier: '',
+        });
+      }
+
+      if (input.method === 'PATCH') {
+        const body = (input.body as { model?: unknown; thinkingLevel?: unknown } | undefined) ?? {};
+        const model = typeof body.model === 'string' ? body.model.trim() : '';
+        const thinkingLevel = typeof body.thinkingLevel === 'string' ? body.thinkingLevel.trim() : '';
+        if (model) {
+          const [provider, modelId] = model.includes('/') ? model.split('/', 2) : ['', model];
+          await runtime.requestHelper({
+            type: 'rpc',
+            command: provider
+              ? { type: 'set_model', provider, modelId }
+              : { type: 'set_model', modelId },
+          });
+        }
+        if (thinkingLevel) {
+          await runtime.requestHelper({ type: 'rpc', command: { type: 'set_thinking_level', level: thinkingLevel } });
+        }
+        const state = await this.readPiState(runtime);
+        return jsonResult(200, {
+          currentModel: readModelId(state),
+          currentThinkingLevel: normalizeThinkingLevel(state.thinkingLevel),
+          currentServiceTier: '',
+        });
+      }
+    }
+
+    if (pathname === `/api/conversations/${encodeURIComponent(conversationId)}/cwd` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const body = (input.body as { cwd?: unknown } | undefined) ?? {};
+      const cwd = typeof body.cwd === 'string' ? body.cwd.trim() : '';
+      if (!cwd) {
+        return jsonResult(400, { error: 'cwd required' });
+      }
+      const runtimeInfo = await runtime.restartRuntime(cwd);
+      const localFile = await this.readLocalSessionFile(conversationId);
+      await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+      return jsonResult(200, {
+        id: conversationId,
+        sessionFile: localFile,
+        cwd: runtimeInfo.cwd,
+        changed: true,
+      });
+    }
+
+    if (pathname === `/api/conversations/${encodeURIComponent(conversationId)}/bootstrap` && input.method === 'GET') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const localFile = await this.readLocalSessionFile(conversationId);
+      await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+      const localApi = await this.getLocalApi();
+      const localResponse = await localApi.dispatchDesktopLocalApiRequest({
+        method: 'GET',
+        path: `/api/conversations/${encodeURIComponent(conversationId)}/bootstrap${query.toString() ? `?${query.toString()}` : ''}`,
+      });
+      const parsed = parseJsonBody<Record<string, unknown>>(localResponse) ?? {};
+      const runtimeInfo = await this.readHelperInfo(runtime);
+      return jsonResult(200, {
+        ...parsed,
+        conversationId,
+        liveSession: {
+          live: true,
+          id: conversationId,
+          cwd: runtimeInfo.cwd,
+          sessionFile: localFile,
+          title: typeof ((parsed.liveSession as { title?: unknown } | undefined)?.title) === 'string'
+            ? (parsed.liveSession as { title: string }).title
+            : ((parsed.sessionDetail as { meta?: { title?: unknown } } | undefined)?.meta?.title as string | undefined),
+          isStreaming: runtimeInfo.isStreaming,
+          hasPendingHiddenTurn: false,
+        },
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}` && input.method === 'GET') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const runtimeInfo = await this.readHelperInfo(runtime);
+      const localFile = await this.readLocalSessionFile(conversationId);
+      await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+      const meta = await this.readLocalSessionMeta(conversationId);
+      return jsonResult(200, {
+        live: true,
+        id: conversationId,
+        cwd: runtimeInfo.cwd,
+        sessionFile: localFile,
+        title: meta?.title,
+        isStreaming: runtimeInfo.isStreaming,
+        hasPendingHiddenTurn: false,
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/context` && input.method === 'GET') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const runtimeInfo = await this.readHelperInfo(runtime);
+      return jsonResult(200, {
+        cwd: runtimeInfo.cwd,
+        branch: null,
+        git: null,
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/prompt` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const body = (input.body as {
+        text?: unknown;
+        behavior?: unknown;
+        images?: unknown;
+        attachmentRefs?: unknown;
+        contextMessages?: unknown;
+      } | undefined) ?? {};
+      const attachmentRefs = Array.isArray(body.attachmentRefs) ? body.attachmentRefs : [];
+      if (attachmentRefs.length > 0) {
+        return jsonResult(400, { error: 'Remote Pi sessions do not support local attachment refs yet.' });
+      }
+      const behavior = body.behavior === 'steer'
+        ? 'steer'
+        : body.behavior === 'followUp'
+          ? 'followUp'
+          : 'prompt';
+      const commandType = behavior === 'steer' ? 'steer' : behavior === 'followUp' ? 'follow_up' : 'prompt';
+      const command = {
+        type: commandType,
+        ...(typeof body.text === 'string' ? { message: body.text } : {}),
+        ...(Array.isArray(body.images) ? { images: body.images } : {}),
+      } as Record<string, unknown>;
+      await runtime.requestHelper({ type: 'rpc', command });
+      return jsonResult(200, {
+        ok: true,
+        accepted: true,
+        delivery: 'started',
+        referencedTaskIds: [],
+        referencedMemoryDocIds: [],
+        referencedVaultFileIds: [],
+        referencedAttachmentIds: [],
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/bash` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const body = (input.body as { command?: unknown } | undefined) ?? {};
+      const command = typeof body.command === 'string' ? body.command.trim() : '';
+      if (!command) {
+        return jsonResult(400, { error: 'command required' });
+      }
+      const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'bash', command } }) as {
+        data?: { output?: string; exitCode?: number; cancelled?: boolean; truncated?: boolean; fullOutputPath?: string };
+      };
+      return jsonResult(200, {
+        ok: true,
+        result: response?.data ?? {},
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/abort` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      await Promise.allSettled([
+        runtime.requestHelper({ type: 'rpc', command: { type: 'abort' } }),
+        runtime.requestHelper({ type: 'rpc', command: { type: 'abort_bash' } }),
+      ]);
+      return jsonResult(200, { ok: true });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/export` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const body = (input.body as { outputPath?: unknown } | undefined) ?? {};
+      const outputPath = typeof body.outputPath === 'string' ? body.outputPath.trim() : '';
+      const response = await runtime.requestHelper({
+        type: 'rpc',
+        command: {
+          type: 'export_html',
+          ...(outputPath ? { outputPath } : {}),
+        },
+      }) as { data?: { path?: string } };
+      return jsonResult(200, {
+        ok: true,
+        path: typeof response?.data?.path === 'string' ? response.data.path : outputPath,
+      });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/fork-entries` && input.method === 'GET') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'get_fork_messages' } }) as {
+        data?: { messages?: Array<{ entryId?: string; text?: string }> };
+      };
+      return jsonResult(200, (response?.data?.messages ?? []).map((message) => ({
+        entryId: typeof message.entryId === 'string' ? message.entryId : '',
+        text: typeof message.text === 'string' ? message.text : '',
+      })));
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}/reload` && input.method === 'POST') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const localFile = await this.readLocalSessionFile(conversationId);
+      await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+      return jsonResult(200, { ok: true });
+    }
+
+    if (pathname === `/api/live-sessions/${encodeURIComponent(conversationId)}` && input.method === 'DELETE') {
+      const runtime = this.runtimes.get(conversationId);
+      if (runtime) {
+        await runtime.shutdownRuntime(conversationId, true).catch(() => undefined);
+        runtime.dispose();
+        this.runtimes.delete(conversationId);
+      }
+      return jsonResult(200, { ok: true });
+    }
+
+    if (pathname.startsWith(`/api/sessions/${encodeURIComponent(conversationId)}`) && input.method === 'GET') {
+      const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+      const localFile = await this.readLocalSessionFile(conversationId);
+      await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+      const localApi = await this.getLocalApi();
+      return localApi.dispatchDesktopLocalApiRequest(input);
+    }
+
+    return jsonResult(501, { error: `SSH remote route not supported: ${pathname}` });
   }
 
   async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
@@ -136,148 +385,225 @@ export class SshHostController implements HostController {
     return parseApiDispatchResult(response);
   }
 
+  async readDirectory(path?: string | null) {
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
+    return runtime.readDirectory(path);
+  }
+
   async subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void> {
-    await this.ensureRunning();
-    if (!this.apiAdapter) {
-      throw new Error('SSH workspace codex adapter is unavailable.');
+    const { pathname, query } = parsePath(path);
+    const conversationId = readConversationId(pathname, /^\/api\/live-sessions\/([^/]+)\/events$/);
+    if (!conversationId) {
+      onEvent({ type: 'open' });
+      onEvent({ type: 'error', message: `SSH remote stream not supported: ${path}` });
+      return () => {
+        onEvent({ type: 'close' });
+      };
     }
-    return this.apiAdapter.subscribeApiStream(path, onEvent);
+
+    const runtime = await this.ensureConversationRuntimeFromLocal(conversationId);
+    const localFile = await this.readLocalSessionFile(conversationId);
+    await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
+    const localApi = await this.getLocalApi();
+    const detail = await localApi.invokeDesktopLocalApi<{
+      blocks: unknown[];
+      blockOffset: number;
+      totalBlocks: number;
+    }>({
+      method: 'GET',
+      path: `/api/sessions/${encodeURIComponent(conversationId)}${query.toString() ? `?${query.toString()}` : ''}`,
+    });
+
+    onEvent({ type: 'open' });
+    onEvent({
+      type: 'message',
+      data: JSON.stringify({
+        type: 'snapshot',
+        blocks: detail.blocks,
+        blockOffset: detail.blockOffset,
+        totalBlocks: detail.totalBlocks,
+      }),
+    });
+
+    const unsubscribe = runtime.subscribeEvents((event) => {
+      const eventType = typeof event.type === 'string' ? event.type : '';
+      switch (eventType) {
+        case 'agent_start':
+          onEvent({ type: 'message', data: JSON.stringify({ type: 'agent_start' }) });
+          return;
+        case 'agent_end':
+          void runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile }).catch(() => undefined);
+          onEvent({ type: 'message', data: JSON.stringify({ type: 'agent_end' }) });
+          return;
+        case 'queue_update':
+          onEvent({
+            type: 'message',
+            data: JSON.stringify({
+              type: 'queue_state',
+              steering: Array.isArray(event.steering) ? event.steering : [],
+              followUp: Array.isArray(event.followUp) ? event.followUp : [],
+            }),
+          });
+          return;
+        case 'tool_execution_start':
+          onEvent({
+            type: 'message',
+            data: JSON.stringify({
+              type: 'tool_start',
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              args: event.args,
+            }),
+          });
+          return;
+        case 'tool_execution_update':
+          onEvent({
+            type: 'message',
+            data: JSON.stringify({
+              type: 'tool_update',
+              toolCallId: event.toolCallId,
+              partialResult: event.partialResult,
+            }),
+          });
+          return;
+        case 'tool_execution_end': {
+          const result = typeof event.result === 'object' && event.result !== null
+            ? event.result as { content?: Array<{ text?: string }>; details?: unknown }
+            : null;
+          const output = result?.content?.map((entry) => entry?.text ?? '').join('') ?? '';
+          onEvent({
+            type: 'message',
+            data: JSON.stringify({
+              type: 'tool_end',
+              toolCallId: event.toolCallId,
+              toolName: event.toolName,
+              output,
+              details: result?.details,
+              isError: event.isError === true,
+            }),
+          });
+          return;
+        }
+        case 'message_update': {
+          const assistantMessageEvent = typeof event.assistantMessageEvent === 'object' && event.assistantMessageEvent !== null
+            ? event.assistantMessageEvent as { type?: unknown; delta?: unknown }
+            : null;
+          if (assistantMessageEvent?.type === 'text_delta' && typeof assistantMessageEvent.delta === 'string') {
+            onEvent({ type: 'message', data: JSON.stringify({ type: 'text_delta', delta: assistantMessageEvent.delta }) });
+          }
+          if (assistantMessageEvent?.type === 'thinking_delta' && typeof assistantMessageEvent.delta === 'string') {
+            onEvent({ type: 'message', data: JSON.stringify({ type: 'thinking_delta', delta: assistantMessageEvent.delta }) });
+          }
+          return;
+        }
+        case 'error':
+          if (typeof event.message === 'string') {
+            onEvent({ type: 'message', data: JSON.stringify({ type: 'error', message: event.message }) });
+          }
+          return;
+      }
+    });
+
+    return () => {
+      unsubscribe();
+      onEvent({ type: 'close' });
+    };
   }
 
   async restart(): Promise<void> {
-    await this.disposeTunnel();
     await this.ensureRunning();
   }
 
   async stop(): Promise<void> {
-    await this.disposeTunnel();
+    for (const [conversationId, runtime] of this.runtimes) {
+      await runtime.shutdownRuntime(conversationId, false).catch(() => undefined);
+      runtime.dispose();
+    }
+    this.runtimes.clear();
   }
 
   async dispose(): Promise<void> {
-    await this.disposeTunnel();
+    for (const runtime of this.runtimes.values()) {
+      runtime.dispose();
+    }
+    this.runtimes.clear();
   }
 
-  private async startTunnel(forwardedPort: number, remotePort: number): Promise<void> {
-    const runtime = resolveDesktopRuntimePaths();
-    const args = [
-      '-N',
-      '-o', 'BatchMode=yes',
-      '-o', 'ExitOnForwardFailure=yes',
-      '-o', 'ServerAliveInterval=30',
-      '-L', `${String(forwardedPort)}:127.0.0.1:${String(remotePort)}`,
-      this.record.sshTarget,
-    ];
-
-    this.tunnelProcess = spawn('ssh', args, {
-      cwd: runtime.repoRoot,
-      env: process.env,
-      stdio: ['ignore', 'ignore', 'ignore'],
-    });
-
-    let spawnError: Error | null = null;
-    this.tunnelProcess.once('error', (error) => {
-      spawnError = error;
-      this.tunnelProcess = undefined;
-      this.forwardedPort = undefined;
-    });
-    this.tunnelProcess.once('exit', () => {
-      this.tunnelProcess = undefined;
-      this.forwardedPort = undefined;
-    });
-
-    await delay(600);
-    if (spawnError) {
-      throw spawnError;
+  private async ensureConversationRuntimeFromLocal(conversationId: string): Promise<SshRemoteConversationRuntime> {
+    const meta = await this.readLocalSessionMeta(conversationId);
+    const cwd = meta?.cwd?.trim() || '';
+    if (!cwd) {
+      throw new Error(`Conversation ${conversationId} does not have a local cwd to start remotely.`);
     }
 
-    if (this.tunnelProcess.exitCode !== null) {
-      throw new Error(`SSH tunnel exited immediately for ${this.record.sshTarget}. Check your SSH config and host reachability.`);
+    const localFile = meta?.file?.trim() || '';
+    let fallbackSessionContent: string | undefined;
+    if (localFile) {
+      try {
+        fallbackSessionContent = readFileSync(localFile, 'utf-8');
+      } catch {
+        fallbackSessionContent = undefined;
+      }
+    }
+
+    const runtime = await this.getRuntime(conversationId);
+    await runtime.ensureRuntime({ conversationId, cwd, fallbackSessionContent });
+    return runtime;
+  }
+
+  private async readPiState(runtime: SshRemoteConversationRuntime): Promise<Record<string, unknown>> {
+    const response = await runtime.requestHelper({ type: 'rpc', command: { type: 'get_state' } }) as {
+      data?: Record<string, unknown>;
+    };
+    return response?.data ?? {};
+  }
+
+  private async readHelperInfo(runtime: SshRemoteConversationRuntime): Promise<{ cwd: string; sessionFile: string; isStreaming: boolean }> {
+    const info = await runtime.requestHelper({ type: 'get_info' });
+    if (!info || typeof info !== 'object') {
+      throw new Error(`Remote helper for ${this.label} returned malformed runtime info.`);
+    }
+    const candidate = info as { cwd?: unknown; sessionFile?: unknown; isStreaming?: unknown };
+    return {
+      cwd: typeof candidate.cwd === 'string' ? candidate.cwd : '',
+      sessionFile: typeof candidate.sessionFile === 'string' ? candidate.sessionFile : '',
+      isStreaming: candidate.isStreaming === true,
+    };
+  }
+
+  private async getLocalApi(): Promise<LocalApiModule> {
+    if (!this.localApiPromise) {
+      this.localApiPromise = this.loadLocalApi();
+    }
+    return this.localApiPromise;
+  }
+
+  private async readLocalSessionMeta(conversationId: string): Promise<{ file?: string; cwd?: string; title?: string } | null> {
+    const localApi = await this.getLocalApi();
+    try {
+      return await localApi.readDesktopSessionMeta(conversationId) as { file?: string; cwd?: string; title?: string } | null;
+    } catch {
+      return null;
     }
   }
 
-  private async bootstrapRemoteHost(remotePort: number): Promise<void> {
-    const bootstrapCommand = buildSshBootstrapCommand({
-      repoRoot: this.record.remoteRepoRoot,
-      remotePort,
-    });
-
-    await new Promise<void>((resolve, reject) => {
-      const child = spawn('ssh', [this.record.sshTarget, bootstrapCommand], {
-        env: process.env,
-        stdio: ['ignore', 'ignore', 'ignore'],
-      });
-
-      child.once('error', reject);
-      child.once('exit', (code) => {
-        if (typeof code === 'number' && code !== 0) {
-          reject(new Error(`SSH bootstrap command failed with exit code ${String(code)} for ${this.record.sshTarget}.`));
-          return;
-        }
-
-        resolve();
-      });
-    });
+  private async readLocalSessionFile(conversationId: string): Promise<string> {
+    const meta = await this.readLocalSessionMeta(conversationId);
+    const filePath = meta?.file?.trim() || '';
+    if (!filePath) {
+      throw new Error(`Conversation ${conversationId} does not have a persisted local session file.`);
+    }
+    return filePath;
   }
 
-  private async disposeTunnel(): Promise<void> {
-    this.apiAdapter = undefined;
-    this.codexClient?.dispose();
-    this.codexClient = undefined;
-
-    const tunnel = this.tunnelProcess;
-    this.tunnelProcess = undefined;
-    this.forwardedPort = undefined;
-
-    if (!tunnel || tunnel.exitCode !== null) {
-      return;
+  private async getRuntime(conversationId: string): Promise<SshRemoteConversationRuntime> {
+    const existing = this.runtimes.get(conversationId);
+    if (existing) {
+      return existing;
     }
 
-    await new Promise<void>((resolve) => {
-      let settled = false;
-      const finish = () => {
-        if (settled) {
-          return;
-        }
-
-        settled = true;
-        resolve();
-      };
-
-      const timer = setTimeout(() => {
-        if (tunnel.exitCode === null && !tunnel.killed) {
-          tunnel.kill('SIGKILL');
-        }
-        finish();
-      }, 4_000);
-
-      tunnel.once('exit', () => {
-        clearTimeout(timer);
-        finish();
-      });
-
-      tunnel.kill('SIGTERM');
-    });
+    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
+    this.runtimes.set(conversationId, runtime);
+    return runtime;
   }
-}
-
-function quoteForShell(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-function renderRemotePathForShell(value: string): string {
-  if (value.startsWith('~/')) {
-    const suffix = value.slice(2).replace(/"/g, '\\"');
-    return `"$HOME/${suffix}"`;
-  }
-
-  return quoteForShell(value);
-}
-
-export function buildSshBootstrapCommand(input: { repoRoot?: string; remotePort: number }): string {
-  const repoRoot = input.repoRoot?.trim() || '~/workingdir/personal-agent';
-  return [
-    `cd ${renderRemotePathForShell(repoRoot)}`,
-    '&&',
-    `nohup pa codex app-server --listen ws://127.0.0.1:${String(input.remotePort)} >/tmp/personal-agent-codex.desktop.log 2>&1 &`,
-  ].join(' ');
 }
