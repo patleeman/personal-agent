@@ -12,8 +12,8 @@ describe('conversation header helpers', () => {
   it('formats service tier labels with a sensible fallback', () => {
     expect(formatServiceTierLabel('priority')).toBe('priority');
     expect(formatServiceTierLabel('  flex  ')).toBe('flex');
-    expect(formatServiceTierLabel('')).toBe('auto');
-    expect(formatServiceTierLabel(undefined)).toBe('auto');
+    expect(formatServiceTierLabel('')).toBe('unset');
+    expect(formatServiceTierLabel(undefined)).toBe('unset');
   });
 
   it('formats context window labels compactly', () => {

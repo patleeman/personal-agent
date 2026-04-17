@@ -323,6 +323,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('>Auto<');
     expect(html).toContain('>Priority<');
     expect(html).toContain('<option value="" selected="">Unset</option>');
+    expect(html).toContain('Current service tier: unset');
   });
 
   it('renders the same consolidated settings page for legacy query routes', () => {
