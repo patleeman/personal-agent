@@ -2230,8 +2230,6 @@ function ToolBlock({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
-  onOpenRun,
-  activeRunId,
   onOpenFilePath: _onOpenFilePath,
   onHydrateMessage,
   hydratingMessageBlockIds,
@@ -2246,8 +2244,6 @@ function ToolBlock({
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
-  onOpenRun?: (runId: string) => void;
-  activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
@@ -2379,38 +2375,22 @@ function ToolBlock({
             </div>
           )}
           <div className="space-y-1.5">
-            {visibleRuns.map((linkedRun) => {
-              const isActiveRun = activeRunId === linkedRun.runId;
-              const headline = isActiveRun
-                ? `Opened ${linkedRun.title}`
-                : onOpenRun
-                  ? `Open ${linkedRun.title}`
-                  : linkedRun.title;
-              return (
-                <button
-                  key={linkedRun.runId}
-                  type="button"
-                  onClick={() => { onOpenRun?.(linkedRun.runId); }}
-                  disabled={!onOpenRun}
-                  className={cx(
-                    'w-full rounded-md px-2 py-1.5 text-left transition-colors',
-                    onOpenRun ? 'hover:bg-black/5' : 'cursor-default',
-                    isActiveRun ? 'bg-black/10 text-primary' : 'text-accent',
-                    !onOpenRun && 'text-dim',
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium leading-4 text-current">{headline}</p>
-                      {linkedRun.detail && (
-                        <p className="mt-1 truncate text-[10px] leading-4 text-secondary/80">{linkedRun.detail}</p>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-45">{isActiveRun ? 'open' : onOpenRun ? 'show' : 'linked'}</span>
+            {visibleRuns.map((linkedRun) => (
+              <div
+                key={linkedRun.runId}
+                className="w-full rounded-md px-2 py-1.5 text-left text-dim"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium leading-4 text-primary">{linkedRun.title}</p>
+                    {linkedRun.detail && (
+                      <p className="mt-1 truncate text-[10px] leading-4 text-secondary/80">{linkedRun.detail}</p>
+                    )}
                   </div>
-                </button>
-              );
-            })}
+                  <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] opacity-45">linked</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -2546,13 +2526,13 @@ function TraceClusterBlock({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
-  onOpenRun,
-  activeRunId,
   onOpenFilePath,
   onResume,
   resumeBusy,
   resumeTitle,
   resumeLabel,
+  isInlineRunExpanded,
+  onToggleInlineRun,
 }: {
   blocks: TraceConversationBlock[];
   summary: TraceClusterSummary;
@@ -2561,18 +2541,17 @@ function TraceClusterBlock({
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
-  onOpenRun?: (runId: string) => void;
-  activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
   onResume?: () => Promise<void> | void;
   resumeBusy?: boolean;
   resumeTitle?: string | null;
   resumeLabel?: string;
+  isInlineRunExpanded?: (runId: string) => boolean;
+  onToggleInlineRun?: (runId: string) => void;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllBlocks, setShowAllBlocks] = useState(false);
   const [showAllLinkedRuns, setShowAllLinkedRuns] = useState(false);
-  const [expandedLinkedRunId, setExpandedLinkedRunId] = useState<string | null>(null);
   const linkedRuns = useMemo(() => collectTraceClusterLinkedRuns(blocks), [blocks]);
   const hiddenLinkedRunCount = Math.max(0, linkedRuns.length - TRACE_LINKED_RUN_VISIBLE_LIMIT);
   const visibleLinkedRuns = showAllLinkedRuns || hiddenLinkedRunCount === 0
@@ -2602,16 +2581,6 @@ function TraceClusterBlock({
       ? 'border-danger/30 bg-danger/5 hover:bg-danger/10'
       : 'border-border-subtle bg-elevated/60 hover:bg-elevated',
   );
-
-  useEffect(() => {
-    if (!expandedLinkedRunId) {
-      return;
-    }
-
-    if (!linkedRuns.some((run) => run.runId === expandedLinkedRunId)) {
-      setExpandedLinkedRunId(null);
-    }
-  }, [expandedLinkedRunId, linkedRuns]);
 
   return (
     <div className="space-y-1.5">
@@ -2684,9 +2653,9 @@ function TraceClusterBlock({
               <InlineTraceRunCard
                 key={linkedRun.runId}
                 run={linkedRun}
-                expanded={expandedLinkedRunId === linkedRun.runId}
+                expanded={isInlineRunExpanded?.(linkedRun.runId) ?? false}
                 onToggle={() => {
-                  setExpandedLinkedRunId((current) => (current === linkedRun.runId ? null : linkedRun.runId));
+                  onToggleInlineRun?.(linkedRun.runId);
                 }}
               />
             ))}
@@ -2726,8 +2695,6 @@ function TraceClusterBlock({
                     activeArtifactId={activeArtifactId}
                     onOpenCheckpoint={onOpenCheckpoint}
                     activeCheckpointId={activeCheckpointId}
-                    onOpenRun={onOpenRun}
-                    activeRunId={activeRunId}
                     onOpenFilePath={onOpenFilePath}
                   />
                 );
@@ -3622,8 +3589,6 @@ interface ChatViewProps {
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
-  onOpenRun?: (runId: string) => void;
-  activeRunId?: string | null;
   onOpenFilePath?: (path: string) => void;
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode?: 'inline' | 'composer';
@@ -3653,8 +3618,6 @@ export const ChatView = memo(function ChatView({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
-  onOpenRun,
-  activeRunId,
   onOpenFilePath,
   onSubmitAskUserQuestion,
   askUserQuestionDisplayMode = 'inline',
@@ -3665,6 +3628,60 @@ export const ChatView = memo(function ChatView({
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
+  const [expandedInlineRunIds, setExpandedInlineRunIds] = useState<ReadonlySet<string>>(() => new Set());
+  const visibleInlineRunIdSet = useMemo(() => {
+    const next = new Set<string>();
+
+    for (const item of renderItems) {
+      if (item.type !== 'trace_cluster') {
+        continue;
+      }
+
+      for (const run of collectTraceClusterLinkedRuns(item.blocks)) {
+        next.add(run.runId);
+      }
+    }
+
+    return next;
+  }, [renderItems]);
+
+  useEffect(() => {
+    setExpandedInlineRunIds((current) => {
+      if (current.size === 0) {
+        return current;
+      }
+
+      let changed = false;
+      const next = new Set<string>();
+      for (const runId of current) {
+        if (visibleInlineRunIdSet.has(runId)) {
+          next.add(runId);
+        } else {
+          changed = true;
+        }
+      }
+
+      return changed ? next : current;
+    });
+  }, [visibleInlineRunIdSet]);
+
+  const isInlineRunExpanded = useCallback(
+    (runId: string) => expandedInlineRunIds.has(runId),
+    [expandedInlineRunIds],
+  );
+
+  const toggleInlineRun = useCallback((runId: string) => {
+    setExpandedInlineRunIds((current) => {
+      const next = new Set(current);
+      if (next.has(runId)) {
+        next.delete(runId);
+      } else {
+        next.add(runId);
+      }
+      return next;
+    });
+  }, []);
+
   const streamingStatusLabel = isCompacting
     ? 'Compacting context…'
     : pendingStatusLabel ?? getStreamingStatusLabel(messages, isStreaming);
@@ -4202,13 +4219,13 @@ export const ChatView = memo(function ChatView({
             activeArtifactId={activeArtifactId}
             onOpenCheckpoint={onOpenCheckpoint}
             activeCheckpointId={activeCheckpointId}
-            onOpenRun={onOpenRun}
-            activeRunId={activeRunId}
             onOpenFilePath={onOpenFilePath}
             onResume={isTailItem ? onResumeConversation : undefined}
             resumeBusy={resumeConversationBusy}
             resumeTitle={resumeConversationTitle}
             resumeLabel={resumeConversationLabel}
+            isInlineRunExpanded={isInlineRunExpanded}
+            onToggleInlineRun={toggleInlineRun}
           />
         </div>
       );
@@ -4268,8 +4285,6 @@ export const ChatView = memo(function ChatView({
               activeArtifactId={activeArtifactId}
               onOpenCheckpoint={onOpenCheckpoint}
               activeCheckpointId={activeCheckpointId}
-              onOpenRun={onOpenRun}
-              activeRunId={activeRunId}
               onOpenFilePath={onOpenFilePath}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
@@ -4313,7 +4328,7 @@ export const ChatView = memo(function ChatView({
         {el}
       </div>
     ) : null;
-  }, [activeArtifactId, activeCheckpointId, activeRunId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenCheckpoint, onOpenFilePath, onOpenRun, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync]);
+  }, [activeArtifactId, activeCheckpointId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isInlineRunExpanded, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenCheckpoint, onOpenFilePath, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync, toggleInlineRun]);
 
   const visibleChunkRange = useMemo(() => {
     if (!shouldWindowTranscript || chunkLayouts.length === 0) {

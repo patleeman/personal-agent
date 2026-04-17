@@ -3,7 +3,6 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
-import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
@@ -20,7 +19,7 @@ import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBrid
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
-import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
+import { createConversationLiveRunId } from '../conversation/conversationRuns';
 import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
@@ -1441,7 +1440,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
-  const selectedRunId = getConversationRunIdFromSearch(location.search);
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
   const conversationEventVersion = useConversationEventVersion(id);
@@ -1450,11 +1448,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const nextSearch = setConversationRunIdInSearch(
-      setConversationCheckpointIdInSearch(
-        setConversationArtifactIdInSearch(location.search, artifactId),
-        null,
-      ),
+    const nextSearch = setConversationCheckpointIdInSearch(
+      setConversationArtifactIdInSearch(location.search, artifactId),
       null,
     );
 
@@ -1469,11 +1464,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    const nextSearch = setConversationRunIdInSearch(
-      setConversationArtifactIdInSearch(
-        setConversationCheckpointIdInSearch(location.search, checkpointId),
-        null,
-      ),
+    const nextSearch = setConversationArtifactIdInSearch(
+      setConversationCheckpointIdInSearch(location.search, checkpointId),
       null,
     );
 
@@ -3349,12 +3341,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const shouldLoadConversationRun = Boolean(conversationRunId)
     && !draft
+    && !isLiveSession
     && (
-      selectedRunId === conversationRunId
-      || (!isLiveSession && (
-        didConversationStopMidTurn(lastConversationMessage)
-        || didConversationStopWithError(lastConversationMessage)
-      ))
+      didConversationStopMidTurn(lastConversationMessage)
+      || didConversationStopWithError(lastConversationMessage)
     );
 
   useEffect(() => {
@@ -6421,9 +6411,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <ConversationWorkspaceShell contextRailEnabled={false}>
-      {() => (
-        <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
           <PageHeader className="min-h-[44px] gap-2 py-2">
             <div className="flex-1 min-w-0">
           {isEditingTitle && !draft ? (
@@ -7198,8 +7186,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           />
         </Suspense>
       )}
-      </div>
-      )}
-    </ConversationWorkspaceShell>
+    </div>
   );
 }

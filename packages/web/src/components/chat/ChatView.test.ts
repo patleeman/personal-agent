@@ -1,7 +1,6 @@
-import React, { Fragment, createElement } from 'react';
+import React, { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock } from '../../shared/types';
 import { ChatView } from './ChatView.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -283,10 +282,9 @@ describe('chat view streaming disclosure', () => {
         status: 'running',
       }],
       isStreaming: true,
-      onOpenRun: () => undefined,
     }));
 
-    expect(html).toContain('Open Continuous conversations next chunk ui');
+    expect(html).toContain('Continuous conversations next chunk ui');
     expect(html).toContain('background run');
     expect(html).toContain('text-left');
     expect(html).toContain('mentioned run');
@@ -315,11 +313,10 @@ describe('chat view streaming disclosure', () => {
         },
       }],
       isStreaming: true,
-      onOpenRun: () => undefined,
     }));
 
     expect(html).toContain('start_agent Inspect git diff');
-    expect(html).toContain('Open Inspect git diff');
+    expect(html).toContain('Inspect git diff');
     expect(html).toContain('agent run');
     expect(html).toContain('ui-polish');
     expect(html).toContain('cwd personal-agent');
@@ -342,11 +339,10 @@ describe('chat view streaming disclosure', () => {
         status: 'running',
       }],
       isStreaming: true,
-      onOpenRun: () => undefined,
     }));
 
     expect(html).toContain('start printf ok');
-    expect(html).toContain('Open printf ok');
+    expect(html).toContain('printf ok');
     expect(html).toContain('shell run');
     expect(html).toContain('ui-preview-check');
     expect(html).toContain('cwd personal-agent');
@@ -404,17 +400,16 @@ describe('chat view streaming disclosure', () => {
         },
       }],
       isStreaming: true,
-      onOpenRun: () => undefined,
     }));
 
     expect(html).toContain('listed runs');
     expect(html).toContain('Showing 5 of 7 runs returned by the tool.');
     expect(html).toContain('Show all');
-    expect(html).toContain('Open Fix build a');
-    expect(html).toContain('Open Fix build e');
+    expect(html).toContain('Fix build a');
+    expect(html).toContain('Fix build e');
     expect(html).toContain('queued · background run');
-    expect(html).not.toContain('Open Fix build f');
-    expect(html).not.toContain('Open Fix build g');
+    expect(html).not.toContain('Fix build f');
+    expect(html).not.toContain('Fix build g');
   });
 
   it('renders tool input and output as plain text without file path buttons', () => {

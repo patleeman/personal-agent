@@ -82,6 +82,18 @@ function DeletedStandaloneRunsRedirect() {
   const [target, setTarget] = useState<string | null>(null);
   const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [sessions, tasks]);
 
+  const buildRunRedirectTarget = useCallback((route: string | undefined, runId: string): string => {
+    if (!route) {
+      return '/automations';
+    }
+
+    if (route.startsWith('/automations')) {
+      return `${route}${setConversationRunIdInSearch('', runId)}`;
+    }
+
+    return route;
+  }, []);
+
   if (!id) {
     return <Navigate to="/automations" replace />;
   }
@@ -91,9 +103,7 @@ function DeletedStandaloneRunsRedirect() {
     const cached = runs?.runs.find((run) => run.runId === id);
     if (cached) {
       const connection = getRunPrimaryConnection(cached, lookups);
-      setTarget(connection?.to
-        ? `${connection.to}${setConversationRunIdInSearch('', cached.runId)}`
-        : '/automations');
+      setTarget(buildRunRedirectTarget(connection?.to, cached.runId));
       return;
     }
 
@@ -105,9 +115,7 @@ function DeletedStandaloneRunsRedirect() {
         }
 
         const connection = getRunPrimaryConnection(detail.run, lookups);
-        setTarget(connection?.to
-          ? `${connection.to}${setConversationRunIdInSearch('', detail.run.runId)}`
-          : '/automations');
+        setTarget(buildRunRedirectTarget(connection?.to, detail.run.runId));
       })
       .catch(() => {
         if (!cancelled) {
@@ -118,7 +126,7 @@ function DeletedStandaloneRunsRedirect() {
     return () => {
       cancelled = true;
     };
-  }, [id, lookups, runs?.runs]);
+  }, [buildRunRedirectTarget, id, lookups, runs?.runs]);
 
   return target ? <Navigate to={target} replace /> : null;
 }
