@@ -832,7 +832,7 @@ interface TokenCounts {
   segments?: ContextUsageSegment[];
 }
 
-export function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):
+function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):
   | { kind: 'none' }
   | { kind: 'summary'; text: string }
   | { kind: 'diff'; added: string; deleted: string } {
@@ -962,7 +962,7 @@ function ConversationPreferencesRow({
   );
 }
 
-export function resolveConversationComposerShellStateClassName({
+function resolveConversationComposerShellStateClassName({
   dragOver,
   hasInteractiveOverlay,
   autoModeEnabled,

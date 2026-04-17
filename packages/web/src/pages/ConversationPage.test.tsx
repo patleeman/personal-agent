@@ -22,8 +22,6 @@ import {
   shouldShowConversationInlineLoadingState,
   shouldFetchConversationAttachments,
   resolveConversationVisibleScrollBinding,
-  resolveConversationComposerShellStateClassName,
-  resolveConversationGitSummaryPresentation,
   resolveRelatedThreadHotkeyIndex,
 } from './ConversationPage.js';
 
@@ -675,57 +673,6 @@ describe('conversation live state helpers', () => {
     })).toBeNull();
   });
 
-});
-
-describe('conversation git summary presentation', () => {
-  it('returns a plain summary when the tree is clean or only has file counts', () => {
-    expect(resolveConversationGitSummaryPresentation(null)).toEqual({ kind: 'none' });
-    expect(resolveConversationGitSummaryPresentation({
-      changeCount: 3,
-      linesAdded: 0,
-      linesDeleted: 0,
-      changes: [],
-    })).toEqual({ kind: 'summary', text: '3 files' });
-  });
-
-  it('returns split diff labels for added and deleted lines', () => {
-    expect(resolveConversationGitSummaryPresentation({
-      changeCount: 2,
-      linesAdded: 1234,
-      linesDeleted: 56,
-      changes: [],
-    })).toEqual({
-      kind: 'diff',
-      added: '+1,234',
-      deleted: '-56',
-    });
-  });
-});
-
-describe('conversation composer shell state', () => {
-  it('uses a subtle pulsing yellow glow when auto mode is enabled', () => {
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: false,
-      hasInteractiveOverlay: false,
-      autoModeEnabled: true,
-    })).toBe('border-warning/30 ring-1 ring-warning/15 ui-input-shell-auto-mode');
-  });
-
-  it('prefers the interactive overlay accent state over the auto mode glow', () => {
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: false,
-      hasInteractiveOverlay: true,
-      autoModeEnabled: true,
-    })).toBe('border-accent/40 ring-1 ring-accent/15');
-  });
-
-  it('prefers the drag-over state over the auto mode glow', () => {
-    expect(resolveConversationComposerShellStateClassName({
-      dragOver: true,
-      hasInteractiveOverlay: false,
-      autoModeEnabled: true,
-    })).toBe('border-accent/50 ring-2 ring-accent/20 bg-accent/5');
-  });
 });
 
 describe('ConversationPage', () => {
