@@ -1334,7 +1334,7 @@ interface ConversationLocationState {
   draftHydrationState?: ConversationDraftHydrationState;
 }
 
-export function buildConversationInitialModelPreferenceState(input: {
+function buildConversationInitialModelPreferenceState(input: {
   conversationId: string;
   currentModel?: string;
   currentThinkingLevel?: string;
@@ -1351,7 +1351,7 @@ export function buildConversationInitialModelPreferenceState(input: {
   };
 }
 
-export function resolveConversationInitialModelPreferenceState(input: {
+function resolveConversationInitialModelPreferenceState(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   locationState: unknown;
@@ -1379,7 +1379,7 @@ export function resolveConversationInitialModelPreferenceState(input: {
   });
 }
 
-export function resolveConversationInitialDeferredResumeState(input: {
+function resolveConversationInitialDeferredResumeState(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   locationState: unknown;
@@ -1396,7 +1396,7 @@ export function resolveConversationInitialDeferredResumeState(input: {
   return Array.isArray(candidate.resumes) ? candidate.resumes : [];
 }
 
-export function resolveConversationDraftHydrationState(input: {
+function resolveConversationDraftHydrationState(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   locationState: unknown;
