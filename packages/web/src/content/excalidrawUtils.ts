@@ -147,7 +147,7 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
-export function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState | null | undefined): ExcalidrawPreviewFrameSize | null {
+function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState | null | undefined): ExcalidrawPreviewFrameSize | null {
   if (!appState || typeof appState !== 'object') {
     return null;
   }
