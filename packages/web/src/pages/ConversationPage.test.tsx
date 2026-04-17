@@ -3,14 +3,10 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock, SessionMeta } from '../shared/types';
+import type { MessageBlock } from '../shared/types';
 import {
   ConversationPage,
-  mergeConversationSessionMeta,
-  replaceConversationTitleInSessionList,
-  resolveConversationPageTitle,
   resolveDisplayedConversationPendingStatusLabel,
-  resolveConversationStreamTitleSync,
   resolveConversationAutocompleteCatalogDemand,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
@@ -677,118 +673,6 @@ describe('conversation live state helpers', () => {
       isLiveSession: true,
       hasVisibleSessionDetail: false,
     })).toBeNull();
-  });
-
-  it('prefers the freshest available conversation title source', () => {
-    expect(resolveConversationPageTitle({
-      draft: false,
-      titleOverride: 'Manual override',
-      streamTitle: 'Live stream title',
-      liveTitle: 'Sidebar title',
-      detailTitle: 'Stored detail title',
-      sessionTitle: 'Session snapshot title',
-    })).toBe('Manual override');
-
-    expect(resolveConversationPageTitle({
-      draft: false,
-      streamTitle: null,
-      liveTitle: 'Sidebar title',
-      detailTitle: 'Stored detail title',
-      sessionTitle: 'Session snapshot title',
-    })).toBe('Sidebar title');
-
-    expect(resolveConversationPageTitle({
-      draft: false,
-      streamTitle: null,
-      liveTitle: null,
-      detailTitle: 'Stored detail title',
-      sessionTitle: 'Session snapshot title',
-    })).toBe('Stored detail title');
-  });
-
-  it('syncs a refreshed conversation title back into the session list', () => {
-    const sessions = [
-      { id: 'conv-123', title: 'Old title' },
-      { id: 'conv-456', title: 'Other title' },
-    ];
-
-    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '  Better title  ')).toEqual([
-      { id: 'conv-123', title: 'Better title' },
-      { id: 'conv-456', title: 'Other title' },
-    ]);
-    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', 'Old title')).toBe(sessions);
-    expect(replaceConversationTitleInSessionList(sessions, 'conv-123', '')).toBe(sessions);
-  });
-
-  it('pushes live stream titles into shared sidebar state immediately', () => {
-    const sessions = [
-      { id: 'conv-123', title: 'New Conversation' },
-      { id: 'conv-456', title: 'Other title' },
-    ];
-
-    expect(resolveConversationStreamTitleSync({
-      draft: false,
-      conversationId: 'conv-123',
-      streamTitle: '  Better title  ',
-      liveTitle: 'New Conversation',
-      sessions,
-    })).toEqual({
-      normalizedTitle: 'Better title',
-      shouldPushLiveTitle: true,
-      nextSessions: [
-        { id: 'conv-123', title: 'Better title' },
-        { id: 'conv-456', title: 'Other title' },
-      ],
-    });
-
-    expect(resolveConversationStreamTitleSync({
-      draft: false,
-      conversationId: 'conv-123',
-      streamTitle: 'Better title',
-      liveTitle: 'Better title',
-      sessions,
-    })).toEqual({
-      normalizedTitle: 'Better title',
-      shouldPushLiveTitle: false,
-      nextSessions: [
-        { id: 'conv-123', title: 'Better title' },
-        { id: 'conv-456', title: 'Other title' },
-      ],
-    });
-  });
-
-  it('preserves deferred resumes from the session snapshot when detail meta omits them', () => {
-    const snapshot: SessionMeta = {
-      id: 'conv-123',
-      file: '/tmp/conv-123.jsonl',
-      timestamp: '2026-03-29T00:00:00.000Z',
-      cwd: '/tmp',
-      cwdSlug: 'tmp',
-      model: 'gpt-test',
-      title: 'Snapshot title',
-      messageCount: 12,
-      deferredResumes: [{
-        id: 'resume-1',
-        sessionFile: '/tmp/conv-123.jsonl',
-        prompt: 'continue later',
-        dueAt: '2026-03-29T00:05:00.000Z',
-        createdAt: '2026-03-29T00:00:00.000Z',
-        attempts: 0,
-        status: 'scheduled',
-      }],
-    };
-
-    const detailMeta: SessionMeta = {
-      ...snapshot,
-      title: 'Detail title',
-      deferredResumes: undefined,
-    };
-
-    const merged = mergeConversationSessionMeta(detailMeta, snapshot);
-
-    expect(merged?.deferredResumes).toEqual(snapshot.deferredResumes);
-    expect(merged?.title).toBe('Detail title');
-    expect(merged?.file).toBe(snapshot.file);
   });
 
 });

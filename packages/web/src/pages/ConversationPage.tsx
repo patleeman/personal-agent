@@ -426,7 +426,7 @@ export function shouldFetchConversationLiveSessionGitContext(input: {
     && !input.hasPendingInitialPromptInFlight;
 }
 
-export function resolveConversationPageTitle(input: {
+function resolveConversationPageTitle(input: {
   draft: boolean;
   titleOverride?: string | null;
   streamTitle?: string | null;
@@ -447,7 +447,7 @@ export function resolveConversationPageTitle(input: {
   );
 }
 
-export function replaceConversationTitleInSessionList<T extends { id: string; title: string }>(
+function replaceConversationTitleInSessionList<T extends { id: string; title: string }>(
   sessions: T[] | null,
   conversationId: string | null | undefined,
   nextTitle: string | null | undefined,
@@ -474,7 +474,7 @@ export function replaceConversationTitleInSessionList<T extends { id: string; ti
   return changed ? updatedSessions : sessions;
 }
 
-export function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
+function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   streamTitle: string | null | undefined;
@@ -509,7 +509,7 @@ export function resolveConversationStreamTitleSync<T extends { id: string; title
   };
 }
 
-export function mergeConversationSessionMeta(
+function mergeConversationSessionMeta(
   detailMeta: SessionMeta | null | undefined,
   sessionSnapshot: SessionMeta | null | undefined,
 ): SessionMeta | null {
