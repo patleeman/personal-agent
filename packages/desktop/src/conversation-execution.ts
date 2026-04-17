@@ -178,6 +178,23 @@ function clearSessionRemoteTarget(filePath: string): void {
   writeSessionHeader(filePath, nextHeader, lines, headerIndex);
 }
 
+function setSessionCwd(filePath: string, cwd: string): void {
+  const normalizedCwd = cwd.trim();
+  if (!normalizedCwd) {
+    return;
+  }
+
+  const { lines, headerIndex, header } = readSessionHeader(filePath);
+  if (header.cwd === normalizedCwd) {
+    return;
+  }
+
+  writeSessionHeader(filePath, {
+    ...header,
+    cwd: normalizedCwd,
+  }, lines, headerIndex);
+}
+
 function isPlaceholderConversationTitle(title: string | undefined): boolean {
   const normalized = title?.trim().toLowerCase();
   return !normalized || normalized === 'new conversation' || normalized === '(new conversation)' || normalized === 'conversation';
@@ -398,6 +415,11 @@ export async function continueConversationInHost(
       path: `/api/sessions/${encodeURIComponent(existingTarget.remoteConversationId)}/meta`,
     }).catch(() => null);
     if (existingRemoteMeta && existingRemoteMeta.statusCode >= 200 && existingRemoteMeta.statusCode < 400) {
+      const remoteMeta = parseJsonBody<{ cwd?: unknown }>(existingRemoteMeta);
+      if (localMeta?.file && typeof remoteMeta?.cwd === 'string') {
+        setSessionCwd(localMeta.file, remoteMeta.cwd);
+      }
+
       return {
         conversationId,
         remoteHostId: existingTarget.hostId,
@@ -425,6 +447,15 @@ export async function continueConversationInHost(
     remoteHostLabel: hostRecord.label,
     remoteConversationId,
   });
+
+  const remoteMetaResponse = await remoteController.dispatchApiRequest({
+    method: 'GET',
+    path: `/api/sessions/${encodeURIComponent(remoteConversationId)}/meta`,
+  }).catch(() => null);
+  const remoteMeta = remoteMetaResponse ? parseJsonBody<{ cwd?: unknown }>(remoteMetaResponse) : null;
+  if (typeof remoteMeta?.cwd === 'string') {
+    setSessionCwd(sessionFile, remoteMeta.cwd);
+  }
 
   if (typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true && localController.destroyLiveSession) {
     await localController.destroyLiveSession(conversationId).catch(() => undefined);
@@ -457,8 +488,9 @@ export async function dispatchConversationExecutionRequest(
     return null;
   }
 
+  const localMeta = await readLocalConversationMeta(hostManager, localConversationId);
+
   if (input.method === 'POST') {
-    const localMeta = await readLocalConversationMeta(hostManager, localConversationId);
     if (localMeta && isPlaceholderConversationTitle(localMeta.title)) {
       const encodedConversationId = encodeURIComponent(localConversationId);
       const fallbackTitle = input.path === `/api/live-sessions/${encodedConversationId}/prompt`
@@ -500,7 +532,46 @@ export async function dispatchConversationExecutionRequest(
     ...input,
     path: translatedPath,
   });
-  return rewriteConversationScopedResponse(input.path, localConversationId, remoteResponse);
+
+  if (input.method === 'POST' && input.path === `/api/conversations/${encodeURIComponent(localConversationId)}/cwd`) {
+    const parsed = parseJsonBody<Record<string, unknown>>(remoteResponse);
+    if (parsed && localMeta?.file) {
+      const remoteConversationId = typeof parsed.id === 'string' ? parsed.id.trim() : '';
+      const remoteCwd = typeof parsed.cwd === 'string' ? parsed.cwd : '';
+      if (remoteConversationId && remoteConversationId !== target.remoteConversationId) {
+        const remoteHostLabel = target.hostLabel || hostManager.getHostRecord(target.hostId).label;
+        setSessionRemoteTarget(localMeta.file, {
+          remoteHostId: target.hostId,
+          remoteHostLabel,
+          remoteConversationId,
+        });
+      }
+      if (remoteCwd) {
+        setSessionCwd(localMeta.file, remoteCwd);
+      }
+
+      return encodeJsonResultLike(remoteResponse, {
+        ...parsed,
+        id: localConversationId,
+        ...(localMeta.file ? { sessionFile: localMeta.file } : {}),
+        ...(remoteCwd ? { cwd: remoteCwd } : {}),
+      });
+    }
+  }
+
+  const rewrittenResponse = rewriteConversationScopedResponse(input.path, localConversationId, remoteResponse);
+  if (localMeta?.file) {
+    const rewrittenBody = parseJsonBody<Record<string, unknown>>(rewrittenResponse);
+    const bootstrap = rewrittenBody?.sessionDetail as { meta?: { cwd?: unknown } } | undefined;
+    const bootstrapCwd = typeof bootstrap?.meta?.cwd === 'string' ? bootstrap.meta.cwd : '';
+    const topLevelCwd = typeof rewrittenBody?.cwd === 'string' ? rewrittenBody.cwd : '';
+    const nextCwd = bootstrapCwd || topLevelCwd;
+    if (nextCwd) {
+      setSessionCwd(localMeta.file, nextCwd);
+    }
+  }
+
+  return rewrittenResponse;
 }
 
 export async function subscribeConversationExecutionApiStream(

@@ -68,6 +68,8 @@ Important behaviors:
 - commit checkpoints can show up as transcript cards and open a dedicated diff review modal from the conversation, with continuous scrolling across files, sidebar jump navigation, split / unified views, bundled structural diffs in the desktop build, GitHub / PR links, and a saved comment thread on the checkpoint; inline commit hashes in transcript markdown also open that review flow when they resolve against the thread checkpoint list or the current local git repo
 - the new-conversation empty state owns the draft workspace picker, including saved workspace selection and folder picking, and it shows the 10 most recent closed conversations under the picker so a fresh window still has quick context reuse; the draft header stays title-only
 - saved conversation headers keep the top bar title-only; working directory still stays attached to the conversation instead of rendering inline there
+- the composer footer keeps execution target + working directory controls on the left and git/context status on the right; saved threads can edit cwd inline and browse for a new folder before switching
+- project-organized thread lists group by execution target first and workspace second, with local groups left implicit and remote targets rendered as their own section headers
 - the Threads filter can switch between all threads, human threads, and automation-owned threads, and automation-owned threads show an inline automation badge in the sidebar
 - working directory and model preferences stay attached to the conversation
 - file/doc mentions already work through `@` in the composer for one-shot context

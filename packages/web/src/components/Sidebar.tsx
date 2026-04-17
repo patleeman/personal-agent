@@ -529,6 +529,40 @@ function resolveSidebarConversationHotkeyOrder<T,>(input: {
   ));
 }
 
+function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel'>): {
+  key: string;
+  label: string;
+  isLocal: boolean;
+} {
+  const remoteHostId = session.remoteHostId?.trim() || '';
+  if (!remoteHostId) {
+    return {
+      key: 'local',
+      label: 'Local project',
+      isLocal: true,
+    };
+  }
+
+  const remoteHostLabel = session.remoteHostLabel?.trim();
+  return {
+    key: remoteHostId,
+    label: remoteHostLabel || remoteHostId,
+    isLocal: false,
+  };
+}
+
+function buildScopedConversationGroupKey(input: {
+  executionTargetKey: string;
+  executionTargetIsLocal: boolean;
+  cwdGroupKey: string;
+}): string {
+  if (input.executionTargetIsLocal) {
+    return input.cwdGroupKey;
+  }
+
+  return `remote:${input.executionTargetKey}::${input.cwdGroupKey}`;
+}
+
 function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string): boolean {
   return event.code === code || normalizeHotkeyKey(event.key) === letter;
 }
@@ -797,6 +831,22 @@ function ThreadsFilterButton({
         </div>
       ) : null}
     </>
+  );
+}
+
+function ConversationExecutionTargetHeader({ label }: { label: string }) {
+  return (
+    <div className="px-4 pb-0.5 pt-1 text-[10px] uppercase tracking-[0.12em] text-accent/80">
+      <span className="inline-flex min-w-0 items-center gap-1.5" title={`Execution target: ${label}`}>
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+          <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
+          <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
+          <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
+          <path d="M7.9 7.8 9.7 7.8 9.7 6" />
+        </svg>
+        <span className="truncate">{label}</span>
+      </span>
+    </div>
   );
 }
 
@@ -1820,37 +1870,105 @@ export function Sidebar() {
       return [];
     }
 
-    const groupsByKey = new Map(
-      groupConversationItemsByCwd(filteredConversationItems, (item) => item.session.cwd, {
-        labelsByCwd: conversationGroupLabels,
-      })
-        .map((group) => [group.key, group] as const),
-    );
-    const baseGroups = threadsFilterMode === 'all'
-      ? workspaceOrder.map((workspacePath) => groupsByKey.get(workspacePath) ?? {
-          key: workspacePath,
-          cwd: workspacePath,
-          label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
-          items: [],
-        })
-      : [];
-    const groups = [...baseGroups];
-    const seenGroupKeys = new Set(groups.map((group) => group.key));
+    const targetBuckets = new Map<string, {
+      executionTargetKey: string;
+      executionTargetLabel: string;
+      executionTargetIsLocal: boolean;
+      items: SidebarConversationItem[];
+    }>();
 
-    for (const group of groupsByKey.values()) {
-      if (seenGroupKeys.has(group.key)) {
+    for (const item of filteredConversationItems) {
+      const executionTarget = resolveSessionExecutionTarget(item.session);
+      const existingBucket = targetBuckets.get(executionTarget.key);
+      if (existingBucket) {
+        existingBucket.items.push(item);
         continue;
       }
 
-      groups.push(group);
-      seenGroupKeys.add(group.key);
+      targetBuckets.set(executionTarget.key, {
+        executionTargetKey: executionTarget.key,
+        executionTargetLabel: executionTarget.label,
+        executionTargetIsLocal: executionTarget.isLocal,
+        items: [item],
+      });
     }
 
-    return groups.map((group) => ({
-      ...group,
-      defaultLabel: group.label,
-      label: conversationGroupLabelOverrides[group.key]?.trim() || group.label,
-    }));
+    if (threadsFilterMode === 'all' && workspaceOrder.length > 0 && !targetBuckets.has('local')) {
+      targetBuckets.set('local', {
+        executionTargetKey: 'local',
+        executionTargetLabel: 'Local project',
+        executionTargetIsLocal: true,
+        items: [],
+      });
+    }
+
+    const localTargetBucket = targetBuckets.get('local');
+    const remoteTargetBuckets = [...targetBuckets.values()]
+      .filter((bucket) => !bucket.executionTargetIsLocal)
+      .sort((left, right) => left.executionTargetLabel.localeCompare(right.executionTargetLabel, undefined, { sensitivity: 'base' }));
+    const orderedTargetBuckets = [
+      ...(localTargetBucket ? [localTargetBucket] : []),
+      ...remoteTargetBuckets,
+    ];
+
+    const rows: Array<{
+      key: string;
+      cwd: string | null;
+      label: string;
+      defaultLabel: string;
+      items: SidebarConversationItem[];
+      executionTargetKey: string;
+      executionTargetLabel: string;
+      executionTargetIsLocal: boolean;
+    }> = [];
+
+    for (const targetBucket of orderedTargetBuckets) {
+      const groupsByCwdKey = new Map(
+        groupConversationItemsByCwd(targetBucket.items, (item) => item.session.cwd, {
+          labelsByCwd: conversationGroupLabels,
+        })
+          .map((group) => [group.key, group] as const),
+      );
+      const baseGroups = targetBucket.executionTargetIsLocal && threadsFilterMode === 'all'
+        ? workspaceOrder.map((workspacePath) => groupsByCwdKey.get(workspacePath) ?? {
+            key: workspacePath,
+            cwd: workspacePath,
+            label: getConversationGroupLabel(workspacePath, { labelsByCwd: conversationGroupLabels }),
+            items: [],
+          })
+        : [];
+      const groups = [...baseGroups];
+      const seenGroupKeys = new Set(groups.map((group) => group.key));
+
+      for (const group of groupsByCwdKey.values()) {
+        if (seenGroupKeys.has(group.key)) {
+          continue;
+        }
+
+        groups.push(group);
+        seenGroupKeys.add(group.key);
+      }
+
+      for (const group of groups) {
+        const scopedGroupKey = buildScopedConversationGroupKey({
+          executionTargetKey: targetBucket.executionTargetKey,
+          executionTargetIsLocal: targetBucket.executionTargetIsLocal,
+          cwdGroupKey: group.key,
+        });
+        rows.push({
+          key: scopedGroupKey,
+          cwd: group.cwd,
+          defaultLabel: group.label,
+          label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || group.label,
+          items: group.items,
+          executionTargetKey: targetBucket.executionTargetKey,
+          executionTargetLabel: targetBucket.executionTargetLabel,
+          executionTargetIsLocal: targetBucket.executionTargetIsLocal,
+        });
+      }
+    }
+
+    return rows;
   }, [conversationGroupLabelOverrides, conversationGroupLabels, filteredConversationItems, threadsFilterMode, threadsOrganizeMode, workspaceOrder]);
   const conversationGroupKeyBySessionId = useMemo(
     () => new Map(groupedConversationRows.flatMap((group) => group.items.map(({ session }) => [session.id, group.key] as const))),
@@ -2300,17 +2418,18 @@ export function Sidebar() {
     cwd: string | null,
     sessionIds: readonly string[],
     includesDraft: boolean,
+    executionTargetIsLocal: boolean,
   ) => {
     const removedCount = archiveConversationGroupSessions(sessionIds);
     updateConversationGroupLabelOverride(groupKey, null);
     clearConversationGroupCollapsedState(groupKey);
 
     const normalizedCwd = normalizeConversationGroupCwd(cwd);
-    if (includesDraft && normalizedCwd && normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd) {
+    if (executionTargetIsLocal && includesDraft && normalizedCwd && normalizeConversationGroupCwd(readDraftConversationCwd()) === normalizedCwd) {
       clearDraftConversationCwd();
     }
 
-    if (normalizedCwd) {
+    if (executionTargetIsLocal && normalizedCwd) {
       const nextWorkspacePaths = savedWorkspacePaths.filter((workspacePath) => workspacePath !== normalizedCwd);
       if (!sameStringLists(savedWorkspacePaths, nextWorkspacePaths)) {
         persistSavedWorkspacePathsState(nextWorkspacePaths);
@@ -2722,25 +2841,31 @@ export function Sidebar() {
             ) : null}
 
             {threadsOrganizeMode === 'project'
-              ? groupedConversationRows.map((group) => {
+              ? groupedConversationRows.map((group, groupIndex) => {
                 const collapsed = collapsedConversationGroupKeySet.has(group.key);
                 const groupSessionIds = group.items
                   .map(({ session }) => session.id)
                   .filter((sessionId) => sessionId !== DRAFT_CONVERSATION_ID);
                 const groupIncludesDraft = group.items.some(({ session }) => session.id === DRAFT_CONVERSATION_ID);
+                const previousGroup = groupIndex > 0 ? groupedConversationRows[groupIndex - 1] : null;
+                const showExecutionTargetHeader = !group.executionTargetIsLocal
+                  && (!previousGroup || previousGroup.executionTargetKey !== group.executionTargetKey);
 
                 return (
                   <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
+                    {showExecutionTargetHeader ? (
+                      <ConversationExecutionTargetHeader label={group.executionTargetLabel} />
+                    ) : null}
                     <ConversationCwdGroupHeader
                       label={group.label}
                       cwd={group.cwd}
                       collapsed={collapsed}
                       onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
                       onNewConversation={() => handleNewConversation(group.cwd)}
-                      onOpenInFinder={group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
+                      onOpenInFinder={group.executionTargetIsLocal && group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
                       onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
                       onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
-                      onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft)}
+                      onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft, group.executionTargetIsLocal)}
                     />
                     {!collapsed ? (
                       group.items.length > 0

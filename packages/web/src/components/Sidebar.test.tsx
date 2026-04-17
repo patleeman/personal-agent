@@ -351,6 +351,43 @@ describe('Sidebar', () => {
     expect(html.match(/aria-label="Collapse alpha-worktree"/g) ?? []).toHaveLength(1);
   });
 
+  it('groups remote threads by execution target before workspace folders', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-local', 'conv-remote-alpha', 'conv-remote-beta']));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify(['/tmp/local-worktree']));
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-local',
+          title: 'Local thread',
+          cwd: '/tmp/local-worktree',
+          cwdSlug: 'local-worktree',
+        }),
+        createSession({
+          id: 'conv-remote-alpha',
+          title: 'Remote alpha thread',
+          cwd: '/srv/repos/alpha',
+          cwdSlug: 'alpha',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+        }),
+        createSession({
+          id: 'conv-remote-beta',
+          title: 'Remote beta thread',
+          cwd: '/srv/repos/beta',
+          cwdSlug: 'beta',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+        }),
+      ],
+    });
+
+    expect(html).toContain('title="Execution target: Bender"');
+    expect(html).not.toContain('Execution target: Local project');
+    expect(html.indexOf('local-worktree')).toBeLessThan(html.indexOf('Execution target: Bender'));
+    expect(html.indexOf('Execution target: Bender')).toBeLessThan(html.indexOf('Remote alpha thread'));
+  });
+
   it('renders saved custom cwd group labels when present', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(

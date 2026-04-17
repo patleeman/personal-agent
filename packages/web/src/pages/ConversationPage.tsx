@@ -1561,11 +1561,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId
     : sessionSnapshot?.remoteHostId?.trim() || 'local';
-  const selectedExecutionTargetOption = executionTargetOptions.find((option) => option.value === selectedExecutionTargetId)
-    ?? (selectedExecutionTargetId === 'local' ? { value: 'local', label: 'Local project' } : null);
-  const selectedExecutionTargetLabel = selectedExecutionTargetOption?.label
-    ?? (selectedExecutionTargetId === 'local' ? 'Local project' : selectedExecutionTargetId);
-  const remoteExecutionLabel = selectedExecutionTargetId !== 'local' ? selectedExecutionTargetLabel : null;
 
   const sessionsLoaded = sessions !== null;
   // We use a confirmed-live flag only for lightweight session-state labeling.
@@ -2243,7 +2238,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [draftCwdError, setDraftCwdError] = useState<string | null>(null);
   const [conversationCwdEditorOpen, setConversationCwdEditorOpen] = useState(false);
   const [conversationCwdDraft, setConversationCwdDraft] = useState('');
-  const [, setConversationCwdPickBusy] = useState(false);
+  const [conversationCwdPickBusy, setConversationCwdPickBusy] = useState(false);
   const [conversationCwdBusy, setConversationCwdBusy] = useState(false);
   const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
 
@@ -3243,8 +3238,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const hasGitSummary = gitSummaryPresentation.kind !== 'none';
   const showExecutionTargetPicker = executionTargetOptions.length > 0;
   const showComposerMeta = showExecutionTargetPicker
-    || Boolean(remoteExecutionLabel)
     || Boolean(sessionTokens)
+    || Boolean(draft ? draftCwdValue : (currentCwd || conversationCwdEditorOpen || conversationCwdError))
     || (!draft && (Boolean(branchLabel) || hasGitSummary));
 
   useEffect(() => {
@@ -4096,6 +4091,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConversationCwdBusy(false);
     }
   }, [conversationCwdBusy, conversationCwdDraft, currentSurfaceId, draft, ensureConversationCanControl, id, navigate, refetchLiveSessionContext, showNotice, stream.isStreaming]);
+
+  const pickConversationCwd = useCallback(async () => {
+    if (draft || !id || conversationCwdPickBusy || conversationCwdBusy) {
+      return;
+    }
+
+    if (!ensureConversationCanControl('change its working directory')) {
+      return;
+    }
+
+    setConversationCwdPickBusy(true);
+    setConversationCwdError(null);
+
+    try {
+      const result = await api.pickFolder({
+        cwd: conversationCwdDraft.trim() || currentCwd || undefined,
+        prompt: 'Choose a working directory',
+      });
+      if (result.cancelled || !result.path) {
+        return;
+      }
+
+      setConversationCwdDraft(result.path);
+      setConversationCwdEditorOpen(true);
+    } catch (error) {
+      setConversationCwdError(error instanceof Error ? error.message : 'Could not choose a folder.');
+    } finally {
+      setConversationCwdPickBusy(false);
+    }
+  }, [conversationCwdBusy, conversationCwdDraft, conversationCwdPickBusy, currentCwd, draft, ensureConversationCanControl, id]);
 
   const beginConversationCwdEdit = useCallback(() => {
     if (draft || !id || conversationCwdBusy) {
@@ -6450,9 +6475,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               title={title}
               cwd={currentCwd}
               onTitleClick={!renameConversationDisabled ? beginTitleEdit : undefined}
-              cwdEditing={conversationCwdEditorOpen}
+              cwdEditing={false}
               cwdDraft={conversationCwdDraft}
-              cwdError={conversationCwdError}
+              cwdError={null}
               cwdSaveBusy={conversationCwdBusy}
               onCwdDraftChange={(value) => {
                 setConversationCwdDraft(value);
@@ -7093,17 +7118,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
 
           {showComposerMeta ? (
-            <div className="conversation-composer-meta mt-1.5 flex min-h-4 items-center justify-between gap-3 px-3 text-[10px] text-dim">
-              <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+            <div className="conversation-composer-meta mt-1.5 flex min-h-4 items-start justify-between gap-3 px-3 text-[10px] text-dim">
+              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 overflow-hidden">
                 {showExecutionTargetPicker ? (
                   <label className="relative inline-flex min-w-0 items-center">
-                    <span className="sr-only">Continue in</span>
+                    <span className="sr-only">Execution target</span>
                     <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
                     <select
                       value={selectedExecutionTargetId}
                       onChange={(event) => { void handleContinueConversationInHost(event.target.value); }}
                       disabled={continueInBusy}
-                      aria-label="Continue in"
+                      aria-label="Execution target"
                       className="h-7 min-w-[8.25rem] max-w-[12rem] appearance-none rounded-md bg-transparent pl-6 pr-7 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary disabled:opacity-50"
                     >
                       {executionTargetOptions.map((option) => (
@@ -7115,18 +7140,98 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </svg>
                   </label>
                 ) : null}
+
                 {continueInBusy ? <span className="text-accent/80">Switching…</span> : null}
-                {sessionTokens ? (
-                  <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
+
+                {draft ? (
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <FolderIcon className="shrink-0 text-dim/70" />
+                    <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
+                    <select
+                      id="draft-composer-cwd"
+                      value={draftCwdValue}
+                      onChange={(event) => { setDraftConversationCwd(event.target.value); }}
+                      className="h-7 min-w-[12rem] max-w-[22rem] truncate appearance-none rounded-md bg-transparent pl-1 pr-2 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
+                    >
+                      <option value="">Default workspace</option>
+                      {availableDraftWorkspacePaths.map((workspacePath) => (
+                        <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => { void pickDraftConversationCwd(); }}
+                      disabled={draftCwdPickBusy}
+                      className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
+                      title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
+                    >
+                      {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
+                    </button>
+                  </div>
+                ) : conversationCwdEditorOpen ? (
+                  <form
+                    className="flex min-w-0 items-center gap-1.5"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void submitConversationCwdChange();
+                    }}
+                  >
+                    <FolderIcon className="shrink-0 text-dim/70" />
+                    <input
+                      autoFocus
+                      value={conversationCwdDraft}
+                      onChange={(event) => {
+                        setConversationCwdDraft(event.target.value);
+                        if (conversationCwdError) {
+                          setConversationCwdError(null);
+                        }
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          event.preventDefault();
+                          cancelConversationCwdEdit();
+                        }
+                      }}
+                      placeholder={currentCwd ?? '~/workingdir/repo'}
+                      spellCheck={false}
+                      aria-label="Conversation working directory"
+                      className="h-7 min-w-[12rem] max-w-[22rem] rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50"
+                      disabled={conversationCwdBusy || conversationCwdPickBusy}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { void pickConversationCwd(); }}
+                      disabled={conversationCwdBusy || conversationCwdPickBusy}
+                      className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
+                      title={conversationCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
+                    >
+                      {conversationCwdPickBusy ? 'Choosing…' : 'Browse…'}
+                    </button>
+                    <button type="submit" className="h-7 rounded-md px-2 text-[10px] text-accent transition-colors hover:bg-surface/45 disabled:opacity-50" disabled={conversationCwdBusy || conversationCwdPickBusy}>
+                      {conversationCwdBusy ? 'Switching…' : 'Switch'}
+                    </button>
+                    <button type="button" className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50" onClick={cancelConversationCwdEdit} disabled={conversationCwdBusy || conversationCwdPickBusy}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={beginConversationCwdEdit}
+                    className="inline-flex min-w-0 max-w-[26rem] items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
+                    title={currentCwd ? `Working directory: ${currentCwd}` : 'Set working directory'}
+                  >
+                    <FolderIcon className="shrink-0 text-dim/70" />
+                    <span className="truncate font-mono text-[11px]">{currentCwd || 'Set working directory'}</span>
+                  </button>
+                )}
+
+                {(draft ? draftCwdError : conversationCwdError) ? (
+                  <span className="text-danger/85">{draft ? draftCwdError : conversationCwdError}</span>
                 ) : null}
               </div>
-              <div className="flex min-w-0 items-center justify-end gap-2 overflow-hidden text-right">
-                {remoteExecutionLabel ? (
-                  <span className="inline-flex min-w-0 items-center gap-1 text-accent" title={`Running on ${remoteExecutionLabel}`}>
-                    <RemoteExecutionIcon className="shrink-0" />
-                    <span className="truncate">{remoteExecutionLabel}</span>
-                  </span>
-                ) : null}
+
+              <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-hidden text-right">
                 {!draft && branchLabel ? (
                   <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
                 ) : null}
@@ -7140,6 +7245,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   ) : (
                     <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
                   )
+                ) : null}
+                {sessionTokens ? (
+                  <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
                 ) : null}
               </div>
             </div>

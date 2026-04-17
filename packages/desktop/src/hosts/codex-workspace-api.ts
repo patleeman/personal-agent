@@ -278,6 +278,54 @@ export class CodexWorkspaceApiAdapter {
       });
     }
 
+    const conversationCwdMatch = path.match(/^\/api\/conversations\/([^/]+)\/cwd$/);
+    if (input.method === 'POST' && conversationCwdMatch) {
+      const conversationId = decodeURIComponent(conversationCwdMatch[1] ?? '');
+      const requestedCwd = typeof (input.body as { cwd?: unknown } | undefined)?.cwd === 'string'
+        ? ((input.body as { cwd: string }).cwd).trim()
+        : '';
+      if (!requestedCwd) {
+        return jsonResult(400, { error: 'cwd required' });
+      }
+
+      const currentThread = await this.readThread(conversationId);
+      if (currentThread.thread.cwd.trim() === requestedCwd) {
+        return jsonResult(200, {
+          id: conversationId,
+          sessionFile: currentThread.thread.path ?? '',
+          cwd: currentThread.thread.cwd,
+          changed: false,
+        });
+      }
+
+      const forkResult = await this.client.request<{ thread?: CodexThread; id?: string }>('thread/fork', {
+        threadId: conversationId,
+        cwd: requestedCwd,
+      });
+      const nextThread = forkResult.thread;
+      const nextConversationId = typeof nextThread?.id === 'string' && nextThread.id.trim().length > 0
+        ? nextThread.id.trim()
+        : typeof forkResult.id === 'string' && forkResult.id.trim().length > 0
+          ? forkResult.id.trim()
+          : '';
+      if (!nextConversationId) {
+        throw new Error('Remote workspace did not return a conversation id when changing cwd.');
+      }
+
+      const existingRuntime = this.threadRuntimeCache.get(conversationId);
+      if (existingRuntime) {
+        this.threadRuntimeCache.set(nextConversationId, existingRuntime);
+      }
+      this.activeTurnIds.delete(conversationId);
+
+      return jsonResult(200, {
+        id: nextConversationId,
+        sessionFile: nextThread?.path ?? '',
+        cwd: nextThread?.cwd ?? requestedCwd,
+        changed: true,
+      });
+    }
+
     const liveSessionMatch = path.match(/^\/api\/live-sessions\/([^/]+)$/);
     if (input.method === 'GET' && liveSessionMatch) {
       const conversationId = decodeURIComponent(liveSessionMatch[1] ?? '');
