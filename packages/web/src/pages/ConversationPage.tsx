@@ -3,7 +3,7 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
-import { ConversationWorkspaceShell, type ConversationWorkspaceShellControls } from '../components/ConversationWorkspaceShell';
+import { ConversationWorkspaceShell } from '../components/ConversationWorkspaceShell';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
@@ -1423,7 +1423,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const id = draft ? undefined : routeId;
   const location = useLocation();
   const navigate = useNavigate();
-  const workspaceShellControlsRef = useRef<ConversationWorkspaceShellControls | null>(null);
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
   const selectedRunId = getConversationRunIdFromSearch(location.search);
@@ -1467,30 +1466,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedCheckpointId]);
-
-  const openRun = useCallback((runId: string) => {
-    const shellControls = workspaceShellControlsRef.current;
-    if (shellControls && !shellControls.railOpen) {
-      shellControls.toggleRail();
-    }
-
-    if (selectedRunId === runId) {
-      return;
-    }
-
-    const nextSearch = setConversationRunIdInSearch(
-      setConversationCheckpointIdInSearch(
-        setConversationArtifactIdInSearch(location.search, null),
-        null,
-      ),
-      runId,
-    );
-
-    navigate({
-      pathname: location.pathname,
-      search: nextSearch,
-    });
-  }, [location.pathname, location.search, navigate, selectedRunId]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -3307,8 +3282,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => buildConversationBackgroundRunIndicatorText(activeConversationBackgroundRuns, runLookups),
     [activeConversationBackgroundRuns, runLookups],
   );
-  const showActiveBackgroundRunDetails = showBackgroundRunDetails
-    || activeConversationBackgroundRuns.some((run) => run.runId === selectedRunId);
+  const showActiveBackgroundRunDetails = showBackgroundRunDetails;
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
   const deferredResumeAutoResumeKey = useMemo(
     () => buildDeferredResumeAutoResumeKey({
@@ -6200,8 +6174,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={renderingStaleTranscript ? null : selectedArtifactId}
               onOpenCheckpoint={renderingStaleTranscript ? undefined : openCheckpoint}
               activeCheckpointId={renderingStaleTranscript ? null : selectedCheckpointId}
-              onOpenRun={renderingStaleTranscript ? undefined : openRun}
-              activeRunId={renderingStaleTranscript ? null : selectedRunId}
               onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}
@@ -6352,7 +6324,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     loadOlderMessages,
     openArtifact,
     openCheckpoint,
-    openRun,
     displayedPendingAssistantStatusLabel,
     realMessages,
     renderingStaleTranscript,
@@ -6362,7 +6333,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     rewindConversationFromMessage,
     selectedArtifactId,
     selectedCheckpointId,
-    selectedRunId,
     sessionLoading,
     shouldRenderConversationRail,
     showConversationLoadingState,
@@ -6425,10 +6395,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <ConversationWorkspaceShell>
-      {(shellControls) => {
-        workspaceShellControlsRef.current = shellControls;
-        return (
+    <ConversationWorkspaceShell contextRailEnabled={false}>
+      {() => (
         <div className="flex h-full flex-col overflow-hidden">
           <PageHeader className="min-h-[44px] gap-2 py-2">
             <div className="flex-1 min-w-0">
@@ -6709,7 +6677,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
                         {activeConversationBackgroundRuns.map((run) => {
                           const headline = getRunHeadline(run, runLookups);
-                          const selected = selectedRunId === run.runId;
                           const summary = headline.summary === 'Background run'
                             ? `Run ${run.runId}`
                             : headline.summary;
@@ -6729,17 +6696,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                                 </div>
                                 <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => openRun(run.runId)}
-                                disabled={selected}
-                                className={cx(
-                                  'shrink-0 text-[11px] transition-colors disabled:cursor-default disabled:opacity-50',
-                                  selected ? 'text-primary' : 'text-accent hover:text-accent/80',
-                                )}
-                              >
-                                {selected ? 'showing' : 'open'}
-                              </button>
                             </div>
                           );
                         })}
@@ -7217,8 +7173,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         </Suspense>
       )}
       </div>
-        );
-      }}
+      )}
     </ConversationWorkspaceShell>
   );
 }

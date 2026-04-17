@@ -930,4 +930,18 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('summarize + fork');
     expect(html).not.toContain('Show right sidebar');
   });
+
+  it('does not render the conversation right rail even when a run is selected', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/conversations/test-session?run=run-ui-preview-check-1']}>
+        <Routes>
+          <Route path="/conversations/:id" element={<ConversationPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).not.toContain('aria-label="Conversation context"');
+    expect(html).not.toContain('Show right sidebar');
+    expect(html).not.toContain('Hide right sidebar');
+  });
 });
