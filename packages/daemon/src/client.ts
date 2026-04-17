@@ -3,8 +3,10 @@ import { createConnection } from 'net';
 import { createDaemonEvent } from './events.js';
 import type { DaemonConfig } from './config.js';
 import { loadDaemonConfig } from './config.js';
+import { getDaemonClientTransportOverride } from './in-process-client.js';
 import { resolveDaemonPaths } from './paths.js';
 import type {
+  DaemonEvent,
   DaemonEventInput,
   DaemonStatus,
   ListDurableRunsResult,
@@ -119,7 +121,20 @@ async function sendRequest<T>(request: RequestEnvelope, config?: DaemonConfig): 
   });
 }
 
+function getTransport() {
+  return getDaemonClientTransportOverride();
+}
+
 export async function pingDaemon(config?: DaemonConfig): Promise<boolean> {
+  const transport = getTransport();
+  if (transport) {
+    try {
+      return await transport.ping(config);
+    } catch {
+      return false;
+    }
+  }
+
   try {
     const result = await sendRequest<{ pong: true }>(
       {
@@ -136,6 +151,11 @@ export async function pingDaemon(config?: DaemonConfig): Promise<boolean> {
 }
 
 export async function getDaemonStatus(config?: DaemonConfig): Promise<DaemonStatus> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.getStatus(config);
+  }
+
   return sendRequest<DaemonStatus>(
     {
       id: `req_${randomUUID()}`,
@@ -146,6 +166,12 @@ export async function getDaemonStatus(config?: DaemonConfig): Promise<DaemonStat
 }
 
 export async function stopDaemon(config?: DaemonConfig): Promise<void> {
+  const transport = getTransport();
+  if (transport) {
+    await transport.stop(config);
+    return;
+  }
+
   await sendRequest<{ stopping: boolean }>(
     {
       id: `req_${randomUUID()}`,
@@ -156,6 +182,11 @@ export async function stopDaemon(config?: DaemonConfig): Promise<void> {
 }
 
 export async function listDurableRuns(config?: DaemonConfig): Promise<ListDurableRunsResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.listDurableRuns(config);
+  }
+
   return sendRequest<ListDurableRunsResult>(
     {
       id: `req_${randomUUID()}`,
@@ -166,6 +197,11 @@ export async function listDurableRuns(config?: DaemonConfig): Promise<ListDurabl
 }
 
 export async function getDurableRun(runId: string, config?: DaemonConfig): Promise<GetDurableRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.getDurableRun(runId, config);
+  }
+
   return sendRequest<GetDurableRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -177,6 +213,11 @@ export async function getDurableRun(runId: string, config?: DaemonConfig): Promi
 }
 
 export async function startScheduledTaskRun(taskId: string, config?: DaemonConfig): Promise<StartScheduledTaskRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.startScheduledTaskRun(taskId, config);
+  }
+
   return sendRequest<StartScheduledTaskRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -191,6 +232,11 @@ export async function startBackgroundRun(
   input: StartBackgroundRunRequestInput,
   config?: DaemonConfig,
 ): Promise<StartBackgroundRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.startBackgroundRun(input, config);
+  }
+
   return sendRequest<StartBackgroundRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -202,6 +248,11 @@ export async function startBackgroundRun(
 }
 
 export async function cancelDurableRun(runId: string, config?: DaemonConfig): Promise<CancelDurableRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.cancelDurableRun(runId, config);
+  }
+
   return sendRequest<CancelDurableRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -213,6 +264,11 @@ export async function cancelDurableRun(runId: string, config?: DaemonConfig): Pr
 }
 
 export async function rerunDurableRun(runId: string, config?: DaemonConfig): Promise<ReplayDurableRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.rerunDurableRun(runId, config);
+  }
+
   return sendRequest<ReplayDurableRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -228,12 +284,18 @@ export async function followUpDurableRun(
   prompt?: string,
   config?: DaemonConfig,
 ): Promise<FollowUpDurableRunResult> {
+  const normalizedPrompt = typeof prompt === 'string' && prompt.trim().length > 0 ? prompt.trim() : undefined;
+  const transport = getTransport();
+  if (transport) {
+    return transport.followUpDurableRun(runId, normalizedPrompt, config);
+  }
+
   return sendRequest<FollowUpDurableRunResult>(
     {
       id: `req_${randomUUID()}`,
       type: 'runs.followUp',
       runId,
-      ...(typeof prompt === 'string' && prompt.trim().length > 0 ? { prompt: prompt.trim() } : {}),
+      ...(normalizedPrompt ? { prompt: normalizedPrompt } : {}),
     },
     config,
   );
@@ -243,6 +305,11 @@ export async function syncWebLiveConversationRunState(
   input: SyncWebLiveConversationRunRequestInput,
   config?: DaemonConfig,
 ): Promise<SyncWebLiveConversationRunResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.syncWebLiveConversationRunState(input, config);
+  }
+
   return sendRequest<SyncWebLiveConversationRunResult>(
     {
       id: `req_${randomUUID()}`,
@@ -256,6 +323,11 @@ export async function syncWebLiveConversationRunState(
 export async function listRecoverableWebLiveConversationRunsFromDaemon(
   config?: DaemonConfig,
 ): Promise<ListRecoverableWebLiveConversationRunsResult> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.listRecoverableWebLiveConversationRuns(config);
+  }
+
   return sendRequest<ListRecoverableWebLiveConversationRunsResult>(
     {
       id: `req_${randomUUID()}`,
@@ -265,8 +337,12 @@ export async function listRecoverableWebLiveConversationRunsFromDaemon(
   );
 }
 
-export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonConfig): Promise<boolean> {
-  const event = createDaemonEvent(input);
+async function emitDaemonEnvelope(event: DaemonEvent, config?: DaemonConfig): Promise<boolean> {
+  const transport = getTransport();
+  if (transport) {
+    return transport.emitEvent(event, config);
+  }
+
   const result = await sendRequest<{ accepted: boolean }>(
     {
       id: `req_${randomUUID()}`,
@@ -277,6 +353,10 @@ export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonCo
   );
 
   return result.accepted;
+}
+
+export async function emitDaemonEvent(input: DaemonEventInput, config?: DaemonConfig): Promise<boolean> {
+  return emitDaemonEnvelope(createDaemonEvent(input), config);
 }
 
 function getErrorCode(error: unknown): string | undefined {

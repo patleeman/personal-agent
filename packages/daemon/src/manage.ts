@@ -7,6 +7,12 @@ import { loadDaemonConfig } from './config.js';
 import { stopDaemon, pingDaemon, getDaemonStatus } from './client.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
 
+function assertDetachedDaemonLifecycleAvailable(): void {
+  if (process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1') {
+    throw new Error('Daemon lifecycle is managed by the desktop app. Restart Personal Agent instead.');
+  }
+}
+
 function resolveDaemonEntryFile(): string {
   const currentFile = fileURLToPath(import.meta.url);
   const currentDir = dirname(currentFile);
@@ -25,6 +31,7 @@ function resolveDaemonEntryFile(): string {
 }
 
 export async function startDaemonDetached(): Promise<void> {
+  assertDetachedDaemonLifecycleAvailable();
   const config = loadDaemonConfig();
   const paths = resolveDaemonPaths(config.ipc.socketPath);
 
@@ -47,6 +54,7 @@ export async function startDaemonDetached(): Promise<void> {
 }
 
 export async function stopDaemonGracefully(): Promise<void> {
+  assertDetachedDaemonLifecycleAvailable();
   const config = loadDaemonConfig();
 
   if (!(await pingDaemon(config))) {

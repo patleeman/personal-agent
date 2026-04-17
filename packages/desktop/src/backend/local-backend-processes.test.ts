@@ -3,40 +3,52 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   pingDaemon: vi.fn(),
   resolveDesktopRuntimePaths: vi.fn(),
-  waitForDaemonHealthy: vi.fn(),
-  spawnLoggedChild: vi.fn(),
-  stopManagedChild: vi.fn(),
+  bindInProcessDaemonClient: vi.fn(),
+  daemonInstances: [] as Array<{
+    options: unknown;
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+    isRunning: ReturnType<typeof vi.fn>;
+  }>,
 }));
 
-vi.mock('@personal-agent/daemon', () => ({
-  pingDaemon: mocks.pingDaemon,
-}));
+vi.mock('@personal-agent/daemon', () => {
+  class PersonalAgentDaemon {
+    options: unknown;
+    start: ReturnType<typeof vi.fn>;
+    stop: ReturnType<typeof vi.fn>;
+    isRunning: ReturnType<typeof vi.fn>;
+
+    constructor(options?: unknown) {
+      this.options = options;
+      this.start = vi.fn().mockResolvedValue(undefined);
+      this.stop = vi.fn().mockResolvedValue(undefined);
+      this.isRunning = vi.fn().mockReturnValue(true);
+      mocks.daemonInstances.push(this);
+    }
+  }
+
+  return {
+    pingDaemon: mocks.pingDaemon,
+    PersonalAgentDaemon,
+    bindInProcessDaemonClient: mocks.bindInProcessDaemonClient,
+  };
+});
 
 vi.mock('../desktop-env.js', () => ({
   resolveDesktopRuntimePaths: mocks.resolveDesktopRuntimePaths,
 }));
 
-vi.mock('./health.js', () => ({
-  waitForDaemonHealthy: mocks.waitForDaemonHealthy,
-}));
-
-vi.mock('./child-process.js', () => ({
-  spawnLoggedChild: mocks.spawnLoggedChild,
-  stopManagedChild: mocks.stopManagedChild,
-}));
-
 import { LocalBackendProcesses } from './local-backend-processes.js';
 import { readDesktopDaemonOwnership } from './daemon-ownership.js';
 
-function createManagedChild(label: string) {
-  return {
-    child: {
-      exitCode: null,
-      killed: false,
-      once: vi.fn(),
-    },
-    logPath: `/logs/${label}.log`,
-  };
+function lastDaemonInstance() {
+  const instance = mocks.daemonInstances.at(-1);
+  if (!instance) {
+    throw new Error('Expected daemon instance');
+  }
+
+  return instance;
 }
 
 describe('LocalBackendProcesses', () => {
@@ -48,6 +60,7 @@ describe('LocalBackendProcesses', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.daemonInstances.length = 0;
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
     delete process.env.PERSONAL_AGENT_DESKTOP_VARIANT;
     delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
@@ -65,16 +78,16 @@ describe('LocalBackendProcesses', () => {
       colorIconFile: '/repo/packages/desktop/assets/icon-color.svg',
     });
     mocks.pingDaemon.mockResolvedValue(false);
-    mocks.waitForDaemonHealthy.mockResolvedValue(undefined);
-    mocks.stopManagedChild.mockResolvedValue(undefined);
-    mocks.spawnLoggedChild.mockReturnValue(createManagedChild('daemon'));
+    mocks.bindInProcessDaemonClient.mockReturnValue(vi.fn());
   });
 
-  it('keeps the owned daemon warm instead of re-checking health on every ensureStarted call', async () => {
+  it('keeps the owned daemon warm instead of re-checking socket health on every ensureStarted call', async () => {
     const backend = new LocalBackendProcesses();
 
     await expect(backend.ensureStarted()).resolves.toBeUndefined();
-    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(1);
+    expect(mocks.daemonInstances).toHaveLength(1);
+    expect(mocks.bindInProcessDaemonClient).toHaveBeenCalledTimes(1);
+    expect(lastDaemonInstance().options).toMatchObject({ stopRequestBehavior: 'reject' });
 
     mocks.pingDaemon.mockReset();
 
@@ -91,22 +104,18 @@ describe('LocalBackendProcesses', () => {
       'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
     );
 
-    expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
+    expect(mocks.daemonInstances).toHaveLength(0);
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('allows testing launches to reuse an external daemon that becomes reachable during startup', async () => {
+  it('allows testing launches to reuse an external daemon that is already reachable', async () => {
     process.env.PERSONAL_AGENT_DESKTOP_VARIANT = 'testing';
-    mocks.pingDaemon
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
-
+    mocks.pingDaemon.mockResolvedValue(true);
     const backend = new LocalBackendProcesses();
 
     await expect(backend.ensureStarted()).resolves.toBeUndefined();
 
-    expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
-    expect(mocks.waitForDaemonHealthy).not.toHaveBeenCalled();
+    expect(mocks.daemonInstances).toHaveLength(0);
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
@@ -134,38 +143,32 @@ describe('LocalBackendProcesses', () => {
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('marks owned daemons and clears ownership on stop or exit', async () => {
+  it('marks owned daemons and clears ownership on stop', async () => {
+    const cleanupBinding = vi.fn();
+    mocks.bindInProcessDaemonClient.mockReturnValue(cleanupBinding);
     const backend = new LocalBackendProcesses();
 
     await backend.ensureStarted();
     expect(readDesktopDaemonOwnership()).toBe('owned');
 
     await backend.stop();
-    expect(readDesktopDaemonOwnership()).toBeUndefined();
 
-    mocks.spawnLoggedChild.mockReturnValueOnce(createManagedChild('daemon-restart'));
-    await backend.ensureStarted();
-    expect(readDesktopDaemonOwnership()).toBe('owned');
-
-    const daemonExitHandler = mocks.spawnLoggedChild.mock.results[1]?.value.child.once.mock.calls[0]?.[1];
-    daemonExitHandler?.(1, null);
+    expect(cleanupBinding).toHaveBeenCalledTimes(1);
+    expect(lastDaemonInstance().stop).toHaveBeenCalledTimes(1);
     expect(readDesktopDaemonOwnership()).toBeUndefined();
   });
 
-  it('clears owned child references on exit so the next ensureStarted can recover', async () => {
+  it('restarts the owned daemon by creating a fresh in-process runtime', async () => {
     const backend = new LocalBackendProcesses();
 
     await backend.ensureStarted();
+    const firstDaemon = lastDaemonInstance();
 
-    const daemonExitHandler = mocks.spawnLoggedChild.mock.results[0]?.value.child.once.mock.calls[0]?.[1];
-    daemonExitHandler?.(1, null);
+    await backend.restart();
 
-    mocks.pingDaemon.mockResolvedValue(false);
-    mocks.spawnLoggedChild.mockReturnValueOnce(createManagedChild('daemon-restart'));
-
-    await backend.ensureStarted();
-
-    expect(mocks.spawnLoggedChild).toHaveBeenCalledTimes(2);
+    expect(firstDaemon.stop).toHaveBeenCalledTimes(1);
+    expect(mocks.daemonInstances).toHaveLength(2);
+    expect(readDesktopDaemonOwnership()).toBe('owned');
   });
 
   it('rejects desktop runtime restarts when attached to an external daemon', async () => {
@@ -177,4 +180,5 @@ describe('LocalBackendProcesses', () => {
     );
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
+
 });

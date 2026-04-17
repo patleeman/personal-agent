@@ -1,11 +1,8 @@
-import { type ChildProcess } from 'node:child_process';
-import { resolveChildProcessEnv } from '@personal-agent/core';
-import { pingDaemon } from '@personal-agent/daemon';
+import { appendFileSync } from 'node:fs';
+import { PersonalAgentDaemon, bindInProcessDaemonClient, pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 import { clearDesktopDaemonOwnership, writeDesktopDaemonOwnership, type DesktopDaemonOwnership } from './daemon-ownership.js';
-import { waitForDaemonHealthy } from './health.js';
-import { spawnLoggedChild, stopManagedChild, type ManagedChildProcess } from './child-process.js';
 
 const EXTERNAL_DAEMON_CONFLICT_MESSAGE = 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.';
 const EXTERNAL_DAEMON_RESTART_MESSAGE = 'The desktop app does not own the running daemon. Restart it with `pa daemon restart` or stop the external daemon service first.';
@@ -21,7 +18,8 @@ interface LocalBackendStatus {
 }
 
 export class LocalBackendProcesses {
-  private daemonProcess?: ManagedChildProcess;
+  private daemon?: PersonalAgentDaemon;
+  private clearInProcessClientBinding?: () => void;
   private startPromise?: Promise<void>;
 
   async ensureStarted(): Promise<void> {
@@ -94,17 +92,19 @@ export class LocalBackendProcesses {
   }
 
   async stop(): Promise<void> {
-    await stopManagedChild(this.daemonProcess);
-    this.daemonProcess = undefined;
+    this.clearInProcessClientBinding?.();
+    this.clearInProcessClientBinding = undefined;
+
+    if (this.daemon) {
+      await this.daemon.stop();
+      this.daemon = undefined;
+    }
+
     clearDesktopDaemonOwnership();
   }
 
   private hasOwnedRuntime(): boolean {
-    return this.isManagedChildRunning(this.daemonProcess);
-  }
-
-  private isManagedChildRunning(managed: ManagedChildProcess | undefined): boolean {
-    return Boolean(managed && managed.child.exitCode === null && !managed.child.killed);
+    return this.daemon?.isRunning() === true;
   }
 
   private async start(options: { allowExistingDaemon?: boolean } = {}): Promise<void> {
@@ -132,35 +132,25 @@ export class LocalBackendProcesses {
     }
 
     const runtime = resolveDesktopRuntimePaths();
-    const childBaseEnv = resolveChildProcessEnv({
-      ...(runtime.useElectronRunAsNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
-      PERSONAL_AGENT_DESKTOP_RUNTIME: '1',
-      PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE: `${runtime.desktopLogsDir}/daemon.log`,
-      PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP: 'owned',
+    const logPath = `${runtime.desktopLogsDir}/daemon.log`;
+    const daemon = new PersonalAgentDaemon({
+      stopRequestBehavior: 'reject',
+      logSink: (line) => {
+        appendFileSync(logPath, `${line}\n`, 'utf-8');
+      },
     });
 
-    this.daemonProcess = spawnLoggedChild({
-      command: runtime.nodeCommand,
-      args: [runtime.daemonEntryFile, '--foreground'],
-      cwd: runtime.repoRoot,
-      env: childBaseEnv,
-      logPath: `${runtime.desktopLogsDir}/daemon.log`,
-    });
-    this.attachExitLogging(this.daemonProcess.child);
-    await waitForDaemonHealthy();
+    try {
+      await daemon.start();
+    } catch (error) {
+      clearDesktopDaemonOwnership();
+      await daemon.stop().catch(() => undefined);
+      throw error;
+    }
+
+    this.clearInProcessClientBinding?.();
+    this.clearInProcessClientBinding = bindInProcessDaemonClient(daemon);
+    this.daemon = daemon;
     writeDesktopDaemonOwnership('owned');
-  }
-
-  private attachExitLogging(child: ChildProcess): void {
-    child.once('exit', (code, signal) => {
-      if (this.daemonProcess?.child === child) {
-        this.daemonProcess = undefined;
-        clearDesktopDaemonOwnership();
-      }
-
-      const renderedCode = typeof code === 'number' ? String(code) : 'null';
-      const renderedSignal = signal ?? 'none';
-      console.warn(`[desktop] daemon exited code=${renderedCode} signal=${renderedSignal}`);
-    });
   }
 }

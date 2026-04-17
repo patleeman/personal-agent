@@ -4,10 +4,22 @@ import { fileURLToPath } from 'url';
 import { resolve } from 'path';
 import { runDaemonProcess } from './server.js';
 
-export { PersonalAgentDaemon } from './server.js';
+export {
+  PersonalAgentDaemon,
+  type PersonalAgentDaemonOptions,
+  type DaemonStopRequestBehavior,
+} from './server.js';
 export { createDaemonEvent, isDaemonEvent, DAEMON_EVENT_VERSION } from './events.js';
 export { loadDaemonConfig, getDefaultDaemonConfig, getDaemonConfigFilePath, type DaemonConfig } from './config.js';
 export { resolveDaemonPaths } from './paths.js';
+export {
+  bindInProcessDaemonClient,
+  clearDaemonClientTransportOverride,
+  createInProcessDaemonClient,
+  getDaemonClientTransportOverride,
+  setDaemonClientTransportOverride,
+  type DaemonClientTransport,
+} from './in-process-client.js';
 export {
   getDaemonStatus,
   pingDaemon,

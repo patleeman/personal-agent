@@ -31,7 +31,7 @@ function createController(id: string, label = id, kind: 'local' | 'ssh' = 'local
     getBaseUrl: vi.fn().mockResolvedValue(`http://${id}.example.test`),
     getStatus: vi.fn().mockResolvedValue({
       reachable: true,
-      mode: kind === 'local' ? 'local-child-process' : 'ssh-tunnel',
+      mode: kind === 'local' ? 'local-app-runtime' : 'ssh-tunnel',
       summary: `${label} ready`,
     }),
     openNewConversation: vi.fn().mockResolvedValue(`http://${id}.example.test/conversations/new`),

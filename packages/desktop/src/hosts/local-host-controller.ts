@@ -71,7 +71,7 @@ export class LocalHostController implements HostController {
 
     return {
       reachable,
-      mode: 'local-child-process',
+      mode: 'local-app-runtime',
       summary,
       webUrl: getDesktopAppBaseUrl(),
       daemonHealthy: reachable,

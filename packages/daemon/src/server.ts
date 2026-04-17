@@ -32,6 +32,7 @@ import {
   saveWebLiveConversationRunState,
 } from './runs/web-live-conversations.js';
 import type {
+  DaemonEvent,
   DaemonModuleStatus,
   DaemonPaths,
   DaemonStatus,
@@ -160,6 +161,18 @@ function appendBackgroundRunSessionDir(input: {
   };
 }
 
+export type DaemonStopRequestBehavior = 'exit-process' | 'reject' | 'stop-only';
+
+export interface PersonalAgentDaemonOptions {
+  config?: DaemonConfig;
+  stopRequestBehavior?: DaemonStopRequestBehavior;
+  logSink?: (line: string) => void;
+}
+
+function isDaemonConfig(value: DaemonConfig | PersonalAgentDaemonOptions): value is DaemonConfig {
+  return 'modules' in value && 'queue' in value && 'ipc' in value;
+}
+
 export class PersonalAgentDaemon {
   private readonly config: DaemonConfig;
   private readonly paths: DaemonPaths;
@@ -168,28 +181,34 @@ export class PersonalAgentDaemon {
   private readonly startedAt: string;
   private readonly pid: number;
   private readonly modules: ModuleRuntime[];
+  private readonly stopRequestBehavior: DaemonStopRequestBehavior;
+  private readonly logSink?: (line: string) => void;
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
   private server?: Server;
   private timerHandles: NodeJS.Timeout[] = [];
+  private running = false;
   private stopping = false;
 
-  constructor(config: DaemonConfig = loadDaemonConfig()) {
-    this.config = config;
-    this.paths = resolveDaemonPaths(config.ipc.socketPath);
+  constructor(input: DaemonConfig | PersonalAgentDaemonOptions = loadDaemonConfig()) {
+    const options = isDaemonConfig(input) ? { config: input } : input;
+    this.config = options.config ?? loadDaemonConfig();
+    this.stopRequestBehavior = options.stopRequestBehavior ?? 'exit-process';
+    this.logSink = options.logSink;
+    this.paths = resolveDaemonPaths(this.config.ipc.socketPath);
     this.runsRoot = resolveDurableRunsRoot(this.paths.root);
     this.startedAt = new Date().toISOString();
     this.pid = process.pid;
 
     this.bus = new EventBus({
-      maxDepth: config.queue.maxDepth,
+      maxDepth: this.config.queue.maxDepth,
       onHandlerError: (event, error) => {
         this.log('error', `event handler failed type=${event.type} id=${event.id} error=${error.message}`);
       },
     });
 
-    this.modules = createBuiltinModules(config)
+    this.modules = createBuiltinModules(this.config)
       .filter((module) => module.enabled)
       .map((module) => ({
         module,
@@ -207,6 +226,11 @@ export class PersonalAgentDaemon {
   }
 
   async start(): Promise<void> {
+    if (this.running) {
+      return;
+    }
+
+    this.stopping = false;
     ensureDaemonDirectories(this.paths);
     mkdirSync(this.runsRoot, { recursive: true, mode: 0o700 });
     this.prepareSocket();
@@ -232,6 +256,7 @@ export class PersonalAgentDaemon {
       });
     });
 
+    this.running = true;
     this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
   }
 
@@ -277,11 +302,19 @@ export class PersonalAgentDaemon {
     if (existsSync(this.paths.pidFile)) {
       rmSync(this.paths.pidFile, { force: true });
     }
+
+    this.server = undefined;
+    this.running = false;
+    this.stopping = false;
+  }
+
+  isRunning(): boolean {
+    return this.running && !this.stopping;
   }
 
   getStatus(): DaemonStatus {
     return {
-      running: !this.stopping,
+      running: this.isRunning(),
       pid: this.pid,
       startedAt: this.startedAt,
       socketPath: this.paths.socketPath,
@@ -565,10 +598,11 @@ export class PersonalAgentDaemon {
     }
 
     if (request.type === 'stop') {
-      this.respond(socket, { id: request.id, ok: true, result: { stopping: true } });
-      setTimeout(() => {
-        void this.stop().then(() => process.exit(0));
-      }, 10);
+      this.respond(socket, {
+        id: request.id,
+        ok: true,
+        result: await this.requestStop(),
+      });
       return;
     }
 
@@ -578,7 +612,7 @@ export class PersonalAgentDaemon {
         return;
       }
 
-      const accepted = this.bus.publish(request.event);
+      const accepted = this.publishEvent(request.event);
       this.respond(socket, {
         id: request.id,
         ok: true,
@@ -587,12 +621,37 @@ export class PersonalAgentDaemon {
           reason: accepted ? undefined : 'event queue is full',
         },
       });
-
-      this.log('debug', `event accepted=${accepted} type=${request.event.type} source=${request.event.source}`);
+      return;
     }
   }
 
-  private listDurableRuns(): ListDurableRunsResult {
+  async requestStop(): Promise<{ stopping: boolean }> {
+    if (this.stopRequestBehavior === 'reject') {
+      throw new Error('Daemon lifecycle is managed by the embedding application.');
+    }
+
+    setTimeout(() => {
+      void this.stop()
+        .then(() => {
+          if (this.stopRequestBehavior === 'exit-process') {
+            process.exit(0);
+          }
+        })
+        .catch((error) => {
+          this.log('error', `daemon stop request failed: ${(error as Error).message}`);
+        });
+    }, 10);
+
+    return { stopping: true };
+  }
+
+  publishEvent(event: DaemonEvent): boolean {
+    const accepted = this.bus.publish(event);
+    this.log('debug', `event accepted=${accepted} type=${event.type} source=${event.source}`);
+    return accepted;
+  }
+
+  listDurableRuns(): ListDurableRunsResult {
     const scannedAt = new Date().toISOString();
     const runs = scanDurableRunsForRecovery(this.runsRoot);
 
@@ -603,7 +662,7 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private getDurableRun(runId: string): GetDurableRunResult | undefined {
+  getDurableRun(runId: string): GetDurableRunResult | undefined {
     const run = scanDurableRun(this.runsRoot, runId);
     if (!run) {
       return undefined;
@@ -615,7 +674,7 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private async startScheduledTaskRun(taskId: string): Promise<StartScheduledTaskRunResult> {
+  async startScheduledTaskRun(taskId: string): Promise<StartScheduledTaskRunResult> {
     const runId = `task-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const accepted = this.bus.publish(createDaemonEvent({
       type: 'tasks.run.requested',
@@ -871,7 +930,7 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
+  async startBackgroundRun(input: StartBackgroundRunInput): Promise<StartBackgroundRunResult> {
     return this.spawnBackgroundRun(input);
   }
 
@@ -889,7 +948,7 @@ export class PersonalAgentDaemon {
     return run;
   }
 
-  private async rerunBackgroundRun(runId: string): Promise<ReplayDurableRunResult> {
+  async rerunBackgroundRun(runId: string): Promise<ReplayDurableRunResult> {
     const run = this.getReplayableBackgroundRun(runId);
     const result = await this.spawnBackgroundRun(buildRerunBackgroundRunInput(run));
     return {
@@ -898,7 +957,7 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private async followUpBackgroundRun(runId: string, prompt?: string): Promise<FollowUpDurableRunResult> {
+  async followUpBackgroundRun(runId: string, prompt?: string): Promise<FollowUpDurableRunResult> {
     const run = this.getReplayableBackgroundRun(runId);
     const result = await this.spawnBackgroundRun(buildFollowUpBackgroundRunInput(
       run,
@@ -910,7 +969,7 @@ export class PersonalAgentDaemon {
     };
   }
 
-  private async cancelBackgroundRun(runId: string, reason = 'Cancelled by user'): Promise<CancelDurableRunResult> {
+  async cancelBackgroundRun(runId: string, reason = 'Cancelled by user'): Promise<CancelDurableRunResult> {
     const active = this.activeBackgroundRuns.get(runId);
     if (active) {
       active.cancelling = true;
@@ -998,13 +1057,13 @@ export class PersonalAgentDaemon {
     }));
   }
 
-  private async syncWebLiveConversationRun(
+  async syncWebLiveConversationRun(
     input: SyncWebLiveConversationRunRequestInput,
   ): Promise<SyncWebLiveConversationRunResult> {
     return saveWebLiveConversationRunState(input);
   }
 
-  private listRecoverableWebLiveConversationRuns(): ListRecoverableWebLiveConversationRunsResult {
+  listRecoverableWebLiveConversationRuns(): ListRecoverableWebLiveConversationRunsResult {
     return {
       runs: listRecoverableWebLiveConversationRuns(),
     };
@@ -1038,7 +1097,13 @@ export class PersonalAgentDaemon {
     }
 
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] [${level}] ${message}`);
+    const line = `[${timestamp}] [${level}] ${message}`;
+    if (this.logSink) {
+      this.logSink(line);
+      return;
+    }
+
+    console.log(line);
   }
 }
 

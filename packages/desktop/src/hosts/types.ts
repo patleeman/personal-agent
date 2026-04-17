@@ -60,7 +60,7 @@ export interface DesktopConfig {
 
 export interface HostStatus {
   reachable: boolean;
-  mode: 'local-child-process' | 'ssh-tunnel';
+  mode: 'local-app-runtime' | 'ssh-tunnel';
   summary: string;
   webUrl?: string;
   daemonHealthy?: boolean;

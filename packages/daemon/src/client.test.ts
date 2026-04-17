@@ -22,6 +22,7 @@ import {
   syncWebLiveConversationRunState,
 } from './client.js';
 import type { DaemonConfig } from './config.js';
+import { clearDaemonClientTransportOverride, setDaemonClientTransportOverride } from './in-process-client.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -92,6 +93,7 @@ async function startMockDaemonServer(
 
 afterEach(async () => {
   process.env = originalEnv;
+  clearDaemonClientTransportOverride();
   await Promise.allSettled(servers.splice(0).map((server) => closeServer(server)));
   await Promise.allSettled(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
@@ -230,6 +232,47 @@ describe('client daemon ipc helpers', () => {
     await expect(getDaemonStatus(config)).rejects.toThrow('status unavailable');
     await expect(stopDaemon(config)).rejects.toThrow('Daemon returned empty response');
     await expect(listDurableRuns(config)).rejects.toThrow('Daemon connection closed without response');
+  });
+});
+
+describe('client daemon in-process transport override', () => {
+  it('routes client helpers through the transport override instead of the socket', async () => {
+    const transport = {
+      ping: vi.fn().mockResolvedValue(true),
+      getStatus: vi.fn().mockResolvedValue({ running: true, pid: 9, startedAt: '2026-04-17T00:00:00.000Z', socketPath: 'in-process', queue: { maxDepth: 1, currentDepth: 0, droppedEvents: 0, processedEvents: 0 }, modules: [] }),
+      stop: vi.fn().mockResolvedValue(undefined),
+      listDurableRuns: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } }),
+      getDurableRun: vi.fn().mockResolvedValue({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } }),
+      startScheduledTaskRun: vi.fn().mockResolvedValue({ accepted: true, runId: 'task-run-1' }),
+      startBackgroundRun: vi.fn().mockResolvedValue({ accepted: true, runId: 'background-run-1' }),
+      cancelDurableRun: vi.fn().mockResolvedValue({ cancelled: true, runId: 'run-1' }),
+      rerunDurableRun: vi.fn().mockResolvedValue({ accepted: true, runId: 'rerun-1', sourceRunId: 'run-1' }),
+      followUpDurableRun: vi.fn().mockResolvedValue({ accepted: true, runId: 'follow-up-1', sourceRunId: 'run-1' }),
+      syncWebLiveConversationRunState: vi.fn().mockResolvedValue({ runId: 'web-live-1' }),
+      listRecoverableWebLiveConversationRuns: vi.fn().mockResolvedValue({ runs: [{ runId: 'web-live-1' }] }),
+      emitEvent: vi.fn().mockResolvedValue(true),
+    };
+    setDaemonClientTransportOverride(transport);
+
+    await expect(pingDaemon()).resolves.toBe(true);
+    await expect(getDaemonStatus()).resolves.toMatchObject({ pid: 9, running: true });
+    await expect(stopDaemon()).resolves.toBeUndefined();
+    await expect(listDurableRuns()).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', runs: [], summary: { total: 0 } });
+    await expect(getDurableRun('run-1')).resolves.toEqual({ scannedAt: '2026-04-17T00:00:00.000Z', run: { id: 'run-1' } });
+    await expect(startScheduledTaskRun('task-1')).resolves.toEqual({ accepted: true, runId: 'task-run-1' });
+    await expect(startBackgroundRun({ taskSlug: 'task', cwd: '/tmp' })).resolves.toEqual({ accepted: true, runId: 'background-run-1' });
+    await expect(cancelDurableRun('run-1')).resolves.toEqual({ cancelled: true, runId: 'run-1' });
+    await expect(rerunDurableRun('run-1')).resolves.toEqual({ accepted: true, runId: 'rerun-1', sourceRunId: 'run-1' });
+    await expect(followUpDurableRun('run-1', '  keep going  ')).resolves.toEqual({ accepted: true, runId: 'follow-up-1', sourceRunId: 'run-1' });
+    await expect(syncWebLiveConversationRunState({ conversationId: 'conv-1', sessionFile: '/tmp/session.jsonl', cwd: '/tmp', state: 'running' })).resolves.toEqual({ runId: 'web-live-1' });
+    await expect(listRecoverableWebLiveConversationRunsFromDaemon()).resolves.toEqual({ runs: [{ runId: 'web-live-1' }] });
+    await expect(emitDaemonEvent({ type: 'pi.run.completed', source: 'desktop' })).resolves.toBe(true);
+
+    expect(transport.ping).toHaveBeenCalledTimes(1);
+    expect(transport.getStatus).toHaveBeenCalledTimes(1);
+    expect(transport.stop).toHaveBeenCalledTimes(1);
+    expect(transport.followUpDurableRun).toHaveBeenCalledWith('run-1', 'keep going', undefined);
+    expect(transport.emitEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'pi.run.completed', source: 'desktop' }), undefined);
   });
 });
 

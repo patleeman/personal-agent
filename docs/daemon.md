@@ -1,8 +1,10 @@
 # Daemon and Background Automation
 
-`personal-agentd` is the shared background process behind unattended behavior.
+`personal-agentd` is the shared background runtime behind unattended behavior.
 
 If you care about scheduled tasks / automations, deferred resumes, or daemon-backed durable runs, you usually want the daemon running.
+
+In the desktop app, the daemon can be owned directly by the Electron runtime instead of being managed as a separate OS service. The same daemon package still owns the background logic; only the host process changes.
 
 ## What the daemon does
 
@@ -13,7 +15,7 @@ The daemon owns background automation such as:
 - durable background runs
 - maintenance and cleanup
 
-It gives the CLI and web UI one place to hand off long-lived work.
+It gives the CLI, web UI, and desktop shell one place to hand off long-lived work.
 
 ## On-disk state
 
@@ -59,6 +61,10 @@ Loads scheduled task files, keeps runtime state in SQLite, runs due work, and tr
 Wakes saved conversations back up when deferred work becomes due.
 
 ## Service management
+
+The CLI service commands matter for headless / CLI-managed daemon usage.
+
+When the packaged desktop app owns the daemon directly, desktop lifecycle controls are the source of truth instead and launchd/systemd service actions are intentionally not the normal control path.
 
 CLI surface:
 

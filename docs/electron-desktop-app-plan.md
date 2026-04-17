@@ -78,11 +78,12 @@ That gives us distinct shortcuts for closing a conversation, moving around the c
 
 The local desktop host:
 
-- normally starts its own daemon in foreground child-process mode
+- normally starts its own daemon in-process inside the Electron desktop runtime
 - refuses to attach to an already-running external daemon in stable desktop launches, so quit semantics stay sane
 - still allows testing/dev launches to attach to an already-running external daemon for compatibility while we migrate off that path
 - loads the packaged renderer over `personal-agent://app/`
 - resolves local JSON API requests and event streams through the Electron main process instead of a loopback web child
+- calls the desktop-owned daemon directly for hot local flows instead of bouncing those paths back through the local daemon socket
 - keeps that local runtime warm for as long as the menubar app stays open
 - does not expose any separate companion/mobile surface from the packaged desktop shell
 
