@@ -62,6 +62,7 @@ That means:
 - when a conversation targets a remote, the desktop app downloads the matching Pi release binary locally and copies it to the remote cache on demand
 - the desktop app also copies a small transient helper binary that keeps a detached remote Pi RPC session alive across disconnects and lets the desktop reattach later
 - remote cwd browsing is real remote browsing, not a local folder picker with a remote label
+- the desktop shell surfaces live SSH remote progress during first connect and reconnects (copying Pi/helper, starting Pi, reattaching, and loading remote directories)
 - conversation execution targeting remains per-thread, not per-window: a local desktop conversation can continue on an SSH remote while the local UI stays on the normal conversation route
 - linked remote-target conversations keep their local thread metadata while the live execution state runs through remote Pi RPC over SSH
 

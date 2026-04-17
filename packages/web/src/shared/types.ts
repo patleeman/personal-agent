@@ -730,6 +730,22 @@ export interface DesktopRemoteDirectoryListing {
   entries: DesktopRemoteDirectoryEntry[];
 }
 
+export interface DesktopRemoteOperationStatus {
+  hostId: string;
+  hostLabel: string;
+  conversationId?: string;
+  scope: 'runtime' | 'directory';
+  stage: 'connect' | 'detect-platform' | 'download-pi' | 'copy-pi' | 'copy-helper' | 'launch' | 'attach' | 'reconnect' | 'restart' | 'browse' | 'ready' | 'error';
+  status: 'running' | 'success' | 'error';
+  message: string;
+  at: string;
+}
+
+export interface DesktopRemoteOperationBridgeEvent {
+  type: 'open' | 'event' | 'close';
+  event?: DesktopRemoteOperationStatus;
+}
+
 type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
 
 interface DesktopAppUpdateState {

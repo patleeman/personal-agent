@@ -275,6 +275,7 @@ export function DesktopConnectionsModal({
                   <li>start a detached remote Pi runtime, and</li>
                   <li>reconnect to that runtime over SSH when needed.</li>
                 </ul>
+                <p className="mt-3 text-[11px] text-secondary">Use the conversation footer to browse the remote filesystem and watch live copy/launch status during the first connection.</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">

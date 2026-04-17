@@ -11,6 +11,8 @@ const CONVERSATION_STATE_CHANNEL = `${CHANNEL_PREFIX}:conversation-state`;
 const CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
 const APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
+const REMOTE_OPERATION_CHANNEL = `${CHANNEL_PREFIX}:remote-operation`;
+const REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 const PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
@@ -298,6 +300,8 @@ const desktopBridge = {
   unsubscribeApiStream: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-api-stream`, subscriptionId),
   subscribeAppEvents: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-app-events`),
   unsubscribeAppEvents: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-app-events`, subscriptionId),
+  subscribeRemoteOperations: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-remote-operations`),
+  unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
   showConnectionsWindow: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-connections`),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
@@ -337,6 +341,10 @@ ipcRenderer.on(CONVERSATION_STATE_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(APP_EVENTS_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(APP_EVENTS_EVENT, payload);
+});
+
+ipcRenderer.on(REMOTE_OPERATION_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(REMOTE_OPERATION_EVENT, payload);
 });
 
 ipcRenderer.on(PROVIDER_OAUTH_CHANNEL, (_event, payload: unknown) => {

@@ -24,6 +24,22 @@ export interface DesktopRemoteDirectoryListing {
   entries: DesktopRemoteDirectoryEntry[];
 }
 
+export interface DesktopRemoteOperationStatus {
+  hostId: string;
+  hostLabel: string;
+  conversationId?: string;
+  scope: 'runtime' | 'directory';
+  stage: 'connect' | 'detect-platform' | 'download-pi' | 'copy-pi' | 'copy-helper' | 'launch' | 'attach' | 'reconnect' | 'restart' | 'browse' | 'ready' | 'error';
+  status: 'running' | 'success' | 'error';
+  message: string;
+  at: string;
+}
+
+export interface DesktopRemoteOperationBridgeEvent {
+  type: 'open' | 'event' | 'close';
+  event?: DesktopRemoteOperationStatus;
+}
+
 export interface DesktopAppPreferences {
   autoInstallUpdates: boolean;
   startOnSystemStart: boolean;

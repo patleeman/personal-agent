@@ -88,10 +88,14 @@ function resolveExtractedBinaryPath(version: string, platform: RemotePlatformInf
   return resolve(versionDir, 'pi');
 }
 
-export async function ensurePiReleaseBinary(platform: RemotePlatformInfo): Promise<{ version: string; path: string; assetName: string }> {
+export async function ensurePiReleaseBinary(
+  platform: RemotePlatformInfo,
+  onProgress?: (event: { phase: 'checking-cache' | 'downloading' | 'extracting'; version: string; assetName: string }) => void,
+): Promise<{ version: string; path: string; assetName: string }> {
   const version = readInstalledPiVersion();
   const assetName = renderPiReleaseAssetName(platform);
   const binaryPath = resolveExtractedBinaryPath(version, platform);
+  onProgress?.({ phase: 'checking-cache', version, assetName });
   if (existsSync(binaryPath)) {
     return { version, path: binaryPath, assetName };
   }
@@ -99,9 +103,11 @@ export async function ensurePiReleaseBinary(platform: RemotePlatformInfo): Promi
   const archivePath = resolveArchivePath(version, assetName);
   if (!existsSync(archivePath)) {
     const url = `https://github.com/${PI_RELEASE_OWNER}/${PI_RELEASE_REPO}/releases/download/v${version}/${assetName}`;
+    onProgress?.({ phase: 'downloading', version, assetName });
     await downloadRelease(url, archivePath);
   }
 
+  onProgress?.({ phase: 'extracting', version, assetName });
   const extractDir = mkdtempSync(join(tmpdir(), `personal-agent-pi-release-${platform.key}-`));
   try {
     run('tar', ['-xzf', archivePath, '-C', extractDir]);

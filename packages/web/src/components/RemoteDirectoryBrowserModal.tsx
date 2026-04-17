@@ -20,6 +20,8 @@ export function RemoteDirectoryBrowserModal({
   hostLabel,
   initialPath,
   title = 'Choose remote directory',
+  statusMessage,
+  statusTone = 'accent',
   onSelect,
   onClose,
 }: {
@@ -27,6 +29,8 @@ export function RemoteDirectoryBrowserModal({
   hostLabel: string;
   initialPath?: string | null;
   title?: string;
+  statusMessage?: string | null;
+  statusTone?: 'accent' | 'danger';
   onSelect: (path: string) => void;
   onClose: () => void;
 }) {
@@ -85,6 +89,8 @@ export function RemoteDirectoryBrowserModal({
     }
   };
 
+  const activeStatusMessage = statusMessage ?? (loading ? `Connecting to ${hostLabel}…` : null);
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
       <div className="flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl">
@@ -102,11 +108,13 @@ export function RemoteDirectoryBrowserModal({
         <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-3 text-[12px] text-secondary">
           <ToolbarButton onClick={() => { void navigateTo(visibleListing?.parent); }} disabled={!visibleListing?.parent || loading}>Up</ToolbarButton>
           <div className="min-w-0 flex-1 truncate font-mono text-[11px] text-primary">{selectedPath || visibleListing?.path || 'Loading…'}</div>
+          <ToolbarButton onClick={() => { void navigateTo(selectedPath || visibleListing?.path || initialPath || undefined); }} disabled={loading}>Reload</ToolbarButton>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-          {loading ? <p className="ui-card-meta px-2">Loading remote directory…</p> : null}
-          {error ? <p className="px-2 text-[12px] text-danger">{error}</p> : null}
+          {activeStatusMessage ? <p className={cx('px-2 text-[12px]', statusTone === 'danger' ? 'text-danger' : 'text-accent')}>{activeStatusMessage}</p> : null}
+          {loading ? <p className="ui-card-meta px-2 pt-2">Loading remote directory…</p> : null}
+          {error ? <p className="px-2 pt-2 text-[12px] text-danger">{error}</p> : null}
           {!loading && !error && visibleListing ? (
             <div className="space-y-px">
               {visibleListing.entries.filter((entry) => entry.isDir).length > 0 ? visibleListing.entries.filter((entry) => entry.isDir).map((entry) => {

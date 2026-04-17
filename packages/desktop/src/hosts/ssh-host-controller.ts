@@ -12,6 +12,7 @@ import type {
 import { parseApiDispatchResult } from './api-dispatch.js';
 import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
 import { runSshCommand } from '../system-ssh.js';
+import { emitDesktopRemoteOperationStatus } from '../remote-operation-events.js';
 
 function jsonResult(statusCode: number, body: unknown): HostApiDispatchResult {
   return {
@@ -197,7 +198,7 @@ export class SshHostController implements HostController {
       if (!cwd) {
         return jsonResult(400, { error: 'cwd required' });
       }
-      const runtimeInfo = await runtime.restartRuntime(cwd);
+      const runtimeInfo = await runtime.restartRuntime(cwd, conversationId);
       const localFile = await this.readLocalSessionFile(conversationId);
       await runtime.syncRemoteSessionToLocal({ conversationId, localFilePath: localFile });
       return jsonResult(200, {
@@ -386,7 +387,12 @@ export class SshHostController implements HostController {
   }
 
   async readDirectory(path?: string | null) {
-    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
+    const runtime = new SshRemoteConversationRuntime(
+      this.record.sshTarget,
+      this.id,
+      this.label,
+      (status) => emitDesktopRemoteOperationStatus(status),
+    );
     return runtime.readDirectory(path);
   }
 
@@ -602,7 +608,12 @@ export class SshHostController implements HostController {
       return existing;
     }
 
-    const runtime = new SshRemoteConversationRuntime(this.record.sshTarget, this.id, this.label);
+    const runtime = new SshRemoteConversationRuntime(
+      this.record.sshTarget,
+      this.id,
+      this.label,
+      (status) => emitDesktopRemoteOperationStatus(status),
+    );
     this.runtimes.set(conversationId, runtime);
     return runtime;
   }

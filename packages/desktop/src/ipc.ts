@@ -5,11 +5,13 @@ import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
+import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
 const CONVERSATION_STATE_CHANNEL = `${CHANNEL_PREFIX}:conversation-state`;
 const APP_EVENTS_CHANNEL = `${CHANNEL_PREFIX}:app-events`;
+const REMOTE_OPERATION_CHANNEL = `${CHANNEL_PREFIX}:remote-operation`;
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 
 export function registerDesktopIpc(options: {
@@ -23,6 +25,7 @@ export function registerDesktopIpc(options: {
   const streamSubscriptions = new Map<string, () => void>();
   const conversationStateSubscriptions = new Map<string, () => void>();
   const appEventSubscriptions = new Map<string, () => void>();
+  const remoteOperationSubscriptions = new Map<string, () => void>();
   const providerOAuthSubscriptions = new Map<string, () => void>();
 
   const sendBufferedSubscriptionEvent = <T>(input: {
@@ -1218,6 +1221,31 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-app-events`, async (_event, subscriptionId: string) => {
     appEventSubscriptions.get(subscriptionId)?.();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-remote-operations`, async (event) => {
+    const subscriptionId = `${event.sender.id}:remote-operation:${Date.now().toString(36)}:${Math.random().toString(36).slice(2, 10)}`;
+    await sendBufferedSubscriptionEvent({
+      sender: event.sender,
+      channel: REMOTE_OPERATION_CHANNEL,
+      subscriptionId,
+      store: remoteOperationSubscriptions,
+      subscribe: async (emit) => {
+        emit({ type: 'open' });
+        const unsubscribe = subscribeDesktopRemoteOperationStatus((status) => {
+          emit({ type: 'event', event: status });
+        });
+        return () => {
+          unsubscribe();
+          emit({ type: 'close' });
+        };
+      },
+    });
+    return { subscriptionId };
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, async (_event, subscriptionId: string) => {
+    remoteOperationSubscriptions.get(subscriptionId)?.();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:subscribe-provider-oauth-login`, async (event, loginId: string) => {

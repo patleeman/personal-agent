@@ -10,6 +10,7 @@ import { ensurePiReleaseBinary } from './pi-release-cache.js';
 import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
 import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
 import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadFileOverScp } from './system-ssh.js';
+import type { DesktopRemoteOperationStatus } from './hosts/types.js';
 
 export interface RemoteDirectoryEntry {
   name: string;
@@ -47,6 +48,11 @@ interface HelperResponseEnvelope {
 interface HelperEventEnvelope {
   type: 'event';
   event: Record<string, unknown>;
+}
+
+interface RemoteStatusContext {
+  scope: 'runtime' | 'directory';
+  conversationId?: string;
 }
 
 function quoteForShell(value: string): string {
@@ -122,6 +128,7 @@ export class SshRemoteConversationRuntime {
   private tunnelProcess: ChildProcess | null = null;
   private socket: Socket | null = null;
   private connectingPromise: Promise<void> | null = null;
+  private currentConversationId: string | null = null;
   private nextRequestId = 1;
   private readonly pendingRequests = new Map<string, {
     resolve: (value: unknown) => void;
@@ -134,10 +141,19 @@ export class SshRemoteConversationRuntime {
     private readonly sshTarget: string,
     private readonly hostId: string,
     private readonly hostLabel: string,
+    private readonly onStatus?: (event: DesktopRemoteOperationStatus) => void,
   ) {}
 
-  async detectRemotePlatform(): Promise<RemotePlatformInfo> {
+  async detectRemotePlatform(context?: RemoteStatusContext): Promise<RemotePlatformInfo> {
     if (!this.platformPromise) {
+      if (context) {
+        this.emitStatus({
+          ...context,
+          stage: 'detect-platform',
+          status: 'running',
+          message: `Detecting ${this.hostLabel} platform…`,
+        });
+      }
       this.platformPromise = (async () => {
         const output = runSshCommand(this.sshTarget, 'uname -s && uname -m');
         const [rawOs = '', rawArch = ''] = output.trim().split(/\r?\n/);
@@ -149,20 +165,51 @@ export class SshRemoteConversationRuntime {
   }
 
   async readDirectory(path: string | null | undefined): Promise<RemoteDirectoryListing> {
-    const platform = await this.detectRemotePlatform();
-    const helperBinary = resolveRemoteHelperBinary(platform);
-    const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
-    await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path);
-
+    const context: RemoteStatusContext = { scope: 'directory' };
     const normalizedPath = typeof path === 'string' ? path.trim() : '';
-    const command = [
-      `${renderRemotePathForShell(remoteHelperPath)}`,
-      'list-dir',
-      '--path',
-      quoteForShell(normalizedPath),
-    ].join(' ');
-    const output = runSshCommand(this.sshTarget, renderRemoteCommand(command)).trim();
-    return JSON.parse(output) as RemoteDirectoryListing;
+    const pathLabel = normalizedPath || '~';
+
+    try {
+      this.emitStatus({
+        ...context,
+        stage: 'connect',
+        status: 'running',
+        message: `Connecting to ${this.hostLabel}…`,
+      });
+      const platform = await this.detectRemotePlatform(context);
+      const helperBinary = resolveRemoteHelperBinary(platform);
+      const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
+      await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path, context);
+
+      this.emitStatus({
+        ...context,
+        stage: 'browse',
+        status: 'running',
+        message: `Loading ${pathLabel} on ${this.hostLabel}…`,
+      });
+      const command = [
+        `${renderRemotePathForShell(remoteHelperPath)}`,
+        'list-dir',
+        '--path',
+        quoteForShell(normalizedPath),
+      ].join(' ');
+      const output = runSshCommand(this.sshTarget, renderRemoteCommand(command)).trim();
+      this.emitStatus({
+        ...context,
+        stage: 'browse',
+        status: 'success',
+        message: `Loaded ${pathLabel} on ${this.hostLabel}.`,
+      });
+      return JSON.parse(output) as RemoteDirectoryListing;
+    } catch (error) {
+      this.emitStatus({
+        ...context,
+        stage: 'error',
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   async ensureRuntime(input: {
@@ -171,56 +218,141 @@ export class SshRemoteConversationRuntime {
     sessionContent?: string;
     fallbackSessionContent?: string;
   }): Promise<HelperRuntimeInfo> {
+    const context: RemoteStatusContext = {
+      scope: 'runtime',
+      conversationId: input.conversationId,
+    };
     const normalizedCwd = input.cwd.trim();
     if (!normalizedCwd) {
       throw new Error('Remote cwd is required.');
     }
 
-    const platform = await this.detectRemotePlatform();
-    const [piBinary, helperBinary] = await Promise.all([
-      ensurePiReleaseBinary(platform),
-      Promise.resolve(resolveRemoteHelperBinary(platform)),
-    ]);
+    this.currentConversationId = input.conversationId;
 
-    await this.ensureRemotePiInstalled(platform, piBinary.version, piBinary.path);
-    await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path);
+    try {
+      if (this.helperRuntimeInfo) {
+        if (this.socket && !this.socket.destroyed) {
+          return this.helperRuntimeInfo;
+        }
 
-    const remoteRunDir = buildRemoteConversationRunDir(input.conversationId);
-    const remoteSessionFile = buildRemoteSessionFile(input.conversationId);
-    const remotePiPath = buildRemotePiPath(piBinary.version, platform);
-    const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
-
-    runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteRunDir)}`);
-    if (typeof input.sessionContent === 'string') {
-      this.uploadSessionContent(remoteSessionFile, input.sessionContent);
-    } else if (typeof input.fallbackSessionContent === 'string') {
-      const remoteSessionExists = this.remoteFileExists(remoteSessionFile);
-      if (!remoteSessionExists) {
-        this.uploadSessionContent(remoteSessionFile, input.fallbackSessionContent);
+        try {
+          await this.ensureHelperConnection({
+            ...context,
+            stage: 'reconnect',
+            message: `Reconnecting to ${this.hostLabel}…`,
+          });
+          this.emitStatus({
+            ...context,
+            stage: 'ready',
+            status: 'success',
+            message: `Remote runtime on ${this.hostLabel} is ready.`,
+          });
+          return this.helperRuntimeInfo;
+        } catch {
+          this.disposeConnection();
+          this.helperRuntimeInfo = null;
+        }
       }
-    }
 
-    const launchCommand = [
-      `${renderRemotePathForShell(remoteHelperPath)}`,
-      'launch',
-      '--run-dir', renderRemotePathForShell(remoteRunDir),
-      '--pi', renderRemotePathForShell(remotePiPath),
-      '--session', renderRemotePathForShell(remoteSessionFile),
-      '--cwd', quoteForShell(normalizedCwd),
-    ].join(' ');
-    const output = runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand)).trim();
-    const runtimeInfo = JSON.parse(output) as HelperRuntimeInfo;
-    if (!isHelperRuntimeInfo(runtimeInfo)) {
-      throw new Error(`Remote helper for ${this.hostLabel} returned malformed runtime info.`);
-    }
+      this.emitStatus({
+        ...context,
+        stage: 'connect',
+        status: 'running',
+        message: `Connecting to ${this.hostLabel}…`,
+      });
+      const platform = await this.detectRemotePlatform(context);
+      const [piBinary, helperBinary] = await Promise.all([
+        ensurePiReleaseBinary(platform, (progress) => {
+          if (progress.phase === 'downloading') {
+            this.emitStatus({
+              ...context,
+              stage: 'download-pi',
+              status: 'running',
+              message: `Downloading Pi ${progress.version} for ${this.hostLabel}…`,
+            });
+            return;
+          }
+          if (progress.phase === 'extracting') {
+            this.emitStatus({
+              ...context,
+              stage: 'download-pi',
+              status: 'running',
+              message: `Preparing Pi ${progress.version} for ${this.hostLabel}…`,
+            });
+          }
+        }),
+        Promise.resolve(resolveRemoteHelperBinary(platform)),
+      ]);
 
-    this.helperRuntimeInfo = runtimeInfo;
-    await this.ensureHelperConnection();
-    return runtimeInfo;
+      await this.ensureRemotePiInstalled(platform, piBinary.version, piBinary.path, context);
+      await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path, context);
+
+      const remoteRunDir = buildRemoteConversationRunDir(input.conversationId);
+      const remoteSessionFile = buildRemoteSessionFile(input.conversationId);
+      const remotePiPath = buildRemotePiPath(piBinary.version, platform);
+      const remoteHelperPath = buildRemoteHelperPath(helperBinary.version, platform);
+
+      runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteRunDir)}`);
+      if (typeof input.sessionContent === 'string') {
+        this.uploadSessionContent(remoteSessionFile, input.sessionContent);
+      } else if (typeof input.fallbackSessionContent === 'string') {
+        const remoteSessionExists = this.remoteFileExists(remoteSessionFile);
+        if (!remoteSessionExists) {
+          this.uploadSessionContent(remoteSessionFile, input.fallbackSessionContent);
+        }
+      }
+
+      this.emitStatus({
+        ...context,
+        stage: 'launch',
+        status: 'running',
+        message: `Starting remote Pi runtime on ${this.hostLabel}…`,
+      });
+      const launchCommand = [
+        `${renderRemotePathForShell(remoteHelperPath)}`,
+        'launch',
+        '--run-dir', renderRemotePathForShell(remoteRunDir),
+        '--pi', renderRemotePathForShell(remotePiPath),
+        '--session', renderRemotePathForShell(remoteSessionFile),
+        '--cwd', quoteForShell(normalizedCwd),
+      ].join(' ');
+      const output = runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand)).trim();
+      const runtimeInfo = JSON.parse(output) as HelperRuntimeInfo;
+      if (!isHelperRuntimeInfo(runtimeInfo)) {
+        throw new Error(`Remote helper for ${this.hostLabel} returned malformed runtime info.`);
+      }
+
+      this.helperRuntimeInfo = runtimeInfo;
+      await this.ensureHelperConnection({
+        ...context,
+        stage: 'attach',
+        message: `Attaching to remote runtime on ${this.hostLabel}…`,
+      });
+      this.emitStatus({
+        ...context,
+        stage: 'ready',
+        status: 'success',
+        message: `Remote runtime on ${this.hostLabel} is ready.`,
+      });
+      return runtimeInfo;
+    } catch (error) {
+      this.emitStatus({
+        ...context,
+        stage: 'error',
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
+    }
   }
 
   async requestHelper(input: { type: string; command?: Record<string, unknown>; cwd?: string }): Promise<unknown> {
-    await this.ensureHelperConnection();
+    await this.ensureHelperConnection({
+      scope: 'runtime',
+      ...(this.currentConversationId ? { conversationId: this.currentConversationId } : {}),
+      stage: 'reconnect',
+      message: `Reconnecting to ${this.hostLabel}…`,
+    });
     const socket = this.socket;
     if (!socket) {
       throw new Error(`Remote runtime for ${this.hostLabel} is not connected.`);
@@ -255,13 +387,41 @@ export class SshRemoteConversationRuntime {
     };
   }
 
-  async restartRuntime(cwd: string): Promise<HelperRuntimeInfo> {
-    const response = await this.requestHelper({ type: 'restart', cwd }) as unknown;
-    if (!isHelperRuntimeInfo(response)) {
-      throw new Error(`Remote runtime for ${this.hostLabel} returned malformed restart info.`);
+  async restartRuntime(cwd: string, conversationId?: string): Promise<HelperRuntimeInfo> {
+    const context: RemoteStatusContext = {
+      scope: 'runtime',
+      ...(conversationId ? { conversationId } : {}),
+    };
+
+    try {
+      this.currentConversationId = conversationId ?? this.currentConversationId;
+      this.emitStatus({
+        ...context,
+        stage: 'restart',
+        status: 'running',
+        message: `Restarting remote runtime on ${this.hostLabel}…`,
+      });
+      const response = await this.requestHelper({ type: 'restart', cwd }) as unknown;
+      if (!isHelperRuntimeInfo(response)) {
+        throw new Error(`Remote runtime for ${this.hostLabel} returned malformed restart info.`);
+      }
+      this.helperRuntimeInfo = response;
+      this.emitStatus({
+        ...context,
+        stage: 'ready',
+        status: 'success',
+        message: `Remote runtime on ${this.hostLabel} is ready.`,
+      });
+      return response;
+    } catch (error) {
+      this.emitStatus({
+        ...context,
+        stage: 'error',
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error),
+      });
+      throw error;
     }
-    this.helperRuntimeInfo = response;
-    return response;
   }
 
   async shutdownRuntime(conversationId: string, removeRunDir = true): Promise<void> {
@@ -345,7 +505,12 @@ export class SshRemoteConversationRuntime {
     }
   }
 
-  private async ensureRemotePiInstalled(platform: RemotePlatformInfo, version: string, localPath: string): Promise<void> {
+  private async ensureRemotePiInstalled(
+    platform: RemotePlatformInfo,
+    version: string,
+    localPath: string,
+    context: RemoteStatusContext,
+  ): Promise<void> {
     const remoteDir = buildRemotePiDir(version, platform);
     const remoteBinary = buildRemotePiPath(version, platform);
     runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`);
@@ -353,12 +518,23 @@ export class SshRemoteConversationRuntime {
       runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
       return;
     } catch {
+      this.emitStatus({
+        ...context,
+        stage: 'copy-pi',
+        status: 'running',
+        message: `Copying Pi to ${this.hostLabel}…`,
+      });
       uploadFileOverScp({ target: this.sshTarget, localPath, remotePath: remoteBinary });
       runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
   }
 
-  private async ensureRemoteHelperInstalled(platform: RemotePlatformInfo, version: string, localPath: string): Promise<void> {
+  private async ensureRemoteHelperInstalled(
+    platform: RemotePlatformInfo,
+    version: string,
+    localPath: string,
+    context: RemoteStatusContext,
+  ): Promise<void> {
     const remoteDir = buildRemoteHelperDir(version, platform);
     const remoteBinary = buildRemoteHelperPath(version, platform);
     runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`);
@@ -366,12 +542,18 @@ export class SshRemoteConversationRuntime {
       runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
       return;
     } catch {
+      this.emitStatus({
+        ...context,
+        stage: 'copy-helper',
+        status: 'running',
+        message: `Copying remote helper to ${this.hostLabel}…`,
+      });
       uploadFileOverScp({ target: this.sshTarget, localPath, remotePath: remoteBinary });
       runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
   }
 
-  private async ensureHelperConnection(): Promise<void> {
+  private async ensureHelperConnection(input: RemoteStatusContext & { stage: 'attach' | 'reconnect'; message: string }): Promise<void> {
     if (this.socket && !this.socket.destroyed) {
       return;
     }
@@ -383,6 +565,10 @@ export class SshRemoteConversationRuntime {
     }
 
     this.connectingPromise = (async () => {
+      this.emitStatus({
+        ...input,
+        status: 'running',
+      });
       const localPort = await getAvailableTcpPort();
       const tunnel = spawnSshTunnel({
         target: this.sshTarget,
@@ -481,6 +667,15 @@ export class SshRemoteConversationRuntime {
 
       newlineIndex = this.buffer.indexOf('\n');
     }
+  }
+
+  private emitStatus(input: Omit<DesktopRemoteOperationStatus, 'hostId' | 'hostLabel' | 'at'>): void {
+    this.onStatus?.({
+      hostId: this.hostId,
+      hostLabel: this.hostLabel,
+      ...input,
+      at: new Date().toISOString(),
+    });
   }
 
   private disposeConnection(): void {

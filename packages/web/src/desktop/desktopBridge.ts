@@ -32,6 +32,7 @@ import type {
   DesktopHostRecord,
   DesktopNavigationState,
   DesktopRemoteDirectoryListing,
+  DesktopRemoteOperationBridgeEvent,
   DisplayBlock,
   LiveSessionContext,
   LiveSessionCreateResult,
@@ -54,6 +55,7 @@ import type {
 export const DESKTOP_API_STREAM_EVENT = 'personal-agent-desktop-api-stream';
 export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversation-state';
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
+export const DESKTOP_REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 
 export type DesktopConversationContextMenuAction =
@@ -374,9 +376,16 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeApiStream(subscriptionId: string): Promise<void>;
   subscribeAppEvents(): Promise<{ subscriptionId: string }>;
   unsubscribeAppEvents(subscriptionId: string): Promise<void>;
+  subscribeRemoteOperations(): Promise<{ subscriptionId: string }>;
+  unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
+}
+
+export interface DesktopRemoteOperationEnvelope {
+  subscriptionId: string;
+  event: DesktopRemoteOperationBridgeEvent;
 }
 
 export function getDesktopBridge(): PersonalAgentDesktopBridge | null {

@@ -7,7 +7,7 @@ import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -17,6 +17,7 @@ import { useDesktopConversationState } from '../hooks/useDesktopConversationStat
 import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
 import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
+import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
@@ -1533,6 +1534,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [continueInOptions, setContinueInOptions] = useState<Array<{ value: string; label: string }>>([]);
   const [draftExecutionTargetId, setDraftExecutionTargetId] = useState('local');
   const [remoteDirectoryBrowserState, setRemoteDirectoryBrowserState] = useState<null | { kind: 'draft' | 'conversation'; initialPath?: string | null }>(null);
+  const [remoteOperationStatus, setRemoteOperationStatus] = useState<DesktopRemoteOperationStatus | null>(null);
+  const remoteOperationStatusClearTimeoutRef = useRef<number | null>(null);
   const rawSessionSnapshot = useMemo(
     () => (id ? sessions?.find((session) => session.id === id) ?? null : null),
     [id, sessions],
@@ -2302,6 +2305,103 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [conversationCwdPickBusy, setConversationCwdPickBusy] = useState(false);
   const [conversationCwdBusy, setConversationCwdBusy] = useState(false);
   const [conversationCwdError, setConversationCwdError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!getDesktopBridge()) {
+      return;
+    }
+
+    let cancelled = false;
+    const clearRemoteOperationStatus = (delayMs = 1800) => {
+      if (remoteOperationStatusClearTimeoutRef.current !== null) {
+        window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
+        remoteOperationStatusClearTimeoutRef.current = null;
+      }
+      remoteOperationStatusClearTimeoutRef.current = window.setTimeout(() => {
+        if (!cancelled) {
+          setRemoteOperationStatus(null);
+        }
+        remoteOperationStatusClearTimeoutRef.current = null;
+      }, delayMs);
+    };
+
+    let unsubscribeRemoteOperations: (() => void) | null = null;
+    void subscribeDesktopRemoteOperations({
+      onevent: (event) => {
+        if (event.hostId !== selectedExecutionTargetId || !selectedExecutionTargetIsRemote) {
+          return;
+        }
+        if (event.scope === 'directory' && !remoteDirectoryBrowserState) {
+          return;
+        }
+        if (event.scope === 'runtime' && !draft && id && event.conversationId && event.conversationId !== id && !continueInBusy && !conversationCwdBusy) {
+          return;
+        }
+
+        if (remoteOperationStatusClearTimeoutRef.current !== null) {
+          window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
+          remoteOperationStatusClearTimeoutRef.current = null;
+        }
+
+        setRemoteOperationStatus(event);
+        if (event.status !== 'running') {
+          clearRemoteOperationStatus();
+        }
+      },
+      onclose: () => {
+        if (remoteOperationStatusClearTimeoutRef.current !== null) {
+          window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
+          remoteOperationStatusClearTimeoutRef.current = null;
+        }
+      },
+    }).then((cleanup) => {
+      if (cancelled) {
+        cleanup();
+        return;
+      }
+      unsubscribeRemoteOperations = cleanup;
+    }).catch(() => {
+      // Ignore best-effort subscription failures in non-desktop test contexts.
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribeRemoteOperations?.();
+      if (remoteOperationStatusClearTimeoutRef.current !== null) {
+        window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
+        remoteOperationStatusClearTimeoutRef.current = null;
+      }
+    };
+  }, [continueInBusy, conversationCwdBusy, draft, id, remoteDirectoryBrowserState, selectedExecutionTargetId, selectedExecutionTargetIsRemote]);
+
+  useEffect(() => {
+    if (selectedExecutionTargetIsRemote) {
+      return;
+    }
+
+    if (remoteOperationStatusClearTimeoutRef.current !== null) {
+      window.clearTimeout(remoteOperationStatusClearTimeoutRef.current);
+      remoteOperationStatusClearTimeoutRef.current = null;
+    }
+    setRemoteOperationStatus(null);
+  }, [selectedExecutionTargetIsRemote]);
+
+  const remoteOperationInlineStatus = remoteOperationStatus?.scope === 'directory'
+    ? null
+    : (remoteOperationStatus?.message
+      ?? (continueInBusy
+        ? `Preparing ${selectedExecutionTargetLabel}…`
+        : (conversationCwdBusy && selectedExecutionTargetIsRemote
+            ? `Switching directory on ${selectedExecutionTargetLabel}…`
+            : null)));
+  const remoteDirectoryStatusMessage = remoteOperationStatus?.scope === 'directory'
+    ? remoteOperationStatus.message
+    : (remoteDirectoryBrowserState && selectedExecutionTargetHost
+        ? `Connecting to ${selectedExecutionTargetHost.label}…`
+        : null);
+  const remoteDirectoryStatusTone = remoteOperationStatus?.scope === 'directory' && remoteOperationStatus.status === 'error'
+    ? 'danger'
+    : 'accent';
 
   useEffect(() => {
     if (!draft) {
@@ -5198,6 +5298,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     setRemoteDirectoryBrowserState(null);
+    if (remoteOperationStatus?.scope === 'directory') {
+      setRemoteOperationStatus(null);
+    }
   }
 
   const pickDraftConversationCwd = useCallback(async () => {
@@ -7530,7 +7633,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </label>
                 ) : null}
 
-                {continueInBusy ? <span className="text-accent/80">Switching…</span> : null}
+                {remoteOperationInlineStatus ? (
+                  <span className={cx(
+                    remoteOperationStatus?.status === 'error' ? 'text-danger/85' : 'text-accent/80',
+                  )}>
+                    {remoteOperationInlineStatus}
+                  </span>
+                ) : null}
 
                 {draft ? (
                   <div className="flex min-w-0 items-center gap-1.5">
@@ -7682,8 +7791,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           hostLabel={selectedExecutionTargetHost.label}
           initialPath={remoteDirectoryBrowserState.initialPath}
           title={remoteDirectoryBrowserState.kind === 'draft' ? 'Choose remote workspace' : 'Choose remote working directory'}
+          statusMessage={remoteDirectoryStatusMessage}
+          statusTone={remoteDirectoryStatusTone}
           onSelect={handleRemoteDirectorySelected}
-          onClose={() => setRemoteDirectoryBrowserState(null)}
+          onClose={() => {
+            setRemoteDirectoryBrowserState(null);
+            if (remoteOperationStatus?.scope === 'directory') {
+              setRemoteOperationStatus(null);
+            }
+          }}
         />
       ) : null}
 
