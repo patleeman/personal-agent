@@ -281,6 +281,15 @@ export interface LocalApiModule {
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
   }>;
+  manageDesktopLiveSessionParallelJob(input: {
+    conversationId: string;
+    jobId: string;
+    action: 'importNow' | 'skip' | 'cancel';
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    status: 'imported' | 'queued' | 'skipped' | 'cancelled';
+  }>;
   takeOverDesktopLiveSession(input: {
     conversationId: string;
     surfaceId: string;

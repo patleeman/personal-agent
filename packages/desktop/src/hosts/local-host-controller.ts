@@ -23,6 +23,8 @@ import type {
   DesktopLiveSessionForkRequest,
   DesktopLiveSessionParallelPromptRequest,
   DesktopLiveSessionParallelPromptResult,
+  DesktopLiveSessionParallelJobRequest,
+  DesktopLiveSessionParallelJobResult,
   DesktopLiveSessionPromptRequest,
   DesktopLiveSessionPromptResult,
   DesktopLiveSessionQueueRestoreRequest,
@@ -599,6 +601,11 @@ export class LocalHostController implements HostController {
   async submitLiveSessionParallelPrompt(input: DesktopLiveSessionParallelPromptRequest): Promise<DesktopLiveSessionParallelPromptResult> {
     const module = await this.loadLocalApi();
     return module.submitDesktopLiveSessionParallelPrompt(input);
+  }
+
+  async manageLiveSessionParallelJob(input: DesktopLiveSessionParallelJobRequest): Promise<DesktopLiveSessionParallelJobResult> {
+    const module = await this.loadLocalApi();
+    return module.manageDesktopLiveSessionParallelJob(input);
   }
 
   async abortLiveSession(conversationId: string): Promise<{ ok: true }> {

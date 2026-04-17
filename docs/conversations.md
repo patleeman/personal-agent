@@ -41,6 +41,7 @@ A conversation can carry:
 - persistent attached docs that stay in scope across turns
 - an optional auto mode toggle in the composer controls for hands-off follow-up
 - live composer controls for direct send, queued steer / follow-up prompts, and temporary parallel fork prompts that reintegrate back into the main thread when the active turn finishes
+- a parallel shelf that keeps side threads inspectable, shows lightweight import metadata, and lets you import now, skip, or cancel stuck work
 
 That is useful execution context, but it still should not replace the durable vault.
 

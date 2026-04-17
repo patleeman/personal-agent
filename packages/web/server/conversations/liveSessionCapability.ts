@@ -37,6 +37,7 @@ import {
   reloadSessionResources as reloadLiveSessionResources,
   restoreQueuedMessage as restoreQueuedLiveSessionMessage,
   resumeSession as resumeLocalSession,
+  manageParallelPromptJob,
   startParallelPromptSession,
   submitPromptSession as submitLocalPromptSession,
   summarizeAndForkSession as summarizeAndForkLiveSession,
@@ -145,6 +146,12 @@ export interface SubmitLiveSessionParallelPromptCapabilityInput {
   attachmentRefs?: unknown;
   contextMessages?: unknown;
   surfaceId?: string;
+}
+
+export interface ManageLiveSessionParallelJobCapabilityInput {
+  conversationId: string;
+  jobId: string;
+  action: 'importNow' | 'skip' | 'cancel';
 }
 
 export interface TakeOverLiveSessionCapabilityInput {
@@ -742,6 +749,7 @@ export async function submitLiveSessionParallelPromptCapability(
     {
       text: prepared.text,
       images: prepared.promptImages,
+      attachmentRefs: prepared.referencedAttachments.map((attachment) => `${attachment.attachmentId} (rev ${attachment.revision})`),
       contextMessages: prepared.normalizedContextMessages,
     },
     buildLiveSessionOptions(context),
@@ -757,6 +765,29 @@ export async function submitLiveSessionParallelPromptCapability(
     referencedVaultFileIds: prepared.referencedVaultFiles.map((file) => file.id),
     referencedAttachmentIds: prepared.referencedAttachments.map((attachment) => attachment.attachmentId),
   };
+}
+
+export async function manageLiveSessionParallelJobCapability(
+  input: ManageLiveSessionParallelJobCapabilityInput,
+): Promise<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }> {
+  const conversationId = input.conversationId.trim();
+  if (!conversationId) {
+    throw new LiveSessionCapabilityInputError('conversationId required');
+  }
+
+  const jobId = input.jobId.trim();
+  if (!jobId) {
+    throw new LiveSessionCapabilityInputError('jobId required');
+  }
+
+  if (input.action !== 'importNow' && input.action !== 'skip' && input.action !== 'cancel') {
+    throw new LiveSessionCapabilityInputError('action must be "importNow", "skip", or "cancel"');
+  }
+
+  return manageParallelPromptJob(conversationId, {
+    jobId,
+    action: input.action,
+  });
 }
 
 export function takeOverLiveSessionCapability(input: TakeOverLiveSessionCapabilityInput) {

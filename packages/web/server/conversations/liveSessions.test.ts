@@ -21,6 +21,7 @@ import {
   isPlaceholderConversationTitle,
   patchSessionManagerPersistence,
   promptSession,
+  manageParallelPromptJob,
   markConversationAutoModeContinueRequested,
   queuePromptContext,
   readLiveSessionAutoModeState,
@@ -74,10 +75,13 @@ function setLiveEntry(
     autoTitleRequested: entry.autoTitleRequested ?? false,
     lastContextUsageJson: entry.lastContextUsageJson ?? null,
     lastQueueStateJson: entry.lastQueueStateJson ?? null,
+    lastParallelStateJson: entry.lastParallelStateJson ?? null,
     pendingHiddenTurnCustomTypes: entry.pendingHiddenTurnCustomTypes ?? [],
     activeHiddenTurnCustomType: entry.activeHiddenTurnCustomType ?? null,
     pendingAutoCompactionReason: entry.pendingAutoCompactionReason ?? null,
     lastCompactionSummaryTitle: entry.lastCompactionSummaryTitle ?? null,
+    parallelJobs: entry.parallelJobs ?? [],
+    importingParallelJobs: entry.importingParallelJobs ?? false,
     ...(entry.lastDurableRunState ? { lastDurableRunState: entry.lastDurableRunState } : {}),
     ...(entry.contextUsageTimer ? { contextUsageTimer: entry.contextUsageTimer } : {}),
     session: session as LiveRegistryEntry['session'],
@@ -264,6 +268,156 @@ describe('resolveStableForkEntryId', () => {
     ].join('\n'));
 
     expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
+  });
+});
+
+describe('parallel prompt job management', () => {
+  it('imports a completed parallel job immediately even when an older running job is still queued', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-parallel-parent.jsonl');
+    writeFileSync(sessionFile, `${JSON.stringify({ type: 'session', id: 'session-parallel-parent', timestamp: '2026-04-17T00:00:00.000Z', cwd: '/tmp/workspace' })}\n`);
+
+    const runningJob = {
+      id: 'parallel-running',
+      prompt: 'Keep scanning',
+      childConversationId: 'child-running',
+      childSessionFile: join(dir, 'child-running.jsonl'),
+      status: 'running' as const,
+      createdAt: '2026-04-17T00:00:01.000Z',
+      updatedAt: '2026-04-17T00:00:01.000Z',
+      imageCount: 0,
+      attachmentRefs: [],
+      touchedFiles: [],
+    };
+    const readyJob = {
+      id: 'parallel-ready',
+      prompt: 'Check the docs',
+      childConversationId: 'child-ready',
+      childSessionFile: join(dir, 'child-ready.jsonl'),
+      status: 'ready' as const,
+      createdAt: '2026-04-17T00:00:02.000Z',
+      updatedAt: '2026-04-17T00:00:03.000Z',
+      imageCount: 1,
+      attachmentRefs: ['diagram (rev 2)'],
+      touchedFiles: ['src/app.ts'],
+      resultText: 'The docs already cover this case.',
+    };
+    const jobsFile = `${sessionFile}.parallel.json`;
+    writeFileSync(jobsFile, `${JSON.stringify([runningJob, readyJob], null, 2)}\n`);
+
+    const sendCustomMessage = vi.fn(async () => {});
+    setLiveEntry('session-parallel-parent', {
+      sessionId: 'session-parallel-parent',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Parallel parent',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      parallelJobs: [runningJob, readyJob],
+      session: {
+        sessionFile,
+        isStreaming: false,
+        state: {
+          messages: [],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        sendCustomMessage,
+      },
+    });
+
+    await expect(manageParallelPromptJob('session-parallel-parent', {
+      jobId: 'parallel-ready',
+      action: 'importNow',
+    })).resolves.toEqual({ ok: true, status: 'imported' });
+
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: 'parallel_result',
+      display: true,
+      content: expect.stringContaining('diagram (rev 2)'),
+    }));
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('src/app.ts'),
+    }));
+    expect(registry.get('session-parallel-parent')?.parallelJobs).toEqual([
+      expect.objectContaining({ id: 'parallel-running', status: 'running' }),
+    ]);
+    expect(JSON.parse(readFileSync(jobsFile, 'utf-8'))).toEqual([
+      expect.objectContaining({ id: 'parallel-running', status: 'running' }),
+    ]);
+  });
+
+  it('cancels a running parallel job and removes it from the durable queue', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pa-live-sessions-'));
+    tempDirs.push(dir);
+    const sessionFile = join(dir, 'session-parallel-cancel.jsonl');
+    writeFileSync(sessionFile, `${JSON.stringify({ type: 'session', id: 'session-parallel-cancel', timestamp: '2026-04-17T00:00:00.000Z', cwd: '/tmp/workspace' })}\n`);
+
+    const runningJob = {
+      id: 'parallel-running',
+      prompt: 'Keep scanning',
+      childConversationId: 'child-running',
+      childSessionFile: join(dir, 'child-running.jsonl'),
+      status: 'running' as const,
+      createdAt: '2026-04-17T00:00:01.000Z',
+      updatedAt: '2026-04-17T00:00:01.000Z',
+      imageCount: 0,
+      attachmentRefs: [],
+      touchedFiles: [],
+    };
+    const jobsFile = `${sessionFile}.parallel.json`;
+    writeFileSync(jobsFile, `${JSON.stringify([runningJob], null, 2)}\n`);
+
+    const abort = vi.fn(async () => {});
+    setLiveEntry('child-running', {
+      sessionId: 'child-running',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Child running',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        sessionFile: runningJob.childSessionFile,
+        isStreaming: true,
+        abort,
+      },
+    });
+
+    setLiveEntry('session-parallel-cancel', {
+      sessionId: 'session-parallel-cancel',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Parallel parent',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      parallelJobs: [runningJob],
+      session: {
+        sessionFile,
+        isStreaming: false,
+        state: {
+          messages: [],
+          streamingMessage: null,
+        },
+        getContextUsage: () => null,
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+      },
+    });
+
+    await expect(manageParallelPromptJob('session-parallel-cancel', {
+      jobId: 'parallel-running',
+      action: 'cancel',
+    })).resolves.toEqual({ ok: true, status: 'cancelled' });
+
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(registry.get('session-parallel-cancel')?.parallelJobs).toEqual([]);
+    expect(existsSync(jobsFile)).toBe(false);
   });
 });
 

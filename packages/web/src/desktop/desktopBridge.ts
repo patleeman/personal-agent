@@ -358,6 +358,15 @@ export interface PersonalAgentDesktopBridge {
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
   }>;
+  manageLiveSessionParallelJob(input: {
+    conversationId: string;
+    jobId: string;
+    action: 'importNow' | 'skip' | 'cancel';
+    surfaceId?: string;
+  }): Promise<{
+    ok: true;
+    status: 'imported' | 'queued' | 'skipped' | 'cancelled';
+  }>;
   abortLiveSession(conversationId: string): Promise<{ ok: true }>;
   subscribeConversationState(input: {
     conversationId: string;

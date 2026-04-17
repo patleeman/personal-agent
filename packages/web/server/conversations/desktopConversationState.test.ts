@@ -63,7 +63,15 @@ describe('desktopConversationState reducer', () => {
     } as never);
     state = applyDesktopConversationStreamEvent(state, {
       type: 'parallel_state',
-      jobs: [{ id: 'parallel-1', prompt: 'Check the docs', childConversationId: 'child-1', status: 'running' }],
+      jobs: [{
+        id: 'parallel-1',
+        prompt: 'Check the docs',
+        childConversationId: 'child-1',
+        status: 'running',
+        imageCount: 1,
+        attachmentRefs: ['diagram (rev 2)'],
+        touchedFiles: ['src/app.ts'],
+      }],
     } as never);
 
     expect(state.isStreaming).toBe(true);
@@ -85,7 +93,15 @@ describe('desktopConversationState reducer', () => {
       followUp: [{ id: 'follow-1', text: 'Later', imageCount: 1 }],
     });
     expect(state.parallelJobs).toEqual([
-      { id: 'parallel-1', prompt: 'Check the docs', childConversationId: 'child-1', status: 'running' },
+      {
+        id: 'parallel-1',
+        prompt: 'Check the docs',
+        childConversationId: 'child-1',
+        status: 'running',
+        imageCount: 1,
+        attachmentRefs: ['diagram (rev 2)'],
+        touchedFiles: ['src/app.ts'],
+      },
     ]);
   });
 

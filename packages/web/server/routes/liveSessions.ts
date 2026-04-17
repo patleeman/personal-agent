@@ -20,6 +20,7 @@ import {
   destroyLiveSessionCapability,
   forkLiveSessionCapability,
   LiveSessionCapabilityInputError,
+  manageLiveSessionParallelJobCapability,
   reloadLiveSessionCapability,
   restoreQueuedLiveSessionMessageCapability,
   resumeLiveSessionCapability,
@@ -214,6 +215,33 @@ export async function handleLiveSessionParallelPrompt(req: Request, res: Respons
       return;
     }
     res.status(500).json({ error: String(err) });
+  }
+}
+
+export async function handleLiveSessionParallelJobAction(req: Request, res: Response): Promise<void> {
+  try {
+    ensureRequestControlsLocalLiveConversation(req.params.id, req.body);
+    const result = await manageLiveSessionParallelJobCapability({
+      conversationId: req.params.id,
+      jobId: req.params.jobId,
+      action: (typeof req.body?.action === 'string' ? req.body.action : '') as 'importNow' | 'skip' | 'cancel',
+    });
+    res.json(result);
+  } catch (err) {
+    logError('request handler error', {
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    if (err instanceof LiveSessionCapabilityInputError) {
+      res.status(400).json({ error: err.message });
+      return;
+    }
+    if (writeLiveConversationControlError(res, err)) {
+      return;
+    }
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('Parallel prompt no longer exists') ? 409 : 500;
+    res.status(status).json({ error: message });
   }
 }
 
@@ -419,6 +447,7 @@ export function registerLiveSessionRoutes(
 
   router.post('/api/live-sessions/:id/prompt', handleLiveSessionPrompt);
   router.post('/api/live-sessions/:id/parallel-prompt', handleLiveSessionParallelPrompt);
+  router.post('/api/live-sessions/:id/parallel-jobs/:jobId', handleLiveSessionParallelJobAction);
 
   router.post('/api/live-sessions/:id/bash', async (req, res) => {
     try {

@@ -257,6 +257,20 @@ function formatParallelJobStatusLabel(status: 'running' | 'ready' | 'failed' | '
   }
 }
 
+function formatParallelJobContextSummary(input: {
+  imageCount: number;
+  attachmentRefs: string[];
+}): string | null {
+  const parts: string[] = [];
+  if (input.imageCount > 0) {
+    parts.push(`${input.imageCount} image${input.imageCount === 1 ? '' : 's'}`);
+  }
+  if (input.attachmentRefs.length > 0) {
+    parts.push(`${input.attachmentRefs.length} attachment${input.attachmentRefs.length === 1 ? '' : 's'}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 function shouldEnableConversationLiveStream(
   conversationId: string | null | undefined,
   confirmedLive: boolean | null,
@@ -1687,12 +1701,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         reconnect: desktopConversation.reconnect,
         send: desktopConversation.send,
         parallel: desktopConversation.parallel,
+        manageParallelJob: desktopConversation.manageParallelJob,
         abort: desktopConversation.abort,
         takeover: desktopConversation.takeover,
       }
     : webStream;
   const streamSend = stream.send;
   const streamParallel = stream.parallel;
+  const streamManageParallelJob = stream.manageParallelJob;
   const streamAbort = stream.abort;
   const streamReconnect = stream.reconnect;
   const streamTakeover = stream.takeover;
@@ -5923,6 +5939,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function manageParallelJob(jobId: string, action: 'importNow' | 'skip' | 'cancel') {
+    if (draft || !id || !isLiveSession) {
+      showNotice('danger', 'Parallel prompts require a live conversation.', 4000);
+      return;
+    }
+
+    try {
+      const result = await streamManageParallelJob(jobId, action);
+      if (!result) {
+        return;
+      }
+
+      if (action === 'importNow') {
+        showNotice('accent', result.status === 'imported' ? 'Parallel response appended.' : 'Parallel response queued for append.', 2500);
+        return;
+      }
+
+      if (action === 'skip') {
+        showNotice('accent', 'Parallel response skipped.', 2500);
+        return;
+      }
+
+      showNotice('accent', 'Parallel prompt cancelled.', 2500);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    }
+  }
+
   async function restoreQueuedPromptToComposer(behavior: 'steer' | 'followUp', queueIndex: number, previewId?: string) {
     if (!id || !isLiveSession) {
       showNotice('danger', 'Queued prompts can only be restored from a live session.', 4000);
@@ -6824,35 +6868,91 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 {parallelJobs.length > 0 && (
                   <div className="px-3 pt-2.5 pb-2 border-b border-border-subtle flex flex-col gap-1.5">
                     <span className="ui-section-label">Parallel</span>
-                    {parallelJobs.map((job) => (
-                      <div key={job.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
-                        <Pill tone={job.status === 'failed' ? 'danger' : job.status === 'running' ? 'steel' : 'accent'} className="mt-0.5">
-                          ⇄ {formatParallelJobStatusLabel(job.status)}
-                        </Pill>
-                        <div className="min-w-0">
-                          <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
-                            {truncateConversationShelfText(job.prompt || '(empty prompt)')}
-                          </p>
-                          {job.status === 'failed' && job.error ? (
-                            <p className="mt-0.5 text-[11px] text-danger">{truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}</p>
-                          ) : job.resultPreview ? (
-                            <p className="mt-0.5 text-[11px] text-dim">{truncateConversationShelfText(job.resultPreview, { maxChars: 140, maxLines: 2 })}</p>
-                          ) : null}
+                    {parallelJobs.map((job) => {
+                      const contextSummary = formatParallelJobContextSummary({
+                        imageCount: job.imageCount,
+                        attachmentRefs: job.attachmentRefs,
+                      });
+                      const attachmentSummary = job.attachmentRefs.length > 0
+                        ? truncateConversationShelfText(job.attachmentRefs.join(', '), { maxChars: 140, maxLines: 2 })
+                        : null;
+                      const touchedFileSummary = job.touchedFiles.length > 0
+                        ? truncateConversationShelfText(job.touchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                        : null;
+
+                      return (
+                        <div key={job.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
+                          <Pill tone={job.status === 'failed' ? 'danger' : job.status === 'running' ? 'steel' : 'accent'} className="mt-0.5">
+                            ⇄ {formatParallelJobStatusLabel(job.status)}
+                          </Pill>
+                          <div className="min-w-0">
+                            <p className="whitespace-pre-wrap break-words text-[11px] leading-relaxed text-secondary">
+                              {truncateConversationShelfText(job.prompt || '(empty prompt)')}
+                            </p>
+                            {contextSummary ? (
+                              <p className="mt-0.5 text-[11px] text-dim">{contextSummary}</p>
+                            ) : null}
+                            {attachmentSummary ? (
+                              <p className="mt-0.5 text-[11px] text-dim">attachments: {attachmentSummary}</p>
+                            ) : null}
+                            {touchedFileSummary ? (
+                              <p className="mt-0.5 text-[11px] text-dim">files: {touchedFileSummary}</p>
+                            ) : null}
+                            {job.status === 'failed' && job.error ? (
+                              <p className="mt-0.5 text-[11px] text-danger">{truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}</p>
+                            ) : job.resultPreview ? (
+                              <p className="mt-0.5 text-[11px] text-dim">{truncateConversationShelfText(job.resultPreview, { maxChars: 140, maxLines: 2 })}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-3 pt-0.5 text-[11px]">
+                            {(job.status === 'ready' || job.status === 'failed') && (
+                              <button
+                                type="button"
+                                onClick={() => { void manageParallelJob(job.id, 'importNow'); }}
+                                className="text-dim transition-colors hover:text-primary"
+                                title="Append this parallel response to the main thread next"
+                                aria-label="Import parallel response now"
+                              >
+                                import
+                              </button>
+                            )}
+                            {job.status === 'running' ? (
+                              <button
+                                type="button"
+                                onClick={() => { void manageParallelJob(job.id, 'cancel'); }}
+                                className="text-dim transition-colors hover:text-primary"
+                                title="Cancel this running parallel prompt"
+                                aria-label="Cancel running parallel prompt"
+                              >
+                                cancel
+                              </button>
+                            ) : job.status !== 'importing' ? (
+                              <button
+                                type="button"
+                                onClick={() => { void manageParallelJob(job.id, 'skip'); }}
+                                className="text-dim transition-colors hover:text-primary"
+                                title="Drop this parallel response without importing it"
+                                aria-label="Skip parallel response"
+                              >
+                                skip
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                ensureConversationTabOpen(job.childConversationId);
+                                navigate(`/conversations/${job.childConversationId}`);
+                              }}
+                              className="text-dim transition-colors hover:text-primary"
+                              title="Open side thread"
+                              aria-label="Open side thread"
+                            >
+                              open
+                            </button>
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            ensureConversationTabOpen(job.childConversationId);
-                            navigate(`/conversations/${job.childConversationId}`);
-                          }}
-                          className="shrink-0 pt-0.5 text-[11px] text-dim transition-colors hover:text-primary"
-                          title="Open side thread"
-                          aria-label="Open side thread"
-                        >
-                          open
-                        </button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 

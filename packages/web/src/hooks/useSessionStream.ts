@@ -561,6 +561,27 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     });
   }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
 
+  const manageParallelJob = useCallback(async (
+    jobId: string,
+    action: 'importNow' | 'skip' | 'cancel',
+  ) => {
+    if (!normalizedSessionId) {
+      return;
+    }
+
+    ensureRequestedSubscription();
+    return retryLiveSessionActionAfterTakeover({
+      attemptAction: () => api.manageParallelPromptJob(normalizedSessionId, jobId, action, surfaceId),
+      takeOverSessionControl: async () => {
+        const surfaceReady = await waitForCurrentSurfaceRegistration();
+        if (!surfaceReady) {
+          throw new Error('Unable to confirm this surface is connected yet. Try again in a moment.');
+        }
+        return api.takeoverLiveSession(normalizedSessionId, surfaceId);
+      },
+    });
+  }, [ensureRequestedSubscription, normalizedSessionId, surfaceId, waitForCurrentSurfaceRegistration]);
+
   const abort = useCallback(async () => {
     if (!normalizedSessionId) return;
     await api.abortSession(normalizedSessionId, surfaceId);
@@ -675,8 +696,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
   const visibleState = selectVisibleStreamState(state, stateSessionIdRef.current, requestedSessionId);
 
   return useMemo(
-    () => ({ ...visibleState, surfaceId, takeover, send, parallel, abort, reconnect }),
-    [visibleState, surfaceId, takeover, send, parallel, abort, reconnect],
+    () => ({ ...visibleState, surfaceId, takeover, send, parallel, manageParallelJob, abort, reconnect }),
+    [visibleState, surfaceId, takeover, send, parallel, manageParallelJob, abort, reconnect],
   );
 }
 

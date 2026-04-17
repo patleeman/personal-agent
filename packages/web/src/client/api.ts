@@ -1178,6 +1178,27 @@ export const api = {
       })),
     });
   },
+  manageParallelPromptJob: async (
+    id: string,
+    jobId: string,
+    action: 'importNow' | 'skip' | 'cancel',
+    surfaceId?: string,
+  ) => {
+    const desktopBridge = getDesktopBridge();
+    if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
+      return desktopBridge.manageLiveSessionParallelJob({
+        conversationId: id,
+        jobId,
+        action,
+        ...(surfaceId ? { surfaceId } : {}),
+      });
+    }
+
+    return post<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }>(`/live-sessions/${id}/parallel-jobs/${encodeURIComponent(jobId)}`, {
+      action,
+      ...(surfaceId ? { surfaceId } : {}),
+    });
+  },
   relatedConversationContext: async (sessionIds: string[], prompt: string) => {
     return post<{ contextMessages: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> }>(
       '/live-sessions/related-context',

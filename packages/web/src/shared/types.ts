@@ -809,6 +809,9 @@ export interface ParallelPromptPreview {
   prompt: string;
   childConversationId: string;
   status: 'running' | 'ready' | 'failed' | 'importing';
+  imageCount: number;
+  attachmentRefs: string[];
+  touchedFiles: string[];
   resultPreview?: string;
   error?: string;
 }

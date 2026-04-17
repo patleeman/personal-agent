@@ -286,6 +286,18 @@ export interface DesktopLiveSessionParallelPromptResult {
   referencedAttachmentIds: string[];
 }
 
+export interface DesktopLiveSessionParallelJobRequest {
+  conversationId: string;
+  jobId: string;
+  action: 'importNow' | 'skip' | 'cancel';
+  surfaceId?: string;
+}
+
+export interface DesktopLiveSessionParallelJobResult {
+  ok: true;
+  status: 'imported' | 'queued' | 'skipped' | 'cancelled';
+}
+
 export interface DesktopLiveSessionQueueRestoreRequest {
   conversationId: string;
   behavior: 'steer' | 'followUp';
@@ -468,6 +480,7 @@ export interface HostController {
   summarizeAndForkLiveSession?(conversationId: string): Promise<{ newSessionId: string; sessionFile: string }>;
   submitLiveSessionPrompt?(input: DesktopLiveSessionPromptRequest): Promise<DesktopLiveSessionPromptResult>;
   submitLiveSessionParallelPrompt?(input: DesktopLiveSessionParallelPromptRequest): Promise<DesktopLiveSessionParallelPromptResult>;
+  manageLiveSessionParallelJob?(input: DesktopLiveSessionParallelJobRequest): Promise<DesktopLiveSessionParallelJobResult>;
   abortLiveSession?(conversationId: string): Promise<{ ok: true }>;
   subscribeConversationState?(
     input: DesktopConversationStateSubscriptionRequest,

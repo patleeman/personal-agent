@@ -3,7 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { appendFileSync, existsSync, readFileSync, unlinkSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -140,11 +140,16 @@ export interface QueuedPromptPreview {
   restorable?: boolean;
 }
 
+type ParallelPromptJobStatus = 'running' | 'ready' | 'failed' | 'importing';
+
 export interface ParallelPromptPreview {
   id: string;
   prompt: string;
   childConversationId: string;
-  status: 'running' | 'ready' | 'failed' | 'importing';
+  status: ParallelPromptJobStatus;
+  imageCount: number;
+  attachmentRefs: string[];
+  touchedFiles: string[];
   resultPreview?: string;
   error?: string;
 }
@@ -251,7 +256,13 @@ interface ParallelPromptJob {
   id: string;
   prompt: string;
   childConversationId: string;
-  status: 'running' | 'ready' | 'failed' | 'importing';
+  childSessionFile?: string;
+  status: ParallelPromptJobStatus;
+  createdAt: string;
+  updatedAt: string;
+  imageCount: number;
+  attachmentRefs: string[];
+  touchedFiles: string[];
   resultText?: string;
   error?: string;
 }
@@ -791,7 +802,363 @@ export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedP
 }
 
 const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
+const PARALLEL_JOBS_FILE_SUFFIX = '.parallel.json';
+const PARALLEL_PREVIEW_PATH_LIMIT = 5;
+const PARALLEL_PREVIEW_ATTACHMENT_LIMIT = 4;
 let parallelPromptJobCounter = 0;
+
+function resolveParallelJobsFile(sessionFile: string): string {
+  return `${sessionFile}${PARALLEL_JOBS_FILE_SUFFIX}`;
+}
+
+function normalizeParallelPromptJobStatus(value: unknown): ParallelPromptJobStatus {
+  return value === 'ready' || value === 'failed' || value === 'importing'
+    ? value
+    : 'running';
+}
+
+function normalizeParallelPromptList(value: unknown, limit = 32): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const next: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+
+    const normalized = candidate.trim();
+    if (!normalized || seen.has(normalized)) {
+      continue;
+    }
+
+    seen.add(normalized);
+    next.push(normalized);
+    if (next.length >= limit) {
+      break;
+    }
+  }
+
+  return next;
+}
+
+function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | null {
+  if (!candidate || typeof candidate !== 'object') {
+    return null;
+  }
+
+  const job = candidate as Partial<ParallelPromptJob>;
+  const id = typeof job.id === 'string' ? job.id.trim() : '';
+  const prompt = typeof job.prompt === 'string' ? job.prompt : '';
+  const childConversationId = typeof job.childConversationId === 'string' ? job.childConversationId.trim() : '';
+  if (!id || !childConversationId) {
+    return null;
+  }
+
+  const createdAt = typeof job.createdAt === 'string' && job.createdAt.trim().length > 0
+    ? job.createdAt.trim()
+    : new Date().toISOString();
+  const updatedAt = typeof job.updatedAt === 'string' && job.updatedAt.trim().length > 0
+    ? job.updatedAt.trim()
+    : createdAt;
+  const childSessionFile = typeof job.childSessionFile === 'string' && job.childSessionFile.trim().length > 0
+    ? job.childSessionFile.trim()
+    : undefined;
+
+  return {
+    id,
+    prompt,
+    childConversationId,
+    ...(childSessionFile ? { childSessionFile } : {}),
+    status: normalizeParallelPromptJobStatus(job.status),
+    createdAt,
+    updatedAt,
+    imageCount: Number.isInteger(job.imageCount) && Number(job.imageCount) > 0 ? Number(job.imageCount) : 0,
+    attachmentRefs: normalizeParallelPromptList(job.attachmentRefs, 12),
+    touchedFiles: normalizeParallelPromptList(job.touchedFiles, 24),
+    ...(typeof job.resultText === 'string' && job.resultText.trim().length > 0 ? { resultText: job.resultText } : {}),
+    ...(typeof job.error === 'string' && job.error.trim().length > 0 ? { error: job.error.trim() } : {}),
+  };
+}
+
+function readPersistedParallelJobs(sessionFile: string): ParallelPromptJob[] {
+  const jobsFile = resolveParallelJobsFile(sessionFile);
+  if (!existsSync(jobsFile)) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(jobsFile, 'utf-8')) as unknown;
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.flatMap((candidate): ParallelPromptJob[] => {
+      const normalized = normalizeParallelPromptJob(candidate);
+      return normalized ? [normalized] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function writePersistedParallelJobs(sessionFile: string, jobs: ParallelPromptJob[]): void {
+  const jobsFile = resolveParallelJobsFile(sessionFile);
+  if (jobs.length === 0) {
+    if (existsSync(jobsFile)) {
+      unlinkSync(jobsFile);
+    }
+    return;
+  }
+
+  writeFileSync(jobsFile, `${JSON.stringify(jobs, null, 2)}\n`);
+}
+
+function persistParallelJobs(entry: Pick<LiveEntry, 'session' | 'parallelJobs'>): void {
+  const sessionFile = entry.session.sessionFile?.trim();
+  if (!sessionFile) {
+    return;
+  }
+
+  writePersistedParallelJobs(sessionFile, Array.isArray(entry.parallelJobs) ? entry.parallelJobs : []);
+}
+
+function replacePersistedParallelJob(
+  sessionFile: string,
+  jobId: string,
+  updater: (job: ParallelPromptJob) => ParallelPromptJob | null,
+): ParallelPromptJob[] {
+  const jobs = readPersistedParallelJobs(sessionFile);
+  const nextJobs: ParallelPromptJob[] = [];
+
+  for (const job of jobs) {
+    if (job.id !== jobId) {
+      nextJobs.push(job);
+      continue;
+    }
+
+    const updated = updater(job);
+    if (updated) {
+      nextJobs.push(updated);
+    }
+  }
+
+  const reconciled = reconcilePersistedParallelJobs(sessionFile, nextJobs);
+  writePersistedParallelJobs(sessionFile, reconciled);
+  return reconciled;
+}
+
+function readImportedParallelChildConversationIds(sessionFile: string): Set<string> {
+  const imported = new Set<string>();
+
+  try {
+    const lines = readFileSync(sessionFile, 'utf-8').split(/\r?\n/);
+    for (const line of lines) {
+      const rawLine = line.trim();
+      if (!rawLine) {
+        continue;
+      }
+
+      try {
+        const entry = JSON.parse(rawLine) as {
+          type?: string;
+          display?: boolean;
+          customType?: string;
+          details?: { childConversationId?: unknown } | null;
+        };
+        if (entry.type !== 'custom_message' || entry.display !== true || entry.customType !== PARALLEL_RESULT_CUSTOM_TYPE) {
+          continue;
+        }
+
+        const childConversationId = typeof entry.details?.childConversationId === 'string'
+          ? entry.details.childConversationId.trim()
+          : '';
+        if (childConversationId) {
+          imported.add(childConversationId);
+        }
+      } catch {
+        continue;
+      }
+    }
+  } catch {
+    return imported;
+  }
+
+  return imported;
+}
+
+function collectParallelToolCallPaths(argumentsValue: unknown): string[] {
+  if (!argumentsValue || typeof argumentsValue !== 'object') {
+    return [];
+  }
+
+  const args = argumentsValue as {
+    path?: unknown;
+    paths?: unknown;
+    filePath?: unknown;
+    filePaths?: unknown;
+  };
+  const paths = [
+    typeof args.path === 'string' ? args.path.trim() : '',
+    typeof args.filePath === 'string' ? args.filePath.trim() : '',
+  ].filter((value): value is string => value.length > 0);
+
+  const multiPaths = [args.paths, args.filePaths]
+    .flatMap((value) => Array.isArray(value) ? value : [])
+    .flatMap((value): string[] => typeof value === 'string' && value.trim().length > 0 ? [value.trim()] : []);
+
+  return [...paths, ...multiPaths];
+}
+
+function readParallelTouchedFilesFromSessionFile(sessionFile: string): string[] {
+  const seen = new Set<string>();
+  const touchedFiles: string[] = [];
+
+  for (const entry of getStableForkBranchEntries(sessionFile)) {
+    if (entry?.type !== 'message' || entry.message?.role !== 'assistant' || !Array.isArray(entry.message.content)) {
+      continue;
+    }
+
+    for (const part of entry.message.content) {
+      if (!part || typeof part !== 'object' || (part as { type?: unknown }).type !== 'toolCall') {
+        continue;
+      }
+
+      const toolName = typeof (part as { name?: unknown }).name === 'string'
+        ? (part as { name: string }).name.trim()
+        : '';
+      if (toolName !== 'read' && toolName !== 'edit' && toolName !== 'write' && toolName !== 'checkpoint') {
+        continue;
+      }
+
+      for (const path of collectParallelToolCallPaths((part as { arguments?: unknown }).arguments)) {
+        if (seen.has(path)) {
+          continue;
+        }
+
+        seen.add(path);
+        touchedFiles.push(path);
+      }
+    }
+  }
+
+  return touchedFiles;
+}
+
+function readParallelJobCompletionFromSessionFile(sessionFile: string): {
+  hasTerminalReply: boolean;
+  status?: Extract<ParallelPromptJobStatus, 'ready' | 'failed'>;
+  resultText?: string;
+  error?: string;
+  touchedFiles: string[];
+} {
+  const branch = getStableForkBranchEntries(sessionFile);
+  const touchedFiles = readParallelTouchedFilesFromSessionFile(sessionFile);
+
+  for (let index = branch.length - 1; index >= 0; index -= 1) {
+    const entry = branch[index];
+    if (entry?.type !== 'message' || entry.message?.role !== 'assistant') {
+      continue;
+    }
+
+    if (entry.message.stopReason === 'toolUse') {
+      continue;
+    }
+
+    if (entry.message.stopReason === 'error') {
+      const errorMessage = entry.message.errorMessage?.trim();
+      return {
+        hasTerminalReply: true,
+        status: 'failed',
+        error: errorMessage && errorMessage.length > 0
+          ? errorMessage
+          : 'The parallel prompt failed before completing.',
+        touchedFiles,
+      };
+    }
+
+    const resultText = extractTextFromMessageContent(entry.message.content);
+    return {
+      hasTerminalReply: true,
+      status: 'ready',
+      ...(resultText ? { resultText } : {}),
+      touchedFiles,
+    };
+  }
+
+  return {
+    hasTerminalReply: false,
+    touchedFiles,
+  };
+}
+
+function reconcileParallelPromptJob(job: ParallelPromptJob): ParallelPromptJob {
+  const childEntry = registry.get(job.childConversationId);
+  const childSessionFile = childEntry?.session.sessionFile?.trim() || job.childSessionFile?.trim() || '';
+  const updatedAt = new Date().toISOString();
+  const next: ParallelPromptJob = {
+    ...job,
+    ...(childSessionFile ? { childSessionFile } : {}),
+    updatedAt,
+    touchedFiles: Array.isArray(job.touchedFiles) ? job.touchedFiles : [],
+  };
+
+  if (childEntry?.session.isStreaming) {
+    next.status = 'running';
+    return next;
+  }
+
+  if (childSessionFile && existsSync(childSessionFile)) {
+    const completion = readParallelJobCompletionFromSessionFile(childSessionFile);
+    next.touchedFiles = completion.touchedFiles;
+
+    if (completion.status === 'failed') {
+      next.status = 'failed';
+      delete next.resultText;
+      next.error = completion.error;
+      return next;
+    }
+
+    if (completion.status === 'ready') {
+      next.status = 'ready';
+      next.resultText = completion.resultText ?? '';
+      delete next.error;
+      return next;
+    }
+  }
+
+  if (next.status === 'importing') {
+    next.status = next.error?.trim() ? 'failed' : 'ready';
+    return next;
+  }
+
+  if (next.status === 'running') {
+    next.status = 'failed';
+    next.error = next.error?.trim() || 'Parallel prompt was interrupted before producing a final reply.';
+  }
+
+  return next;
+}
+
+function reconcilePersistedParallelJobs(sessionFile: string, jobs: ParallelPromptJob[]): ParallelPromptJob[] {
+  const importedChildConversationIds = readImportedParallelChildConversationIds(sessionFile);
+  return jobs
+    .filter((job) => !importedChildConversationIds.has(job.childConversationId))
+    .map((job) => reconcileParallelPromptJob(job));
+}
+
+function loadPersistedParallelJobs(entry: Pick<LiveEntry, 'session'>): ParallelPromptJob[] {
+  const sessionFile = entry.session.sessionFile?.trim();
+  if (!sessionFile) {
+    return [];
+  }
+
+  const jobs = reconcilePersistedParallelJobs(sessionFile, readPersistedParallelJobs(sessionFile));
+  writePersistedParallelJobs(sessionFile, jobs);
+  return jobs;
+}
 
 function createParallelPromptJobId(): string {
   parallelPromptJobCounter += 1;
@@ -810,11 +1177,16 @@ function truncateParallelPreviewText(text: string, maxLength = 240): string {
 }
 
 function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPreview {
+  const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
+  const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
   return {
     id: job.id,
     prompt: truncateParallelPreviewText(job.prompt),
     childConversationId: job.childConversationId,
     status: job.status,
+    imageCount: Number.isInteger(job.imageCount) && job.imageCount > 0 ? job.imageCount : 0,
+    attachmentRefs: attachmentRefs.slice(0, PARALLEL_PREVIEW_ATTACHMENT_LIMIT),
+    touchedFiles: touchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
     ...(job.resultText ? { resultPreview: truncateParallelPreviewText(job.resultText) } : {}),
     ...(job.error ? { error: truncateParallelPreviewText(job.error) } : {}),
   };
@@ -1680,10 +2052,16 @@ function wireSession(
     controllerAcquiredAt: null,
 
   };
+  entry.parallelJobs = loadPersistedParallelJobs(entry);
   registry.set(id, entry);
   publishSessionMetaChanged(id);
   void syncDurableConversationRun(entry, session.isStreaming ? 'running' : 'waiting', { force: true });
   maybeAutoTitleConversation(entry);
+  if (entry.parallelJobs.length > 0) {
+    queueMicrotask(() => {
+      void tryImportReadyParallelJobs(entry);
+    });
+  }
 
   session.subscribe((event: AgentSessionEvent) => {
     ensureHiddenTurnState(entry);
@@ -2827,20 +3205,32 @@ async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
         break;
       }
 
+      const fallbackStatus: Extract<ParallelPromptJobStatus, 'ready' | 'failed'> = currentJob.error?.trim() ? 'failed' : 'ready';
       currentJob.status = 'importing';
+      currentJob.updatedAt = new Date().toISOString();
+      persistParallelJobs(entry);
       broadcastParallelState(entry, true);
 
-      await appendVisibleCustomMessage(
-        entry.sessionId,
-        PARALLEL_RESULT_CUSTOM_TYPE,
-        buildParallelImportedContent(currentJob),
-        {
-          childConversationId: currentJob.childConversationId,
-          status: currentJob.error?.trim() ? 'failed' : 'complete',
-        },
-      );
+      try {
+        await appendVisibleCustomMessage(
+          entry.sessionId,
+          PARALLEL_RESULT_CUSTOM_TYPE,
+          buildParallelImportedContent(currentJob),
+          {
+            childConversationId: currentJob.childConversationId,
+            status: currentJob.error?.trim() ? 'failed' : 'complete',
+          },
+        );
+      } catch (error) {
+        currentJob.status = fallbackStatus;
+        currentJob.updatedAt = new Date().toISOString();
+        persistParallelJobs(entry);
+        broadcastParallelState(entry, true);
+        throw error;
+      }
 
       entry.parallelJobs.shift();
+      persistParallelJobs(entry);
       broadcastParallelState(entry, true);
     }
   } finally {
@@ -2853,6 +3243,7 @@ export async function startParallelPromptSession(
   input: {
     text: string;
     images?: PromptImageAttachment[];
+    attachmentRefs?: string[];
     contextMessages?: Array<{ customType: string; content: string }>;
   },
   options: LiveSessionLoaderOptions = {},
@@ -2891,14 +3282,22 @@ export async function startParallelPromptSession(
       });
 
   const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
+  const now = new Date().toISOString();
   const job: ParallelPromptJob = {
     id: createParallelPromptJobId(),
     prompt: text,
     childConversationId,
+    childSessionFile: forked.sessionFile,
     status: 'running',
+    createdAt: now,
+    updatedAt: now,
+    imageCount: input.images?.length ?? 0,
+    attachmentRefs: normalizeParallelPromptList(input.attachmentRefs, 12),
+    touchedFiles: [],
   };
   entry.parallelJobs ??= [];
   entry.parallelJobs.push(job);
+  persistParallelJobs(entry);
   broadcastParallelState(entry, true);
 
   try {
@@ -2908,33 +3307,49 @@ export async function startParallelPromptSession(
 
     const submitted = await submitPromptSession(childConversationId, text, undefined, input.images);
     void submitted.completion.then(async () => {
+      const completion = existsSync(forked.sessionFile)
+        ? readParallelJobCompletionFromSessionFile(forked.sessionFile)
+        : { hasTerminalReply: false, touchedFiles: [] as string[] };
+      const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
+        ...currentJob,
+        childSessionFile: forked.sessionFile,
+        status: completion.status ?? 'ready',
+        updatedAt: new Date().toISOString(),
+        touchedFiles: completion.touchedFiles,
+        ...(completion.status === 'failed'
+          ? { error: completion.error ?? 'The parallel prompt failed before completing.' }
+          : {}),
+        ...(completion.status === 'ready' || completion.resultText !== undefined
+          ? { resultText: completion.resultText ?? '' }
+          : {}),
+      }));
       const currentEntry = registry.get(sessionId);
-      if (!currentEntry?.parallelJobs) {
+      if (!currentEntry || currentEntry.session.sessionFile?.trim() !== sourceSessionFile) {
         return;
       }
 
-      const currentJob = currentEntry.parallelJobs.find((candidate) => candidate.id === job.id);
-      if (!currentJob) {
-        return;
-      }
-
-      currentJob.resultText = extractLatestAssistantReplyText(forked.sessionFile) ?? '';
-      currentJob.status = 'ready';
+      currentEntry.parallelJobs = nextJobs;
       broadcastParallelState(currentEntry, true);
       await tryImportReadyParallelJobs(currentEntry);
     }).catch(async (error: unknown) => {
+      const completion = existsSync(forked.sessionFile)
+        ? readParallelJobCompletionFromSessionFile(forked.sessionFile)
+        : { hasTerminalReply: false, touchedFiles: [] as string[] };
+      const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
+        ...currentJob,
+        childSessionFile: forked.sessionFile,
+        status: 'failed',
+        updatedAt: new Date().toISOString(),
+        touchedFiles: completion.touchedFiles,
+        error: completion.error ?? (error instanceof Error ? error.message : String(error)),
+        ...(completion.resultText !== undefined ? { resultText: completion.resultText } : {}),
+      }));
       const currentEntry = registry.get(sessionId);
-      if (!currentEntry?.parallelJobs) {
+      if (!currentEntry || currentEntry.session.sessionFile?.trim() !== sourceSessionFile) {
         return;
       }
 
-      const currentJob = currentEntry.parallelJobs.find((candidate) => candidate.id === job.id);
-      if (!currentJob) {
-        return;
-      }
-
-      currentJob.error = error instanceof Error ? error.message : String(error);
-      currentJob.status = 'failed';
+      currentEntry.parallelJobs = nextJobs;
       broadcastParallelState(currentEntry, true);
       await tryImportReadyParallelJobs(currentEntry);
     });
@@ -2945,9 +3360,76 @@ export async function startParallelPromptSession(
     };
   } catch (error) {
     entry.parallelJobs = entry.parallelJobs.filter((candidate) => candidate.id !== job.id);
+    persistParallelJobs(entry);
     broadcastParallelState(entry, true);
     throw error;
   }
+}
+
+export async function manageParallelPromptJob(
+  sessionId: string,
+  input: { jobId: string; action: 'importNow' | 'skip' | 'cancel' },
+): Promise<{ ok: true; status: 'imported' | 'queued' | 'skipped' | 'cancelled' }> {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const jobId = input.jobId.trim();
+  if (!jobId) {
+    throw new Error('jobId required');
+  }
+
+  entry.parallelJobs ??= [];
+  const jobIndex = entry.parallelJobs.findIndex((candidate) => candidate.id === jobId);
+  if (jobIndex < 0) {
+    throw new Error('Parallel prompt no longer exists.');
+  }
+
+  const job = entry.parallelJobs[jobIndex]!;
+  if (input.action === 'skip') {
+    if (job.status === 'running') {
+      throw new Error('Use cancel to stop a running parallel prompt.');
+    }
+    if (job.status === 'importing') {
+      throw new Error('Parallel prompt is already being appended.');
+    }
+
+    entry.parallelJobs.splice(jobIndex, 1);
+    persistParallelJobs(entry);
+    broadcastParallelState(entry, true);
+    return { ok: true, status: 'skipped' };
+  }
+
+  if (input.action === 'cancel') {
+    if (job.status === 'importing') {
+      throw new Error('Parallel prompt is already being appended.');
+    }
+
+    if (job.status === 'running') {
+      await abortSession(job.childConversationId);
+    }
+
+    entry.parallelJobs.splice(jobIndex, 1);
+    persistParallelJobs(entry);
+    broadcastParallelState(entry, true);
+    return { ok: true, status: 'cancelled' };
+  }
+
+  if (job.status !== 'ready' && job.status !== 'failed') {
+    throw new Error('Only completed parallel prompts can be imported now.');
+  }
+
+  if (jobIndex > 0) {
+    entry.parallelJobs.splice(jobIndex, 1);
+    entry.parallelJobs.unshift(job);
+    persistParallelJobs(entry);
+    broadcastParallelState(entry, true);
+  }
+
+  await tryImportReadyParallelJobs(entry);
+  const imported = !(entry.parallelJobs ?? []).some((candidate) => candidate.id === jobId);
+  return { ok: true, status: imported ? 'imported' : 'queued' };
 }
 
 function resolvePromptBehavior(
@@ -3535,6 +4017,7 @@ interface StableForkBranchEntry {
     role?: string;
     content?: unknown;
     stopReason?: string;
+    errorMessage?: string;
   };
 }
 
@@ -3667,23 +4150,6 @@ function extractTextFromMessageContent(content: unknown): string {
     .trim();
 }
 
-function extractLatestAssistantReplyText(sessionFile: string): string | null {
-  const branch = getStableForkBranchEntries(sessionFile);
-  for (let index = branch.length - 1; index >= 0; index -= 1) {
-    const entry = branch[index];
-    if (entry?.type !== 'message' || entry.message?.role !== 'assistant') {
-      continue;
-    }
-
-    const text = extractTextFromMessageContent(entry.message.content);
-    if (text) {
-      return text;
-    }
-  }
-
-  return null;
-}
-
 function formatParallelQuotedSection(text: string): string {
   return text
     .split('\n')
@@ -3691,7 +4157,11 @@ function formatParallelQuotedSection(text: string): string {
     .join('\n');
 }
 
-function buildParallelImportedContent(job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error'>): string {
+function buildParallelImportedContent(
+  job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error' | 'imageCount' | 'attachmentRefs' | 'touchedFiles'>,
+): string {
+  const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
+  const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
   const childHref = `/conversations/${encodeURIComponent(job.childConversationId)}`;
   const promptText = job.prompt.trim().length > 0 ? job.prompt.trim() : '(image-only prompt)';
   const sections = [
@@ -3699,11 +4169,23 @@ function buildParallelImportedContent(job: Pick<ParallelPromptJob, 'prompt' | 'c
     '',
     `[Open side thread](${childHref})`,
     '',
-    '**Prompt**',
-    '',
-    formatParallelQuotedSection(promptText),
-    '',
   ];
+
+  const metadata: string[] = [];
+  if (job.imageCount > 0) {
+    metadata.push(`- Images: ${job.imageCount}`);
+  }
+  if (attachmentRefs.length > 0) {
+    metadata.push('- Attachments:', ...attachmentRefs.map((attachmentRef) => `  - ${attachmentRef}`));
+  }
+  if (touchedFiles.length > 0) {
+    metadata.push('- Touched files:', ...touchedFiles.map((path) => `  - \`${path}\``));
+  }
+  if (metadata.length > 0) {
+    sections.push('**Metadata**', '', ...metadata, '');
+  }
+
+  sections.push('**Prompt**', '', formatParallelQuotedSection(promptText), '');
 
   if (job.error?.trim()) {
     sections.push('**Status**', '', 'Failed', '');
