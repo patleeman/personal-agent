@@ -7087,6 +7087,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       const touchedFileSummary = job.touchedFiles.length > 0
                         ? truncateConversationShelfText(job.touchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
                         : null;
+                      const parentTouchedSummary = job.parentTouchedFiles.length > 0
+                        ? truncateConversationShelfText(job.parentTouchedFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                        : null;
+                      const overlapSummary = job.overlapFiles.length > 0
+                        ? truncateConversationShelfText(job.overlapFiles.join(', '), { maxChars: 180, maxLines: 2 })
+                        : null;
+                      const sideEffectSummary = job.sideEffects.length > 0
+                        ? truncateConversationShelfText(job.sideEffects.join(' · '), { maxChars: 180, maxLines: 3 })
+                        : null;
 
                       return (
                         <div key={job.id} className="grid min-w-0 grid-cols-[auto,minmax(0,1fr),auto] items-start gap-x-2 gap-y-1">
@@ -7105,6 +7114,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             ) : null}
                             {touchedFileSummary ? (
                               <p className="mt-0.5 text-[11px] text-dim">files: {touchedFileSummary}</p>
+                            ) : null}
+                            {parentTouchedSummary ? (
+                              <p className="mt-0.5 text-[11px] text-dim">parent: {parentTouchedSummary}</p>
+                            ) : null}
+                            {overlapSummary ? (
+                              <p className="mt-0.5 text-[11px] text-warning">overlap: {overlapSummary}</p>
+                            ) : null}
+                            {sideEffectSummary ? (
+                              <p className="mt-0.5 text-[11px] text-dim">effects: {sideEffectSummary}</p>
                             ) : null}
                             {job.status === 'failed' && job.error ? (
                               <p className="mt-0.5 text-[11px] text-danger">{truncateConversationShelfText(job.error, { maxChars: 140, maxLines: 2 })}</p>

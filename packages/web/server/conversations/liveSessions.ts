@@ -4,7 +4,7 @@
  * exposes a pub/sub SSE event layer for the web server.
  */
 import { appendFileSync, existsSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, normalize, relative, resolve } from 'node:path';
 import {
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
@@ -46,6 +46,7 @@ import {
   type DisplayBlock,
 } from './sessions.js';
 import { estimateContextUsageSegments } from './sessionContextUsage.js';
+import { readGitRepoInfo, readGitStatusSummary } from '../workspace/gitStatus.js';
 import { logWarn } from '../shared/logging.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
@@ -150,6 +151,9 @@ export interface ParallelPromptPreview {
   imageCount: number;
   attachmentRefs: string[];
   touchedFiles: string[];
+  parentTouchedFiles: string[];
+  overlapFiles: string[];
+  sideEffects: string[];
   resultPreview?: string;
   error?: string;
 }
@@ -263,6 +267,12 @@ interface ParallelPromptJob {
   imageCount: number;
   attachmentRefs: string[];
   touchedFiles: string[];
+  parentTouchedFiles: string[];
+  overlapFiles: string[];
+  sideEffects: string[];
+  forkEntryId?: string;
+  repoRoot?: string;
+  worktreeDirtyPathsAtStart: string[];
   resultText?: string;
   error?: string;
 }
@@ -805,6 +815,7 @@ const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
 const PARALLEL_JOBS_FILE_SUFFIX = '.parallel.json';
 const PARALLEL_PREVIEW_PATH_LIMIT = 5;
 const PARALLEL_PREVIEW_ATTACHMENT_LIMIT = 4;
+const PARALLEL_PREVIEW_SIDE_EFFECT_LIMIT = 3;
 let parallelPromptJobCounter = 0;
 
 function resolveParallelJobsFile(sessionFile: string): string {
@@ -866,6 +877,12 @@ function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | nul
   const childSessionFile = typeof job.childSessionFile === 'string' && job.childSessionFile.trim().length > 0
     ? job.childSessionFile.trim()
     : undefined;
+  const forkEntryId = typeof job.forkEntryId === 'string' && job.forkEntryId.trim().length > 0
+    ? job.forkEntryId.trim()
+    : undefined;
+  const repoRoot = typeof job.repoRoot === 'string' && job.repoRoot.trim().length > 0
+    ? job.repoRoot.trim()
+    : undefined;
 
   return {
     id,
@@ -878,6 +895,12 @@ function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | nul
     imageCount: Number.isInteger(job.imageCount) && Number(job.imageCount) > 0 ? Number(job.imageCount) : 0,
     attachmentRefs: normalizeParallelPromptList(job.attachmentRefs, 12),
     touchedFiles: normalizeParallelPromptList(job.touchedFiles, 24),
+    parentTouchedFiles: normalizeParallelPromptList(job.parentTouchedFiles, 24),
+    overlapFiles: normalizeParallelPromptList(job.overlapFiles, 24),
+    sideEffects: normalizeParallelPromptList(job.sideEffects, 12),
+    ...(forkEntryId ? { forkEntryId } : {}),
+    ...(repoRoot ? { repoRoot } : {}),
+    worktreeDirtyPathsAtStart: normalizeParallelPromptList(job.worktreeDirtyPathsAtStart, 128),
     ...(typeof job.resultText === 'string' && job.resultText.trim().length > 0 ? { resultText: job.resultText } : {}),
     ...(typeof job.error === 'string' && job.error.trim().length > 0 ? { error: job.error.trim() } : {}),
   };
@@ -989,6 +1012,39 @@ function readImportedParallelChildConversationIds(sessionFile: string): Set<stri
   return imported;
 }
 
+function normalizeParallelComparablePath(pathValue: string): string {
+  return normalize(pathValue).replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function normalizeParallelTouchedPath(pathValue: string, input: { cwd?: string; repoRoot?: string } = {}): string {
+  const normalized = pathValue.trim();
+  if (!normalized) {
+    return '';
+  }
+
+  if (input.repoRoot) {
+    const absolutePath = normalized.startsWith('/')
+      ? resolve(normalized)
+      : input.cwd
+        ? resolve(input.cwd, normalized)
+        : null;
+    if (absolutePath) {
+      const relativePath = relative(input.repoRoot, absolutePath);
+      if (relativePath && !relativePath.startsWith('..')) {
+        return normalizeParallelComparablePath(relativePath);
+      }
+      if (relativePath === '') {
+        return normalizeParallelComparablePath(absolutePath);
+      }
+      if (normalized.startsWith('/')) {
+        return normalizeParallelComparablePath(absolutePath);
+      }
+    }
+  }
+
+  return normalizeParallelComparablePath(normalized);
+}
+
 function collectParallelToolCallPaths(argumentsValue: unknown): string[] {
   if (!argumentsValue || typeof argumentsValue !== 'object') {
     return [];
@@ -1012,11 +1068,14 @@ function collectParallelToolCallPaths(argumentsValue: unknown): string[] {
   return [...paths, ...multiPaths];
 }
 
-function readParallelTouchedFilesFromSessionFile(sessionFile: string): string[] {
+function collectParallelTouchedFilesFromBranchEntries(
+  entries: StableForkBranchEntry[],
+  options: { cwd?: string; repoRoot?: string; includeRead?: boolean } = {},
+): string[] {
   const seen = new Set<string>();
   const touchedFiles: string[] = [];
 
-  for (const entry of getStableForkBranchEntries(sessionFile)) {
+  for (const entry of entries) {
     if (entry?.type !== 'message' || entry.message?.role !== 'assistant' || !Array.isArray(entry.message.content)) {
       continue;
     }
@@ -1029,17 +1088,23 @@ function readParallelTouchedFilesFromSessionFile(sessionFile: string): string[] 
       const toolName = typeof (part as { name?: unknown }).name === 'string'
         ? (part as { name: string }).name.trim()
         : '';
-      if (toolName !== 'read' && toolName !== 'edit' && toolName !== 'write' && toolName !== 'checkpoint') {
+      if ((toolName === 'read' && options.includeRead !== false)
+        || toolName === 'edit'
+        || toolName === 'write'
+        || toolName === 'checkpoint') {
+        // keep going
+      } else {
         continue;
       }
 
-      for (const path of collectParallelToolCallPaths((part as { arguments?: unknown }).arguments)) {
-        if (seen.has(path)) {
+      for (const rawPath of collectParallelToolCallPaths((part as { arguments?: unknown }).arguments)) {
+        const normalizedPath = normalizeParallelTouchedPath(rawPath, options);
+        if (!normalizedPath || seen.has(normalizedPath)) {
           continue;
         }
 
-        seen.add(path);
-        touchedFiles.push(path);
+        seen.add(normalizedPath);
+        touchedFiles.push(normalizedPath);
       }
     }
   }
@@ -1047,15 +1112,178 @@ function readParallelTouchedFilesFromSessionFile(sessionFile: string): string[] 
   return touchedFiles;
 }
 
-function readParallelJobCompletionFromSessionFile(sessionFile: string): {
+function readParallelTouchedFilesFromSessionFile(
+  sessionFile: string,
+  options: { cwd?: string; repoRoot?: string } = {},
+): string[] {
+  return collectParallelTouchedFilesFromBranchEntries(getStableForkBranchEntries(sessionFile), options);
+}
+
+function readParallelMutatedFilesFromSessionFile(
+  sessionFile: string,
+  options: { cwd?: string; repoRoot?: string } = {},
+): string[] {
+  return collectParallelTouchedFilesFromBranchEntries(getStableForkBranchEntries(sessionFile), {
+    ...options,
+    includeRead: false,
+  });
+}
+
+function isParallelRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readParallelRecordString(value: Record<string, unknown> | null, key: string): string | null {
+  const candidate = value?.[key];
+  return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : null;
+}
+
+function readParallelToolAction(block: Extract<DisplayBlock, { type: 'tool_use' }>): string | null {
+  const details = isParallelRecord(block.details) ? block.details : null;
+  const input = isParallelRecord(block.input) ? block.input : null;
+  return readParallelRecordString(details, 'action') ?? readParallelRecordString(input, 'action');
+}
+
+function summarizeParallelToolOutput(block: Extract<DisplayBlock, { type: 'tool_use' }>): string | null {
+  const firstLine = block.output
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (!firstLine) {
+    return null;
+  }
+
+  return truncateParallelPreviewText(firstLine, 200);
+}
+
+function isParallelSideEffectBlock(block: Extract<DisplayBlock, { type: 'tool_use' }>): boolean {
+  const action = readParallelToolAction(block);
+
+  if (block.tool === 'artifact') {
+    return action === 'save' || action === 'delete';
+  }
+
+  if (block.tool === 'checkpoint') {
+    return action === 'save';
+  }
+
+  if (block.tool === 'reminder') {
+    return true;
+  }
+
+  if (block.tool === 'conversation_queue') {
+    return action === 'add' || action === 'cancel';
+  }
+
+  if (block.tool === 'scheduled_task') {
+    return action === 'save' || action === 'delete' || action === 'run';
+  }
+
+  if (block.tool === 'run') {
+    return action === 'start'
+      || action === 'start_agent'
+      || action === 'rerun'
+      || action === 'follow_up'
+      || action === 'cancel';
+  }
+
+  if (block.tool === 'change_working_directory') {
+    return action === 'queue';
+  }
+
+  return false;
+}
+
+function readParallelSideEffectsFromSessionFile(sessionFile: string): string[] {
+  const detail = readSessionBlocksByFile(sessionFile);
+  const blocks = detail?.blocks ?? [];
+  const seen = new Set<string>();
+  const sideEffects: string[] = [];
+
+  for (const block of blocks) {
+    if (block.type !== 'tool_use' || !isParallelSideEffectBlock(block)) {
+      continue;
+    }
+
+    const summary = summarizeParallelToolOutput(block);
+    if (!summary || seen.has(summary)) {
+      continue;
+    }
+
+    seen.add(summary);
+    sideEffects.push(summary);
+  }
+
+  return sideEffects;
+}
+
+function readParallelCurrentWorktreeDirtyPaths(cwd: string, repoRoot?: string): string[] {
+  if (!cwd.trim()) {
+    return [];
+  }
+
+  const resolvedRepoRoot = repoRoot?.trim() || readGitRepoInfo(cwd)?.root;
+  if (!resolvedRepoRoot) {
+    return [];
+  }
+
+  const summary = readGitStatusSummary(resolvedRepoRoot);
+  if (!summary) {
+    return [];
+  }
+
+  return normalizeParallelPromptList(summary.changes.map((change) => normalizeParallelComparablePath(change.relativePath)), 256);
+}
+
+function readParentTouchedFilesSinceFork(
+  sessionFile: string,
+  forkEntryId: string | undefined,
+  options: { cwd?: string; repoRoot?: string; includeRead?: boolean } = {},
+): string[] {
+  const branch = getStableForkBranchEntries(sessionFile);
+  if (!forkEntryId) {
+    return collectParallelTouchedFilesFromBranchEntries(branch, options);
+  }
+
+  const forkIndex = branch.findIndex((entry) => entry.id?.trim() === forkEntryId);
+  const branchTail = forkIndex >= 0 ? branch.slice(forkIndex + 1) : branch;
+  return collectParallelTouchedFilesFromBranchEntries(branchTail, options);
+}
+
+function readParallelOverlapFiles(input: {
+  mutatingChildFiles: string[];
+  parentMutatingFiles: string[];
+  currentDirtyPaths: string[];
+  worktreeDirtyPathsAtStart: string[];
+}): string[] {
+  if (input.mutatingChildFiles.length === 0) {
+    return [];
+  }
+
+  const startDirtyPaths = new Set(input.worktreeDirtyPathsAtStart);
+  const concurrentDirtyPaths = input.currentDirtyPaths.filter((path) => !startDirtyPaths.has(path));
+  const overlapCandidates = new Set<string>([
+    ...normalizeParallelPromptList(input.parentMutatingFiles, 64),
+    ...normalizeParallelPromptList(concurrentDirtyPaths, 128),
+  ]);
+
+  return input.mutatingChildFiles.filter((path) => overlapCandidates.has(path));
+}
+
+function readParallelJobCompletionFromSessionFile(
+  sessionFile: string,
+  options: { cwd?: string; repoRoot?: string } = {},
+): {
   hasTerminalReply: boolean;
   status?: Extract<ParallelPromptJobStatus, 'ready' | 'failed'>;
   resultText?: string;
   error?: string;
   touchedFiles: string[];
+  sideEffects: string[];
 } {
   const branch = getStableForkBranchEntries(sessionFile);
-  const touchedFiles = readParallelTouchedFilesFromSessionFile(sessionFile);
+  const touchedFiles = readParallelTouchedFilesFromSessionFile(sessionFile, options);
+  const sideEffects = readParallelSideEffectsFromSessionFile(sessionFile);
 
   for (let index = branch.length - 1; index >= 0; index -= 1) {
     const entry = branch[index];
@@ -1076,6 +1304,7 @@ function readParallelJobCompletionFromSessionFile(sessionFile: string): {
           ? errorMessage
           : 'The parallel prompt failed before completing.',
         touchedFiles,
+        sideEffects,
       };
     }
 
@@ -1085,34 +1314,66 @@ function readParallelJobCompletionFromSessionFile(sessionFile: string): {
       status: 'ready',
       ...(resultText ? { resultText } : {}),
       touchedFiles,
+      sideEffects,
     };
   }
 
   return {
     hasTerminalReply: false,
     touchedFiles,
+    sideEffects,
   };
 }
 
-function reconcileParallelPromptJob(job: ParallelPromptJob): ParallelPromptJob {
+function reconcileParallelPromptJob(sessionFile: string, job: ParallelPromptJob): ParallelPromptJob {
+  const parentMeta = readSessionMetaByFile(sessionFile);
+  const sourceCwd = parentMeta?.cwd ?? '';
+  const repoRoot = sourceCwd ? (job.repoRoot?.trim() || readGitRepoInfo(sourceCwd)?.root) : job.repoRoot?.trim();
   const childEntry = registry.get(job.childConversationId);
   const childSessionFile = childEntry?.session.sessionFile?.trim() || job.childSessionFile?.trim() || '';
   const updatedAt = new Date().toISOString();
+  const parentTouchedFiles = readParentTouchedFilesSinceFork(sessionFile, job.forkEntryId, { cwd: sourceCwd, repoRoot });
+  const parentMutatingFiles = readParentTouchedFilesSinceFork(sessionFile, job.forkEntryId, {
+    cwd: sourceCwd,
+    repoRoot,
+    includeRead: false,
+  });
+  const currentDirtyPaths = readParallelCurrentWorktreeDirtyPaths(sourceCwd, repoRoot);
   const next: ParallelPromptJob = {
     ...job,
     ...(childSessionFile ? { childSessionFile } : {}),
+    ...(repoRoot ? { repoRoot } : {}),
     updatedAt,
     touchedFiles: Array.isArray(job.touchedFiles) ? job.touchedFiles : [],
+    parentTouchedFiles,
+    overlapFiles: [],
+    sideEffects: Array.isArray(job.sideEffects) ? job.sideEffects : [],
+    worktreeDirtyPathsAtStart: normalizeParallelPromptList(job.worktreeDirtyPathsAtStart, 128),
   };
 
   if (childEntry?.session.isStreaming) {
     next.status = 'running';
+    next.overlapFiles = readParallelOverlapFiles({
+      mutatingChildFiles: childSessionFile && existsSync(childSessionFile)
+        ? readParallelMutatedFilesFromSessionFile(childSessionFile, { cwd: sourceCwd, repoRoot })
+        : [],
+      parentMutatingFiles,
+      currentDirtyPaths,
+      worktreeDirtyPathsAtStart: next.worktreeDirtyPathsAtStart,
+    });
     return next;
   }
 
   if (childSessionFile && existsSync(childSessionFile)) {
-    const completion = readParallelJobCompletionFromSessionFile(childSessionFile);
+    const completion = readParallelJobCompletionFromSessionFile(childSessionFile, { cwd: sourceCwd, repoRoot });
     next.touchedFiles = completion.touchedFiles;
+    next.sideEffects = completion.sideEffects;
+    next.overlapFiles = readParallelOverlapFiles({
+      mutatingChildFiles: readParallelMutatedFilesFromSessionFile(childSessionFile, { cwd: sourceCwd, repoRoot }),
+      parentMutatingFiles,
+      currentDirtyPaths,
+      worktreeDirtyPathsAtStart: next.worktreeDirtyPathsAtStart,
+    });
 
     if (completion.status === 'failed') {
       next.status = 'failed';
@@ -1128,6 +1389,13 @@ function reconcileParallelPromptJob(job: ParallelPromptJob): ParallelPromptJob {
       return next;
     }
   }
+
+  next.overlapFiles = readParallelOverlapFiles({
+    mutatingChildFiles: [],
+    parentMutatingFiles,
+    currentDirtyPaths,
+    worktreeDirtyPathsAtStart: next.worktreeDirtyPathsAtStart,
+  });
 
   if (next.status === 'importing') {
     next.status = next.error?.trim() ? 'failed' : 'ready';
@@ -1146,7 +1414,7 @@ function reconcilePersistedParallelJobs(sessionFile: string, jobs: ParallelPromp
   const importedChildConversationIds = readImportedParallelChildConversationIds(sessionFile);
   return jobs
     .filter((job) => !importedChildConversationIds.has(job.childConversationId))
-    .map((job) => reconcileParallelPromptJob(job));
+    .map((job) => reconcileParallelPromptJob(sessionFile, job));
 }
 
 function loadPersistedParallelJobs(entry: Pick<LiveEntry, 'session'>): ParallelPromptJob[] {
@@ -1179,6 +1447,9 @@ function truncateParallelPreviewText(text: string, maxLength = 240): string {
 function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPreview {
   const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
   const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
+  const parentTouchedFiles = Array.isArray(job.parentTouchedFiles) ? job.parentTouchedFiles : [];
+  const overlapFiles = Array.isArray(job.overlapFiles) ? job.overlapFiles : [];
+  const sideEffects = Array.isArray(job.sideEffects) ? job.sideEffects : [];
   return {
     id: job.id,
     prompt: truncateParallelPreviewText(job.prompt),
@@ -1187,6 +1458,9 @@ function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPrevi
     imageCount: Number.isInteger(job.imageCount) && job.imageCount > 0 ? job.imageCount : 0,
     attachmentRefs: attachmentRefs.slice(0, PARALLEL_PREVIEW_ATTACHMENT_LIMIT),
     touchedFiles: touchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
+    parentTouchedFiles: parentTouchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
+    overlapFiles: overlapFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
+    sideEffects: sideEffects.slice(0, PARALLEL_PREVIEW_SIDE_EFFECT_LIMIT),
     ...(job.resultText ? { resultPreview: truncateParallelPreviewText(job.resultText) } : {}),
     ...(job.error ? { error: truncateParallelPreviewText(job.error) } : {}),
   };
@@ -3186,6 +3460,47 @@ export async function appendVisibleCustomMessage(
   publishSessionMetaChanged(sessionId);
 }
 
+function shouldPreserveParallelChildLiveSession(entry: LiveEntry | undefined): boolean {
+  if (!entry) {
+    return false;
+  }
+
+  return entry.listeners.size > 0 || (entry.presenceBySurfaceId?.size ?? 0) > 0;
+}
+
+async function finalizeParallelChildLiveSession(
+  childConversationId: string,
+  options: { abortIfRunning?: boolean } = {},
+): Promise<'destroyed' | 'preserved' | 'missing'> {
+  const childEntry = registry.get(childConversationId);
+  if (!childEntry) {
+    return 'missing';
+  }
+
+  if (options.abortIfRunning && childEntry.session.isStreaming) {
+    try {
+      await childEntry.session.abort();
+    } catch (error) {
+      logWarn('parallel child abort failed before cleanup', {
+        conversationId: childConversationId,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    }
+  }
+
+  if (shouldPreserveParallelChildLiveSession(childEntry)) {
+    return 'preserved';
+  }
+
+  if (!options.abortIfRunning && childEntry.session.isStreaming) {
+    return 'preserved';
+  }
+
+  destroySession(childConversationId);
+  return 'destroyed';
+}
+
 async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
   entry.parallelJobs ??= [];
   if (entry.importingParallelJobs || entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
@@ -3232,6 +3547,7 @@ async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
       entry.parallelJobs.shift();
       persistParallelJobs(entry);
       broadcastParallelState(entry, true);
+      await finalizeParallelChildLiveSession(currentJob.childConversationId);
     }
   } finally {
     entry.importingParallelJobs = false;
@@ -3264,6 +3580,11 @@ export async function startParallelPromptSession(
   }
 
   const activeTurnInProgress = entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry);
+  if (!activeTurnInProgress) {
+    throw new Error('Parallel prompts are only available while the conversation is busy.');
+  }
+
+  const parallelRepoRoot = readGitRepoInfo(entry.cwd)?.root;
   const stableEntryId = resolveStableForkEntryId(sourceSessionFile, { activeTurnInProgress });
   const forked = stableEntryId
     ? await forkSession(sessionId, stableEntryId, {
@@ -3294,6 +3615,12 @@ export async function startParallelPromptSession(
     imageCount: input.images?.length ?? 0,
     attachmentRefs: normalizeParallelPromptList(input.attachmentRefs, 12),
     touchedFiles: [],
+    parentTouchedFiles: [],
+    overlapFiles: [],
+    sideEffects: [],
+    ...(stableEntryId ? { forkEntryId: stableEntryId } : {}),
+    ...(parallelRepoRoot ? { repoRoot: parallelRepoRoot } : {}),
+    worktreeDirtyPathsAtStart: readParallelCurrentWorktreeDirtyPaths(entry.cwd, parallelRepoRoot),
   };
   entry.parallelJobs ??= [];
   entry.parallelJobs.push(job);
@@ -3308,14 +3635,15 @@ export async function startParallelPromptSession(
     const submitted = await submitPromptSession(childConversationId, text, undefined, input.images);
     void submitted.completion.then(async () => {
       const completion = existsSync(forked.sessionFile)
-        ? readParallelJobCompletionFromSessionFile(forked.sessionFile)
-        : { hasTerminalReply: false, touchedFiles: [] as string[] };
+        ? readParallelJobCompletionFromSessionFile(forked.sessionFile, { cwd: entry.cwd, repoRoot: parallelRepoRoot })
+        : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
       const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
         ...currentJob,
         childSessionFile: forked.sessionFile,
         status: completion.status ?? 'ready',
         updatedAt: new Date().toISOString(),
         touchedFiles: completion.touchedFiles,
+        sideEffects: completion.sideEffects,
         ...(completion.status === 'failed'
           ? { error: completion.error ?? 'The parallel prompt failed before completing.' }
           : {}),
@@ -3333,14 +3661,15 @@ export async function startParallelPromptSession(
       await tryImportReadyParallelJobs(currentEntry);
     }).catch(async (error: unknown) => {
       const completion = existsSync(forked.sessionFile)
-        ? readParallelJobCompletionFromSessionFile(forked.sessionFile)
-        : { hasTerminalReply: false, touchedFiles: [] as string[] };
+        ? readParallelJobCompletionFromSessionFile(forked.sessionFile, { cwd: entry.cwd, repoRoot: parallelRepoRoot })
+        : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
       const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
         ...currentJob,
         childSessionFile: forked.sessionFile,
         status: 'failed',
         updatedAt: new Date().toISOString(),
         touchedFiles: completion.touchedFiles,
+        sideEffects: completion.sideEffects,
         error: completion.error ?? (error instanceof Error ? error.message : String(error)),
         ...(completion.resultText !== undefined ? { resultText: completion.resultText } : {}),
       }));
@@ -3398,6 +3727,7 @@ export async function manageParallelPromptJob(
     entry.parallelJobs.splice(jobIndex, 1);
     persistParallelJobs(entry);
     broadcastParallelState(entry, true);
+    await finalizeParallelChildLiveSession(job.childConversationId);
     return { ok: true, status: 'skipped' };
   }
 
@@ -3406,13 +3736,10 @@ export async function manageParallelPromptJob(
       throw new Error('Parallel prompt is already being appended.');
     }
 
-    if (job.status === 'running') {
-      await abortSession(job.childConversationId);
-    }
-
     entry.parallelJobs.splice(jobIndex, 1);
     persistParallelJobs(entry);
     broadcastParallelState(entry, true);
+    await finalizeParallelChildLiveSession(job.childConversationId, { abortIfRunning: true });
     return { ok: true, status: 'cancelled' };
   }
 
@@ -4158,10 +4485,13 @@ function formatParallelQuotedSection(text: string): string {
 }
 
 function buildParallelImportedContent(
-  job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error' | 'imageCount' | 'attachmentRefs' | 'touchedFiles'>,
+  job: Pick<ParallelPromptJob, 'prompt' | 'childConversationId' | 'resultText' | 'error' | 'imageCount' | 'attachmentRefs' | 'touchedFiles' | 'parentTouchedFiles' | 'overlapFiles' | 'sideEffects'>,
 ): string {
   const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
   const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
+  const parentTouchedFiles = Array.isArray(job.parentTouchedFiles) ? job.parentTouchedFiles : [];
+  const overlapFiles = Array.isArray(job.overlapFiles) ? job.overlapFiles : [];
+  const sideEffects = Array.isArray(job.sideEffects) ? job.sideEffects : [];
   const childHref = `/conversations/${encodeURIComponent(job.childConversationId)}`;
   const promptText = job.prompt.trim().length > 0 ? job.prompt.trim() : '(image-only prompt)';
   const sections = [
@@ -4181,8 +4511,26 @@ function buildParallelImportedContent(
   if (touchedFiles.length > 0) {
     metadata.push('- Touched files:', ...touchedFiles.map((path) => `  - \`${path}\``));
   }
+  if (parentTouchedFiles.length > 0) {
+    metadata.push('- Parent thread touched:', ...parentTouchedFiles.map((path) => `  - \`${path}\``));
+  }
   if (metadata.length > 0) {
     sections.push('**Metadata**', '', ...metadata, '');
+  }
+
+  if (overlapFiles.length > 0) {
+    sections.push(
+      '**Potential overlap**',
+      '',
+      'These files changed in the worktree while this side thread was running and may need a manual conflict check.',
+      '',
+      ...overlapFiles.map((path) => `- \`${path}\``),
+      '',
+    );
+  }
+
+  if (sideEffects.length > 0) {
+    sections.push('**Side effects**', '', ...sideEffects.map((summary) => `- ${summary}`), '');
   }
 
   sections.push('**Prompt**', '', formatParallelQuotedSection(promptText), '');

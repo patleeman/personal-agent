@@ -71,6 +71,9 @@ describe('desktopConversationState reducer', () => {
         imageCount: 1,
         attachmentRefs: ['diagram (rev 2)'],
         touchedFiles: ['src/app.ts'],
+        parentTouchedFiles: ['src/app.ts'],
+        overlapFiles: ['src/app.ts'],
+        sideEffects: ['Saved checkpoint abc1234 Keep the fix.'],
       }],
     } as never);
 
@@ -101,6 +104,9 @@ describe('desktopConversationState reducer', () => {
         imageCount: 1,
         attachmentRefs: ['diagram (rev 2)'],
         touchedFiles: ['src/app.ts'],
+        parentTouchedFiles: ['src/app.ts'],
+        overlapFiles: ['src/app.ts'],
+        sideEffects: ['Saved checkpoint abc1234 Keep the fix.'],
       },
     ]);
   });

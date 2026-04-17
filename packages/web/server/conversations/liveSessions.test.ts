@@ -289,6 +289,10 @@ describe('parallel prompt job management', () => {
       imageCount: 0,
       attachmentRefs: [],
       touchedFiles: [],
+      parentTouchedFiles: [],
+      overlapFiles: [],
+      sideEffects: [],
+      worktreeDirtyPathsAtStart: [],
     };
     const readyJob = {
       id: 'parallel-ready',
@@ -301,6 +305,10 @@ describe('parallel prompt job management', () => {
       imageCount: 1,
       attachmentRefs: ['diagram (rev 2)'],
       touchedFiles: ['src/app.ts'],
+      parentTouchedFiles: ['src/app.ts'],
+      overlapFiles: ['src/app.ts'],
+      sideEffects: ['Saved checkpoint abc1234 Keep the docs fix.'],
+      worktreeDirtyPathsAtStart: [],
       resultText: 'The docs already cover this case.',
     };
     const jobsFile = `${sessionFile}.parallel.json`;
@@ -343,12 +351,16 @@ describe('parallel prompt job management', () => {
     expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
       content: expect.stringContaining('src/app.ts'),
     }));
+    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      content: expect.stringContaining('Saved checkpoint abc1234 Keep the docs fix.'),
+    }));
     expect(registry.get('session-parallel-parent')?.parallelJobs).toEqual([
       expect.objectContaining({ id: 'parallel-running', status: 'running' }),
     ]);
     expect(JSON.parse(readFileSync(jobsFile, 'utf-8'))).toEqual([
       expect.objectContaining({ id: 'parallel-running', status: 'running' }),
     ]);
+    expect(isLive('child-ready')).toBe(false);
   });
 
   it('cancels a running parallel job and removes it from the durable queue', async () => {
@@ -368,6 +380,10 @@ describe('parallel prompt job management', () => {
       imageCount: 0,
       attachmentRefs: [],
       touchedFiles: [],
+      parentTouchedFiles: [],
+      overlapFiles: [],
+      sideEffects: [],
+      worktreeDirtyPathsAtStart: [],
     };
     const jobsFile = `${sessionFile}.parallel.json`;
     writeFileSync(jobsFile, `${JSON.stringify([runningJob], null, 2)}\n`);
@@ -385,6 +401,7 @@ describe('parallel prompt job management', () => {
         sessionFile: runningJob.childSessionFile,
         isStreaming: true,
         abort,
+        dispose: vi.fn(),
       },
     });
 
@@ -417,6 +434,7 @@ describe('parallel prompt job management', () => {
 
     expect(abort).toHaveBeenCalledTimes(1);
     expect(registry.get('session-parallel-cancel')?.parallelJobs).toEqual([]);
+    expect(isLive('child-running')).toBe(false);
     expect(existsSync(jobsFile)).toBe(false);
   });
 });

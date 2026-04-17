@@ -803,6 +803,9 @@ export interface ParallelPromptPreview {
   imageCount: number;
   attachmentRefs: string[];
   touchedFiles: string[];
+  parentTouchedFiles: string[];
+  overlapFiles: string[];
+  sideEffects: string[];
   resultPreview?: string;
   error?: string;
 }
