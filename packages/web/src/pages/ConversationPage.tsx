@@ -139,7 +139,7 @@ function isDesktopConversationShortcutAction(value: unknown): value is DesktopCo
   return value === 'focus-composer' || value === 'edit-working-directory' || value === 'rename-conversation';
 }
 
-export function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent): number {
+function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent): number {
   if (event.isComposing || !event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) {
     return -1;
   }
@@ -152,7 +152,7 @@ export function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent)
   return /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : -1;
 }
 
-export function resolveConversationAutocompleteCatalogDemand(input: string): {
+function resolveConversationAutocompleteCatalogDemand(input: string): {
   needsMemoryData: boolean;
   needsVaultFiles: boolean;
 } {

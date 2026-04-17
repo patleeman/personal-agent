@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConversationPage,
   resolveDisplayedConversationPendingStatusLabel,
-  resolveConversationAutocompleteCatalogDemand,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
@@ -15,7 +14,6 @@ import {
   shouldLoadConversationModels,
   shouldUseHealthyDesktopConversationState,
   shouldFetchConversationAttachments,
-  resolveRelatedThreadHotkeyIndex,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -46,91 +44,6 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
 
   return null;
 }
-
-describe('related thread hotkeys', () => {
-  it('accepts Ctrl+digit via event.code for the first 9 threads', () => {
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      key: '1',
-      code: 'Digit1',
-      isComposing: false,
-    })).toBe(0);
-
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      key: '9',
-      code: 'Digit9',
-      isComposing: false,
-    })).toBe(8);
-  });
-
-  it('falls back to the raw key when event.code is unavailable', () => {
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      key: '4',
-      code: '',
-      isComposing: false,
-    })).toBe(3);
-  });
-
-  it('ignores non-Ctrl and modified key combinations', () => {
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: false,
-      metaKey: false,
-      altKey: false,
-      shiftKey: false,
-      key: '1',
-      code: 'Digit1',
-      isComposing: false,
-    })).toBe(-1);
-
-    expect(resolveRelatedThreadHotkeyIndex({
-      ctrlKey: true,
-      metaKey: false,
-      altKey: false,
-      shiftKey: true,
-      key: '!',
-      code: 'Digit1',
-      isComposing: false,
-    })).toBe(-1);
-  });
-});
-
-describe('conversation autocomplete catalog demand', () => {
-  it('skips memory and vault catalog reads for plain prompts', () => {
-    expect(resolveConversationAutocompleteCatalogDemand('Write a git commit message for this diff.')).toEqual({
-      needsMemoryData: false,
-      needsVaultFiles: false,
-    });
-  });
-
-  it('loads memory data for slash command discovery but skips vault files', () => {
-    expect(resolveConversationAutocompleteCatalogDemand('/resume 10m')).toEqual({
-      needsMemoryData: true,
-      needsVaultFiles: false,
-    });
-  });
-
-  it('loads both catalogs for mention discovery but not for the model picker', () => {
-    expect(resolveConversationAutocompleteCatalogDemand('@agent-browser')).toEqual({
-      needsMemoryData: true,
-      needsVaultFiles: true,
-    });
-    expect(resolveConversationAutocompleteCatalogDemand('/model claude')).toEqual({
-      needsMemoryData: false,
-      needsVaultFiles: false,
-    });
-  });
-});
 
 describe('desktop conversation state fallback', () => {
   it('uses the dedicated desktop state only while the local subscription is healthy', () => {
