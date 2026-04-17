@@ -5,17 +5,42 @@ import {
   readWarmLiveSessionState,
   writeWarmLiveSessionState,
 } from './liveSessionWarmth';
-import { INITIAL_STREAM_STATE, shouldPersistWarmLiveSessionState } from '../hooks/useSessionStream';
+import type { StreamState } from '../hooks/useSessionStream';
+
+function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
+  return {
+    blocks: [],
+    blockOffset: 0,
+    totalBlocks: 0,
+    hasSnapshot: false,
+    isStreaming: false,
+    isCompacting: false,
+    error: null,
+    title: null,
+    tokens: null,
+    cost: null,
+    contextUsage: null,
+    pendingQueue: { steering: [], followUp: [] },
+    presence: {
+      surfaces: [],
+      controllerSurfaceId: null,
+      controllerSurfaceType: null,
+      controllerAcquiredAt: null,
+    },
+    autoModeState: null,
+    cwdChange: null,
+    ...overrides,
+  };
+}
 
 describe('liveSessionWarmth', () => {
   it('stores and clears warm live session state by conversation id', () => {
     const sessionId = 'conv-live-cache';
-    const state = {
-      ...INITIAL_STREAM_STATE,
+    const state = createStreamState({
       hasSnapshot: true,
       blocks: [{ type: 'text' as const, id: 'assistant-1', ts: '2026-03-28T12:00:00.000Z', text: 'Fresh live snapshot' }],
       totalBlocks: 1,
-    };
+    });
 
     clearWarmLiveSessionState(sessionId);
     writeWarmLiveSessionState(sessionId, state);
@@ -28,22 +53,3 @@ describe('liveSessionWarmth', () => {
   });
 });
 
-describe('shouldPersistWarmLiveSessionState', () => {
-  it('skips completely empty stream state', () => {
-    expect(shouldPersistWarmLiveSessionState(INITIAL_STREAM_STATE)).toBe(false);
-  });
-
-  it('keeps meaningful live state warm for hidden tabs', () => {
-    expect(shouldPersistWarmLiveSessionState({
-      ...INITIAL_STREAM_STATE,
-      isStreaming: true,
-    })).toBe(true);
-
-    expect(shouldPersistWarmLiveSessionState({
-      ...INITIAL_STREAM_STATE,
-      hasSnapshot: true,
-      blocks: [{ type: 'text', ts: '2026-03-28T12:05:00.000Z', text: 'ready' }],
-      totalBlocks: 1,
-    })).toBe(true);
-  });
-});

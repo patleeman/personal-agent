@@ -47,7 +47,7 @@ function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
   };
 }
 
-export const INITIAL_STREAM_STATE: StreamState = {
+const INITIAL_STREAM_STATE: StreamState = {
   blocks: [],
   blockOffset: 0,
   totalBlocks: 0,
@@ -302,7 +302,7 @@ function shouldRetrySessionStreamAfterError(status?: number): boolean {
   return status >= 500;
 }
 
-export function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
+function shouldPersistWarmLiveSessionState(state: StreamState): boolean {
   return state.hasSnapshot
     || state.blocks.length > 0
     || state.isStreaming
@@ -676,7 +676,7 @@ function readLiveTerminalBashDetails(
   };
 }
 
-export function applyEvent(
+function applyEvent(
   prev: StreamState,
   blocksRef: React.MutableRefObject<MessageBlock[]>,
   streamingRef: React.MutableRefObject<boolean>,
