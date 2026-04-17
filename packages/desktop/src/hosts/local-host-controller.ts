@@ -61,18 +61,20 @@ export class LocalHostController implements HostController {
 
   async getStatus(): Promise<HostStatus> {
     const status = await this.backend.getStatus();
-    const summary = !status.daemonHealthy
-      ? 'Local desktop runtime is starting or unavailable.'
-      : status.daemonOwnership === 'external'
-        ? 'Local desktop runtime is attached to an external daemon.'
-        : 'Local desktop runtime is healthy.';
+    const reachable = status.daemonHealthy && !status.blockedReason;
+    const summary = status.blockedReason
+      ?? (!status.daemonHealthy
+        ? 'Local desktop runtime is starting or unavailable.'
+        : status.daemonOwnership === 'external'
+          ? 'Local desktop runtime is attached to an external daemon.'
+          : 'Local desktop runtime is healthy.');
 
     return {
-      reachable: status.daemonHealthy,
+      reachable,
       mode: 'local-child-process',
       summary,
       webUrl: getDesktopAppBaseUrl(),
-      daemonHealthy: status.daemonHealthy,
+      daemonHealthy: reachable,
     };
   }
 

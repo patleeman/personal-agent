@@ -42,11 +42,15 @@ function createManagedChild(label: string) {
 describe('LocalBackendProcesses', () => {
   afterEach(() => {
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
+    delete process.env.PERSONAL_AGENT_DESKTOP_VARIANT;
+    delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
+    delete process.env.PERSONAL_AGENT_DESKTOP_VARIANT;
+    delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
 
     mocks.resolveDesktopRuntimePaths.mockReturnValue({
       repoRoot: '/repo',
@@ -79,17 +83,20 @@ describe('LocalBackendProcesses', () => {
     expect(mocks.pingDaemon).not.toHaveBeenCalled();
   });
 
-  it('does not spawn a new daemon when one is already reachable', async () => {
+  it('rejects startup in stable launches when an external daemon is already reachable', async () => {
     mocks.pingDaemon.mockResolvedValue(true);
     const backend = new LocalBackendProcesses();
 
-    await expect(backend.ensureStarted()).resolves.toBeUndefined();
+    await expect(backend.ensureStarted()).rejects.toThrow(
+      'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+    );
 
     expect(mocks.spawnLoggedChild).not.toHaveBeenCalled();
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('adopts a daemon that becomes reachable during startup instead of failing bootstrap', async () => {
+  it('allows testing launches to reuse an external daemon that becomes reachable during startup', async () => {
+    process.env.PERSONAL_AGENT_DESKTOP_VARIANT = 'testing';
     mocks.pingDaemon
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
@@ -103,7 +110,20 @@ describe('LocalBackendProcesses', () => {
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('records ownership when status checks discover an external daemon before bootstrap', async () => {
+  it('reports stable launches as blocked when an external daemon is already running', async () => {
+    mocks.pingDaemon.mockResolvedValue(true);
+    const backend = new LocalBackendProcesses();
+
+    await expect(backend.getStatus()).resolves.toEqual({
+      daemonHealthy: false,
+      daemonOwnership: 'external',
+      blockedReason: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+    });
+    expect(readDesktopDaemonOwnership()).toBe('external');
+  });
+
+  it('reports testing launches as attached when an external daemon is already running', async () => {
+    process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE = '1';
     mocks.pingDaemon.mockResolvedValue(true);
     const backend = new LocalBackendProcesses();
 
@@ -153,7 +173,7 @@ describe('LocalBackendProcesses', () => {
     const backend = new LocalBackendProcesses();
 
     await expect(backend.restart()).rejects.toThrow(
-      'The desktop app is attached to an external daemon. Restart it with `pa daemon restart` or stop the external daemon service first.',
+      'The desktop app does not own the running daemon. Restart it with `pa daemon restart` or stop the external daemon service first.',
     );
     expect(readDesktopDaemonOwnership()).toBe('external');
   });

@@ -2,13 +2,22 @@ import { type ChildProcess } from 'node:child_process';
 import { resolveChildProcessEnv } from '@personal-agent/core';
 import { pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
+import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 import { clearDesktopDaemonOwnership, writeDesktopDaemonOwnership, type DesktopDaemonOwnership } from './daemon-ownership.js';
 import { waitForDaemonHealthy } from './health.js';
 import { spawnLoggedChild, stopManagedChild, type ManagedChildProcess } from './child-process.js';
 
+const EXTERNAL_DAEMON_CONFLICT_MESSAGE = 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.';
+const EXTERNAL_DAEMON_RESTART_MESSAGE = 'The desktop app does not own the running daemon. Restart it with `pa daemon restart` or stop the external daemon service first.';
+
+function allowExternalDaemonReuseInDesktopLaunch(env: NodeJS.ProcessEnv = process.env): boolean {
+  return resolveDesktopLaunchPresentation(env).mode === 'testing';
+}
+
 interface LocalBackendStatus {
   daemonHealthy: boolean;
   daemonOwnership?: DesktopDaemonOwnership;
+  blockedReason?: string;
 }
 
 export class LocalBackendProcesses {
@@ -28,25 +37,45 @@ export class LocalBackendProcesses {
 
     if (await pingDaemon()) {
       writeDesktopDaemonOwnership('external');
-      return;
+      if (allowExternalDaemonReuseInDesktopLaunch()) {
+        return;
+      }
+
+      throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
     }
 
     clearDesktopDaemonOwnership();
-    await this.start({ allowExistingDaemon: true });
+    await this.start({ allowExistingDaemon: allowExternalDaemonReuseInDesktopLaunch() });
   }
 
   async getStatus(): Promise<LocalBackendStatus> {
-    const daemonHealthy = await pingDaemon();
-    const daemonOwnership = this.hasOwnedRuntime()
-      ? 'owned'
-      : daemonHealthy
-        ? 'external'
-        : undefined;
+    if (this.hasOwnedRuntime()) {
+      writeDesktopDaemonOwnership('owned');
+      return {
+        daemonHealthy: true,
+        daemonOwnership: 'owned',
+      };
+    }
 
-    writeDesktopDaemonOwnership(daemonOwnership);
+    if (await pingDaemon()) {
+      writeDesktopDaemonOwnership('external');
+      if (allowExternalDaemonReuseInDesktopLaunch()) {
+        return {
+          daemonHealthy: true,
+          daemonOwnership: 'external',
+        };
+      }
+
+      return {
+        daemonHealthy: false,
+        daemonOwnership: 'external',
+        blockedReason: EXTERNAL_DAEMON_CONFLICT_MESSAGE,
+      };
+    }
+
+    clearDesktopDaemonOwnership();
     return {
-      daemonHealthy,
-      daemonOwnership,
+      daemonHealthy: false,
     };
   }
 
@@ -57,7 +86,7 @@ export class LocalBackendProcesses {
 
     if (!this.hasOwnedRuntime() && await pingDaemon()) {
       writeDesktopDaemonOwnership('external');
-      throw new Error('The desktop app is attached to an external daemon. Restart it with `pa daemon restart` or stop the external daemon service first.');
+      throw new Error(EXTERNAL_DAEMON_RESTART_MESSAGE);
     }
 
     await this.stop();
@@ -99,7 +128,7 @@ export class LocalBackendProcesses {
         return;
       }
 
-      throw new Error('A daemon is already running outside the desktop app. Stop it before launching the desktop shell.');
+      throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
     }
 
     const runtime = resolveDesktopRuntimePaths();

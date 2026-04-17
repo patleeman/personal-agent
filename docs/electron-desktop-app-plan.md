@@ -43,7 +43,7 @@ Behavior to expect:
 - clicking a normal external URL opens it in the system browser instead of spawning another Electron window
 - hiding every window drops the app back to a menubar-only background mode
 - the native macOS About panel shows the Personal Agent icon plus the current Personal Agent and pinned Pi versions
-- quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend; if the app attached to an already-running external daemon, that external daemon keeps running until you stop it separately
+- quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend; testing/dev launches can still warn when they are attached to an already-running external daemon that will keep running until you stop it separately
 - the desktop shell uses the same web UI, not a separate native renderer
 - if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path
 - if the renderer recovers from a route-level crash inside the normal shell, the fallback card shows the thrown error message under **Error details**
@@ -79,7 +79,8 @@ That gives us distinct shortcuts for closing a conversation, moving around the c
 The local desktop host:
 
 - normally starts its own daemon in foreground child-process mode
-- can attach to an already-running external daemon instead of spawning a second one
+- refuses to attach to an already-running external daemon in stable desktop launches, so quit semantics stay sane
+- still allows testing/dev launches to attach to an already-running external daemon for compatibility while we migrate off that path
 - loads the packaged renderer over `personal-agent://app/`
 - resolves local JSON API requests and event streams through the Electron main process instead of a loopback web child
 - keeps that local runtime warm for as long as the menubar app stays open
@@ -119,8 +120,8 @@ That means:
 
 - the Settings page describes the local runtime instead of exposing launchd/systemd-style service controls
 - Desktop → App behavior owns auto-install-on-idle updates and start-on-sign-in behavior for the local menu bar app
-- quitting the app is the expected way to stop the local Mac runtime when the desktop shell owns the daemon directly
-- if the desktop shell attached to an already-running external daemon, quitting the app does not stop that daemon; use `pa daemon stop`, `pa daemon restart`, or `pa daemon service uninstall` to manage it explicitly
+- quitting the app is the expected way to stop the local Mac runtime in stable desktop launches because the desktop shell owns the daemon directly
+- testing/dev launches may still attach to an already-running external daemon, and quitting the app does not stop that daemon; use `pa daemon stop`, `pa daemon restart`, or `pa daemon service uninstall` to manage it explicitly
 - background behavior normally comes from the menubar app staying open, not from separately managed OS services
 
 ## Current limitations
@@ -128,7 +129,7 @@ That means:
 - the desktop-owned local backend intentionally does not expose any separate companion/mobile surface
 - remote browser access still requires a separately managed web UI
 - direct remote hosts still rely on the remote web UI being up so they can expose the app-server WebSocket surface
-- the desktop shell can reuse an already-running external local daemon when it is already healthy, but quitting the app will not stop that external daemon
+- stable desktop launches refuse to reuse an already-running external local daemon; testing/dev launches can still do it for compatibility, and quitting the app will not stop that external daemon
 - the desktop shell still does not reuse a separately managed local web UI
 
 ## Related docs

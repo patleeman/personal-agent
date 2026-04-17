@@ -127,6 +127,28 @@ function createBackendMock(): LocalBackendProcesses {
 }
 
 describe('LocalHostController', () => {
+  it('reports external daemon conflicts as unreachable local runtime state', async () => {
+    const backend = createBackendMock();
+    backend.getStatus = vi.fn().mockResolvedValue({
+      daemonHealthy: false,
+      daemonOwnership: 'external',
+      blockedReason: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+    });
+
+    const controller = new LocalHostController(
+      { id: 'local', label: 'Local', kind: 'local' },
+      backend,
+    );
+
+    await expect(controller.getStatus()).resolves.toEqual({
+      reachable: false,
+      mode: 'local-child-process',
+      summary: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+      webUrl: 'personal-agent://app/',
+      daemonHealthy: false,
+    });
+  });
+
   it('routes live-session mutations through the local API module without booting the web child', async () => {
     const invokeDesktopLocalApi = vi.fn().mockResolvedValue({ ok: true, accepted: true });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
