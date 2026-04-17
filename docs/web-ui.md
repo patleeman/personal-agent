@@ -111,6 +111,8 @@ The page is now organized as one long settings document with a centered intro an
 
 It is also the place to manage local instruction-file selection and other runtime defaults.
 
+Model defaults in Settings now expose a **Fast mode** toggle (maps to `service_tier=priority` when supported by the selected model) instead of the old generic service-tier dropdown.
+
 The top-level section order is:
 
 - appearance

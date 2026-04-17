@@ -128,7 +128,7 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'gpt-4o',
       currentThinkingLevel: 'off',
-      currentServiceTier: 'priority',
+      currentServiceTier: '',
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
@@ -154,9 +154,9 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'qwen-reap',
       currentThinkingLevel: 'medium',
-      currentServiceTier: 'priority',
+      currentServiceTier: '',
     });
-    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change', 'custom']);
+    expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
 
   it('accepts raw model ids that already contain slashes', () => {
@@ -180,7 +180,7 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'openrouter/free',
       currentThinkingLevel: 'medium',
-      currentServiceTier: 'priority',
+      currentServiceTier: '',
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
@@ -203,7 +203,7 @@ describe('conversationModelPreferences', () => {
     expect(state).toEqual({
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
-      currentServiceTier: 'auto',
+      currentServiceTier: '',
     });
     expect(readConversationModelPreferenceSnapshot(sessionManager)).toEqual({
       currentModel: '',

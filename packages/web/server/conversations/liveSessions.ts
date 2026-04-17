@@ -25,12 +25,12 @@ import { stream, streamSimple, type Context, type Model, type ProviderStreamOpti
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
   applyConversationModelPreferencesToLiveSession,
-  modelSupportsServiceTiers,
   readConversationModelPreferenceSnapshot,
   resolveConversationModelPreferenceState,
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
+import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import {
@@ -94,7 +94,7 @@ function buildServiceTierAwareStreamFn(
       headers: auth.headers || options?.headers ? { ...auth.headers, ...options?.headers } : undefined,
     };
 
-    if (!serviceTier || !modelSupportsServiceTiers(model)) {
+    if (!serviceTier || !modelSupportsServiceTier(model, serviceTier)) {
       return streamSimple(model, context, mergedOptions);
     }
 

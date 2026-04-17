@@ -315,15 +315,13 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Repo root');
   });
 
-  it('renders service tier controls with an unset option instead of defaulting to auto', () => {
+  it('renders a fast mode toggle for models that support priority tier', () => {
     const html = renderPage('/settings');
 
-    expect(html).toContain('id="settings-service-tier"');
-    expect(html).toContain('>Unset<');
-    expect(html).toContain('>Auto<');
-    expect(html).toContain('>Priority<');
-    expect(html).toContain('<option value="" selected="">Unset</option>');
-    expect(html).toContain('Current service tier: unset');
+    expect(html).toContain('id="settings-fast-mode"');
+    expect(html).toContain('Fast mode');
+    expect(html).toContain('Fast mode is off.');
+    expect(html).toContain('type="checkbox"');
   });
 
   it('renders the same consolidated settings page for legacy query routes', () => {

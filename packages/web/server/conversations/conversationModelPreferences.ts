@@ -1,12 +1,17 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { type AgentSession, type SessionManager } from '@mariozechner/pi-coding-agent';
 import { supportsXhigh, type Model } from '@mariozechner/pi-ai';
+import {
+  getSupportedServiceTiersForModel,
+  modelSupportsServiceTier,
+  normalizeServiceTierValue,
+  type ServiceTierValue,
+} from '../models/modelServiceTiers.js';
 
 const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'medium';
 const THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high'];
 const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = [...THINKING_LEVELS, 'xhigh'];
-const SERVICE_TIERS = ['auto', 'default', 'flex', 'priority', 'scale'] as const;
-type ServiceTier = typeof SERVICE_TIERS[number];
+type ServiceTier = ServiceTierValue;
 const SERVICE_TIER_CUSTOM_TYPE = 'conversation-service-tier';
 
 export interface ConversationModelPreferenceState {
@@ -56,8 +61,22 @@ function normalizeThinkingLevel(value: unknown): ThinkingLevel | '' {
 }
 
 function normalizeServiceTier(value: unknown): ServiceTier | '' {
-  const normalized = readNonEmptyString(value).toLowerCase();
-  return SERVICE_TIERS.includes(normalized as ServiceTier) ? normalized as ServiceTier : '';
+  return normalizeServiceTierValue(value);
+}
+
+function clampServiceTier(
+  serviceTier: ServiceTier | '',
+  model: Pick<Model<any>, 'id'> | null | undefined,
+): ServiceTier | '' {
+  if (!serviceTier) {
+    return '';
+  }
+
+  if (!model) {
+    return serviceTier;
+  }
+
+  return modelSupportsServiceTier(model, serviceTier) ? serviceTier : '';
 }
 
 function getAvailableThinkingLevels(model: Model<any> | null | undefined): ThinkingLevel[] {
@@ -81,8 +100,8 @@ function clampThinkingLevel(level: ThinkingLevel | '', model: Model<any> | null 
   return availableLevels[availableLevels.length - 1] ?? 'off';
 }
 
-export function modelSupportsServiceTiers(model: Pick<Model<any>, 'api'> | null | undefined): boolean {
-  return model?.api === 'openai-responses' || model?.api === 'openai-codex-responses';
+export function modelSupportsServiceTiers(model: Pick<Model<any>, 'id'> | null | undefined): boolean {
+  return getSupportedServiceTiersForModel(model).length > 0;
 }
 
 function resolveModelById(modelId: string, models: Model<any>[]): Model<any> | null {
@@ -140,12 +159,12 @@ function buildResolvedState(
   const currentModel = snapshot.currentModel || fallbackModel;
   const currentModelDefinition = resolveModelById(currentModel, models);
   const fallbackThinkingLevel = normalizeThinkingLevel(defaults.currentThinkingLevel);
-  const fallbackServiceTier = normalizeServiceTier(defaults.currentServiceTier);
+  const fallbackServiceTier = clampServiceTier(normalizeServiceTier(defaults.currentServiceTier), currentModelDefinition);
   const currentThinkingLevel = snapshot.hasExplicitThinkingLevel
     ? normalizeThinkingLevel(snapshot.currentThinkingLevel)
     : fallbackThinkingLevel;
   const currentServiceTier = snapshot.hasExplicitServiceTier
-    ? normalizeServiceTier(snapshot.currentServiceTier)
+    ? clampServiceTier(normalizeServiceTier(snapshot.currentServiceTier), currentModelDefinition)
     : fallbackServiceTier;
 
   return {
@@ -216,16 +235,28 @@ function computeNextConversationModelPreferences(
   let nextServiceTierOverride: ServiceTier | null | undefined;
 
   if (requestedServiceTier !== undefined) {
-    const fallbackServiceTier = normalizeServiceTier(defaults.currentServiceTier);
-    const effectiveServiceTier = requestedServiceTier || fallbackServiceTier;
+    const fallbackServiceTier = clampServiceTier(normalizeServiceTier(defaults.currentServiceTier), nextModel);
+    const effectiveServiceTier = clampServiceTier(requestedServiceTier || fallbackServiceTier, nextModel);
     nextServiceTierForDisplay = effectiveServiceTier;
 
     if (requestedServiceTier) {
-      if (requestedServiceTier !== resolved.currentServiceTier || !snapshot.hasExplicitServiceTier) {
-        nextServiceTierOverride = requestedServiceTier;
+      if (!effectiveServiceTier) {
+        if (snapshot.hasExplicitServiceTier) {
+          nextServiceTierOverride = null;
+        }
+      } else if (effectiveServiceTier !== resolved.currentServiceTier || !snapshot.hasExplicitServiceTier) {
+        nextServiceTierOverride = effectiveServiceTier;
       }
     } else if (requestedServiceTierClearsToDefault && snapshot.hasExplicitServiceTier) {
       nextServiceTierOverride = null;
+    }
+  } else if (shouldAppendModelChange) {
+    const fallbackServiceTier = clampServiceTier(normalizeServiceTier(defaults.currentServiceTier), nextModel);
+    const effectiveServiceTier = clampServiceTier(resolved.currentServiceTier || fallbackServiceTier, nextModel);
+    nextServiceTierForDisplay = effectiveServiceTier;
+
+    if (snapshot.hasExplicitServiceTier && effectiveServiceTier !== resolved.currentServiceTier) {
+      nextServiceTierOverride = effectiveServiceTier || null;
     }
   }
 

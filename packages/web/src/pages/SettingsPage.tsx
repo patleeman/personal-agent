@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import { formatContextWindowLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
@@ -1600,6 +1600,10 @@ export function SettingsPage() {
     () => getModelSelectableServiceTierOptions(selectedModel),
     [selectedModel],
   );
+  const selectedModelSupportsFastMode = useMemo(
+    () => selectedModelServiceTierOptions.some((option) => option.value === 'priority'),
+    [selectedModelServiceTierOptions],
+  );
 
   const selectedConversationTitleModel = useMemo(
     () => findModelByRef(modelState?.models ?? [], conversationTitleState?.currentModel ?? ''),
@@ -2945,26 +2949,27 @@ export function SettingsPage() {
                         : `Current thinking level: ${formatThinkingLevelLabel(modelState.currentThinkingLevel)}`}
                     </p>
 
-                    {selectedModelServiceTierOptions.length > 0 && (
+                    {selectedModelSupportsFastMode && (
                       <>
-                        <label className="ui-card-meta pt-1" htmlFor="settings-service-tier">Service tier</label>
-                        <select
-                          id="settings-service-tier"
-                          value={modelState.currentServiceTier}
-                          onChange={(event) => {
-                            void handleModelPreferenceChange({ serviceTier: event.target.value }, 'serviceTier');
-                          }}
-                          disabled={savingPreference !== null}
-                          className={INPUT_CLASS}
-                        >
-                          {selectedModelServiceTierOptions.map((option) => (
-                            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
+                        <label className="inline-flex items-center gap-3 pt-1 text-[14px] text-primary" htmlFor="settings-fast-mode">
+                          <input
+                            id="settings-fast-mode"
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none"
+                            checked={modelState.currentServiceTier === 'priority'}
+                            onChange={(event) => {
+                              void handleModelPreferenceChange({ serviceTier: event.target.checked ? 'priority' : '' }, 'serviceTier');
+                            }}
+                            disabled={savingPreference !== null}
+                          />
+                          <span>Fast mode</span>
+                        </label>
                         <p className="ui-card-meta">
                           {savingPreference === 'serviceTier'
-                            ? 'Saving service tier…'
-                            : `Current service tier: ${formatServiceTierLabel(modelState.currentServiceTier)}`}
+                            ? 'Saving fast mode…'
+                            : modelState.currentServiceTier === 'priority'
+                              ? 'Fast mode is on (service tier: priority).'
+                              : 'Fast mode is off.'}
                         </p>
                       </>
                     )}

@@ -21,7 +21,7 @@ import { appendComposerHistory, readComposerHistory } from '../conversation/comp
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { createConversationLiveRunId, getConversationRunIdFromSearch, setConversationRunIdInSearch } from '../conversation/conversationRuns';
-import { formatContextUsageLabel, formatServiceTierLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -882,6 +882,11 @@ function ConversationPreferencesRow({
     () => getModelSelectableServiceTierOptions(selectedModel),
     [selectedModel],
   );
+  const supportsFastMode = useMemo(
+    () => serviceTierOptions.some((option) => option.value === 'priority'),
+    [serviceTierOptions],
+  );
+  const fastModeEnabled = currentServiceTier === 'priority';
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -923,24 +928,35 @@ function ConversationPreferencesRow({
           <path d="m6 9 6 6 6-6" />
         </svg>
       </label>
-      {serviceTierOptions.length > 0 && (
-        <label className="relative inline-flex min-w-0 items-center">
-          <span className="sr-only">Conversation service tier</span>
-          <select
-            value={currentServiceTier}
-            onChange={(event) => { onSelectServiceTier(event.target.value); }}
-            disabled={savingPreference !== null}
-            className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[7rem] min-w-[6.25rem] appearance-none')}
-            aria-label="Conversation service tier"
+      {supportsFastMode && (
+        <button
+          type="button"
+          role="switch"
+          aria-checked={fastModeEnabled}
+          aria-label={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+          title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+          onClick={() => { onSelectServiceTier(fastModeEnabled ? '' : 'priority'); }}
+          disabled={savingPreference !== null}
+          className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <span
+            aria-hidden="true"
+            className={cx(
+              'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
+              fastModeEnabled
+                ? 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]'
+                : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+            )}
           >
-            {serviceTierOptions.map((option) => (
-              <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-          <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
-            <path d="m6 9 6 6 6-6" />
-          </svg>
-        </label>
+            <span
+              className={cx(
+                'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+                fastModeEnabled ? 'translate-x-[14px]' : 'translate-x-0',
+              )}
+            />
+          </span>
+          <span className={cx('leading-none', fastModeEnabled && 'text-primary')}>Fast</span>
+        </button>
       )}
     </div>
   );
@@ -4519,7 +4535,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         savedServiceTier = next.currentServiceTier;
       }
 
-      showNotice('accent', `Service tier set to ${formatServiceTierLabel(savedServiceTier)}.`);
+      showNotice('accent', savedServiceTier === 'priority' ? 'Fast mode enabled.' : 'Fast mode disabled.');
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     } finally {
