@@ -5,6 +5,7 @@ const CONVERSATION_CHECKPOINT_FILE_QUERY_PARAM = 'checkpointFile';
 
 interface ConversationCheckpointPresentation {
   action: 'save' | 'get';
+  conversationId?: string;
   checkpointId: string;
   commitSha: string;
   shortSha: string;
@@ -108,6 +109,9 @@ export function readCheckpointPresentation(block: Extract<MessageBlock, { type: 
 
   return {
     action,
+    conversationId: typeof details?.conversationId === 'string' && details.conversationId.trim().length > 0
+      ? details.conversationId.trim()
+      : undefined,
     checkpointId,
     commitSha,
     shortSha,

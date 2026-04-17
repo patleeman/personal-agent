@@ -40,6 +40,7 @@ import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, ty
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
 import { getDesktopBridge } from '../../desktop/desktopBridge';
+import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 import { Pill, SurfacePanel, cx } from '../ui';
 
 // ── Markdown renderer ─────────────────────────────────────────────────────────
@@ -734,7 +735,6 @@ function CheckpointToolBlock({
   const isRunning = block.status === 'running' || !!block.running;
   const isError = block.status === 'error' || !!block.error;
   const isActive = activeCheckpointId === checkpoint.checkpointId;
-  const actionLabel = isActive ? 'Review open' : 'View diff';
 
   return (
     <SurfacePanel
@@ -766,26 +766,31 @@ function CheckpointToolBlock({
           {isError && block.output && (
             <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
-            {isRunning ? (
+          {isRunning ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
               <span className="inline-flex items-center gap-1.5 text-dim">
                 <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
                 saving checkpoint…
               </span>
-            ) : (
+            </div>
+          ) : !isError && checkpoint.conversationId ? (
+            <CheckpointInlineDiff
+              conversationId={checkpoint.conversationId}
+              checkpointId={checkpoint.checkpointId}
+              onOpenCheckpoint={onOpenCheckpoint}
+              modalOpen={isActive}
+            />
+          ) : !isError && onOpenCheckpoint ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
               <button
                 type="button"
-                onClick={() => onOpenCheckpoint?.(checkpoint.checkpointId)}
-                disabled={!onOpenCheckpoint}
-                className={cx(
-                  'ui-action-button text-[11px] text-accent disabled:cursor-default disabled:opacity-50',
-                  isActive && 'text-secondary',
-                )}
+                onClick={() => onOpenCheckpoint(checkpoint.checkpointId)}
+                className={cx('ui-action-button text-[11px]', isActive ? 'text-secondary' : 'text-accent')}
               >
-                {actionLabel}
+                {isActive ? 'Modal open' : 'Open modal'}
               </button>
-            )}
-          </div>
+            </div>
+          ) : null}
         </div>
       </div>
     </SurfacePanel>
@@ -1869,6 +1874,10 @@ const EMPTY_POLLED_RUN_SNAPSHOT_STATE: PolledRunSnapshotState = {
   error: null,
 };
 
+function buildInlineRunExpansionKey(clusterStartIndex: number, runId: string): string {
+  return `${clusterStartIndex}:${runId}`;
+}
+
 function usePolledDurableRunSnapshot(
   runId: string | null,
   enabled: boolean,
@@ -2169,8 +2178,9 @@ function InlineTraceRunCard({
     return () => observer.disconnect();
   }, [expanded]);
 
-  const pollEnabled = expanded && isVisible;
-  const snapshot = usePolledDurableRunSnapshot(resolvedRunId, pollEnabled, {
+  const snapshotRunId = expanded ? resolvedRunId : null;
+  const pollEnabled = Boolean(snapshotRunId) && isVisible;
+  const snapshot = usePolledDurableRunSnapshot(snapshotRunId, pollEnabled, {
     tail: INLINE_RUN_LOG_TAIL_LINES,
     pollIntervalMs: INLINE_RUN_POLL_INTERVAL_MS,
   });
@@ -2609,6 +2619,7 @@ function traceSummaryTone(category: TraceClusterSummaryCategory) {
 const MAX_VISIBLE_TRACE_BLOCKS = 5;
 
 function TraceClusterBlock({
+  clusterStartIndex,
   blocks,
   summary,
   live,
@@ -2624,6 +2635,7 @@ function TraceClusterBlock({
   isInlineRunExpanded,
   onToggleInlineRun,
 }: {
+  clusterStartIndex: number;
   blocks: TraceConversationBlock[];
   summary: TraceClusterSummary;
   live: boolean;
@@ -2636,8 +2648,8 @@ function TraceClusterBlock({
   resumeBusy?: boolean;
   resumeTitle?: string | null;
   resumeLabel?: string;
-  isInlineRunExpanded?: (runId: string) => boolean;
-  onToggleInlineRun?: (runId: string) => void;
+  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
+  onToggleInlineRun?: (inlineRunKey: string) => void;
 }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const [showAllBlocks, setShowAllBlocks] = useState(false);
@@ -2739,16 +2751,20 @@ function TraceClusterBlock({
             )}
           </div>
           <div className="space-y-1.5">
-            {visibleLinkedRuns.map((linkedRun) => (
-              <InlineTraceRunCard
-                key={linkedRun.runId}
-                run={linkedRun}
-                expanded={isInlineRunExpanded?.(linkedRun.runId) ?? false}
-                onToggle={() => {
-                  onToggleInlineRun?.(linkedRun.runId);
-                }}
-              />
-            ))}
+            {visibleLinkedRuns.map((linkedRun) => {
+              const inlineRunKey = buildInlineRunExpansionKey(clusterStartIndex, linkedRun.runId);
+
+              return (
+                <InlineTraceRunCard
+                  key={linkedRun.runId}
+                  run={linkedRun}
+                  expanded={isInlineRunExpanded?.(inlineRunKey) ?? false}
+                  onToggle={() => {
+                    onToggleInlineRun?.(inlineRunKey);
+                  }}
+                />
+              );
+            })}
           </div>
         </div>
       )}
@@ -3718,8 +3734,8 @@ export const ChatView = memo(function ChatView({
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
-  const [expandedInlineRunIds, setExpandedInlineRunIds] = useState<ReadonlySet<string>>(() => new Set());
-  const visibleInlineRunIdSet = useMemo(() => {
+  const [expandedInlineRunKeys, setExpandedInlineRunKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const visibleInlineRunKeySet = useMemo(() => {
     const next = new Set<string>();
 
     for (const item of renderItems) {
@@ -3728,7 +3744,7 @@ export const ChatView = memo(function ChatView({
       }
 
       for (const run of collectTraceClusterLinkedRuns(item.blocks)) {
-        next.add(run.runId);
+        next.add(buildInlineRunExpansionKey(item.startIndex, run.runId));
       }
     }
 
@@ -3736,16 +3752,16 @@ export const ChatView = memo(function ChatView({
   }, [renderItems]);
 
   useEffect(() => {
-    setExpandedInlineRunIds((current) => {
+    setExpandedInlineRunKeys((current) => {
       if (current.size === 0) {
         return current;
       }
 
       let changed = false;
       const next = new Set<string>();
-      for (const runId of current) {
-        if (visibleInlineRunIdSet.has(runId)) {
-          next.add(runId);
+      for (const inlineRunKey of current) {
+        if (visibleInlineRunKeySet.has(inlineRunKey)) {
+          next.add(inlineRunKey);
         } else {
           changed = true;
         }
@@ -3753,20 +3769,20 @@ export const ChatView = memo(function ChatView({
 
       return changed ? next : current;
     });
-  }, [visibleInlineRunIdSet]);
+  }, [visibleInlineRunKeySet]);
 
   const isInlineRunExpanded = useCallback(
-    (runId: string) => expandedInlineRunIds.has(runId),
-    [expandedInlineRunIds],
+    (inlineRunKey: string) => expandedInlineRunKeys.has(inlineRunKey),
+    [expandedInlineRunKeys],
   );
 
-  const toggleInlineRun = useCallback((runId: string) => {
-    setExpandedInlineRunIds((current) => {
+  const toggleInlineRun = useCallback((inlineRunKey: string) => {
+    setExpandedInlineRunKeys((current) => {
       const next = new Set(current);
-      if (next.has(runId)) {
-        next.delete(runId);
+      if (next.has(inlineRunKey)) {
+        next.delete(inlineRunKey);
       } else {
-        next.add(runId);
+        next.add(inlineRunKey);
       }
       return next;
     });
@@ -4302,6 +4318,7 @@ export const ChatView = memo(function ChatView({
             return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
           })}
           <TraceClusterBlock
+            clusterStartIndex={item.startIndex}
             blocks={item.blocks}
             summary={item.summary}
             live={live}
