@@ -1,4 +1,7 @@
 import { Buffer } from 'node:buffer';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { HostApiDispatchResult } from './hosts/types.js';
 import type { HostManager } from './hosts/host-manager.js';
@@ -13,6 +16,14 @@ function jsonResult(body: unknown, statusCode = 200): HostApiDispatchResult {
     headers: { 'content-type': 'application/json; charset=utf-8' },
     body: Uint8Array.from(Buffer.from(JSON.stringify(body), 'utf-8')),
   };
+}
+
+function parseJsonResult(response: HostApiDispatchResult | null): unknown {
+  if (!response) {
+    return null;
+  }
+
+  return JSON.parse(Buffer.from(response.body).toString('utf-8')) as unknown;
 }
 
 function createHostManagerMock() {
@@ -128,5 +139,86 @@ describe('conversation-execution remote routing', () => {
     expect(forwardedEvents).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'message' }),
     ]));
+  });
+
+  it('rewrites remote cwd-change responses back to the local conversation id and updates local session mapping', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pa-conversation-execution-'));
+    const sessionFile = join(tempRoot, 'local-conversation.jsonl');
+    writeFileSync(sessionFile, `${JSON.stringify({
+      type: 'session',
+      id: 'local-conversation',
+      timestamp: '2026-04-17T00:00:00.000Z',
+      cwd: '/repo/current',
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-conversation',
+    })}\n`, 'utf-8');
+
+    try {
+      const localController = {
+        readSessionMeta: vi.fn().mockResolvedValue({
+          id: 'local-conversation',
+          file: sessionFile,
+          cwd: '/repo/current',
+          title: 'Keep this thread',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+          remoteConversationId: 'remote-conversation',
+        }),
+        dispatchApiRequest: vi.fn(),
+      };
+      const remoteController = {
+        dispatchApiRequest: vi.fn().mockImplementation(({ method, path, body }: { method: string; path: string; body?: unknown }) => {
+          if (method === 'POST' && path === '/api/conversations/remote-conversation/cwd') {
+            expect(body).toEqual({ cwd: '/repo/next' });
+            return Promise.resolve(jsonResult({
+              id: 'remote-conversation-2',
+              sessionFile: '/sessions/remote-conversation-2.jsonl',
+              cwd: '/repo/next',
+              changed: true,
+            }));
+          }
+
+          throw new Error(`Unexpected remote request: ${method} ${path}`);
+        }),
+      };
+
+      const hostManager = {
+        getHostController: vi.fn((hostId: string) => {
+          if (hostId === 'local') {
+            return localController;
+          }
+
+          return remoteController;
+        }),
+      } as unknown as HostManager;
+
+      const response = await dispatchConversationExecutionRequest(hostManager, {
+        method: 'POST',
+        path: '/api/conversations/local-conversation/cwd',
+        body: { cwd: '/repo/next' },
+      });
+
+      expect(parseJsonResult(response as HostApiDispatchResult)).toEqual({
+        id: 'local-conversation',
+        sessionFile,
+        cwd: '/repo/next',
+        changed: true,
+      });
+
+      const headerLine = readFileSync(sessionFile, 'utf-8').trim().split('\n')[0] ?? '{}';
+      const header = JSON.parse(headerLine) as {
+        cwd?: string;
+        remoteHostId?: string;
+        remoteHostLabel?: string;
+        remoteConversationId?: string;
+      };
+      expect(header.cwd).toBe('/repo/next');
+      expect(header.remoteHostId).toBe('bender');
+      expect(header.remoteHostLabel).toBe('Bender');
+      expect(header.remoteConversationId).toBe('remote-conversation-2');
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

@@ -122,6 +122,42 @@ describe('CodexWorkspaceApiAdapter', () => {
     });
   });
 
+  it('returns changed=false when the requested cwd already matches the remote thread cwd', async () => {
+    const thread = createThread('thread-1');
+    const request = vi.fn((method: string) => {
+      if (method === 'thread/read') {
+        return Promise.resolve({ thread });
+      }
+      if (method === 'model/list') {
+        return Promise.resolve({ data: [{ model: 'gpt-5.4', isDefault: true }] });
+      }
+      if (method === 'thread/loaded/list') {
+        return Promise.resolve({ data: ['thread-1'] });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+
+    const adapter = new CodexWorkspaceApiAdapter({
+      request,
+      subscribeNotifications: vi.fn().mockReturnValue(() => undefined),
+    } as never);
+
+    const response = await adapter.dispatchApiRequest({
+      method: 'POST',
+      path: '/api/conversations/thread-1/cwd',
+      body: { cwd: '/repo' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(parseJsonBody(response)).toEqual({
+      id: 'thread-1',
+      sessionFile: '/sessions/thread-1.jsonl',
+      cwd: '/repo',
+      changed: false,
+    });
+    expect(request).not.toHaveBeenCalledWith('thread/fork', expect.anything());
+  });
+
   it('supports /bash on remote live sessions and emits tool events to active stream subscribers', async () => {
     const thread = createThread('thread-1');
     const notifications = new Set<(event: { method?: string; params?: unknown }) => void>();
