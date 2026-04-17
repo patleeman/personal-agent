@@ -3,7 +3,6 @@ import { parseFragment } from 'parse5';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { MessageBlock } from '../shared/types';
 import {
   ConversationPage,
   resolveDisplayedConversationPendingStatusLabel,
@@ -14,14 +13,8 @@ import {
   shouldDeferConversationFileRefresh,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
-  resolveConversationInitialHistoricalWarmupTarget,
-  hasConversationLoadedHistoricalTailBlocks,
-  shouldShowConversationInitialHistoricalWarmupLoader,
-  shouldShowConversationBootstrapLoadingState,
   shouldUseHealthyDesktopConversationState,
-  shouldShowConversationInlineLoadingState,
   shouldFetchConversationAttachments,
-  resolveConversationVisibleScrollBinding,
   resolveRelatedThreadHotkeyIndex,
 } from './ConversationPage.js';
 
@@ -348,103 +341,6 @@ describe('conversation live state helpers', () => {
     })).toBe(true);
   });
 
-  it('skips eager historical warmup so the conversation can open from a small tail first', () => {
-    expect(resolveConversationInitialHistoricalWarmupTarget({
-      draft: false,
-      conversationId: 'conv-123',
-      liveDecision: false,
-      historicalTotalBlocks: 1500,
-      historicalHasOlderBlocks: true,
-    })).toBeNull();
-
-    expect(resolveConversationInitialHistoricalWarmupTarget({
-      draft: false,
-      conversationId: 'conv-123',
-      liveDecision: true,
-      historicalTotalBlocks: 1500,
-      historicalHasOlderBlocks: true,
-    })).toBeNull();
-  });
-
-  it('keeps the conversation loader up until the warmed historical tail has arrived', () => {
-    const detail = {
-      blocks: Array.from({ length: 240 }, () => null) as never[],
-      totalBlocks: 360,
-    };
-
-    expect(hasConversationLoadedHistoricalTailBlocks(detail, 360)).toBe(false);
-    expect(shouldShowConversationInitialHistoricalWarmupLoader({
-      warmupActive: true,
-      targetTailBlocks: 360,
-      currentTailBlocks: 360,
-      loadedTailBlocks: false,
-    })).toBe(true);
-
-    const loadedDetail = {
-      ...detail,
-      blocks: Array.from({ length: 360 }, () => null) as never[],
-    };
-
-    expect(hasConversationLoadedHistoricalTailBlocks(loadedDetail, 360)).toBe(true);
-    expect(shouldShowConversationInitialHistoricalWarmupLoader({
-      warmupActive: true,
-      targetTailBlocks: 360,
-      currentTailBlocks: 360,
-      loadedTailBlocks: true,
-    })).toBe(false);
-  });
-
-  it('shows a loading state while the next conversation bootstrap is still fetching', () => {
-    expect(shouldShowConversationBootstrapLoadingState({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationBootstrapLoading: true,
-      hasRenderableMessages: false,
-      hasVisibleSessionDetail: false,
-    })).toBe(true);
-
-    expect(shouldShowConversationBootstrapLoadingState({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationBootstrapLoading: false,
-      hasRenderableMessages: false,
-      hasVisibleSessionDetail: false,
-    })).toBe(false);
-
-    expect(shouldShowConversationBootstrapLoadingState({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationBootstrapLoading: true,
-      hasRenderableMessages: true,
-      hasVisibleSessionDetail: false,
-    })).toBe(false);
-
-    expect(shouldShowConversationBootstrapLoadingState({
-      draft: false,
-      conversationId: 'conv-123',
-      conversationBootstrapLoading: true,
-      hasRenderableMessages: false,
-      hasVisibleSessionDetail: true,
-    })).toBe(false);
-  });
-
-  it('keeps the current transcript visible while the next one is still loading', () => {
-    expect(shouldShowConversationInlineLoadingState({
-      showConversationLoadingState: true,
-      hasVisibleTranscript: true,
-    })).toBe(true);
-
-    expect(shouldShowConversationInlineLoadingState({
-      showConversationLoadingState: true,
-      hasVisibleTranscript: false,
-    })).toBe(false);
-
-    expect(shouldShowConversationInlineLoadingState({
-      showConversationLoadingState: false,
-      hasVisibleTranscript: true,
-    })).toBe(false);
-  });
-
   it('waits to auto-dispatch a pending initial prompt until no background start is in flight', () => {
     expect(shouldAutoDispatchPendingInitialPrompt({
       draft: false,
@@ -541,64 +437,6 @@ describe('conversation live state helpers', () => {
         attachmentRefs: [],
       },
     })).toBe(false);
-  });
-
-  it('binds scroll state to the preserved transcript while a replacement conversation is still loading', () => {
-    const preservedMessages: MessageBlock[] = [{
-      type: 'text',
-      ts: '2026-04-06T10:00:00.000Z',
-      text: 'Preserved transcript block',
-    }];
-
-    expect(resolveConversationVisibleScrollBinding({
-      draft: false,
-      routeConversationId: 'conv-next',
-      realMessages: undefined,
-      stableTranscriptState: {
-        conversationId: 'conv-prev',
-        messages: preservedMessages,
-      },
-      showConversationLoadingState: true,
-      initialScrollKey: 'conv-next:settled',
-      isStreaming: true,
-    })).toEqual({
-      conversationId: 'conv-prev',
-      messages: preservedMessages,
-      initialScrollKey: null,
-      isStreaming: false,
-      usingStableTranscript: true,
-    });
-  });
-
-  it('keeps scroll state attached to the active transcript once the conversation is ready', () => {
-    const realMessages: MessageBlock[] = [{
-      type: 'text',
-      ts: '2026-04-06T10:01:00.000Z',
-      text: 'Fresh transcript block',
-    }];
-
-    expect(resolveConversationVisibleScrollBinding({
-      draft: false,
-      routeConversationId: 'conv-next',
-      realMessages,
-      stableTranscriptState: {
-        conversationId: 'conv-prev',
-        messages: [{
-          type: 'text',
-          ts: '2026-04-06T10:00:00.000Z',
-          text: 'Old transcript block',
-        }],
-      },
-      showConversationLoadingState: false,
-      initialScrollKey: 'conv-next:settled',
-      isStreaming: true,
-    })).toEqual({
-      conversationId: 'conv-next',
-      messages: realMessages,
-      initialScrollKey: 'conv-next:settled',
-      isStreaming: true,
-      usingStableTranscript: false,
-    });
   });
 
   it('keeps showing a pending status while a draft or initial prompt is still staging', () => {

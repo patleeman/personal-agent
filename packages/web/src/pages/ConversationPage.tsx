@@ -563,7 +563,7 @@ const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 
-export function resolveConversationInitialHistoricalWarmupTarget(input: {
+function resolveConversationInitialHistoricalWarmupTarget(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   liveDecision: boolean | null | undefined;
@@ -585,7 +585,7 @@ export function resolveConversationInitialHistoricalWarmupTarget(input: {
   return null;
 }
 
-export function hasConversationLoadedHistoricalTailBlocks(
+function hasConversationLoadedHistoricalTailBlocks(
   detail: Pick<SessionDetail, 'blocks' | 'totalBlocks'> | null | undefined,
   targetTailBlocks: number | null,
 ): boolean {
@@ -596,7 +596,7 @@ export function hasConversationLoadedHistoricalTailBlocks(
   return detail.blocks.length >= Math.min(targetTailBlocks, detail.totalBlocks);
 }
 
-export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
+function shouldShowConversationInitialHistoricalWarmupLoader(input: {
   warmupActive: boolean;
   targetTailBlocks: number | null;
   currentTailBlocks: number;
@@ -609,7 +609,7 @@ export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
   return input.currentTailBlocks < input.targetTailBlocks || !input.loadedTailBlocks;
 }
 
-export function shouldShowConversationBootstrapLoadingState(input: {
+function shouldShowConversationBootstrapLoadingState(input: {
   draft: boolean;
   conversationId: string | null | undefined;
   conversationBootstrapLoading: boolean;
@@ -635,7 +635,7 @@ export function shouldUseHealthyDesktopConversationState(input: {
     && !input.desktopError;
 }
 
-export function shouldShowConversationInlineLoadingState(input: {
+function shouldShowConversationInlineLoadingState(input: {
   showConversationLoadingState: boolean;
   hasVisibleTranscript: boolean;
 }): boolean {
@@ -650,7 +650,7 @@ export function shouldFetchConversationAttachments(input: {
   return !input.draft && Boolean(input.conversationId) && input.drawingsPickerOpen;
 }
 
-export function resolveConversationVisibleScrollBinding(input: {
+function resolveConversationVisibleScrollBinding(input: {
   draft: boolean;
   routeConversationId: string | null | undefined;
   realMessages: MessageBlock[] | undefined;
