@@ -352,6 +352,34 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('cwd personal-agent');
   });
 
+  it('surfaces linked run cards even when an internal-work cluster is collapsed', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'run',
+        input: {
+          action: 'start_agent',
+          prompt: 'Inspect git diff',
+        },
+        output: 'Started durable agent run run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b for ui-polish.',
+        status: 'ok',
+        details: {
+          action: 'start_agent',
+          runId: 'run-ui-polish-2026-03-25T00-53-25-347Z-903aa31b',
+          prompt: 'Inspect git diff',
+          status: 'running',
+        },
+      }],
+      isStreaming: false,
+    }));
+
+    expect(html).toContain('Internal work');
+    expect(html).toContain('runs');
+    expect(html).toContain('Inspect git diff');
+    expect(html).toContain('show');
+  });
+
   it('limits listed runs in the transcript to 5 rows by default', () => {
     const listedRuns = Array.from({ length: 7 }, (_, index) => ({
       runId: `run-fix-build-${String.fromCharCode(97 + index)}-2026-03-25T00-53-25-347Z-903aa31b`,
