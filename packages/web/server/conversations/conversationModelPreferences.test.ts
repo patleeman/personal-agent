@@ -56,6 +56,7 @@ describe('conversationModelPreferences', () => {
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
       currentServiceTier: 'priority',
+      hasExplicitServiceTier: false,
     });
   });
 
@@ -103,6 +104,7 @@ describe('conversationModelPreferences', () => {
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
       currentServiceTier: 'priority',
+      hasExplicitServiceTier: false,
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change']);
   });
@@ -129,6 +131,7 @@ describe('conversationModelPreferences', () => {
       currentModel: 'gpt-4o',
       currentThinkingLevel: 'off',
       currentServiceTier: '',
+      hasExplicitServiceTier: false,
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
@@ -155,6 +158,7 @@ describe('conversationModelPreferences', () => {
       currentModel: 'qwen-reap',
       currentThinkingLevel: 'medium',
       currentServiceTier: '',
+      hasExplicitServiceTier: false,
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
@@ -181,13 +185,13 @@ describe('conversationModelPreferences', () => {
       currentModel: 'openrouter/free',
       currentThinkingLevel: 'medium',
       currentServiceTier: '',
+      hasExplicitServiceTier: false,
     });
     expect(sessionManager.getBranch().map((entry) => entry.type)).toEqual(['model_change', 'thinking_level_change']);
   });
 
-  it('can clear an explicit service tier override back to the saved default', () => {
+  it('can explicitly disable fast mode even when the saved default is on', () => {
     const sessionManager = createSessionManager();
-    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: 'priority' });
 
     const state = applyConversationModelPreferencesToSessionManager(
       sessionManager,
@@ -195,7 +199,7 @@ describe('conversationModelPreferences', () => {
       {
         currentModel: 'gpt-5.4',
         currentThinkingLevel: 'high',
-        currentServiceTier: 'auto',
+        currentServiceTier: 'priority',
       },
       [createTestModel({ id: 'gpt-5.4', provider: 'openai-codex' })],
     );
@@ -204,6 +208,38 @@ describe('conversationModelPreferences', () => {
       currentModel: 'gpt-5.4',
       currentThinkingLevel: 'high',
       currentServiceTier: '',
+      hasExplicitServiceTier: true,
+    });
+    expect(readConversationModelPreferenceSnapshot(sessionManager)).toEqual({
+      currentModel: '',
+      currentThinkingLevel: 'off',
+      currentServiceTier: '',
+      hasExplicitModel: false,
+      hasExplicitThinkingLevel: false,
+      hasExplicitServiceTier: true,
+    });
+  });
+
+  it('can clear an explicit service tier override back to the saved default', () => {
+    const sessionManager = createSessionManager();
+    sessionManager.appendCustomEntry('conversation-service-tier', { serviceTier: null });
+
+    const state = applyConversationModelPreferencesToSessionManager(
+      sessionManager,
+      { serviceTier: '' },
+      {
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: 'priority',
+      },
+      [createTestModel({ id: 'gpt-5.4', provider: 'openai-codex' })],
+    );
+
+    expect(state).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: 'priority',
+      hasExplicitServiceTier: false,
     });
     expect(readConversationModelPreferenceSnapshot(sessionManager)).toEqual({
       currentModel: '',

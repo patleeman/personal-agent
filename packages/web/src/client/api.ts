@@ -1043,7 +1043,7 @@ export const api = {
       return desktopBridge.readConversationModelPreferences({ conversationId: id });
     }
 
-    return get<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
+    return get<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(`/conversations/${encodeURIComponent(id)}/model-preferences`);
   },
   updateConversationModelPreferences: async (id: string, input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }, surfaceId?: string) => {
     const desktopBridge = getDesktopBridge();
@@ -1055,7 +1055,7 @@ export const api = {
       });
     }
 
-    return patch<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
+    return patch<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>(`/conversations/${encodeURIComponent(id)}/model-preferences`, { ...input, ...(surfaceId ? { surfaceId } : {}) });
   },
   recoverConversation: async (id: string) => {
     const desktopBridge = getDesktopBridge();

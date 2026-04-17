@@ -3527,7 +3527,7 @@ describe('session actions', () => {
 
   it('updates live session model preferences with the current session state', async () => {
     const applyPreferences = vi.spyOn(conversationModelPreferences, 'applyConversationModelPreferencesToLiveSession')
-      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority' });
+      .mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority', hasExplicitServiceTier: true });
 
     try {
       setLiveEntry('session-model-preferences', {
@@ -3550,7 +3550,7 @@ describe('session actions', () => {
         'session-model-preferences',
         { model: 'gpt-5', thinkingLevel: 'high' },
         [{ id: 'gpt-5', provider: 'openai' }] as never,
-      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority' });
+      )).resolves.toEqual({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: 'priority', hasExplicitServiceTier: true });
 
       expect(applyPreferences).toHaveBeenCalledWith(
         registry.get('session-model-preferences')?.session,

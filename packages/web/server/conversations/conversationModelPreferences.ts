@@ -12,12 +12,14 @@ const DEFAULT_THINKING_LEVEL: ThinkingLevel = 'medium';
 const THINKING_LEVELS: ThinkingLevel[] = ['off', 'minimal', 'low', 'medium', 'high'];
 const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = [...THINKING_LEVELS, 'xhigh'];
 type ServiceTier = ServiceTierValue;
+type ServiceTierOverride = ServiceTier | '' | null;
 const SERVICE_TIER_CUSTOM_TYPE = 'conversation-service-tier';
 
 export interface ConversationModelPreferenceState {
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
+  hasExplicitServiceTier: boolean;
 }
 
 export interface ConversationModelPreferenceDefaults {
@@ -134,6 +136,10 @@ function readServiceTierOverride(
     }
 
     const data = entry.data as { serviceTier?: unknown } | undefined;
+    if (data?.serviceTier === null) {
+      return { currentServiceTier: '', hasExplicitServiceTier: true };
+    }
+
     const serviceTier = normalizeServiceTier(data?.serviceTier);
     if (serviceTier) {
       return { currentServiceTier: serviceTier, hasExplicitServiceTier: true };
@@ -184,17 +190,21 @@ function computeNextConversationModelPreferences(
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
+  hasExplicitServiceTier: boolean;
   nextModel: Model<any> | null;
   shouldAppendModelChange: boolean;
   nextPersistedThinkingLevel: ThinkingLevel | null;
-  nextServiceTierOverride: ServiceTier | null | undefined;
+  nextServiceTierOverride: ServiceTierOverride | undefined;
 } {
   const resolved = buildResolvedState(snapshot, defaults, models);
   const requestedModel = input.model === undefined ? undefined : readNonEmptyString(input.model ?? '');
   const requestedThinkingLevel = input.thinkingLevel === undefined ? undefined : normalizeThinkingLevel(input.thinkingLevel ?? '');
   const requestedThinkingClearsToDefault = requestedThinkingLevel !== undefined && requestedThinkingLevel === '';
-  const requestedServiceTier = input.serviceTier === undefined ? undefined : normalizeServiceTier(input.serviceTier ?? '');
-  const requestedServiceTierClearsToDefault = requestedServiceTier !== undefined && requestedServiceTier === '';
+  const requestedServiceTier = input.serviceTier === undefined || input.serviceTier === null
+    ? input.serviceTier
+    : normalizeServiceTier(input.serviceTier);
+  const requestedServiceTierClearsToDefault = requestedServiceTier !== undefined && requestedServiceTier !== null && requestedServiceTier === '';
+  const requestedServiceTierDisables = requestedServiceTier === null;
 
   if (requestedModel !== undefined && !requestedModel) {
     throw new Error('model required');
@@ -232,9 +242,14 @@ function computeNextConversationModelPreferences(
   }
 
   let nextServiceTierForDisplay = resolved.currentServiceTier;
-  let nextServiceTierOverride: ServiceTier | null | undefined;
+  let nextServiceTierOverride: ServiceTierOverride | undefined;
 
-  if (requestedServiceTier !== undefined) {
+  if (requestedServiceTierDisables) {
+    nextServiceTierForDisplay = '';
+    if (!snapshot.hasExplicitServiceTier || resolved.currentServiceTier !== '') {
+      nextServiceTierOverride = null;
+    }
+  } else if (requestedServiceTier !== undefined) {
     const fallbackServiceTier = clampServiceTier(normalizeServiceTier(defaults.currentServiceTier), nextModel);
     const effectiveServiceTier = clampServiceTier(requestedServiceTier || fallbackServiceTier, nextModel);
     nextServiceTierForDisplay = effectiveServiceTier;
@@ -242,21 +257,23 @@ function computeNextConversationModelPreferences(
     if (requestedServiceTier) {
       if (!effectiveServiceTier) {
         if (snapshot.hasExplicitServiceTier) {
-          nextServiceTierOverride = null;
+          nextServiceTierOverride = '';
         }
       } else if (effectiveServiceTier !== resolved.currentServiceTier || !snapshot.hasExplicitServiceTier) {
         nextServiceTierOverride = effectiveServiceTier;
       }
     } else if (requestedServiceTierClearsToDefault && snapshot.hasExplicitServiceTier) {
-      nextServiceTierOverride = null;
+      nextServiceTierOverride = '';
     }
   } else if (shouldAppendModelChange) {
     const fallbackServiceTier = clampServiceTier(normalizeServiceTier(defaults.currentServiceTier), nextModel);
-    const effectiveServiceTier = clampServiceTier(resolved.currentServiceTier || fallbackServiceTier, nextModel);
+    const effectiveServiceTier = snapshot.hasExplicitServiceTier
+      ? clampServiceTier(normalizeServiceTier(snapshot.currentServiceTier), nextModel)
+      : clampServiceTier(resolved.currentServiceTier || fallbackServiceTier, nextModel);
     nextServiceTierForDisplay = effectiveServiceTier;
 
     if (snapshot.hasExplicitServiceTier && effectiveServiceTier !== resolved.currentServiceTier) {
-      nextServiceTierOverride = effectiveServiceTier || null;
+      nextServiceTierOverride = effectiveServiceTier || '';
     }
   }
 
@@ -264,6 +281,9 @@ function computeNextConversationModelPreferences(
     currentModel,
     currentThinkingLevel: nextThinkingLevelForDisplay,
     currentServiceTier: nextServiceTierForDisplay,
+    hasExplicitServiceTier: nextServiceTierOverride === undefined
+      ? snapshot.hasExplicitServiceTier
+      : nextServiceTierOverride !== '',
     nextModel,
     shouldAppendModelChange,
     nextPersistedThinkingLevel,
@@ -298,12 +318,13 @@ export function resolveConversationModelPreferenceState(
     currentModel: resolved.currentModel,
     currentThinkingLevel: resolved.currentThinkingLevel,
     currentServiceTier: resolved.currentServiceTier,
+    hasExplicitServiceTier: snapshot.hasExplicitServiceTier,
   };
 }
 
 function appendConversationServiceTierOverride(
   sessionManager: Pick<SessionManager, 'appendCustomEntry'>,
-  serviceTier: ServiceTier | null,
+  serviceTier: ServiceTierOverride,
 ): void {
   sessionManager.appendCustomEntry(SERVICE_TIER_CUSTOM_TYPE, { serviceTier });
 }
@@ -333,6 +354,7 @@ export function applyConversationModelPreferencesToSessionManager(
     currentModel: next.currentModel,
     currentThinkingLevel: next.currentThinkingLevel,
     currentServiceTier: next.currentServiceTier,
+    hasExplicitServiceTier: next.hasExplicitServiceTier,
   };
 }
 
@@ -363,5 +385,6 @@ export async function applyConversationModelPreferencesToLiveSession(
     currentModel: next.currentModel,
     currentThinkingLevel: next.currentThinkingLevel,
     currentServiceTier: next.currentServiceTier,
+    hasExplicitServiceTier: next.hasExplicitServiceTier,
   };
 }

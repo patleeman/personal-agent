@@ -282,7 +282,7 @@ describe('liveSessions bootstrap helpers', () => {
     syncWebLiveConversationRunMock.mockReset();
 
     authCreateMock.mockReturnValue({ kind: 'auth' });
-    applyConversationModelPreferencesMock.mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' });
+    applyConversationModelPreferencesMock.mockResolvedValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
     createBashToolMock.mockReturnValue({ name: 'bash-tool' });
     createRuntimeModelRegistryMock.mockReturnValue({
       getAvailable: vi.fn(() => []),
@@ -309,6 +309,7 @@ describe('liveSessions bootstrap helpers', () => {
       currentModel: defaults?.currentModel ?? '',
       currentThinkingLevel: defaults?.currentThinkingLevel ?? '',
       currentServiceTier: defaults?.currentServiceTier ?? '',
+      hasExplicitServiceTier: false,
     }));
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
   });
@@ -746,7 +747,7 @@ describe('liveSessions bootstrap helpers', () => {
     );
     expect(applyConversationModelPreferencesMock).toHaveBeenCalledWith(
       createdSession.session,
-      { model: 'gpt-5', thinkingLevel: 'high', serviceTier: null },
+      { model: 'gpt-5', thinkingLevel: 'high' },
       { currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' },
       [],
     );

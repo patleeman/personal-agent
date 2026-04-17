@@ -670,7 +670,7 @@ function resolveConversationSessionFile(conversationId: string): string | undefi
   return snapshotSessionFile || undefined;
 }
 
-async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string } | null> {
+async function readConversationModelPreferenceStateById(conversationId: string): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean } | null> {
   const sessionFile = resolveConversationSessionFile(conversationId);
   if (!sessionFile || !existsSync(sessionFile)) {
     return null;

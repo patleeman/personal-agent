@@ -184,7 +184,7 @@ describe('conversationService', () => {
       telemetry: { cache: 'miss', loader: 'disk', durationMs: 4 },
     });
     readSessionMetaMock.mockReturnValue(null);
-    resolveConversationModelPreferenceStateMock.mockReturnValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '' });
+    resolveConversationModelPreferenceStateMock.mockReturnValue({ currentModel: 'gpt-5', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
     statSyncMock.mockImplementation(() => {
       throw new Error('stat unavailable');
     });
@@ -509,6 +509,7 @@ describe('conversationService', () => {
       currentModel: 'gpt-5',
       currentThinkingLevel: 'high',
       currentServiceTier: '',
+      hasExplicitServiceTier: false,
     });
     expect(SessionManagerOpenMock).toHaveBeenCalledWith('/sessions/conversation-3.jsonl');
     expect(readSavedModelPreferencesMock).toHaveBeenCalledWith(expect.any(String), [{ id: 'gpt-5' }]);

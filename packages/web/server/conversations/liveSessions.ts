@@ -79,6 +79,16 @@ function resolveConversationPreferenceStateForSession(
   );
 }
 
+function buildConversationServiceTierPreferenceInput(
+  state: Pick<ConversationModelPreferenceState, 'currentServiceTier' | 'hasExplicitServiceTier'>,
+): string | null | undefined {
+  if (!state.hasExplicitServiceTier) {
+    return undefined;
+  }
+
+  return state.currentServiceTier || null;
+}
+
 function buildServiceTierAwareStreamFn(
   modelRegistry: ModelRegistry,
   serviceTier: string,
@@ -3598,7 +3608,7 @@ export async function startParallelPromptSession(
           ? entry.session.thinkingLevel ?? null
           : options.initialThinkingLevel,
         initialServiceTier: options.initialServiceTier === undefined
-          ? resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()).currentServiceTier || null
+          ? buildConversationServiceTierPreferenceInput(resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()))
           : options.initialServiceTier,
       });
 
@@ -4272,7 +4282,7 @@ export async function forkSession(
         ? entry.session.thinkingLevel ?? null
         : loaderOptions.initialThinkingLevel,
       initialServiceTier: loaderOptions.initialServiceTier === undefined
-        ? resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()).currentServiceTier || null
+        ? buildConversationServiceTierPreferenceInput(resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()))
         : loaderOptions.initialServiceTier,
     });
 

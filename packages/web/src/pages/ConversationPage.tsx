@@ -902,7 +902,7 @@ function ConversationPreferencesRow({
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
-  onSelectServiceTier: (serviceTier: string) => void;
+  onSelectServiceTier: (enableFastMode: boolean) => void;
 }) {
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = useMemo(
@@ -966,7 +966,7 @@ function ConversationPreferencesRow({
           aria-checked={fastModeEnabled}
           aria-label={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
           title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-          onClick={() => { onSelectServiceTier(fastModeEnabled ? '' : 'priority'); }}
+          onClick={() => { onSelectServiceTier(!fastModeEnabled); }}
           disabled={savingPreference !== null}
           className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
         >
@@ -1375,6 +1375,7 @@ interface ConversationInitialModelPreferenceState {
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
+  hasExplicitServiceTier: boolean;
 }
 
 interface ConversationInitialDeferredResumeState {
@@ -1393,20 +1394,70 @@ interface ConversationLocationState {
   draftHydrationState?: ConversationDraftHydrationState;
 }
 
+const DRAFT_SERVICE_TIER_DISABLED_SENTINEL = '__pa_draft_fast_mode_disabled__';
+
+function resolveDraftConversationServiceTierState(
+  storedServiceTier: string,
+  defaultServiceTier: string,
+): { currentServiceTier: string; hasExplicitServiceTier: boolean } {
+  const normalizedStoredServiceTier = storedServiceTier.trim();
+  if (normalizedStoredServiceTier === DRAFT_SERVICE_TIER_DISABLED_SENTINEL) {
+    return { currentServiceTier: '', hasExplicitServiceTier: true };
+  }
+
+  if (normalizedStoredServiceTier) {
+    return { currentServiceTier: normalizedStoredServiceTier, hasExplicitServiceTier: true };
+  }
+
+  return {
+    currentServiceTier: defaultServiceTier.trim(),
+    hasExplicitServiceTier: false,
+  };
+}
+
+function buildConversationServiceTierPreferenceInput(input: {
+  currentServiceTier: string;
+  hasExplicitServiceTier: boolean;
+}): { serviceTier?: string | null } {
+  if (!input.hasExplicitServiceTier) {
+    return {};
+  }
+
+  return { serviceTier: input.currentServiceTier.trim() || null };
+}
+
+function resolveFastModeToggleServiceTier(input: {
+  enableFastMode: boolean;
+  defaultServiceTier: string;
+}): string | null {
+  if (input.enableFastMode) {
+    return input.defaultServiceTier === 'priority' ? '' : 'priority';
+  }
+
+  return input.defaultServiceTier === 'priority' ? null : '';
+}
+
 function buildConversationInitialModelPreferenceState(input: {
   conversationId: string;
   currentModel?: string;
   currentThinkingLevel?: string;
   currentServiceTier?: string;
+  hasExplicitServiceTier?: boolean;
   defaultModel?: string;
   defaultThinkingLevel?: string;
   defaultServiceTier?: string;
 }): ConversationInitialModelPreferenceState {
+  const normalizedCurrentServiceTier = input.currentServiceTier?.trim() || '';
+  const hasExplicitServiceTier = Boolean(input.hasExplicitServiceTier);
+
   return {
     conversationId: input.conversationId,
     currentModel: input.currentModel?.trim() || input.defaultModel?.trim() || '',
     currentThinkingLevel: input.currentThinkingLevel?.trim() || input.defaultThinkingLevel?.trim() || '',
-    currentServiceTier: input.currentServiceTier?.trim() || input.defaultServiceTier?.trim() || '',
+    currentServiceTier: hasExplicitServiceTier
+      ? normalizedCurrentServiceTier
+      : normalizedCurrentServiceTier || input.defaultServiceTier?.trim() || '',
+    hasExplicitServiceTier,
   };
 }
 
@@ -1432,6 +1483,7 @@ function resolveConversationInitialModelPreferenceState(input: {
     currentModel: typeof candidate.currentModel === 'string' ? candidate.currentModel : '',
     currentThinkingLevel: typeof candidate.currentThinkingLevel === 'string' ? candidate.currentThinkingLevel : '',
     currentServiceTier: typeof candidate.currentServiceTier === 'string' ? candidate.currentServiceTier : '',
+    hasExplicitServiceTier: typeof candidate.hasExplicitServiceTier === 'boolean' ? candidate.hasExplicitServiceTier : false,
     defaultModel: input.defaultModel,
     defaultThinkingLevel: input.defaultThinkingLevel,
     defaultServiceTier: input.defaultServiceTier,
@@ -2270,6 +2322,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const [currentServiceTier, setCurrentServiceTier] = useState<string>('');
+  const [hasExplicitServiceTier, setHasExplicitServiceTier] = useState(false);
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
   const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
@@ -2410,9 +2463,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     const syncDraftPreferences = () => {
+      const serviceTierState = resolveDraftConversationServiceTierState(
+        readDraftConversationServiceTier(),
+        defaultServiceTier,
+      );
       setCurrentModel(readDraftConversationModel().trim() || defaultModel);
       setCurrentThinkingLevel(readDraftConversationThinkingLevel().trim() || defaultThinkingLevel);
-      setCurrentServiceTier(readDraftConversationServiceTier().trim() || defaultServiceTier);
+      setCurrentServiceTier(serviceTierState.currentServiceTier);
+      setHasExplicitServiceTier(serviceTierState.hasExplicitServiceTier);
       setDraftCwdValue(readDraftConversationCwd().trim());
     };
 
@@ -2439,6 +2497,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setCurrentModel(defaultModel);
       setCurrentThinkingLevel(defaultThinkingLevel);
       setCurrentServiceTier(defaultServiceTier);
+      setHasExplicitServiceTier(false);
       return;
     }
 
@@ -2447,6 +2506,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setCurrentModel(initialModelPreferenceState.currentModel);
       setCurrentThinkingLevel(initialModelPreferenceState.currentThinkingLevel);
       setCurrentServiceTier(initialModelPreferenceState.currentServiceTier);
+      setHasExplicitServiceTier(initialModelPreferenceState.hasExplicitServiceTier);
       return;
     }
 
@@ -2460,6 +2520,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setCurrentModel(data.currentModel || defaultModel);
         setCurrentThinkingLevel(data.currentThinkingLevel ?? defaultThinkingLevel);
         setCurrentServiceTier(data.currentServiceTier ?? defaultServiceTier);
+        setHasExplicitServiceTier(Boolean(data.hasExplicitServiceTier));
       })
       .catch(() => {
         if (cancelled) {
@@ -2469,6 +2530,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setCurrentModel(defaultModel);
         setCurrentThinkingLevel(defaultThinkingLevel);
         setCurrentServiceTier(defaultServiceTier);
+        setHasExplicitServiceTier(false);
       });
 
     return () => {
@@ -4494,7 +4556,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
       ...(currentModel ? { model: currentModel } : {}),
       ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-      ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
+      ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
     });
     if (draftExecutionTarget === 'local') {
       primeCreatedConversationOpenCaches(created, {
@@ -4526,6 +4588,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           currentModel,
           currentThinkingLevel,
           currentServiceTier,
+          hasExplicitServiceTier,
           defaultModel,
           defaultThinkingLevel,
           defaultServiceTier,
@@ -4542,7 +4605,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
 
     return newId;
-  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, currentServiceTier, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, draftCwdValue, id, input, navigate]);
+  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, currentServiceTier, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, draftCwdValue, hasExplicitServiceTier, id, input, navigate]);
 
   const toggleConversationAutoMode = useCallback(async () => {
     if (conversationAutoModeBusy) {
@@ -4687,6 +4750,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setCurrentModel(next.currentModel);
         setCurrentThinkingLevel(next.currentThinkingLevel);
         setCurrentServiceTier(next.currentServiceTier);
+        setHasExplicitServiceTier(next.hasExplicitServiceTier);
       }
 
       const selectedModel = models.find((candidate) => candidate.id === modelId);
@@ -4725,6 +4789,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setCurrentModel(next.currentModel);
         setCurrentThinkingLevel(next.currentThinkingLevel);
         setCurrentServiceTier(next.currentServiceTier);
+        setHasExplicitServiceTier(next.hasExplicitServiceTier);
         savedThinkingLevel = next.currentThinkingLevel;
       }
 
@@ -4736,22 +4801,34 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  async function saveServiceTierPreference(serviceTier: string) {
-    if (serviceTier === currentServiceTier || savingPreference !== null) {
+  async function saveServiceTierPreference(enableFastMode: boolean) {
+    if (savingPreference !== null) {
       return;
     }
 
+    const serviceTier = resolveFastModeToggleServiceTier({
+      enableFastMode,
+      defaultServiceTier,
+    });
+
     setSavingPreference('serviceTier');
     try {
-      let savedServiceTier = serviceTier || defaultServiceTier;
+      let savedServiceTier = enableFastMode ? 'priority' : '';
 
       if (draft) {
-        if (!serviceTier || serviceTier === defaultServiceTier) {
+        if (serviceTier === null) {
+          persistDraftConversationServiceTier(DRAFT_SERVICE_TIER_DISABLED_SENTINEL);
+          setCurrentServiceTier('');
+          setHasExplicitServiceTier(true);
+        } else if (!serviceTier || serviceTier === defaultServiceTier) {
           clearDraftConversationServiceTier();
+          setCurrentServiceTier(serviceTier || defaultServiceTier);
+          setHasExplicitServiceTier(false);
         } else {
           persistDraftConversationServiceTier(serviceTier);
+          setCurrentServiceTier(serviceTier);
+          setHasExplicitServiceTier(true);
         }
-        setCurrentServiceTier(savedServiceTier);
       } else if (id) {
         if (isLiveSession && !ensureConversationCanControl('change the service tier')) {
           return;
@@ -4761,6 +4838,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setCurrentModel(next.currentModel);
         setCurrentThinkingLevel(next.currentThinkingLevel);
         setCurrentServiceTier(next.currentServiceTier);
+        setHasExplicitServiceTier(next.hasExplicitServiceTier);
         savedServiceTier = next.currentServiceTier;
       }
 
@@ -4795,7 +4873,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const created = await api.createLiveSession(cwd, undefined, {
         ...(currentModel ? { model: currentModel } : {}),
         ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-        ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
+        ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
       });
       primeCreatedConversationOpenCaches(created, {
         tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
@@ -4810,6 +4888,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             currentModel,
             currentThinkingLevel,
             currentServiceTier,
+            hasExplicitServiceTier,
             defaultModel,
             defaultThinkingLevel,
             defaultServiceTier,
@@ -5242,6 +5321,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setCurrentServiceTier(defaultServiceTier);
+    setHasExplicitServiceTier(false);
     setDraftCwdValue('');
     setDraftCwdPickBusy(false);
     setDraftCwdError(null);
@@ -5643,7 +5723,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
           ...(currentModel ? { model: currentModel } : {}),
           ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-          ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
+          ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
         });
         conversationId = created.id;
         if (draftExecutionTarget !== 'local') {
@@ -5676,6 +5756,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               currentModel,
               currentThinkingLevel,
               currentServiceTier,
+              hasExplicitServiceTier,
               defaultModel,
               defaultThinkingLevel,
               defaultServiceTier,
@@ -5820,7 +5901,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
               ...(currentModel ? { model: currentModel } : {}),
               ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-              ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
+              ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
             });
             createdSessionId = created.id;
             if (draftExecutionTarget === 'local') {
@@ -5864,6 +5945,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   currentModel,
                   currentThinkingLevel,
                   currentServiceTier,
+                  hasExplicitServiceTier,
                   defaultModel,
                   defaultThinkingLevel,
                   defaultServiceTier,
@@ -5905,7 +5987,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
             ...(currentModel ? { model: currentModel } : {}),
             ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-            ...(currentServiceTier ? { serviceTier: currentServiceTier } : {}),
+            ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
           });
           createdSessionId = created.id;
           if (draftExecutionTarget === 'local') {
@@ -5947,6 +6029,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 currentModel,
                 currentThinkingLevel,
                 currentServiceTier,
+                hasExplicitServiceTier,
                 defaultModel,
                 defaultThinkingLevel,
                 defaultServiceTier,
@@ -7487,7 +7570,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         savingPreference={savingPreference}
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
-                        onSelectServiceTier={(serviceTier) => { void saveServiceTierPreference(serviceTier); }}
+                        onSelectServiceTier={(enableFastMode) => { void saveServiceTierPreference(enableFastMode); }}
                       />
                       {(draft || id) && (
                         <ConversationAutoModeToggle

@@ -134,8 +134,8 @@ describe('api desktop transport', () => {
       usedFallbackPrompt: true,
     });
     const readLiveSessionForkEntries = vi.fn().mockResolvedValue([{ entryId: 'entry-1', text: 'fork from here' }]);
-    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '' });
-    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority' });
+    const readConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
+    const updateConversationModelPreferences = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority', hasExplicitServiceTier: true });
     const readLiveSession = vi.fn().mockResolvedValue({ live: true, id: 'live-1' });
     const readLiveSessionContext = vi.fn().mockResolvedValue({ cwd: '/repo', branch: 'main', git: null });
     const readSessionDetail = vi.fn().mockResolvedValue({ meta: { id: 'live-1' }, blocks: [], blockOffset: 0, totalBlocks: 0, contextUsage: null });
@@ -468,8 +468,8 @@ describe('api desktop transport', () => {
       replayedPendingOperation: false,
       usedFallbackPrompt: true,
     });
-    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '' });
-    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority' });
+    expect(modelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', hasExplicitServiceTier: false });
+    expect(updatedModelPreferences).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'medium', currentServiceTier: 'priority', hasExplicitServiceTier: true });
     expect(live).toEqual({ live: true, id: 'live-1' });
     expect(forkEntries).toEqual([{ entryId: 'entry-1', text: 'fork from here' }]);
     expect(liveContext).toEqual({ cwd: '/repo', branch: 'main', git: null });

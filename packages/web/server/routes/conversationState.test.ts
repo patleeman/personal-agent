@@ -551,7 +551,7 @@ describe('registerConversationStateRoutes', () => {
     const handler = patchHandler('/api/conversations/:id/model-preferences');
 
     isLocalLiveMock.mockReturnValueOnce(true);
-    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '' });
+    updateLiveSessionModelPreferencesMock.mockResolvedValueOnce({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '', hasExplicitServiceTier: false });
     const liveRes = createResponse();
     await handler({
       params: { id: 'conversation-1' },
@@ -562,11 +562,11 @@ describe('registerConversationStateRoutes', () => {
       surfaceId: 'surface-1',
     });
     expect(updateLiveSessionModelPreferencesMock).toHaveBeenCalledWith('conversation-1', { model: 'gpt-5' }, [{ id: 'model-1' }]);
-    expect(liveRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '' });
+    expect(liveRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'gpt-5', currentServiceTier: '', hasExplicitServiceTier: false });
 
     resolveConversationSessionFileMock.mockReturnValueOnce('/sessions/conversation-1.json');
     SessionManagerOpenMock.mockReturnValueOnce({ id: 'session-manager' });
-    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '' });
+    applyConversationModelPreferencesToSessionManagerMock.mockReturnValueOnce({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '', hasExplicitServiceTier: false });
     const storedRes = createResponse();
     await handler({
       params: { id: 'conversation-1' },
@@ -580,7 +580,7 @@ describe('registerConversationStateRoutes', () => {
       [{ id: 'model-1' }],
     );
     expect(publishConversationSessionMetaChangedMock).toHaveBeenCalledWith('conversation-1');
-    expect(storedRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '' });
+    expect(storedRes.json).toHaveBeenCalledWith({ conversationId: 'conversation-1', model: 'claude-4', currentServiceTier: '', hasExplicitServiceTier: false });
   });
 
   it('handles missing stored conversations and mapped model preference errors', async () => {

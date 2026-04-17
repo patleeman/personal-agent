@@ -262,8 +262,8 @@ export interface PersonalAgentDesktopBridge {
     resumes: DeferredResumeSummary[];
   }>;
   recoverConversation(conversationId: string): Promise<ConversationRecoveryResult>;
-  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>;
-  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string }>;
+  readConversationModelPreferences(input: { conversationId: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
+  updateConversationModelPreferences(input: { conversationId: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null; surfaceId?: string }): Promise<{ currentModel: string; currentThinkingLevel: string; currentServiceTier: string; hasExplicitServiceTier: boolean }>;
   readConversationArtifacts(conversationId: string): Promise<{ conversationId: string; artifacts: ConversationArtifactSummary[] }>;
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<{ conversationId: string; artifact: ConversationArtifactRecord }>;
   readConversationCheckpoints(conversationId: string): Promise<{ conversationId: string; checkpoints: ConversationCommitCheckpointSummary[] }>;
