@@ -191,6 +191,14 @@ Common actions:
 - `validate` — validate a legacy task definition or proposed payload
 - `run` — trigger a task immediately
 
+Useful `save` fields beyond the schedule itself:
+
+- `targetType: "background-agent" | "conversation"`
+- `threadMode: "dedicated" | "existing" | "none"`
+- `threadConversationId` when you want `threadMode: "existing"`
+- `deliverAs: "steer" | "followUp"` for conversation-target automations
+- `deliverResultToConversation` only for background-agent automations that should callback later
+
 Use the web UI when you want to inspect automation detail, status, and owned run history visually.
 
 ## Logs and runtime state

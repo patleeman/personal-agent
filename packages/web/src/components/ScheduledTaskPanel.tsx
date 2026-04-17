@@ -451,7 +451,6 @@ function TaskAdvancedMenu({
   existingThreadOptions: Array<{ id: string; label: string; cwd?: string }>;
   onChange: (patch: Partial<TaskFormState>) => void;
 }) {
-  const targetLabel = formatTargetTypeLabel(value.targetType);
   return (
     <div className="absolute top-full right-0 z-20 mt-2 w-[20rem] rounded-xl border border-border-default bg-surface/95 p-3 shadow-2xl backdrop-blur-md">
       <div className="space-y-3">
@@ -491,7 +490,7 @@ function TaskAdvancedMenu({
         )}
 
         <div className="space-y-1.5">
-          <span className={FIELD_LABEL_CLASS}>{targetLabel} thread</span>
+          <span className={FIELD_LABEL_CLASS}>Thread</span>
           <InlineSelect
             value={value.threadMode}
             onChange={(event) => onChange({

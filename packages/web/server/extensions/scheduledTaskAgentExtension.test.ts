@@ -153,6 +153,53 @@ describe('scheduled task agent extension', () => {
     expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'activity-digest' })).toBeUndefined();
   });
 
+  it('saves conversation-target tasks on the current thread and clears stale callbacks', async () => {
+    const taskTool = registerScheduledTaskTool();
+    const sessionFile = writeSessionFile('conv-123');
+
+    await taskTool.execute(
+      'tool-1',
+      {
+        action: 'save',
+        taskId: 'thread-check',
+        at: '2026-04-10T09:00:00.000Z',
+        prompt: 'Summarize recent activity.',
+        deliverResultToConversation: true,
+      },
+      undefined,
+      undefined,
+      createToolContext(sessionFile),
+    );
+
+    const saved = await taskTool.execute(
+      'tool-2',
+      {
+        action: 'save',
+        taskId: 'thread-check',
+        targetType: 'conversation',
+        at: '2026-04-11T09:00:00.000Z',
+        deliverAs: 'followUp',
+        prompt: 'Check back in tomorrow.',
+      },
+      undefined,
+      undefined,
+      createToolContext(sessionFile),
+    );
+
+    expect(saved.isError).not.toBe(true);
+    expect(getTaskCallbackBinding({ profile: 'assistant', taskId: 'thread-check' })).toBeUndefined();
+
+    const fetched = await taskTool.execute('tool-3', {
+      action: 'get',
+      taskId: 'thread-check',
+    });
+
+    expect(fetched.content[0]?.text).toContain('target: thread');
+    expect(fetched.content[0]?.text).toContain('threadMode: existing');
+    expect(fetched.content[0]?.text).toContain('threadConversationId: conv-123');
+    expect(fetched.content[0]?.text).toContain('deliverAs: followUp');
+  });
+
   it('lists and validates scheduled task definitions', async () => {
     const taskTool = registerScheduledTaskTool();
 
@@ -240,8 +287,9 @@ describe('scheduled task agent extension', () => {
     expect(deleted.content[0]?.text).toContain('Deleted scheduled task @daily-status.');
   });
 
-  it('returns tool errors for missing conversations, unknown tasks, and rejected runs', async () => {
+  it('returns tool errors for missing conversations, invalid conversation callbacks, unknown tasks, and rejected runs', async () => {
     const taskTool = registerScheduledTaskTool();
+    const sessionFile = writeSessionFile('conv-999');
 
     const missingConversation = await taskTool.execute(
       'tool-1',
@@ -256,9 +304,23 @@ describe('scheduled task agent extension', () => {
       undefined,
       createToolContext(''),
     );
-    const missingTask = await taskTool.execute('tool-2', { action: 'validate', taskId: 'missing-task' });
+    const invalidConversationCallback = await taskTool.execute(
+      'tool-2',
+      {
+        action: 'save',
+        taskId: 'thread-ping',
+        at: '2026-04-10T09:00:00.000Z',
+        targetType: 'conversation',
+        prompt: 'Ping this thread later.',
+        deliverResultToConversation: true,
+      },
+      undefined,
+      undefined,
+      createToolContext(sessionFile),
+    );
+    const missingTask = await taskTool.execute('tool-3', { action: 'validate', taskId: 'missing-task' });
 
-    await taskTool.execute('tool-3', {
+    await taskTool.execute('tool-4', {
       action: 'save',
       taskId: 'run-me',
       cron: '0 9 * * 1-5',
@@ -271,10 +333,12 @@ describe('scheduled task agent extension', () => {
       reason: 'daemon busy',
     } as never);
 
-    const rejectedRun = await taskTool.execute('tool-4', { action: 'run', taskId: 'run-me' });
+    const rejectedRun = await taskTool.execute('tool-5', { action: 'run', taskId: 'run-me' });
 
     expect(missingConversation.isError).toBe(true);
     expect(missingConversation.content[0]?.text).toContain('deliverResultToConversation requires an active persisted conversation.');
+    expect(invalidConversationCallback.isError).toBe(true);
+    expect(invalidConversationCallback.content[0]?.text).toContain('deliverResultToConversation is only supported for background-agent automations.');
     expect(missingTask.isError).toBe(true);
     expect(missingTask.content[0]?.text).toContain('Task not found: missing-task');
     expect(rejectedRun.isError).toBe(true);
