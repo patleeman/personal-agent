@@ -209,4 +209,48 @@ describe('TasksPage', () => {
     expect(html).toContain('Worktree');
     expect(html).toContain('No automations yet.');
   });
+
+  it('uses existing conversation workspaces as project options in the create form', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations?new=1']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            projects: null,
+            sessions: [{
+              id: 'conv-1',
+              file: '/tmp/conv-1.jsonl',
+              timestamp: '2026-03-18T00:00:00.000Z',
+              cwd: '/tmp/alpha-worktree',
+              cwdSlug: 'alpha-worktree',
+              model: 'openai/gpt-5.4',
+              title: 'Alpha thread',
+              messageCount: 12,
+            }, {
+              id: 'conv-2',
+              file: '/tmp/conv-2.jsonl',
+              timestamp: '2026-03-18T01:00:00.000Z',
+              cwd: '/tmp/beta-worktree',
+              cwdSlug: 'beta-worktree',
+              model: 'openai/gpt-5.4',
+              title: 'Beta thread',
+              messageCount: 3,
+            }],
+            runs: null,
+            tasks: [],
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('>alpha-worktree<');
+    expect(html).toContain('>beta-worktree<');
+  });
 });

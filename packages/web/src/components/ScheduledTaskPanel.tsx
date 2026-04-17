@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type SelectHTMLAttributes } from 
 import { useNavigate } from 'react-router-dom';
 import { api } from '../client/api';
 import { useAppData } from '../app/contexts';
+import { buildConversationGroupLabels, normalizeConversationGroupCwd } from '../conversation/conversationCwdGroups';
 import { useApi } from '../hooks/useApi';
+import { normalizeWorkspacePaths } from '../local/savedWorkspacePaths';
 import { THINKING_LEVEL_OPTIONS } from '../model/modelPreferences';
 import { isScheduledTaskDetail } from '../automation/scheduledTaskDetail';
 import {
@@ -362,13 +364,22 @@ function CronBuilderEditor({
 }
 
 function summarizePathLabel(path: string): string {
-  const trimmed = path.trim().replace(/\/$/, '');
-  if (!trimmed) {
+  const normalized = normalizeConversationGroupCwd(path);
+  if (!normalized) {
     return 'Select project';
   }
 
-  const segments = trimmed.split('/').filter(Boolean);
-  return segments[segments.length - 1] ?? trimmed;
+  if (normalized === '/' || /^[A-Za-z]:\/$/.test(normalized)) {
+    return normalized;
+  }
+
+  const segments = normalized.split('/').filter(Boolean);
+  return segments[segments.length - 1] ?? normalized;
+}
+
+function isFilesystemRootPath(path: string): boolean {
+  const normalized = normalizeConversationGroupCwd(path);
+  return normalized === '/' || /^[A-Za-z]:\/$/.test(normalized);
 }
 
 function formatThreadModeLabel(mode: TaskFormState['threadMode']): string {
@@ -543,10 +554,20 @@ function TaskEditorForm({
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
   const { data: cwdState } = useApi(async () => api.defaultCwd(), 'task-editor-default-cwd');
   const { data: modelState } = useApi(async () => api.models(), 'task-editor-models');
+  const { data: savedWorkspacePaths } = useApi(
+    async () => normalizeWorkspacePaths(await api.savedWorkspacePaths()),
+    'task-editor-saved-workspaces',
+  );
 
   useEffect(() => {
-    if (value.runIn === 'worktree' && !value.projectPath.trim() && cwdState?.effectiveCwd) {
-      onChange({ projectPath: cwdState.effectiveCwd });
+    const defaultPath = normalizeConversationGroupCwd(cwdState?.effectiveCwd);
+    if (
+      value.runIn === 'worktree'
+      && !value.projectPath.trim()
+      && defaultPath
+      && !isFilesystemRootPath(defaultPath)
+    ) {
+      onChange({ projectPath: defaultPath });
     }
   }, [cwdState?.effectiveCwd, onChange, value.projectPath, value.runIn]);
 
@@ -585,38 +606,64 @@ function TaskEditorForm({
 
   const projectOptions = useMemo(() => {
     const seen = new Set<string>();
-    const entries: Array<{ label: string; path: string }> = [];
+    const orderedPaths: string[] = [];
+    const projectTitlesByPath = new Map<string, string>();
 
-    for (const project of projects ?? []) {
-      const path = project.repoRoot?.trim();
-      if (!path || seen.has(path)) {
-        continue;
+    function addPath(candidate: string | null | undefined, options?: { title?: string; allowRoot?: boolean }) {
+      const normalized = normalizeConversationGroupCwd(candidate);
+      if (!normalized) {
+        return;
       }
 
-      seen.add(path);
-      entries.push({ label: project.title, path });
+      if (!options?.allowRoot && isFilesystemRootPath(normalized)) {
+        return;
+      }
+
+      const title = options?.title?.trim();
+      if (title && !projectTitlesByPath.has(normalized)) {
+        projectTitlesByPath.set(normalized, title);
+      }
+
+      if (seen.has(normalized)) {
+        return;
+      }
+
+      seen.add(normalized);
+      orderedPaths.push(normalized);
     }
 
-    const defaultPath = cwdState?.effectiveCwd?.trim();
-    if (defaultPath && !seen.has(defaultPath)) {
-      entries.unshift({ label: summarizePathLabel(defaultPath), path: defaultPath });
-      seen.add(defaultPath);
+    addPath(value.projectPath, { allowRoot: true });
+    addPath(cwdState?.effectiveCwd);
+
+    for (const savedPath of savedWorkspacePaths ?? []) {
+      addPath(savedPath);
     }
 
-    const currentPath = value.projectPath.trim();
-    if (currentPath && !seen.has(currentPath)) {
-      entries.unshift({ label: summarizePathLabel(currentPath), path: currentPath });
+    for (const session of sessions ?? []) {
+      addPath(session.cwd);
     }
 
-    return entries;
-  }, [cwdState?.effectiveCwd, projects, value.projectPath]);
+    for (const project of projects ?? []) {
+      addPath(project.repoRoot, { title: project.title });
+    }
+
+    const labelsByPath = buildConversationGroupLabels(orderedPaths);
+
+    return orderedPaths.map((path) => ({
+      label: projectTitlesByPath.get(path) ?? labelsByPath.get(path) ?? summarizePathLabel(path),
+      path,
+    }));
+  }, [cwdState?.effectiveCwd, projects, savedWorkspacePaths, sessions, value.projectPath]);
 
   const effectiveThreadCwd = value.runIn === 'worktree'
-    ? value.projectPath.trim()
-    : (cwdState?.effectiveCwd?.trim() || '');
+    ? normalizeConversationGroupCwd(value.projectPath)
+    : normalizeConversationGroupCwd(cwdState?.effectiveCwd);
   const existingThreadOptions = useMemo(() => {
     const entries = (sessions ?? [])
-      .filter((session) => !effectiveThreadCwd || !session.cwd || session.cwd === effectiveThreadCwd)
+      .filter((session) => {
+        const sessionCwd = normalizeConversationGroupCwd(session.cwd);
+        return !effectiveThreadCwd || !sessionCwd || sessionCwd === effectiveThreadCwd;
+      })
       .map((session) => ({
         id: session.id,
         label: session.title,
