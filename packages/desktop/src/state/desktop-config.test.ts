@@ -51,6 +51,23 @@ describe('desktop-config', () => {
     ]));
   });
 
+  it('migrates tailscale websocket URLs to include the codex upstream path', () => {
+    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
+      version: 1,
+      defaultHostId: 'tailnet',
+      openWindowOnLaunch: true,
+      hosts: [
+        { id: 'local', label: 'Local', kind: 'local' },
+        { id: 'tailnet', label: 'Tailnet', kind: 'web', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex' },
+      ],
+    }, null, 2)}\n`, 'utf-8');
+
+    const config = loadDesktopConfig();
+    expect(config.hosts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'tailnet', websocketUrl: 'wss://desktop.tail5a01ec.ts.net/codex/codex' }),
+    ]));
+  });
+
   it('defaults desktop app preferences and persists updates', () => {
     const initial = loadDesktopConfig();
     expect(readDesktopAppPreferences(initial)).toEqual({

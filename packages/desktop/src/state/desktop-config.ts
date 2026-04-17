@@ -37,6 +37,40 @@ function ensureLocalHost(hosts: DesktopHostRecord[]): DesktopHostRecord[] {
   return [createDefaultLocalHost(), ...nextHosts];
 }
 
+function normalizeTailnetWorkspaceWebsocketUrl(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return trimmed;
+  }
+
+  if (parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+    return trimmed;
+  }
+
+  if (!parsed.hostname.endsWith('.ts.net')) {
+    return trimmed;
+  }
+
+  const normalizedPath = parsed.pathname.length > 1
+    ? parsed.pathname.replace(/\/+$/, '')
+    : parsed.pathname;
+  if (normalizedPath !== '/codex') {
+    return trimmed;
+  }
+
+  parsed.pathname = '/codex/codex';
+  parsed.search = '';
+  parsed.hash = '';
+  return parsed.toString();
+}
+
 function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
   if (!host || typeof host !== 'object') {
     return null;
@@ -72,11 +106,11 @@ function normalizeHostRecord(host: unknown): DesktopHostRecord | null {
     };
   }
 
-  const websocketUrl = typeof candidate.websocketUrl === 'string'
+  const websocketUrl = normalizeTailnetWorkspaceWebsocketUrl(typeof candidate.websocketUrl === 'string'
     ? candidate.websocketUrl
     : typeof candidate.baseUrl === 'string'
       ? candidate.baseUrl
-      : '';
+      : '');
   return {
     id,
     label,

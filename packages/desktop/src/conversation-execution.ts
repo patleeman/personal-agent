@@ -178,6 +178,91 @@ function clearSessionRemoteTarget(filePath: string): void {
   writeSessionHeader(filePath, nextHeader, lines, headerIndex);
 }
 
+function isPlaceholderConversationTitle(title: string | undefined): boolean {
+  const normalized = title?.trim().toLowerCase();
+  return !normalized || normalized === 'new conversation' || normalized === '(new conversation)' || normalized === 'conversation';
+}
+
+function formatFallbackConversationTitle(text: string, imageCount: number): string {
+  return text.trim().replace(/\s+/g, ' ').slice(0, 80)
+    || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${String(imageCount)} image attachments)` : '');
+}
+
+function buildPromptFallbackConversationTitle(body: unknown): string {
+  if (!body || typeof body !== 'object') {
+    return '';
+  }
+
+  const candidate = body as { text?: unknown; images?: unknown };
+  const text = typeof candidate.text === 'string' ? candidate.text : '';
+  const imageCount = Array.isArray(candidate.images) ? candidate.images.length : 0;
+  return formatFallbackConversationTitle(text, imageCount);
+}
+
+function buildBashFallbackConversationTitle(body: unknown): string {
+  if (!body || typeof body !== 'object') {
+    return '';
+  }
+
+  const command = typeof (body as { command?: unknown }).command === 'string'
+    ? ((body as { command: string }).command)
+    : '';
+  return formatFallbackConversationTitle(command, 0);
+}
+
+function parseRemoteTitleUpdateFromStreamEventData(data: string | undefined): string | null {
+  if (!data) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(data) as { type?: unknown; title?: unknown };
+    if (parsed.type !== 'title_update' || typeof parsed.title !== 'string') {
+      return null;
+    }
+
+    const title = parsed.title.trim();
+    return title.length > 0 ? title : null;
+  } catch {
+    return null;
+  }
+}
+
+async function renameConversationForRemoteTarget(hostManager: HostManager, input: {
+  localConversationId: string;
+  remoteHostId: string;
+  remoteConversationId: string;
+  name: string;
+}): Promise<void> {
+  const normalizedName = input.name.trim();
+  if (!normalizedName) {
+    return;
+  }
+
+  const remoteController = hostManager.getHostController(input.remoteHostId);
+  const localController = hostManager.getHostController('local');
+
+  await remoteController.dispatchApiRequest({
+    method: 'PATCH',
+    path: `/api/conversations/${encodeURIComponent(input.remoteConversationId)}/title`,
+    body: { name: normalizedName },
+  }).catch(() => undefined);
+
+  if (localController.renameConversation) {
+    await localController.renameConversation({
+      conversationId: input.localConversationId,
+      name: normalizedName,
+    }).catch(() => undefined);
+    return;
+  }
+
+  await localController.dispatchApiRequest({
+    method: 'PATCH',
+    path: `/api/conversations/${encodeURIComponent(input.localConversationId)}/title`,
+    body: { name: normalizedName },
+  }).catch(() => undefined);
+}
+
 function translateConversationScopedPath(path: string, localConversationId: string, remoteConversationId: string): string | null {
   const conversationPathPrefix = `/api/conversations/${encodeURIComponent(localConversationId)}`;
   const liveSessionPathPrefix = `/api/live-sessions/${encodeURIComponent(localConversationId)}`;
@@ -298,16 +383,6 @@ export async function continueConversationInHost(
     return { conversationId };
   }
 
-  const existingTarget = await resolveConversationRemoteTarget(hostManager, conversationId);
-  if (existingTarget?.hostId === hostId && existingTarget.remoteConversationId) {
-    return {
-      conversationId,
-      remoteHostId: existingTarget.hostId,
-      ...(existingTarget.hostLabel ? { remoteHostLabel: existingTarget.hostLabel } : {}),
-      remoteConversationId: existingTarget.remoteConversationId,
-    };
-  }
-
   const hostRecord = hostManager.getHostRecord(hostId);
   if (hostRecord.kind === 'local') {
     throw new Error('Use the local option instead of creating a remote link to the local host.');
@@ -315,6 +390,22 @@ export async function continueConversationInHost(
 
   const remoteController = hostManager.getHostController(hostId);
   await hostManager.ensureHostRunning(hostId);
+
+  const existingTarget = await resolveConversationRemoteTarget(hostManager, conversationId);
+  if (existingTarget?.hostId === hostId && existingTarget.remoteConversationId) {
+    const existingRemoteMeta = await remoteController.dispatchApiRequest({
+      method: 'GET',
+      path: `/api/sessions/${encodeURIComponent(existingTarget.remoteConversationId)}/meta`,
+    }).catch(() => null);
+    if (existingRemoteMeta && existingRemoteMeta.statusCode >= 200 && existingRemoteMeta.statusCode < 400) {
+      return {
+        conversationId,
+        remoteHostId: existingTarget.hostId,
+        ...(existingTarget.hostLabel ? { remoteHostLabel: existingTarget.hostLabel } : {}),
+        remoteConversationId: existingTarget.remoteConversationId,
+      };
+    }
+  }
   const created = await remoteController.invokeLocalApi('POST', '/api/live-sessions', cwd ? { cwd } : {});
   const remoteConversationId = typeof (created as { id?: unknown } | null | undefined)?.id === 'string'
     ? ((created as { id: string }).id).trim()
@@ -366,6 +457,27 @@ export async function dispatchConversationExecutionRequest(
     return null;
   }
 
+  if (input.method === 'POST') {
+    const localMeta = await readLocalConversationMeta(hostManager, localConversationId);
+    if (localMeta && isPlaceholderConversationTitle(localMeta.title)) {
+      const encodedConversationId = encodeURIComponent(localConversationId);
+      const fallbackTitle = input.path === `/api/live-sessions/${encodedConversationId}/prompt`
+        ? buildPromptFallbackConversationTitle(input.body)
+        : input.path === `/api/live-sessions/${encodedConversationId}/bash`
+          ? buildBashFallbackConversationTitle(input.body)
+          : '';
+
+      if (fallbackTitle) {
+        await renameConversationForRemoteTarget(hostManager, {
+          localConversationId,
+          remoteHostId: target.hostId,
+          remoteConversationId: target.remoteConversationId,
+          name: fallbackTitle,
+        });
+      }
+    }
+  }
+
   if (input.path === `/api/conversations/${encodeURIComponent(localConversationId)}/title` && input.method === 'PATCH') {
     const localController = hostManager.getHostController('local');
     const remoteController = hostManager.getHostController(target.hostId);
@@ -412,7 +524,36 @@ export async function subscribeConversationExecutionApiStream(
   }
 
   const remoteController = hostManager.getHostController(target.hostId);
-  return remoteController.subscribeApiStream(translatedPath, onEvent);
+  const localController = hostManager.getHostController('local');
+  return remoteController.subscribeApiStream(translatedPath, (event) => {
+    if (event.type === 'message') {
+      const remoteTitle = parseRemoteTitleUpdateFromStreamEventData(event.data);
+      if (remoteTitle) {
+        void (async () => {
+          const localMeta = await readLocalConversationMeta(hostManager, localConversationId);
+          if (localMeta?.title?.trim() === remoteTitle) {
+            return;
+          }
+
+          if (localController.renameConversation) {
+            await localController.renameConversation({
+              conversationId: localConversationId,
+              name: remoteTitle,
+            }).catch(() => undefined);
+            return;
+          }
+
+          await localController.dispatchApiRequest({
+            method: 'PATCH',
+            path: `/api/conversations/${encodeURIComponent(localConversationId)}/title`,
+            body: { name: remoteTitle },
+          }).catch(() => undefined);
+        })();
+      }
+    }
+
+    onEvent(event);
+  });
 }
 
 function decodeConversationIdFromPath(path: string): string | null {

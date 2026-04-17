@@ -68,6 +68,7 @@ describe('WebHostController', () => {
     const status = await controller.getStatus();
     expect(status.reachable).toBe(true);
     expect(status.mode).toBe('ws-remote');
+    expect(status.webUrl).toBe('wss://desktop.example.ts.net/codex/codex');
     expect(status.summary).toContain('/workspace/home');
   });
 

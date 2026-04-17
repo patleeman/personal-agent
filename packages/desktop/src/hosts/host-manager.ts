@@ -133,6 +133,7 @@ export class HostManager {
     }
 
     saveDesktopConfig(this.config);
+    this.config = loadDesktopConfig();
   }
 
   async deleteHost(hostId: string): Promise<void> {

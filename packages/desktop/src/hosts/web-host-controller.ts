@@ -19,6 +19,18 @@ function normalizeWebsocketUrl(value: string): string {
   if (url.protocol !== 'ws:' && url.protocol !== 'wss:') {
     throw new Error(`Unsupported websocket protocol: ${url.protocol}`);
   }
+
+  if (url.hostname.endsWith('.ts.net')) {
+    const normalizedPath = url.pathname.length > 1
+      ? url.pathname.replace(/\/+$/, '')
+      : url.pathname;
+    if (normalizedPath === '/codex') {
+      url.pathname = '/codex/codex';
+      url.search = '';
+      url.hash = '';
+    }
+  }
+
   return url.toString();
 }
 

@@ -1376,13 +1376,26 @@ function OpenConversationRow({
         ].filter(Boolean).join(' ')}
         title={rowTitle}
       >
-        <div className="flex w-2.5 shrink-0 items-center justify-center self-stretch">
+        <div className="flex w-3 shrink-0 items-center justify-center self-stretch">
           {(session.isRunning || needsAttention) ? (
             <ConversationStatusText
               isRunning={session.isRunning}
               needsAttention={needsAttention}
               className="shrink-0"
             />
+          ) : session.remoteHostId ? (
+            <span
+              className="shrink-0 text-accent/80"
+              title={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}
+              aria-label={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}
+            >
+              <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+                <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
+                <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
+                <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
+                <path d="M7.9 7.8 9.7 7.8 9.7 6" />
+              </svg>
+            </span>
           ) : null}
         </div>
         <div className="min-w-0 flex-1 pr-[4.5rem]">
@@ -1390,16 +1403,6 @@ function OpenConversationRow({
             {isAutomation ? (
               <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75" title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}>
                 auto
-              </span>
-            ) : null}
-            {session.remoteHostId ? (
-              <span className="shrink-0 text-accent/80" title={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'} aria-label={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}>
-                <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
-                  <rect x="1.75" y="2" width="4.5" height="3.5" rx="1" />
-                  <rect x="7.75" y="8.5" width="4.5" height="3.5" rx="1" />
-                  <path d="M6.2 4.8h1.5c1.1 0 2 .9 2 2v1" />
-                  <path d="M7.9 7.8 9.7 7.8 9.7 6" />
-                </svg>
               </span>
             ) : null}
             <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>

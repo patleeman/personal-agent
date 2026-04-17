@@ -134,6 +134,85 @@ function parseTextInput(input: unknown): string {
     .trim();
 }
 
+function parsePromptImages(input: unknown): Array<{ data: string; mimeType: string; name?: string }> {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return [];
+      }
+
+      const image = entry as { data?: unknown; mimeType?: unknown; name?: unknown };
+      if (typeof image.data !== 'string' || typeof image.mimeType !== 'string') {
+        return [];
+      }
+
+      const data = image.data.trim();
+      const mimeType = image.mimeType.trim();
+      if (!data || !mimeType) {
+        return [];
+      }
+
+      return [{
+        data,
+        mimeType,
+        ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
+      }];
+    });
+}
+
+function parseAttachmentRefs(input: unknown): Array<{ attachmentId: string; revision?: number }> {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return [];
+      }
+
+      const attachmentRef = entry as { attachmentId?: unknown; revision?: unknown };
+      const attachmentId = typeof attachmentRef.attachmentId === 'string' ? attachmentRef.attachmentId.trim() : '';
+      if (!attachmentId) {
+        return [];
+      }
+
+      const revision = typeof attachmentRef.revision === 'number' && Number.isInteger(attachmentRef.revision)
+        ? attachmentRef.revision
+        : undefined;
+      return [{
+        attachmentId,
+        ...(revision !== undefined ? { revision } : {}),
+      }];
+    });
+}
+
+function parseContextMessages(input: unknown): Array<{ customType: string; content: string }> {
+  if (!Array.isArray(input)) {
+    return [];
+  }
+
+  return input
+    .flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return [];
+      }
+
+      const contextMessage = entry as { customType?: unknown; content?: unknown };
+      const customType = typeof contextMessage.customType === 'string' ? contextMessage.customType.trim() : '';
+      const content = typeof contextMessage.content === 'string' ? contextMessage.content : '';
+      if (!customType || !content) {
+        return [];
+      }
+
+      return [{ customType, content }];
+    });
+}
+
 function normalizeReasoningEffort(value: unknown): 'low' | 'medium' | 'high' | null {
   return value === 'low' || value === 'medium' || value === 'high' ? value : null;
 }
@@ -1122,7 +1201,13 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
     }
 
     if (method === 'turn/start') {
-      const params = request.params as { threadId?: string; input?: unknown } | undefined;
+      const params = request.params as {
+        threadId?: string;
+        input?: unknown;
+        images?: unknown;
+        attachmentRefs?: unknown;
+        contextMessages?: unknown;
+      } | undefined;
       const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
       if (!threadId) {
         sendError(socket, id, -32602, 'threadId required.');
@@ -1132,8 +1217,17 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
       await unarchiveThreadId(threadId);
       const runtime = await ensureThreadSubscription({ socket, state, threadId });
       const text = parseTextInput(params?.input);
-      if (!text) {
-        sendError(socket, id, -32602, 'text input required.');
+      const images = [
+        ...parsePromptImages(params?.images),
+        ...parsePromptImages(Array.isArray(params?.input)
+          ? (params.input as Array<unknown>)
+            .filter((entry) => entry && typeof entry === 'object' && (entry as { type?: unknown }).type === 'image')
+          : []),
+      ];
+      const attachmentRefs = parseAttachmentRefs(params?.attachmentRefs);
+      const contextMessages = parseContextMessages(params?.contextMessages);
+      if (!text && images.length === 0 && attachmentRefs.length === 0) {
+        sendError(socket, id, -32602, 'text, images, or attachmentRefs required.');
         return;
       }
 
@@ -1150,6 +1244,9 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
         conversationId: threadId,
         text,
         behavior: 'followUp',
+        ...(images.length > 0 ? { images } : {}),
+        ...(attachmentRefs.length > 0 ? { attachmentRefs } : {}),
+        ...(contextMessages.length > 0 ? { contextMessages } : {}),
       });
       if (promptResult.delivery !== 'started') {
         runtime.activeTurn = undefined;
@@ -1185,7 +1282,14 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
     }
 
     if (method === 'turn/steer') {
-      const params = request.params as { threadId?: string; expectedTurnId?: string; input?: unknown } | undefined;
+      const params = request.params as {
+        threadId?: string;
+        expectedTurnId?: string;
+        input?: unknown;
+        images?: unknown;
+        attachmentRefs?: unknown;
+        contextMessages?: unknown;
+      } | undefined;
       const threadId = typeof params?.threadId === 'string' ? params.threadId.trim() : '';
       const expectedTurnId = typeof params?.expectedTurnId === 'string' ? params.expectedTurnId.trim() : '';
       const runtime = state.threads.get(threadId);
@@ -1195,8 +1299,17 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
       }
 
       const text = parseTextInput(params?.input);
-      if (!text) {
-        sendError(socket, id, -32602, 'text input required.');
+      const images = [
+        ...parsePromptImages(params?.images),
+        ...parsePromptImages(Array.isArray(params?.input)
+          ? (params.input as Array<unknown>)
+            .filter((entry) => entry && typeof entry === 'object' && (entry as { type?: unknown }).type === 'image')
+          : []),
+      ];
+      const attachmentRefs = parseAttachmentRefs(params?.attachmentRefs);
+      const contextMessages = parseContextMessages(params?.contextMessages);
+      if (!text && images.length === 0 && attachmentRefs.length === 0) {
+        sendError(socket, id, -32602, 'text, images, or attachmentRefs required.');
         return;
       }
 
@@ -1205,6 +1318,9 @@ async function handleRequest(socket: WebSocket, state: ConnectionState, request:
         conversationId: threadId,
         text,
         behavior: 'steer',
+        ...(images.length > 0 ? { images } : {}),
+        ...(attachmentRefs.length > 0 ? { attachmentRefs } : {}),
+        ...(contextMessages.length > 0 ? { contextMessages } : {}),
       });
       if (promptResult.delivery !== 'started' && promptResult.delivery !== 'queued') {
         sendError(socket, id, -32011, 'Turn steer was not accepted.');

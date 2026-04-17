@@ -132,7 +132,7 @@ describe('DesktopWorkspaceServerManager', () => {
       running: true,
       websocketPath: '/codex',
       localWebsocketUrl: 'ws://127.0.0.1:8390/codex',
-      tailnetWebsocketUrl: 'wss://desktop.tailnet.ts.net/codex',
+      tailnetWebsocketUrl: 'wss://desktop.tailnet.ts.net/codex/codex',
       tailscalePublishState: {
         status: 'published',
         path: '/codex',

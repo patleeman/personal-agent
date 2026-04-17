@@ -68,10 +68,34 @@ function renderLocalWebsocketUrl(port: number): string {
   return `ws://127.0.0.1:${String(port)}${DESKTOP_WORKSPACE_SERVER_PATH}`;
 }
 
+function normalizeServePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed || trimmed === '/') {
+    return '/';
+  }
+
+  return trimmed.startsWith('/') ? trimmed.replace(/\/+$/, '') : `/${trimmed.replace(/\/+$/, '')}`;
+}
+
+function joinPublishedServePathWithUpstreamPath(publishedPath: string, upstreamPath: string): string {
+  const normalizedPublished = normalizeServePath(publishedPath);
+  const normalizedUpstream = normalizeServePath(upstreamPath);
+
+  if (normalizedPublished === '/') {
+    return normalizedUpstream;
+  }
+
+  if (normalizedUpstream === '/') {
+    return `${normalizedPublished}/`;
+  }
+
+  return `${normalizedPublished}/${normalizedUpstream.replace(/^\/+/, '')}`;
+}
+
 function renderTailnetWebsocketUrl(baseUrl: string): string {
   const url = new URL(baseUrl);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.pathname = DESKTOP_WORKSPACE_SERVER_PATH;
+  url.pathname = joinPublishedServePathWithUpstreamPath(DESKTOP_WORKSPACE_SERVER_PATH, DESKTOP_WORKSPACE_SERVER_PATH);
   url.search = '';
   url.hash = '';
   return url.toString();

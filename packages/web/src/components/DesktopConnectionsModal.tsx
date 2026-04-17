@@ -939,7 +939,7 @@ export function DesktopConnectionsModal({
                             className={`${INPUT_CLASS} font-mono text-[13px]`}
                             autoComplete="off"
                             spellCheck={false}
-                            placeholder="wss://my-machine.tailnet.ts.net/codex"
+                            placeholder="wss://my-machine.tailnet.ts.net/codex/codex"
                           />
                         </div>
                         <div className="space-y-2 min-w-0">

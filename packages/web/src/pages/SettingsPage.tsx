@@ -1147,7 +1147,7 @@ function DesktopConnectionsSettingsPanel() {
                         className={`${INPUT_CLASS} font-mono text-[13px]`}
                         autoComplete="off"
                         spellCheck={false}
-                        placeholder="wss://my-machine.tailnet.ts.net/codex"
+                        placeholder="wss://my-machine.tailnet.ts.net/codex/codex"
                       />
                       <p className="ui-card-meta">Point this at a live Codex-compatible app-server endpoint, not the normal Personal Agent web UI URL.</p>
                     </div>

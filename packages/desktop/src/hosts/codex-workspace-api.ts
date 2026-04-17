@@ -40,10 +40,126 @@ interface ModelListResult {
   }>;
 }
 
+interface PromptImageInput {
+  data: string;
+  mimeType: string;
+  name?: string;
+}
+
+interface CommandExecResult {
+  exitCode?: number;
+  stdout?: string;
+  stderr?: string;
+}
+
+function normalizePromptImages(value: unknown): PromptImageInput[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const image = entry as { data?: unknown; mimeType?: unknown; name?: unknown };
+      if (typeof image.data !== 'string' || typeof image.mimeType !== 'string') {
+        return null;
+      }
+
+      const data = image.data.trim();
+      const mimeType = image.mimeType.trim();
+      if (!data || !mimeType) {
+        return null;
+      }
+
+      return {
+        data,
+        mimeType,
+        ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
+      } satisfies PromptImageInput;
+    })
+    .filter((image): image is PromptImageInput => image !== null);
+}
+
+function normalizePromptAttachmentRefs(value: unknown): Array<{ attachmentId: string; revision?: number }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const attachmentRef = entry as { attachmentId?: unknown; revision?: unknown };
+      const attachmentId = typeof attachmentRef.attachmentId === 'string' ? attachmentRef.attachmentId.trim() : '';
+      if (!attachmentId) {
+        return null;
+      }
+
+      const revision = typeof attachmentRef.revision === 'number' && Number.isInteger(attachmentRef.revision)
+        ? attachmentRef.revision
+        : undefined;
+
+      return {
+        attachmentId,
+        ...(revision !== undefined ? { revision } : {}),
+      };
+    })
+    .filter((attachmentRef): attachmentRef is { attachmentId: string; revision?: number } => attachmentRef !== null);
+}
+
+function normalizePromptContextMessages(value: unknown): Array<{ customType: string; content: string }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return null;
+      }
+
+      const contextMessage = entry as { customType?: unknown; content?: unknown };
+      const customType = typeof contextMessage.customType === 'string' ? contextMessage.customType.trim() : '';
+      const content = typeof contextMessage.content === 'string' ? contextMessage.content : '';
+      if (!customType || !content) {
+        return null;
+      }
+
+      return { customType, content };
+    })
+    .filter((contextMessage): contextMessage is { customType: string; content: string } => contextMessage !== null);
+}
+
+function normalizePromptBehavior(value: unknown): 'steer' | 'followUp' {
+  return value === 'steer' ? 'steer' : 'followUp';
+}
+
+function combineCommandOutput(result: CommandExecResult): string {
+  const stdout = typeof result.stdout === 'string' ? result.stdout : '';
+  const stderr = typeof result.stderr === 'string' ? result.stderr : '';
+  if (!stdout) {
+    return stderr;
+  }
+
+  if (!stderr) {
+    return stdout;
+  }
+
+  const separator = stdout.endsWith('\n') || stderr.startsWith('\n') ? '' : '\n';
+  return `${stdout}${separator}${stderr}`;
+}
+
 export class CodexWorkspaceApiAdapter {
   private sessionMetaCache = new Map<string, ReturnType<typeof buildSessionMetaFromCodexThread>>();
   private threadRuntimeCache = new Map<string, { model: string; thinkingLevel: string }>();
   private activeTurnIds = new Map<string, string>();
+  private liveStreamSubscribers = new Map<string, Set<(event: DesktopApiStreamEvent) => void>>();
+  private runningBashThreads = new Set<string>();
 
   constructor(
     private readonly client: CodexAppServerClient,
@@ -216,26 +332,51 @@ export class CodexWorkspaceApiAdapter {
     const livePromptMatch = path.match(/^\/api\/live-sessions\/([^/]+)\/prompt$/);
     if (input.method === 'POST' && livePromptMatch) {
       const conversationId = decodeURIComponent(livePromptMatch[1] ?? '');
-      const body = (input.body as { text?: unknown; behavior?: unknown } | undefined) ?? {};
+      const body = (input.body as {
+        text?: unknown;
+        behavior?: unknown;
+        images?: unknown;
+        attachmentRefs?: unknown;
+        contextMessages?: unknown;
+      } | undefined) ?? {};
       const text = typeof body.text === 'string' ? body.text : '';
-      const behavior = body.behavior === 'steer' ? 'steer' : 'followUp';
+      const images = normalizePromptImages(body.images);
+      const attachmentRefs = normalizePromptAttachmentRefs(body.attachmentRefs);
+      const contextMessages = normalizePromptContextMessages(body.contextMessages);
+      const behavior = normalizePromptBehavior(body.behavior);
+      if (!text.trim() && images.length === 0 && attachmentRefs.length === 0) {
+        return jsonResult(400, { error: 'text, images, or attachmentRefs required' });
+      }
+
+      const promptInput = [
+        ...(text.trim().length > 0 ? [{ type: 'text', text, textElements: [] }] : []),
+      ];
+
       if (behavior === 'steer') {
         const activeTurnId = this.activeTurnIds.get(conversationId);
         if (!activeTurnId) {
           return jsonResult(409, { error: 'No active turn is available to steer for this remote workspace.' });
         }
+
         await this.client.request('turn/steer', {
           threadId: conversationId,
           expectedTurnId: activeTurnId,
-          input: [{ type: 'text', text, textElements: [] }],
+          input: promptInput,
+          ...(images.length > 0 ? { images } : {}),
+          ...(attachmentRefs.length > 0 ? { attachmentRefs } : {}),
+          ...(contextMessages.length > 0 ? { contextMessages } : {}),
         });
       } else {
         const result = await this.client.request<{ turn: { id: string } }>('turn/start', {
           threadId: conversationId,
-          input: [{ type: 'text', text, textElements: [] }],
+          input: promptInput,
+          ...(images.length > 0 ? { images } : {}),
+          ...(attachmentRefs.length > 0 ? { attachmentRefs } : {}),
+          ...(contextMessages.length > 0 ? { contextMessages } : {}),
         });
         this.activeTurnIds.set(conversationId, result.turn.id);
       }
+
       return jsonResult(200, {
         ok: true,
         accepted: true,
@@ -245,6 +386,84 @@ export class CodexWorkspaceApiAdapter {
         referencedVaultFileIds: [],
         referencedAttachmentIds: [],
       });
+    }
+
+    const liveBashMatch = path.match(/^\/api\/live-sessions\/([^/]+)\/bash$/);
+    if (input.method === 'POST' && liveBashMatch) {
+      const conversationId = decodeURIComponent(liveBashMatch[1] ?? '');
+      const body = (input.body as { command?: unknown; excludeFromContext?: unknown } | undefined) ?? {};
+      const command = typeof body.command === 'string' ? body.command.trim() : '';
+      if (!command) {
+        return jsonResult(400, { error: 'command required' });
+      }
+
+      if (this.runningBashThreads.has(conversationId)) {
+        return jsonResult(409, { error: 'A bash command is already running.' });
+      }
+
+      const thread = await this.readThread(conversationId);
+      const toolCallId = `remote-bash-${conversationId}-${Date.now().toString(36)}`;
+      const startedAt = Date.now();
+      const excludeFromContext = body.excludeFromContext === true;
+      const eventArgs: Record<string, unknown> = {
+        command,
+        displayMode: 'terminal',
+        ...(excludeFromContext ? { excludeFromContext: true } : {}),
+      };
+
+      this.runningBashThreads.add(conversationId);
+      this.emitThreadStreamMessage(conversationId, {
+        type: 'tool_start',
+        toolCallId,
+        toolName: 'bash',
+        args: eventArgs,
+      });
+
+      try {
+        const result = await this.client.request<CommandExecResult>('command/exec', {
+          command: ['/usr/bin/env', 'bash', '-lc', command],
+          cwd: thread.thread.cwd,
+        });
+        const output = combineCommandOutput(result);
+        this.emitThreadStreamMessage(conversationId, {
+          type: 'tool_end',
+          toolCallId,
+          toolName: 'bash',
+          isError: false,
+          durationMs: Date.now() - startedAt,
+          output,
+          details: {
+            displayMode: 'terminal',
+            ...(typeof result.exitCode === 'number' ? { exitCode: result.exitCode } : {}),
+            ...(excludeFromContext ? { excludeFromContext: true } : {}),
+          },
+        });
+
+        return jsonResult(200, {
+          ok: true,
+          result: {
+            output,
+            ...(typeof result.exitCode === 'number' ? { exitCode: result.exitCode } : {}),
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.emitThreadStreamMessage(conversationId, {
+          type: 'tool_end',
+          toolCallId,
+          toolName: 'bash',
+          isError: true,
+          durationMs: Date.now() - startedAt,
+          output: message,
+          details: {
+            displayMode: 'terminal',
+            ...(excludeFromContext ? { excludeFromContext: true } : {}),
+          },
+        });
+        return jsonResult(500, { error: message });
+      } finally {
+        this.runningBashThreads.delete(conversationId);
+      }
     }
 
     return notSupported(path);
@@ -271,6 +490,7 @@ export class CodexWorkspaceApiAdapter {
     const threadId = decodeURIComponent(match[1] ?? '');
     const thread = await this.readThread(threadId);
     onEvent({ type: 'open' });
+    const removeStreamSubscriber = this.addLiveStreamSubscriber(threadId, onEvent);
     onEvent({
       type: 'message',
       data: JSON.stringify({
@@ -399,8 +619,42 @@ export class CodexWorkspaceApiAdapter {
 
     return () => {
       unsubscribe();
+      removeStreamSubscriber();
       onEvent({ type: 'close' });
     };
+  }
+
+  private addLiveStreamSubscriber(threadId: string, listener: (event: DesktopApiStreamEvent) => void): () => void {
+    const existing = this.liveStreamSubscribers.get(threadId);
+    if (existing) {
+      existing.add(listener);
+    } else {
+      this.liveStreamSubscribers.set(threadId, new Set([listener]));
+    }
+
+    return () => {
+      const subscribers = this.liveStreamSubscribers.get(threadId);
+      if (!subscribers) {
+        return;
+      }
+
+      subscribers.delete(listener);
+      if (subscribers.size === 0) {
+        this.liveStreamSubscribers.delete(threadId);
+      }
+    };
+  }
+
+  private emitThreadStreamMessage(threadId: string, message: Record<string, unknown>): void {
+    const subscribers = this.liveStreamSubscribers.get(threadId);
+    if (!subscribers || subscribers.size === 0) {
+      return;
+    }
+
+    const data = JSON.stringify(message);
+    for (const subscriber of subscribers) {
+      subscriber({ type: 'message', data });
+    }
   }
 
   private async readThread(threadId: string): Promise<{ thread: CodexThread; detail: ReturnType<typeof buildSessionDetailFromCodexThread>; model: string; isLoaded: boolean }> {
