@@ -20,8 +20,10 @@ import {
 } from './schedule-run.js';
 
 /**
- * @deprecated Use scheduleRun() from './schedule-run.js' instead.
- * This function is kept for backward compatibility.
+ * Immediate background-run request.
+ *
+ * This remains the daemon-facing API for “start now” runs even though it now
+ * compiles down to the lower-level scheduleRun() implementation internally.
  */
 export interface StartBackgroundRunInput {
   taskSlug: string;
@@ -204,8 +206,7 @@ export async function createBackgroundRunRecord(
 }
 
 /**
- * Build ScheduleRunInput from legacy StartBackgroundRunInput.
- * This bridges the old API to the new unified API.
+ * Build the lower-level scheduleRun() payload for an immediate background run.
  */
 function buildScheduleRunInputFromBackgroundRun(
   input: StartBackgroundRunInput,
