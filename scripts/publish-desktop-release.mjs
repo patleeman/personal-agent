@@ -316,26 +316,50 @@ function validatePackagedAutoUpdateConfig(releaseRepo) {
   }
 }
 
-function stapleAndValidate(pathname) {
-  run('xcrun', ['stapler', 'staple', pathname]);
-  run('xcrun', ['stapler', 'validate', pathname]);
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function stapleAndValidate(pathname, env, options = {}) {
+  const attempts = options.attempts ?? 6;
+  const retryDelayMs = options.retryDelayMs ?? 15_000;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const staple = tryCapture('xcrun', ['stapler', 'staple', pathname], { env });
+    if (staple.status === 0) {
+      run('xcrun', ['stapler', 'validate', pathname], { env });
+      return;
+    }
+
+    const rendered = `${staple.stderr ?? ''}${staple.stdout ?? ''}`.trim();
+    const ticketPending = rendered.includes('Record not found') || rendered.includes('Could not find base64 encoded ticket');
+    if (ticketPending && attempt < attempts) {
+      console.log(`Stapler ticket for ${pathname} is not visible yet (attempt ${attempt}/${attempts}). Retrying in ${Math.round(retryDelayMs / 1000)}s...`);
+      sleepMs(retryDelayMs);
+      continue;
+    }
+
+    fail(rendered || `xcrun stapler staple ${pathname} failed`);
+  }
+}
+
+function submitForNotarization(pathname, env, label, options = {}) {
+  const notarytoolArgs = buildNotarytoolArgs(env);
+  console.log(`Submitting ${label} ${pathname} for notarization...`);
+  run('xcrun', ['notarytool', 'submit', pathname, ...notarytoolArgs, '--wait', ...(options.force ? ['--force'] : [])], { env });
 }
 
 function notarizeDistributionContainers(env, files) {
-  const notarytoolArgs = buildNotarytoolArgs(env);
-
   const zipFiles = files.filter((file) => file.endsWith('.zip'));
   for (const zipFile of zipFiles) {
-    console.log(`Submitting ${zipFile} for ZIP notarization...`);
-    run('xcrun', ['notarytool', 'submit', zipFile, ...notarytoolArgs, '--wait']);
+    submitForNotarization(zipFile, env, 'ZIP');
   }
 
   const dmgFiles = files.filter((file) => file.endsWith('.dmg'));
   for (const dmgFile of dmgFiles) {
-    console.log(`Submitting ${dmgFile} for DMG notarization...`);
-    run('xcrun', ['notarytool', 'submit', dmgFile, ...notarytoolArgs, '--wait']);
+    submitForNotarization(dmgFile, env, 'DMG');
     console.log(`Stapling notarized DMG ${dmgFile}...`);
-    stapleAndValidate(dmgFile);
+    stapleAndValidate(dmgFile, env);
   }
 }
 
