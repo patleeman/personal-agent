@@ -390,6 +390,27 @@ function formatDesktopHostDetails(host: Extract<DesktopHostRecord, { kind: 'ssh'
   return host.sshTarget;
 }
 
+function DesktopRuntimeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="10" rx="2.5" />
+      <path d="M8 19h8" />
+      <path d="M12 15v4" />
+    </svg>
+  );
+}
+
+function SshRemoteIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="5" width="7" height="6" rx="1.5" />
+      <rect x="13" y="13" width="7" height="6" rx="1.5" />
+      <path d="M11 8h2a3 3 0 0 1 3 3v2" />
+      <path d="m13 11 3 0 0-3" />
+    </svg>
+  );
+}
+
 function formatDesktopUpdateSummary(state: DesktopAppPreferencesState | null): string {
   if (!state || !state.available) {
     return 'Desktop app settings are unavailable in this window.';
@@ -736,51 +757,100 @@ function DesktopConnectionsSettingsPanel() {
         id="desktop-connections"
         title="SSH remotes"
         description="Saved SSH targets for remote conversations. Personal Agent copies the matching Pi release binary and a transient helper when a conversation targets one."
-        actions={(
-          <button
-            type="button"
-            onClick={beginNewRemote}
-            className={ACTION_BUTTON_CLASS}
-          >
-            New SSH remote
-          </button>
-        )}
       >
         {loading ? <p className="ui-card-meta">Loading SSH remotes…</p> : null}
         {environment ? (
-          <p className="ui-card-meta">
-            Desktop runtime: <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-secondary">
+            <div className="inline-flex min-w-0 items-center gap-2">
+              <DesktopRuntimeIcon className="shrink-0 text-dim/80" />
+              <span className="truncate">
+                Desktop runtime <span className="text-primary">{environment.activeHostLabel}</span> · {environment.activeHostSummary}
+              </span>
+            </div>
+            <span className="text-dim">{connections?.hosts.length ?? 0} saved</span>
+          </div>
         ) : null}
         {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
         {error ? <p className="text-[12px] text-danger">{error}</p> : null}
         {connections ? (
-          <div className="space-y-6">
-            <div className="space-y-px">
-              {connections.hosts.length > 0 ? connections.hosts.map((host) => {
-                const selected = host.id === selectedHostId;
-                return (
-                  <div key={host.id} className={cx('ui-list-row px-3 py-3', selected && 'ui-list-row-selected')}>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <span className="text-[13px] font-medium text-primary">{host.label}</span>
-                        <span className="ui-card-meta">ssh</span>
-                      </div>
-                      <p className="ui-card-meta mt-1 break-all">{formatDesktopHostDetails(host)}</p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button type="button" onClick={() => { selectRemote(host); }} disabled={action !== null} className={ACTION_BUTTON_CLASS}>Edit</button>
-                      <button type="button" onClick={() => { void handleDelete(host.id); }} disabled={action !== null} className={ACTION_BUTTON_CLASS}>Delete</button>
-                    </div>
-                  </div>
-                );
-              }) : <p className="ui-card-meta">No SSH remotes saved yet.</p>}
+          <div className="grid gap-6 xl:grid-cols-[minmax(0,18rem)_minmax(0,1fr)] xl:items-start">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[14px] font-medium text-primary">Saved remotes</h3>
+                  <p className="mt-1 text-[12px] text-secondary">Use SSH aliases from <span className="font-mono text-[11px]">~/.ssh/config</span> or full targets.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={beginNewRemote}
+                  disabled={action !== null}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  New remote
+                </button>
+              </div>
+
+              {connections.hosts.length > 0 ? (
+                <div className="space-y-1.5">
+                  {connections.hosts.map((host) => {
+                    const selected = host.id === selectedHostId;
+                    return (
+                      <button
+                        key={host.id}
+                        type="button"
+                        onClick={() => { selectRemote(host); }}
+                        disabled={action !== null}
+                        className={cx(
+                          'group flex w-full items-start gap-3 rounded-2xl px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                          selected
+                            ? 'bg-accent/6 text-primary ring-1 ring-accent/15'
+                            : 'text-secondary hover:bg-surface hover:text-primary',
+                        )}
+                      >
+                        <SshRemoteIcon className={cx('mt-0.5 shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="truncate text-[13px] font-medium text-primary">{host.label}</span>
+                            {selected ? <span className="text-[11px] text-accent">Editing</span> : null}
+                          </div>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-secondary">
+                            <span className="font-mono text-dim">{host.id}</span>
+                            <span className="text-dim/70">·</span>
+                            <span className="min-w-0 truncate font-mono text-primary/90">{formatDesktopHostDetails(host)}</span>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-2xl bg-surface/70 px-4 py-4">
+                  <p className="text-[13px] font-medium text-primary">No remotes yet</p>
+                  <p className="mt-1 text-[12px] leading-5 text-secondary">Add an SSH target here, then pick it per conversation from the footer.</p>
+                </div>
+              )}
             </div>
 
-            <div className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="space-y-1">
-                <h3 className="text-[15px] font-medium text-primary">{selectedHost ? 'Edit SSH remote' : 'New SSH remote'}</h3>
-                <p className="ui-card-meta">The desktop UI stays local. Remote execution happens per conversation through SSH.</p>
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <h3 className="text-[15px] font-medium text-primary">{selectedHost ? selectedHost.label : 'New SSH remote'}</h3>
+                  <p className="text-[12px] text-secondary">
+                    {selectedHost
+                      ? `${selectedHost.id} · ${selectedHost.sshTarget}`
+                      : 'The desktop UI stays local. Remote execution happens per conversation over SSH.'}
+                  </p>
+                </div>
+                {selectedHost ? (
+                  <button
+                    type="button"
+                    onClick={() => { void handleDelete(selectedHost.id); }}
+                    disabled={action !== null}
+                    className={ACTION_BUTTON_CLASS}
+                  >
+                    {action === 'delete' ? 'Deleting…' : 'Delete remote'}
+                  </button>
+                ) : null}
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -796,6 +866,7 @@ function DesktopConnectionsSettingsPanel() {
                     spellCheck={false}
                     placeholder="bender"
                   />
+                  <p className="text-[11px] text-dim">Stable id used by saved conversations.</p>
                 </div>
                 <div className="space-y-2 min-w-0">
                   <label className="ui-card-meta" htmlFor="desktop-host-label">Label</label>
@@ -809,6 +880,7 @@ function DesktopConnectionsSettingsPanel() {
                     spellCheck={false}
                     placeholder="Bender"
                   />
+                  <p className="text-[11px] text-dim">Shown in the conversation target picker.</p>
                 </div>
                 <div className="space-y-2 min-w-0 md:col-span-2">
                   <label className="ui-card-meta" htmlFor="desktop-host-ssh-target">SSH target</label>
@@ -822,17 +894,13 @@ function DesktopConnectionsSettingsPanel() {
                     spellCheck={false}
                     placeholder="patrick@desktop-gpu"
                   />
+                  <p className="text-[11px] text-dim">Use a host alias or any target that works with your normal <span className="font-mono">ssh</span> command.</p>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border-subtle bg-surface px-4 py-4 text-[12px] text-secondary">
-                <p>Remote conversations copy and run:</p>
-                <ul className="mt-2 space-y-1 pl-4">
-                  <li>the exact Pi release version installed locally,</li>
-                  <li>a transient SSH helper binary,</li>
-                  <li>a detached per-conversation runtime that survives disconnects, and</li>
-                  <li>a remote directory browser for choosing the remote cwd.</li>
-                </ul>
+              <div className="space-y-1.5 text-[12px] text-secondary">
+                <p>First use copies the exact local Pi release and a transient helper to the remote cache.</p>
+                <p>Remote threads run in detached per-conversation runtimes, and the footer directory browser picks the real remote cwd.</p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -842,7 +910,7 @@ function DesktopConnectionsSettingsPanel() {
                   disabled={action !== null}
                   className={ACTION_BUTTON_CLASS}
                 >
-                  {action === 'save' ? 'Saving…' : selectedHost ? 'Save remote' : 'Add remote'}
+                  {action === 'save' ? 'Saving…' : selectedHost ? 'Save changes' : 'Add remote'}
                 </button>
                 {selectedHost ? (
                   <button
@@ -851,7 +919,7 @@ function DesktopConnectionsSettingsPanel() {
                     disabled={action !== null}
                     className={ACTION_BUTTON_CLASS}
                   >
-                    New SSH remote
+                    Add another
                   </button>
                 ) : null}
               </div>
