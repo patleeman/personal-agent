@@ -126,7 +126,7 @@ That means:
 
 ## Current limitations
 
-- the companion API currently depends on the daemon-backed desktop runtime and still needs a dedicated native iOS client to consume it
+- the companion API currently depends on the daemon-backed desktop runtime; the native iOS client now lives at `apps/ios/PersonalAgentCompanion`, but the runtime ownership still routes through the desktop-backed bridge
 - direct remote hosts still rely on the SSH remote runtime path for execution rather than a full second desktop frontend
 - the desktop shell refuses to reuse an already-running external local daemon, and quitting the app will not stop that external daemon
 - the desktop shell still does not reuse a separately managed local web UI

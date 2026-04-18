@@ -29,6 +29,23 @@ These are the design decisions locked in for v1.
 | Remote execution in v1 | Full support, including **changing execution target from iOS** |
 | Pairing/device admin | Daemon owns APIs; desktop UI is the frontend |
 
+## Implementation status
+
+Current repo implementation:
+
+- host-side companion API: implemented at `/companion/v1`
+- desktop companion admin UI: implemented in desktop Settings
+- native iOS client: implemented at `apps/ios/PersonalAgentCompanion`
+
+The shipping iOS client currently covers:
+
+- host pairing + local host persistence
+- conversation list mirroring pinned/open ordering
+- live conversation transcript + prompt composer
+- prompt images + saved drawing attachment refs
+- execution-target switching, takeover, abort, and rename
+- saved attachment browse/read/create/update flows for drawing attachments
+
 ## Product thesis
 
 A Personal Agent installation should have one **companion host runtime** per machine context.
