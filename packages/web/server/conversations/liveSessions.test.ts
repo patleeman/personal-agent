@@ -3277,6 +3277,170 @@ describe('promptSession', () => {
     expect(followUp).not.toHaveBeenCalled();
   });
 
+  it('branches away from dangling tool calls before sending a fresh prompt', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const branch = vi.fn();
+    const resetLeaf = vi.fn();
+    const sanitizedMessages = [{ role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }] }];
+    const state = {
+      messages: [{ role: 'assistant', content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'README.md' } }] }],
+      streamingMessage: null,
+    };
+
+    setLiveEntry('session-dangling-tool-repair', {
+      sessionId: 'session-dangling-tool-repair',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Dangling tool repair',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-18T10:00:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Keep going.' }] },
+            },
+            {
+              type: 'message',
+              id: 'assistant-1',
+              parentId: 'user-1',
+              timestamp: '2026-04-18T10:00:01.000Z',
+              message: { role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }], stopReason: 'stop' },
+            },
+            {
+              type: 'custom_message',
+              id: 'hidden-1',
+              parentId: 'assistant-1',
+              timestamp: '2026-04-18T10:00:02.000Z',
+              customType: 'conversation_automation_post_turn_review',
+              content: [{ type: 'text', text: 'Hidden review prompt.' }],
+              display: false,
+            },
+            {
+              type: 'message',
+              id: 'assistant-2',
+              parentId: 'hidden-1',
+              timestamp: '2026-04-18T10:00:03.000Z',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'README.md' } }],
+                stopReason: 'toolUse',
+              },
+            },
+          ],
+          getEntry: (id: string) => ({
+            'assistant-1': {
+              type: 'message',
+              id: 'assistant-1',
+              parentId: 'user-1',
+              timestamp: '2026-04-18T10:00:01.000Z',
+              message: { role: 'assistant', content: [{ type: 'text', text: 'Stable answer' }], stopReason: 'stop' },
+            },
+            'hidden-1': {
+              type: 'custom_message',
+              id: 'hidden-1',
+              parentId: 'assistant-1',
+              timestamp: '2026-04-18T10:00:02.000Z',
+              customType: 'conversation_automation_post_turn_review',
+              content: [{ type: 'text', text: 'Hidden review prompt.' }],
+              display: false,
+            },
+          } as Record<string, unknown>)[id],
+          branch,
+          resetLeaf,
+          buildSessionContext: () => ({ messages: sanitizedMessages, thinkingLevel: 'off', model: null }),
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+      },
+    });
+
+    await promptSession('session-dangling-tool-repair', 'continue working');
+
+    expect(branch).toHaveBeenCalledWith('assistant-1');
+    expect(resetLeaf).not.toHaveBeenCalled();
+    expect(state.messages).toBe(sanitizedMessages);
+    expect(prompt).toHaveBeenCalledWith('continue working');
+  });
+
+  it('keeps matched tool call history intact when the transcript is already valid', async () => {
+    const prompt = vi.fn(async () => undefined);
+    const branch = vi.fn();
+    const resetLeaf = vi.fn();
+    const state = {
+      messages: [{ role: 'assistant', content: [{ type: 'text', text: 'ready' }] }],
+      streamingMessage: null,
+    };
+
+    setLiveEntry('session-valid-tool-history', {
+      sessionId: 'session-valid-tool-history',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Valid tool history',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      session: {
+        state,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-18T10:01:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Check the file.' }] },
+            },
+            {
+              type: 'message',
+              id: 'assistant-1',
+              parentId: 'user-1',
+              timestamp: '2026-04-18T10:01:01.000Z',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'README.md' } }],
+                stopReason: 'toolUse',
+              },
+            },
+            {
+              type: 'message',
+              id: 'tool-1',
+              parentId: 'assistant-1',
+              timestamp: '2026-04-18T10:01:02.000Z',
+              message: {
+                role: 'toolResult',
+                toolCallId: 'call_1',
+                toolName: 'read',
+                content: [{ type: 'text', text: 'all good' }],
+              },
+            },
+          ],
+          getEntry: vi.fn(),
+          branch,
+          resetLeaf,
+          buildSessionContext: vi.fn(() => ({ messages: [], thinkingLevel: 'off', model: null })),
+        },
+        getContextUsage: () => null,
+        isStreaming: false,
+        prompt,
+      },
+    });
+
+    await promptSession('session-valid-tool-history', 'continue working');
+
+    expect(branch).not.toHaveBeenCalled();
+    expect(resetLeaf).not.toHaveBeenCalled();
+    expect(prompt).toHaveBeenCalledWith('continue working');
+    expect(state.messages).toEqual([{ role: 'assistant', content: [{ type: 'text', text: 'ready' }] }]);
+  });
+
   it('queues follow-up prompts while the session is streaming', async () => {
     const prompt = vi.fn(async () => undefined);
     const steer = vi.fn(async () => undefined);

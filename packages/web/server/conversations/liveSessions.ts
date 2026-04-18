@@ -20,6 +20,7 @@ import {
   createBashTool,
   type AgentSessionEvent,
   type ExtensionFactory,
+  type SessionEntry,
 } from '@mariozechner/pi-coding-agent';
 import { stream, streamSimple, type Api, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
 import { publishAppEvent } from '../shared/appEvents.js';
@@ -3322,6 +3323,7 @@ export async function requestConversationAutoModeTurn(sessionId: string): Promis
   publishSessionMetaChanged(sessionId);
 
   try {
+    repairDanglingToolCallContext(entry.session);
     await entry.session.sendCustomMessage({
       customType: CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
       content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
@@ -3371,6 +3373,7 @@ export async function requestConversationAutoModeContinuationTurn(sessionId: str
     return false;
   }
 
+  repairDanglingToolCallContext(entry.session);
   await entry.session.sendCustomMessage({
     customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
     content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
@@ -3804,6 +3807,102 @@ function resolvePromptBehavior(
   });
 }
 
+function isHiddenSessionBranchEntry(entry: SessionEntry | undefined): boolean {
+  return entry?.type === 'custom_message' && entry.display === false;
+}
+
+function resolveDanglingToolCallRepairLeafId(
+  sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>,
+): string | null | undefined {
+  const branch = sessionManager.getBranch();
+  if (branch.length === 0) {
+    return undefined;
+  }
+
+  const pendingToolCalls = new Map<string, { index: number; parentId: string | null }>();
+
+  for (const [index, entry] of branch.entries()) {
+    if (entry.type !== 'message') {
+      continue;
+    }
+
+    const { message } = entry;
+    if (message.role === 'assistant') {
+      for (const part of message.content) {
+        if (part.type !== 'toolCall') {
+          continue;
+        }
+
+        const toolCallId = part.id?.trim();
+        if (!toolCallId) {
+          continue;
+        }
+
+        pendingToolCalls.set(toolCallId, {
+          index,
+          parentId: entry.parentId ?? null,
+        });
+      }
+      continue;
+    }
+
+    if (message.role === 'toolResult') {
+      const toolCallId = message.toolCallId?.trim();
+      if (toolCallId) {
+        pendingToolCalls.delete(toolCallId);
+      }
+    }
+  }
+
+  let repairLeafId: string | null | undefined;
+  let earliestPendingIndex = Number.POSITIVE_INFINITY;
+  for (const pending of pendingToolCalls.values()) {
+    if (pending.index < earliestPendingIndex) {
+      earliestPendingIndex = pending.index;
+      repairLeafId = pending.parentId;
+    }
+  }
+
+  if (repairLeafId === undefined) {
+    return undefined;
+  }
+
+  while (repairLeafId) {
+    const parentEntry = sessionManager.getEntry(repairLeafId);
+    if (!isHiddenSessionBranchEntry(parentEntry)) {
+      break;
+    }
+    repairLeafId = parentEntry.parentId ?? null;
+  }
+
+  return repairLeafId;
+}
+
+function repairDanglingToolCallContext(session: Pick<AgentSession, 'sessionManager' | 'state'>): boolean {
+  const sessionManager = session.sessionManager as Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'resetLeaf' | 'buildSessionContext'>> | undefined;
+  if (!sessionManager
+    || typeof sessionManager.getBranch !== 'function'
+    || typeof sessionManager.getEntry !== 'function'
+    || typeof sessionManager.branch !== 'function'
+    || typeof sessionManager.resetLeaf !== 'function'
+    || typeof sessionManager.buildSessionContext !== 'function') {
+    return false;
+  }
+
+  const repairLeafId = resolveDanglingToolCallRepairLeafId(sessionManager as Pick<SessionManager, 'getBranch' | 'getEntry'>);
+  if (repairLeafId === undefined) {
+    return false;
+  }
+
+  if (repairLeafId === null) {
+    sessionManager.resetLeaf();
+  } else {
+    sessionManager.branch(repairLeafId);
+  }
+  session.state.messages = sessionManager.buildSessionContext().messages;
+  return true;
+}
+
 async function runPromptOnLiveEntry(
   entry: LiveEntry,
   text: string,
@@ -3812,6 +3911,10 @@ async function runPromptOnLiveEntry(
 ): Promise<void> {
   const { session } = entry;
   const hasImages = Boolean(images && images.length > 0);
+
+  if (behavior === undefined) {
+    repairDanglingToolCallContext(session);
+  }
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {
     if (behavior === 'steer') {
