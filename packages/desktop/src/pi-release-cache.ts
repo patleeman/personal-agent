@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -81,11 +81,42 @@ function resolveArchivePath(version: string, assetName: string): string {
   return resolve(versionDir, assetName);
 }
 
-function resolveExtractedBinaryPath(version: string, platform: RemotePlatformInfo): string {
+function resolveExtractedBundleDir(version: string, platform: RemotePlatformInfo): string {
   const cacheRoot = resolveCacheRoot();
   const versionDir = resolve(cacheRoot, version, platform.key);
   mkdirSync(versionDir, { recursive: true, mode: 0o700 });
-  return resolve(versionDir, 'pi');
+  return versionDir;
+}
+
+function resolveExtractedBinaryPath(version: string, platform: RemotePlatformInfo): string {
+  return resolve(resolveExtractedBundleDir(version, platform), 'pi');
+}
+
+function findExtractedPiBundleDir(extractDir: string): string | null {
+  const queue = [extractDir];
+  const seen = new Set<string>();
+
+  while (queue.length > 0) {
+    const currentDir = queue.shift();
+    if (!currentDir || seen.has(currentDir)) {
+      continue;
+    }
+    seen.add(currentDir);
+
+    const entries = readdirSync(currentDir, { withFileTypes: true });
+    if (entries.some((entry) => entry.isFile() && entry.name === 'pi')) {
+      return currentDir;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      queue.push(resolve(currentDir, entry.name));
+    }
+  }
+
+  return null;
 }
 
 export async function ensurePiReleaseBinary(
@@ -94,11 +125,15 @@ export async function ensurePiReleaseBinary(
 ): Promise<{ version: string; path: string; assetName: string }> {
   const version = readInstalledPiVersion();
   const assetName = renderPiReleaseAssetName(platform);
+  const bundleDir = resolveExtractedBundleDir(version, platform);
   const binaryPath = resolveExtractedBinaryPath(version, platform);
+  const packageJsonPath = resolve(bundleDir, 'package.json');
   onProgress?.({ phase: 'checking-cache', version, assetName });
-  if (existsSync(binaryPath)) {
+  if (existsSync(binaryPath) && statSync(binaryPath).isFile() && existsSync(packageJsonPath)) {
     return { version, path: binaryPath, assetName };
   }
+  rmSync(bundleDir, { recursive: true, force: true });
+  mkdirSync(bundleDir, { recursive: true, mode: 0o700 });
 
   const archivePath = resolveArchivePath(version, assetName);
   if (!existsSync(archivePath)) {
@@ -111,11 +146,13 @@ export async function ensurePiReleaseBinary(
   const extractDir = mkdtempSync(join(tmpdir(), `personal-agent-pi-release-${platform.key}-`));
   try {
     run('tar', ['-xzf', archivePath, '-C', extractDir]);
-    const extractedPath = resolve(extractDir, 'pi');
-    if (!existsSync(extractedPath)) {
+    const extractedBundleDir = findExtractedPiBundleDir(extractDir);
+    if (!extractedBundleDir) {
       throw new Error(`Pi release archive ${assetName} did not contain a pi binary.`);
     }
-    writeFileSync(binaryPath, readFileSync(extractedPath));
+    for (const entry of readdirSync(extractedBundleDir, { withFileTypes: true })) {
+      cpSync(resolve(extractedBundleDir, entry.name), resolve(bundleDir, entry.name), { recursive: true });
+    }
     chmodSync(binaryPath, 0o755);
     return { version, path: binaryPath, assetName };
   } finally {

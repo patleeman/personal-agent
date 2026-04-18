@@ -1,6 +1,6 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Socket } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { ChildProcess } from 'node:child_process';
@@ -9,7 +9,7 @@ import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionCont
 import { ensurePiReleaseBinary } from './pi-release-cache.js';
 import { parseRemotePlatform, type RemotePlatformInfo } from './remote-platform.js';
 import { resolveRemoteHelperBinary } from './remote-helper-bundle.js';
-import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadFileOverScp } from './system-ssh.js';
+import { downloadFileOverScp, runSshCommand, spawnSshTunnel, uploadDirectoryOverScp, uploadFileOverScp } from './system-ssh.js';
 import type { DesktopRemoteOperationStatus } from './hosts/types.js';
 
 export interface RemoteDirectoryEntry {
@@ -513,9 +513,18 @@ export class SshRemoteConversationRuntime {
   ): Promise<void> {
     const remoteDir = buildRemotePiDir(version, platform);
     const remoteBinary = buildRemotePiPath(version, platform);
-    runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteDir)} && test -x ${renderRemotePathForShell(remoteBinary)} || true`);
+    const remotePackageJson = `${remoteDir}/package.json`;
+    const localBundleDir = dirname(localPath);
+    const remoteBundleParentDir = dirname(remoteDir);
+    runSshCommand(
+      this.sshTarget,
+      `mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)} && test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(remotePackageJson)} || true`,
+    );
     try {
-      runSshCommand(this.sshTarget, `test -x ${renderRemotePathForShell(remoteBinary)}`);
+      runSshCommand(
+        this.sshTarget,
+        `test -x ${renderRemotePathForShell(remoteBinary)} && test -f ${renderRemotePathForShell(remotePackageJson)}`,
+      );
       return;
     } catch {
       this.emitStatus({
@@ -524,7 +533,8 @@ export class SshRemoteConversationRuntime {
         status: 'running',
         message: `Copying Pi to ${this.hostLabel}…`,
       });
-      uploadFileOverScp({ target: this.sshTarget, localPath, remotePath: remoteBinary });
+      runSshCommand(this.sshTarget, `rm -rf ${renderRemotePathForShell(remoteDir)} && mkdir -p ${renderRemotePathForShell(remoteBundleParentDir)}`);
+      uploadDirectoryOverScp({ target: this.sshTarget, localPath: localBundleDir, remotePath: remoteBundleParentDir });
       runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
   }
@@ -633,9 +643,9 @@ export class SshRemoteConversationRuntime {
 
   private handleSocketData(fragment: string): void {
     this.buffer += fragment;
-    let newlineIndex = this.buffer.indexOf('\n');
-    while (newlineIndex !== -1) {
+    let newlineIndex: number;
 
+    while ((newlineIndex = this.buffer.indexOf('\n')) !== -1) {
       const rawLine = this.buffer.slice(0, newlineIndex);
       this.buffer = this.buffer.slice(newlineIndex + 1);
       const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
@@ -664,8 +674,6 @@ export class SshRemoteConversationRuntime {
       for (const subscriber of this.eventSubscribers) {
         subscriber(payload.event);
       }
-
-      newlineIndex = this.buffer.indexOf('\n');
     }
   }
 

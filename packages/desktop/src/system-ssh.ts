@@ -61,6 +61,26 @@ export function uploadFileOverScp(input: { target: string; localPath: string; re
   }
 }
 
+export function uploadDirectoryOverScp(input: { target: string; localPath: string; remotePath: string }): void {
+  const result = spawnSync('scp', [
+    '-qr',
+    '-o', 'BatchMode=yes',
+    '-o', `ConnectTimeout=${SSH_TIMEOUT_SECONDS}`,
+    input.localPath,
+    `${input.target}:${input.remotePath}`,
+  ], {
+    env: process.env,
+    encoding: 'utf-8',
+  });
+  if (result.error) {
+    throw result.error;
+  }
+  if (result.status !== 0) {
+    const rendered = `${result.stderr ?? ''}${result.stdout ?? ''}`.trim();
+    throw new Error(rendered || `scp upload to ${input.target}:${input.remotePath} failed with exit code ${String(result.status)}`);
+  }
+}
+
 export function downloadFileOverScp(input: { target: string; remotePath: string; localPath: string }): void {
   const result = spawnSync('scp', [
     '-q',
