@@ -37,6 +37,7 @@ const desktopBridge = {
   saveHost: (host: unknown) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:save-host`, host),
   deleteHost: (hostId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:delete-host`, hostId),
   readRemoteDirectory: (input: { hostId: string; path?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-remote-directory`, input),
+  testSshConnection: (input: { sshTarget: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:test-ssh-connection`, input),
   openNewConversation: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:open-new-conversation`),
   showConversationContextMenu: (input: {
     x: number;

@@ -5,12 +5,14 @@ import { loadLocalApiModule, type LocalApiModule, type LocalApiModuleLoader } fr
 import type {
   DesktopApiStreamEvent,
   DesktopHostRecord,
+  DesktopSshConnectionTestResult,
   HostApiDispatchResult,
   HostController,
   HostStatus,
 } from './types.js';
 import { parseApiDispatchResult } from './api-dispatch.js';
 import { SshRemoteConversationRuntime } from '../ssh-remote-runtime.js';
+import { parseRemotePlatform } from '../remote-platform.js';
 import { runSshCommand } from '../system-ssh.js';
 import { emitDesktopRemoteOperationStatus } from '../remote-operation-events.js';
 
@@ -63,6 +65,47 @@ function readModelId(value: Record<string, unknown>): string {
 function readConversationId(pathname: string, prefix: RegExp): string {
   const match = pathname.match(prefix);
   return typeof match?.[1] === 'string' ? decodeURIComponent(match[1]) : '';
+}
+
+function buildSshConnectionProbeCommand(): string {
+  return [
+    'set -eu',
+    'os=$(uname -s)',
+    'arch=$(uname -m)',
+    'home=${HOME:?HOME is not set}',
+    'tmp=${TMPDIR:-/tmp}',
+    'cache="$home/.cache/personal-agent/ssh-runtime"',
+    'mkdir -p "$cache"',
+    'test -w "$cache"',
+    'probe=$(mktemp -d "${tmp%/}/personal-agent-ssh-test.XXXXXX")',
+    'rmdir "$probe"',
+    'printf "%s\\n%s\\n%s\\n%s\\n%s\\n" "$os" "$arch" "$home" "$tmp" "$cache"',
+  ].join('; ');
+}
+
+export function testSshConnection(input: { sshTarget: string }): DesktopSshConnectionTestResult {
+  const sshTarget = input.sshTarget.trim();
+  if (!sshTarget) {
+    throw new Error('SSH target is required.');
+  }
+
+  const output = runSshCommand(sshTarget, `sh -lc '${buildSshConnectionProbeCommand()}'`).trim();
+  const [rawOs = '', rawArch = '', homeDirectory = '', tempDirectory = '', cacheDirectory = ''] = output.split(/\r?\n/);
+  const platform = parseRemotePlatform({ os: rawOs, arch: rawArch });
+  const osLabel = platform.os === 'darwin' ? 'macOS' : 'Linux';
+  const message = `${sshTarget} is reachable · ${osLabel} ${platform.arch}`;
+
+  return {
+    ok: true,
+    sshTarget,
+    os: platform.os,
+    arch: platform.arch,
+    platformKey: platform.key,
+    homeDirectory,
+    tempDirectory,
+    cacheDirectory,
+    message,
+  };
 }
 
 export class SshHostController implements HostController {

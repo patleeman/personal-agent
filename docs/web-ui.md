@@ -38,7 +38,7 @@ Current desktop routes/operators surfaces are:
 
 - **Conversations** — draft, saved, open, pinned, archived, and live thread work
 - **Automations** — scheduled tasks and task detail/editing
-- **Settings** — appearance, general defaults, providers, desktop connections, and interface reset tools
+- **Settings** — appearance, general defaults, providers, SSH remotes, and interface reset tools
 
 A few older routes now redirect instead of acting as first-class destinations:
 

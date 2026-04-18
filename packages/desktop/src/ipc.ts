@@ -130,6 +130,15 @@ export function registerDesktopIpc(options: {
     return controller.readDirectory(typeof input?.path === 'string' ? input.path : undefined);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:test-ssh-connection`, async (_event, input) => {
+    const sshTarget = typeof input?.sshTarget === 'string' ? input.sshTarget.trim() : '';
+    if (!sshTarget) {
+      throw new Error('SSH target is required.');
+    }
+
+    return options.hostManager.testSshConnection({ sshTarget });
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:open-new-conversation`, async (event) => {
     const url = await options.hostManager.openNewConversation();
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);

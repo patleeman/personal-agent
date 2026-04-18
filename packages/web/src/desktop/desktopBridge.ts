@@ -33,6 +33,7 @@ import type {
   DesktopNavigationState,
   DesktopRemoteDirectoryListing,
   DesktopRemoteOperationBridgeEvent,
+  DesktopSshConnectionTestResult,
   DisplayBlock,
   LiveSessionContext,
   LiveSessionCreateResult,
@@ -111,6 +112,7 @@ export interface PersonalAgentDesktopBridge {
   saveHost(host: DesktopHostRecord): Promise<DesktopConnectionsState>;
   deleteHost(hostId: string): Promise<DesktopConnectionsState>;
   readRemoteDirectory(input: { hostId: string; path?: string | null }): Promise<DesktopRemoteDirectoryListing>;
+  testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;

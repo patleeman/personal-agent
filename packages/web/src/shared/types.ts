@@ -731,6 +731,18 @@ export interface DesktopRemoteDirectoryListing {
   entries: DesktopRemoteDirectoryEntry[];
 }
 
+export interface DesktopSshConnectionTestResult {
+  ok: true;
+  sshTarget: string;
+  os: string;
+  arch: string;
+  platformKey: string;
+  homeDirectory: string;
+  tempDirectory: string;
+  cacheDirectory: string;
+  message: string;
+}
+
 export interface DesktopRemoteOperationStatus {
   hostId: string;
   hostLabel: string;

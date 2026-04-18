@@ -4,10 +4,11 @@ import type {
   DesktopConnectionsState,
   DesktopEnvironmentState,
   DesktopHostRecord,
+  DesktopSshConnectionTestResult,
   HostController,
 } from './types.js';
 import { LocalHostController } from './local-host-controller.js';
-import { SshHostController } from './ssh-host-controller.js';
+import { SshHostController, testSshConnection } from './ssh-host-controller.js';
 import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 
 export class HostManager {
@@ -92,6 +93,10 @@ export class HostManager {
     };
     saveDesktopConfig(this.config);
     this.config = loadDesktopConfig();
+  }
+
+  async testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult> {
+    return testSshConnection(input);
   }
 
   getHostRecord(hostId: string): DesktopHostRecord {

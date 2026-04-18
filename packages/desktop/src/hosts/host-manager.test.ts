@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   saveDesktopConfig: vi.fn(),
   LocalHostController: vi.fn(),
   SshHostController: vi.fn(),
+  testSshConnection: vi.fn(),
 }));
 
 vi.mock('../state/desktop-config.js', () => ({
@@ -18,6 +19,7 @@ vi.mock('./local-host-controller.js', () => ({
 
 vi.mock('./ssh-host-controller.js', () => ({
   SshHostController: mocks.SshHostController,
+  testSshConnection: mocks.testSshConnection,
 }));
 
 import { HostManager } from './host-manager.js';
@@ -72,6 +74,17 @@ describe('HostManager', () => {
     mocks.SshHostController.mockImplementation(function SshHostController(record) {
       return createController(record.id, record.label, 'ssh');
     });
+    mocks.testSshConnection.mockImplementation(({ sshTarget }) => ({
+      ok: true,
+      sshTarget,
+      os: 'linux',
+      arch: 'x64',
+      platformKey: 'linux-x64',
+      homeDirectory: '/home/patrick',
+      tempDirectory: '/tmp',
+      cacheDirectory: '/home/patrick/.cache/personal-agent/ssh-runtime',
+      message: `${sshTarget} is reachable · Linux x64`,
+    }));
   });
 
   it('always reports the local desktop as the active host', async () => {
@@ -119,5 +132,17 @@ describe('HostManager', () => {
     await manager.deleteHost('ssh-1');
 
     expect(manager.getConnectionsState()).toEqual({ hosts: [] });
+  });
+
+  it('probes SSH targets without saving them first', async () => {
+    const manager = new HostManager();
+
+    await expect(manager.testSshConnection({ sshTarget: 'patrick@bender' })).resolves.toMatchObject({
+      ok: true,
+      sshTarget: 'patrick@bender',
+      platformKey: 'linux-x64',
+    });
+
+    expect(mocks.testSshConnection).toHaveBeenCalledWith({ sshTarget: 'patrick@bender' });
   });
 });
