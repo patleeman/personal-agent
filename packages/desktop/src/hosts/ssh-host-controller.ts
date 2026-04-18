@@ -331,7 +331,13 @@ export class SshHostController implements HostController {
         ...(typeof body.text === 'string' ? { message: body.text } : {}),
         ...(Array.isArray(body.images) ? { images: body.images } : {}),
       } as Record<string, unknown>;
-      await runtime.requestHelper({ type: 'rpc', command });
+      const response = await runtime.requestHelper({ type: 'rpc', command }) as {
+        success?: boolean;
+        error?: string;
+      };
+      if (response?.success === false) {
+        return jsonResult(500, { error: response.error || `Remote ${commandType} failed.` });
+      }
       return jsonResult(200, {
         ok: true,
         accepted: true,

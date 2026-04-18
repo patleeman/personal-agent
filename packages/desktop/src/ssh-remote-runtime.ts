@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { Socket } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { ChildProcess } from 'node:child_process';
+import { getPiAgentRuntimeDir } from '@personal-agent/core';
 import { getAvailableTcpPort } from './backend/ports.js';
 import { applyRemoteMetadataToSessionContent, stripRemoteMetadataFromSessionContent } from './conversation-session-header.js';
 import { ensurePiReleaseBinary } from './pi-release-cache.js';
@@ -94,6 +95,18 @@ function buildRemotePiDir(version: string, platform: RemotePlatformInfo): string
 
 function buildRemoteHelperDir(version: string, platform: RemotePlatformInfo): string {
   return `${buildRemoteBaseDir()}/helper/${version}/${platform.key}`;
+}
+
+function buildRemotePiAgentDir(): string {
+  return `${buildRemoteBaseDir()}/agent`;
+}
+
+function buildRemotePiAgentAuthPath(): string {
+  return `${buildRemotePiAgentDir()}/auth.json`;
+}
+
+function buildRemotePiAgentSettingsPath(): string {
+  return `${buildRemotePiAgentDir()}/settings.json`;
 }
 
 function buildRemotePiPath(version: string, platform: RemotePlatformInfo): string {
@@ -286,6 +299,7 @@ export class SshRemoteConversationRuntime {
 
       await this.ensureRemotePiInstalled(platform, piBinary.version, piBinary.path, context);
       await this.ensureRemoteHelperInstalled(platform, helperBinary.version, helperBinary.path, context);
+      const remoteAgentDir = await this.ensureRemotePiAgentConfigured();
 
       const remoteRunDir = buildRemoteConversationRunDir(input.conversationId);
       const remoteSessionFile = buildRemoteSessionFile(input.conversationId);
@@ -315,6 +329,7 @@ export class SshRemoteConversationRuntime {
         '--pi', renderRemotePathForShell(remotePiPath),
         '--session', renderRemotePathForShell(remoteSessionFile),
         '--cwd', quoteForShell(normalizedCwd),
+        ...(remoteAgentDir ? ['--agent-dir', renderRemotePathForShell(remoteAgentDir)] : []),
       ].join(' ');
       const output = runSshCommand(this.sshTarget, renderRemoteCommand(launchCommand)).trim();
       const runtimeInfo = JSON.parse(output) as HelperRuntimeInfo;
@@ -537,6 +552,25 @@ export class SshRemoteConversationRuntime {
       uploadDirectoryOverScp({ target: this.sshTarget, localPath: localBundleDir, remotePath: remoteBundleParentDir });
       runSshCommand(this.sshTarget, `chmod +x ${renderRemotePathForShell(remoteBinary)}`);
     }
+  }
+
+  private async ensureRemotePiAgentConfigured(): Promise<string | null> {
+    const localAgentDir = getPiAgentRuntimeDir();
+    const localAuthPath = join(localAgentDir, 'auth.json');
+    const localSettingsPath = join(localAgentDir, 'settings.json');
+    if (!existsSync(localAuthPath) && !existsSync(localSettingsPath)) {
+      return null;
+    }
+
+    const remoteAgentDir = buildRemotePiAgentDir();
+    runSshCommand(this.sshTarget, `mkdir -p ${renderRemotePathForShell(remoteAgentDir)}`);
+    if (existsSync(localAuthPath)) {
+      uploadFileOverScp({ target: this.sshTarget, localPath: localAuthPath, remotePath: buildRemotePiAgentAuthPath() });
+    }
+    if (existsSync(localSettingsPath)) {
+      uploadFileOverScp({ target: this.sshTarget, localPath: localSettingsPath, remotePath: buildRemotePiAgentSettingsPath() });
+    }
+    return remoteAgentDir;
   }
 
   private async ensureRemoteHelperInstalled(
