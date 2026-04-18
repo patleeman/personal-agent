@@ -3869,7 +3869,7 @@ function resolveDanglingToolCallRepairLeafId(
 
   while (repairLeafId) {
     const parentEntry = sessionManager.getEntry(repairLeafId);
-    if (!isHiddenSessionBranchEntry(parentEntry)) {
+    if (!isHiddenSessionBranchEntry(parentEntry) || !parentEntry) {
       break;
     }
     repairLeafId = parentEntry.parentId ?? null;
