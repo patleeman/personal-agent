@@ -1,15 +1,10 @@
 import { appendFileSync } from 'node:fs';
 import { PersonalAgentDaemon, bindInProcessDaemonClient, pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
-import { resolveDesktopLaunchPresentation } from '../launch-mode.js';
 import { clearDesktopDaemonOwnership, writeDesktopDaemonOwnership, type DesktopDaemonOwnership } from './daemon-ownership.js';
 
-const EXTERNAL_DAEMON_CONFLICT_MESSAGE = 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.';
+const EXTERNAL_DAEMON_CONFLICT_MESSAGE = 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.';
 const EXTERNAL_DAEMON_RESTART_MESSAGE = 'The desktop app does not own the running daemon. Restart it with `pa daemon restart` or stop the external daemon service first.';
-
-function allowExternalDaemonReuseInDesktopLaunch(env: NodeJS.ProcessEnv = process.env): boolean {
-  return resolveDesktopLaunchPresentation(env).mode === 'testing';
-}
 
 interface LocalBackendStatus {
   daemonHealthy: boolean;
@@ -35,15 +30,11 @@ export class LocalBackendProcesses {
 
     if (await pingDaemon()) {
       writeDesktopDaemonOwnership('external');
-      if (allowExternalDaemonReuseInDesktopLaunch()) {
-        return;
-      }
-
       throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
     }
 
     clearDesktopDaemonOwnership();
-    await this.start({ allowExistingDaemon: allowExternalDaemonReuseInDesktopLaunch() });
+    await this.start();
   }
 
   async getStatus(): Promise<LocalBackendStatus> {
@@ -57,13 +48,6 @@ export class LocalBackendProcesses {
 
     if (await pingDaemon()) {
       writeDesktopDaemonOwnership('external');
-      if (allowExternalDaemonReuseInDesktopLaunch()) {
-        return {
-          daemonHealthy: true,
-          daemonOwnership: 'external',
-        };
-      }
-
       return {
         daemonHealthy: false,
         daemonOwnership: 'external',
@@ -107,12 +91,12 @@ export class LocalBackendProcesses {
     return this.daemon?.isRunning() === true;
   }
 
-  private async start(options: { allowExistingDaemon?: boolean } = {}): Promise<void> {
+  private async start(): Promise<void> {
     if (this.startPromise) {
       return this.startPromise;
     }
 
-    this.startPromise = this.startInternal(options);
+    this.startPromise = this.startInternal();
 
     try {
       await this.startPromise;
@@ -121,13 +105,9 @@ export class LocalBackendProcesses {
     }
   }
 
-  private async startInternal(options: { allowExistingDaemon?: boolean } = {}): Promise<void> {
+  private async startInternal(): Promise<void> {
     if (await pingDaemon()) {
       writeDesktopDaemonOwnership('external');
-      if (options.allowExistingDaemon) {
-        return;
-      }
-
       throw new Error(EXTERNAL_DAEMON_CONFLICT_MESSAGE);
     }
 

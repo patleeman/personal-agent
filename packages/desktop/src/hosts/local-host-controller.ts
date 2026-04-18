@@ -65,9 +65,7 @@ export class LocalHostController implements HostController {
     const summary = status.blockedReason
       ?? (!status.daemonHealthy
         ? 'Local desktop runtime is starting or unavailable.'
-        : status.daemonOwnership === 'external'
-          ? 'Local desktop runtime is attached to an external daemon.'
-          : 'Local desktop runtime is healthy.');
+        : 'Local desktop runtime is healthy.');
 
     return {
       reachable,

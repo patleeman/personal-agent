@@ -153,7 +153,7 @@ The local desktop backend intentionally refuses to start if:
 
 - port `3741` is already in use
 
-If a separate daemon is already healthy, stable desktop builds now refuse to attach to it instead of silently reusing it.
+If a separate daemon is already healthy, the desktop app now refuses to attach to it instead of silently reusing it.
 
 Stop or uninstall the external daemon, then relaunch the desktop app:
 
@@ -162,7 +162,7 @@ pa daemon stop
 pa daemon service uninstall
 ```
 
-Testing/dev desktop launches can still attach to an already-running external daemon for compatibility. In that mode, quitting the desktop app does **not** stop the external daemon.
+Quitting the desktop app does **not** stop that external daemon. Stop or uninstall it explicitly if you want the whole local stack off.
 
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 

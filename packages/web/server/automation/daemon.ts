@@ -237,7 +237,7 @@ export async function readDaemonState(): Promise<DaemonStateSnapshot> {
   }
 
   if (isDesktopUsingExternalDaemon()) {
-    warnings.push('Desktop is attached to an external daemon. Quitting the menu bar app will not stop it.');
+    warnings.push('An external daemon is already running outside the desktop app. The desktop app will not stop it.');
   }
 
   if (runtimeInspectionError) {

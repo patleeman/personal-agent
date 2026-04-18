@@ -54,16 +54,12 @@ function lastDaemonInstance() {
 describe('LocalBackendProcesses', () => {
   afterEach(() => {
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
-    delete process.env.PERSONAL_AGENT_DESKTOP_VARIANT;
-    delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
   });
 
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.daemonInstances.length = 0;
     delete process.env.PERSONAL_AGENT_DESKTOP_DAEMON_OWNERSHIP;
-    delete process.env.PERSONAL_AGENT_DESKTOP_VARIANT;
-    delete process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE;
 
     mocks.resolveDesktopRuntimePaths.mockReturnValue({
       repoRoot: '/repo',
@@ -101,19 +97,21 @@ describe('LocalBackendProcesses', () => {
     const backend = new LocalBackendProcesses();
 
     await expect(backend.ensureStarted()).rejects.toThrow(
-      'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+      'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
     );
 
     expect(mocks.daemonInstances).toHaveLength(0);
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('allows testing launches to reuse an external daemon that is already reachable', async () => {
+  it('rejects startup even in testing launches when an external daemon is already reachable', async () => {
     process.env.PERSONAL_AGENT_DESKTOP_VARIANT = 'testing';
     mocks.pingDaemon.mockResolvedValue(true);
     const backend = new LocalBackendProcesses();
 
-    await expect(backend.ensureStarted()).resolves.toBeUndefined();
+    await expect(backend.ensureStarted()).rejects.toThrow(
+      'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+    );
 
     expect(mocks.daemonInstances).toHaveLength(0);
     expect(readDesktopDaemonOwnership()).toBe('external');
@@ -126,19 +124,20 @@ describe('LocalBackendProcesses', () => {
     await expect(backend.getStatus()).resolves.toEqual({
       daemonHealthy: false,
       daemonOwnership: 'external',
-      blockedReason: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+      blockedReason: 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
     });
     expect(readDesktopDaemonOwnership()).toBe('external');
   });
 
-  it('reports testing launches as attached when an external daemon is already running', async () => {
+  it('reports testing launches as blocked too when an external daemon is already running', async () => {
     process.env.PERSONAL_AGENT_DESKTOP_DEV_BUNDLE = '1';
     mocks.pingDaemon.mockResolvedValue(true);
     const backend = new LocalBackendProcesses();
 
     await expect(backend.getStatus()).resolves.toEqual({
-      daemonHealthy: true,
+      daemonHealthy: false,
       daemonOwnership: 'external',
+      blockedReason: 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
     });
     expect(readDesktopDaemonOwnership()).toBe('external');
   });

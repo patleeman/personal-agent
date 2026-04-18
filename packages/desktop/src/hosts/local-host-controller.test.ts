@@ -132,7 +132,7 @@ describe('LocalHostController', () => {
     backend.getStatus = vi.fn().mockResolvedValue({
       daemonHealthy: false,
       daemonOwnership: 'external',
-      blockedReason: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+      blockedReason: 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
     });
 
     const controller = new LocalHostController(
@@ -143,7 +143,7 @@ describe('LocalHostController', () => {
     await expect(controller.getStatus()).resolves.toEqual({
       reachable: false,
       mode: 'local-app-runtime',
-      summary: 'A personal-agent daemon is already running outside the desktop app. Stable desktop builds will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
+      summary: 'A personal-agent daemon is already running outside the desktop app. The desktop app will not attach to it. Stop it with `pa daemon stop` or `pa daemon service uninstall`, then relaunch.',
       webUrl: 'personal-agent://app/',
       daemonHealthy: false,
     });

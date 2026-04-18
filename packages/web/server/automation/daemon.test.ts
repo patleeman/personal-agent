@@ -278,7 +278,7 @@ describe('automation daemon', () => {
     });
 
     await expect(readDaemonState()).resolves.toEqual({
-      warnings: ['Desktop is attached to an external daemon. Quitting the menu bar app will not stop it.'],
+      warnings: ['An external daemon is already running outside the desktop app. The desktop app will not stop it.'],
       service: {
         platform: expectedServicePlatform(),
         identifier: 'io.personal-agent.daemon',
