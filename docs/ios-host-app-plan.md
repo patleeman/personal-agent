@@ -1,418 +1,634 @@
-# iOS host-connected app design
+# iOS companion app and daemon companion API design
 
-The iOS app should be a **surface that connects to a Personal Agent host**, not another place that runs Pi, owns sessions, or deploys SSH helpers.
+This document defines the target design for an iOS companion app that connects to Personal Agent.
 
-That keeps the two remote problems separate:
+The key product reality is:
 
-- **host connection** — connect to the machine that owns sessions, attachments, alerts, automations, pairing, and live presence
-- **execution target** — where a conversation actually runs tools and model turns
+- the **desktop app is the only primary UI today**
+- the current desktop `/api` surface is mostly an **internal renderer/runtime contract**
+- the iOS app should **not** couple itself to that internal contract
+- instead, we should define a **new external companion API** with its own versioned root
 
-This split covers both target use cases:
+## Decision summary
 
-- **work** — laptop is the host, and some conversations execute on remote compute over SSH
-- **home handoff** — Mac mini is the host, and laptop + iPhone connect to that same host to share the same threads
+These are the design decisions locked in for v1.
+
+| Area | Decision |
+| --- | --- |
+| Primary UI today | Desktop app only |
+| External client API | Brand new, separate root |
+| Companion API owner | **Daemon** |
+| Conversation authority | **Daemon owns conversations and live sessions** |
+| Network exposure | **Daemon serves HTTP + WebSocket directly** |
+| Main transport | **Single multiplexed WebSocket** |
+| Auth | Pairing code -> long-lived bearer token |
+| Host identity | Stable `hostInstanceId` + human label |
+| iOS scope | Conversations core + **full attachment parity** |
+| Conversation list shape | Mirror desktop open/pinned ordering closely |
+| Creation/resume | Full creation + resume controls |
+| Remote execution in v1 | Full support, including **changing execution target from iOS** |
+| Pairing/device admin | Daemon owns APIs; desktop UI is the frontend |
 
 ## Product thesis
 
-A conversation belongs to exactly **one host**.
+A Personal Agent installation should have one **companion host runtime** per machine context.
 
-That host may run the conversation:
+For this design, that host runtime is the **daemon**.
 
-- on itself
-- or on a host-managed SSH execution target
+That means the daemon becomes the authority for:
 
-The iOS app only talks to the **host**. It never talks to raw SSH compute directly.
+- conversation/session metadata
+- live sessions and live control
+- presence and takeover
+- attachments and artifacts
+- device pairing and revocation
+- execution-target routing
+- the external companion API used by iOS
+
+The desktop app remains the main operator interface, but it becomes a **frontend to daemon-owned state** rather than the sole owner of foreground conversation state.
 
 ## Goals
 
-- make iPhone and iPad first-class surfaces for an existing host
-- share the same sessions, live state, attachments, artifacts, alerts, and automations as the host
-- support handoff between desktop, browser, and iOS on the same host
-- preserve the current remote-workspace idea, but treat it as **execution routing owned by the host**
-- support multiple saved hosts on the phone, with explicit switching between them
+- define a stable external API for remote companion clients
+- make the iOS app a real peer surface for the same conversations the desktop app sees
+- keep one authoritative conversation/runtime model per host
+- support full conversation work from iOS, including:
+  - opening and creating conversations
+  - resuming them live
+  - prompting and taking over
+  - viewing and creating attachments/assets
+  - using conversations that execute on SSH remotes
+  - changing execution target from iOS
+- mirror desktop open/pinned conversation ordering closely enough that the phone feels like the same product
 
 ## Non-goals
 
-- running Pi or Personal Agent locally on iOS
-- deploying Pi or the SSH helper from iOS
-- syncing sessions across multiple hosts
-- making remote compute boxes look like full PA hosts
-- replacing the current desktop SSH remote flow before the host model exists
+- reviving browser/mobile-web clients as a product surface
+- exposing the current internal desktop renderer API as the public companion API
+- making the iOS app deploy Pi/helper or manage raw SSH sessions itself
+- multi-host session sync
+- SSH remote CRUD from iOS in v1
 
 ## Terms
 
 | Term | Meaning |
 | --- | --- |
-| **Host** | The machine that owns durable PA state: sessions, attachments, alerts, automations, auth, and presence |
-| **Surface** | One client attached to a host: desktop window, browser tab, iPhone app |
-| **Execution target** | Where a conversation runs: host-local or host-managed SSH remote |
-| **Remote compute** | An SSH target used for tools/model execution, but not a separate session universe |
-| **Host connection** | A saved iOS connection to one host |
-| **Handoff** | Moving active control of a live conversation between surfaces on the same host |
+| **Canonical machine** | The machine the user wants to connect to for shared threads |
+| **Companion host** | The externally reachable daemon-backed runtime that owns conversations and exposes the companion API |
+| **Surface** | One UI attached to a host: desktop UI, iOS app, later other native clients |
+| **Execution target** | Where a conversation executes: local or SSH remote |
+| **Companion API** | The new external API used by iOS and future remote native clients |
 
-## User model
+## Current-state problem
 
-### Work remote workspace
+Today, the desktop product works because the desktop runtime brokers a mix of:
 
-- the **laptop** is the PA host
-- the laptop routes some threads to a **remote compute** workspace over SSH
-- the iPhone connects to the **laptop host** if it should see those same threads
-- the remote compute box is not discoverable as an independent thread library
+- Electron IPC
+- internal API-shaped requests
+- desktop-owned SSH remote execution state
 
-### Home handoff
+That is fine for one packaged UI, but it is not a stable external contract.
 
-- the **Mac mini** is the PA host
-- the Mac mini owns the session store and background state
-- the laptop and iPhone both connect to the **Mac mini host**
-- handoff works because both surfaces are looking at the same host-owned conversations
+If we want iOS to be a real companion client, we need a brand new API surface with different constraints:
 
-### Multiple hosts
+- remotely reachable
+- versioned
+- authenticated
+- stable across client releases
+- independent of renderer implementation details
+- authoritative for live conversation ownership and routing
 
-An iPhone can save more than one host:
+## Why the daemon owns this
 
-- Home Mac mini
-- Work laptop
-- another dev box later
+The daemon is the right long-lived process to host the companion API if the goal is a real peer client model.
 
-Those are separate universes. Sessions are shared **within a host**, not across hosts.
+For v1, the daemon should own:
 
-## Core design rule
+- conversation registry and conversation metadata
+- live-session lifecycle
+- conversation presence and control state
+- attachment and artifact metadata
+- execution-target state and routing
+- pairing codes and paired-device registry
+- host identity and capability advertisement
+- the companion HTTP + WebSocket server
 
-The product must not collapse these two ideas into one setting:
+This is a deliberate change from the current split where the desktop app owns much of the foreground live-conversation behavior.
 
-- **connect to host**
-- **run on execution target**
+The design goal is to remove the distinction between:
 
-If they stay separate, the model is understandable:
+- “desktop foreground conversation state”
+- “headless durable background state”
 
-- pick a **host** when you want the same threads and state
-- pick an **execution target** when you want a thread to run somewhere else
+and replace it with:
 
-## Host requirements
+- **one daemon-owned runtime model**
+- multiple frontends, with desktop being the first and iOS being the second
 
-A host must own these responsibilities:
-
-- conversation/session storage
-- attachment and artifact storage
-- live-session presence and takeover
-- alerts, reminders, deferred resumes, runs, and automations
-- remote-access pairing and device auth
-- execution-target definitions and per-thread routing
-- API + live-update transport for connected surfaces
-
-Initial host form factors:
-
-- **managed web UI service** on macOS/Linux
-- later, optionally, a **desktop companion mode** that exposes the same host runtime directly from the desktop app
-
-Important current limitation:
-
-- the packaged Electron desktop shell does **not** currently expose a companion/mobile surface over Tailnet HTTPS
-- remote browser access today comes from the managed web UI service
-
-That means the first iOS host-connected model should target the **managed host service**, not the packaged desktop runtime.
-
-## Architecture
+## High-level architecture
 
 ```text
-[iPhone app] ─────┐
-[iPad/browser] ───┼──── HTTPS + SSE ────> [PA host]
-[desktop app] ────┘                         │
-                                            ├── local execution
-                                            └── SSH execution targets
+[iOS app] ───────────────┐
+[desktop UI frontend] ───┼──────> [daemon companion host]
+                         │            │
+                         │            ├── conversations + live sessions
+                         │            ├── pairing + devices
+                         │            ├── attachments + artifacts
+                         │            ├── execution target routing
+                         │            └── local + SSH execution
+                         │
+                         └──── HTTP + WebSocket companion API
 ```
 
-The host is the authority.
+The daemon becomes the shared backend.
 
-Surfaces subscribe to host state, view the same conversations, and request control when needed. The host decides whether a conversation is running locally or on a remote execution target.
+The desktop app is still the main product UI, but its job shifts toward:
 
-## API model
+- presenting the primary UX
+- hosting the embedded renderer
+- surfacing native OS integrations
+- acting as the admin frontend for companion features
 
-The iOS app should use the host's existing HTTP API shape wherever possible.
+It should not remain the sole owner of remote/client-visible live conversation state.
 
-### Existing surfaces to reuse
+## API boundary
 
-- `GET /api/status` — handshake and basic host inspection
-- `GET /api/events` — app-level SSE snapshots
-- `GET /api/live-sessions/:id/events` — conversation SSE stream
-- `POST /api/live-sessions/:id/prompt` — submit a prompt
-- `POST /api/live-sessions/:id/takeover` — claim control
-- conversation/session detail endpoints for bootstrap, titles, cwd, artifacts, attachments, and metadata
+The companion API should use a completely separate root.
 
-### Host capability handshake
+### Root
 
-We should add a small host capability payload, either by extending `GET /api/status` or adding a dedicated host descriptor endpoint.
+Use:
 
-The app needs to know at least:
+```text
+/companion/v1
+```
 
-- host label / profile / version
-- whether remote access auth is required
-- whether native bearer auth is supported
-- whether execution-target switching is supported
-- whether push notifications are configured
-- a stable `hostInstanceId` so renamed URLs do not look like new hosts
+This keeps the external contract cleanly separated from the current internal `/api` surface.
 
-## Authentication
+The existing internal desktop API can continue to evolve independently.
 
-The current remote browser flow already has the right pairing shape:
+## Transport model
 
-- short-lived pairing code
-- long-lived revocable device session
+### Main transport
 
-That should become the native iOS auth model too.
+Use a **single multiplexed WebSocket** as the primary authenticated runtime channel.
 
-### Pairing flow
+That socket is responsible for:
 
-1. user enters a host URL or scans a host QR code
-2. app calls `GET /api/status`
-3. app checks whether remote access is required
-4. user enters a short-lived pairing code generated on the host
-5. app exchanges it through `POST /api/remote-access/device-token`
-6. app stores the returned bearer token in the iOS Keychain
-7. future API and SSE calls use `Authorization: Bearer <token>`
+- client hello / session ready
+- app-level subscriptions
+- conversation subscriptions
+- command invocation
+- command responses
+- server events
+- presence updates
+- execution-target updates
 
-### Required backend change
+### HTTP surface
 
-The auth gate currently centers on the `pa_web` cookie flow.
+Even in a WebSocket-first model, HTTP is still needed for a few things:
 
-For a native app, the host must also accept:
+- initial host hello/capabilities
+- pairing code exchange
+- desktop-admin pairing/device routes
+- large binary attachment/asset upload and download
 
-- `Authorization: Bearer <token>`
+So the v1 shape is:
 
-using the same device-session records already created by the pairing flow.
+- **HTTP for bootstrapping/auth/admin/blob transfer**
+- **WebSocket for realtime state + commands**
 
-### Device/session management
+That is still WebSocket-first in the way that matters to the companion client.
 
-The host should keep showing paired devices in Settings so the operator can:
+## HTTP endpoints
 
-- see which phones/tablets are paired
-- revoke a device
-- rename the device label later if needed
+### Public companion hello
 
-## Surface identity and handoff
+```text
+GET /companion/v1/hello
+```
 
-The host already has the beginnings of the right model:
+Returns:
 
-- per-surface registration
-- surface type
-- controller surface
-- explicit takeover
+- `hostInstanceId`
+- host label
+- app/daemon version
+- protocol version
+- auth requirements
+- capability flags
 
-The iOS app should participate in that same model.
+This endpoint exists so the iOS client can:
+
+- identify whether it is talking to the same host as before
+- display a stable human label
+- understand companion capabilities before opening the socket
+
+### Pairing exchange
+
+```text
+POST /companion/v1/auth/pair
+```
+
+Input:
+
+- pairing code
+- device label
+
+Returns:
+
+- bearer token
+- paired device record
+- host identity payload
+
+### Device/session admin
+
+These are daemon-owned APIs, primarily surfaced through the desktop UI.
+
+Examples:
+
+```text
+POST   /companion/v1/admin/pairing-codes
+GET    /companion/v1/admin/devices
+DELETE /companion/v1/admin/devices/:deviceId
+PATCH  /companion/v1/admin/devices/:deviceId
+```
+
+The desktop UI should call these daemon APIs rather than owning pairing state itself.
+
+### Attachment and asset transfer
+
+Binary asset transfer should stay on HTTP.
+
+Examples:
+
+```text
+GET    /companion/v1/conversations/:id/attachments
+GET    /companion/v1/conversations/:id/attachments/:attachmentId
+GET    /companion/v1/conversations/:id/attachments/:attachmentId/assets/:asset
+POST   /companion/v1/conversations/:id/attachments
+PATCH  /companion/v1/conversations/:id/attachments/:attachmentId
+```
+
+For create/update, use authenticated multipart upload with desktop-parity attachment fields.
+
+That includes support for:
+
+- structured attachments like Excalidraw
+- source + preview assets
+- revisions
+- metadata such as title and note
+
+## WebSocket endpoint
+
+### Socket URL
+
+```text
+GET /companion/v1/socket
+```
+
+The client authenticates with the bearer token during the WebSocket handshake.
+
+### Connection contract
+
+After the socket opens, the server should emit a `ready` envelope containing:
+
+- `hostInstanceId`
+- host label
+- protocol version
+- server capabilities
+- current authenticated device/session info
+
+## WebSocket envelope
+
+Use a simple multiplexed frame shape.
+
+### Client -> server
+
+```json
+{
+  "id": "msg-123",
+  "type": "command",
+  "name": "conversation.prompt",
+  "payload": {
+    "conversationId": "conv_123",
+    "text": "continue this",
+    "surfaceId": "ios-surface-1"
+  }
+}
+```
+
+or:
+
+```json
+{
+  "id": "msg-124",
+  "type": "subscribe",
+  "topic": "conversation",
+  "key": "conv_123"
+}
+```
+
+### Server -> client
+
+```json
+{
+  "id": "msg-123",
+  "type": "response",
+  "ok": true,
+  "result": {
+    "accepted": true
+  }
+}
+```
+
+or:
+
+```json
+{
+  "type": "event",
+  "topic": "conversation",
+  "key": "conv_123",
+  "event": {
+    "type": "text_delta",
+    "delta": "..."
+  }
+}
+```
+
+This keeps one socket sufficient for app state, conversation state, and commands.
+
+## Companion API domains
+
+## 1. Host domain
+
+The companion host must expose:
+
+- host identity
+- capability flags
+- current device/session identity
+- connection health
+
+Example capabilities:
+
+- companion API version
+- attachment parity supported
+- execution-target switching supported
+- pairing admin supported
+
+## 2. Conversation list domain
+
+The iOS conversation list should mirror the desktop app’s open/pinned ordering closely.
+
+That means the daemon must own or at least persist the ordering model used by the desktop UI.
+
+V1 list payload should include:
+
+- pinned conversation ids in order
+- open conversation ids in order
+- enough conversation metadata to render those rows
+- recent conversations for fallback/history
+
+The companion list is not just “all sessions sorted by recency.”
+It needs to feel like the same working set the desktop app presents.
+
+## 3. Conversation bootstrap domain
+
+The daemon should expose a single conversation bootstrap read for iOS.
+
+That bootstrap should return the initial state needed to render a conversation screen:
+
+- conversation metadata
+- transcript blocks
+- live status
+- presence/controller state
+- execution target summary
+- attachment summaries
+
+This should be a clean external companion payload, not a direct mirror of the current internal desktop bootstrap types.
+
+## 4. Conversation stream domain
+
+Once bootstrapped, the iOS client subscribes to the conversation topic on the main socket.
+
+Event families include:
+
+- transcript deltas
+- snapshot resets when needed
+- turn start/end
+- live status changes
+- title updates
+- presence/controller updates
+- execution target updates
+- attachment updates
+- error state
+
+## 5. Conversation commands
+
+The v1 command surface should cover full creation/resume controls and core live actions.
+
+Required commands:
+
+- `conversation.create`
+- `conversation.resume`
+- `conversation.prompt`
+- `conversation.abort`
+- `conversation.takeover`
+- `conversation.rename`
+- `conversation.change_execution_target`
+
+Likely useful shortly after:
+
+- `conversation.change_cwd`
+- `conversation.set_model_preferences`
+
+The important design point is that commands are **typed daemon-level operations**, not leaked internal route translations.
+
+## 6. Execution target domain
+
+Remote execution needs full support in v1.
+
+That means an iOS client must be able to:
+
+- open a conversation that already runs on an SSH target
+- see live state for that conversation
+- prompt it normally
+- take over control
+- change its execution target between local and an existing SSH target
+
+V1 does **not** need SSH target CRUD from iOS.
+
+So the daemon must own:
+
+- execution target definitions
+- per-conversation execution target mapping
+- routing of live operations to the correct local or SSH runtime
+
+Desktop remains the place to manage SSH targets themselves.
+
+iOS only needs to read the target list and switch among existing targets.
+
+## 7. Attachment domain
+
+V1 needs full desktop attachment parity.
+
+At minimum that means:
+
+- list attachment metadata for a conversation
+- fetch attachment details
+- download preview/source assets
+- create new attachments from iOS
+- update existing attachments from iOS
+- support image/file uploads
+- support structured attachments such as Excalidraw
+- preserve revisioned source/preview assets and metadata fields
+
+This should not be cut down to image-only support.
+
+The product expectation is that attached assets are part of the conversation model, and the iOS client should participate fully.
+
+## Surface identity and takeover
+
+The host should distinguish:
+
+- device identity
+- active surface identity
+
+### Device identity
+
+Stable per paired device, stored in daemon state.
 
 ### Surface identity
 
-The app should create:
+Ephemeral per active conversation view/session.
 
-- a stable **device id** stored in Keychain
-- an ephemeral **surface id** for each active conversation view/session
+The daemon should model takeover at the surface level.
 
-That lets the host distinguish:
+That enables:
 
-- “Patrick's iPhone” as a device
-- “the currently open conversation screen” as the active surface
+- desktop watching while iOS takes control
+- iOS watching while desktop takes control back
+- explicit control handoff without treating surfaces as separate thread owners
 
-### Surface type
+Use explicit native surface types rather than legacy web-oriented names.
 
-For the first pass, the app can behave like the current mobile surface model.
+Suggested v1 surface types:
 
-Longer-term, the host should understand a dedicated native surface type, for example:
+- `desktop_ui`
+- `ios_native`
 
-- `mobile_native`
+## Host identity
 
-That lets presence and future capability decisions distinguish native app clients from browser clients without changing the control semantics.
+Each companion host needs:
 
-### Handoff behavior
+- stable `hostInstanceId`
+- human-readable host label
 
-Desired behavior:
+`hostInstanceId` must survive process restarts and ordinary upgrades.
 
-- multiple surfaces can watch the same conversation
-- one surface is the current controller for live actions that require control
-- iPhone can explicitly take over from desktop
-- desktop can take control back later
-- mirrored surfaces keep reading live output even when they are not the controller
+This lets the iOS client distinguish:
 
-The conversation UI should show:
-
-- current controller device
-- current execution target
-- a clear **Take over here** action when needed
-
-## Execution model
-
-The iOS app does not manage SSH remotes directly.
-
-Instead:
-
-- the app reads execution-target state from the host
-- the app asks the host to continue or prompt a conversation
-- the host routes the request to local execution or a host-managed SSH target
-
-### Required architectural move
-
-This is the main structural requirement for covering both use cases.
-
-Today, SSH remotes are primarily a **desktop-owned capability**. That is good enough for the desktop shell, but it is not enough for a host-connected iOS app.
-
-To support the iOS host model cleanly, execution-target state needs to move from **desktop-only ownership** into **host ownership**.
-
-That means:
-
-- saved SSH execution targets belong to the host runtime, not just Electron settings
-- per-conversation execution-target routing belongs to the host
-- desktop becomes one surface that uses those host APIs, instead of the only place that can drive them
-
-Without that move, the iOS app can connect to a host and share host-owned conversations, but it cannot fully participate in conversations whose execution routing only exists inside one desktop process.
-
-## UI shape
-
-The iOS app should be a focused host client, not a full copy of the desktop UI.
-
-### V1 screens
-
-- **Hosts**
-  - saved hosts
-  - add host
-  - pair / repair auth
-  - host health and last-connected state
-- **Conversations**
-  - recent/open/pinned threads
-  - search
-  - attention badges
-- **Conversation detail**
-  - transcript
-  - composer
-  - attachments/artifacts access
-  - current execution target
-  - controller / presence state
-  - takeover action
-- **Settings**
-  - paired account/device info
-  - host connection management
-  - notification preferences when they exist
-
-### V1 omissions
-
-These can remain desktop- or web-first initially:
-
-- SSH execution-target management UI
-- full automation editing
-- detailed provider/model admin
-- broad repo/folder management flows
-- checkpoint diff review parity with desktop
-
-The phone should be excellent at:
-
-- reading and continuing conversations
-- handing control between surfaces
-- monitoring active work
-- resolving lightweight prompts or unblock requests
-
-## Notifications and background behavior
-
-V1 should not depend on background agent execution on the phone.
-
-### V1
-
-- foreground app uses HTTPS + SSE
-- background app reconnects when reopened
-- no requirement for full closed-app push delivery yet
-
-### Later
-
-Add APNs support from the host so conversation attention and alert-worthy automation results can wake the phone.
-
-That requires:
-
-- APNs device registration on the host
-- host-side notification preferences
-- mapping existing alert/reminder concepts onto push delivery
-
-## Offline and reconnect model
-
-The app should assume the host is sometimes unreachable.
-
-Expected behavior:
-
-- cached host list and recent conversation metadata remain visible
-- conversation detail can show last known transcript snapshot when offline
-- reconnect automatically when the app returns foreground and the host is reachable
-- auth expiry or revocation should degrade into a repair-auth state, not silent failure
+- “same host, new network path”
+- “different host entirely”
 
 ## Security model
 
-Preferred connection modes:
+### Auth
 
-- **Tailnet HTTPS** first
-- trusted local-network HTTPS later if needed
+Use:
 
-Security rules:
+- short-lived pairing code
+- long-lived revocable bearer token per paired device
 
-- store bearer tokens only in the iOS Keychain
-- treat device tokens as revocable host sessions
-- keep device labels visible to the host operator
-- never require SSH credentials on the phone for normal conversation use
-- keep execution-target secrets and provider credentials on the host
+The bearer token lives in the iOS Keychain.
 
-## Relationship to the web UI
+### Revocation
 
-A WKWebView wrapper is acceptable as a bootstrap step, but it is not the target architecture.
+The daemon stores paired devices and can revoke them individually.
 
-Target architecture:
+The desktop UI is the admin frontend for:
 
-- native host list and auth
-- native conversation list and conversation view
-- native SSE / API client
-- native takeover and presence UI
+- creating pairing codes
+- showing paired devices
+- revoking devices
+- renaming devices
 
-The important design point is not whether the first build is web-wrapped or native.
+### Network
 
-The important design point is that the app connects to a **host-owned session model**.
+The daemon directly serves the companion HTTP + WebSocket API.
+
+This design does not depend on a browser/mobile-web surface.
+
+## Desktop role in this model
+
+The desktop app remains the only primary interface for now.
+
+But architecturally it becomes:
+
+- the main operator UI
+- the admin frontend for daemon-owned companion features
+- the native shell for OS integrations
+
+It should stop being the only authority for live conversation state if we want a correct peer-surface model.
 
 ## Rollout plan
 
-### Phase 0 — host prerequisites
+### Phase 0 — daemon host foundations
 
-- add bearer-token auth support for native clients
-- add host capability handshake
-- define native surface identity and surface type
-- expose enough host metadata for saved-host UX
+- add stable `hostInstanceId`
+- add daemon HTTP + WebSocket companion server
+- add daemon-owned pairing/device registry
+- add public `hello` endpoint
+- add authenticated multiplexed socket
 
-### Phase 1 — iOS host client MVP
+### Phase 1 — daemon-owned conversation authority
 
-- saved hosts
-- pair to host
-- conversations list
-- conversation detail + live stream
-- prompt submission
-- takeover / presence UI
-- read basic attachments and artifacts
+- move conversation/session authority into the daemon
+- move live-session ownership into the daemon
+- make desktop UI read/write that daemon-owned state
+- define companion bootstrap/event/command schemas
 
-### Phase 2 — shared execution-target model
+### Phase 2 — execution-target authority
 
-- move SSH execution-target ownership into the host runtime
-- let desktop and iOS use the same execution-target APIs
-- show execution-target state in mobile conversation detail
-- optionally allow lightweight execution-target switching from mobile
+- move execution-target routing under daemon ownership
+- support local + SSH execution through daemon-owned routing
+- expose read + change-execution-target companion commands
+- keep SSH target CRUD desktop-only
 
-### Phase 3 — mobile attention and push
+### Phase 3 — attachment parity
 
-- host-managed APNs registration
-- push delivery for alerts/reminders/conversation attention
-- notification deep links into the owning conversation
+- move attachment APIs under the companion root
+- support binary source/preview asset transfer over HTTP
+- support create/update parity from iOS
+- support structured attachments like Excalidraw
+
+### Phase 4 — iOS companion client
+
+- host list + pairing
+- conversation list mirroring desktop ordering
+- conversation bootstrap + live stream
+- create/resume/prompt/takeover/abort
+- attachment view/create/update parity
+- execution-target switching
 
 ## Concrete product rule
 
-If the operator wants the same threads on phone and desktop, those devices must connect to the **same host**.
+If two devices should share the same threads, they connect to the same **daemon-backed companion host**.
 
-If the operator wants a thread to run on another machine, that is an **execution-target** decision owned by that host.
+If a thread should run on another machine, that is an **execution-target routing decision** made by that host.
 
-That is the model this iOS app should implement.
+That is the model this iOS companion design implements.
+
+## Ready-for-implementation note
+
+The major architectural bet in this design is explicit:
+
+> the daemon becomes the authoritative conversation host, not just a background-task subsystem.
+
+That is the right move if we want a clean external client API and real peer surfaces.
 
 ## Related docs
 
-- [Web UI Guide](./web-ui.md)
+- [Daemon and Background Automation](./daemon.md)
 - [Electron desktop app](./electron-desktop-app-plan.md)
 - [Electron desktop app spec](./electron-desktop-app-spec.md)
 - [How personal-agent works](./how-it-works.md)
-- [Web server route modules](./web-server-routing.md)
