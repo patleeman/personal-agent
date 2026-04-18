@@ -30,6 +30,11 @@ export interface DaemonConfig {
   ipc: {
     socketPath?: string;
   };
+  companion?: {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+  };
   modules: {
     maintenance: MaintenanceModuleConfig;
     tasks: TasksModuleConfig;
@@ -58,6 +63,11 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
     ipc: {
       ...config.ipc,
       socketPath: config.ipc.socketPath ? resolve(expandHome(config.ipc.socketPath)) : undefined,
+    },
+    companion: {
+      enabled: config.companion?.enabled !== false,
+      host: config.companion?.host ? String(config.companion.host).trim() || '127.0.0.1' : '127.0.0.1',
+      port: Number.isInteger(config.companion?.port) ? Number(config.companion?.port) : Number.parseInt(String(config.companion?.port), 10) || 3843,
     },
     modules: {
       ...config.modules,
@@ -129,6 +139,11 @@ export function getDefaultDaemonConfig(): DaemonConfig {
     },
     ipc: {
       socketPath: process.env.PERSONAL_AGENT_DAEMON_SOCKET_PATH,
+    },
+    companion: {
+      enabled: process.env.PERSONAL_AGENT_COMPANION_ENABLED !== '0',
+      host: process.env.PERSONAL_AGENT_COMPANION_HOST?.trim() || '127.0.0.1',
+      port: Number.parseInt(process.env.PERSONAL_AGENT_COMPANION_PORT?.trim() || '3843', 10),
     },
     modules: {
       maintenance: {

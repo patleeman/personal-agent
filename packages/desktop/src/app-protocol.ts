@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, protocol, session } from 'electron';
+import { loadDaemonConfig } from '@personal-agent/daemon';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
@@ -104,6 +105,30 @@ async function readDesktopProtocolRequestBody(request: Request): Promise<unknown
   return bodyText;
 }
 
+async function proxyCompanionRequest(request: Request): Promise<Response> {
+  const config = loadDaemonConfig();
+  const host = config.companion?.host ?? '127.0.0.1';
+  const port = config.companion?.port ?? 3843;
+  const sourceUrl = new URL(request.url);
+  const targetBase = `http://${host.includes(':') ? `[${host}]` : host}:${String(port)}`;
+  const targetUrl = new URL(`${sourceUrl.pathname}${sourceUrl.search}`, targetBase);
+  const headers = new Headers(request.headers);
+  headers.delete('host');
+
+  const response = await fetch(targetUrl, {
+    method: request.method,
+    headers,
+    body: request.method === 'GET' || request.method === 'HEAD'
+      ? undefined
+      : Buffer.from(await request.arrayBuffer()),
+  });
+
+  return new Response(response.body, {
+    status: response.status,
+    headers: response.headers,
+  });
+}
+
 function buildDesktopProtocolErrorResponse(error: unknown): Response {
   const message = error instanceof Error ? error.message : String(error);
   const status = message.startsWith('No local API route for ')
@@ -200,6 +225,14 @@ export function createDesktopProtocolHandler(options?: {
     const url = new URL(request.url);
     if (url.host !== DESKTOP_APP_HOST) {
       return new Response('Not found', { status: 404 });
+    }
+
+    if (url.pathname.startsWith('/companion/')) {
+      try {
+        return await proxyCompanionRequest(request);
+      } catch (error) {
+        return buildDesktopProtocolErrorResponse(error);
+      }
     }
 
     if (url.pathname.startsWith('/api/')) {

@@ -1,21 +1,23 @@
 # Daemon and Background Automation
 
-`personal-agentd` is the shared background runtime behind unattended behavior.
+`personal-agentd` is the shared long-lived runtime behind unattended behavior and companion access.
 
-If you care about scheduled tasks / automations, deferred resumes, or daemon-backed durable runs, you usually want the daemon running.
+If you care about scheduled tasks / automations, deferred resumes, daemon-backed durable runs, or native companion clients, you usually want the daemon running.
 
 In the desktop app, the daemon can be owned directly by the Electron runtime instead of being managed as a separate OS service. The same daemon package still owns the background logic; only the host process changes.
 
 ## What the daemon does
 
-The daemon owns background automation such as:
+The daemon owns long-lived runtime responsibilities such as:
 
 - scheduled tasks / automations
 - deferred resume wakeups
 - durable background runs
+- companion pairing/device state
+- the daemon-hosted companion HTTP + WebSocket API
 - maintenance and cleanup
 
-It gives the CLI, web UI, and desktop shell one place to hand off long-lived work.
+It gives the CLI and desktop shell one place to hand off long-lived work, and it is the intended backend for native companion clients.
 
 ## On-disk state
 
@@ -34,6 +36,7 @@ Important pieces:
 
 - `runtime.db` stores daemon-backed runtime state, including durable run metadata and task scheduler state
 - `runs/<run-id>/` stores per-run logs and results
+- `companion/` stores companion host identity plus pairing/device auth state
 
 ## When you need it
 
@@ -88,10 +91,11 @@ Managed services use:
 
 When the daemon is unavailable:
 
-- direct live conversation work can still continue
+- direct live conversation work can still continue in desktop-local flows
 - scheduled tasks / automations do not run
 - deferred resumes do not fire
 - daemon-backed runs cannot be managed normally
+- the companion API is unavailable to remote/native clients
 - some surfaces fall back to degraded behavior instead of hard-failing
 
 ## Related docs

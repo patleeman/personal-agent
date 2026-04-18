@@ -21,6 +21,30 @@ export {
   type DaemonClientTransport,
 } from './in-process-client.js';
 export {
+  getCompanionRuntimeProvider,
+  resolveCompanionRuntime,
+  setCompanionRuntimeProvider,
+} from './companion/runtime.js';
+export {
+  readCompanionHostState,
+  resolveCompanionHostStateFile,
+  updateCompanionHostLabel,
+  writeCompanionHostState,
+} from './companion/host-state.js';
+export {
+  createCompanionPairingCode,
+  pairCompanionDevice,
+  readCompanionDeviceAdminState,
+  readCompanionDeviceByToken,
+  resolveCompanionAuthStateFile,
+  revokeCompanionDevice,
+  updateCompanionDeviceLabel,
+  type CompanionDeviceAdminState,
+} from './companion/auth-store.js';
+export {
+  DaemonCompanionServer,
+} from './companion/server.js';
+export {
   getDaemonStatus,
   pingDaemon,
   stopDaemon,
@@ -204,6 +228,42 @@ export type {
   SyncWebLiveConversationRunResult,
   ListRecoverableWebLiveConversationRunsResult,
 } from './types.js';
+export {
+  COMPANION_API_ROOT,
+  COMPANION_PROTOCOL_VERSION,
+  COMPANION_SOCKET_PATH,
+} from './companion/types.js';
+export type {
+  CompanionAttachmentAssetInput,
+  CompanionAttachmentCreateInput,
+  CompanionAttachmentUpdateInput,
+  CompanionBinaryAsset,
+  CompanionClientSocketMessage,
+  CompanionCommandMessage,
+  CompanionConversationAbortInput,
+  CompanionConversationBootstrapInput,
+  CompanionConversationCreateInput,
+  CompanionConversationExecutionTargetChangeInput,
+  CompanionConversationPromptInput,
+  CompanionConversationRenameInput,
+  CompanionConversationResumeInput,
+  CompanionConversationSubscriptionInput,
+  CompanionConversationTakeoverInput,
+  CompanionDeviceTokenResult,
+  CompanionHostHello,
+  CompanionPairedDeviceSummary,
+  CompanionPairingCode,
+  CompanionReadyEvent,
+  CompanionRuntime,
+  CompanionRuntimeProvider,
+  CompanionServerSocketMessage,
+  CompanionSocketEventEnvelope,
+  CompanionSocketSuccessResponse,
+  CompanionSocketErrorResponse,
+  CompanionSubscribeMessage,
+  CompanionSurfaceType,
+  CompanionUnsubscribeMessage,
+} from './companion/types.js';
 
 export async function runDaemonCli(argv: string[] = process.argv.slice(2)): Promise<number> {
   if (argv.includes('--help') || argv.includes('-h')) {

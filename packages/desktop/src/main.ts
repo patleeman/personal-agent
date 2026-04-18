@@ -1,6 +1,7 @@
 import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getStateRoot, hydrateProcessEnvFromShell } from '@personal-agent/core';
+import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
 import { app, dialog, shell } from 'electron';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
@@ -8,6 +9,7 @@ import { applyDesktopAboutPanelOptions } from './about.js';
 import { registerDesktopAppProtocol } from './app-protocol.js';
 import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
+import { createDesktopCompanionRuntime } from './companion/runtime.js';
 import { resolveDesktopLaunchPresentation } from './launch-mode.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
@@ -321,6 +323,7 @@ async function checkForDesktopUpdates(): Promise<void> {
 async function bootstrapDesktopApp(): Promise<void> {
   configureDesktopRuntimeEnvironment();
   hostManager = new HostManager();
+  setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
   updateManager = new DesktopUpdateManager({
@@ -445,6 +448,7 @@ async function prepareForQuit(): Promise<void> {
   windowController?.setQuitting(true);
   updateManager?.dispose();
   trayController?.destroy();
+  setCompanionRuntimeProvider(undefined);
   await hostManager?.dispose();
 }
 

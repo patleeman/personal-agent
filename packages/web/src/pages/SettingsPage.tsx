@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
@@ -476,6 +476,215 @@ function formatStartOnSystemStartSummary(state: DesktopAppPreferencesState | nul
     : 'Personal Agent only starts when you open it manually.';
 }
 
+interface CompanionHelloState {
+  hostInstanceId: string;
+  hostLabel: string;
+  daemonVersion: string;
+  protocolVersion: string;
+}
+
+interface CompanionPairingCodeState {
+  id: string;
+  code: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+interface CompanionDeviceSummaryState {
+  id: string;
+  deviceLabel: string;
+  createdAt: string;
+  lastUsedAt: string;
+  expiresAt: string;
+  revokedAt?: string;
+}
+
+interface CompanionAdminState {
+  pendingPairings: Array<{
+    id: string;
+    createdAt: string;
+    expiresAt: string;
+  }>;
+  devices: CompanionDeviceSummaryState[];
+}
+
+async function readCompanionApiError(response: Response): Promise<string> {
+  try {
+    const data = await response.json() as { error?: string };
+    if (typeof data.error === 'string' && data.error.trim().length > 0) {
+      return data.error;
+    }
+  } catch {
+    // Ignore malformed error payloads.
+  }
+
+  return `${response.status} ${response.statusText}`;
+}
+
+async function requestCompanionJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    cache: 'no-store',
+    ...(body === undefined
+      ? {}
+      : {
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        }),
+  });
+
+  if (!response.ok) {
+    throw new Error(await readCompanionApiError(response));
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function formatCompanionTimestamp(value: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return value;
+  }
+
+  return new Date(parsed).toLocaleString();
+}
+
+function DesktopCompanionSettingsPanel() {
+  const [loading, setLoading] = useState(true);
+  const [action, setAction] = useState<'create-pairing' | `revoke:${string}` | null>(null);
+  const [hello, setHello] = useState<CompanionHelloState | null>(null);
+  const [adminState, setAdminState] = useState<CompanionAdminState | null>(null);
+  const [latestPairingCode, setLatestPairingCode] = useState<CompanionPairingCodeState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [nextHello, nextAdmin] = await Promise.all([
+        requestCompanionJson<CompanionHelloState>('GET', '/companion/v1/hello'),
+        requestCompanionJson<CompanionAdminState>('GET', '/companion/v1/admin/devices'),
+      ]);
+      setHello(nextHello);
+      setAdminState(nextAdmin);
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleCreatePairingCode = async () => {
+    setAction('create-pairing');
+    setError(null);
+    setNotice(null);
+    try {
+      const pairing = await requestCompanionJson<CompanionPairingCodeState>('POST', '/companion/v1/admin/pairing-codes');
+      setLatestPairingCode(pairing);
+      setNotice('Pairing code created.');
+      await refresh();
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  const handleRevokeDevice = async (deviceId: string) => {
+    setAction(`revoke:${deviceId}`);
+    setError(null);
+    setNotice(null);
+    try {
+      const result = await requestCompanionJson<{ devices: CompanionDeviceSummaryState[] }>('DELETE', `/companion/v1/admin/devices/${encodeURIComponent(deviceId)}`);
+      setAdminState((current) => current ? { ...current, devices: result.devices } : { pendingPairings: [], devices: result.devices });
+      setNotice('Paired device revoked.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : String(nextError));
+    } finally {
+      setAction(null);
+    }
+  };
+
+  return (
+    <SettingsPanel
+      title="Companion access"
+      description="Generate pairing codes and manage companion devices for the daemon-backed companion API."
+    >
+      {loading ? <p className="ui-card-meta">Loading companion access state…</p> : null}
+      {hello ? (
+        <div className="space-y-1 text-[12px] text-secondary">
+          <p><span className="text-primary">{hello.hostLabel}</span> · protocol {hello.protocolVersion}</p>
+          <p className="font-mono text-[11px] text-dim break-all">{hello.hostInstanceId}</p>
+        </div>
+      ) : null}
+      {notice ? <p className="text-[12px] text-accent">{notice}</p> : null}
+      {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => { void handleCreatePairingCode(); }}
+          disabled={action !== null}
+          className={ACTION_BUTTON_CLASS}
+        >
+          {action === 'create-pairing' ? 'Creating…' : 'Generate pairing code'}
+        </button>
+        <button
+          type="button"
+          onClick={() => { void refresh(); }}
+          disabled={action !== null}
+          className={ACTION_BUTTON_CLASS}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {latestPairingCode ? (
+        <div className="rounded-2xl bg-surface/70 px-4 py-4">
+          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/75">Latest pairing code</p>
+          <p className="mt-2 font-mono text-[20px] tracking-[0.18em] text-primary">{latestPairingCode.code}</p>
+          <p className="mt-2 text-[12px] text-secondary">Expires {formatCompanionTimestamp(latestPairingCode.expiresAt)}</p>
+        </div>
+      ) : null}
+
+      <div className="space-y-3">
+        <div>
+          <h4 className="text-[14px] font-medium text-primary">Paired devices</h4>
+          <p className="mt-1 text-[12px] text-secondary">Revoke a device here if you want it to sign in again.</p>
+        </div>
+        {adminState && adminState.devices.length > 0 ? (
+          <div className="space-y-2">
+            {adminState.devices.map((device) => (
+              <div key={device.id} className="flex flex-wrap items-start justify-between gap-3 rounded-2xl bg-surface/70 px-4 py-4">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-[13px] font-medium text-primary">{device.deviceLabel}</p>
+                  <p className="font-mono text-[11px] text-dim break-all">{device.id}</p>
+                  <p className="text-[12px] text-secondary">Last used {formatCompanionTimestamp(device.lastUsedAt)}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { void handleRevokeDevice(device.id); }}
+                  disabled={action !== null}
+                  className={ACTION_BUTTON_CLASS}
+                >
+                  {action === `revoke:${device.id}` ? 'Revoking…' : 'Revoke'}
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="ui-card-meta">No paired devices yet.</p>
+        )}
+      </div>
+    </SettingsPanel>
+  );
+}
+
 function SettingsTableOfContents({
   items,
   activeId,
@@ -802,6 +1011,8 @@ export function DesktopConnectionsSettingsPanel() {
         )}
         {appPreferencesError ? <p className="text-[12px] text-danger">{appPreferencesError}</p> : null}
       </SettingsPanel>
+
+      <DesktopCompanionSettingsPanel />
 
       <SettingsPanel
         id="desktop-connections"

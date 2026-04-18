@@ -84,7 +84,7 @@ The local desktop host:
 - resolves local JSON API requests and event streams through the Electron main process instead of a loopback web child
 - calls the desktop-owned daemon directly for hot local flows instead of bouncing those paths back through the local daemon socket
 - keeps that local runtime warm for as long as the menubar app stays open
-- does not expose any separate companion/mobile surface from the packaged desktop shell
+- configures the in-process daemon as the companion host for native clients, with the desktop UI acting as the primary frontend
 
 ### SSH remote host
 
@@ -126,9 +126,8 @@ That means:
 
 ## Current limitations
 
-- the desktop-owned local backend intentionally does not expose any separate companion/mobile surface
-- remote browser access still requires a separately managed web UI
-- direct remote hosts still rely on the remote web UI being up so they can expose the app-server WebSocket surface
+- the companion API currently depends on the daemon-backed desktop runtime and still needs a dedicated native iOS client to consume it
+- direct remote hosts still rely on the SSH remote runtime path for execution rather than a full second desktop frontend
 - the desktop shell refuses to reuse an already-running external local daemon, and quitting the app will not stop that external daemon
 - the desktop shell still does not reuse a separately managed local web UI
 

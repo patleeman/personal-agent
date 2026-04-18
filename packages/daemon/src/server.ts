@@ -7,6 +7,8 @@ import { EventBus } from './event-bus.js';
 import { createDaemonEvent, isDaemonEvent } from './events.js';
 import { parseRequest, serializeResponse, type DaemonRequest, type DaemonResponse } from './ipc-protocol.js';
 import { loadDaemonConfig, type DaemonConfig, type LogLevel } from './config.js';
+import { DaemonCompanionServer } from './companion/server.js';
+import type { CompanionRuntimeProvider } from './companion/types.js';
 import { createBuiltinModules, type DaemonModule, type DaemonModuleContext } from './modules/index.js';
 import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
 import {
@@ -167,6 +169,7 @@ export interface PersonalAgentDaemonOptions {
   config?: DaemonConfig;
   stopRequestBehavior?: DaemonStopRequestBehavior;
   logSink?: (line: string) => void;
+  companionRuntimeProvider?: CompanionRuntimeProvider;
 }
 
 function isDaemonConfig(value: DaemonConfig | PersonalAgentDaemonOptions): value is DaemonConfig {
@@ -183,10 +186,12 @@ export class PersonalAgentDaemon {
   private readonly modules: ModuleRuntime[];
   private readonly stopRequestBehavior: DaemonStopRequestBehavior;
   private readonly logSink?: (line: string) => void;
+  private readonly companionRuntimeProvider?: CompanionRuntimeProvider;
   private readonly activeBackgroundRuns = new Map<string, ActiveBackgroundRunHandle>();
   private readonly socketTraces = new WeakMap<Socket, IpcSocketTrace>();
 
   private server?: Server;
+  private companionServer?: DaemonCompanionServer;
   private timerHandles: NodeJS.Timeout[] = [];
   private running = false;
   private stopping = false;
@@ -196,6 +201,7 @@ export class PersonalAgentDaemon {
     this.config = options.config ?? loadDaemonConfig();
     this.stopRequestBehavior = options.stopRequestBehavior ?? 'exit-process';
     this.logSink = options.logSink;
+    this.companionRuntimeProvider = options.companionRuntimeProvider;
     this.paths = resolveDaemonPaths(this.config.ipc.socketPath);
     this.runsRoot = resolveDurableRunsRoot(this.paths.root);
     this.startedAt = new Date().toISOString();
@@ -256,6 +262,9 @@ export class PersonalAgentDaemon {
       });
     });
 
+    this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+    await this.companionServer.start();
+
     this.running = true;
     this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
   }
@@ -285,6 +294,9 @@ export class PersonalAgentDaemon {
         }
       }
     }
+
+    await this.companionServer?.stop();
+    this.companionServer = undefined;
 
     await new Promise<void>((resolve) => {
       if (!this.server) {
@@ -324,6 +336,10 @@ export class PersonalAgentDaemon {
         detail: moduleRuntime.module.getStatus?.(),
       })),
     };
+  }
+
+  getCompanionUrl(): string | null {
+    return this.companionServer?.getUrl() ?? null;
   }
 
   private prepareSocket(): void {
