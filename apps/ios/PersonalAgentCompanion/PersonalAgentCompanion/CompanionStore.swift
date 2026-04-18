@@ -13,12 +13,15 @@ final class CompanionAppModel: ObservableObject {
     private let hostsStorageKey = "pa.ios.companion.hosts"
     private let activeHostStorageKey = "pa.ios.companion.active-host-id"
     private let surfaceInstallationIdKey = "pa.ios.companion.installation-id"
+    private let environment: [String: String]
+    private var transientTokens: [UUID: String] = [:]
     private let useMockMode: Bool
 
     let installationSurfaceId: String
 
     init() {
-        self.useMockMode = ProcessInfo.processInfo.environment["PA_IOS_MOCK_MODE"] == "1"
+        self.environment = ProcessInfo.processInfo.environment
+        self.useMockMode = environment["PA_IOS_MOCK_MODE"] == "1"
         if let existing = defaults.string(forKey: surfaceInstallationIdKey), !existing.isEmpty {
             self.installationSurfaceId = existing
         } else {
@@ -27,6 +30,7 @@ final class CompanionAppModel: ObservableObject {
             defaults.set(next, forKey: surfaceInstallationIdKey)
         }
         loadHosts()
+        seedBootstrapHostIfNeeded()
         bootstrapInitialSession()
     }
 
@@ -72,7 +76,7 @@ final class CompanionAppModel: ObservableObject {
         guard let record = hosts.first(where: { $0.id == id }) else {
             return
         }
-        guard let token = KeychainStore.shared.token(for: record.id) else {
+        guard let token = KeychainStore.shared.token(for: record.id) ?? transientTokens[record.id] else {
             bannerMessage = "The paired token for \(record.hostLabel) is missing. Pair it again."
             return
         }
@@ -89,6 +93,7 @@ final class CompanionAppModel: ObservableObject {
             activeHostId = nil
         }
         hosts.removeAll { $0.id == host.id }
+        transientTokens.removeValue(forKey: host.id)
         KeychainStore.shared.removeToken(for: host.id)
         persistHosts()
         if activeHostId == nil, let next = hosts.first {
@@ -112,6 +117,45 @@ final class CompanionAppModel: ObservableObject {
             return
         }
         Task { await selectHost(id) }
+    }
+
+    private func seedBootstrapHostIfNeeded() {
+        guard !useMockMode else {
+            return
+        }
+        guard let baseURLString = environment["PA_IOS_BOOTSTRAP_HOST_URL"]?.nilIfBlank,
+              let bearerToken = environment["PA_IOS_BOOTSTRAP_BEARER_TOKEN"]?.nilIfBlank else {
+            return
+        }
+
+        do {
+            let normalized = try normalizeHostURL(baseURLString)
+            let hostInstanceId = environment["PA_IOS_BOOTSTRAP_HOST_INSTANCE_ID"]?.nilIfBlank
+                ?? hosts.first(where: { $0.baseURL == normalized.absoluteString })?.hostInstanceId
+                ?? "bootstrap-\(normalized.host ?? "host")"
+            let deviceId = environment["PA_IOS_BOOTSTRAP_DEVICE_ID"]?.nilIfBlank ?? "bootstrap-device"
+            let existingId = environment["PA_IOS_BOOTSTRAP_RECORD_ID"].flatMap(UUID.init(uuidString:))
+                ?? hosts.first(where: { $0.hostInstanceId == hostInstanceId && $0.deviceId == deviceId })?.id
+                ?? UUID()
+            let record = CompanionHostRecord(
+                id: existingId,
+                baseURL: normalized.absoluteString,
+                hostLabel: environment["PA_IOS_BOOTSTRAP_HOST_LABEL"]?.nilIfBlank ?? normalized.host ?? "Companion Host",
+                hostInstanceId: hostInstanceId,
+                deviceId: deviceId,
+                deviceLabel: environment["PA_IOS_BOOTSTRAP_DEVICE_LABEL"]?.nilIfBlank ?? "Bootstrap Device"
+            )
+            transientTokens[record.id] = bearerToken
+            _ = KeychainStore.shared.setToken(bearerToken, for: record.id)
+            hosts.removeAll { candidate in
+                candidate.id == record.id || (candidate.hostInstanceId == record.hostInstanceId && candidate.deviceId == record.deviceId)
+            }
+            hosts.insert(record, at: 0)
+            activeHostId = record.id
+            persistHosts()
+        } catch {
+            bannerMessage = "Failed to bootstrap host from the environment: \(error.localizedDescription)"
+        }
     }
 
     private func normalizeHostURL(_ string: String) throws -> URL {

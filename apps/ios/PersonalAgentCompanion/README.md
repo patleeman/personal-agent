@@ -66,3 +66,54 @@ Typical local-dev path:
 1. start the desktop runtime
 2. generate a pairing code in Settings → Companion access
 3. pair from the iOS app against the host URL
+
+## Live integration test
+
+The test target includes a real-host round-trip that:
+
+- pairs against a live companion host
+- creates a conversation
+- creates and downloads an attachment
+- sends a real prompt over the companion socket
+- waits for a live streamed assistant response
+
+Enable it with a config file before `xcodebuild test`:
+
+```json
+{
+  "enabled": true,
+  "baseURL": "http://127.0.0.1:3845",
+  "pairingCode": "XXXX-XXXX-XXXX",
+  "cwd": "/absolute/path/to/repo"
+}
+```
+
+Write that to:
+
+```text
+/tmp/personal-agent-ios-live-test-config.json
+```
+
+The test will also honor direct process env when you run it under a harness that forwards test runtime environment:
+
+```text
+PA_IOS_LIVE_COMPANION_TEST=1
+PA_IOS_LIVE_COMPANION_URL=http://127.0.0.1:3845
+PA_IOS_LIVE_COMPANION_PAIRING_CODE=XXXX-XXXX-XXXX
+PA_IOS_LIVE_COMPANION_CWD=/absolute/path/to/repo
+```
+
+## Bootstrap host env for simulator smoke tests
+
+For local dev and validation, the app can seed a paired host from launch environment:
+
+```text
+PA_IOS_BOOTSTRAP_HOST_URL=http://127.0.0.1:3845
+PA_IOS_BOOTSTRAP_BEARER_TOKEN=<paired device token>
+PA_IOS_BOOTSTRAP_HOST_LABEL=Local Desktop Host
+PA_IOS_BOOTSTRAP_HOST_INSTANCE_ID=host_...
+PA_IOS_BOOTSTRAP_DEVICE_ID=device_...
+PA_IOS_BOOTSTRAP_DEVICE_LABEL=iPhone Simulator
+```
+
+When these are present, the app inserts that host into local storage, stores the bearer token in Keychain, and opens it automatically.
