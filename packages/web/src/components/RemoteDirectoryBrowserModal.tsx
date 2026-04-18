@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { type KeyboardEvent as ReactKeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../client/api';
 import type { DesktopRemoteDirectoryListing } from '../shared/types';
 import { ToolbarButton, cx } from './ui';
@@ -63,6 +63,13 @@ function splitPathSegments(path: string): Array<{ label: string; path: string }>
   return segments;
 }
 
+interface BrowserRow {
+  kind: 'parent' | 'dir';
+  path: string;
+  label: string;
+  isHidden?: boolean;
+}
+
 const BROWSER_ROW_CLASS = 'group flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/40 focus-visible:ring-offset-1 focus-visible:ring-offset-base';
 
 export function RemoteDirectoryBrowserModal({
@@ -88,10 +95,20 @@ export function RemoteDirectoryBrowserModal({
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   const visibleListing = useMemo(() => (listing ? sortListing(listing) : null), [listing]);
   const directories = useMemo(() => visibleListing?.entries.filter((entry) => entry.isDir) ?? [], [visibleListing]);
   const pathSegments = useMemo(() => splitPathSegments(visibleListing?.path ?? selectedPath), [selectedPath, visibleListing?.path]);
+  const rowEntries = useMemo<BrowserRow[]>(() => [
+    ...(visibleListing?.parent ? [{ kind: 'parent' as const, path: visibleListing.parent, label: '..' }] : []),
+    ...directories.map((entry) => ({
+      kind: 'dir' as const,
+      path: entry.path,
+      label: entry.name,
+      isHidden: entry.isHidden,
+    })),
+  ], [directories, visibleListing?.parent]);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +140,10 @@ export function RemoteDirectoryBrowserModal({
     };
   }, [hostId, initialPath]);
 
+  useEffect(() => {
+    dialogRef.current?.focus();
+  }, []);
+
   const navigateTo = async (path: string | undefined) => {
     if (!path) {
       return;
@@ -144,9 +165,65 @@ export function RemoteDirectoryBrowserModal({
   const activeStatusMessage = statusMessage ?? (loading ? `Connecting to ${hostLabel}…` : null);
   const currentPath = visibleListing?.path ?? selectedPath;
 
+  const handleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      const tagName = target.tagName;
+      const isFormField = tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || target.isContentEditable;
+      const isNonRowButton = tagName === 'BUTTON' && target.dataset.browserRow !== 'true';
+      if (isFormField || isNonRowButton) {
+        return;
+      }
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+
+    if (event.key === 'Backspace') {
+      if (!visibleListing?.parent || loading) {
+        return;
+      }
+      event.preventDefault();
+      void navigateTo(visibleListing.parent);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      const selectedRow = rowEntries.find((row) => row.path === selectedPath);
+      if (!selectedRow || loading) {
+        return;
+      }
+      event.preventDefault();
+      void navigateTo(selectedRow.path);
+      return;
+    }
+
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return;
+    }
+
+    if (rowEntries.length === 0 || loading) {
+      return;
+    }
+
+    event.preventDefault();
+    const currentIndex = rowEntries.findIndex((row) => row.path === selectedPath);
+    const nextIndex = event.key === 'ArrowDown'
+      ? (currentIndex < 0 ? 0 : Math.min(currentIndex + 1, rowEntries.length - 1))
+      : (currentIndex < 0 ? rowEntries.length - 1 : Math.max(currentIndex - 1, 0));
+    setSelectedPath(rowEntries[nextIndex]?.path ?? selectedPath);
+  };
+
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} onKeyDown={handleKeyDown} className="flex max-h-[86vh] w-full max-w-4xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl focus:outline-none">
         <div className="border-b border-border-subtle px-6 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
@@ -188,36 +265,31 @@ export function RemoteDirectoryBrowserModal({
           {error ? <p className="px-2 pb-2 text-[12px] text-danger">{error}</p> : null}
           {!loading && !error && visibleListing ? (
             <div className="space-y-1">
-              {visibleListing.parent ? (
-                <button
-                  type="button"
-                  onClick={() => { void navigateTo(visibleListing.parent); }}
-                  className={cx(BROWSER_ROW_CLASS, 'text-secondary hover:bg-surface hover:text-primary')}
-                >
-                  <ParentDirectoryIcon className="shrink-0 text-dim/80" />
-                  <span className="font-mono text-[13px] text-primary">..</span>
-                </button>
-              ) : null}
-
-              {directories.length > 0 ? directories.map((entry) => {
-                const selected = selectedPath === entry.path;
+              {rowEntries.length > 0 ? rowEntries.map((row) => {
+                const selected = selectedPath === row.path;
                 return (
                   <button
-                    key={entry.path}
+                    key={`${row.kind}:${row.path}`}
                     type="button"
-                    onClick={() => setSelectedPath(entry.path)}
-                    onDoubleClick={() => { void navigateTo(entry.path); }}
+                    data-browser-row="true"
+                    aria-selected={selected}
+                    onClick={() => setSelectedPath(row.path)}
+                    onDoubleClick={() => { void navigateTo(row.path); }}
                     className={cx(
                       BROWSER_ROW_CLASS,
                       selected ? 'bg-accent/6 text-primary ring-1 ring-accent/15' : 'text-secondary hover:bg-surface hover:text-primary',
                     )}
                   >
-                    <FolderIcon className={cx('shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')} />
-                    <span className={cx('min-w-0 flex-1 truncate text-[13px] font-medium', selected ? 'text-primary' : 'text-primary/95')}>
-                      {entry.name}
+                    {row.kind === 'parent' ? (
+                      <ParentDirectoryIcon className={cx('shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')} />
+                    ) : (
+                      <FolderIcon className={cx('shrink-0', selected ? 'text-accent' : 'text-dim/80 group-hover:text-accent')} />
+                    )}
+                    <span className={cx('min-w-0 flex-1 truncate text-[13px] font-medium', selected ? 'text-primary' : 'text-primary/95', row.kind === 'parent' ? 'font-mono' : '')}>
+                      {row.label}
                     </span>
-                    {entry.isHidden ? <span className="shrink-0 text-[11px] text-dim">Hidden</span> : null}
-                    <ChevronRightIcon className="shrink-0 text-dim/70" />
+                    {row.kind === 'dir' && row.isHidden ? <span className="shrink-0 text-[11px] text-dim">Hidden</span> : null}
+                    {row.kind === 'dir' ? <ChevronRightIcon className="shrink-0 text-dim/70" /> : null}
                   </button>
                 );
               }) : (
