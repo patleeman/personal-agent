@@ -53,8 +53,8 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 - packages the Electron desktop app with `electron-builder`
 - excludes stale nested app bundles and workspace package-local `node_modules/` directories from the shipped app
 - signs it with the local `Developer ID Application` certificate
-- notarizes the packaged app and staples it
-- notarizes the shipped `.dmg` and staples it so the downloadable installer is accepted by Gatekeeper
+- notarizes the shipped `.zip` and `.dmg` containers after packaging
+- staples the shipped `.dmg` so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
 - emits Electron updater metadata including `latest-mac.yml`
 

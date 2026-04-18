@@ -322,14 +322,15 @@ function stapleAndValidate(pathname) {
 }
 
 function notarizeDistributionContainers(env, files) {
-  const appPath = collectPackagedAppPath();
-  if (appPath) {
-    console.log(`Stapling packaged app ${appPath}...`);
-    stapleAndValidate(appPath);
+  const notarytoolArgs = buildNotarytoolArgs(env);
+
+  const zipFiles = files.filter((file) => file.endsWith('.zip'));
+  for (const zipFile of zipFiles) {
+    console.log(`Submitting ${zipFile} for ZIP notarization...`);
+    run('xcrun', ['notarytool', 'submit', zipFile, ...notarytoolArgs, '--wait']);
   }
 
   const dmgFiles = files.filter((file) => file.endsWith('.dmg'));
-  const notarytoolArgs = buildNotarytoolArgs(env);
   for (const dmgFile of dmgFiles) {
     console.log(`Submitting ${dmgFile} for DMG notarization...`);
     run('xcrun', ['notarytool', 'submit', dmgFile, ...notarytoolArgs, '--wait']);
