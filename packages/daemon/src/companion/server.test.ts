@@ -137,6 +137,13 @@ describe('daemon companion server', () => {
     expect(hello.hostLabel.length).toBeGreaterThan(0);
     expect(hello.protocolVersion).toBe('v1');
 
+    const setupResponse = await fetch(`${baseUrl}/companion/v1/admin/setup`, { method: 'POST' });
+    expect(setupResponse.status).toBe(201);
+    const setup = await readJson(setupResponse) as { pairing: { code: string }; links: Array<{ baseUrl: string; setupUrl: string }>; warnings: string[] };
+    expect(setup.pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
+    expect(setup.links).toEqual([]);
+    expect(setup.warnings[0]).toContain('loopback only');
+
     const pairingCodeResponse = await fetch(`${baseUrl}/companion/v1/admin/pairing-codes`, { method: 'POST' });
     expect(pairingCodeResponse.status).toBe(201);
     const pairing = await readJson(pairingCodeResponse) as { code: string };

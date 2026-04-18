@@ -58,6 +58,23 @@ final class CompanionAppModel: ObservableObject {
         }
     }
 
+    func pairSetupLink(_ setupLink: CompanionSetupLink, deviceLabel: String? = nil) async {
+        await pairHost(
+            baseURLString: setupLink.baseURL,
+            code: setupLink.code,
+            deviceLabel: deviceLabel?.trimmed.nilIfBlank ?? UIDevice.current.name
+        )
+    }
+
+    func handleIncomingSetupURL(_ url: URL) async {
+        guard let setupLink = CompanionSetupLink(url: url) else {
+            bannerMessage = "That QR code or setup link is not a valid Personal Agent companion pairing link."
+            return
+        }
+
+        await pairSetupLink(setupLink)
+    }
+
     func selectHost(_ id: UUID?) async {
         activeSession?.stop()
         activeSession = nil

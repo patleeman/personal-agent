@@ -46,6 +46,19 @@ export interface CompanionPairingCode {
   expiresAt: string;
 }
 
+export interface CompanionSetupLink {
+  id: string;
+  label: string;
+  baseUrl: string;
+  setupUrl: string;
+}
+
+export interface CompanionSetupState {
+  pairing: CompanionPairingCode;
+  links: CompanionSetupLink[];
+  warnings: string[];
+}
+
 export interface CompanionDeviceTokenResult {
   bearerToken: string;
   device: CompanionPairedDeviceSummary;

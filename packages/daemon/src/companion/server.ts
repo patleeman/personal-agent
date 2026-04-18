@@ -7,6 +7,7 @@ import type { DaemonConfig } from '../config.js';
 import { readCompanionDeviceByToken, readCompanionDeviceAdminState, createCompanionPairingCode, pairCompanionDevice, revokeCompanionDevice, updateCompanionDeviceLabel } from './auth-store.js';
 import { readCompanionHostState } from './host-state.js';
 import { resolveCompanionRuntime } from './runtime.js';
+import { buildCompanionSetupState } from './setup-links.js';
 import {
   COMPANION_API_ROOT,
   COMPANION_PROTOCOL_VERSION,
@@ -30,6 +31,7 @@ import {
   type CompanionRuntime,
   type CompanionRuntimeProvider,
   type CompanionServerSocketMessage,
+  type CompanionSetupState,
   type CompanionSocketErrorResponse,
   type CompanionSubscribeMessage,
   type CompanionSurfaceType,
@@ -194,6 +196,16 @@ function buildHello(stateRoot: string): CompanionHostHello {
       deviceAdmin: true,
     },
   };
+}
+
+function buildSetupState(stateRoot: string, config: DaemonConfig, pairing = createCompanionPairingCode(stateRoot)): CompanionSetupState {
+  const host = readCompanionHostState(stateRoot);
+  return buildCompanionSetupState({
+    config,
+    pairing,
+    hostLabel: host.hostLabel,
+    hostInstanceId: host.hostInstanceId,
+  });
 }
 
 async function resolveRuntimeOrThrow(
@@ -411,6 +423,15 @@ export class DaemonCompanionServer {
       }
 
       sendJson(response, 201, createCompanionPairingCode(this.stateRoot));
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/admin/setup`) {
+      if (!this.requireLoopbackAdmin(request, response)) {
+        return;
+      }
+
+      sendJson(response, 201, buildSetupState(this.stateRoot, this.config));
       return;
     }
 

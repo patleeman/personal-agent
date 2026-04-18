@@ -80,6 +80,44 @@ struct CompanionPairResult: Codable, Equatable {
     let hello: CompanionHello?
 }
 
+struct CompanionSetupLink: Equatable {
+    static let scheme = "pa-companion"
+
+    let baseURL: String
+    let code: String
+    let hostLabel: String?
+    let hostInstanceId: String?
+
+    init?(url: URL) {
+        guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              url.scheme?.lowercased() == Self.scheme,
+              url.host?.lowercased() == "pair" || components.path == "/pair" else {
+            return nil
+        }
+
+        func queryValue(_ name: String) -> String? {
+            components.queryItems?.first(where: { $0.name == name })?.value?.trimmed.nilIfBlank
+        }
+
+        guard let baseURL = queryValue("base") ?? queryValue("baseUrl"),
+              let code = queryValue("code") else {
+            return nil
+        }
+
+        self.baseURL = baseURL
+        self.code = code
+        self.hostLabel = queryValue("label")
+        self.hostInstanceId = queryValue("hostInstanceId")
+    }
+
+    init?(rawString: String) {
+        guard let url = URL(string: rawString.trimmed) else {
+            return nil
+        }
+        self.init(url: url)
+    }
+}
+
 struct ExecutionTargetSummary: Codable, Equatable, Identifiable {
     let id: String
     let label: String

@@ -10,7 +10,7 @@ apps/ios/PersonalAgentCompanion
 
 ## What it does
 
-- pair to a companion host with pairing code + bearer token
+- pair to a companion host with manual pairing code entry or setup QR + bearer token
 - persist paired hosts locally and keep the token in Keychain
 - mirror host conversation ordering with pinned/open sections
 - open a conversation and stream transcript updates over the multiplexed companion socket
@@ -64,8 +64,9 @@ The live app expects the desktop runtime to be running on the target machine so 
 Typical local-dev path:
 
 1. start the desktop runtime
-2. generate a pairing code in Settings → Companion access
-3. pair from the iOS app against the host URL
+2. in desktop Settings → Companion access, generate a setup QR
+3. in the iOS app, open Pair host → Scan setup QR
+4. or use manual host URL + pairing code entry if needed
 
 ## Live integration test
 

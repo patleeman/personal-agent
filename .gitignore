@@ -23,6 +23,8 @@ tools/*/.build/
 
 # OS/editor
 .DS_Store
+**/xcuserdata/
+*.xcuserstate
 
 # Logs
 *.log

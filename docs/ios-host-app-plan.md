@@ -34,12 +34,13 @@ These are the design decisions locked in for v1.
 Current repo implementation:
 
 - host-side companion API: implemented at `/companion/v1`
-- desktop companion admin UI: implemented in desktop Settings
+- desktop companion admin UI: implemented in desktop Settings, including setup QR generation for reachable host addresses
 - native iOS client: implemented at `apps/ios/PersonalAgentCompanion`
 
 The shipping iOS client currently covers:
 
 - host pairing + local host persistence
+- setup QR onboarding via desktop-generated QR codes, custom `pa-companion://` setup links, and in-app QR scanning
 - conversation list mirroring pinned/open ordering
 - live conversation transcript + prompt composer
 - prompt images + saved drawing attachment refs

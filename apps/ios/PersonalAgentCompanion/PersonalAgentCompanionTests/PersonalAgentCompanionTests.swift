@@ -13,6 +13,16 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.sections.last?.sessions.first?.id, "conv-2")
     }
 
+    func testCompanionSetupLinkParsesCustomPairURL() {
+        let raw = "pa-companion://pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL&label=Patrick%20Mac&hostInstanceId=host_123"
+        let setupLink = CompanionSetupLink(rawString: raw)
+
+        XCTAssertEqual(setupLink?.baseURL, "http://192.168.1.23:3845")
+        XCTAssertEqual(setupLink?.code, "ABCD-EFGH-IJKL")
+        XCTAssertEqual(setupLink?.hostLabel, "Patrick Mac")
+        XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
+    }
+
     func testConversationBootstrapLoadsTranscriptAndAttachments() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

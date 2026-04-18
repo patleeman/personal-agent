@@ -1,4 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import QRCode from 'qrcode';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
@@ -490,6 +491,19 @@ interface CompanionPairingCodeState {
   expiresAt: string;
 }
 
+interface CompanionSetupLinkState {
+  id: string;
+  label: string;
+  baseUrl: string;
+  setupUrl: string;
+}
+
+interface CompanionSetupState {
+  pairing: CompanionPairingCodeState;
+  links: CompanionSetupLinkState[];
+  warnings: string[];
+}
+
 interface CompanionDeviceSummaryState {
   id: string;
   deviceLabel: string;
@@ -551,10 +565,13 @@ function formatCompanionTimestamp(value: string): string {
 
 function DesktopCompanionSettingsPanel() {
   const [loading, setLoading] = useState(true);
-  const [action, setAction] = useState<'create-pairing' | `revoke:${string}` | null>(null);
+  const [action, setAction] = useState<'create-setup' | `revoke:${string}` | null>(null);
   const [hello, setHello] = useState<CompanionHelloState | null>(null);
   const [adminState, setAdminState] = useState<CompanionAdminState | null>(null);
   const [latestPairingCode, setLatestPairingCode] = useState<CompanionPairingCodeState | null>(null);
+  const [latestSetup, setLatestSetup] = useState<CompanionSetupState | null>(null);
+  const [selectedSetupLinkId, setSelectedSetupLinkId] = useState<string | null>(null);
+  const [setupQrSvg, setSetupQrSvg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -579,14 +596,50 @@ function DesktopCompanionSettingsPanel() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    const selectedLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId)
+      ?? latestSetup?.links[0]
+      ?? null;
+    if (!selectedLink) {
+      setSetupQrSvg(null);
+      return;
+    }
+
+    let active = true;
+    void QRCode.toString(selectedLink.setupUrl, {
+      type: 'svg',
+      margin: 1,
+      width: 240,
+      color: {
+        dark: '#111111',
+        light: '#ffffff',
+      },
+    }).then((svg) => {
+      if (active) {
+        setSetupQrSvg(svg);
+      }
+    }).catch((nextError) => {
+      if (active) {
+        setSetupQrSvg(null);
+        setError(nextError instanceof Error ? nextError.message : String(nextError));
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [latestSetup, selectedSetupLinkId]);
+
   const handleCreatePairingCode = async () => {
-    setAction('create-pairing');
+    setAction('create-setup');
     setError(null);
     setNotice(null);
     try {
-      const pairing = await requestCompanionJson<CompanionPairingCodeState>('POST', '/companion/v1/admin/pairing-codes');
-      setLatestPairingCode(pairing);
-      setNotice('Pairing code created.');
+      const setup = await requestCompanionJson<CompanionSetupState>('POST', '/companion/v1/admin/setup');
+      setLatestSetup(setup);
+      setLatestPairingCode(setup.pairing);
+      setSelectedSetupLinkId(setup.links[0]?.id ?? null);
+      setNotice(setup.links.length > 0 ? 'Setup QR created.' : 'Pairing code created, but the companion host is not reachable from other devices yet.');
       await refresh();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -610,10 +663,14 @@ function DesktopCompanionSettingsPanel() {
     }
   };
 
+  const selectedSetupLink = latestSetup?.links.find((entry) => entry.id === selectedSetupLinkId)
+    ?? latestSetup?.links[0]
+    ?? null;
+
   return (
     <SettingsPanel
       title="Companion access"
-      description="Generate pairing codes and manage companion devices for the daemon-backed companion API."
+      description="Generate phone setup QR codes and manage companion devices for the daemon-backed companion API."
     >
       {loading ? <p className="ui-card-meta">Loading companion access state…</p> : null}
       {hello ? (
@@ -632,7 +689,7 @@ function DesktopCompanionSettingsPanel() {
           disabled={action !== null}
           className={ACTION_BUTTON_CLASS}
         >
-          {action === 'create-pairing' ? 'Creating…' : 'Generate pairing code'}
+          {action === 'create-setup' ? 'Creating…' : 'Generate setup QR'}
         </button>
         <button
           type="button"
@@ -645,10 +702,61 @@ function DesktopCompanionSettingsPanel() {
       </div>
 
       {latestPairingCode ? (
-        <div className="rounded-2xl bg-surface/70 px-4 py-4">
-          <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/75">Latest pairing code</p>
-          <p className="mt-2 font-mono text-[20px] tracking-[0.18em] text-primary">{latestPairingCode.code}</p>
-          <p className="mt-2 text-[12px] text-secondary">Expires {formatCompanionTimestamp(latestPairingCode.expiresAt)}</p>
+        <div className="space-y-3 rounded-2xl bg-surface/70 px-4 py-4">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/75">Latest pairing code</p>
+            <p className="mt-2 font-mono text-[20px] tracking-[0.18em] text-primary">{latestPairingCode.code}</p>
+            <p className="mt-2 text-[12px] text-secondary">Expires {formatCompanionTimestamp(latestPairingCode.expiresAt)}</p>
+          </div>
+
+          {latestSetup && latestSetup.links.length > 0 ? (
+            <div className="space-y-3">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/75">Phone setup QR</p>
+                <p className="mt-1 text-[12px] text-secondary">Open the iPhone app and scan this QR from Pair host → Scan setup QR.</p>
+              </div>
+
+              {latestSetup.links.length > 1 ? (
+                <div className="flex flex-wrap gap-2">
+                  {latestSetup.links.map((link) => (
+                    <button
+                      key={link.id}
+                      type="button"
+                      onClick={() => setSelectedSetupLinkId(link.id)}
+                      className={cx(
+                        ACTION_BUTTON_CLASS,
+                        selectedSetupLink?.id === link.id ? 'border-accent bg-surface text-primary' : undefined,
+                      )}
+                    >
+                      {link.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                <div className="w-fit rounded-2xl bg-white p-3 shadow-sm">
+                  {setupQrSvg ? (
+                    <div className="h-[240px] w-[240px] [&_svg]:h-full [&_svg]:w-full" dangerouslySetInnerHTML={{ __html: setupQrSvg }} />
+                  ) : (
+                    <div className="flex h-[240px] w-[240px] items-center justify-center text-[12px] text-black/60">Rendering QR…</div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1 space-y-2 text-[12px] text-secondary">
+                  <p><span className="text-primary">Base URL</span> · <span className="font-mono break-all">{selectedSetupLink?.baseUrl}</span></p>
+                  <p><span className="text-primary">Route</span> · <span className="font-mono break-all">{selectedSetupLink?.label}</span></p>
+                  <p className="text-[11px] text-dim">If the phone camera does not open the app directly, scan this QR inside the iPhone app instead.</p>
+                </div>
+              </div>
+            </div>
+          ) : latestSetup?.warnings.length ? (
+            <div className="space-y-2 rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-[12px] text-secondary">
+              <p className="font-medium text-primary">Phone pairing needs a reachable host address.</p>
+              {latestSetup.warnings.map((warning) => (
+                <p key={warning}>{warning}</p>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

@@ -22,6 +22,8 @@
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Upload images and preview assets into Personal Agent conversations.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Scan setup QR codes from a Personal Agent host.</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Connect to Personal Agent hosts running on your local network.</string>
 	<key>NSAppTransportSecurity</key>
@@ -29,6 +31,19 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.personalagent.ios.companion.setup</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>pa-companion</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

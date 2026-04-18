@@ -1,4 +1,5 @@
 import SwiftUI
+import VisionKit
 
 struct RootView: View {
     @StateObject private var appModel = CompanionAppModel()
@@ -31,6 +32,11 @@ struct RootView: View {
         }
         .sheet(isPresented: $appModel.hostSelectionPresented) {
             HostSelectionView(appModel: appModel)
+        }
+        .onOpenURL { url in
+            Task {
+                await appModel.handleIncomingSetupURL(url)
+            }
         }
         .alert("Companion", isPresented: Binding(get: {
             appModel.bannerMessage != nil
@@ -232,6 +238,7 @@ struct PairHostView: View {
     @State private var code = ""
     @State private var deviceLabel = UIDevice.current.name
     @State private var isPairing = false
+    @State private var showingScanner = false
 
     var body: some View {
         NavigationStack {
@@ -245,8 +252,16 @@ struct PairHostView: View {
                         .autocorrectionDisabled()
                     TextField("Device label", text: $deviceLabel)
                 }
+                Section("Instant setup") {
+                    Button {
+                        showingScanner = true
+                    } label: {
+                        Label("Scan setup QR", systemImage: "qrcode.viewfinder")
+                    }
+                    .disabled(isPairing)
+                }
                 Section {
-                    Text("Use the host’s companion settings panel to generate a pairing code, then enter the host URL and code here.")
+                    Text("Use the host’s companion settings panel to generate a setup QR or pairing code. Scanning the QR will pair this device immediately.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -259,17 +274,43 @@ struct PairHostView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isPairing ? "Pairing…" : "Pair") {
                         Task {
-                            isPairing = true
-                            await appModel.pairHost(baseURLString: baseURL, code: code, deviceLabel: deviceLabel)
-                            isPairing = false
-                            if appModel.activeSession != nil {
-                                dismiss()
-                            }
+                            await submitManualPairing()
                         }
                     }
                     .disabled(isPairing || baseURL.trimmed.isEmpty || code.trimmed.isEmpty)
                 }
             }
+        }
+        .sheet(isPresented: $showingScanner) {
+            SetupQrScannerSheet(
+                onScan: { rawValue in
+                    guard let setupLink = CompanionSetupLink(rawString: rawValue) else {
+                        appModel.bannerMessage = "That QR code is not a valid Personal Agent companion setup code."
+                        return
+                    }
+                    Task {
+                        showingScanner = false
+                        isPairing = true
+                        await appModel.pairSetupLink(setupLink, deviceLabel: deviceLabel)
+                        isPairing = false
+                        if appModel.activeSession != nil {
+                            dismiss()
+                        }
+                    }
+                },
+                onError: { message in
+                    appModel.bannerMessage = message
+                }
+            )
+        }
+    }
+
+    private func submitManualPairing() async {
+        isPairing = true
+        await appModel.pairHost(baseURLString: baseURL, code: code, deviceLabel: deviceLabel)
+        isPairing = false
+        if appModel.activeSession != nil {
+            dismiss()
         }
     }
 }
@@ -322,6 +363,114 @@ struct HostSelectionView: View {
                     Button("Done") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+private struct SetupQrScannerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let onScan: (String) -> Void
+    let onError: (String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                    SetupQrScannerView(onScan: { rawValue in
+                        onScan(rawValue)
+                        dismiss()
+                    }, onError: { message in
+                        onError(message)
+                    })
+                    .ignoresSafeArea(edges: .bottom)
+                } else {
+                    ContentUnavailableView(
+                        "Scanner unavailable",
+                        systemImage: "qrcode.viewfinder",
+                        description: Text("This device cannot scan setup QR codes in-app. Use manual pairing instead.")
+                    )
+                    .padding()
+                }
+            }
+            .navigationTitle("Scan setup QR")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct SetupQrScannerView: UIViewControllerRepresentable {
+    let onScan: (String) -> Void
+    let onError: (String) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onScan: onScan, onError: onError)
+    }
+
+    func makeUIViewController(context: Context) -> DataScannerViewController {
+        let controller = DataScannerViewController(
+            recognizedDataTypes: [.barcode(symbologies: [.qr])],
+            qualityLevel: .balanced,
+            recognizesMultipleItems: false,
+            isHighFrameRateTrackingEnabled: false,
+            isHighlightingEnabled: true
+        )
+        controller.delegate = context.coordinator
+        return controller
+    }
+
+    func updateUIViewController(_ uiViewController: DataScannerViewController, context: Context) {
+        context.coordinator.onScan = onScan
+        context.coordinator.onError = onError
+        guard !context.coordinator.hasStarted else {
+            return
+        }
+        context.coordinator.hasStarted = true
+        Task {
+            do {
+                try await uiViewController.startScanning()
+            } catch {
+                context.coordinator.onError(error.localizedDescription)
+            }
+        }
+    }
+
+    static func dismantleUIViewController(_ uiViewController: DataScannerViewController, coordinator: Coordinator) {
+        uiViewController.stopScanning()
+    }
+
+    final class Coordinator: NSObject, DataScannerViewControllerDelegate {
+        var onScan: (String) -> Void
+        var onError: (String) -> Void
+        var hasStarted = false
+        private var hasScanned = false
+
+        init(onScan: @escaping (String) -> Void, onError: @escaping (String) -> Void) {
+            self.onScan = onScan
+            self.onError = onError
+        }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, didAdd addedItems: [RecognizedItem], allItems: [RecognizedItem]) {
+            guard !hasScanned else {
+                return
+            }
+
+            for item in addedItems {
+                guard case .barcode(let barcode) = item, let payload = barcode.payloadStringValue?.trimmed, !payload.isEmpty else {
+                    continue
+                }
+                hasScanned = true
+                dataScanner.stopScanning()
+                onScan(payload)
+                return
+            }
+        }
+
+        func dataScanner(_ dataScanner: DataScannerViewController, becameUnavailableWithError error: DataScannerViewController.ScanningUnavailable) {
+            onError(error.localizedDescription)
         }
     }
 }

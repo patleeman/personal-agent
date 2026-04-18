@@ -105,9 +105,18 @@ async function readDesktopProtocolRequestBody(request: Request): Promise<unknown
   return bodyText;
 }
 
+function normalizeCompanionProxyHost(host: string): string {
+  const normalized = host.trim().toLowerCase();
+  if (normalized === '0.0.0.0' || normalized === '::' || normalized === '::0' || normalized === '::ffff:0.0.0.0') {
+    return '127.0.0.1';
+  }
+
+  return host;
+}
+
 async function proxyCompanionRequest(request: Request): Promise<Response> {
   const config = loadDaemonConfig();
-  const host = config.companion?.host ?? '127.0.0.1';
+  const host = normalizeCompanionProxyHost(config.companion?.host ?? '127.0.0.1');
   const port = config.companion?.port ?? 3843;
   const sourceUrl = new URL(request.url);
   const targetBase = `http://${host.includes(':') ? `[${host}]` : host}:${String(port)}`;
