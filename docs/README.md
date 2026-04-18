@@ -49,6 +49,7 @@ Then use this order:
 ## Interfaces
 
 - [Web UI Guide](./web-ui.md)
+- [iOS host-connected app design](./ios-host-app-plan.md)
 - [Electron desktop app plan](./electron-desktop-app-plan.md)
 - [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
@@ -94,7 +95,8 @@ These pages live under `../internal-skills/` because they describe runtime featu
 | How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
 | How should I handle local repo files? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
 | How do rendered outputs work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Work Packages](./projects.md) |
-| Which interface should I use day to day? | [Web UI Guide](./web-ui.md) | [Electron desktop app](./electron-desktop-app-plan.md), [Command-Line Guide (`pa`)](./command-line.md) |
+| Which interface should I use day to day? | [Web UI Guide](./web-ui.md) | [Electron desktop app](./electron-desktop-app-plan.md), [iOS host-connected app design](./ios-host-app-plan.md), [Command-Line Guide (`pa`)](./command-line.md) |
+| How should a phone or tablet connect to an existing PA host? | [iOS host-connected app design](./ios-host-app-plan.md) | [Web UI Guide](./web-ui.md), [Electron desktop app](./electron-desktop-app-plan.md) |
 | How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
 
 ## Durable surfaces at a glance

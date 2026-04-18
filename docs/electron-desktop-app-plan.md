@@ -135,5 +135,6 @@ That means:
 ## Related docs
 
 - [Electron desktop architecture](./electron-desktop-app-spec.md)
+- [iOS host-connected app design](./ios-host-app-plan.md)
 - [Web UI Guide](./web-ui.md)
 - [Release cycle](./release-cycle.md)

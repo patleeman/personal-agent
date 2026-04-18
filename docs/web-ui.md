@@ -181,6 +181,7 @@ Use your editor for repo files and durable instruction sources, and use the vaul
 
 - [Conversations](./conversations.md)
 - [Workspace](./workspace.md)
+- [iOS host-connected app design](./ios-host-app-plan.md)
 - [Electron desktop app](./electron-desktop-app-plan.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
