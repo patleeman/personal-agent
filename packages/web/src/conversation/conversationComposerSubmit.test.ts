@@ -31,25 +31,41 @@ describe('normalizeConversationComposerBehavior', () => {
 
 describe('resolveConversationComposerSubmitState', () => {
   it('shows Send when the session is idle', () => {
-    expect(resolveConversationComposerSubmitState(false, false)).toEqual({ label: 'Send' });
-    expect(resolveConversationComposerSubmitState(false, true)).toEqual({ label: 'Send' });
+    expect(resolveConversationComposerSubmitState(false, false)).toEqual({ label: 'Send', action: 'submit' });
+    expect(resolveConversationComposerSubmitState(false, true)).toEqual({ label: 'Send', action: 'submit' });
   });
 
   it('shows Follow up when the session is idle but new prompts will queue behind a hidden turn', () => {
     expect(resolveConversationComposerSubmitState(false, false, true)).toEqual({
       label: 'Follow up',
+      action: 'submit',
       behavior: 'followUp',
     });
   });
 
+  it('shows Parallel when a hidden turn is pending and the parallel modifier is held', () => {
+    expect(resolveConversationComposerSubmitState(false, false, true, true)).toEqual({
+      label: 'Parallel',
+      action: 'parallel',
+    });
+  });
+
   it('shows Steer while streaming by default', () => {
-    expect(resolveConversationComposerSubmitState(true, false)).toEqual({ label: 'Steer' });
+    expect(resolveConversationComposerSubmitState(true, false)).toEqual({ label: 'Steer', action: 'submit' });
   });
 
   it('switches to Follow up while streaming when Alt is held', () => {
     expect(resolveConversationComposerSubmitState(true, true)).toEqual({
       label: 'Follow up',
+      action: 'submit',
       behavior: 'followUp',
+    });
+  });
+
+  it('switches to Parallel while streaming when the parallel modifier is held', () => {
+    expect(resolveConversationComposerSubmitState(true, false, false, true)).toEqual({
+      label: 'Parallel',
+      action: 'parallel',
     });
   });
 });

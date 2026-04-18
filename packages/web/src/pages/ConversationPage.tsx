@@ -835,12 +835,24 @@ function RemoteExecutionIcon({ className }: { className?: string }) {
   );
 }
 
-function ComposerQueuedSendIcon({ label, className }: { label: 'Steer' | 'Follow up'; className?: string }) {
+function ComposerActionIcon({ label, className }: { label: 'Steer' | 'Follow up' | 'Parallel'; className?: string }) {
   if (label === 'Follow up') {
     return (
       <svg className={className} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M9 14 4 9l5-5" />
         <path d="M20 20c0-6-4-11-11-11H4" />
+      </svg>
+    );
+  }
+
+  if (label === 'Parallel') {
+    return (
+      <svg className={className} width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M7 7h10" />
+        <path d="M7 12h10" />
+        <path d="M7 17h10" />
+        <path d="m15 5 4 2-4 2" />
+        <path d="m9 15-4 2 4 2" />
       </svg>
     );
   }
@@ -853,8 +865,8 @@ function ComposerQueuedSendIcon({ label, className }: { label: 'Steer' | 'Follow
   );
 }
 
-function formatComposerQueuedSendLabel(label: 'Steer' | 'Follow up'): string {
-  return label === 'Follow up' ? 'followup' : 'steer';
+function formatComposerActionLabel(label: 'Steer' | 'Follow up' | 'Parallel'): string {
+  return label === 'Follow up' ? 'followup' : label.toLowerCase();
 }
 
 interface TokenCounts {
@@ -2750,6 +2762,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [drawingsBusy, setDrawingsBusy] = useState(false);
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [composerAltHeld, setComposerAltHeld] = useState(false);
+  const [composerParallelHeld, setComposerParallelHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
@@ -2848,10 +2861,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     function handleModifierChange(event: KeyboardEvent) {
       setComposerAltHeld(event.altKey);
+      setComposerParallelHeld(event.ctrlKey || event.metaKey);
     }
 
     function resetModifierState() {
       setComposerAltHeld(false);
+      setComposerParallelHeld(false);
     }
 
     window.addEventListener('keydown', handleModifierChange);
@@ -6207,6 +6222,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
+  async function submitComposerActionForModifiers(altKeyHeld: boolean, parallelKeyHeld: boolean) {
+    const nextSubmit = resolveConversationComposerSubmitState(
+      stream.isStreaming,
+      altKeyHeld,
+      liveSessionHasPendingHiddenTurn,
+      parallelKeyHeld,
+    );
+
+    if (nextSubmit.action === 'parallel') {
+      await submitParallelComposer();
+      return;
+    }
+
+    await submitComposer(nextSubmit.behavior);
+  }
+
   async function manageParallelJob(jobId: string, action: 'importNow' | 'skip' | 'cancel') {
     if (draft || !id || !isLiveSession) {
       showNotice('danger', 'Parallel prompts require a live conversation.', 4000);
@@ -6438,33 +6469,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
     }
 
-    if (
-      e.key === 'Enter'
-      && e.ctrlKey
-      && !e.metaKey
-      && !e.altKey
-      && !e.shiftKey
-      && !e.nativeEvent.isComposing
-      && (stream.isStreaming || liveSessionHasPendingHiddenTurn)
-    ) {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
-      await submitParallelComposer();
-      return;
-    }
-
-    if (e.key === 'Enter' && e.altKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      await submitComposer(resolveConversationComposerSubmitState(
-        stream.isStreaming,
-        true,
-        liveSessionHasPendingHiddenTurn,
-      ).behavior);
-      return;
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.nativeEvent.isComposing) {
-      e.preventDefault();
-      await submitComposer();
+      await submitComposerActionForModifiers(e.altKey, e.ctrlKey || e.metaKey);
     }
   }
 
@@ -6543,6 +6550,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     stream.isStreaming,
     composerAltHeld,
     liveSessionHasPendingHiddenTurn,
+    composerParallelHeld,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext || wholeLineBashRunning;
@@ -7529,7 +7537,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         : 'Message… (/ for commands, @ to reference notes, tasks, and indexed folders/files)'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                        : 'Ctrl+C clears the composer. Ctrl+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+                        : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
                       style={{ minHeight: '44px', maxHeight: '180px' }}
                     />
                   </div>
@@ -7585,51 +7593,33 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       {stream.isStreaming ? (
                         <>
-                          {composerHasContent && (() => {
-                            const queuedSendLabel = composerSubmit.label === 'Follow up' ? 'Follow up' : 'Steer';
-                            return (
-                              <button
-                                type="button"
-                                onClick={(event) => {
-                                  const behavior = resolveConversationComposerSubmitState(
-                                    stream.isStreaming,
-                                    composerAltHeld || event.altKey,
-                                    liveSessionHasPendingHiddenTurn,
-                                  ).behavior;
-                                  void submitComposer(behavior);
-                                }}
-                                disabled={composerDisabled}
-                                className={cx(
-                                  'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
-                                  queuedSendLabel === 'Follow up'
-                                    ? 'bg-elevated text-primary hover:bg-elevated/80'
-                                    : 'bg-warning/15 text-warning hover:bg-warning/25',
-                                )}
-                                title={queuedSendLabel}
-                                aria-label={queuedSendLabel}
-                              >
-                                <ComposerQueuedSendIcon label={queuedSendLabel} className="shrink-0" />
-                                <span>{formatComposerQueuedSendLabel(queuedSendLabel)}</span>
-                              </button>
-                            );
-                          })()}
                           {composerHasContent ? (
                             <button
                               type="button"
-                              onClick={() => { void submitParallelComposer(); }}
+                              onClick={(event) => {
+                                void submitComposerActionForModifiers(
+                                  composerAltHeld || event.altKey,
+                                  composerParallelHeld || event.ctrlKey || event.metaKey,
+                                );
+                              }}
                               disabled={composerDisabled}
-                              className="flex h-8 shrink-0 items-center gap-1.5 rounded-full bg-steel/12 px-3 text-[11px] font-medium text-steel transition-colors hover:bg-steel/20 disabled:cursor-default disabled:opacity-40"
-                              title="Parallel (Ctrl+Enter)"
-                              aria-label="Parallel"
+                              className={cx(
+                                'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
+                                composerSubmit.label === 'Parallel'
+                                  ? 'bg-steel/12 text-steel hover:bg-steel/20'
+                                  : composerSubmit.label === 'Follow up'
+                                    ? 'bg-elevated text-primary hover:bg-elevated/80'
+                                    : 'bg-warning/15 text-warning hover:bg-warning/25',
+                              )}
+                              title={composerSubmit.label === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : composerSubmit.label}
+                              aria-label={composerSubmit.label}
                             >
-                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                                <path d="M7 7h10" />
-                                <path d="M7 12h10" />
-                                <path d="M7 17h10" />
-                                <path d="m15 5 4 2-4 2" />
-                                <path d="m9 15-4 2 4 2" />
-                              </svg>
-                              <span>Parallel</span>
+                              {composerSubmit.label !== 'Send' ? (
+                                <>
+                                  <ComposerActionIcon label={composerSubmit.label} className="shrink-0" />
+                                  <span>{formatComposerActionLabel(composerSubmit.label)}</span>
+                                </>
+                              ) : null}
                             </button>
                           ) : null}
                           <button
@@ -7661,26 +7651,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         <button
                           type="button"
                           onClick={(event) => {
-                            const behavior = resolveConversationComposerSubmitState(
-                              stream.isStreaming,
+                            void submitComposerActionForModifiers(
                               composerAltHeld || event.altKey,
-                              liveSessionHasPendingHiddenTurn,
-                            ).behavior;
-                            void submitComposer(behavior);
+                              composerParallelHeld || event.ctrlKey || event.metaKey,
+                            );
                           }}
                           disabled={composerDisabled}
                           className={cx(
                             'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
                             composerSubmit.label === 'Send'
                               ? 'h-8 w-8 bg-accent text-white hover:bg-accent/90'
-                              : 'h-9 px-3 text-[11px] font-medium',
+                              : 'h-9 gap-1.5 px-3 text-[11px] font-medium',
                             composerSubmit.label === 'Steer'
                               ? 'bg-warning/15 text-warning hover:bg-warning/25'
                               : composerSubmit.label === 'Follow up'
                                 ? 'bg-elevated text-primary hover:bg-elevated/80'
-                                : '',
+                                : composerSubmit.label === 'Parallel'
+                                  ? 'bg-steel/12 text-steel hover:bg-steel/20'
+                                  : '',
                           )}
-                          title={composerSubmit.label}
+                          title={composerSubmit.label === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : composerSubmit.label}
                           aria-label={composerSubmit.label}
                         >
                           {composerSubmit.label === 'Send' ? (
@@ -7688,7 +7678,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                               <path d="m18 15-6-6-6 6" />
                             </svg>
                           ) : (
-                            <span>{composerSubmit.label}</span>
+                            <>
+                              <ComposerActionIcon label={composerSubmit.label} className="shrink-0" />
+                              <span>{formatComposerActionLabel(composerSubmit.label)}</span>
+                            </>
                           )}
                         </button>
                       ) : (
