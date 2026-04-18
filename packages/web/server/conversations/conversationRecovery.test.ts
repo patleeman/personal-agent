@@ -81,7 +81,7 @@ describe('conversation recovery', () => {
       },
     });
 
-    expect(resumeSession).toHaveBeenCalledWith(sessionFile, undefined);
+    expect(resumeSession).toHaveBeenCalledWith(sessionFile, { cwdOverride: '/tmp/workspace' });
     expect(queuePromptContext).toHaveBeenCalledWith('conv-123', 'referenced_context', 'Referenced projects: @foo');
     expect(promptSession).toHaveBeenCalledWith('conv-123', 'continue working', 'followUp', undefined);
     expect(recovered).toEqual({

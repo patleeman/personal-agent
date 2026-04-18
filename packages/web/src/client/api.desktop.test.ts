@@ -305,7 +305,7 @@ describe('api desktop transport', () => {
     const sessionDetail = await api.sessionDetail('live-1', { tailBlocks: 24 });
     const sessionBlock = await api.sessionBlock('live-1', 'block-1');
     const created = await api.createLiveSession('/repo', undefined, { model: 'gpt-5.4' });
-    const resumed = await api.resumeSession('/tmp/live-1.jsonl');
+    const resumed = await api.resumeSession('/tmp/live-1.jsonl', '/repo');
     const takeover = await api.takeoverLiveSession('live-1', 'surface-1');
     const prompted = await api.promptSession('live-1', 'hello', 'followUp', [], [], 'surface-1');
     const restored = await api.restoreQueuedMessage('live-1', { behavior: 'followUp', index: 0, previewId: 'queue-1' }, 'surface-1');
@@ -380,7 +380,7 @@ describe('api desktop transport', () => {
     expect(readSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
     expect(readSessionBlock).toHaveBeenCalledWith({ sessionId: 'live-1', blockId: 'block-1' });
     expect(createLiveSession).toHaveBeenCalledWith({ cwd: '/repo', model: 'gpt-5.4' });
-    expect(resumeLiveSession).toHaveBeenCalledWith('/tmp/live-1.jsonl');
+    expect(resumeLiveSession).toHaveBeenCalledWith({ sessionFile: '/tmp/live-1.jsonl', cwd: '/repo' });
     expect(takeOverLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', surfaceId: 'surface-1' });
     expect(submitLiveSessionPrompt).toHaveBeenCalledWith({
       conversationId: 'live-1',

@@ -1098,13 +1098,13 @@ export const api = {
     });
   },
 
-  resumeSession: async (sessionFile: string) => {
+  resumeSession: async (sessionFile: string, cwd?: string) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.resumeLiveSession(sessionFile);
+      return desktopBridge.resumeLiveSession({ sessionFile, ...(cwd ? { cwd } : {}) });
     }
 
-    return post<{ id: string }>('/live-sessions/resume', { sessionFile });
+    return post<{ id: string }>('/live-sessions/resume', { sessionFile, ...(cwd ? { cwd } : {}) });
   },
 
   promptSession: async (

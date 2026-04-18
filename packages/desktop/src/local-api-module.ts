@@ -246,7 +246,7 @@ export interface LocalApiModule {
     thinkingLevel?: string | null;
     serviceTier?: string | null;
   }): Promise<{ id: string; sessionFile: string; bootstrap?: unknown }>;
-  resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }>;
+  resumeDesktopLiveSession(input: { sessionFile: string; cwd?: string }): Promise<{ id: string }>;
   submitDesktopLiveSessionPrompt(input: {
     conversationId: string;
     text?: string;

@@ -244,7 +244,7 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-block`, input),
   createLiveSession: (input: { cwd?: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-live-session`, input),
-  resumeLiveSession: (sessionFile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:resume-live-session`, sessionFile),
+  resumeLiveSession: (input: { sessionFile: string; cwd?: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:resume-live-session`, input),
   takeOverLiveSession: (input: { conversationId: string; surfaceId: string }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:take-over-live-session`, input),
   restoreQueuedLiveSessionMessage: (input: {

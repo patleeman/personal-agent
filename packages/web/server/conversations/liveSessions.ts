@@ -3170,21 +3170,29 @@ async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry):
 /** Resume an existing session file into a live session. */
 export async function resumeSession(
   sessionFile: string,
-  options: LiveSessionLoaderOptions = {},
+  options: LiveSessionLoaderOptions & { cwdOverride?: string } = {},
 ): Promise<{ id: string }> {
   // Don't re-create if already live
   for (const [id, e] of registry.entries()) {
     if (resolveLiveSessionFile(e.session) === sessionFile) return { id };
   }
 
+  const {
+    cwdOverride,
+    ...loaderOptions
+  } = options;
+  const normalizedCwdOverride = typeof cwdOverride === 'string' && cwdOverride.trim().length > 0
+    ? cwdOverride.trim()
+    : undefined;
+
   const auth = makeAuth();
   const modelRegistry = makeRegistry(auth);
-  const sessionManager = SessionManager.open(sessionFile);
-  const cwd = sessionManager.getCwd();
-  const resourceLoader = await makeLoader(cwd, options);
+  const sessionManager = SessionManager.open(sessionFile, undefined, normalizedCwdOverride);
+  const cwd = normalizedCwdOverride ?? sessionManager.getCwd();
+  const resourceLoader = await makeLoader(cwd, loaderOptions);
   const { session } = await createAgentSession({
     cwd,
-    agentDir: options.agentDir ?? AGENT_DIR,
+    agentDir: loaderOptions.agentDir ?? AGENT_DIR,
     authStorage: auth,
     modelRegistry,
     resourceLoader,
@@ -3204,7 +3212,7 @@ export async function resumeSession(
   wireSession(id, session, cwd, {
     autoTitleRequested: Boolean(session.sessionName?.trim()),
   });
-  queuePrewarmLiveSessionLoader(cwd, options);
+  queuePrewarmLiveSessionLoader(cwd, loaderOptions);
   return { id };
 }
 
@@ -4246,7 +4254,7 @@ export async function branchSession(
     throw new Error('Cannot branch a live session without a session file.');
   }
 
-  const sourceManager = SessionManager.open(sourceSessionFile);
+  const sourceManager = SessionManager.open(sourceSessionFile, undefined, entry.cwd);
   if (!sourceManager.getEntry(entryId)) {
     throw new Error(`Session entry not found: ${entryId}`);
   }
@@ -4256,7 +4264,10 @@ export async function branchSession(
     throw new Error('Unable to create a branched session file.');
   }
 
-  const resumed = await resumeSession(branchedSessionFile, options);
+  const resumed = await resumeSession(branchedSessionFile, {
+    ...options,
+    cwdOverride: entry.cwd,
+  });
   return { newSessionId: resumed.id, sessionFile: branchedSessionFile };
 }
 
@@ -4285,7 +4296,7 @@ export async function forkSession(
     throw new Error('Cannot fork a live session without a session file.');
   }
 
-  const sourceManager = SessionManager.open(sourceSessionFile);
+  const sourceManager = SessionManager.open(sourceSessionFile, undefined, entry.cwd);
   const sourceEntry = sourceManager.getEntry(entryId);
   if (!sourceEntry) {
     throw new Error(`Session entry not found: ${entryId}`);
@@ -4320,7 +4331,10 @@ export async function forkSession(
     throw new Error('Unable to create a forked session file.');
   }
 
-  const resumed = await resumeSession(forkedSessionFile, loaderOptions);
+  const resumed = await resumeSession(forkedSessionFile, {
+    ...loaderOptions,
+    cwdOverride: entry.cwd,
+  });
 
   if (!preserveSource) {
     destroySession(sessionId);
@@ -4593,13 +4607,16 @@ export async function summarizeAndForkSession(
         throw new Error('No completed conversation turn is ready to summarize and fork yet.');
       }
 
-      const sourceManager = SessionManager.open(sourceSessionFile);
+      const sourceManager = SessionManager.open(sourceSessionFile, undefined, entry.cwd);
       const forkedSessionFile = sourceManager.createBranchedSession(lastCompletedEntryId);
       if (!forkedSessionFile) {
         throw new Error('Unable to create a summary fork from the latest completed turn.');
       }
 
-      const resumed = await resumeSession(forkedSessionFile, options);
+      const resumed = await resumeSession(forkedSessionFile, {
+        ...options,
+        cwdOverride: entry.cwd,
+      });
       return { id: resumed.id, sessionFile: forkedSessionFile };
     })()
     : await createSessionFromExisting(sourceSessionFile, entry.cwd, options);

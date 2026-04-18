@@ -340,6 +340,7 @@ export function registerLiveSessionRoutes(
     try {
       const result = await resumeLiveSessionCapability({
         sessionFile: typeof req.body?.sessionFile === 'string' ? req.body.sessionFile : '',
+        cwd: typeof req.body?.cwd === 'string' ? req.body.cwd : undefined,
       }, getLiveSessionCapabilityContext());
       res.json(result);
     } catch (err) {

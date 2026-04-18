@@ -830,7 +830,7 @@ describe('LocalHostController', () => {
         },
       },
     });
-    await expect(controller.resumeLiveSession?.('/tmp/live-1.jsonl')).resolves.toEqual({ id: 'live-1' });
+    await expect(controller.resumeLiveSession?.({ sessionFile: '/tmp/live-1.jsonl', cwd: '/repo' })).resolves.toEqual({ id: 'live-1' });
     await expect(controller.takeOverLiveSession?.({ conversationId: 'live-1', surfaceId: 'surface-1' })).resolves.toEqual({
       controllerSurfaceId: 'surface-1',
     });
@@ -867,7 +867,7 @@ describe('LocalHostController', () => {
     expect(readDesktopSessionDetail).toHaveBeenCalledWith({ sessionId: 'live-1', tailBlocks: 24 });
     expect(readDesktopSessionBlock).toHaveBeenCalledWith({ sessionId: 'live-1', blockId: 'block-1' });
     expect(createDesktopLiveSession).toHaveBeenCalledWith({ cwd: '/repo', model: 'gpt-5.4' });
-    expect(resumeDesktopLiveSession).toHaveBeenCalledWith('/tmp/live-1.jsonl');
+    expect(resumeDesktopLiveSession).toHaveBeenCalledWith({ sessionFile: '/tmp/live-1.jsonl', cwd: '/repo' });
     expect(takeOverDesktopLiveSession).toHaveBeenCalledWith({ conversationId: 'live-1', surfaceId: 'surface-1' });
     expect(submitDesktopLiveSessionPrompt).toHaveBeenCalledWith({
       conversationId: 'live-1',

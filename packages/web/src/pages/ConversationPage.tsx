@@ -3942,7 +3942,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      await api.resumeSession(visibleSessionDetail.meta.file);
+      await api.resumeSession(visibleSessionDetail.meta.file, visibleSessionDetail.meta.cwd);
       setConfirmedLive(true);
       streamReconnect();
       await streamSend(textToSend, queuedBehavior);

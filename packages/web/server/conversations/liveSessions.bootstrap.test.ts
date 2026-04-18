@@ -533,13 +533,13 @@ describe('liveSessions bootstrap helpers', () => {
       id: 'session-forked',
       sessionFile: '/tmp/durable-sessions/--tmp-next-workspace--/session-forked.jsonl',
     });
-    await expect(resumeSession('/tmp/stored-session.jsonl')).resolves.toEqual({
+    await expect(resumeSession('/tmp/stored-session.jsonl', { cwdOverride: '/tmp/override-workspace' })).resolves.toEqual({
       id: 'session-resumed',
     });
 
     expect(sessionManagerForkFromMock).toHaveBeenCalledWith('/tmp/source-session.jsonl', '/tmp/next-workspace', '/tmp/durable-sessions/--tmp-next-workspace--');
-    expect(sessionManagerOpenMock).toHaveBeenCalledWith('/tmp/stored-session.jsonl');
-    expect(registry.get('session-resumed')?.cwd).toBe('/tmp/resumed-workspace');
+    expect(sessionManagerOpenMock).toHaveBeenCalledWith('/tmp/stored-session.jsonl', undefined, '/tmp/override-workspace');
+    expect(registry.get('session-resumed')?.cwd).toBe('/tmp/override-workspace');
     expect(registry.get('session-resumed')?.autoTitleRequested).toBe(true);
   });
 
@@ -696,6 +696,10 @@ describe('liveSessions bootstrap helpers', () => {
     expect(branchSourceManager.getEntry).toHaveBeenCalledWith('entry-1');
     expect(forkSourceManager.getEntry).toHaveBeenCalledWith('entry-2');
     expect(forkSourceManager.createBranchedSession).toHaveBeenCalledWith('entry-1');
+    expect(sessionManagerOpenMock).toHaveBeenNthCalledWith(1, '/tmp/source-session.jsonl', undefined, '/tmp/source-workspace');
+    expect(sessionManagerOpenMock).toHaveBeenNthCalledWith(2, '/tmp/branch-session.jsonl', undefined, '/tmp/source-workspace');
+    expect(sessionManagerOpenMock).toHaveBeenNthCalledWith(3, '/tmp/source-session.jsonl', undefined, '/tmp/source-workspace');
+    expect(sessionManagerOpenMock).toHaveBeenNthCalledWith(4, '/tmp/fork-session.jsonl', undefined, '/tmp/source-workspace');
     expect(summarySession.session.compact).toHaveBeenCalledTimes(1);
     expect(registry.has('session-fork-source')).toBe(false);
   });

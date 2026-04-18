@@ -122,6 +122,7 @@ export interface CreateLiveSessionCapabilityResult {
 
 export interface ResumeLiveSessionCapabilityInput {
   sessionFile: string;
+  cwd?: string;
 }
 
 export interface PromptAttachmentRefInput {
@@ -444,7 +445,14 @@ export async function resumeLiveSessionCapability(
     throw new LiveSessionCapabilityInputError('sessionFile required');
   }
 
-  const result = await resumeLocalSession(sessionFile, buildLiveSessionOptions(context));
+  const cwd = typeof input.cwd === 'string' && input.cwd.trim().length > 0
+    ? input.cwd.trim()
+    : undefined;
+
+  const result = await resumeLocalSession(sessionFile, {
+    ...buildLiveSessionOptions(context),
+    ...(cwd ? { cwdOverride: cwd } : {}),
+  });
   await context.flushLiveDeferredResumes();
   return result;
 }

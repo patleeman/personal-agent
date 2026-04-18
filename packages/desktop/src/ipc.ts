@@ -996,7 +996,7 @@ export function registerDesktopIpc(options: {
     return controller.createLiveSession(input);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:resume-live-session`, async (event, sessionFile: string) => {
+  ipcMain.handle(`${CHANNEL_PREFIX}:resume-live-session`, async (event, input: { sessionFile: string; cwd?: string }) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();
     const controller = options.hostManager.getHostController(hostId);
@@ -1004,7 +1004,7 @@ export function registerDesktopIpc(options: {
       throw new Error('Dedicated desktop live-session resume is only available for the local host.');
     }
 
-    return controller.resumeLiveSession(sessionFile);
+    return controller.resumeLiveSession(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:take-over-live-session`, async (event, input) => {

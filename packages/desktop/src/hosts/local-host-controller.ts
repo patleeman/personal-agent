@@ -549,9 +549,9 @@ export class LocalHostController implements HostController {
     return module.createDesktopLiveSession(input);
   }
 
-  async resumeLiveSession(sessionFile: string): Promise<{ id: string }> {
+  async resumeLiveSession(input: { sessionFile: string; cwd?: string }): Promise<{ id: string }> {
     const module = await this.loadLocalApi();
-    return module.resumeDesktopLiveSession(sessionFile);
+    return module.resumeDesktopLiveSession(input);
   }
 
   async takeOverLiveSession(input: DesktopLiveSessionTakeoverRequest): Promise<unknown> {

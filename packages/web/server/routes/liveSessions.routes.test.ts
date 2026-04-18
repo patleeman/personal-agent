@@ -109,6 +109,7 @@ vi.mock('node:fs', () => ({
 }));
 
 vi.mock('@personal-agent/core', () => ({
+  getStateRoot: vi.fn(() => '/tmp/personal-agent-state'),
   resolveConversationAttachmentPromptFiles: resolveConversationAttachmentPromptFilesMock,
 }));
 

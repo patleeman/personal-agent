@@ -47,7 +47,7 @@ export interface RecoverConversationResult {
 
 export interface RecoverDurableLiveConversationsDependencies {
   isLive: (conversationId: string) => boolean;
-  resumeSession: (sessionFile: string, options?: RecoveryLoaderOptions) => Promise<{ id: string }>;
+  resumeSession: (sessionFile: string, options?: RecoveryLoaderOptions & { cwdOverride?: string }) => Promise<{ id: string }>;
   queuePromptContext: (conversationId: string, customType: string, content: string) => Promise<void>;
   promptSession: (
     conversationId: string,
@@ -153,14 +153,18 @@ export async function recoverConversationCapability(
   const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0
     ? manifestSpec.cwd.trim()
     : undefined;
-  const resumed = await resumeSession(sessionFile, buildRecoveryLoaderOptions(context, currentProfile));
+  const requestedCwd = sessionDetail?.meta.cwd
+    ?? readCheckpointString(checkpointPayload, 'cwd')
+    ?? manifestCwd;
+  const resumed = await resumeSession(sessionFile, {
+    ...buildRecoveryLoaderOptions(context, currentProfile),
+    ...(requestedCwd ? { cwdOverride: requestedCwd } : {}),
+  });
   await context.flushLiveDeferredResumes();
 
   const resumedEntry = liveRegistry.get(resumed.id);
   const effectiveCwd = resumedEntry?.cwd
-    ?? sessionDetail?.meta.cwd
-    ?? readCheckpointString(checkpointPayload, 'cwd')
-    ?? manifestCwd;
+    ?? requestedCwd;
   const effectiveTitle = sessionDetail?.meta.title ?? readCheckpointString(checkpointPayload, 'title');
   const effectiveProfile = readCheckpointString(checkpointPayload, 'profile') ?? currentProfile;
 
@@ -252,7 +256,10 @@ export async function recoverDurableLiveConversations(
         continue;
       }
 
-      const resumed = await dependencies.resumeSession(run.sessionFile, dependencies.loaderOptions);
+      const resumed = await dependencies.resumeSession(run.sessionFile, {
+        ...(dependencies.loaderOptions ?? {}),
+        cwdOverride: run.cwd,
+      });
 
       await syncWebLiveConversationRun({
         conversationId: resumed.id,

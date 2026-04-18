@@ -2544,8 +2544,8 @@ export async function createDesktopLiveSession(input: {
   return createLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
-export async function resumeDesktopLiveSession(sessionFile: string): Promise<{ id: string }> {
-  return resumeLiveSessionCapability({ sessionFile }, await getLocalLiveSessionCapabilityContext());
+export async function resumeDesktopLiveSession(input: { sessionFile: string; cwd?: string }): Promise<{ id: string }> {
+  return resumeLiveSessionCapability(input, await getLocalLiveSessionCapabilityContext());
 }
 
 export async function submitDesktopLiveSessionPrompt(input: {
@@ -2711,7 +2711,7 @@ export async function rollbackDesktopConversation(input: {
   rewriteConversationSessionToLeaf(source.sessionFile, leafId);
 
   if (source.live) {
-    await resumeLiveSessionCapability({ sessionFile: source.sessionFile }, await getLocalLiveSessionCapabilityContext());
+    await resumeLiveSessionCapability({ sessionFile: source.sessionFile, cwd: source.cwd }, await getLocalLiveSessionCapabilityContext());
   } else {
     publishConversationSessionMetaChanged(conversationId);
   }
