@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import type { HostManager } from './hosts/host-manager.js';
 import type { HostApiDispatchResult } from './hosts/types.js';
 import {
@@ -43,6 +43,70 @@ interface ConversationExecutionTargetState {
   remoteConversationId?: string;
 }
 
+interface ConversationSessionFileResolution {
+  path: string | null;
+  invalidPath?: string;
+  invalidPathKind?: 'directory' | 'other';
+}
+
+function resolveRegularFilePath(pathValue: string | undefined | null): { path: string | null; invalidKind?: 'directory' | 'other' } {
+  const normalizedPath = pathValue?.trim() || '';
+  if (!normalizedPath) {
+    return { path: null };
+  }
+
+  try {
+    const stats = statSync(normalizedPath);
+    if (stats.isFile()) {
+      return { path: normalizedPath };
+    }
+
+    return {
+      path: null,
+      invalidKind: stats.isDirectory() ? 'directory' : 'other',
+    };
+  } catch {
+    return { path: null };
+  }
+}
+
+function resolveLocalConversationSessionFile(
+  bootstrap: ConversationBootstrapLike | undefined,
+  localMeta: LocalConversationMeta | null,
+): ConversationSessionFileResolution {
+  const candidates = [
+    typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
+      ? bootstrap.liveSession.sessionFile
+      : null,
+    bootstrap?.sessionDetail?.meta?.file,
+    localMeta?.file,
+  ];
+  let invalidPath: string | undefined;
+  let invalidPathKind: 'directory' | 'other' | undefined;
+
+  for (const candidate of candidates) {
+    const normalizedCandidate = candidate?.trim() || '';
+    if (!normalizedCandidate) {
+      continue;
+    }
+
+    const resolved = resolveRegularFilePath(normalizedCandidate);
+    if (resolved.path) {
+      return { path: resolved.path };
+    }
+
+    if (!invalidPath && resolved.invalidKind) {
+      invalidPath = normalizedCandidate;
+      invalidPathKind = resolved.invalidKind;
+    }
+  }
+
+  return {
+    path: null,
+    ...(invalidPath ? { invalidPath } : {}),
+    ...(invalidPathKind ? { invalidPathKind } : {}),
+  };
+}
 
 function parseJsonBody<T = unknown>(response: HostApiDispatchResult): T | null {
   const contentType = response.headers['content-type'] ?? response.headers['Content-Type'] ?? '';
@@ -311,9 +375,8 @@ export async function continueConversationInHost(
   const localController = hostManager.getHostController('local');
   const bootstrap = await localController.readConversationBootstrap?.({ conversationId }) as ConversationBootstrapLike | undefined;
   const localMeta = await readLocalConversationMeta(hostManager, conversationId);
-  const sessionFile = typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
-    ? bootstrap.liveSession.sessionFile?.trim() || localMeta?.file
-    : bootstrap?.sessionDetail?.meta?.file?.trim() || localMeta?.file;
+  const sessionFileResolution = resolveLocalConversationSessionFile(bootstrap, localMeta);
+  const sessionFile = sessionFileResolution.path;
   const cwd = typeof bootstrap?.liveSession === 'object' && bootstrap.liveSession?.live === true
     ? bootstrap.liveSession.cwd?.trim() || localMeta?.cwd || ''
     : bootstrap?.sessionDetail?.meta?.cwd?.trim() || localMeta?.cwd || '';
@@ -322,6 +385,14 @@ export async function continueConversationInHost(
     : bootstrap?.sessionDetail?.meta?.title?.trim() || localMeta?.title || 'Conversation';
 
   if (!sessionFile) {
+    if (sessionFileResolution.invalidPath) {
+      throw new Error(
+        sessionFileResolution.invalidPathKind === 'directory'
+          ? `Conversation session file is invalid (expected a file, got a directory): ${sessionFileResolution.invalidPath}`
+          : `Conversation session file is invalid (not a regular file): ${sessionFileResolution.invalidPath}`,
+      );
+    }
+
     throw new Error('Conversation does not have a persisted session file yet. Send a turn first, then continue it remotely.');
   }
 

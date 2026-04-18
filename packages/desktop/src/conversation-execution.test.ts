@@ -1,11 +1,12 @@
 import { Buffer } from 'node:buffer';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { HostApiDispatchResult } from './hosts/types.js';
 import type { HostManager } from './hosts/host-manager.js';
 import {
+  continueConversationInHost,
   dispatchConversationExecutionRequest,
   subscribeConversationExecutionApiStream,
 } from './conversation-execution.js';
@@ -72,6 +73,128 @@ function createHostManagerMock() {
 }
 
 describe('conversation-execution remote routing', () => {
+  it('continues remotely using the persisted local session file when live bootstrap metadata points at a directory', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pa-conversation-execution-'));
+    const sessionDir = join(tempRoot, 'live-session-dir');
+    const sessionFile = join(tempRoot, 'local-conversation.jsonl');
+    const sessionContent = `${JSON.stringify({
+      type: 'session',
+      id: 'local-conversation',
+      timestamp: '2026-04-17T00:00:00.000Z',
+      cwd: '/repo/current',
+    })}\n`;
+    mkdirSync(sessionDir, { recursive: true });
+    writeFileSync(sessionFile, sessionContent, 'utf-8');
+
+    try {
+      const localController = {
+        readConversationBootstrap: vi.fn().mockResolvedValue({
+          liveSession: {
+            live: true,
+            id: 'local-conversation',
+            cwd: '/repo/current',
+            sessionFile: sessionDir,
+            title: 'Keep this thread',
+          },
+        }),
+        readSessionMeta: vi.fn().mockResolvedValue({
+          id: 'local-conversation',
+          file: sessionFile,
+          cwd: '/repo/current',
+          title: 'Keep this thread',
+        }),
+        destroyLiveSession: vi.fn().mockResolvedValue(undefined),
+      };
+      const remoteController = {
+        invokeLocalApi: vi.fn().mockImplementation((method: string, path: string, body: unknown) => {
+          if (method === 'POST' && path === '/api/live-sessions') {
+            expect(body).toEqual({
+              conversationId: 'local-conversation',
+              cwd: '/repo/current',
+              sessionContent,
+            });
+            return Promise.resolve({ id: 'remote-conversation' });
+          }
+
+          if (method === 'PATCH' && path === '/api/conversations/remote-conversation/title') {
+            expect(body).toEqual({ name: 'Keep this thread' });
+            return Promise.resolve({ ok: true });
+          }
+
+          throw new Error(`Unexpected remote invokeLocalApi call: ${method} ${path}`);
+        }),
+        dispatchApiRequest: vi.fn().mockImplementation(({ method, path }: { method: string; path: string }) => {
+          if (method === 'GET' && path === '/api/sessions/remote-conversation/meta') {
+            return Promise.resolve(jsonResult({ cwd: '/repo/current' }));
+          }
+
+          throw new Error(`Unexpected remote dispatch: ${method} ${path}`);
+        }),
+      };
+
+      const hostManager = {
+        getHostController: vi.fn((hostId: string) => {
+          if (hostId === 'local') {
+            return localController;
+          }
+
+          return remoteController;
+        }),
+        getHostRecord: vi.fn(() => ({ kind: 'ssh', label: 'Bender' })),
+        ensureHostRunning: vi.fn().mockResolvedValue(undefined),
+      } as unknown as HostManager;
+
+      await expect(continueConversationInHost(hostManager, {
+        conversationId: 'local-conversation',
+        hostId: 'bender',
+      })).resolves.toEqual({
+        conversationId: 'local-conversation',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+        remoteConversationId: 'remote-conversation',
+      });
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('throws a helpful error when the only available session path is a directory', async () => {
+    const tempRoot = mkdtempSync(join(tmpdir(), 'pa-conversation-execution-'));
+    const sessionDir = join(tempRoot, 'live-session-dir');
+    mkdirSync(sessionDir, { recursive: true });
+
+    try {
+      const localController = {
+        readConversationBootstrap: vi.fn().mockResolvedValue({
+          liveSession: {
+            live: true,
+            id: 'local-conversation',
+            cwd: '/repo/current',
+            sessionFile: sessionDir,
+            title: 'Keep this thread',
+          },
+        }),
+        readSessionMeta: vi.fn().mockResolvedValue({
+          id: 'local-conversation',
+          file: sessionDir,
+          cwd: '/repo/current',
+          title: 'Keep this thread',
+        }),
+      };
+
+      const hostManager = {
+        getHostController: vi.fn(() => localController),
+      } as unknown as HostManager;
+
+      await expect(continueConversationInHost(hostManager, {
+        conversationId: 'local-conversation',
+        hostId: 'bender',
+      })).rejects.toThrow(`Conversation session file is invalid (expected a file, got a directory): ${sessionDir}`);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
   it('applies a fallback title to both local and remote conversations before the first remote prompt', async () => {
     const { hostManager, localController, remoteController } = createHostManagerMock();
 

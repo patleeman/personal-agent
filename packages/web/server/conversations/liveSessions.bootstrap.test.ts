@@ -147,6 +147,9 @@ function createMockManager(overrides: Record<string, unknown> = {}) {
     createBranchedSession: vi.fn(),
     getCwd: vi.fn(() => '/tmp/workspace'),
     getEntry: vi.fn(),
+    getSessionFile: vi.fn(function getSessionFile(this: any) {
+      return this.sessionFile;
+    }),
     ...overrides,
   };
 
@@ -432,7 +435,7 @@ describe('liveSessions bootstrap helpers', () => {
       cwd: '/tmp/workspace',
       manager,
       model: { id: 'gpt-5', provider: 'wrong-provider' },
-      sessionFile: '/tmp/durable-sessions/--tmp-workspace--/session-created.jsonl',
+      sessionFile: '/tmp/workspace',
       tools: [],
     });
 

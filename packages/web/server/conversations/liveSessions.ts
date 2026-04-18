@@ -329,10 +329,9 @@ export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycl
 }
 
 function notifyLiveSessionLifecycleHandlers(entry: LiveEntry, trigger: 'turn_end' | 'auto_compaction_end'): void {
-  ensureSessionFileExists(entry.session.sessionManager);
   const event: LiveSessionLifecycleEvent = {
     conversationId: entry.sessionId,
-    sessionFile: entry.session.sessionFile?.trim() || undefined,
+    sessionFile: resolveLiveSessionFile(entry.session, { ensurePersisted: true }),
     title: resolveEntryTitle(entry),
     cwd: entry.cwd,
     trigger,
@@ -477,6 +476,25 @@ export function ensureSessionFileExists(sessionManager: SessionManager): void {
   manager.flushed = true;
 }
 
+function resolveLiveSessionFile(
+  session: Pick<AgentSession, 'sessionFile'> & { sessionManager?: Pick<SessionManager, 'getSessionFile'> },
+  options: { ensurePersisted?: boolean } = {},
+): string | undefined {
+  if (options.ensurePersisted && session.sessionManager) {
+    ensureSessionFileExists(session.sessionManager as SessionManager);
+  }
+
+  const managerFile = typeof session.sessionManager?.getSessionFile === 'function'
+    ? session.sessionManager.getSessionFile()?.trim()
+    : '';
+  if (managerFile) {
+    return managerFile;
+  }
+
+  const sessionFile = session.sessionFile?.trim();
+  return sessionFile || undefined;
+}
+
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
   const blocks = Array.isArray(content)
     ? content as Array<{ type?: string; text?: string }>
@@ -532,7 +550,7 @@ export function resolveStableSessionTitle(session: AgentSession): string {
     return sessionName;
   }
 
-  const sessionFile = session.sessionFile?.trim();
+  const sessionFile = resolveLiveSessionFile(session);
   if (sessionFile) {
     const persistedTitle = readSessionMetaByFile(sessionFile)?.title?.trim();
     if (persistedTitle && !isPlaceholderConversationTitle(persistedTitle)) {
@@ -2562,7 +2580,7 @@ export function getLiveSessions() {
   return Array.from(registry.entries()).map(([id, entry]) => ({
     id,
     cwd: entry.cwd,
-    sessionFile: entry.session.sessionFile ?? '',
+    sessionFile: resolveLiveSessionFile(entry.session) ?? '',
     title: resolveEntryTitle(entry),
     isStreaming: entry.session.isStreaming,
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
@@ -2906,7 +2924,7 @@ export async function createSession(
     sessionManager,
   });
 
-  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
+  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
 
@@ -2938,7 +2956,7 @@ export async function createSession(
   const id = session.sessionId;
   wireSession(id, session, cwd);
   queuePrewarmLiveSessionLoader(cwd, options);
-  return { id, sessionFile: session.sessionFile ?? '' };
+  return { id, sessionFile: resolveLiveSessionFile(session) ?? '' };
 }
 
 /** Create a new live session in a different cwd from an existing session file. */
@@ -2960,7 +2978,7 @@ export async function createSessionFromExisting(
     sessionManager,
   });
 
-  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
+  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
   patchSessionManagerPersistence(session.sessionManager);
   ensureSessionFileExists(session.sessionManager);
   const availableModels = modelRegistry.getAvailable();
@@ -2973,7 +2991,7 @@ export async function createSessionFromExisting(
   const id = session.sessionId;
   wireSession(id, session, cwd);
   queuePrewarmLiveSessionLoader(cwd, options);
-  return { id, sessionFile: session.sessionFile ?? '' };
+  return { id, sessionFile: resolveLiveSessionFile(session) ?? '' };
 }
 
 function buildRelatedConversationCompactionInstructions(prompt: string): string {
@@ -3023,7 +3041,7 @@ export async function summarizeSessionFileForPrompt(
   ensureSessionFileExists(session.sessionManager);
   await repairSessionModelProvider(session, modelRegistry.getAvailable());
 
-  const temporarySessionFile = session.sessionFile ?? '';
+  const temporarySessionFile = resolveLiveSessionFile(session) ?? '';
 
   try {
     await session.compact(buildRelatedConversationCompactionInstructions(prompt));
@@ -3076,7 +3094,7 @@ export async function requestConversationWorkingDirectoryChange(
     throw new Error(`Session ${conversationId} is not live.`);
   }
 
-  if (!entry.session.sessionFile?.trim()) {
+  if (!resolveLiveSessionFile(entry.session, { ensurePersisted: true })) {
     throw new Error('Conversation working directory changes require a persisted session file.');
   }
 
@@ -3110,9 +3128,8 @@ async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry):
   }
 
   pendingConversationWorkingDirectoryChanges.delete(entry.sessionId);
-  ensureSessionFileExists(entry.session.sessionManager);
 
-  const sourceSessionFile = entry.session.sessionFile?.trim();
+  const sourceSessionFile = resolveLiveSessionFile(entry.session, { ensurePersisted: true });
   if (!sourceSessionFile) {
     broadcast(entry, {
       type: 'error',
@@ -3157,7 +3174,7 @@ export async function resumeSession(
 ): Promise<{ id: string }> {
   // Don't re-create if already live
   for (const [id, e] of registry.entries()) {
-    if (e.session.sessionFile === sessionFile) return { id };
+    if (resolveLiveSessionFile(e.session) === sessionFile) return { id };
   }
 
   const auth = makeAuth();
@@ -3174,7 +3191,7 @@ export async function resumeSession(
     sessionManager,
   });
 
-  patchConversationBashTool(session, cwd, session.sessionId, session.sessionFile);
+  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
   patchSessionManagerPersistence(session.sessionManager);
   const availableModels = modelRegistry.getAvailable();
   await repairSessionModelProvider(session, availableModels);
