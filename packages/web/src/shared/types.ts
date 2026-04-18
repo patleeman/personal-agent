@@ -400,34 +400,6 @@ interface WebUiReleaseSummary {
   revision?: string;
 }
 
-interface WebUiDeploymentSummary {
-  stablePort: number;
-  activeRelease?: WebUiReleaseSummary;
-}
-
-interface WebUiServiceSummary {
-  platform: string;
-  identifier: string;
-  manifestPath: string;
-  installed: boolean;
-  running: boolean;
-  logFile?: string;
-  error?: string;
-  repoRoot: string;
-  port: number;
-  url: string;
-  tailscaleServe: boolean;
-  tailscaleUrl?: string;
-  resumeFallbackPrompt: string;
-  deployment?: WebUiDeploymentSummary;
-}
-
-export interface WebUiState {
-  warnings: string[];
-  service: WebUiServiceSummary;
-  log: LogTail;
-}
-
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export interface ConversationContextDocRef {
@@ -529,7 +501,6 @@ export type AppEventTopic =
   | 'tasks'
   | 'runs'
   | 'daemon'
-  | 'webUi'
   | 'workspace';
 
 export type AppEvent =
@@ -541,8 +512,7 @@ export type AppEvent =
   | { type: 'sessions_snapshot'; sessions: SessionMeta[] }
   | { type: 'tasks_snapshot'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs_snapshot'; result: DurableRunListResult }
-  | { type: 'daemon_snapshot'; state: DaemonState }
-  | { type: 'web_ui_snapshot'; state: WebUiState };
+  | { type: 'daemon_snapshot'; state: DaemonState };
 
 export type DesktopAppEvent =
   | { type: 'invalidate'; topics: AppEventTopic[] }
@@ -552,8 +522,7 @@ export type DesktopAppEvent =
   | { type: 'sessions'; sessions: SessionMeta[] }
   | { type: 'tasks'; tasks: ScheduledTaskSummary[] }
   | { type: 'runs'; result: DurableRunListResult }
-  | { type: 'daemon'; state: DaemonState }
-  | { type: 'webUi'; state: WebUiState };
+  | { type: 'daemon'; state: DaemonState };
 
 // ── Live session ──────────────────────────────────────────────────────────────
 
@@ -659,36 +628,6 @@ export interface LiveSessionForkEntry {
 export interface LiveSessionExportResult {
   ok: boolean;
   path: string;
-}
-
-interface RemoteAccessSessionSummary {
-  id: string;
-  deviceLabel: string;
-  createdAt: string;
-  lastUsedAt: string;
-  expiresAt: string;
-  revokedAt?: string;
-}
-
-export interface RemoteAccessAdminState {
-  pendingPairings: Array<{
-    id: string;
-    createdAt: string;
-    expiresAt: string;
-  }>;
-  sessions: RemoteAccessSessionSummary[];
-}
-
-export interface RemoteAccessPairingCodeResult {
-  id: string;
-  code: string;
-  createdAt: string;
-  expiresAt: string;
-}
-
-export interface RemoteAccessSessionState {
-  required: boolean;
-  session: RemoteAccessSessionSummary | null;
 }
 
 export type DesktopHostRecord =

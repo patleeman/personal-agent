@@ -28,11 +28,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     dispatchDesktopLocalApiRequest: vi.fn(),
     readDesktopAppStatus: vi.fn(),
     readDesktopDaemonState: vi.fn(),
-    readDesktopWebUiState: vi.fn(),
-    updateDesktopWebUiConfig: vi.fn(),
-    readDesktopRemoteAccessState: vi.fn(),
-    createDesktopRemoteAccessPairingCode: vi.fn(),
-    revokeDesktopRemoteAccessSession: vi.fn(),
     readDesktopSessions: vi.fn(),
     readDesktopSessionMeta: vi.fn(),
     readDesktopSessionSearchIndex: vi.fn(),
@@ -182,11 +177,9 @@ describe('LocalHostController', () => {
   it('routes desktop runtime status reads through the local API module without loopback proxying', async () => {
     const readDesktopAppStatus = vi.fn().mockResolvedValue({ profile: 'assistant', repoRoot: '/repo' });
     const readDesktopDaemonState = vi.fn().mockResolvedValue({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
-    const readDesktopWebUiState = vi.fn().mockResolvedValue({ service: { running: true, platform: 'desktop' }, warnings: [], log: { lines: [] } });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopAppStatus,
       readDesktopDaemonState,
-      readDesktopWebUiState,
     }));
     const backend = createBackendMock();
     const controller = new LocalHostController(
@@ -197,40 +190,13 @@ describe('LocalHostController', () => {
 
     await expect(controller.readAppStatus?.()).resolves.toEqual({ profile: 'assistant', repoRoot: '/repo' });
     await expect(controller.readDaemonState?.()).resolves.toEqual({ service: { running: true }, runtime: { running: true }, warnings: [], log: { lines: [] } });
-    await expect(controller.readWebUiState?.()).resolves.toEqual({ service: { running: true, platform: 'desktop' }, warnings: [], log: { lines: [] } });
 
     expect(readDesktopAppStatus).toHaveBeenCalledTimes(1);
     expect(readDesktopDaemonState).toHaveBeenCalledTimes(1);
-    expect(readDesktopWebUiState).toHaveBeenCalledTimes(1);
     expect(backend.ensureStarted).not.toHaveBeenCalled();
   });
 
-  it('routes desktop system admin settings through the local API module without loopback proxying', async () => {
-    const updateDesktopWebUiConfig = vi.fn().mockResolvedValue({
-      warnings: [],
-      service: {
-        running: true,
-        platform: 'desktop',
-        identifier: 'web-ui',
-        tailscaleServe: false,
-        resumeFallbackPrompt: 'Resume the task.',
-      },
-      log: { lines: [] },
-    });
-    const readDesktopRemoteAccessState = vi.fn().mockResolvedValue({
-      pendingPairings: [],
-      sessions: [{ id: 'session-1', label: 'iPhone' }],
-    });
-    const createDesktopRemoteAccessPairingCode = vi.fn().mockResolvedValue({
-      id: 'pairing-1',
-      code: '123456',
-      createdAt: '2026-04-15T10:00:00.000Z',
-      expiresAt: '2026-04-15T10:10:00.000Z',
-    });
-    const revokeDesktopRemoteAccessSession = vi.fn().mockResolvedValue({
-      ok: true,
-      state: { pendingPairings: [], sessions: [] },
-    });
+  it('routes desktop layout settings through the local API module without loopback proxying', async () => {
     const readDesktopOpenConversationTabs = vi.fn().mockResolvedValue({
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
@@ -245,10 +211,6 @@ describe('LocalHostController', () => {
       workspacePaths: ['/tmp/beta'],
     });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      updateDesktopWebUiConfig,
-      readDesktopRemoteAccessState,
-      createDesktopRemoteAccessPairingCode,
-      revokeDesktopRemoteAccessSession,
       readDesktopOpenConversationTabs,
       updateDesktopOpenConversationTabs,
     }));
@@ -259,31 +221,6 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
-    await expect(controller.updateWebUiConfig?.({ resumeFallbackPrompt: 'Resume the task.' })).resolves.toEqual({
-      warnings: [],
-      service: {
-        running: true,
-        platform: 'desktop',
-        identifier: 'web-ui',
-        tailscaleServe: false,
-        resumeFallbackPrompt: 'Resume the task.',
-      },
-      log: { lines: [] },
-    });
-    await expect(controller.readRemoteAccessState?.()).resolves.toEqual({
-      pendingPairings: [],
-      sessions: [{ id: 'session-1', label: 'iPhone' }],
-    });
-    await expect(controller.createRemoteAccessPairingCode?.()).resolves.toEqual({
-      id: 'pairing-1',
-      code: '123456',
-      createdAt: '2026-04-15T10:00:00.000Z',
-      expiresAt: '2026-04-15T10:10:00.000Z',
-    });
-    await expect(controller.revokeRemoteAccessSession?.('session-1')).resolves.toEqual({
-      ok: true,
-      state: { pendingPairings: [], sessions: [] },
-    });
     await expect(controller.readOpenConversationTabs?.()).resolves.toEqual({
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
@@ -298,10 +235,6 @@ describe('LocalHostController', () => {
       workspacePaths: ['/tmp/beta'],
     });
 
-    expect(updateDesktopWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
-    expect(readDesktopRemoteAccessState).toHaveBeenCalledTimes(1);
-    expect(createDesktopRemoteAccessPairingCode).toHaveBeenCalledTimes(1);
-    expect(revokeDesktopRemoteAccessSession).toHaveBeenCalledWith('session-1');
     expect(readDesktopOpenConversationTabs).toHaveBeenCalledTimes(1);
     expect(updateDesktopOpenConversationTabs).toHaveBeenCalledWith({
       sessionIds: ['conversation-4'],

@@ -2,8 +2,6 @@ import { existsSync, readdirSync, statSync, watch, type Dirent, type FSWatcher }
 import { basename, dirname, join, normalize } from 'node:path';
 import {
   getDurableTasksDir,
-  getMachineConfigFilePath,
-  getStateRoot,
   resolveConversationAttentionStatePath,
   resolveDeferredResumeStateFile,
   resolveProfileAlertsStateFile,
@@ -27,7 +25,6 @@ export type AppEventTopic =
   | 'runs'
   | 'automation'
   | 'daemon'
-  | 'webUi'
   | 'workspace';
 
 export type AppEvent =
@@ -77,7 +74,6 @@ const ALL_TOPICS: AppEventTopic[] = [
   'runs',
   'automation',
   'daemon',
-  'webUi',
   'workspace',
 ];
 const listeners = new Set<AppEventListener>();
@@ -186,7 +182,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
   const conversationAttentionStateFile = resolveConversationAttentionStatePath({ profile });
   const deferredResumeStateFile = resolveDeferredResumeStateFile();
   const alertsStateFile = resolveProfileAlertsStateFile({ profile });
-  const webStateDir = join(getStateRoot(), 'web');
 
   const activitySources: AppEventWatchSource[] = [
     ...activityStateDirs.map((path) => ({ path, kind: 'directory' as const })),
@@ -223,11 +218,6 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
     daemon: [
       { path: getDaemonConfigFilePath(), kind: 'file' },
       { path: daemonPaths.socketPath, kind: 'file' },
-    ],
-    webUi: [
-      { path: getMachineConfigFilePath(), kind: 'file' },
-      { path: join(webStateDir, 'deploy-state.json'), kind: 'file' },
-      { path: join(webStateDir, 'app-restart.lock.json'), kind: 'file' },
     ],
     workspace: [],
   };

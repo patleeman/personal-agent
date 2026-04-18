@@ -71,12 +71,6 @@ const desktopBridge = {
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
-  readWebUiState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-web-ui-state`),
-  updateWebUiConfig: (input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }) =>
-    ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-web-ui-config`, input),
-  readRemoteAccessState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-remote-access-state`),
-  createRemoteAccessPairingCode: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:create-remote-access-pairing-code`),
-  revokeRemoteAccessSession: (sessionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:revoke-remote-access-session`, sessionId),
   readSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-sessions`),
   readSessionMeta: (sessionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-meta`, sessionId),
   readSessionSearchIndex: (sessionIds: string[]) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-search-index`, sessionIds),

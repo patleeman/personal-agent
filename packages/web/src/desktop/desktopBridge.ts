@@ -1,7 +1,5 @@
 import type {
   AppStatus,
-  RemoteAccessAdminState,
-  RemoteAccessPairingCodeResult,
   ConversationArtifactRecord,
   ConversationArtifactSummary,
   ConversationCommitCheckpointRecord,
@@ -18,7 +16,6 @@ import type {
   ProviderAuthState,
   ProviderOAuthLoginState,
   VaultRootState,
-  WebUiState,
   ConversationBootstrapState,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
@@ -122,11 +119,6 @@ export interface PersonalAgentDesktopBridge {
   updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }): Promise<DesktopAppPreferencesState>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
-  readWebUiState(): Promise<WebUiState>;
-  updateWebUiConfig(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<WebUiState>;
-  readRemoteAccessState(): Promise<RemoteAccessAdminState>;
-  createRemoteAccessPairingCode(): Promise<RemoteAccessPairingCodeResult>;
-  revokeRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: RemoteAccessAdminState }>;
   readSessions(): Promise<SessionMeta[]>;
   readSessionMeta(sessionId: string): Promise<SessionMeta>;
   readSessionSearchIndex(sessionIds: string[]): Promise<{ index: Record<string, string> }>;

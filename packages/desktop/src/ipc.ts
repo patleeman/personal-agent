@@ -208,61 +208,6 @@ export function registerDesktopIpc(options: {
     return controller.readDaemonState();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-web-ui-state`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readWebUiState) {
-      throw new Error('Dedicated desktop web-ui-state reads are only available for the local host.');
-    }
-
-    return controller.readWebUiState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:update-web-ui-config`, async (event, input) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.updateWebUiConfig) {
-      throw new Error('Dedicated desktop web-ui config writes are only available for the local host.');
-    }
-
-    return controller.updateWebUiConfig(input);
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-remote-access-state`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readRemoteAccessState) {
-      throw new Error('Dedicated desktop remote-access reads are only available for the local host.');
-    }
-
-    return controller.readRemoteAccessState();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:create-remote-access-pairing-code`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.createRemoteAccessPairingCode) {
-      throw new Error('Dedicated desktop remote-access writes are only available for the local host.');
-    }
-
-    return controller.createRemoteAccessPairingCode();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:revoke-remote-access-session`, async (event, sessionId: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.revokeRemoteAccessSession) {
-      throw new Error('Dedicated desktop remote-access session revokes are only available for the local host.');
-    }
-
-    return controller.revokeRemoteAccessSession(sessionId);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-sessions`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

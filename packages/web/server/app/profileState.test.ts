@@ -320,7 +320,6 @@ describe('createProfileState', () => {
       'tasks',
       'runs',
       'daemon',
-      'webUi',
     );
     expect(process.env.PERSONAL_AGENT_ACTIVE_PROFILE).toBe('other');
     expect(process.env.PERSONAL_AGENT_PROFILE).toBe('other');

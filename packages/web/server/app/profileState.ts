@@ -192,7 +192,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
       'tasks',
       'runs',
       'daemon',
-      'webUi',
     );
     return currentProfile;
   }

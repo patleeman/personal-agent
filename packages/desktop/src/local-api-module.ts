@@ -35,14 +35,6 @@ export interface LocalApiModule {
   }): Promise<DesktopLocalApiDispatchResult>;
   readDesktopAppStatus(): Promise<unknown>;
   readDesktopDaemonState(): Promise<unknown>;
-  readDesktopWebUiState(): Promise<unknown>;
-  updateDesktopWebUiConfig(input: {
-    useTailscaleServe?: boolean;
-    resumeFallbackPrompt?: string;
-  }): Promise<unknown>;
-  readDesktopRemoteAccessState(): Promise<unknown>;
-  createDesktopRemoteAccessPairingCode(): Promise<unknown>;
-  revokeDesktopRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readDesktopSessions(): Promise<unknown>;
   readDesktopSessionMeta(sessionId: string): Promise<unknown>;
   readDesktopSessionSearchIndex(sessionIds: string[]): Promise<unknown>;

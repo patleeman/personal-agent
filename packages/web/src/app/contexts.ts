@@ -13,7 +13,6 @@ import type {
   ProjectRecord,
   ScheduledTaskSummary,
   SessionMeta,
-  WebUiState,
 } from '../shared/types';
 
 // ── Live title overrides ──────────────────────────────────────────────────────
@@ -45,7 +44,6 @@ export const INITIAL_APP_EVENT_VERSIONS: AppEventVersions = {
   runs: 0,
   automation: 0,
   daemon: 0,
-  webUi: 0,
   workspace: 0,
 };
 
@@ -105,15 +103,11 @@ export function useAppData() {
 
 interface SystemStatusContextValue {
   daemon: DaemonState | null;
-  webUi: WebUiState | null;
   setDaemon: (value: DaemonState) => void;
-  setWebUi: (value: WebUiState) => void;
 }
 
 export const SystemStatusContext = createContext<SystemStatusContextValue>({
   daemon: null,
-  webUi: null,
   setDaemon: () => {},
-  setWebUi: () => {},
 });
 

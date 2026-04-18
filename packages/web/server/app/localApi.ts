@@ -119,7 +119,6 @@ import {
 } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
-import { readWebUiState, syncConfiguredWebUiTailscaleServe, writeWebUiConfig } from '../ui/webUi.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
@@ -170,11 +169,6 @@ import {
   readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
 } from '../conversations/conversationAssetsCapability.js';
-import {
-  createRemoteAccessPairingCode,
-  readRemoteAccessAdminState,
-  revokeRemoteAccessSession,
-} from '../ui/remoteAccessAuth.js';
 import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
 import { startDeferredResumeLoop } from './bootstrap.js';
@@ -737,11 +731,6 @@ function mapSnapshotEventToDesktopAppEvent(event: unknown): unknown | null {
         type: 'daemon',
         state: typedEvent.state ?? null,
       };
-    case 'web_ui_snapshot':
-      return {
-        type: 'webUi',
-        state: typedEvent.state ?? null,
-      };
     default:
       return null;
   }
@@ -767,78 +756,6 @@ async function buildDesktopAppEventsForTopics(topics: readonly string[]): Promis
   }
 
   return events;
-}
-
-async function subscribeDesktopAppEventStream(
-  onEvent: (event: DesktopLocalApiStreamEvent) => void,
-): Promise<() => void> {
-  await getLocalRoutes();
-
-  let closed = false;
-  let writeQueue = Promise.resolve();
-
-  const writeEvent = (event: unknown) => {
-    if (closed) {
-      return;
-    }
-
-    emitStreamMessage(onEvent, event);
-  };
-
-  const enqueueWrite = (task: () => Promise<void> | void) => {
-    writeQueue = writeQueue
-      .then(async () => {
-        if (closed) {
-          return;
-        }
-
-        await task();
-      })
-      .catch((error) => {
-        if (closed) {
-          return;
-        }
-
-        onEvent({
-          type: 'error',
-          message: error instanceof Error ? error.message : String(error),
-        });
-      });
-  };
-
-  onEvent({ type: 'open' });
-  writeEvent({ type: 'connected' });
-  enqueueWrite(async () => {
-    const bootstrapEvents = await buildDesktopAppEventsForTopics(INITIAL_APP_EVENT_TOPICS);
-    for (const event of bootstrapEvents) {
-      writeEvent(event);
-    }
-  });
-
-  const unsubscribe = subscribeAppEvents((event) => {
-    if (event.type === 'invalidate') {
-      enqueueWrite(async () => {
-        const mappedEvents = await buildDesktopAppEventsForTopics(event.topics);
-        for (const mappedEvent of mappedEvents) {
-          writeEvent(mappedEvent);
-        }
-        writeEvent(event);
-      });
-      return;
-    }
-
-    writeEvent(event);
-  });
-
-  return () => {
-    if (closed) {
-      return;
-    }
-
-    closed = true;
-    unsubscribe();
-    onEvent({ type: 'close' });
-  };
 }
 
 export async function subscribeDesktopAppEvents(
@@ -1379,10 +1296,6 @@ export async function subscribeDesktopLocalApiStream(
 ): Promise<() => void> {
   const url = new URL(path, 'http://desktop.local');
 
-  if (url.pathname === '/api/events') {
-    return subscribeDesktopAppEventStream(onEvent);
-  }
-
   if (/^\/api\/live-sessions\/[^/]+\/events$/.test(url.pathname)) {
     return subscribeDesktopLiveSessionStream(url, onEvent);
   }
@@ -1473,66 +1386,6 @@ export async function readDesktopAppStatus() {
 
 export async function readDesktopDaemonState() {
   return readDaemonState();
-}
-
-export async function readDesktopWebUiState() {
-  return readWebUiState();
-}
-
-export async function updateDesktopWebUiConfig(input: {
-  useTailscaleServe?: boolean;
-  resumeFallbackPrompt?: string;
-}) {
-  const { useTailscaleServe, resumeFallbackPrompt } = input;
-
-  if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
-    throw new Error('Provide useTailscaleServe and/or resumeFallbackPrompt.');
-  }
-
-  if (useTailscaleServe !== undefined && typeof useTailscaleServe !== 'boolean') {
-    throw new Error('useTailscaleServe must be a boolean when provided.');
-  }
-
-  if (resumeFallbackPrompt !== undefined && typeof resumeFallbackPrompt !== 'string') {
-    throw new Error('resumeFallbackPrompt must be a string when provided.');
-  }
-
-  const savedConfig = writeWebUiConfig({
-    ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
-    ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
-  });
-
-  if (useTailscaleServe !== undefined) {
-    syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
-  }
-
-  const state = readWebUiState();
-  invalidateAppTopics('webUi');
-
-  return {
-    ...state,
-    service: {
-      ...state.service,
-      tailscaleServe: savedConfig.useTailscaleServe,
-      resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
-    },
-  };
-}
-
-export async function readDesktopRemoteAccessState() {
-  return readRemoteAccessAdminState();
-}
-
-export async function createDesktopRemoteAccessPairingCode() {
-  return createRemoteAccessPairingCode();
-}
-
-export async function revokeDesktopRemoteAccessSession(sessionId: string) {
-  revokeRemoteAccessSession(sessionId);
-  return {
-    ok: true as const,
-    state: readRemoteAccessAdminState(),
-  };
 }
 
 export async function readDesktopSessions() {

@@ -106,34 +106,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopDaemonState();
   }
 
-  async readWebUiState(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopWebUiState();
-  }
-
-  async updateWebUiConfig(input: {
-    useTailscaleServe?: boolean;
-    resumeFallbackPrompt?: string;
-  }): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.updateDesktopWebUiConfig(input);
-  }
-
-  async readRemoteAccessState(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopRemoteAccessState();
-  }
-
-  async createRemoteAccessPairingCode(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.createDesktopRemoteAccessPairingCode();
-  }
-
-  async revokeRemoteAccessSession(sessionId: string): Promise<{ ok: boolean; state: unknown }> {
-    const module = await this.loadLocalApi();
-    return module.revokeDesktopRemoteAccessSession(sessionId);
-  }
-
   async readSessions(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopSessions();

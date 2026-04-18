@@ -24,11 +24,6 @@ export function normalizeAppEvent(event: AppEvent): DesktopAppEvent | null {
         type: 'daemon',
         state: event.state,
       };
-    case 'web_ui_snapshot':
-      return {
-        type: 'webUi',
-        state: event.state,
-      };
     default:
       return event;
   }

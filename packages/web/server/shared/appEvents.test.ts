@@ -18,7 +18,6 @@ const ALL_TOPICS = [
   'runs',
   'automation',
   'daemon',
-  'webUi',
   'workspace',
 ] as const;
 
@@ -164,9 +163,9 @@ describe('app event monitor', () => {
     events.length = 0;
 
     currentProfile = 'other';
-    appendFileSync(profileConfigFile, '\n', 'utf-8');
+    writeFileSync(profileConfigFile, '{"defaultProfile":"other"}\n', 'utf-8');
 
-    await waitFor(() => events.some((event) => event.type === 'invalidate' && event.topics.length === ALL_TOPICS.length));
+    await waitFor(() => events.some((event) => event.type === 'invalidate' && ALL_TOPICS.every((topic) => event.topics.includes(topic))));
     expect(events.some((event) => event.type === 'invalidate' && ALL_TOPICS.every((topic) => event.topics.includes(topic)))).toBe(true);
     unsubscribe();
   }, 15_000);

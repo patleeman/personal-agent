@@ -345,11 +345,6 @@ export interface HostController {
   invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   readAppStatus?(): Promise<unknown>;
   readDaemonState?(): Promise<unknown>;
-  readWebUiState?(): Promise<unknown>;
-  updateWebUiConfig?(input: { useTailscaleServe?: boolean; resumeFallbackPrompt?: string }): Promise<unknown>;
-  readRemoteAccessState?(): Promise<unknown>;
-  createRemoteAccessPairingCode?(): Promise<unknown>;
-  revokeRemoteAccessSession?(sessionId: string): Promise<{ ok: boolean; state: unknown }>;
   readSessions?(): Promise<unknown>;
   readSessionMeta?(sessionId: string): Promise<unknown>;
   readSessionSearchIndex?(sessionIds: string[]): Promise<unknown>;

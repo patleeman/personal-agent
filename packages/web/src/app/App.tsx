@@ -2,11 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { resolveWebRouteRedirect } from '../navigation/routes';
 import { api } from '../client/api';
-import { buildApiPath } from '../client/apiBase';
-import { normalizeAppEvent } from '../client/appEventTransport';
 import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
-import { readDesktopEnvironment } from '../desktop/desktopBridge';
-import { createDesktopAwareEventSource } from '../desktop/desktopEventSource';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { Layout } from '../components/Layout';
 import { resolveConversationIndexRedirect } from '../conversation/conversationRoutes';
@@ -39,14 +35,11 @@ import {
 import { ThemeProvider } from '../ui-state/theme';
 import { createSessionMetaRefreshScheduler } from '../session/sessionMetaRefreshScheduler';
 import type {
-  AppEvent,
   DaemonState,
   DesktopAppEvent,
   DurableRunListResult,
-  RemoteAccessSessionState,
   ScheduledTaskSummary,
   SessionMeta,
-  WebUiState,
 } from '../shared/types';
 import { setConversationRunIdInSearch } from '../conversation/conversationRuns';
 import { getRunPrimaryConnection, type RunPresentationLookups } from '../automation/runPresentation';
@@ -163,91 +156,7 @@ function SavedConversationRoute() {
   return suspendRoute(<ConversationPage key={id ?? 'conversation'} />);
 }
 
-function defaultRemoteAccessDeviceLabel(): string {
-  if (typeof navigator === 'undefined') {
-    return 'Remote desktop';
-  }
-
-  const navigatorWithUserAgentData = navigator as Navigator & { userAgentData?: { platform?: string } };
-  const platform = navigatorWithUserAgentData.userAgentData?.platform ?? navigator.platform ?? '';
-  return platform.trim().length > 0 ? `${platform} desktop` : 'Remote desktop';
-}
-
-function RemoteAccessPairingScreen() {
-  const [pairingCode, setPairingCode] = useState('');
-  const [deviceLabel, setDeviceLabel] = useState(() => defaultRemoteAccessDeviceLabel());
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handlePair = useCallback(async () => {
-    if (busy || pairingCode.trim().length === 0) {
-      return;
-    }
-
-    setBusy(true);
-    setError(null);
-    try {
-      await api.exchangeRemoteAccessPairingCode(pairingCode, deviceLabel);
-      window.location.reload();
-    } catch (pairError) {
-      setError(pairError instanceof Error ? pairError.message : String(pairError));
-      setBusy(false);
-    }
-  }, [busy, deviceLabel, pairingCode]);
-
-  return (
-    <ThemeProvider>
-      <div className="flex min-h-screen items-center justify-center bg-base px-5 py-8 text-primary">
-        <div className="w-full max-w-md rounded-[28px] border border-border-subtle bg-surface/80 px-5 py-6 shadow-[0_18px_80px_rgba(15,23,42,0.18)]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-dim/70">Remote access</p>
-          <h1 className="mt-3 text-[24px] font-semibold tracking-tight text-primary">Pair this browser</h1>
-          <p className="mt-2 text-[13px] leading-relaxed text-secondary">
-            Enter a short-lived pairing code from the machine hosting Pi to unlock the full desktop web UI over your tailnet.
-          </p>
-          <p className="mt-2 text-[12px] leading-relaxed text-secondary">
-            Generate a code from the local web UI or run <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[11px] text-primary">pa ui pairing-code</code>. Active pairings refresh while you use them; idle pairings expire after 30 days unless you revoke them sooner.
-          </p>
-          <label className="mt-5 block">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Pairing code</span>
-            <input
-              value={pairingCode}
-              onChange={(event) => setPairingCode(event.target.value.toUpperCase())}
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
-              placeholder="ABCD-EFGH-IJKL"
-              className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 font-mono text-[16px] tracking-[0.18em] text-primary outline-none transition focus:border-accent"
-            />
-          </label>
-          <label className="mt-4 block">
-            <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-dim/70">Device label</span>
-            <input
-              value={deviceLabel}
-              onChange={(event) => setDeviceLabel(event.target.value)}
-              autoCorrect="off"
-              spellCheck={false}
-              className="mt-2 w-full rounded-2xl border border-border-subtle bg-base px-4 py-3 text-[14px] text-primary outline-none transition focus:border-accent"
-            />
-          </label>
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => { void handlePair(); }}
-              disabled={busy || pairingCode.trim().length === 0}
-              className="ui-toolbar-button"
-            >
-              {busy ? 'Signing in…' : 'Pair browser'}
-            </button>
-          </div>
-          {error ? <p className="mt-4 text-[12px] text-danger">{error}</p> : null}
-        </div>
-      </div>
-    </ThemeProvider>
-  );
-}
-
 export function App() {
-  const [remoteAccessSession, setRemoteAccessSession] = useState<RemoteAccessSessionState | null>(null);
   const [titleMap, setTitleMap] = useState<Map<string, string>>(new Map());
   const [eventVersions, setEventVersions] = useState(INITIAL_APP_EVENT_VERSIONS);
   const [conversationVersions, setConversationVersions] = useState(INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS);
@@ -259,7 +168,6 @@ export function App() {
   const [tasks, setTasksState] = useState<ScheduledTaskSummary[] | null>(null);
   const [runs, setRunsState] = useState<DurableRunListResult | null>(null);
   const [daemon, setDaemonState] = useState<DaemonState | null>(null);
-  const [webUi, setWebUiState] = useState<WebUiState | null>(null);
   const openedOnceRef = useRef(false);
   const inflightSessionMetaRefreshesRef = useRef(new Map<string, Promise<void>>());
 
@@ -347,10 +255,6 @@ export function App() {
     setDaemonState(state);
   }, []);
 
-  const setWebUi = useCallback((state: WebUiState) => {
-    setWebUiState(state);
-  }, []);
-
   const handleDesktopAppEvent = useCallback((payload: DesktopAppEvent) => {
     switch (payload.type) {
       case 'live_title':
@@ -380,9 +284,6 @@ export function App() {
       case 'daemon':
         setDaemon(payload.state);
         return;
-      case 'webUi':
-        setWebUi(payload.state);
-        return;
       case 'invalidate':
         setEventVersions((prev) => {
           const next = { ...prev };
@@ -398,7 +299,7 @@ export function App() {
       default:
         return;
     }
-  }, [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle, setWebUi]);
+  }, [bumpConversationVersion, refreshSessionMeta, setDaemon, setSessions, setTasks, setTitle]);
 
   const bootstrapSnapshots = useCallback(() => {
     void fetchSessionsSnapshot()
@@ -432,44 +333,9 @@ export function App() {
       .catch(() => {
         // Keep waiting for SSE or a later retry.
       });
-
-    void api.webUiState()
-      .then((state) => {
-        setWebUi(state);
-      })
-      .catch(() => {
-        // Keep waiting for SSE or a later retry.
-      });
-  }, [setDaemon, setRuns, setSessions, setTasks, setWebUi]);
+  }, [setDaemon, setRuns, setSessions, setTasks]);
 
   useEffect(() => {
-    let cancelled = false;
-
-    api.remoteAccessSession()
-      .then((state) => {
-        if (!cancelled) {
-          setRemoteAccessSession(state);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setRemoteAccessSession({ required: false, session: null });
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const remoteAccessGranted = remoteAccessSession !== null
-    && (!remoteAccessSession.required || remoteAccessSession.session !== null);
-
-  useEffect(() => {
-    if (!remoteAccessGranted) {
-      return;
-    }
-
     let cancelled = false;
     let cleanup = () => {};
     const bootstrapTimer = window.setTimeout(() => {
@@ -479,81 +345,32 @@ export function App() {
       }
     }, 1500);
 
-    const startLegacyAppStream = () => {
-      const es = createDesktopAwareEventSource(buildApiPath('/events'));
-      es.onopen = () => {
+    void subscribeDesktopAppEvents({
+      onopen: () => {
         openedOnceRef.current = true;
         window.clearTimeout(bootstrapTimer);
         setSseStatus('open');
-      };
-
-      es.onmessage = (event) => {
-        let payload: AppEvent;
-        try {
-          payload = JSON.parse(event.data) as AppEvent;
-        } catch {
-          return;
-        }
-
-        const normalized = normalizeAppEvent(payload);
-        if (normalized) {
-          handleDesktopAppEvent(normalized);
-        }
-      };
-
-      es.onerror = () => {
-        if (es.readyState === EventSource.CLOSED) {
-          setSseStatus('offline');
-          return;
-        }
+      },
+      onevent: handleDesktopAppEvent,
+      onerror: () => {
         setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
-      };
-
-      return () => {
-        es.close();
-      };
-    };
-
-    void (async () => {
-      const environment = await readDesktopEnvironment().catch(() => null);
+      },
+      onclose: () => {
+        setSseStatus('offline');
+      },
+    }).then((localCleanup) => {
       if (cancelled) {
+        localCleanup();
         return;
       }
 
-      if (environment?.activeHostKind === 'local') {
-        try {
-          const localCleanup = await subscribeDesktopAppEvents({
-            onopen: () => {
-              openedOnceRef.current = true;
-              window.clearTimeout(bootstrapTimer);
-              setSseStatus('open');
-            },
-            onevent: handleDesktopAppEvent,
-            onerror: () => {
-              setSseStatus(openedOnceRef.current ? 'reconnecting' : 'connecting');
-            },
-            onclose: () => {
-              setSseStatus('offline');
-            },
-          });
-          if (cancelled) {
-            localCleanup();
-            return;
-          }
-
-          cleanup = localCleanup;
-          return;
-        } catch {
-          // Fall through to the legacy desktop-aware event transport.
-        }
+      cleanup = localCleanup;
+    }).catch(() => {
+      if (!cancelled) {
+        setSseStatus('offline');
+        void bootstrapSnapshots();
       }
-
-      if (cancelled) {
-        return;
-      }
-
-      cleanup = startLegacyAppStream();
-    })();
+    });
 
     return () => {
       cancelled = true;
@@ -561,25 +378,13 @@ export function App() {
       cleanup();
       setSseStatus('offline');
     };
-  }, [bootstrapSnapshots, handleDesktopAppEvent, remoteAccessGranted, setRuns]);
-
-  if (remoteAccessSession === null) {
-    return (
-      <ThemeProvider>
-        <div className="flex min-h-screen items-center justify-center bg-base px-6 text-[12px] text-dim">Checking desktop access…</div>
-      </ThemeProvider>
-    );
-  }
-
-  if (remoteAccessSession.required && !remoteAccessSession.session) {
-    return <RemoteAccessPairingScreen />;
-  }
+  }, [bootstrapSnapshots, handleDesktopAppEvent]);
 
   return (
     <AppEventsContext.Provider value={{ versions: eventVersions, conversationVersions }}>
       <SseConnectionContext.Provider value={{ status: sseStatus }}>
         <AppDataContext.Provider value={{ projects, sessions, tasks, runs, setProjects, setSessions, setTasks, setRuns }}>
-          <SystemStatusContext.Provider value={{ daemon, webUi, setDaemon, setWebUi }}>
+          <SystemStatusContext.Provider value={{ daemon, setDaemon }}>
             <LiveTitlesContext.Provider value={{ titles: titleMap, setTitle }}>
               <ThemeProvider>
                 <BrowserRouter>

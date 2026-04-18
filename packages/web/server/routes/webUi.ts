@@ -1,6 +1,5 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { readWebUiState, syncConfiguredWebUiTailscaleServe, writeWebUiConfig } from '../ui/webUi.js';
 import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
 import { logError } from '../middleware/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
@@ -114,79 +113,11 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
   }
 }
 
-function handleWebUiStateRequest(_req: Request, res: Response): void {
-  try {
-    res.json(readWebUiState());
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
-function handleWebUiConfigPatch(req: Request, res: Response): void {
-  try {
-    const {
-      useTailscaleServe,
-      resumeFallbackPrompt,
-    } = req.body as {
-      useTailscaleServe?: unknown;
-      resumeFallbackPrompt?: unknown;
-    };
-
-    if (useTailscaleServe === undefined && resumeFallbackPrompt === undefined) {
-      res.status(400).json({ error: 'Provide useTailscaleServe and/or resumeFallbackPrompt.' });
-      return;
-    }
-
-    if (useTailscaleServe !== undefined && typeof useTailscaleServe !== 'boolean') {
-      res.status(400).json({ error: 'useTailscaleServe must be a boolean when provided.' });
-      return;
-    }
-
-    if (resumeFallbackPrompt !== undefined && typeof resumeFallbackPrompt !== 'string') {
-      res.status(400).json({ error: 'resumeFallbackPrompt must be a string when provided.' });
-      return;
-    }
-
-    const savedConfig = writeWebUiConfig({
-      ...(useTailscaleServe !== undefined ? { useTailscaleServe } : {}),
-      ...(resumeFallbackPrompt !== undefined ? { resumeFallbackPrompt } : {}),
-    });
-
-    if (useTailscaleServe !== undefined) {
-      syncConfiguredWebUiTailscaleServe(savedConfig.useTailscaleServe);
-    }
-
-    const state = readWebUiState();
-    invalidateAppTopics('webUi');
-
-    res.json({
-      ...state,
-      service: {
-        ...state.service,
-        tailscaleServe: savedConfig.useTailscaleServe,
-        resumeFallbackPrompt: savedConfig.resumeFallbackPrompt,
-      },
-    });
-  } catch (err) {
-    logError('request handler error', {
-      message: err instanceof Error ? err.message : String(err),
-      stack: err instanceof Error ? err.stack : undefined,
-    });
-    res.status(500).json({ error: String(err) });
-  }
-}
-
 export function registerWebUiRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
   context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
   initializeWebUiRoutesContext(context);
-  router.get('/api/web-ui/state', handleWebUiStateRequest);
-  router.post('/api/web-ui/config', handleWebUiConfigPatch);
   router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
   router.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
 }

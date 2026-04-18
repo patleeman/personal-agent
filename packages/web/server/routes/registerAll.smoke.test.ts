@@ -117,15 +117,4 @@ describe('registerServerRoutes smoke test', () => {
     }));
   });
 
-  it('serves remote pairing admin routes through the main app surface', async () => {
-    const pairingCodeResponse = await fetch(`${appBaseUrl}/api/remote-access/pairing-code`, {
-      method: 'POST',
-    });
-
-    expect(pairingCodeResponse.status).toBe(201);
-    expect(await pairingCodeResponse.json()).toEqual(expect.objectContaining({
-      code: expect.any(String),
-      expiresAt: expect.any(String),
-    }));
-  });
 });

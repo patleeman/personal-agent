@@ -1,5 +1,4 @@
 import type { RegisterServerRoutesInput } from './context.js';
-import { registerAuthRoutes } from './auth.js';
 import { registerConversationStateRoutes } from './conversationState.js';
 import { registerConversationTitlesRoutes } from './conversationTitles.js';
 import { registerConversationRoutes } from './conversations.js';
@@ -24,8 +23,6 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerModelRoutes(app, context);
 
   registerToolsRoutes(app, context);
-
-  registerAuthRoutes(app);
 
   registerSystemRoutes(app, context);
 

@@ -10,7 +10,6 @@ describe('system route initial app topics', () => {
       'tasks',
       'runs',
       'daemon',
-      'webUi',
     ]);
   });
 });
