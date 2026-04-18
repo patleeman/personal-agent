@@ -15,7 +15,7 @@ The desktop shell owns:
 - a custom top bar sized to visually align in-app navigation controls with the native macOS traffic lights
 - the packaged renderer entrypoint
 - the preload bridge for trusted local capabilities
-- host switching and local/remote connection state
+- conversation-level local/remote execution state and saved SSH remotes
 - desktop-specific integrations like file reveal/open, system notifications, login-item start-on-sign-in control, and updater behavior
 
 The renderer remains the same React app used for the web UI, but in local desktop mode it can call direct preload-backed capabilities instead of going through loopback HTTP for hot paths.
@@ -33,12 +33,10 @@ The preload bridge is intentionally narrow. The packaged `personal-agent://app` 
 - read and manage local settings/operator flows such as instruction-file selection, model/runtime preferences, vault/default-cwd state, model providers, provider auth, and desktop app behavior preferences without routing those flows through generic local API calls
 
 - get desktop environment
-- get saved connections
-- switch host
-- save/delete host
+- get saved SSH remotes
+- save/delete SSH remotes
+- browse remote directories
 - open new conversation
-- open a host in its own window
-- show connections UI
 - go back / forward
 
 ## Local capability rule
@@ -63,6 +61,7 @@ That means:
 - the desktop app also copies a small transient helper binary that keeps a detached remote Pi RPC session alive across disconnects and lets the desktop reattach later
 - remote cwd browsing is real remote browsing, not a local folder picker with a remote label
 - the desktop shell surfaces live SSH remote progress during first connect and reconnects (copying Pi/helper, starting Pi, reattaching, and loading remote directories)
+- SSH remotes are managed from Settings instead of a dedicated top-bar modal
 - conversation execution targeting remains per-thread, not per-window: a local desktop conversation can continue on an SSH remote while the local UI stays on the normal conversation route
 - linked remote-target conversations keep their local thread metadata while the live execution state runs through remote Pi RPC over SSH
 

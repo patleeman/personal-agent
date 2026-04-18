@@ -490,7 +490,6 @@ export interface DesktopEnvironmentState {
   activeHostSummary: string;
   launchMode?: 'stable' | 'testing';
   launchLabel?: string;
-  canManageConnections: true;
 }
 
 export interface DesktopConnectionsState {

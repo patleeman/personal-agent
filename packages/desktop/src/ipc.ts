@@ -1271,10 +1271,6 @@ export function registerDesktopIpc(options: {
     providerOAuthSubscriptions.get(subscriptionId)?.();
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:show-connections`, async () => {
-    await options.windowController.openMainWindow('/settings#desktop-connections');
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:go-back`, async (event) => {
     return options.windowController.goBackForWebContents(event.sender.id);
   });

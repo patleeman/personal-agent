@@ -67,7 +67,7 @@ When the UI is running inside Electron, the desktop shell adds a few conversatio
 - `Cmd/Ctrl+\` — toggle the sidebar
 - `Cmd/Ctrl+Shift+\` — toggle the right rail
 - `Cmd/Ctrl+Shift+W` — hide the current window
-- `Cmd/Ctrl+,` — open desktop connections
+- `Cmd/Ctrl+,` — open Settings
 - `Cmd/Ctrl+K` — open the command palette
 
 That gives us distinct shortcuts for closing a conversation, moving around the conversation workspace, switching hosts, managing conversation state, jumping back into typing, and hiding or reshaping the Electron window.

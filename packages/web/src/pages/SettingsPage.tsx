@@ -344,12 +344,14 @@ function SettingsSection({
 }
 
 function SettingsPanel({
+  id,
   title,
   description,
   actions,
   children,
   className,
 }: {
+  id?: string;
   title: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -357,7 +359,7 @@ function SettingsPanel({
   className?: string;
 }) {
   return (
-    <section className={cx('grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
+    <section id={id} className={cx('scroll-mt-24 grid gap-5 border-t border-border-subtle/70 py-6 first:border-t-0 first:pt-0 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)] lg:items-start lg:gap-8', className)}>
       <div className="min-w-0 space-y-2">
         <div className="space-y-1.5">
           <h3 className="text-[15px] font-medium tracking-tight text-primary">{title}</h3>
@@ -731,8 +733,9 @@ function DesktopConnectionsSettingsPanel() {
       </SettingsPanel>
 
       <SettingsPanel
-        title="Connections"
-        description="SSH remotes only. Personal Agent copies the matching Pi release binary and a transient helper to the remote when a conversation targets it."
+        id="desktop-connections"
+        title="SSH remotes"
+        description="Saved SSH targets for remote conversations. Personal Agent copies the matching Pi release binary and a transient helper when a conversation targets one."
         actions={(
           <button
             type="button"

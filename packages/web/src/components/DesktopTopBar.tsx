@@ -1,9 +1,8 @@
 import { type CSSProperties, useEffect, useState } from 'react';
-import { DesktopConnectionsModal } from './DesktopConnectionsModal';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
-import { IconButton, ToolbarButton } from './ui';
+import { ToolbarButton } from './ui';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -21,19 +20,6 @@ function RightRailToggleIcon({ open }: { open: boolean }) {
       <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
       <path d="M9.25 2v10" />
       {open ? <path d="M8 7H5.5" /> : <path d="M6.1 5.4 7.8 7l-1.7 1.6" />}
-    </svg>
-  );
-}
-
-function ConnectionsIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.15" aria-hidden="true">
-      <rect x="2" y="2" width="10" height="4" rx="1.2" />
-      <rect x="2" y="8" width="10" height="4" rx="1.2" />
-      <path d="M4 4h3" />
-      <path d="M4 10h3" />
-      <circle cx="10.2" cy="4" r="0.55" fill="currentColor" stroke="none" />
-      <circle cx="10.2" cy="10" r="0.55" fill="currentColor" stroke="none" />
     </svg>
   );
 }
@@ -83,7 +69,6 @@ export function DesktopTopBar({
     canGoBack: false,
     canGoForward: false,
   });
-  const [showConnectionsModal, setShowConnectionsModal] = useState(false);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -150,58 +135,45 @@ export function DesktopTopBar({
     : null;
 
   return (
-    <>
-      <div className="ui-desktop-top-bar">
-        <div className="ui-desktop-top-bar__drag-region" />
-        <div className="ui-desktop-top-bar__leading">
-          <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
-          <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-            <ToolbarButton
-              className="ui-desktop-top-bar__icon-button"
-              onClick={onToggleSidebar}
-              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            >
-              <LeftSidebarToggleIcon open={sidebarOpen} />
-            </ToolbarButton>
-            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
-              ←
-            </ToolbarButton>
-            <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
-              →
-            </ToolbarButton>
-          </div>
-          {launchBadgeLabel ? (
-            <div className="ui-desktop-top-bar__mode-badge" title="Launched from the command line">
-              {launchBadgeLabel}
-            </div>
-          ) : null}
-        </div>
-        <div className="ui-desktop-top-bar__center" />
-        <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
-          <IconButton
+    <div className="ui-desktop-top-bar">
+      <div className="ui-desktop-top-bar__drag-region" />
+      <div className="ui-desktop-top-bar__leading">
+        <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
+        <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
+          <ToolbarButton
             className="ui-desktop-top-bar__icon-button"
-            onClick={() => setShowConnectionsModal(true)}
-            aria-label="Manage remotes"
-            title="Manage remotes"
+            onClick={onToggleSidebar}
+            aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
           >
-            <ConnectionsIcon />
-          </IconButton>
-          {showRailToggle ? (
-            <ToolbarButton
-              className="ui-desktop-top-bar__icon-button"
-              onClick={onToggleRail}
-              aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-              title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
-            >
-              <RightRailToggleIcon open={railOpen} />
-            </ToolbarButton>
-          ) : null}
+            <LeftSidebarToggleIcon open={sidebarOpen} />
+          </ToolbarButton>
+          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
+            ←
+          </ToolbarButton>
+          <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleForward(); }} disabled={!navigation.canGoForward} aria-label="Go forward" title="Go forward">
+            →
+          </ToolbarButton>
         </div>
+        {launchBadgeLabel ? (
+          <div className="ui-desktop-top-bar__mode-badge" title="Launched from the command line">
+            {launchBadgeLabel}
+          </div>
+        ) : null}
       </div>
-      {showConnectionsModal ? (
-        <DesktopConnectionsModal onClose={() => setShowConnectionsModal(false)} />
-      ) : null}
-    </>
+      <div className="ui-desktop-top-bar__center" />
+      <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+        {showRailToggle ? (
+          <ToolbarButton
+            className="ui-desktop-top-bar__icon-button"
+            onClick={onToggleRail}
+            aria-label={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+            title={railOpen ? 'Hide right sidebar' : 'Show right sidebar'}
+          >
+            <RightRailToggleIcon open={railOpen} />
+          </ToolbarButton>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -302,7 +302,6 @@ const desktopBridge = {
   unsubscribeAppEvents: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-app-events`, subscriptionId),
   subscribeRemoteOperations: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:subscribe-remote-operations`),
   unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
-  showConnectionsWindow: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-connections`),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
 };

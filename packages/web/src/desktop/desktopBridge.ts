@@ -380,7 +380,6 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeAppEvents(subscriptionId: string): Promise<void>;
   subscribeRemoteOperations(): Promise<{ subscriptionId: string }>;
   unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
-  showConnectionsWindow(): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
 }

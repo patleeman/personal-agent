@@ -147,7 +147,6 @@ export class HostManager {
       activeHostSummary: status.summary,
       launchMode: launchPresentation.mode,
       launchLabel: launchPresentation.launchLabel,
-      canManageConnections: true,
     };
   }
 

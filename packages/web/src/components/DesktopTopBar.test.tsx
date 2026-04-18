@@ -30,7 +30,7 @@ describe('DesktopTopBar', () => {
     vi.unstubAllGlobals();
   });
 
-  it('keeps the connections icon visible in Electron shells even when the preload bridge is missing', () => {
+  it('keeps desktop navigation chrome visible in Electron shells even when the preload bridge is missing', () => {
     vi.stubGlobal('window', {
       personalAgentDesktop: undefined,
       location: { search: '' },
@@ -47,7 +47,7 @@ describe('DesktopTopBar', () => {
 
     const html = renderTopBar();
 
-    expect(html).toContain('aria-label="Manage remotes');
+    expect(html).toContain('Go back');
   });
 
   it('renders a testing badge for command-line desktop launches', () => {
@@ -59,7 +59,6 @@ describe('DesktopTopBar', () => {
       activeHostSummary: 'Local runtime is healthy.',
       launchMode: 'testing',
       launchLabel: 'Testing',
-      canManageConnections: true,
     });
 
     expect(html).toContain('>Testing<');
@@ -75,12 +74,11 @@ describe('DesktopTopBar', () => {
       activeHostSummary: 'Local runtime is healthy.',
       launchMode: 'normal',
       launchLabel: null,
-      canManageConnections: true,
     }, { showRailToggle: true, railOpen: true });
 
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
-    expect(html.indexOf('aria-label="Manage remotes')).toBeLessThan(html.indexOf('Hide right sidebar'));
+    expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('Hide right sidebar'));
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {
@@ -90,7 +88,6 @@ describe('DesktopTopBar', () => {
 
     const html = renderTopBar();
 
-    expect(html).not.toContain('aria-label="Manage remotes');
     expect(html).not.toContain('Go back');
   });
 });
