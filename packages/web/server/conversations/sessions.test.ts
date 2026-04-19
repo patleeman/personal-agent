@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -966,6 +966,42 @@ describe('sessions', () => {
     }));
     expect(listSessions()[0]).toEqual(expect.not.objectContaining({
       remoteHostId: expect.anything(),
+    }));
+  });
+
+  it('keeps the first session header when duplicate session records appear later in the file', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const filePath = writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-remote-duplicate',
+      title: 'Remote execution thread',
+      assistantTexts: ['Generated answer'],
+    });
+
+    setStoredSessionRemoteTargetByFile(filePath, {
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
+    });
+
+    appendFileSync(filePath, [
+      JSON.stringify({
+        type: 'session',
+        id: 'session-remote-duplicate',
+        timestamp: '2026-03-11T12:00:00.000Z',
+        cwd: '/tmp/project',
+      }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      '',
+    ].join('\n'));
+
+    expect(listSessions()[0]).toEqual(expect.objectContaining({
+      id: 'session-remote-duplicate',
+      remoteHostId: 'bender',
+      remoteHostLabel: 'Bender',
+      remoteConversationId: 'remote-thread-1',
     }));
   });
 

@@ -122,7 +122,11 @@ describe('desktop companion runtime', () => {
     });
 
     expect(events).toEqual([{ type: 'open' }]);
-    appListener?.({ type: 'event', event: { type: 'session_meta_changed', sessionId: 'conv-1' } });
+    if (!appListener) {
+      throw new Error('App listener was not registered.');
+    }
+    const emitAppEvent = appListener as (event: { type: string; event?: unknown; message?: string }) => void;
+    emitAppEvent({ type: 'event', event: { type: 'session_meta_changed', sessionId: 'conv-1' } });
     expect(events).toEqual([
       { type: 'open' },
       { type: 'conversation_list_changed', sourceEvent: { type: 'session_meta_changed', sessionId: 'conv-1' } },

@@ -1270,7 +1270,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     }
 
     if (line.type === 'session') {
-      sessionRecord = line as RawSessionRecord;
+      if (!sessionRecord) {
+        sessionRecord = line as RawSessionRecord;
+      }
       continue;
     }
 
