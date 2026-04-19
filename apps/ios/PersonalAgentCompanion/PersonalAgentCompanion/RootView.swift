@@ -2,7 +2,7 @@ import SwiftUI
 import VisionKit
 
 struct RootView: View {
-    @StateObject private var appModel = CompanionAppModel()
+    @ObservedObject var appModel: CompanionAppModel
     @State private var showingPairHost = false
 
     var body: some View {
@@ -32,11 +32,6 @@ struct RootView: View {
         }
         .sheet(isPresented: $appModel.hostSelectionPresented) {
             HostSelectionView(appModel: appModel)
-        }
-        .onOpenURL { url in
-            Task {
-                await appModel.handleIncomingSetupURL(url)
-            }
         }
         .alert("Companion", isPresented: Binding(get: {
             appModel.bannerMessage != nil

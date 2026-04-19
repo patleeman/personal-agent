@@ -46,13 +46,19 @@ final class CompanionAppModel: ObservableObject {
                 deviceId: paired.device.id,
                 deviceLabel: paired.device.deviceLabel
             )
-            guard KeychainStore.shared.setToken(paired.bearerToken, for: record.id) else {
-                throw CompanionClientError.requestFailed("Failed to store the paired device token in Keychain.")
+            let persistedInKeychain = KeychainStore.shared.setToken(paired.bearerToken, for: record.id)
+            if !persistedInKeychain {
+                transientTokens[record.id] = paired.bearerToken
             }
             hosts.removeAll { $0.hostInstanceId == record.hostInstanceId && $0.deviceId == record.deviceId }
             hosts.insert(record, at: 0)
             persistHosts()
             await selectHost(record.id)
+            if persistedInKeychain {
+                bannerMessage = nil
+            } else {
+                bannerMessage = "Paired, but the token could not be stored in Keychain on this device. The host will stay connected for now, but you may need to pair again after restarting the app."
+            }
         } catch {
             bannerMessage = error.localizedDescription
         }

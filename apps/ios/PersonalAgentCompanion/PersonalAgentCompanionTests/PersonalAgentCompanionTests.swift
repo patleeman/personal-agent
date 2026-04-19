@@ -144,6 +144,44 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(draft.previewAsset?.mimeType, "image/png")
     }
 
+    func testLiveSetupURLPairsAgainstDesktopHost() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let config = try loadLiveCompanionConfig(from: environment)
+        guard config.enabled else {
+            throw XCTSkip("Live companion test is disabled.")
+        }
+        let pairingCode = try await loadLivePairingCode(from: config)
+
+        var components = URLComponents()
+        components.scheme = "pa-companion"
+        components.host = "pair"
+        components.queryItems = [
+            URLQueryItem(name: "base", value: config.baseURL),
+            URLQueryItem(name: "code", value: pairingCode),
+            URLQueryItem(name: "label", value: "Live Host"),
+            URLQueryItem(name: "hostInstanceId", value: "host_live_test"),
+        ]
+        let setupURL = try XCTUnwrap(components.url)
+        let model = CompanionAppModel()
+        await model.handleIncomingSetupURL(setupURL)
+        try await waitForCondition(timeout: .seconds(20)) {
+            model.activeSession != nil && !model.hosts.isEmpty
+        }
+
+        if let bannerMessage = model.bannerMessage {
+            XCTAssertTrue(bannerMessage.contains("Keychain"))
+        }
+        XCTAssertEqual(model.hosts.first?.baseURL, config.baseURL)
+        XCTAssertEqual(model.activeHostId, model.hosts.first?.id)
+
+        let session = try XCTUnwrap(model.activeSession)
+        try await waitForCondition(timeout: .seconds(20)) {
+            !session.sections.isEmpty || session.errorMessage != nil
+        }
+        XCTAssertNil(session.errorMessage)
+        XCTAssertFalse(session.sections.isEmpty)
+    }
+
     func testLiveCompanionRoundTripAgainstDesktopHost() async throws {
         let environment = ProcessInfo.processInfo.environment
         let config = try loadLiveCompanionConfig(from: environment)
@@ -153,9 +191,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         guard let baseURL = URL(string: config.baseURL) else {
             throw XCTSkip("The live companion test host URL is invalid.")
         }
-        guard let pairingCode = config.pairingCode?.trimmingCharacters(in: .whitespacesAndNewlines), !pairingCode.isEmpty else {
-            throw XCTSkip("Set a live companion pairing code to run the live test.")
-        }
+        let pairingCode = try await loadLivePairingCode(from: config)
 
         let cwd = config.cwd ?? FileManager.default.currentDirectoryPath
         let surfaceId = "ios-live-test"
@@ -259,6 +295,37 @@ final class PersonalAgentCompanionTests: XCTestCase {
         return try JSONDecoder().decode(LiveCompanionConfig.self, from: data)
     }
 
+    private func loadLivePairingCode(from config: LiveCompanionConfig) async throws -> String {
+        if let baseURL = URL(string: config.baseURL), let scheme = baseURL.scheme, let port = baseURL.port {
+            var adminURL = URLComponents()
+            adminURL.scheme = scheme
+            adminURL.host = "127.0.0.1"
+            adminURL.port = port
+            adminURL.path = "/companion/v1/admin/pairing-codes"
+            if let url = adminURL.url {
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                do {
+                    let (data, response) = try await URLSession.shared.data(for: request)
+                    if let http = response as? HTTPURLResponse, (200 ... 299).contains(http.statusCode) {
+                        struct PairingCodeResponse: Decodable { let code: String }
+                        let decoded = try JSONDecoder().decode(PairingCodeResponse.self, from: data)
+                        if !decoded.code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            return decoded.code
+                        }
+                    }
+                } catch {
+                    // Fall back to the configured code below when loopback admin access is unavailable.
+                }
+            }
+        }
+
+        guard let pairingCode = config.pairingCode?.trimmingCharacters(in: .whitespacesAndNewlines), !pairingCode.isEmpty else {
+            throw XCTSkip("Set a live companion pairing code to run the live companion tests.")
+        }
+        return pairingCode
+    }
+
     private func makeLiveAttachmentDraft() -> AttachmentEditorDraft {
         let sourceJSON = "{\"type\":\"excalidraw\",\"version\":2,\"source\":\"personal-agent-live-test\",\"elements\":[],\"appState\":{\"gridSize\":null},\"files\":{}}"
         let previewPNGBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i0K8AAAAASUVORK5CYII="
@@ -278,6 +345,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
                 rawData: Data(base64Encoded: previewPNGBase64) ?? Data()
             )
         )
+    }
+
+    private func waitForCondition(timeout: Duration, pollInterval: Duration = .milliseconds(100), _ condition: @escaping @MainActor () -> Bool) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if condition() {
+                return
+            }
+            try await Task.sleep(for: pollInterval)
+        }
+
+        XCTAssertTrue(condition(), "Condition was not satisfied before the timeout elapsed.")
     }
 
     private func clearStoredHostState() {
