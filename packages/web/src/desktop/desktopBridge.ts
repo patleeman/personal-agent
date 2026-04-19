@@ -117,6 +117,7 @@ export interface PersonalAgentDesktopBridge {
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;
   updateDesktopAppPreferences(input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }): Promise<DesktopAppPreferencesState>;
+  ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }>;
   readAppStatus(): Promise<AppStatus>;
   readDaemonState(): Promise<DaemonState>;
   readSessions(): Promise<SessionMeta[]>;

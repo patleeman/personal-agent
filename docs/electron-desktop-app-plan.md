@@ -85,7 +85,7 @@ The local desktop host:
 - calls the desktop-owned daemon directly for hot local flows instead of bouncing those paths back through the local daemon socket
 - keeps that local runtime warm for as long as the menubar app stays open
 - configures the in-process daemon as the companion host for native clients, with the desktop UI acting as the primary frontend
-- exposes companion onboarding controls in Settings, including setup QR generation for reachable host addresses
+- exposes companion onboarding controls in Settings, including one-click local-network enablement and setup QR generation for reachable host addresses
 
 ### SSH remote host
 

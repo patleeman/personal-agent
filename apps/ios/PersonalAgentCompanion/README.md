@@ -65,8 +65,9 @@ Typical local-dev path:
 
 1. start the desktop runtime
 2. in desktop Settings → Companion access, generate a setup QR
-3. in the iOS app, open Pair host → Scan setup QR
-4. or use manual host URL + pairing code entry if needed
+3. the desktop app will automatically enable local-network phone access if the companion server is still loopback-only
+4. in the iOS app, open Pair host → Scan setup QR
+5. or use manual host URL + pairing code entry if needed
 
 ## Live integration test
 

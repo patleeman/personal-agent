@@ -1,5 +1,6 @@
 import { appendFileSync } from 'node:fs';
-import { PersonalAgentDaemon, bindInProcessDaemonClient, pingDaemon } from '@personal-agent/daemon';
+import { updateMachineConfigSection } from '@personal-agent/core';
+import { PersonalAgentDaemon, bindInProcessDaemonClient, loadDaemonConfig, pingDaemon } from '@personal-agent/daemon';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 import { clearDesktopDaemonOwnership, writeDesktopDaemonOwnership, type DesktopDaemonOwnership } from './daemon-ownership.js';
 
@@ -10,6 +11,15 @@ interface LocalBackendStatus {
   daemonHealthy: boolean;
   daemonOwnership?: DesktopDaemonOwnership;
   blockedReason?: string;
+}
+
+function isLoopbackHost(value: string | undefined): boolean {
+  const normalized = value?.trim() || '';
+  return normalized === ''
+    || normalized === '127.0.0.1'
+    || normalized === '::1'
+    || normalized === 'localhost'
+    || normalized === '::ffff:127.0.0.1';
 }
 
 export class LocalBackendProcesses {
@@ -85,6 +95,48 @@ export class LocalBackendProcesses {
     }
 
     clearDesktopDaemonOwnership();
+  }
+
+  async ensureCompanionNetworkReachable(): Promise<{ changed: boolean; url: string | null }> {
+    await this.ensureStarted();
+    if (!this.daemon) {
+      throw new Error('Local desktop daemon is unavailable.');
+    }
+
+    const currentConfig = loadDaemonConfig();
+    const currentHost = currentConfig.companion?.host ?? '127.0.0.1';
+    const nextHost = isLoopbackHost(currentHost) ? '0.0.0.0' : currentHost;
+    if (!isLoopbackHost(currentHost) && currentConfig.companion?.enabled !== false) {
+      return {
+        changed: false,
+        url: this.daemon.getCompanionUrl(),
+      };
+    }
+
+    updateMachineConfigSection('daemon', (current) => {
+      const next = current ? { ...current } : {};
+      const existingCompanion = next.companion && typeof next.companion === 'object'
+        ? { ...(next.companion as Record<string, unknown>) }
+        : {};
+      next.companion = {
+        ...existingCompanion,
+        enabled: true,
+        host: nextHost,
+      };
+      return next;
+    });
+
+    const nextConfig = loadDaemonConfig();
+    const result = await this.daemon.updateCompanionConfig({
+      enabled: nextConfig.companion?.enabled,
+      host: nextConfig.companion?.host,
+      port: nextConfig.companion?.port,
+    });
+
+    return {
+      changed: true,
+      url: result.url,
+    };
   }
 
   private hasOwnedRuntime(): boolean {

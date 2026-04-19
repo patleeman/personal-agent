@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   pingDaemon: vi.fn(),
+  loadDaemonConfig: vi.fn(),
+  updateMachineConfigSection: vi.fn(),
   resolveDesktopRuntimePaths: vi.fn(),
   bindInProcessDaemonClient: vi.fn(),
   daemonInstances: [] as Array<{
@@ -9,6 +11,8 @@ const mocks = vi.hoisted(() => ({
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     isRunning: ReturnType<typeof vi.fn>;
+    getCompanionUrl: ReturnType<typeof vi.fn>;
+    updateCompanionConfig: ReturnType<typeof vi.fn>;
   }>,
 }));
 
@@ -18,22 +22,31 @@ vi.mock('@personal-agent/daemon', () => {
     start: ReturnType<typeof vi.fn>;
     stop: ReturnType<typeof vi.fn>;
     isRunning: ReturnType<typeof vi.fn>;
+    getCompanionUrl: ReturnType<typeof vi.fn>;
+    updateCompanionConfig: ReturnType<typeof vi.fn>;
 
     constructor(options?: unknown) {
       this.options = options;
       this.start = vi.fn().mockResolvedValue(undefined);
       this.stop = vi.fn().mockResolvedValue(undefined);
       this.isRunning = vi.fn().mockReturnValue(true);
+      this.getCompanionUrl = vi.fn().mockReturnValue('http://127.0.0.1:3843');
+      this.updateCompanionConfig = vi.fn().mockResolvedValue({ url: 'http://0.0.0.0:3843' });
       mocks.daemonInstances.push(this);
     }
   }
 
   return {
     pingDaemon: mocks.pingDaemon,
+    loadDaemonConfig: mocks.loadDaemonConfig,
     PersonalAgentDaemon,
     bindInProcessDaemonClient: mocks.bindInProcessDaemonClient,
   };
 });
+
+vi.mock('@personal-agent/core', () => ({
+  updateMachineConfigSection: mocks.updateMachineConfigSection,
+}));
 
 vi.mock('../desktop-env.js', () => ({
   resolveDesktopRuntimePaths: mocks.resolveDesktopRuntimePaths,
@@ -73,6 +86,14 @@ describe('LocalBackendProcesses', () => {
       trayTemplateIconFile: '/repo/packages/desktop/assets/icon-template.svg',
       colorIconFile: '/repo/packages/desktop/assets/icon-color.svg',
     });
+    mocks.loadDaemonConfig.mockReturnValue({
+      companion: {
+        enabled: true,
+        host: '127.0.0.1',
+        port: 3843,
+      },
+    });
+    mocks.updateMachineConfigSection.mockImplementation((_, updater) => updater({}, {}));
     mocks.pingDaemon.mockResolvedValue(false);
     mocks.bindInProcessDaemonClient.mockReturnValue(vi.fn());
   });
@@ -168,6 +189,45 @@ describe('LocalBackendProcesses', () => {
     expect(firstDaemon.stop).toHaveBeenCalledTimes(1);
     expect(mocks.daemonInstances).toHaveLength(2);
     expect(readDesktopDaemonOwnership()).toBe('owned');
+  });
+
+  it('enables local-network companion access without restarting the daemon', async () => {
+    const backend = new LocalBackendProcesses();
+
+    await backend.ensureStarted();
+    const daemon = lastDaemonInstance();
+    mocks.loadDaemonConfig
+      .mockReturnValueOnce({ companion: { enabled: true, host: '127.0.0.1', port: 3843 } })
+      .mockReturnValueOnce({ companion: { enabled: true, host: '0.0.0.0', port: 3843 } });
+
+    await expect(backend.ensureCompanionNetworkReachable()).resolves.toEqual({
+      changed: true,
+      url: 'http://0.0.0.0:3843',
+    });
+
+    expect(mocks.updateMachineConfigSection).toHaveBeenCalledTimes(1);
+    expect(daemon.updateCompanionConfig).toHaveBeenCalledWith({
+      enabled: true,
+      host: '0.0.0.0',
+      port: 3843,
+    });
+    expect(daemon.stop).not.toHaveBeenCalled();
+  });
+
+  it('leaves companion access alone when it is already reachable on the network', async () => {
+    const backend = new LocalBackendProcesses();
+
+    await backend.ensureStarted();
+    const daemon = lastDaemonInstance();
+    mocks.loadDaemonConfig.mockReturnValue({ companion: { enabled: true, host: '0.0.0.0', port: 3843 } });
+
+    await expect(backend.ensureCompanionNetworkReachable()).resolves.toEqual({
+      changed: false,
+      url: 'http://127.0.0.1:3843',
+    });
+
+    expect(mocks.updateMachineConfigSection).not.toHaveBeenCalled();
+    expect(daemon.updateCompanionConfig).not.toHaveBeenCalled();
   });
 
   it('rejects desktop runtime restarts when attached to an external daemon', async () => {

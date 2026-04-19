@@ -563,7 +563,7 @@ function formatCompanionTimestamp(value: string): string {
   return new Date(parsed).toLocaleString();
 }
 
-function DesktopCompanionSettingsPanel() {
+export function DesktopCompanionSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<'create-setup' | `revoke:${string}` | null>(null);
   const [hello, setHello] = useState<CompanionHelloState | null>(null);
@@ -635,11 +635,24 @@ function DesktopCompanionSettingsPanel() {
     setError(null);
     setNotice(null);
     try {
+      const desktopBridge = getDesktopBridge();
+      let enabledFromDesktop = false;
+      if (desktopBridge) {
+        const result = await desktopBridge.ensureCompanionNetworkReachable();
+        enabledFromDesktop = result.changed;
+      }
+
       const setup = await requestCompanionJson<CompanionSetupState>('POST', '/companion/v1/admin/setup');
       setLatestSetup(setup);
       setLatestPairingCode(setup.pairing);
       setSelectedSetupLinkId(setup.links[0]?.id ?? null);
-      setNotice(setup.links.length > 0 ? 'Setup QR created.' : 'Pairing code created, but the companion host is not reachable from other devices yet.');
+      setNotice(
+        setup.links.length > 0
+          ? enabledFromDesktop
+            ? 'Phone access enabled. Setup QR created.'
+            : 'Setup QR created.'
+          : 'Pairing code created, but the companion host is not reachable from other devices yet.',
+      );
       await refresh();
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : String(nextError));
@@ -670,7 +683,7 @@ function DesktopCompanionSettingsPanel() {
   return (
     <SettingsPanel
       title="Companion access"
-      description="Generate phone setup QR codes and manage companion devices for the daemon-backed companion API."
+      description="Generate phone setup QR codes and manage companion devices for the daemon-backed companion API. The desktop app will enable local-network phone access automatically when needed."
     >
       {loading ? <p className="ui-card-meta">Loading companion access state…</p> : null}
       {hello ? (

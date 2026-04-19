@@ -90,7 +90,7 @@ export function buildCompanionSetupState(input: {
   };
 
   if (isLoopbackHost(companionHost)) {
-    warnings.push('Companion access is bound to loopback only. Relaunch the desktop app with PERSONAL_AGENT_COMPANION_HOST=0.0.0.0 or another reachable host address before pairing from your phone.');
+    warnings.push('Companion access is still bound to loopback only. Enable local-network phone access before pairing from your phone.');
   } else if (isWildcardHost(companionHost)) {
     const readInterfaces = input.readNetworkInterfaces ?? networkInterfaces;
     const interfaces = readInterfaces();

@@ -34,7 +34,7 @@ These are the design decisions locked in for v1.
 Current repo implementation:
 
 - host-side companion API: implemented at `/companion/v1`
-- desktop companion admin UI: implemented in desktop Settings, including setup QR generation for reachable host addresses
+- desktop companion admin UI: implemented in desktop Settings, including automatic local-network enable + setup QR generation for reachable host addresses
 - native iOS client: implemented at `apps/ios/PersonalAgentCompanion`
 
 The shipping iOS client currently covers:

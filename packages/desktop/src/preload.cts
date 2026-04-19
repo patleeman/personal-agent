@@ -69,6 +69,7 @@ const desktopBridge = {
   readDesktopAppPreferences: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-desktop-app-preferences`),
   updateDesktopAppPreferences: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-desktop-app-preferences`, input),
+  ensureCompanionNetworkReachable: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`),
   readAppStatus: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-app-status`),
   readDaemonState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-daemon-state`),
   readSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-sessions`),

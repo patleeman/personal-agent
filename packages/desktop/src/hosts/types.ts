@@ -484,6 +484,7 @@ export interface HostController {
   ): Promise<() => void>;
   subscribeApiStream(path: string, onEvent: (event: DesktopApiStreamEvent) => void): Promise<() => void>;
   subscribeDesktopAppEvents?(onEvent: (event: DesktopAppBridgeEvent) => void): Promise<() => void>;
+  ensureCompanionNetworkReachable?(): Promise<{ changed: boolean; url: string | null }>;
   restart(): Promise<void>;
   stop(): Promise<void>;
   dispose(): Promise<void>;

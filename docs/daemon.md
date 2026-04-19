@@ -15,6 +15,7 @@ The daemon owns long-lived runtime responsibilities such as:
 - durable background runs
 - companion pairing/device state
 - setup QR generation state for native companion onboarding
+- companion network exposure state for desktop-owned local-network phone pairing
 - the daemon-hosted companion HTTP + WebSocket API
 - maintenance and cleanup
 

@@ -342,6 +342,43 @@ export class PersonalAgentDaemon {
     return this.companionServer?.getUrl() ?? null;
   }
 
+  async updateCompanionConfig(input: {
+    enabled?: boolean;
+    host?: string;
+    port?: number;
+  }): Promise<{ url: string | null }> {
+    const previous = {
+      enabled: this.config.companion?.enabled !== false,
+      host: this.config.companion?.host ?? '127.0.0.1',
+      port: this.config.companion?.port ?? 3843,
+    };
+    const next = {
+      enabled: input.enabled ?? previous.enabled,
+      host: input.host ?? previous.host,
+      port: input.port ?? previous.port,
+    };
+
+    this.config.companion = next;
+
+    if (!this.isRunning()) {
+      return { url: null };
+    }
+
+    await this.companionServer?.stop();
+    this.companionServer = undefined;
+
+    try {
+      this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+      await this.companionServer.start();
+      return { url: this.companionServer.getUrl() };
+    } catch (error) {
+      this.config.companion = previous;
+      this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
+      await this.companionServer.start().catch(() => undefined);
+      throw error;
+    }
+  }
+
   private prepareSocket(): void {
     if (existsSync(this.paths.socketPath)) {
       rmSync(this.paths.socketPath, { force: true });

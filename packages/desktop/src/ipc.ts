@@ -21,6 +21,7 @@ export function registerDesktopIpc(options: {
   onCheckForUpdates?: () => Promise<void> | void;
   readDesktopAppPreferences?: () => Promise<unknown> | unknown;
   updateDesktopAppPreferences?: (input: { autoInstallUpdates?: boolean; startOnSystemStart?: boolean }) => Promise<unknown> | unknown;
+  ensureCompanionNetworkReachable?: () => Promise<unknown> | unknown;
 }): void {
   const streamSubscriptions = new Map<string, () => void>();
   const conversationStateSubscriptions = new Map<string, () => void>();
@@ -184,6 +185,14 @@ export function registerDesktopIpc(options: {
     }
 
     return options.updateDesktopAppPreferences(input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:ensure-companion-network-reachable`, async () => {
+    if (!options.ensureCompanionNetworkReachable) {
+      throw new Error('Companion network access is unavailable.');
+    }
+
+    return options.ensureCompanionNetworkReachable();
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-app-status`, async (event) => {
