@@ -1,3 +1,4 @@
+import CoreImage.CIFilterBuiltins
 import SwiftUI
 import VisionKit
 
@@ -8,7 +9,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if let session = appModel.activeSession {
-                ConversationListView(appModel: appModel, session: session)
+                HostDashboardView(appModel: appModel, session: session)
             } else {
                 ContentUnavailableView {
                     Label("Connect to a host", systemImage: "iphone.and.arrow.forward")
@@ -47,13 +48,52 @@ struct RootView: View {
     }
 }
 
+struct HostDashboardView: View {
+    @ObservedObject var appModel: CompanionAppModel
+    @ObservedObject var session: HostSessionModel
+
+    var body: some View {
+        TabView {
+            ConversationListView(appModel: appModel, session: session)
+                .tabItem {
+                    Label("Threads", systemImage: "message")
+                }
+
+            AutomationListView(session: session)
+                .tabItem {
+                    Label("Automations", systemImage: "clock.arrow.circlepath")
+                }
+
+            RunsListView(session: session)
+                .tabItem {
+                    Label("Runs", systemImage: "bolt.horizontal.circle")
+                }
+
+            HostSettingsView(appModel: appModel, session: session)
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape")
+                }
+        }
+        .tint(CompanionTheme.accent)
+    }
+}
+
 struct ConversationListView: View {
+    enum FilterMode: String, CaseIterable, Identifiable {
+        case all = "All"
+        case human = "Human"
+        case automation = "Automation"
+
+        var id: String { rawValue }
+    }
+
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
     @State private var path: [String] = []
     @State private var showingHostSelection = false
     @State private var showingPairHost = false
     @State private var showingLaunchSheet = false
+    @State private var filterMode: FilterMode = .all
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -78,18 +118,65 @@ struct ConversationListView: View {
                     }
                 }
 
-                ForEach(session.sections) { section in
+                Section {
+                    Picker("Filter", selection: $filterMode) {
+                        ForEach(FilterMode.allCases) { mode in
+                            Text(mode.rawValue).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .listRowBackground(CompanionTheme.panel)
+                }
+
+                ForEach(filteredSections) { section in
                     Section(section.title) {
                         ForEach(section.sessions) { item in
                             NavigationLink(value: item.id) {
                                 ConversationRow(session: item)
                             }
                             .listRowBackground(CompanionTheme.panel)
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    Task { await session.togglePinned(item.id) }
+                                } label: {
+                                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+                                }
+                                .tint(.accentColor)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button {
+                                    Task { await session.toggleArchived(item.id) }
+                                } label: {
+                                    Label(section.id == "archived" ? "Restore" : "Archive", systemImage: section.id == "archived" ? "tray.and.arrow.up" : "archivebox")
+                                }
+                                .tint(.orange)
+                            }
+                            .contextMenu {
+                                Button {
+                                    Task { await session.togglePinned(item.id) }
+                                } label: {
+                                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+                                }
+                                Button {
+                                    Task { await session.toggleArchived(item.id) }
+                                } label: {
+                                    Label(section.id == "archived" ? "Restore" : "Archive", systemImage: section.id == "archived" ? "tray.and.arrow.up" : "archivebox")
+                                }
+                                Button {
+                                    Task {
+                                        if let duplicated = await session.duplicateConversation(item.id) {
+                                            path.append(duplicated)
+                                        }
+                                    }
+                                } label: {
+                                    Label("Duplicate", systemImage: "plus.square.on.square")
+                                }
+                            }
                         }
                     }
                 }
 
-                if session.sections.isEmpty && !session.isLoading {
+                if filteredSections.isEmpty && !session.isLoading {
                     Section {
                         ContentUnavailableView(
                             "No conversations",
@@ -108,7 +195,13 @@ struct ConversationListView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .navigationDestination(for: String.self) { conversationId in
-                ConversationScreen(viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]))
+                ConversationScreen(
+                    viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]),
+                    onOpenConversation: { nextId in
+                        path.append(nextId)
+                        session.refresh()
+                    }
+                )
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -177,6 +270,23 @@ struct ConversationListView: View {
             }
         }
     }
+
+    private var filteredSections: [ConversationListSection] {
+        switch filterMode {
+        case .all:
+            return session.sections
+        case .human:
+            return session.sections.compactMap { section in
+                let items = section.sessions.filter { $0.automationTaskId == nil }
+                return items.isEmpty ? nil : ConversationListSection(id: section.id, title: section.title, sessions: items)
+            }
+        case .automation:
+            return session.sections.compactMap { section in
+                let items = section.sessions.filter { $0.automationTaskId != nil }
+                return items.isEmpty ? nil : ConversationListSection(id: section.id, title: section.title, sessions: items)
+            }
+        }
+    }
 }
 
 private struct ConversationRow: View {
@@ -201,6 +311,9 @@ private struct ConversationRow: View {
                 Text(session.model)
                 if let remoteLabel = session.remoteHostLabel?.nilIfBlank {
                     Text(remoteLabel)
+                }
+                if let automationTitle = session.automationTitle?.nilIfBlank {
+                    Text("Auto: \(automationTitle)")
                 }
             }
             .font(.caption)
@@ -237,6 +350,618 @@ private struct ErrorBanner: View {
             .padding(.vertical, 10)
             .background(.red.opacity(0.92), in: Capsule())
             .shadow(radius: 8, y: 4)
+    }
+}
+
+struct AutomationListView: View {
+    @ObservedObject var session: HostSessionModel
+    @State private var path: [String] = []
+    @State private var tasks: [ScheduledTaskSummary] = []
+    @State private var selectedTask: ScheduledTaskDetail?
+    @State private var editingTaskId: String?
+    @State private var editorDraft = ScheduledTaskEditorDraft()
+    @State private var showingEditor = false
+    @State private var isLoading = false
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            List {
+                if tasks.isEmpty && !isLoading {
+                    ContentUnavailableView("No automations", systemImage: "clock.arrow.circlepath", description: Text("Create an automation to match the desktop Automations workspace."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(tasks) { task in
+                        Button {
+                            Task {
+                                selectedTask = await session.readTask(task.id)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(task.title)
+                                    .font(.headline)
+                                Text(task.prompt?.nilIfBlank ?? "No prompt")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                HStack(spacing: 8) {
+                                    if let schedule = task.cron ?? task.at {
+                                        Text(schedule)
+                                    }
+                                    Text(task.enabled ? "Enabled" : "Disabled")
+                                    if task.running == true {
+                                        Text("Running")
+                                    }
+                                }
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .navigationTitle("Automations")
+            .navigationDestination(for: String.self) { conversationId in
+                ConversationScreen(
+                    viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]),
+                    onOpenConversation: { nextId in
+                        path.append(nextId)
+                        session.refresh()
+                    }
+                )
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        editingTaskId = nil
+                        editorDraft = ScheduledTaskEditorDraft()
+                        showingEditor = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .overlay {
+                if isLoading {
+                    ProgressView()
+                }
+            }
+            .refreshable {
+                await reload()
+            }
+            .task {
+                await reload()
+            }
+            .sheet(item: $selectedTask) { task in
+                AutomationDetailView(session: session, task: task, onEdit: { detail in
+                    editingTaskId = detail.id
+                    editorDraft = ScheduledTaskEditorDraft(detail: detail)
+                    showingEditor = true
+                }, onOpenConversation: { conversationId in
+                    path.append(conversationId)
+                }, onChanged: {
+                    await reload()
+                })
+            }
+            .sheet(isPresented: $showingEditor) {
+                AutomationEditorView(draft: $editorDraft, session: session, title: editingTaskId == nil ? "New automation" : "Edit automation") {
+                    if await session.saveTask(taskId: editingTaskId, draft: editorDraft) != nil {
+                        showingEditor = false
+                        await reload()
+                    }
+                }
+            }
+        }
+    }
+
+    private func reload() async {
+        isLoading = true
+        tasks = await session.listTasks()
+        isLoading = false
+    }
+}
+
+private struct AutomationDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var session: HostSessionModel
+    let task: ScheduledTaskDetail
+    let onEdit: (ScheduledTaskDetail) -> Void
+    let onOpenConversation: (String) -> Void
+    let onChanged: () async -> Void
+
+    @State private var log: DurableRunLogResponse?
+    @State private var isLoadingLog = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Task") {
+                    LabeledContent("Title") { Text(task.title) }
+                    if let schedule = task.cron ?? task.at {
+                        LabeledContent("Schedule") { Text(schedule) }
+                    }
+                    if let targetType = task.targetType?.nilIfBlank {
+                        LabeledContent("Target") { Text(targetType) }
+                    }
+                    if let model = task.model?.nilIfBlank {
+                        LabeledContent("Model") { Text(model) }
+                    }
+                    if let cwd = task.cwd?.nilIfBlank {
+                        LabeledContent("Cwd") { Text(cwd).multilineTextAlignment(.trailing) }
+                    }
+                }
+                Section("Prompt") {
+                    Text(task.prompt ?? "")
+                        .font(.body)
+                }
+                if let log {
+                    Section("Last log") {
+                        ScrollView(.horizontal) {
+                            Text(log.log)
+                                .font(.footnote.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(task.title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .confirmationAction) {
+                    Button("Run") {
+                        Task {
+                            _ = await session.runTask(task.id)
+                            await onChanged()
+                        }
+                    }
+                    Button("Edit") {
+                        onEdit(task)
+                        dismiss()
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                HStack(spacing: 12) {
+                    if let threadConversationId = task.threadConversationId?.nilIfBlank {
+                        Button("Open thread") {
+                            dismiss()
+                            onOpenConversation(threadConversationId)
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                    Button(isLoadingLog ? "Loading log…" : "View log") {
+                        Task {
+                            isLoadingLog = true
+                            log = await session.readTaskLog(task.id)
+                            isLoadingLog = false
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    Button("Delete", role: .destructive) {
+                        Task {
+                            if await session.deleteTask(task.id) {
+                                await onChanged()
+                                dismiss()
+                            }
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .padding()
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+}
+
+private struct AutomationEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var draft: ScheduledTaskEditorDraft
+    @ObservedObject var session: HostSessionModel
+    let title: String
+    let onSave: () async -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Basics") {
+                    TextField("Title", text: $draft.title)
+                    Toggle("Enabled", isOn: $draft.enabled)
+                    Picker("Target", selection: $draft.targetType) {
+                        Text("Background job").tag("background-agent")
+                        Text("Conversation").tag("conversation")
+                    }
+                    if draft.targetType == "conversation" {
+                        Picker("Thread", selection: $draft.threadMode) {
+                            Text("Dedicated").tag("dedicated")
+                            Text("Existing").tag("existing")
+                            Text("None").tag("none")
+                        }
+                        if draft.threadMode == "existing" {
+                            Picker("Conversation", selection: $draft.threadConversationId) {
+                                Text("Select thread").tag("")
+                                ForEach(Array(session.sessions.values).sorted { $0.title < $1.title }, id: \.id) { meta in
+                                    Text(meta.title).tag(meta.id)
+                                }
+                            }
+                        }
+                    }
+                }
+                Section("Schedule") {
+                    Picker("Mode", selection: $draft.scheduleMode) {
+                        Text("Cron").tag("cron")
+                        Text("At").tag("at")
+                    }
+                    if draft.scheduleMode == "cron" {
+                        TextField("0 9 * * 1-5", text: $draft.cron)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    } else {
+                        TextField("2026-04-20T09:00:00-04:00", text: $draft.at)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                }
+                Section("Prompt") {
+                    TextField("Prompt", text: $draft.prompt, axis: .vertical)
+                        .lineLimit(4...10)
+                }
+                Section("Runtime") {
+                    TextField("Model", text: $draft.model)
+                    TextField("Thinking level", text: $draft.thinkingLevel)
+                    TextField("Working directory", text: $draft.cwd)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Timeout seconds", text: $draft.timeoutSeconds)
+                        .keyboardType(.numberPad)
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            await onSave()
+                        }
+                    }
+                    .disabled(draft.prompt.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+struct RunsListView: View {
+    @ObservedObject var session: HostSessionModel
+    @State private var runs: [DurableRunSummary] = []
+    @State private var isLoading = false
+    @State private var selectedRun: DurableRunDetailResponse?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if runs.isEmpty && !isLoading {
+                    ContentUnavailableView("No runs", systemImage: "bolt.horizontal.circle", description: Text("Durable background runs show up here."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(runs) { run in
+                        Button {
+                            Task {
+                                selectedRun = await session.readRun(run.runId)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(run.manifest?.source?.id ?? run.runId)
+                                    .font(.headline)
+                                HStack(spacing: 8) {
+                                    Text(run.manifest?.kind ?? "run")
+                                    Text(run.status?.status ?? "unknown")
+                                    Text(formatRelativeCompanionDate(run.status?.updatedAt ?? run.manifest?.createdAt))
+                                }
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .navigationTitle("Runs")
+            .overlay {
+                if isLoading {
+                    ProgressView()
+                }
+            }
+            .refreshable {
+                await reload()
+            }
+            .task {
+                await reload()
+            }
+            .sheet(item: $selectedRun) { detail in
+                RunDetailView(session: session, detail: detail) {
+                    await reload()
+                }
+            }
+        }
+    }
+
+    private func reload() async {
+        isLoading = true
+        runs = (await session.listRuns())?.runs ?? []
+        isLoading = false
+    }
+}
+
+private struct RunDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var session: HostSessionModel
+    let detail: DurableRunDetailResponse
+    let onChanged: () async -> Void
+
+    @State private var log: DurableRunLogResponse?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Run") {
+                    LabeledContent("Run ID") { Text(detail.run.runId) }
+                    LabeledContent("Kind") { Text(detail.run.manifest?.kind ?? "unknown") }
+                    LabeledContent("Status") { Text(detail.run.status?.status ?? "unknown") }
+                    if let sourceId = detail.run.manifest?.source?.id?.nilIfBlank {
+                        LabeledContent("Source") { Text(sourceId) }
+                    }
+                    if let lastError = detail.run.status?.lastError?.nilIfBlank {
+                        LabeledContent("Last error") { Text(lastError) }
+                    }
+                }
+                if let log {
+                    Section("Log") {
+                        ScrollView(.horizontal) {
+                            Text(log.log)
+                                .font(.footnote.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(detail.run.runId)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+                ToolbarItemGroup(placement: .confirmationAction) {
+                    Button("Log") {
+                        Task {
+                            log = await session.readRunLog(detail.run.runId)
+                        }
+                    }
+                    if detail.run.status?.status == "running" {
+                        Button("Cancel", role: .destructive) {
+                            Task {
+                                _ = await session.cancelRun(detail.run.runId)
+                                await onChanged()
+                                dismiss()
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct HostSettingsView: View {
+    @ObservedObject var appModel: CompanionAppModel
+    @ObservedObject var session: HostSessionModel
+    @State private var showingHostSelection = false
+    @State private var showingPairHost = false
+    @State private var deviceState: CompanionDeviceAdminState?
+    @State private var setupState: CompanionSetupState?
+    @State private var editingDevice: CompanionPairedDeviceSummary?
+    @State private var isLoading = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Host") {
+                    LabeledContent("Label") { Text(session.host.hostLabel) }
+                    LabeledContent("URL") { Text(session.host.baseURL) }
+                    LabeledContent("This device") { Text(session.host.deviceLabel) }
+                    Button("Choose saved host") {
+                        showingHostSelection = true
+                    }
+                    Button("Pair another host") {
+                        showingPairHost = true
+                    }
+                }
+
+                Section("Add another device") {
+                    Button("Generate pairing setup") {
+                        Task {
+                            isLoading = true
+                            setupState = await session.createSetupState()
+                            isLoading = false
+                        }
+                    }
+                    if let setupState {
+                        Text(setupState.pairing.code)
+                            .font(.title3.monospaced().weight(.semibold))
+                        if let firstLink = setupState.links.first {
+                            QRCodeView(text: firstLink.setupUrl)
+                                .frame(maxWidth: .infinity)
+                                .frame(height: 220)
+                            Text(firstLink.baseUrl)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        ForEach(setupState.warnings, id: \.self) { warning in
+                            Text(warning)
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+
+                Section("Paired devices") {
+                    if let currentDeviceState = deviceState {
+                        ForEach(currentDeviceState.devices) { device in
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(device.deviceLabel)
+                                    Text("Last used \(formatRelativeCompanionDate(device.lastUsedAt))")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Menu {
+                                    Button("Rename") {
+                                        editingDevice = device
+                                    }
+                                    Button("Revoke", role: .destructive) {
+                                        Task {
+                                            self.deviceState = await session.deletePairedDevice(device.id)
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    } else if isLoading {
+                        ProgressView()
+                    } else {
+                        Text("No devices")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Settings")
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .refreshable {
+                await reload()
+            }
+            .task {
+                await reload()
+            }
+            .sheet(isPresented: $showingHostSelection) {
+                HostSelectionView(appModel: appModel)
+            }
+            .sheet(isPresented: $showingPairHost) {
+                PairHostView(appModel: appModel)
+            }
+            .sheet(item: $editingDevice) { device in
+                DeviceRenameView(device: device) { nextLabel in
+                    deviceState = await session.updatePairedDevice(device.id, label: nextLabel)
+                }
+            }
+        }
+    }
+
+    private func reload() async {
+        isLoading = true
+        deviceState = await session.readDeviceAdminState()
+        isLoading = false
+    }
+}
+
+private struct DeviceRenameView: View {
+    @Environment(\.dismiss) private var dismiss
+    let device: CompanionPairedDeviceSummary
+    let onSave: (String) async -> Void
+    @State private var label: String
+
+    init(device: CompanionPairedDeviceSummary, onSave: @escaping (String) async -> Void) {
+        self.device = device
+        self.onSave = onSave
+        _label = State(initialValue: device.deviceLabel)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Device label", text: $label)
+            }
+            .navigationTitle("Rename device")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            await onSave(label)
+                            dismiss()
+                        }
+                    }
+                    .disabled(label.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct QRCodeView: View {
+    let text: String
+    private let context = CIContext()
+    private let filter = CIFilter.qrCodeGenerator()
+
+    var body: some View {
+        Group {
+            if let image = generateImage() {
+                Image(uiImage: image)
+                    .interpolation(.none)
+                    .resizable()
+                    .scaledToFit()
+            } else {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(.secondary.opacity(0.12))
+                    .overlay {
+                        Text("QR unavailable")
+                            .foregroundStyle(.secondary)
+                    }
+            }
+        }
+    }
+
+    private func generateImage() -> UIImage? {
+        filter.setValue(Data(text.utf8), forKey: "inputMessage")
+        filter.correctionLevel = "M"
+        guard let output = filter.outputImage?.transformed(by: CGAffineTransform(scaleX: 12, y: 12)), let cgImage = context.createCGImage(output, from: output.extent) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage)
+    }
+}
+
+private extension ScheduledTaskEditorDraft {
+    init(detail: ScheduledTaskDetail) {
+        self.title = detail.title
+        self.enabled = detail.enabled
+        self.scheduleMode = detail.scheduleType == "at" ? "at" : "cron"
+        self.cron = detail.cron ?? ""
+        self.at = detail.at ?? ""
+        self.model = detail.model ?? ""
+        self.thinkingLevel = detail.thinkingLevel ?? ""
+        self.cwd = detail.cwd ?? ""
+        self.timeoutSeconds = detail.timeoutSeconds.map(String.init) ?? ""
+        self.prompt = detail.prompt ?? ""
+        self.targetType = detail.targetType ?? "background-agent"
+        self.threadMode = detail.threadConversationId == nil ? "dedicated" : "existing"
+        self.threadConversationId = detail.threadConversationId ?? ""
     }
 }
 
@@ -552,7 +1277,7 @@ private struct SetupQrScannerView: UIViewControllerRepresentable {
         context.coordinator.hasStarted = true
         Task {
             do {
-                try await uiViewController.startScanning()
+                try uiViewController.startScanning()
             } catch {
                 context.coordinator.onError(error.localizedDescription)
             }
@@ -635,6 +1360,9 @@ struct ConversationLaunchView: View {
                         TextField("Working directory", text: $createRequest.cwd)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
+                        TextField("Model", text: $createRequest.model)
+                        TextField("Thinking level", text: $createRequest.thinkingLevel)
+                        TextField("Service tier", text: $createRequest.serviceTier)
                         Picker("Execution target", selection: $createRequest.executionTargetId) {
                             ForEach(targetOptions) { target in
                                 Text(target.label).tag(target.id)

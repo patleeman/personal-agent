@@ -78,7 +78,7 @@ struct CompanionHello: Codable, Equatable {
     let capabilities: Capabilities
 }
 
-struct CompanionPairedDeviceSummary: Codable, Equatable {
+struct CompanionPairedDeviceSummary: Codable, Equatable, Identifiable {
     let id: String
     let deviceLabel: String
     let createdAt: String
@@ -138,10 +138,10 @@ struct ExecutionTargetSummary: Codable, Equatable, Identifiable {
 }
 
 struct ConversationOrdering: Codable, Equatable {
-    let sessionIds: [String]
-    let pinnedSessionIds: [String]
-    let archivedSessionIds: [String]
-    let workspacePaths: [String]
+    var sessionIds: [String]
+    var pinnedSessionIds: [String]
+    var archivedSessionIds: [String]
+    var workspacePaths: [String]
 }
 
 struct ConversationListState: Codable, Equatable {
@@ -455,6 +455,9 @@ struct NewConversationRequest: Equatable {
     var promptText: String = ""
     var cwd: String = ""
     var executionTargetId: String = "local"
+    var model: String = ""
+    var thinkingLevel: String = ""
+    var serviceTier: String = ""
 }
 
 struct ResumeConversationRequest: Equatable {
@@ -468,6 +471,297 @@ struct AttachmentEditorDraft: Equatable {
     var note: String = ""
     var sourceAsset: AttachmentDraftAsset?
     var previewAsset: AttachmentDraftAsset?
+}
+
+struct ConversationModelPreferencesState: Codable, Equatable {
+    let currentModel: String
+    let currentThinkingLevel: String
+    let currentServiceTier: String
+    let hasExplicitServiceTier: Bool
+}
+
+struct ConversationCwdChangeResult: Codable, Equatable {
+    let id: String
+    let sessionFile: String
+    let cwd: String
+    let changed: Bool
+}
+
+struct ConversationArtifactSummary: Codable, Equatable, Identifiable {
+    let id: String
+    let conversationId: String
+    let title: String
+    let kind: String
+    let createdAt: String
+    let updatedAt: String
+    let revision: Int
+}
+
+struct ConversationArtifactRecord: Codable, Equatable, Identifiable {
+    let id: String
+    let conversationId: String
+    let title: String
+    let kind: String
+    let createdAt: String
+    let updatedAt: String
+    let revision: Int
+    let content: String
+}
+
+struct ConversationCommitCheckpointFile: Codable, Equatable, Identifiable {
+    var id: String { path }
+
+    let path: String
+    let previousPath: String?
+    let status: String
+    let additions: Int
+    let deletions: Int
+    let patch: String
+}
+
+struct ConversationCommitCheckpointComment: Codable, Equatable, Identifiable {
+    let id: String
+    let authorName: String
+    let authorProfile: String?
+    let body: String
+    let filePath: String?
+    let createdAt: String
+    let updatedAt: String
+}
+
+struct ConversationCommitCheckpointSummary: Codable, Equatable, Identifiable {
+    let id: String
+    let conversationId: String
+    let title: String
+    let cwd: String
+    let commitSha: String
+    let shortSha: String
+    let subject: String
+    let body: String?
+    let authorName: String
+    let authorEmail: String?
+    let committedAt: String
+    let createdAt: String
+    let updatedAt: String
+    let fileCount: Int
+    let linesAdded: Int
+    let linesDeleted: Int
+    let commentCount: Int
+}
+
+struct ConversationCommitCheckpointRecord: Codable, Equatable, Identifiable {
+    let id: String
+    let conversationId: String
+    let title: String
+    let cwd: String
+    let commitSha: String
+    let shortSha: String
+    let subject: String
+    let body: String?
+    let authorName: String
+    let authorEmail: String?
+    let committedAt: String
+    let createdAt: String
+    let updatedAt: String
+    let fileCount: Int
+    let linesAdded: Int
+    let linesDeleted: Int
+    let commentCount: Int
+    let files: [ConversationCommitCheckpointFile]
+    let comments: [ConversationCommitCheckpointComment]
+}
+
+struct ScheduledTaskSummary: Codable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let filePath: String?
+    let scheduleType: String?
+    let targetType: String?
+    let running: Bool?
+    let enabled: Bool
+    let cron: String?
+    let at: String?
+    let prompt: String?
+    let model: String?
+    let thinkingLevel: String?
+    let cwd: String?
+    let threadConversationId: String?
+    let threadTitle: String?
+    let lastStatus: String?
+    let lastRunAt: String?
+    let lastSuccessAt: String?
+    let lastAttemptCount: Int?
+}
+
+struct ScheduledTaskDetail: Codable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let filePath: String?
+    let scheduleType: String?
+    let targetType: String?
+    let running: Bool?
+    let enabled: Bool
+    let cron: String?
+    let at: String?
+    let model: String?
+    let thinkingLevel: String?
+    let cwd: String?
+    let timeoutSeconds: Int?
+    let prompt: String?
+    let lastStatus: String?
+    let lastRunAt: String?
+    let threadConversationId: String?
+    let threadTitle: String?
+}
+
+struct ScheduledTaskMutationEnvelope: Codable, Equatable {
+    let ok: Bool
+    let task: ScheduledTaskDetail
+}
+
+struct ScheduledTaskRunResponse: Codable, Equatable {
+    let ok: Bool
+    let accepted: Bool
+    let runId: String?
+}
+
+struct ScheduledTaskEditorDraft: Equatable {
+    var title: String = ""
+    var enabled: Bool = true
+    var scheduleMode: String = "cron"
+    var cron: String = ""
+    var at: String = ""
+    var model: String = ""
+    var thinkingLevel: String = ""
+    var cwd: String = ""
+    var timeoutSeconds: String = ""
+    var prompt: String = ""
+    var targetType: String = "background-agent"
+    var threadMode: String = "dedicated"
+    var threadConversationId: String = ""
+}
+
+struct DurableRunPaths: Codable, Equatable {
+    let root: String
+    let manifestPath: String
+    let statusPath: String
+    let checkpointPath: String
+    let eventsPath: String
+    let outputLogPath: String
+    let resultPath: String
+}
+
+struct DurableRunManifestSource: Codable, Equatable {
+    let type: String
+    let id: String?
+    let filePath: String?
+}
+
+struct DurableRunManifest: Codable, Equatable {
+    let version: Int?
+    let id: String
+    let kind: String
+    let resumePolicy: String
+    let createdAt: String
+    let spec: [String: JSONValue]
+    let parentId: String?
+    let rootId: String?
+    let source: DurableRunManifestSource?
+}
+
+struct DurableRunStatusRecord: Codable, Equatable {
+    let version: Int?
+    let runId: String
+    let status: String
+    let createdAt: String
+    let updatedAt: String
+    let activeAttempt: Int
+    let startedAt: String?
+    let completedAt: String?
+    let checkpointKey: String?
+    let lastError: String?
+}
+
+struct DurableRunCheckpointRecord: Codable, Equatable {
+    let version: Int?
+    let runId: String
+    let updatedAt: String
+    let step: String?
+    let cursor: String?
+    let payload: [String: JSONValue]?
+}
+
+struct DurableRunSummary: Codable, Equatable, Identifiable {
+    var id: String { runId }
+
+    let runId: String
+    let paths: DurableRunPaths
+    let manifest: DurableRunManifest?
+    let status: DurableRunStatusRecord?
+    let checkpoint: DurableRunCheckpointRecord?
+    let problems: [String]
+    let recoveryAction: String
+}
+
+struct DurableRunsSummary: Codable, Equatable {
+    let total: Int
+    let recoveryActions: [String: Int]
+    let statuses: [String: Int]
+}
+
+struct DurableRunsListResponse: Codable, Equatable {
+    let scannedAt: String
+    let runs: [DurableRunSummary]
+    let summary: DurableRunsSummary
+}
+
+struct DurableRunDetailResponse: Codable, Equatable, Identifiable {
+    var id: String { run.runId }
+
+    let scannedAt: String
+    let run: DurableRunSummary
+}
+
+struct DurableRunLogResponse: Codable, Equatable {
+    let path: String
+    let log: String
+}
+
+struct DurableRunCancelResponse: Codable, Equatable {
+    let cancelled: Bool
+    let runId: String
+    let reason: String?
+}
+
+struct CompanionPendingPairing: Codable, Equatable, Identifiable {
+    let id: String
+    let createdAt: String
+    let expiresAt: String
+}
+
+struct CompanionDeviceAdminState: Codable, Equatable {
+    let pendingPairings: [CompanionPendingPairing]
+    let devices: [CompanionPairedDeviceSummary]
+}
+
+struct CompanionPairingCodeRecord: Codable, Equatable, Identifiable {
+    let id: String
+    let code: String
+    let createdAt: String
+    let expiresAt: String
+}
+
+struct CompanionSetupLinkRecord: Codable, Equatable, Identifiable {
+    let id: String
+    let label: String
+    let baseUrl: String
+    let setupUrl: String
+}
+
+struct CompanionSetupState: Codable, Equatable {
+    let pairing: CompanionPairingCodeRecord
+    let links: [CompanionSetupLinkRecord]
+    let warnings: [String]
 }
 
 struct ConversationListSection: Identifiable, Equatable {

@@ -2,15 +2,22 @@ import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
+import WebKit
 
 struct ConversationScreen: View {
     @ObservedObject var viewModel: ConversationViewModel
+    var onOpenConversation: (String) -> Void = { _ in }
 
     @State private var showingAttachments = false
     @State private var showingRename = false
     @State private var renameText = ""
     @State private var importedPhotoItems: [PhotosPickerItem] = []
     @State private var showingImageFileImporter = false
+    @State private var showingCwdEditor = false
+    @State private var cwdText = ""
+    @State private var showingModelPreferences = false
+    @State private var showingArtifacts = false
+    @State private var showingCheckpoints = false
 
     private var currentExecutionTargetLabel: String {
         viewModel.executionTargets.first(where: { $0.id == viewModel.currentExecutionTargetId })?.label ?? "Local"
@@ -20,6 +27,10 @@ struct ConversationScreen: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
+                    if let meta = viewModel.sessionMeta {
+                        ConversationMetaBar(meta: meta)
+                    }
+
                     if viewModel.blocks.isEmpty && !viewModel.isLoading {
                         ContentUnavailableView(
                             "No transcript yet",
@@ -68,6 +79,36 @@ struct ConversationScreen: View {
                                 viewModel.takeOver()
                             } label: {
                                 Label("Take over here", systemImage: "hand.raised")
+                            }
+                            Button {
+                                Task {
+                                    if let nextId = await viewModel.duplicateConversation() {
+                                        onOpenConversation(nextId)
+                                    }
+                                }
+                            } label: {
+                                Label("Duplicate", systemImage: "plus.square.on.square")
+                            }
+                            Button {
+                                cwdText = viewModel.sessionMeta?.cwd ?? ""
+                                showingCwdEditor = true
+                            } label: {
+                                Label("Change working directory", systemImage: "folder")
+                            }
+                            Button {
+                                showingModelPreferences = true
+                            } label: {
+                                Label("Model preferences", systemImage: "slider.horizontal.3")
+                            }
+                            Button {
+                                showingArtifacts = true
+                            } label: {
+                                Label("Artifacts", systemImage: "doc.richtext")
+                            }
+                            Button {
+                                showingCheckpoints = true
+                            } label: {
+                                Label("Checkpoints", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                             }
                             Button {
                                 showingAttachments = true
@@ -123,6 +164,23 @@ struct ConversationScreen: View {
                     viewModel.renameConversation(renameText)
                     showingRename = false
                 }
+            }
+            .sheet(isPresented: $showingCwdEditor) {
+                ConversationCwdEditorView(cwd: $cwdText) {
+                    if let result = await viewModel.changeWorkingDirectory(cwdText), result.changed {
+                        showingCwdEditor = false
+                        onOpenConversation(result.id)
+                    }
+                }
+            }
+            .sheet(isPresented: $showingModelPreferences) {
+                ConversationModelPreferencesView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showingArtifacts) {
+                ArtifactBrowserView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showingCheckpoints) {
+                CheckpointBrowserView(viewModel: viewModel)
             }
             .fileImporter(isPresented: $showingImageFileImporter, allowedContentTypes: [.image], allowsMultipleSelection: true) { result in
                 switch result {
@@ -515,6 +573,301 @@ private struct RenameConversationView: View {
                         dismiss()
                     }
                     .disabled(title.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct ConversationMetaBar: View {
+    let meta: SessionMeta
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(meta.cwd)
+                .font(.caption)
+                .foregroundStyle(CompanionTheme.textSecondary)
+                .lineLimit(2)
+            HStack(spacing: 8) {
+                Text(meta.model)
+                if let remoteHostLabel = meta.remoteHostLabel?.nilIfBlank {
+                    Text(remoteHostLabel)
+                }
+                if let automationTitle = meta.automationTitle?.nilIfBlank {
+                    Text(automationTitle)
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(CompanionTheme.textDim)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+        }
+    }
+}
+
+private struct ConversationCwdEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var cwd: String
+    let onSave: () async -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Working directory", text: $cwd)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            .navigationTitle("Change cwd")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            await onSave()
+                            dismiss()
+                        }
+                    }
+                    .disabled(cwd.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct ConversationModelPreferencesView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ConversationViewModel
+    @State private var model = ""
+    @State private var thinkingLevel = ""
+    @State private var serviceTier = ""
+    @State private var isLoading = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Preferences") {
+                    TextField("Model", text: $model)
+                    TextField("Thinking level", text: $thinkingLevel)
+                    TextField("Service tier", text: $serviceTier)
+                }
+            }
+            .navigationTitle("Model preferences")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isLoading ? "Saving…" : "Save") {
+                        Task {
+                            isLoading = true
+                            _ = await viewModel.saveModelPreferences(model: model, thinkingLevel: thinkingLevel, serviceTier: serviceTier)
+                            isLoading = false
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .task {
+                guard let state = await viewModel.loadModelPreferences() else { return }
+                model = state.currentModel
+                thinkingLevel = state.currentThinkingLevel
+                serviceTier = state.currentServiceTier
+            }
+        }
+    }
+}
+
+private struct ArtifactBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ConversationViewModel
+    @State private var artifacts: [ConversationArtifactSummary] = []
+    @State private var selectedArtifact: ConversationArtifactRecord?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if artifacts.isEmpty {
+                    ContentUnavailableView("No artifacts", systemImage: "doc.richtext", description: Text("Rendered conversation artifacts appear here."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(artifacts) { artifact in
+                        Button {
+                            Task {
+                                selectedArtifact = await viewModel.readArtifact(artifact.id)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(artifact.title)
+                                    .font(.headline)
+                                Text(artifact.kind)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Artifacts")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task {
+                artifacts = await viewModel.listArtifacts()
+            }
+            .sheet(item: $selectedArtifact) { artifact in
+                ArtifactDetailView(artifact: artifact)
+            }
+        }
+    }
+}
+
+private struct ArtifactDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let artifact: ConversationArtifactRecord
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if artifact.kind == "html" {
+                    HTMLArtifactView(html: artifact.content)
+                } else {
+                    ScrollView {
+                        Text(artifact.content)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding()
+                    }
+                }
+            }
+            .navigationTitle(artifact.title)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct HTMLArtifactView: UIViewRepresentable {
+    let html: String
+
+    func makeUIView(context: Context) -> WKWebView {
+        let view = WKWebView(frame: .zero)
+        view.isOpaque = false
+        view.backgroundColor = .clear
+        view.scrollView.backgroundColor = .clear
+        return view
+    }
+
+    func updateUIView(_ uiView: WKWebView, context: Context) {
+        uiView.loadHTMLString(html, baseURL: nil)
+    }
+}
+
+private struct CheckpointBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ConversationViewModel
+    @State private var checkpoints: [ConversationCommitCheckpointSummary] = []
+    @State private var selectedCheckpoint: ConversationCommitCheckpointRecord?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if checkpoints.isEmpty {
+                    ContentUnavailableView("No checkpoints", systemImage: "point.topleft.down.curvedto.point.bottomright.up", description: Text("Commit checkpoints from the conversation appear here."))
+                        .listRowBackground(Color.clear)
+                } else {
+                    ForEach(checkpoints) { checkpoint in
+                        Button {
+                            Task {
+                                selectedCheckpoint = await viewModel.readCheckpoint(checkpoint.id)
+                            }
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(checkpoint.title)
+                                    .font(.headline)
+                                Text("\(checkpoint.shortSha) · \(checkpoint.fileCount) files")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Checkpoints")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task {
+                checkpoints = await viewModel.listCheckpoints()
+            }
+            .sheet(item: $selectedCheckpoint) { checkpoint in
+                CheckpointDetailView(checkpoint: checkpoint)
+            }
+        }
+    }
+}
+
+private struct CheckpointDetailView: View {
+    @Environment(\.dismiss) private var dismiss
+    let checkpoint: ConversationCommitCheckpointRecord
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Commit") {
+                    LabeledContent("Title") { Text(checkpoint.title) }
+                    LabeledContent("SHA") { Text(checkpoint.shortSha) }
+                    LabeledContent("Subject") { Text(checkpoint.subject) }
+                    LabeledContent("Files") { Text("\(checkpoint.fileCount)") }
+                }
+                Section("Files") {
+                    ForEach(checkpoint.files) { file in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(file.path)
+                                .font(.subheadline.weight(.semibold))
+                            Text(file.patch)
+                                .font(.caption.monospaced())
+                                .textSelection(.enabled)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                if !checkpoint.comments.isEmpty {
+                    Section("Comments") {
+                        ForEach(checkpoint.comments) { comment in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(comment.authorName)
+                                    .font(.subheadline.weight(.semibold))
+                                Text(comment.body)
+                                    .font(.body)
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(checkpoint.title)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
                 }
             }
         }

@@ -180,6 +180,57 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(draft.previewAsset?.mimeType, "image/png")
     }
 
+    func testHostSessionCanArchiveAndPinConversations() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+        session.refresh()
+        try await Task.sleep(for: .milliseconds(50))
+
+        await session.toggleArchived("conv-2")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(session.sections.contains(where: { $0.id == "archived" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
+
+        await session.togglePinned("conv-2")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(session.sections.contains(where: { $0.id == "pinned" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
+    }
+
+    func testConversationLoadsArtifactsAndCheckpoints() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: []
+        )
+
+        let artifacts = await model.listArtifacts()
+        let artifact = await model.readArtifact("artifact-1")
+        let checkpoints = await model.listCheckpoints()
+        let checkpoint = await model.readCheckpoint("abc1234")
+
+        XCTAssertEqual(artifacts.first?.id, "artifact-1")
+        XCTAssertEqual(artifact?.kind, "html")
+        XCTAssertEqual(checkpoints.first?.id, "abc1234")
+        XCTAssertEqual(checkpoint?.files.count, 1)
+    }
+
+    func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+
+        let tasks = await session.listTasks()
+        XCTAssertEqual(tasks.first?.id, "task-1")
+
+        let runResponse = await session.runTask("task-1")
+        XCTAssertTrue(runResponse?.accepted == true)
+        let runs = await session.listRuns()
+        XCTAssertGreaterThanOrEqual(runs?.runs.count ?? 0, 1)
+
+        let devices = await session.readDeviceAdminState()
+        XCTAssertEqual(devices?.devices.count, 1)
+        let setup = await session.createSetupState()
+        XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
+    }
+
     func testLiveSetupURLPairsAgainstDesktopHost() async throws {
         let environment = ProcessInfo.processInfo.environment
         let config = try loadLiveCompanionConfig(from: environment)

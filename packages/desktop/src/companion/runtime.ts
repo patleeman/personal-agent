@@ -7,13 +7,20 @@ import type {
   CompanionConversationAbortInput,
   CompanionConversationBootstrapInput,
   CompanionConversationCreateInput,
+  CompanionConversationCwdChangeInput,
+  CompanionConversationDuplicateInput,
   CompanionConversationExecutionTargetChangeInput,
+  CompanionConversationModelPreferencesUpdateInput,
   CompanionConversationPromptInput,
   CompanionConversationRenameInput,
   CompanionConversationResumeInput,
   CompanionConversationSubscriptionInput,
+  CompanionConversationTabsUpdateInput,
   CompanionConversationTakeoverInput,
+  CompanionDurableRunLogInput,
   CompanionRuntime,
+  CompanionScheduledTaskInput,
+  CompanionScheduledTaskUpdateInput,
   CompanionSurfaceType,
 } from '@personal-agent/daemon';
 import type { DesktopApiStreamEvent } from '../hosts/types.js';
@@ -153,6 +160,22 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       return buildConversationListState(hostManager);
     },
 
+    async updateConversationTabs(input: CompanionConversationTabsUpdateInput) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.updateOpenConversationTabs) {
+        throw new Error('Conversation layout updates are unavailable.');
+      }
+
+      return localController.updateOpenConversationTabs(input);
+    },
+
+    async duplicateConversation(input: CompanionConversationDuplicateInput) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/duplicate`,
+      });
+    },
+
     async listExecutionTargets() {
       return {
         executionTargets: buildExecutionTargets(hostManager),
@@ -285,6 +308,83 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async changeConversationCwd(input: CompanionConversationCwdChangeInput) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/cwd`,
+        body: {
+          cwd: input.cwd,
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
+    async readConversationModelPreferences(conversationId: string) {
+      const localController = hostManager.getHostController('local');
+      if (localController.readConversationModelPreferences) {
+        return localController.readConversationModelPreferences({ conversationId });
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/conversations/${encodeURIComponent(conversationId)}/model-preferences`,
+      });
+    },
+
+    async updateConversationModelPreferences(input: CompanionConversationModelPreferencesUpdateInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.updateConversationModelPreferences) {
+        return localController.updateConversationModelPreferences(input);
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'PATCH',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/model-preferences`,
+        body: {
+          ...(input.model !== undefined ? { model: input.model } : {}),
+          ...(input.thinkingLevel !== undefined ? { thinkingLevel: input.thinkingLevel } : {}),
+          ...(input.serviceTier !== undefined ? { serviceTier: input.serviceTier } : {}),
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
+    async listConversationArtifacts(conversationId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readConversationArtifacts) {
+        throw new Error('Conversation artifacts are unavailable.');
+      }
+
+      return localController.readConversationArtifacts(conversationId);
+    },
+
+    async readConversationArtifact(input: { conversationId: string; artifactId: string }) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readConversationArtifact) {
+        throw new Error('Conversation artifacts are unavailable.');
+      }
+
+      return localController.readConversationArtifact(input);
+    },
+
+    async listConversationCheckpoints(conversationId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readConversationCheckpoints) {
+        throw new Error('Conversation checkpoints are unavailable.');
+      }
+
+      return localController.readConversationCheckpoints(conversationId);
+    },
+
+    async readConversationCheckpoint(input: { conversationId: string; checkpointId: string }) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readConversationCheckpoint) {
+        throw new Error('Conversation checkpoints are unavailable.');
+      }
+
+      return localController.readConversationCheckpoint(input);
+    },
+
     async changeConversationExecutionTarget(input: CompanionConversationExecutionTargetChangeInput) {
       await continueConversationInHost(hostManager, {
         conversationId: input.conversationId,
@@ -337,6 +437,105 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       }
 
       return parseDataUrlAsset(await localController.readConversationAttachmentAsset(input));
+    },
+
+    async listScheduledTasks() {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readScheduledTasks) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.readScheduledTasks();
+    },
+
+    async readScheduledTask(taskId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readScheduledTaskDetail) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.readScheduledTaskDetail(taskId);
+    },
+
+    async readScheduledTaskLog(taskId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readScheduledTaskLog) {
+        throw new Error('Scheduled task logs are unavailable.');
+      }
+
+      return localController.readScheduledTaskLog(taskId);
+    },
+
+    async createScheduledTask(input: CompanionScheduledTaskInput) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.createScheduledTask) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.createScheduledTask(input);
+    },
+
+    async updateScheduledTask(input: CompanionScheduledTaskUpdateInput) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.updateScheduledTask) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.updateScheduledTask(input);
+    },
+
+    async deleteScheduledTask(taskId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.deleteScheduledTask) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.deleteScheduledTask(taskId);
+    },
+
+    async runScheduledTask(taskId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.runScheduledTask) {
+        throw new Error('Scheduled tasks are unavailable.');
+      }
+
+      return localController.runScheduledTask(taskId);
+    },
+
+    async listDurableRuns() {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readDurableRuns) {
+        throw new Error('Durable runs are unavailable.');
+      }
+
+      return localController.readDurableRuns();
+    },
+
+    async readDurableRun(runId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readDurableRun) {
+        throw new Error('Durable runs are unavailable.');
+      }
+
+      return localController.readDurableRun(runId);
+    },
+
+    async readDurableRunLog(input: CompanionDurableRunLogInput) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.readDurableRunLog) {
+        throw new Error('Durable run logs are unavailable.');
+      }
+
+      return localController.readDurableRunLog(input);
+    },
+
+    async cancelDurableRun(runId: string) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.cancelDurableRun) {
+        throw new Error('Durable runs are unavailable.');
+      }
+
+      return localController.cancelDurableRun(runId);
     },
 
     async subscribeApp(onEvent: (event: unknown) => void) {

@@ -20,16 +20,23 @@ import {
   type CompanionConversationAbortInput,
   type CompanionConversationBootstrapInput,
   type CompanionConversationCreateInput,
+  type CompanionConversationCwdChangeInput,
+  type CompanionConversationDuplicateInput,
   type CompanionConversationExecutionTargetChangeInput,
+  type CompanionConversationModelPreferencesUpdateInput,
   type CompanionConversationPromptInput,
   type CompanionConversationRenameInput,
   type CompanionConversationResumeInput,
   type CompanionConversationSubscriptionInput,
+  type CompanionConversationTabsUpdateInput,
   type CompanionConversationTakeoverInput,
+  type CompanionDurableRunLogInput,
   type CompanionHostHello,
   type CompanionPairedDeviceSummary,
   type CompanionRuntime,
   type CompanionRuntimeProvider,
+  type CompanionScheduledTaskInput,
+  type CompanionScheduledTaskUpdateInput,
   type CompanionServerSocketMessage,
   type CompanionSetupState,
   type CompanionSocketErrorResponse,
@@ -129,6 +136,23 @@ function readOptionalString(input: unknown): string | undefined {
   return typeof input === 'string' && input.trim().length > 0 ? input.trim() : undefined;
 }
 
+function readOptionalStringArray(input: unknown, field: string): string[] | undefined {
+  if (input === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(input)) {
+    throw new Error(`${field} must be an array of strings when provided.`);
+  }
+
+  return input.map((value) => {
+    if (typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error(`${field} must only contain non-empty strings.`);
+    }
+    return value.trim();
+  });
+}
+
 function readOptionalPositiveInteger(input: unknown, field: string): number | undefined {
   if (input === undefined) {
     return undefined;
@@ -198,10 +222,24 @@ function buildHello(stateRoot: string): CompanionHostHello {
   };
 }
 
-function buildSetupState(stateRoot: string, config: DaemonConfig, pairing = createCompanionPairingCode(stateRoot)): CompanionSetupState {
+function buildSetupState(
+  stateRoot: string,
+  config: DaemonConfig,
+  pairing = createCompanionPairingCode(stateRoot),
+  portOverride?: number,
+): CompanionSetupState {
   const host = readCompanionHostState(stateRoot);
+  const effectiveConfig: DaemonConfig = {
+    ...config,
+    companion: {
+      ...config.companion,
+      enabled: config.companion?.enabled ?? true,
+      host: config.companion?.host ?? '127.0.0.1',
+      port: portOverride ?? config.companion?.port ?? 3843,
+    },
+  };
   return buildCompanionSetupState({
-    config,
+    config: effectiveConfig,
     pairing,
     hostLabel: host.hostLabel,
     hostInstanceId: host.hostInstanceId,
@@ -385,12 +423,18 @@ export class DaemonCompanionServer {
     return device;
   }
 
-  private requireLoopbackAdmin(request: IncomingMessage, response: ServerResponse): boolean {
+  private async requireAdminAccess(request: IncomingMessage, response: ServerResponse): Promise<boolean> {
     if (isLoopbackAddress(request.socket.remoteAddress)) {
       return true;
     }
 
-    sendError(response, 403, 'Desktop-admin companion endpoints are only available from loopback.');
+    const device = await this.authenticateBearer(request);
+    if (device) {
+      return true;
+    }
+
+    response.setHeader('WWW-Authenticate', 'Bearer');
+    sendError(response, 401, 'Companion admin access requires loopback or a paired device token.');
     return false;
   }
 
@@ -418,7 +462,7 @@ export class DaemonCompanionServer {
     }
 
     if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/admin/pairing-codes`) {
-      if (!this.requireLoopbackAdmin(request, response)) {
+      if (!await this.requireAdminAccess(request, response)) {
         return;
       }
 
@@ -427,16 +471,16 @@ export class DaemonCompanionServer {
     }
 
     if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/admin/setup`) {
-      if (!this.requireLoopbackAdmin(request, response)) {
+      if (!await this.requireAdminAccess(request, response)) {
         return;
       }
 
-      sendJson(response, 201, buildSetupState(this.stateRoot, this.config));
+      sendJson(response, 201, buildSetupState(this.stateRoot, this.config, undefined, this.listeningAddress?.port));
       return;
     }
 
     if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/admin/devices`) {
-      if (!this.requireLoopbackAdmin(request, response)) {
+      if (!await this.requireAdminAccess(request, response)) {
         return;
       }
 
@@ -446,7 +490,7 @@ export class DaemonCompanionServer {
 
     const patchDeviceMatch = /^\/companion\/v1\/admin\/devices\/([^/]+)$/.exec(pathname);
     if (patchDeviceMatch && request.method === 'PATCH') {
-      if (!this.requireLoopbackAdmin(request, response)) {
+      if (!await this.requireAdminAccess(request, response)) {
         return;
       }
 
@@ -466,7 +510,7 @@ export class DaemonCompanionServer {
 
     const deleteDeviceMatch = /^\/companion\/v1\/admin\/devices\/([^/]+)$/.exec(pathname);
     if (deleteDeviceMatch && request.method === 'DELETE') {
-      if (!this.requireLoopbackAdmin(request, response)) {
+      if (!await this.requireAdminAccess(request, response)) {
         return;
       }
 
@@ -488,6 +532,138 @@ export class DaemonCompanionServer {
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
       sendJson(response, 200, await runtime.listConversations());
+      return;
+    }
+
+    if (request.method === 'PATCH' && pathname === `${COMPANION_API_ROOT}/conversations/layout`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationTabsUpdateInput = {
+        ...(payload.sessionIds !== undefined ? { sessionIds: readOptionalStringArray(payload.sessionIds, 'sessionIds') } : {}),
+        ...(payload.pinnedSessionIds !== undefined ? { pinnedSessionIds: readOptionalStringArray(payload.pinnedSessionIds, 'pinnedSessionIds') } : {}),
+        ...(payload.archivedSessionIds !== undefined ? { archivedSessionIds: readOptionalStringArray(payload.archivedSessionIds, 'archivedSessionIds') } : {}),
+        ...(payload.workspacePaths !== undefined ? { workspacePaths: readOptionalStringArray(payload.workspacePaths, 'workspacePaths') } : {}),
+      };
+      sendJson(response, 200, await runtime.updateConversationTabs(input));
+      return;
+    }
+
+    const duplicateConversationMatch = /^\/companion\/v1\/conversations\/([^/]+)\/duplicate$/.exec(pathname);
+    if (duplicateConversationMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const input: CompanionConversationDuplicateInput = {
+        conversationId: decodeURIComponent(duplicateConversationMatch[1] || ''),
+      };
+      sendJson(response, 200, await runtime.duplicateConversation(input));
+      return;
+    }
+
+    const conversationCwdMatch = /^\/companion\/v1\/conversations\/([^/]+)\/cwd$/.exec(pathname);
+    if (conversationCwdMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationCwdChangeInput = {
+        conversationId: decodeURIComponent(conversationCwdMatch[1] || ''),
+        cwd: readRequiredString(payload.cwd, 'cwd'),
+        ...(readOptionalString(payload.surfaceId) ? { surfaceId: readOptionalString(payload.surfaceId) } : {}),
+      };
+      sendJson(response, 200, await runtime.changeConversationCwd(input));
+      return;
+    }
+
+    const modelPreferencesMatch = /^\/companion\/v1\/conversations\/([^/]+)\/model-preferences$/.exec(pathname);
+    if (modelPreferencesMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readConversationModelPreferences(decodeURIComponent(modelPreferencesMatch[1] || '')));
+      return;
+    }
+
+    if (modelPreferencesMatch && request.method === 'PATCH') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationModelPreferencesUpdateInput = {
+        conversationId: decodeURIComponent(modelPreferencesMatch[1] || ''),
+        ...(payload.model !== undefined ? { model: payload.model === null ? null : readOptionalString(payload.model) } : {}),
+        ...(payload.thinkingLevel !== undefined ? { thinkingLevel: payload.thinkingLevel === null ? null : readOptionalString(payload.thinkingLevel) } : {}),
+        ...(payload.serviceTier !== undefined ? { serviceTier: payload.serviceTier === null ? null : readOptionalString(payload.serviceTier) } : {}),
+        ...(readOptionalString(payload.surfaceId) ? { surfaceId: readOptionalString(payload.surfaceId) } : {}),
+      };
+      sendJson(response, 200, await runtime.updateConversationModelPreferences(input));
+      return;
+    }
+
+    const artifactsMatch = /^\/companion\/v1\/conversations\/([^/]+)\/artifacts$/.exec(pathname);
+    if (artifactsMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const conversationId = decodeURIComponent(artifactsMatch[1] || '');
+      sendJson(response, 200, await runtime.listConversationArtifacts(conversationId));
+      return;
+    }
+
+    const artifactMatch = /^\/companion\/v1\/conversations\/([^/]+)\/artifacts\/([^/]+)$/.exec(pathname);
+    if (artifactMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readConversationArtifact({
+        conversationId: decodeURIComponent(artifactMatch[1] || ''),
+        artifactId: decodeURIComponent(artifactMatch[2] || ''),
+      }));
+      return;
+    }
+
+    const checkpointsMatch = /^\/companion\/v1\/conversations\/([^/]+)\/checkpoints$/.exec(pathname);
+    if (checkpointsMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const conversationId = decodeURIComponent(checkpointsMatch[1] || '');
+      sendJson(response, 200, await runtime.listConversationCheckpoints(conversationId));
+      return;
+    }
+
+    const checkpointMatch = /^\/companion\/v1\/conversations\/([^/]+)\/checkpoints\/([^/]+)$/.exec(pathname);
+    if (checkpointMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readConversationCheckpoint({
+        conversationId: decodeURIComponent(checkpointMatch[1] || ''),
+        checkpointId: decodeURIComponent(checkpointMatch[2] || ''),
+      }));
       return;
     }
 
@@ -591,6 +767,159 @@ export class DaemonCompanionServer {
           : {}),
       });
       response.end(Buffer.from(asset.data));
+      return;
+    }
+
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/tasks`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.listScheduledTasks());
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/tasks`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionScheduledTaskInput = {
+        ...(payload.title !== undefined ? { title: readOptionalString(payload.title) } : {}),
+        ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {}),
+        ...(payload.cron !== undefined ? { cron: payload.cron === null ? null : readOptionalString(payload.cron) } : {}),
+        ...(payload.at !== undefined ? { at: payload.at === null ? null : readOptionalString(payload.at) } : {}),
+        ...(payload.model !== undefined ? { model: payload.model === null ? null : readOptionalString(payload.model) } : {}),
+        ...(payload.thinkingLevel !== undefined ? { thinkingLevel: payload.thinkingLevel === null ? null : readOptionalString(payload.thinkingLevel) } : {}),
+        ...(payload.cwd !== undefined ? { cwd: payload.cwd === null ? null : readOptionalString(payload.cwd) } : {}),
+        ...(payload.timeoutSeconds !== undefined ? { timeoutSeconds: payload.timeoutSeconds === null ? null : readOptionalPositiveInteger(payload.timeoutSeconds, 'timeoutSeconds') } : {}),
+        ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
+        ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
+        ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
+        ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
+      };
+      sendJson(response, 201, await runtime.createScheduledTask(input));
+      return;
+    }
+
+    const taskMatch = /^\/companion\/v1\/tasks\/([^/]+)$/.exec(pathname);
+    if (taskMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readScheduledTask(decodeURIComponent(taskMatch[1] || '')));
+      return;
+    }
+
+    if (taskMatch && request.method === 'PATCH') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionScheduledTaskUpdateInput = {
+        taskId: decodeURIComponent(taskMatch[1] || ''),
+        ...(payload.title !== undefined ? { title: readOptionalString(payload.title) } : {}),
+        ...(payload.enabled !== undefined ? { enabled: Boolean(payload.enabled) } : {}),
+        ...(payload.cron !== undefined ? { cron: payload.cron === null ? null : readOptionalString(payload.cron) } : {}),
+        ...(payload.at !== undefined ? { at: payload.at === null ? null : readOptionalString(payload.at) } : {}),
+        ...(payload.model !== undefined ? { model: payload.model === null ? null : readOptionalString(payload.model) } : {}),
+        ...(payload.thinkingLevel !== undefined ? { thinkingLevel: payload.thinkingLevel === null ? null : readOptionalString(payload.thinkingLevel) } : {}),
+        ...(payload.cwd !== undefined ? { cwd: payload.cwd === null ? null : readOptionalString(payload.cwd) } : {}),
+        ...(payload.timeoutSeconds !== undefined ? { timeoutSeconds: payload.timeoutSeconds === null ? null : readOptionalPositiveInteger(payload.timeoutSeconds, 'timeoutSeconds') } : {}),
+        ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
+        ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
+        ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
+        ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
+      };
+      sendJson(response, 200, await runtime.updateScheduledTask(input));
+      return;
+    }
+
+    if (taskMatch && request.method === 'DELETE') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.deleteScheduledTask(decodeURIComponent(taskMatch[1] || '')));
+      return;
+    }
+
+    const taskLogMatch = /^\/companion\/v1\/tasks\/([^/]+)\/log$/.exec(pathname);
+    if (taskLogMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readScheduledTaskLog(decodeURIComponent(taskLogMatch[1] || '')));
+      return;
+    }
+
+    const taskRunMatch = /^\/companion\/v1\/tasks\/([^/]+)\/run$/.exec(pathname);
+    if (taskRunMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.runScheduledTask(decodeURIComponent(taskRunMatch[1] || '')));
+      return;
+    }
+
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/runs`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.listDurableRuns());
+      return;
+    }
+
+    const runMatch = /^\/companion\/v1\/runs\/([^/]+)$/.exec(pathname);
+    if (runMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readDurableRun(decodeURIComponent(runMatch[1] || '')));
+      return;
+    }
+
+    const runLogMatch = /^\/companion\/v1\/runs\/([^/]+)\/log$/.exec(pathname);
+    if (runLogMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const input: CompanionDurableRunLogInput = {
+        runId: decodeURIComponent(runLogMatch[1] || ''),
+        ...(requestUrl.searchParams.has('tail') ? { tail: readOptionalPositiveInteger(requestUrl.searchParams.get('tail'), 'tail') } : {}),
+      };
+      sendJson(response, 200, await runtime.readDurableRunLog(input));
+      return;
+    }
+
+    const runCancelMatch = /^\/companion\/v1\/runs\/([^/]+)\/cancel$/.exec(pathname);
+    if (runCancelMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.cancelDurableRun(decodeURIComponent(runCancelMatch[1] || '')));
       return;
     }
 

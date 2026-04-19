@@ -12,11 +12,14 @@ apps/ios/PersonalAgentCompanion
 
 - pair to a companion host with manual pairing code entry or setup QR + bearer token
 - persist paired hosts locally and keep the token in Keychain
-- mirror host conversation ordering with pinned/open sections
+- mirror host conversation ordering with pinned/open/archived sections and native pin/archive/duplicate controls
 - open a conversation and stream transcript updates over the multiplexed companion socket
 - send prompts with text, prompt images, and saved drawing attachment refs
-- take over control, abort a turn, rename a conversation, and switch execution target
+- take over control, abort a turn, rename a conversation, change cwd, adjust model preferences, and switch execution target
+- browse conversation artifacts and commit checkpoints
 - browse saved drawing attachments, inspect revisions, and create/update attachment assets
+- manage automations and durable runs from the phone
+- manage paired devices and generate setup state for adding another device
 
 ## Build and test
 
@@ -57,17 +60,60 @@ Optional host convenience env var:
 PA_IOS_DEFAULT_HOST=http://127.0.0.1:3843
 ```
 
+## Fast local dev loop
+
+Use the simulator against a loopback-only local companion host. This is the fast path for UI, conversation, and onboarding iteration.
+
+From the repo root:
+
+```bash
+npm run ios:dev:prepare
+```
+
+Terminal 1:
+
+```bash
+npm run ios:dev:host
+```
+
+That starts a headless local companion host on:
+
+```text
+http://127.0.0.1:3845
+```
+
+Terminal 2:
+
+```bash
+npm run ios:dev:sim
+```
+
+That will:
+
+- mint a fresh paired device token against the local host
+- write the live-test config to `/tmp/personal-agent-ios-live-test-config.json`
+- build the app into a stable derived-data path
+- boot `iPhone 17 Pro`
+- install the app into the simulator
+- launch it already paired using bootstrap env vars
+
+For onboarding/deeplink work, open a fresh setup link directly in the simulator:
+
+```bash
+npm run ios:dev:setup-url
+```
+
+That bypasses phone cameras and QR scanning while still exercising the real `pa-companion://pair?...` flow.
+
 ## Real host notes
 
-The live app expects the desktop runtime to be running on the target machine so the daemon companion server has an attached conversation runtime provider.
+The live app expects the desktop runtime or headless local dev host to be running on the target machine so the daemon companion server has an attached conversation runtime provider.
 
-Typical local-dev path:
+Typical fast local-dev path:
 
-1. start the desktop runtime
-2. in desktop Settings → Companion access, generate a setup QR
-3. the desktop app will automatically enable local-network phone access if the companion server is still loopback-only
-4. in the iOS app, open Pair host → Scan setup QR
-5. or use manual host URL + pairing code entry if needed
+1. start the local dev host with `npm run ios:dev:host`
+2. launch the simulator with `npm run ios:dev:sim`
+3. only use a real phone for final LAN/Tailnet smoke tests
 
 ## Live integration test
 
@@ -79,7 +125,15 @@ The test target includes a real-host round-trip that:
 - sends a real prompt over the companion socket
 - waits for a live streamed assistant response
 
-Enable it with a config file before `xcodebuild test`:
+Fast path from the repo root:
+
+```bash
+npm run ios:test:live
+```
+
+That targets only the real-host iOS integration tests against the local dev host and rewrites the config file automatically.
+
+Manual path: enable it with a config file before `xcodebuild test`:
 
 ```json
 {

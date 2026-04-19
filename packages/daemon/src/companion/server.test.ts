@@ -84,6 +84,8 @@ describe('daemon companion server', () => {
 
     const runtime: CompanionRuntime = {
       listConversations: async () => ({ sessions: [{ id: 'conv-1', title: 'Conversation 1' }], ordering: { sessionIds: ['conv-1'], pinnedSessionIds: ['conv-1'], archivedSessionIds: [], workspacePaths: [] } }),
+      updateConversationTabs: async () => ({ ok: true }),
+      duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
       listExecutionTargets: async () => ({ executionTargets: [{ id: 'local', label: 'Local', kind: 'local' }] }),
       readConversationBootstrap: async (input) => ({ conversationId: input.conversationId, bootstrap: true }),
       createConversation: async () => ({ conversationId: 'created-1' }),
@@ -92,6 +94,13 @@ describe('daemon companion server', () => {
       abortConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       takeOverConversation: async (input) => ({ ok: true, surfaceId: input.surfaceId }),
       renameConversation: async (input) => ({ ok: true, title: input.name }),
+      changeConversationCwd: async (input) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
+      readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
+      updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
+      listConversationArtifacts: async (conversationId) => ({ conversationId, artifacts: [] }),
+      readConversationArtifact: async ({ conversationId, artifactId }) => ({ conversationId, artifact: { id: artifactId } }),
+      listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),
+      readConversationCheckpoint: async ({ conversationId, checkpointId }) => ({ conversationId, checkpoint: { id: checkpointId } }),
       changeConversationExecutionTarget: async (input) => ({ ok: true, executionTargetId: input.executionTargetId }),
       listConversationAttachments: async (conversationId) => ({ conversationId, attachments: [{ id: 'att-1', title: 'Sketch' }] }),
       readConversationAttachment: async ({ conversationId, attachmentId }) => ({ conversationId, attachment: { id: attachmentId, title: 'Sketch' } }),
@@ -103,6 +112,17 @@ describe('daemon companion server', () => {
         fileName: 'preview.png',
         disposition: 'inline',
       }),
+      listScheduledTasks: async () => ({ tasks: [] }),
+      readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
+      readScheduledTaskLog: async (taskId) => ({ path: `/tmp/${taskId}.log`, log: '' }),
+      createScheduledTask: async () => ({ ok: true, task: { taskId: 'task-1', title: 'Task' } }),
+      updateScheduledTask: async ({ taskId }) => ({ ok: true, task: { taskId, title: 'Task' } }),
+      deleteScheduledTask: async (taskId) => ({ ok: true, deleted: true, taskId }),
+      runScheduledTask: async () => ({ ok: true, accepted: true, runId: 'run-1' }),
+      listDurableRuns: async () => ({ runs: [] }),
+      readDurableRun: async (runId) => ({ run: { runId } }),
+      readDurableRunLog: async ({ runId }) => ({ path: `/tmp/${runId}.log`, log: '' }),
+      cancelDurableRun: async (runId) => ({ cancelled: true, runId }),
       subscribeApp: async (onEvent) => {
         appSubscribers.push(onEvent);
         return () => {

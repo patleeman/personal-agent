@@ -133,11 +133,60 @@ export interface CompanionConversationExecutionTargetChangeInput {
   cwd?: string | null;
 }
 
+export interface CompanionConversationTabsUpdateInput {
+  sessionIds?: string[];
+  pinnedSessionIds?: string[];
+  archivedSessionIds?: string[];
+  workspacePaths?: string[];
+}
+
+export interface CompanionConversationDuplicateInput {
+  conversationId: string;
+}
+
+export interface CompanionConversationCwdChangeInput {
+  conversationId: string;
+  cwd: string;
+  surfaceId?: string;
+}
+
+export interface CompanionConversationModelPreferencesUpdateInput {
+  conversationId: string;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  serviceTier?: string | null;
+  surfaceId?: string;
+}
+
 export interface CompanionConversationSubscriptionInput {
   conversationId: string;
   surfaceId?: string;
   surfaceType?: CompanionSurfaceType;
   tailBlocks?: number;
+}
+
+export interface CompanionScheduledTaskInput {
+  title?: string;
+  enabled?: boolean;
+  cron?: string | null;
+  at?: string | null;
+  model?: string | null;
+  thinkingLevel?: string | null;
+  cwd?: string | null;
+  timeoutSeconds?: number | null;
+  prompt?: string;
+  targetType?: string | null;
+  threadMode?: string | null;
+  threadConversationId?: string | null;
+}
+
+export interface CompanionScheduledTaskUpdateInput extends CompanionScheduledTaskInput {
+  taskId: string;
+}
+
+export interface CompanionDurableRunLogInput {
+  runId: string;
+  tail?: number;
 }
 
 export interface CompanionAttachmentCreateInput {
@@ -166,6 +215,8 @@ export interface CompanionAttachmentAssetInput {
 
 export interface CompanionRuntime {
   listConversations(): Promise<unknown>;
+  updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
+  duplicateConversation(input: CompanionConversationDuplicateInput): Promise<unknown>;
   listExecutionTargets(): Promise<unknown>;
   readConversationBootstrap(input: CompanionConversationBootstrapInput): Promise<unknown>;
   createConversation(input: CompanionConversationCreateInput): Promise<unknown>;
@@ -174,12 +225,30 @@ export interface CompanionRuntime {
   abortConversation(input: CompanionConversationAbortInput): Promise<unknown>;
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;
+  changeConversationCwd(input: CompanionConversationCwdChangeInput): Promise<unknown>;
+  readConversationModelPreferences(conversationId: string): Promise<unknown>;
+  updateConversationModelPreferences(input: CompanionConversationModelPreferencesUpdateInput): Promise<unknown>;
+  listConversationArtifacts(conversationId: string): Promise<unknown>;
+  readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
+  listConversationCheckpoints(conversationId: string): Promise<unknown>;
+  readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<unknown>;
   changeConversationExecutionTarget(input: CompanionConversationExecutionTargetChangeInput): Promise<unknown>;
   listConversationAttachments(conversationId: string): Promise<unknown>;
   readConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createConversationAttachment(input: CompanionAttachmentCreateInput): Promise<unknown>;
   updateConversationAttachment(input: CompanionAttachmentUpdateInput): Promise<unknown>;
   readConversationAttachmentAsset(input: CompanionAttachmentAssetInput): Promise<CompanionBinaryAsset>;
+  listScheduledTasks(): Promise<unknown>;
+  readScheduledTask(taskId: string): Promise<unknown>;
+  readScheduledTaskLog(taskId: string): Promise<unknown>;
+  createScheduledTask(input: CompanionScheduledTaskInput): Promise<unknown>;
+  updateScheduledTask(input: CompanionScheduledTaskUpdateInput): Promise<unknown>;
+  deleteScheduledTask(taskId: string): Promise<unknown>;
+  runScheduledTask(taskId: string): Promise<unknown>;
+  listDurableRuns(): Promise<unknown>;
+  readDurableRun(runId: string): Promise<unknown>;
+  readDurableRunLog(input: CompanionDurableRunLogInput): Promise<unknown>;
+  cancelDurableRun(runId: string): Promise<unknown>;
   subscribeApp(onEvent: (event: unknown) => void): Promise<() => void>;
   subscribeConversation(input: CompanionConversationSubscriptionInput, onEvent: (event: unknown) => void): Promise<() => void>;
 }

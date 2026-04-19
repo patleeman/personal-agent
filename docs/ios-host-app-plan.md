@@ -42,11 +42,15 @@ The shipping iOS client currently covers:
 
 - host pairing + local host persistence
 - setup QR onboarding via desktop-generated QR codes, custom `pa-companion://` setup links, and in-app QR scanning
-- conversation list mirroring pinned/open ordering
+- conversation list mirroring pinned/open/archived ordering, plus native pin/archive/duplicate controls
 - live conversation transcript + prompt composer
 - prompt images + saved drawing attachment refs
-- execution-target switching, takeover, abort, and rename
+- execution-target switching, takeover, abort, rename, working-directory changes, and per-thread model preferences
+- conversation artifact and commit-checkpoint browsing
 - saved attachment browse/read/create/update flows for drawing attachments
+- automation list/detail/create/edit/delete/run flows
+- durable run list/detail/log/cancel flows
+- paired-device admin plus setup generation from iOS
 
 ## Product thesis
 

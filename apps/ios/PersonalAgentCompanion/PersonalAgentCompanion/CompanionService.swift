@@ -9,6 +9,8 @@ protocol CompanionClientProtocol: AnyObject {
     func connect() async throws
     func disconnect()
     func listConversations() async throws -> ConversationListState
+    func updateConversationTabs(ordering: ConversationOrdering) async throws
+    func duplicateConversation(conversationId: String) async throws -> String
     func listExecutionTargets() async throws -> [ExecutionTargetSummary]
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope
@@ -17,12 +19,35 @@ protocol CompanionClientProtocol: AnyObject {
     func abortConversation(conversationId: String) async throws
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
+    func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult
+    func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState
+    func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState
+    func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary]
+    func readConversationArtifact(conversationId: String, artifactId: String) async throws -> ConversationArtifactRecord
+    func listConversationCheckpoints(conversationId: String) async throws -> [ConversationCommitCheckpointSummary]
+    func readConversationCheckpoint(conversationId: String, checkpointId: String) async throws -> ConversationCommitCheckpointRecord
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope
     func listAttachments(conversationId: String) async throws -> ConversationAttachmentListResponse
     func readAttachment(conversationId: String, attachmentId: String) async throws -> ConversationAttachmentDetailResponse
     func downloadAttachmentAsset(conversationId: String, attachmentId: String, asset: String, revision: Int?) async throws -> AttachmentAssetDownload
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
+    func listTasks() async throws -> [ScheduledTaskSummary]
+    func readTask(taskId: String) async throws -> ScheduledTaskDetail
+    func readTaskLog(taskId: String) async throws -> DurableRunLogResponse
+    func createTask(draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail
+    func updateTask(taskId: String, draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail
+    func deleteTask(taskId: String) async throws
+    func runTask(taskId: String) async throws -> ScheduledTaskRunResponse
+    func listRuns() async throws -> DurableRunsListResponse
+    func readRun(runId: String) async throws -> DurableRunDetailResponse
+    func readRunLog(runId: String, tail: Int?) async throws -> DurableRunLogResponse
+    func cancelRun(runId: String) async throws -> DurableRunCancelResponse
+    func readDeviceAdminState() async throws -> CompanionDeviceAdminState
+    func createPairingCode() async throws -> CompanionPairingCodeRecord
+    func createSetupState() async throws -> CompanionSetupState
+    func updatePairedDevice(deviceId: String, deviceLabel: String) async throws -> CompanionDeviceAdminState
+    func deletePairedDevice(deviceId: String) async throws -> CompanionDeviceAdminState
     func subscribeAppEvents() async throws -> AsyncStream<CompanionAppEvent>
     func subscribeConversationEvents(conversationId: String, surfaceId: String) async throws -> AsyncStream<CompanionConversationEvent>
 }
@@ -195,6 +220,29 @@ final class LiveCompanionClient: CompanionClientProtocol {
         try await authorizedJSON(path: "/companion/v1/conversations", method: "GET", body: nil, decode: ConversationListState.self)
     }
 
+    func updateConversationTabs(ordering: ConversationOrdering) async throws {
+        struct ResponsePayload: Decodable {}
+        _ = try await authorizedJSON(path: "/companion/v1/conversations/layout", method: "PATCH", body: [
+            "sessionIds": ordering.sessionIds,
+            "pinnedSessionIds": ordering.pinnedSessionIds,
+            "archivedSessionIds": ordering.archivedSessionIds,
+            "workspacePaths": ordering.workspacePaths,
+        ], decode: ResponsePayload.self)
+    }
+
+    func duplicateConversation(conversationId: String) async throws -> String {
+        struct ResponsePayload: Decodable {
+            let newSessionId: String
+        }
+
+        return try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/duplicate",
+            method: "POST",
+            body: nil,
+            decode: ResponsePayload.self
+        ).newSessionId
+    }
+
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] {
         struct ResultPayload: Decodable { let executionTargets: [ExecutionTargetSummary] }
         return try await sendCommand(name: "executionTargets.list", payload: [:], as: ResultPayload.self).executionTargets
@@ -210,6 +258,15 @@ final class LiveCompanionClient: CompanionClientProtocol {
         ]
         if let cwd = input.cwd.nilIfBlank {
             payload["cwd"] = cwd
+        }
+        if let model = input.model.nilIfBlank {
+            payload["model"] = model
+        }
+        if let thinkingLevel = input.thinkingLevel.nilIfBlank {
+            payload["thinkingLevel"] = thinkingLevel
+        }
+        if let serviceTier = input.serviceTier.nilIfBlank {
+            payload["serviceTier"] = serviceTier
         }
         if let promptText = input.promptText.nilIfBlank {
             payload["prompt"] = [
@@ -283,6 +340,82 @@ final class LiveCompanionClient: CompanionClientProtocol {
         ], as: ResponsePayload.self)
     }
 
+    func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/cwd",
+            method: "POST",
+            body: [
+                "cwd": cwd,
+                "surfaceId": surfaceId,
+            ],
+            decode: ConversationCwdChangeResult.self
+        )
+    }
+
+    func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/model-preferences",
+            method: "GET",
+            body: nil,
+            decode: ConversationModelPreferencesState.self
+        )
+    }
+
+    func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState {
+        var body: [String: Any] = ["surfaceId": surfaceId]
+        if let model {
+            body["model"] = model
+        }
+        if let thinkingLevel {
+            body["thinkingLevel"] = thinkingLevel
+        }
+        if let serviceTier {
+            body["serviceTier"] = serviceTier
+        }
+        return try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/model-preferences",
+            method: "PATCH",
+            body: body,
+            decode: ConversationModelPreferencesState.self
+        )
+    }
+
+    func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary] {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/artifacts",
+            method: "GET",
+            body: nil,
+            decode: [ConversationArtifactSummary].self
+        )
+    }
+
+    func readConversationArtifact(conversationId: String, artifactId: String) async throws -> ConversationArtifactRecord {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/artifacts/\(artifactId)",
+            method: "GET",
+            body: nil,
+            decode: ConversationArtifactRecord.self
+        )
+    }
+
+    func listConversationCheckpoints(conversationId: String) async throws -> [ConversationCommitCheckpointSummary] {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/checkpoints",
+            method: "GET",
+            body: nil,
+            decode: [ConversationCommitCheckpointSummary].self
+        )
+    }
+
+    func readConversationCheckpoint(conversationId: String, checkpointId: String) async throws -> ConversationCommitCheckpointRecord {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/checkpoints/\(checkpointId)",
+            method: "GET",
+            body: nil,
+            decode: ConversationCommitCheckpointRecord.self
+        )
+    }
+
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope {
         try await sendCommand(name: "conversation.change_execution_target", payload: [
             "conversationId": conversationId,
@@ -324,6 +457,91 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
         try await saveAttachment(path: "/companion/v1/conversations/\(conversationId)/attachments/\(attachmentId)", method: "PATCH", draft: draft)
+    }
+
+    func listTasks() async throws -> [ScheduledTaskSummary] {
+        try await authorizedJSON(path: "/companion/v1/tasks", method: "GET", body: nil, decode: [ScheduledTaskSummary].self)
+    }
+
+    func readTask(taskId: String) async throws -> ScheduledTaskDetail {
+        try await authorizedJSON(path: "/companion/v1/tasks/\(taskId)", method: "GET", body: nil, decode: ScheduledTaskDetail.self)
+    }
+
+    func readTaskLog(taskId: String) async throws -> DurableRunLogResponse {
+        try await authorizedJSON(path: "/companion/v1/tasks/\(taskId)/log", method: "GET", body: nil, decode: DurableRunLogResponse.self)
+    }
+
+    func createTask(draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {
+        try await authorizedJSON(path: "/companion/v1/tasks", method: "POST", body: scheduledTaskBody(from: draft), decode: ScheduledTaskMutationEnvelope.self).task
+    }
+
+    func updateTask(taskId: String, draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {
+        try await authorizedJSON(path: "/companion/v1/tasks/\(taskId)", method: "PATCH", body: scheduledTaskBody(from: draft), decode: ScheduledTaskMutationEnvelope.self).task
+    }
+
+    func deleteTask(taskId: String) async throws {
+        struct DeleteResponse: Decodable { let ok: Bool }
+        _ = try await authorizedJSON(path: "/companion/v1/tasks/\(taskId)", method: "DELETE", body: nil, decode: DeleteResponse.self)
+    }
+
+    func runTask(taskId: String) async throws -> ScheduledTaskRunResponse {
+        try await authorizedJSON(path: "/companion/v1/tasks/\(taskId)/run", method: "POST", body: nil, decode: ScheduledTaskRunResponse.self)
+    }
+
+    func listRuns() async throws -> DurableRunsListResponse {
+        try await authorizedJSON(path: "/companion/v1/runs", method: "GET", body: nil, decode: DurableRunsListResponse.self)
+    }
+
+    func readRun(runId: String) async throws -> DurableRunDetailResponse {
+        try await authorizedJSON(path: "/companion/v1/runs/\(runId)", method: "GET", body: nil, decode: DurableRunDetailResponse.self)
+    }
+
+    func readRunLog(runId: String, tail: Int?) async throws -> DurableRunLogResponse {
+        let path: String
+        if let tail {
+            path = "/companion/v1/runs/\(runId)/log?tail=\(tail)"
+        } else {
+            path = "/companion/v1/runs/\(runId)/log"
+        }
+        return try await authorizedJSON(path: path, method: "GET", body: nil, decode: DurableRunLogResponse.self)
+    }
+
+    func cancelRun(runId: String) async throws -> DurableRunCancelResponse {
+        try await authorizedJSON(path: "/companion/v1/runs/\(runId)/cancel", method: "POST", body: nil, decode: DurableRunCancelResponse.self)
+    }
+
+    func readDeviceAdminState() async throws -> CompanionDeviceAdminState {
+        try await authorizedJSON(path: "/companion/v1/admin/devices", method: "GET", body: nil, decode: CompanionDeviceAdminState.self)
+    }
+
+    func createPairingCode() async throws -> CompanionPairingCodeRecord {
+        try await authorizedJSON(path: "/companion/v1/admin/pairing-codes", method: "POST", body: nil, decode: CompanionPairingCodeRecord.self)
+    }
+
+    func createSetupState() async throws -> CompanionSetupState {
+        try await authorizedJSON(path: "/companion/v1/admin/setup", method: "POST", body: nil, decode: CompanionSetupState.self)
+    }
+
+    func updatePairedDevice(deviceId: String, deviceLabel: String) async throws -> CompanionDeviceAdminState {
+        struct ResponsePayload: Decodable { let devices: [CompanionPairedDeviceSummary] }
+        _ = try await authorizedJSON(
+            path: "/companion/v1/admin/devices/\(deviceId)",
+            method: "PATCH",
+            body: ["deviceLabel": deviceLabel],
+            decode: ResponsePayload.self
+        )
+        return try await readDeviceAdminState()
+    }
+
+    func deletePairedDevice(deviceId: String) async throws -> CompanionDeviceAdminState {
+        struct ResponsePayload: Decodable { let devices: [CompanionPairedDeviceSummary] }
+        _ = try await authorizedJSON(
+            path: "/companion/v1/admin/devices/\(deviceId)",
+            method: "DELETE",
+            body: nil,
+            decode: ResponsePayload.self
+        )
+        return try await readDeviceAdminState()
     }
 
     func subscribeAppEvents() async throws -> AsyncStream<CompanionAppEvent> {
@@ -421,6 +639,43 @@ final class LiveCompanionClient: CompanionClientProtocol {
             body["note"] = note
         }
         return try await authorizedJSON(path: path, method: method, body: body, decode: ConversationAttachmentMutationResponse.self)
+    }
+
+    private func scheduledTaskBody(from draft: ScheduledTaskEditorDraft) -> [String: Any] {
+        var body: [String: Any] = [
+            "enabled": draft.enabled,
+            "targetType": draft.targetType,
+            "threadMode": draft.threadMode,
+        ]
+        if let title = draft.title.nilIfBlank {
+            body["title"] = title
+        }
+        if draft.scheduleMode == "cron" {
+            body["cron"] = draft.cron.nilIfBlank
+            body["at"] = NSNull()
+        } else {
+            body["at"] = draft.at.nilIfBlank
+            body["cron"] = NSNull()
+        }
+        if let model = draft.model.nilIfBlank {
+            body["model"] = model
+        }
+        if let thinkingLevel = draft.thinkingLevel.nilIfBlank {
+            body["thinkingLevel"] = thinkingLevel
+        }
+        if let cwd = draft.cwd.nilIfBlank {
+            body["cwd"] = cwd
+        }
+        if let timeout = Int(draft.timeoutSeconds.trimmed), timeout > 0 {
+            body["timeoutSeconds"] = timeout
+        }
+        if let prompt = draft.prompt.nilIfBlank {
+            body["prompt"] = prompt
+        }
+        if draft.targetType == "conversation" && draft.threadMode == "existing", let threadConversationId = draft.threadConversationId.nilIfBlank {
+            body["threadConversationId"] = threadConversationId
+        }
+        return body
     }
 
     private func connectIfNeeded() async throws {
@@ -774,6 +1029,13 @@ final class MockCompanionClient: CompanionClientProtocol {
     private var listState: ConversationListState
     private var conversations: [String: ConversationBootstrapEnvelope]
     private var attachmentsByConversation: [String: [ConversationAttachmentRecord]]
+    private var artifactsByConversation: [String: [ConversationArtifactRecord]]
+    private var checkpointsByConversation: [String: [ConversationCommitCheckpointRecord]]
+    private var tasks: [ScheduledTaskDetail]
+    private var runs: [DurableRunSummary]
+    private var runLogs: [String: String]
+    private var deviceAdminState: CompanionDeviceAdminState
+    private var setupState: CompanionSetupState
     private var appContinuations: [UUID: AsyncStream<CompanionAppEvent>.Continuation] = [:]
     private var conversationContinuations: [String: [UUID: AsyncStream<CompanionConversationEvent>.Continuation]] = [:]
 
@@ -944,6 +1206,138 @@ final class MockCompanionClient: CompanionClientProtocol {
             ),
         ]
         self.attachmentsByConversation = ["conv-1": [attachment], "conv-2": []]
+        self.artifactsByConversation = [
+            "conv-1": [
+                ConversationArtifactRecord(
+                    id: "artifact-1",
+                    conversationId: "conv-1",
+                    title: "Implementation memo",
+                    kind: "html",
+                    createdAt: now,
+                    updatedAt: now,
+                    revision: 1,
+                    content: "<html><body style=\"font-family: -apple-system; color: white; background: #111827; padding: 24px;\"><h1>Implementation memo</h1><p>The iOS companion now mirrors the desktop conversation workflow.</p></body></html>"
+                )
+            ],
+            "conv-2": []
+        ]
+        self.checkpointsByConversation = [
+            "conv-1": [
+                ConversationCommitCheckpointRecord(
+                    id: "abc1234",
+                    conversationId: "conv-1",
+                    title: "Ship companion parity",
+                    cwd: "/Users/patrick/workingdir/personal-agent",
+                    commitSha: "abc1234def567890",
+                    shortSha: "abc1234",
+                    subject: "Add iOS companion parity",
+                    body: "Implements richer conversation controls and companion admin screens.",
+                    authorName: "Patrick Lee",
+                    authorEmail: "patrick@example.com",
+                    committedAt: now,
+                    createdAt: now,
+                    updatedAt: now,
+                    fileCount: 2,
+                    linesAdded: 120,
+                    linesDeleted: 12,
+                    commentCount: 1,
+                    files: [
+                        ConversationCommitCheckpointFile(
+                            path: "apps/ios/PersonalAgentCompanion/PersonalAgentCompanion/ConversationView.swift",
+                            previousPath: nil,
+                            status: "modified",
+                            additions: 80,
+                            deletions: 10,
+                            patch: "@@ -1,5 +1,12 @@\n+ Added richer conversation controls\n- Old line"
+                        )
+                    ],
+                    comments: [
+                        ConversationCommitCheckpointComment(
+                            id: "comment-1",
+                            authorName: "Patrick Lee",
+                            authorProfile: "assistant",
+                            body: "Looks good.",
+                            filePath: nil,
+                            createdAt: now,
+                            updatedAt: now
+                        )
+                    ]
+                )
+            ],
+            "conv-2": []
+        ]
+        self.tasks = [
+            ScheduledTaskDetail(
+                id: "task-1",
+                title: "Morning review",
+                filePath: "/tasks/task-1.md",
+                scheduleType: "cron",
+                targetType: "conversation",
+                running: false,
+                enabled: true,
+                cron: "0 9 * * 1-5",
+                at: nil,
+                model: "gpt-5.4",
+                thinkingLevel: "medium",
+                cwd: "/Users/patrick/workingdir/personal-agent",
+                timeoutSeconds: 900,
+                prompt: "Review outstanding work and summarize priorities.",
+                lastStatus: "completed",
+                lastRunAt: now,
+                threadConversationId: "conv-1",
+                threadTitle: "iOS companion app"
+            )
+        ]
+        let runSummary = DurableRunSummary(
+            runId: "run-1",
+            paths: DurableRunPaths(
+                root: "/runs/run-1",
+                manifestPath: "/runs/run-1/manifest.json",
+                statusPath: "/runs/run-1/status.json",
+                checkpointPath: "/runs/run-1/checkpoint.json",
+                eventsPath: "/runs/run-1/events.jsonl",
+                outputLogPath: "/runs/run-1/output.log",
+                resultPath: "/runs/run-1/result.json"
+            ),
+            manifest: DurableRunManifest(
+                version: 1,
+                id: "run-1",
+                kind: "background-run",
+                resumePolicy: "manual",
+                createdAt: now,
+                spec: [:],
+                parentId: nil,
+                rootId: nil,
+                source: DurableRunManifestSource(type: "task", id: "task-1", filePath: "/tasks/task-1.md")
+            ),
+            status: DurableRunStatusRecord(
+                version: 1,
+                runId: "run-1",
+                status: "completed",
+                createdAt: now,
+                updatedAt: now,
+                activeAttempt: 1,
+                startedAt: now,
+                completedAt: now,
+                checkpointKey: nil,
+                lastError: nil
+            ),
+            checkpoint: nil,
+            problems: [],
+            recoveryAction: "none"
+        )
+        self.runs = [runSummary]
+        self.runLogs = ["run-1": "[info] Morning review completed successfully.\n"]
+        self.deviceAdminState = CompanionDeviceAdminState(
+            pendingPairings: [],
+            devices: [CompanionPairedDeviceSummary(id: "device-demo", deviceLabel: "iPhone Demo", createdAt: now, lastUsedAt: now, expiresAt: now, revokedAt: nil)]
+        )
+        let pairing = CompanionPairingCodeRecord(id: "pair-1", code: "ABCD-EFGH-IJKL", createdAt: now, expiresAt: now)
+        self.setupState = CompanionSetupState(
+            pairing: pairing,
+            links: [CompanionSetupLinkRecord(id: "link-1", label: "Tailnet", baseUrl: "https://demo.personal-agent.invalid", setupUrl: "pa-companion://pair?base=https%3A%2F%2Fdemo.personal-agent.invalid&code=ABCD-EFGH-IJKL")],
+            warnings: []
+        )
     }
 
     func hello() async throws -> CompanionHello {
@@ -964,6 +1358,17 @@ final class MockCompanionClient: CompanionClientProtocol {
 
     func listConversations() async throws -> ConversationListState { listState }
 
+    func updateConversationTabs(ordering: ConversationOrdering) async throws {
+        listState = ConversationListState(sessions: listState.sessions, ordering: ordering, executionTargets: listState.executionTargets)
+        emitApp(.conversationListState(listState))
+    }
+
+    func duplicateConversation(conversationId: String) async throws -> String {
+        let source = try await conversationBootstrap(conversationId: conversationId)
+        let duplicated = try await createConversation(.init(promptText: source.sessionMeta?.title ?? "Duplicate", cwd: source.sessionMeta?.cwd ?? "", executionTargetId: source.sessionMeta?.remoteHostId ?? "local", model: source.sessionMeta?.model ?? "", thinkingLevel: "", serviceTier: ""), surfaceId: "ios-mock")
+        return duplicated.bootstrap.conversationId
+    }
+
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] { listState.executionTargets ?? [] }
 
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
@@ -982,7 +1387,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             timestamp: now,
             cwd: input.cwd.nilIfBlank ?? "/Users/patrick/workingdir/personal-agent",
             cwdSlug: URL(fileURLWithPath: input.cwd.nilIfBlank ?? "/Users/patrick/workingdir/personal-agent").lastPathComponent,
-            model: "gpt-5.4",
+            model: input.model.nilIfBlank ?? "gpt-5.4",
             title: input.promptText.nilIfBlank ?? "New conversation",
             messageCount: input.promptText.nilIfBlank == nil ? 0 : 1,
             isRunning: false,
@@ -1018,6 +1423,8 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         conversations[conversationId] = envelope
         attachmentsByConversation[conversationId] = []
+        artifactsByConversation[conversationId] = []
+        checkpointsByConversation[conversationId] = []
         listState = ConversationListState(
             sessions: [session] + listState.sessions,
             ordering: ConversationOrdering(
@@ -1118,6 +1525,154 @@ final class MockCompanionClient: CompanionClientProtocol {
         emitApp(.conversationListState(listState))
     }
 
+    func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult {
+        guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let nextId = conversationId == "conv-1" ? "conv-1-cwd" : conversationId
+        let updatedMeta = SessionMeta(
+            id: nextId,
+            file: meta.file,
+            timestamp: meta.timestamp,
+            cwd: cwd,
+            cwdSlug: URL(fileURLWithPath: cwd).lastPathComponent,
+            model: meta.model,
+            title: meta.title,
+            messageCount: meta.messageCount,
+            isRunning: meta.isRunning,
+            isLive: meta.isLive,
+            lastActivityAt: ISO8601DateFormatter.flexible.string(from: .now),
+            parentSessionFile: meta.parentSessionFile,
+            parentSessionId: meta.parentSessionId,
+            sourceRunId: meta.sourceRunId,
+            remoteHostId: meta.remoteHostId,
+            remoteHostLabel: meta.remoteHostLabel,
+            remoteConversationId: meta.remoteConversationId,
+            automationTaskId: meta.automationTaskId,
+            automationTitle: meta.automationTitle,
+            needsAttention: meta.needsAttention,
+            attentionUpdatedAt: meta.attentionUpdatedAt,
+            attentionUnreadMessageCount: meta.attentionUnreadMessageCount,
+            attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
+            attentionActivityIds: meta.attentionActivityIds
+        )
+        let updated = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: nextId,
+                sessionDetail: envelope.bootstrap.sessionDetail.map { detail in
+                    SessionDetail(meta: updatedMeta, blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks, signature: detail.signature)
+                },
+                sessionDetailSignature: envelope.bootstrap.sessionDetailSignature,
+                sessionDetailUnchanged: envelope.bootstrap.sessionDetailUnchanged,
+                sessionDetailAppendOnly: envelope.bootstrap.sessionDetailAppendOnly,
+                liveSession: ConversationBootstrapLiveSession(live: true, id: nextId, cwd: cwd, sessionFile: meta.file, title: updatedMeta.title, isStreaming: envelope.bootstrap.liveSession.isStreaming, hasPendingHiddenTurn: envelope.bootstrap.liveSession.hasPendingHiddenTurn)
+            ),
+            sessionMeta: updatedMeta,
+            attachments: envelope.attachments,
+            executionTargets: envelope.executionTargets
+        )
+        conversations[nextId] = updated
+        listState = ConversationListState(
+            sessions: listState.sessions.map { $0.id == conversationId ? updatedMeta : $0 },
+            ordering: ConversationOrdering(
+                sessionIds: listState.ordering.sessionIds.map { $0 == conversationId ? nextId : $0 },
+                pinnedSessionIds: listState.ordering.pinnedSessionIds.map { $0 == conversationId ? nextId : $0 },
+                archivedSessionIds: listState.ordering.archivedSessionIds.map { $0 == conversationId ? nextId : $0 },
+                workspacePaths: listState.ordering.workspacePaths
+            ),
+            executionTargets: listState.executionTargets
+        )
+        emitApp(.conversationListState(listState))
+        return ConversationCwdChangeResult(id: nextId, sessionFile: meta.file, cwd: cwd, changed: true)
+    }
+
+    func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState {
+        guard let meta = conversations[conversationId]?.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        return ConversationModelPreferencesState(currentModel: meta.model, currentThinkingLevel: "medium", currentServiceTier: "standard", hasExplicitServiceTier: false)
+    }
+
+    func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState {
+        guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let updatedMeta = SessionMeta(
+            id: meta.id,
+            file: meta.file,
+            timestamp: meta.timestamp,
+            cwd: meta.cwd,
+            cwdSlug: meta.cwdSlug,
+            model: model?.nilIfBlank ?? meta.model,
+            title: meta.title,
+            messageCount: meta.messageCount,
+            isRunning: meta.isRunning,
+            isLive: meta.isLive,
+            lastActivityAt: meta.lastActivityAt,
+            parentSessionFile: meta.parentSessionFile,
+            parentSessionId: meta.parentSessionId,
+            sourceRunId: meta.sourceRunId,
+            remoteHostId: meta.remoteHostId,
+            remoteHostLabel: meta.remoteHostLabel,
+            remoteConversationId: meta.remoteConversationId,
+            automationTaskId: meta.automationTaskId,
+            automationTitle: meta.automationTitle,
+            needsAttention: meta.needsAttention,
+            attentionUpdatedAt: meta.attentionUpdatedAt,
+            attentionUnreadMessageCount: meta.attentionUnreadMessageCount,
+            attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
+            attentionActivityIds: meta.attentionActivityIds
+        )
+        conversations[conversationId] = ConversationBootstrapEnvelope(bootstrap: envelope.bootstrap, sessionMeta: updatedMeta, attachments: envelope.attachments, executionTargets: envelope.executionTargets)
+        listState = ConversationListState(sessions: listState.sessions.map { $0.id == conversationId ? updatedMeta : $0 }, ordering: listState.ordering, executionTargets: listState.executionTargets)
+        emitApp(.conversationListState(listState))
+        return ConversationModelPreferencesState(currentModel: updatedMeta.model, currentThinkingLevel: thinkingLevel?.nilIfBlank ?? "medium", currentServiceTier: serviceTier?.nilIfBlank ?? "standard", hasExplicitServiceTier: serviceTier?.nilIfBlank != nil)
+    }
+
+    func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary] {
+        (artifactsByConversation[conversationId] ?? []).map { artifact in
+            ConversationArtifactSummary(id: artifact.id, conversationId: artifact.conversationId, title: artifact.title, kind: artifact.kind, createdAt: artifact.createdAt, updatedAt: artifact.updatedAt, revision: artifact.revision)
+        }
+    }
+
+    func readConversationArtifact(conversationId: String, artifactId: String) async throws -> ConversationArtifactRecord {
+        guard let artifact = artifactsByConversation[conversationId]?.first(where: { $0.id == artifactId }) else {
+            throw CompanionClientError.requestFailed("Artifact not found.")
+        }
+        return artifact
+    }
+
+    func listConversationCheckpoints(conversationId: String) async throws -> [ConversationCommitCheckpointSummary] {
+        (checkpointsByConversation[conversationId] ?? []).map { checkpoint in
+            ConversationCommitCheckpointSummary(
+                id: checkpoint.id,
+                conversationId: checkpoint.conversationId,
+                title: checkpoint.title,
+                cwd: checkpoint.cwd,
+                commitSha: checkpoint.commitSha,
+                shortSha: checkpoint.shortSha,
+                subject: checkpoint.subject,
+                body: checkpoint.body,
+                authorName: checkpoint.authorName,
+                authorEmail: checkpoint.authorEmail,
+                committedAt: checkpoint.committedAt,
+                createdAt: checkpoint.createdAt,
+                updatedAt: checkpoint.updatedAt,
+                fileCount: checkpoint.fileCount,
+                linesAdded: checkpoint.linesAdded,
+                linesDeleted: checkpoint.linesDeleted,
+                commentCount: checkpoint.commentCount
+            )
+        }
+    }
+
+    func readConversationCheckpoint(conversationId: String, checkpointId: String) async throws -> ConversationCommitCheckpointRecord {
+        guard let checkpoint = checkpointsByConversation[conversationId]?.first(where: { $0.id == checkpointId }) else {
+            throw CompanionClientError.requestFailed("Checkpoint not found.")
+        }
+        return checkpoint
+    }
+
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope {
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
@@ -1191,6 +1746,176 @@ final class MockCompanionClient: CompanionClientProtocol {
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
         let created = try await createAttachment(conversationId: conversationId, draft: draft)
         return ConversationAttachmentMutationResponse(conversationId: conversationId, attachment: created.attachment, attachments: created.attachments)
+    }
+
+    func listTasks() async throws -> [ScheduledTaskSummary] {
+        tasks.map { task in
+            ScheduledTaskSummary(
+                id: task.id,
+                title: task.title,
+                filePath: task.filePath,
+                scheduleType: task.scheduleType,
+                targetType: task.targetType,
+                running: task.running,
+                enabled: task.enabled,
+                cron: task.cron,
+                at: task.at,
+                prompt: task.prompt,
+                model: task.model,
+                thinkingLevel: task.thinkingLevel,
+                cwd: task.cwd,
+                threadConversationId: task.threadConversationId,
+                threadTitle: task.threadTitle,
+                lastStatus: task.lastStatus,
+                lastRunAt: task.lastRunAt,
+                lastSuccessAt: task.lastRunAt,
+                lastAttemptCount: 1
+            )
+        }
+    }
+
+    func readTask(taskId: String) async throws -> ScheduledTaskDetail {
+        guard let task = tasks.first(where: { $0.id == taskId }) else {
+            throw CompanionClientError.requestFailed("Task not found.")
+        }
+        return task
+    }
+
+    func readTaskLog(taskId: String) async throws -> DurableRunLogResponse {
+        DurableRunLogResponse(path: "/tmp/\(taskId).log", log: runLogs[taskId] ?? "[info] Task \(taskId) completed.\n")
+    }
+
+    func createTask(draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {
+        let created = ScheduledTaskDetail(
+            id: "task-\(Int.random(in: 10...999))",
+            title: draft.title.nilIfBlank ?? "Mock task",
+            filePath: nil,
+            scheduleType: draft.scheduleMode,
+            targetType: draft.targetType,
+            running: false,
+            enabled: draft.enabled,
+            cron: draft.scheduleMode == "cron" ? draft.cron.nilIfBlank : nil,
+            at: draft.scheduleMode == "at" ? draft.at.nilIfBlank : nil,
+            model: draft.model.nilIfBlank,
+            thinkingLevel: draft.thinkingLevel.nilIfBlank,
+            cwd: draft.cwd.nilIfBlank,
+            timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
+            prompt: draft.prompt.nilIfBlank,
+            lastStatus: nil,
+            lastRunAt: nil,
+            threadConversationId: draft.threadConversationId.nilIfBlank,
+            threadTitle: listState.sessions.first(where: { $0.id == draft.threadConversationId.nilIfBlank })?.title
+        )
+        tasks.insert(created, at: 0)
+        return created
+    }
+
+    func updateTask(taskId: String, draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {
+        guard let index = tasks.firstIndex(where: { $0.id == taskId }) else {
+            throw CompanionClientError.requestFailed("Task not found.")
+        }
+        let previous = tasks[index]
+        let updated = ScheduledTaskDetail(
+            id: taskId,
+            title: draft.title.nilIfBlank ?? previous.title,
+            filePath: previous.filePath,
+            scheduleType: draft.scheduleMode,
+            targetType: draft.targetType,
+            running: previous.running,
+            enabled: draft.enabled,
+            cron: draft.scheduleMode == "cron" ? draft.cron.nilIfBlank : nil,
+            at: draft.scheduleMode == "at" ? draft.at.nilIfBlank : nil,
+            model: draft.model.nilIfBlank,
+            thinkingLevel: draft.thinkingLevel.nilIfBlank,
+            cwd: draft.cwd.nilIfBlank,
+            timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
+            prompt: draft.prompt.nilIfBlank,
+            lastStatus: previous.lastStatus,
+            lastRunAt: previous.lastRunAt,
+            threadConversationId: draft.threadConversationId.nilIfBlank,
+            threadTitle: listState.sessions.first(where: { $0.id == draft.threadConversationId.nilIfBlank })?.title
+        )
+        tasks[index] = updated
+        return updated
+    }
+
+    func deleteTask(taskId: String) async throws {
+        tasks.removeAll { $0.id == taskId }
+    }
+
+    func runTask(taskId: String) async throws -> ScheduledTaskRunResponse {
+        guard let task = tasks.first(where: { $0.id == taskId }) else {
+            throw CompanionClientError.requestFailed("Task not found.")
+        }
+        let runId = "run-\(Int.random(in: 100...999))"
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let summary = DurableRunSummary(
+            runId: runId,
+            paths: DurableRunPaths(root: "/runs/\(runId)", manifestPath: "/runs/\(runId)/manifest.json", statusPath: "/runs/\(runId)/status.json", checkpointPath: "/runs/\(runId)/checkpoint.json", eventsPath: "/runs/\(runId)/events.jsonl", outputLogPath: "/runs/\(runId)/output.log", resultPath: "/runs/\(runId)/result.json"),
+            manifest: DurableRunManifest(version: 1, id: runId, kind: "scheduled-task", resumePolicy: "manual", createdAt: now, spec: [:], parentId: nil, rootId: nil, source: DurableRunManifestSource(type: "task", id: task.id, filePath: task.filePath)),
+            status: DurableRunStatusRecord(version: 1, runId: runId, status: "running", createdAt: now, updatedAt: now, activeAttempt: 1, startedAt: now, completedAt: nil, checkpointKey: nil, lastError: nil),
+            checkpoint: nil,
+            problems: [],
+            recoveryAction: "none"
+        )
+        runs.insert(summary, at: 0)
+        runLogs[runId] = "[info] Started task \(task.title).\n"
+        return ScheduledTaskRunResponse(ok: true, accepted: true, runId: runId)
+    }
+
+    func listRuns() async throws -> DurableRunsListResponse {
+        let statuses = Dictionary(grouping: runs.compactMap { $0.status?.status }, by: { $0 }).mapValues(\.count)
+        let recoveryActions = Dictionary(grouping: runs.map(\.recoveryAction), by: { $0 }).mapValues(\.count)
+        return DurableRunsListResponse(scannedAt: ISO8601DateFormatter.flexible.string(from: .now), runs: runs, summary: DurableRunsSummary(total: runs.count, recoveryActions: recoveryActions, statuses: statuses))
+    }
+
+    func readRun(runId: String) async throws -> DurableRunDetailResponse {
+        guard let run = runs.first(where: { $0.runId == runId }) else {
+            throw CompanionClientError.requestFailed("Run not found.")
+        }
+        return DurableRunDetailResponse(scannedAt: ISO8601DateFormatter.flexible.string(from: .now), run: run)
+    }
+
+    func readRunLog(runId: String, tail: Int?) async throws -> DurableRunLogResponse {
+        DurableRunLogResponse(path: "/tmp/\(runId).log", log: runLogs[runId] ?? "")
+    }
+
+    func cancelRun(runId: String) async throws -> DurableRunCancelResponse {
+        if let index = runs.firstIndex(where: { $0.runId == runId }) {
+            let run = runs[index]
+            let updatedStatus = DurableRunStatusRecord(version: run.status?.version, runId: runId, status: "cancelled", createdAt: run.status?.createdAt ?? ISO8601DateFormatter.flexible.string(from: .now), updatedAt: ISO8601DateFormatter.flexible.string(from: .now), activeAttempt: run.status?.activeAttempt ?? 1, startedAt: run.status?.startedAt, completedAt: ISO8601DateFormatter.flexible.string(from: .now), checkpointKey: run.status?.checkpointKey, lastError: run.status?.lastError)
+            runs[index] = DurableRunSummary(runId: run.runId, paths: run.paths, manifest: run.manifest, status: updatedStatus, checkpoint: run.checkpoint, problems: run.problems, recoveryAction: run.recoveryAction)
+        }
+        return DurableRunCancelResponse(cancelled: true, runId: runId, reason: nil)
+    }
+
+    func readDeviceAdminState() async throws -> CompanionDeviceAdminState {
+        deviceAdminState
+    }
+
+    func createPairingCode() async throws -> CompanionPairingCodeRecord {
+        let next = CompanionPairingCodeRecord(id: "pair-\(Int.random(in: 10...999))", code: "WXYZ-QRST-UVWX", createdAt: ISO8601DateFormatter.flexible.string(from: .now), expiresAt: ISO8601DateFormatter.flexible.string(from: .now.addingTimeInterval(600)))
+        deviceAdminState = CompanionDeviceAdminState(pendingPairings: [CompanionPendingPairing(id: next.id, createdAt: next.createdAt, expiresAt: next.expiresAt)] + deviceAdminState.pendingPairings, devices: deviceAdminState.devices)
+        setupState = CompanionSetupState(pairing: next, links: setupState.links, warnings: setupState.warnings)
+        return next
+    }
+
+    func createSetupState() async throws -> CompanionSetupState {
+        setupState
+    }
+
+    func updatePairedDevice(deviceId: String, deviceLabel: String) async throws -> CompanionDeviceAdminState {
+        deviceAdminState = CompanionDeviceAdminState(pendingPairings: deviceAdminState.pendingPairings, devices: deviceAdminState.devices.map { device in
+            device.id == deviceId
+                ? CompanionPairedDeviceSummary(id: device.id, deviceLabel: deviceLabel, createdAt: device.createdAt, lastUsedAt: device.lastUsedAt, expiresAt: device.expiresAt, revokedAt: device.revokedAt)
+                : device
+        })
+        return deviceAdminState
+    }
+
+    func deletePairedDevice(deviceId: String) async throws -> CompanionDeviceAdminState {
+        deviceAdminState = CompanionDeviceAdminState(pendingPairings: deviceAdminState.pendingPairings, devices: deviceAdminState.devices.filter { $0.id != deviceId })
+        return deviceAdminState
     }
 
     func subscribeAppEvents() async throws -> AsyncStream<CompanionAppEvent> {

@@ -304,6 +304,7 @@ final class HostSessionModel: ObservableObject {
 
     let installationSurfaceId: String
     private let client: CompanionClientProtocol
+    private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
     private var appEventsTask: Task<Void, Never>?
 
     init(client: CompanionClientProtocol, installationSurfaceId: String) {
@@ -354,6 +355,7 @@ final class HostSessionModel: ObservableObject {
             if let meta = envelope.sessionMeta {
                 sessions[meta.id] = meta
             }
+            refresh()
             return envelope.bootstrap.conversationId
         } catch {
             errorMessage = error.localizedDescription
@@ -367,7 +369,190 @@ final class HostSessionModel: ObservableObject {
             if let meta = envelope.sessionMeta {
                 sessions[meta.id] = meta
             }
+            refresh()
             return envelope.bootstrap.conversationId
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func togglePinned(_ conversationId: String) async {
+        var next = currentOrdering
+        let isPinned = next.pinnedSessionIds.contains(conversationId)
+        if isPinned {
+            next.pinnedSessionIds.removeAll { $0 == conversationId }
+        } else {
+            next.archivedSessionIds.removeAll { $0 == conversationId }
+            next.pinnedSessionIds.append(conversationId)
+            if !next.sessionIds.contains(conversationId) {
+                next.sessionIds.append(conversationId)
+            }
+        }
+        await saveOrdering(next)
+    }
+
+    func toggleArchived(_ conversationId: String) async {
+        var next = currentOrdering
+        let isArchived = next.archivedSessionIds.contains(conversationId)
+        if isArchived {
+            next.archivedSessionIds.removeAll { $0 == conversationId }
+            if !next.sessionIds.contains(conversationId) {
+                next.sessionIds.append(conversationId)
+            }
+        } else {
+            next.archivedSessionIds.append(conversationId)
+            next.pinnedSessionIds.removeAll { $0 == conversationId }
+        }
+        await saveOrdering(next)
+    }
+
+    func duplicateConversation(_ conversationId: String) async -> String? {
+        do {
+            let nextId = try await client.duplicateConversation(conversationId: conversationId)
+            refresh()
+            return nextId
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func listTasks() async -> [ScheduledTaskSummary] {
+        do {
+            return try await client.listTasks()
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func readTask(_ taskId: String) async -> ScheduledTaskDetail? {
+        do {
+            return try await client.readTask(taskId: taskId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func readTaskLog(_ taskId: String) async -> DurableRunLogResponse? {
+        do {
+            return try await client.readTaskLog(taskId: taskId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func saveTask(taskId: String?, draft: ScheduledTaskEditorDraft) async -> ScheduledTaskDetail? {
+        do {
+            let task = if let taskId {
+                try await client.updateTask(taskId: taskId, draft: draft)
+            } else {
+                try await client.createTask(draft: draft)
+            }
+            return task
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func deleteTask(_ taskId: String) async -> Bool {
+        do {
+            try await client.deleteTask(taskId: taskId)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    func runTask(_ taskId: String) async -> ScheduledTaskRunResponse? {
+        do {
+            return try await client.runTask(taskId: taskId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func listRuns() async -> DurableRunsListResponse? {
+        do {
+            return try await client.listRuns()
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func readRun(_ runId: String) async -> DurableRunDetailResponse? {
+        do {
+            return try await client.readRun(runId: runId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func readRunLog(_ runId: String, tail: Int? = 200) async -> DurableRunLogResponse? {
+        do {
+            return try await client.readRunLog(runId: runId, tail: tail)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func cancelRun(_ runId: String) async -> DurableRunCancelResponse? {
+        do {
+            return try await client.cancelRun(runId: runId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func readDeviceAdminState() async -> CompanionDeviceAdminState? {
+        do {
+            return try await client.readDeviceAdminState()
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func createPairingCode() async -> CompanionPairingCodeRecord? {
+        do {
+            return try await client.createPairingCode()
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func createSetupState() async -> CompanionSetupState? {
+        do {
+            return try await client.createSetupState()
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func updatePairedDevice(_ deviceId: String, label: String) async -> CompanionDeviceAdminState? {
+        do {
+            return try await client.updatePairedDevice(deviceId: deviceId, deviceLabel: label)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func deletePairedDevice(_ deviceId: String) async -> CompanionDeviceAdminState? {
+        do {
+            return try await client.deletePairedDevice(deviceId: deviceId)
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -404,21 +589,24 @@ final class HostSessionModel: ObservableObject {
 
     private func applyConversationListState(_ state: ConversationListState) {
         errorMessage = nil
+        currentOrdering = state.ordering
         let sessionIndex = Dictionary(uniqueKeysWithValues: state.sessions.map { ($0.id, $0) })
         sessions = sessionIndex
         executionTargets = state.executionTargets ?? []
 
         let pinnedOrder = Set(state.ordering.pinnedSessionIds)
+        let archivedOrder = Set(state.ordering.archivedSessionIds)
         let sessionOrder = state.ordering.sessionIds
         let pinned: [SessionMeta] = sessionOrder.compactMap { (id: String) -> SessionMeta? in
-            guard pinnedOrder.contains(id) else { return nil }
+            guard pinnedOrder.contains(id), !archivedOrder.contains(id) else { return nil }
             return sessionIndex[id]
         }
         let open: [SessionMeta] = sessionOrder.compactMap { (id: String) -> SessionMeta? in
-            guard !pinnedOrder.contains(id) else { return nil }
+            guard !pinnedOrder.contains(id), !archivedOrder.contains(id) else { return nil }
             return sessionIndex[id]
         }
-        let orderedSet = Set(sessionOrder)
+        let archived: [SessionMeta] = state.ordering.archivedSessionIds.compactMap { sessionIndex[$0] }
+        let orderedSet = Set(sessionOrder).union(archivedOrder)
         let recent = state.sessions
             .filter { !orderedSet.contains($0.id) }
             .sorted { lhs, rhs in
@@ -428,8 +616,19 @@ final class HostSessionModel: ObservableObject {
         sections = [
             pinned.isEmpty ? nil : ConversationListSection(id: "pinned", title: "Pinned", sessions: pinned),
             open.isEmpty ? nil : ConversationListSection(id: "open", title: "Open", sessions: open),
+            archived.isEmpty ? nil : ConversationListSection(id: "archived", title: "Archived", sessions: archived),
             recent.isEmpty ? nil : ConversationListSection(id: "recent", title: "Recent", sessions: recent),
         ].compactMap { $0 }
+    }
+
+    private func saveOrdering(_ ordering: ConversationOrdering) async {
+        do {
+            try await client.updateConversationTabs(ordering: ordering)
+            currentOrdering = ordering
+            refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -575,6 +774,114 @@ final class ConversationViewModel: ObservableObject {
             } catch {
                 errorMessage = error.localizedDescription
             }
+        }
+    }
+
+    func duplicateConversation() async -> String? {
+        do {
+            return try await client.duplicateConversation(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func changeWorkingDirectory(_ cwd: String) async -> ConversationCwdChangeResult? {
+        do {
+            return try await client.changeConversationCwd(conversationId: conversationId, cwd: cwd, surfaceId: installationSurfaceId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func loadModelPreferences() async -> ConversationModelPreferencesState? {
+        do {
+            return try await client.readConversationModelPreferences(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func saveModelPreferences(model: String?, thinkingLevel: String?, serviceTier: String?) async -> ConversationModelPreferencesState? {
+        do {
+            let state = try await client.updateConversationModelPreferences(
+                conversationId: conversationId,
+                model: model?.nilIfBlank,
+                thinkingLevel: thinkingLevel?.nilIfBlank,
+                serviceTier: serviceTier?.nilIfBlank,
+                surfaceId: installationSurfaceId
+            )
+            if let model = model?.nilIfBlank, var meta = sessionMeta {
+                meta = SessionMeta(
+                    id: meta.id,
+                    file: meta.file,
+                    timestamp: meta.timestamp,
+                    cwd: meta.cwd,
+                    cwdSlug: meta.cwdSlug,
+                    model: model,
+                    title: meta.title,
+                    messageCount: meta.messageCount,
+                    isRunning: meta.isRunning,
+                    isLive: meta.isLive,
+                    lastActivityAt: meta.lastActivityAt,
+                    parentSessionFile: meta.parentSessionFile,
+                    parentSessionId: meta.parentSessionId,
+                    sourceRunId: meta.sourceRunId,
+                    remoteHostId: meta.remoteHostId,
+                    remoteHostLabel: meta.remoteHostLabel,
+                    remoteConversationId: meta.remoteConversationId,
+                    automationTaskId: meta.automationTaskId,
+                    automationTitle: meta.automationTitle,
+                    needsAttention: meta.needsAttention,
+                    attentionUpdatedAt: meta.attentionUpdatedAt,
+                    attentionUnreadMessageCount: meta.attentionUnreadMessageCount,
+                    attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
+                    attentionActivityIds: meta.attentionActivityIds
+                )
+                sessionMeta = meta
+            }
+            return state
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func listArtifacts() async -> [ConversationArtifactSummary] {
+        do {
+            return try await client.listConversationArtifacts(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func readArtifact(_ artifactId: String) async -> ConversationArtifactRecord? {
+        do {
+            return try await client.readConversationArtifact(conversationId: conversationId, artifactId: artifactId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func listCheckpoints() async -> [ConversationCommitCheckpointSummary] {
+        do {
+            return try await client.listConversationCheckpoints(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func readCheckpoint(_ checkpointId: String) async -> ConversationCommitCheckpointRecord? {
+        do {
+            return try await client.readConversationCheckpoint(conversationId: conversationId, checkpointId: checkpointId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
         }
     }
 
