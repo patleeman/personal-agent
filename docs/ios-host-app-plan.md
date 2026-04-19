@@ -35,6 +35,7 @@ Current repo implementation:
 
 - host-side companion API: implemented at `/companion/v1`
 - desktop companion admin UI: implemented in desktop Settings, including automatic local-network enable + setup QR generation for reachable host addresses
+- setup QR generation now also includes a Tailnet HTTPS option when the companion API is published through Tailscale Serve, and desktop setup generation will best-effort publish that `/companion` path automatically when Tailscale is available
 - native iOS client: implemented at `apps/ios/PersonalAgentCompanion`
 
 The shipping iOS client currently covers:

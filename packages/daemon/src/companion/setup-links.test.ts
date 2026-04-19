@@ -42,12 +42,13 @@ describe('buildCompanionSetupState', () => {
     expect(state.warnings[0]).toContain('loopback only');
   });
 
-  it('enumerates non-loopback IPv4 addresses when the companion host is wildcard', () => {
+  it('enumerates the tailnet url before non-loopback IPv4 addresses when the companion host is wildcard', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('0.0.0.0', 3845),
       pairing,
       hostLabel: 'Patrick Mac',
       hostInstanceId: 'host-1',
+      resolveTailnetUrl: () => 'https://my-host.tailnet.ts.net',
       readNetworkInterfaces: () => ({
         lo0: [{ address: '127.0.0.1', family: 'IPv4', internal: true, netmask: '255.0.0.0', mac: '00:00:00:00:00:00', cidr: '127.0.0.1/8' }],
         en0: [{ address: '192.168.1.25', family: 'IPv4', internal: false, netmask: '255.255.255.0', mac: '01:02:03:04:05:06', cidr: '192.168.1.25/24' }],
@@ -57,11 +58,26 @@ describe('buildCompanionSetupState', () => {
 
     expect(state.warnings).toEqual([]);
     expect(state.links.map((entry) => entry.baseUrl)).toEqual([
+      'https://my-host.tailnet.ts.net',
       'http://192.168.1.25:3845',
       'http://100.88.90.12:3845',
     ]);
+    expect(state.links[0]?.label).toContain('Tailnet');
     expect(state.links[0]?.setupUrl).toContain('pa-companion://pair?');
     expect(state.links[0]?.setupUrl).toContain('code=ABCD-EFGH-IJKL');
+  });
+
+  it('suppresses the loopback-only warning when a tailnet url is available', () => {
+    const state = buildCompanionSetupState({
+      config: createTestConfig('127.0.0.1'),
+      pairing,
+      hostLabel: 'Patrick Mac',
+      hostInstanceId: 'host-1',
+      resolveTailnetUrl: () => 'https://my-host.tailnet.ts.net',
+    });
+
+    expect(state.warnings).toEqual([]);
+    expect(state.links.map((entry) => entry.baseUrl)).toEqual(['https://my-host.tailnet.ts.net']);
   });
 
   it('uses the configured host directly when it is already reachable', () => {

@@ -1,5 +1,6 @@
 import { networkInterfaces } from 'node:os';
 import type { DaemonConfig } from '../config.js';
+import { resolveCompanionTailscaleUrl } from '../tailscale-serve.js';
 import type { CompanionPairingCode, CompanionSetupLink, CompanionSetupState } from './types.js';
 
 function isLoopbackHost(host: string): boolean {
@@ -64,14 +65,15 @@ export function buildCompanionSetupState(input: {
   hostLabel: string;
   hostInstanceId: string;
   readNetworkInterfaces?: typeof networkInterfaces;
+  resolveTailnetUrl?: (port: number) => string | undefined;
 }): CompanionSetupState {
   const companionHost = input.config.companion?.host?.trim() || '127.0.0.1';
   const companionPort = input.config.companion?.port ?? 3843;
   const warnings: string[] = [];
   const links: CompanionSetupLink[] = [];
   const seenBaseUrls = new Set<string>();
-  const addLink = (label: string, host: string) => {
-    const baseUrl = `http://${formatHttpHost(host)}:${String(companionPort)}`;
+  const tailnetUrl = input.resolveTailnetUrl?.(companionPort) ?? resolveCompanionTailscaleUrl(companionPort);
+  const addBaseUrl = (label: string, baseUrl: string) => {
     if (seenBaseUrls.has(baseUrl)) {
       return;
     }
@@ -88,9 +90,25 @@ export function buildCompanionSetupState(input: {
       }),
     });
   };
+  const addHostLink = (label: string, host: string) => {
+    addBaseUrl(label, `http://${formatHttpHost(host)}:${String(companionPort)}`);
+  };
+
+  if (tailnetUrl) {
+    const tailnetHostLabel = (() => {
+      try {
+        return new URL(tailnetUrl).host || 'Tailnet HTTPS';
+      } catch {
+        return 'Tailnet HTTPS';
+      }
+    })();
+    addBaseUrl(`Tailnet · ${tailnetHostLabel}`, tailnetUrl);
+  }
 
   if (isLoopbackHost(companionHost)) {
-    warnings.push('Companion access is still bound to loopback only. Enable local-network phone access before pairing from your phone.');
+    if (!tailnetUrl) {
+      warnings.push('Companion access is still bound to loopback only. Enable local-network phone access before pairing from your phone.');
+    }
   } else if (isWildcardHost(companionHost)) {
     const readInterfaces = input.readNetworkInterfaces ?? networkInterfaces;
     const interfaces = readInterfaces();
@@ -102,7 +120,7 @@ export function buildCompanionSetupState(input: {
         if ((family !== 'IPv4' && family !== '4') || entry.internal !== false || !isUsableIpv4Address(entry.address)) {
           continue;
         }
-        addLink(`${name} · ${entry.address}`, entry.address);
+        addHostLink(`${name} · ${entry.address}`, entry.address);
       }
     }
 
@@ -110,7 +128,7 @@ export function buildCompanionSetupState(input: {
       warnings.push('No non-loopback IPv4 network address is available for QR pairing. Connect the host machine to Wi-Fi or Ethernet, or bind the companion host to a specific reachable address.');
     }
   } else {
-    addLink('Configured host', companionHost);
+    addHostLink('Configured host', companionHost);
   }
 
   return {

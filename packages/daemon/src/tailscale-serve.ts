@@ -11,6 +11,11 @@ export interface SyncWebUiTailscaleServeInput {
   port: number;
 }
 
+export interface SyncCompanionTailscaleServeInput {
+  enabled: boolean;
+  port: number;
+}
+
 export type TailscaleServeProxyStatus = 'disabled' | 'published' | 'missing' | 'mismatch' | 'unavailable';
 
 export interface TailscaleServeProxyState {
@@ -397,6 +402,13 @@ export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): vo
   });
 }
 
+export function syncCompanionTailscaleServe(input: SyncCompanionTailscaleServeInput): void {
+  syncTailscaleServeProxy({
+    ...input,
+    path: '/companion',
+  });
+}
+
 export function resolveTailscaleServeBaseUrl(): string | undefined {
   const status = readTailscaleStatusPayload();
   if (!status.payload) {
@@ -408,5 +420,18 @@ export function resolveTailscaleServeBaseUrl(): string | undefined {
 }
 
 export function resolveWebUiTailscaleUrl(): string | undefined {
+  return resolveTailscaleServeBaseUrl();
+}
+
+export function resolveCompanionTailscaleUrl(port: number): string | undefined {
+  const state = readTailscaleServeProxyState({
+    enabled: true,
+    port,
+    path: '/companion',
+  });
+  if (state.status !== 'published') {
+    return undefined;
+  }
+
   return resolveTailscaleServeBaseUrl();
 }

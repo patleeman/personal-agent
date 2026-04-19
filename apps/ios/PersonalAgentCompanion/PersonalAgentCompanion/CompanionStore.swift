@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SwiftUI
 
 @MainActor
@@ -210,11 +211,51 @@ final class CompanionAppModel: ObservableObject {
         guard !trimmed.isEmpty else {
             throw CompanionClientError.invalidHostURL
         }
-        let withScheme = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
-        guard let url = URL(string: withScheme), let scheme = url.scheme, ["http", "https"].contains(scheme) else {
+
+        let hadExplicitScheme = trimmed.contains("://")
+        let seeded = hadExplicitScheme ? trimmed : "https://\(trimmed)"
+        guard var components = URLComponents(string: seeded),
+              let host = components.host?.trimmed.nilIfBlank,
+              let originalScheme = components.scheme?.lowercased(),
+              ["http", "https"].contains(originalScheme) else {
+            throw CompanionClientError.invalidHostURL
+        }
+
+        let normalizedScheme: String
+        if shouldForceHttps(forHost: host) {
+            normalizedScheme = "https"
+        } else if shouldForceHttp(forHost: host) {
+            normalizedScheme = "http"
+        } else if hadExplicitScheme {
+            normalizedScheme = originalScheme
+        } else {
+            normalizedScheme = "https"
+        }
+
+        components.scheme = normalizedScheme
+        guard let url = components.url else {
             throw CompanionClientError.invalidHostURL
         }
         return url.standardized
+    }
+
+    private func shouldForceHttps(forHost host: String) -> Bool {
+        let normalized = host.lowercased()
+        return normalized.hasSuffix(".ts.net")
+    }
+
+    private func shouldForceHttp(forHost host: String) -> Bool {
+        let normalized = host.lowercased()
+        if normalized == "localhost" || normalized.hasSuffix(".local") || normalized.hasSuffix(".lan") {
+            return true
+        }
+        if !normalized.contains(".") {
+            return true
+        }
+        if IPv4Address(normalized) != nil || IPv6Address(normalized) != nil {
+            return true
+        }
+        return false
     }
 
     private func loadHosts() {
@@ -222,7 +263,20 @@ final class CompanionAppModel: ObservableObject {
             return
         }
         do {
-            hosts = try JSONDecoder().decode([CompanionHostRecord].self, from: data)
+            let decoded = try JSONDecoder().decode([CompanionHostRecord].self, from: data)
+            var didNormalize = false
+            hosts = decoded.map { host in
+                guard let normalized = try? normalizeHostURL(host.baseURL), normalized.absoluteString != host.baseURL else {
+                    return host
+                }
+                didNormalize = true
+                var updated = host
+                updated.baseURL = normalized.absoluteString
+                return updated
+            }
+            if didNormalize {
+                persistHosts()
+            }
         } catch {
             bannerMessage = "Failed to load saved hosts: \(error.localizedDescription)"
         }

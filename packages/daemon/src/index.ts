@@ -84,10 +84,13 @@ export {
 } from './service.js';
 export {
   readTailscaleServeProxyState,
+  resolveCompanionTailscaleUrl,
   resolveTailscaleServeBaseUrl,
   resolveWebUiTailscaleUrl,
+  syncCompanionTailscaleServe,
   syncTailscaleServeProxy,
   syncWebUiTailscaleServe,
+  type SyncCompanionTailscaleServeInput,
   type SyncTailscaleServeProxyInput,
   type SyncWebUiTailscaleServeInput,
   type TailscaleServeProxyState,

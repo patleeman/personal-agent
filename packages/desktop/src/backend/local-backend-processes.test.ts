@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   pingDaemon: vi.fn(),
   loadDaemonConfig: vi.fn(),
+  syncCompanionTailscaleServe: vi.fn(),
   updateMachineConfigSection: vi.fn(),
   resolveDesktopRuntimePaths: vi.fn(),
   bindInProcessDaemonClient: vi.fn(),
@@ -39,6 +40,7 @@ vi.mock('@personal-agent/daemon', () => {
   return {
     pingDaemon: mocks.pingDaemon,
     loadDaemonConfig: mocks.loadDaemonConfig,
+    syncCompanionTailscaleServe: mocks.syncCompanionTailscaleServe,
     PersonalAgentDaemon,
     bindInProcessDaemonClient: mocks.bindInProcessDaemonClient,
   };
@@ -93,6 +95,8 @@ describe('LocalBackendProcesses', () => {
         port: 3843,
       },
     });
+    mocks.syncCompanionTailscaleServe.mockReset();
+    mocks.syncCompanionTailscaleServe.mockImplementation(() => undefined);
     mocks.updateMachineConfigSection.mockImplementation((_, updater) => updater({}, {}));
     mocks.pingDaemon.mockResolvedValue(false);
     mocks.bindInProcessDaemonClient.mockReturnValue(vi.fn());
@@ -211,6 +215,7 @@ describe('LocalBackendProcesses', () => {
       host: '0.0.0.0',
       port: 3843,
     });
+    expect(mocks.syncCompanionTailscaleServe).toHaveBeenCalledWith({ enabled: true, port: 3843 });
     expect(daemon.stop).not.toHaveBeenCalled();
   });
 
@@ -228,6 +233,21 @@ describe('LocalBackendProcesses', () => {
 
     expect(mocks.updateMachineConfigSection).not.toHaveBeenCalled();
     expect(daemon.updateCompanionConfig).not.toHaveBeenCalled();
+    expect(mocks.syncCompanionTailscaleServe).toHaveBeenCalledWith({ enabled: true, port: 3843 });
+  });
+
+  it('keeps local-network setup working even if companion tailnet publishing is unavailable', async () => {
+    const backend = new LocalBackendProcesses();
+
+    await backend.ensureStarted();
+    mocks.syncCompanionTailscaleServe.mockImplementation(() => {
+      throw new Error('tailscale unavailable');
+    });
+
+    await expect(backend.ensureCompanionNetworkReachable()).resolves.toEqual({
+      changed: true,
+      url: 'http://0.0.0.0:3843',
+    });
   });
 
   it('rejects desktop runtime restarts when attached to an external daemon', async () => {

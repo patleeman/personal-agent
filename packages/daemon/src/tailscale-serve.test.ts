@@ -10,8 +10,10 @@ vi.mock('child_process', () => ({
 
 import {
   readTailscaleServeProxyState,
+  resolveCompanionTailscaleUrl,
   resolveTailscaleServeBaseUrl,
   resolveWebUiTailscaleUrl,
+  syncCompanionTailscaleServe,
   syncTailscaleServeProxy,
   syncWebUiTailscaleServe,
 } from './tailscale-serve.js';
@@ -123,6 +125,30 @@ describe('syncTailscaleServeProxy', () => {
   });
 });
 
+describe('syncCompanionTailscaleServe', () => {
+  it('enables tailscale serve for the companion path without clobbering sibling paths', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: createServeStatusPayload({
+          '/': 'http://localhost:3741',
+          '/companion': 'http://localhost:3843',
+        }),
+        stderr: '',
+      });
+
+    syncCompanionTailscaleServe({ enabled: true, port: 3843 });
+
+    expect(mocks.spawnSync).toHaveBeenNthCalledWith(
+      1,
+      'tailscale',
+      ['serve', '--bg', '--set-path=/companion', 'localhost:3843'],
+      { encoding: 'utf-8' },
+    );
+  });
+});
+
 describe('syncWebUiTailscaleServe', () => {
   it('enables tailscale serve for the provided web UI port without clobbering sibling paths', () => {
     mocks.spawnSync
@@ -207,6 +233,38 @@ describe('resolveTailscaleServeBaseUrl', () => {
 
     expect(url).toBe('https://my-host.tailnet.ts.net');
     expect(mocks.spawnSync).toHaveBeenCalledWith('tailscale', ['status', '--json'], { encoding: 'utf-8' });
+  });
+});
+
+describe('resolveCompanionTailscaleUrl', () => {
+  it('returns the tailnet https hostname when the companion path is published to the requested port', () => {
+    mocks.spawnSync
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: createServeStatusPayload({ '/companion': 'http://localhost:3843' }),
+        stderr: '',
+      })
+      .mockReturnValueOnce({
+        status: 0,
+        stdout: JSON.stringify({
+          Self: {
+            DNSName: 'my-host.tailnet.ts.net.',
+          },
+        }),
+        stderr: '',
+      });
+
+    expect(resolveCompanionTailscaleUrl(3843)).toBe('https://my-host.tailnet.ts.net');
+  });
+
+  it('returns undefined when the companion path is not published for the requested port', () => {
+    mocks.spawnSync.mockReturnValue({
+      status: 0,
+      stdout: createServeStatusPayload({ '/companion': 'http://localhost:3999' }),
+      stderr: '',
+    });
+
+    expect(resolveCompanionTailscaleUrl(3843)).toBeUndefined();
   });
 });
 

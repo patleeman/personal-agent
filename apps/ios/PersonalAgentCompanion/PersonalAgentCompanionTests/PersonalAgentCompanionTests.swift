@@ -38,7 +38,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
     }
 
-    func testUpdatingSavedHostChangesBaseURLAndLabel() async throws {
+    func testUpdatingSavedHostNormalizesLocalHostsToHTTP() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
         let original = CompanionHostRecord(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
@@ -54,8 +54,44 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let saved = await model.updateHost(original, baseURLString: "https://mini.local:4444", displayName: "Mac mini")
 
         XCTAssertTrue(saved)
-        XCTAssertEqual(model.hosts.first?.baseURL, "https://mini.local:4444")
+        XCTAssertEqual(model.hosts.first?.baseURL, "http://mini.local:4444")
         XCTAssertEqual(model.hosts.first?.hostLabel, "Mac mini")
+    }
+
+    func testUpdatingSavedHostKeepsTailnetHostsOnHTTPS() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let original = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "https://desktop.tailnet.ts.net",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        storeHosts([original])
+
+        let model = CompanionAppModel()
+        let saved = await model.updateHost(original, baseURLString: "desktop.tailnet.ts.net", displayName: "Tailnet host")
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.hosts.first?.baseURL, "https://desktop.tailnet.ts.net")
+    }
+
+    func testLoadingSavedHostsNormalizesLocalHTTPSUrlsToHTTP() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let original = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "https://192.168.1.23:3843",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        storeHosts([original])
+
+        let model = CompanionAppModel()
+
+        XCTAssertEqual(model.hosts.first?.baseURL, "http://192.168.1.23:3843")
     }
 
     func testRemovingActiveHostFallsBackToNextSavedHost() async throws {
