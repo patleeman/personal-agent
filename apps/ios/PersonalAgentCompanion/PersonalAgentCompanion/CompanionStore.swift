@@ -103,6 +103,30 @@ final class CompanionAppModel: ObservableObject {
         session.start()
     }
 
+    func updateHost(_ host: CompanionHostRecord, baseURLString: String, displayName: String) async -> Bool {
+        do {
+            let normalized = try normalizeHostURL(baseURLString)
+            guard let index = hosts.firstIndex(where: { $0.id == host.id }) else {
+                return false
+            }
+
+            var updated = hosts[index]
+            updated.baseURL = normalized.absoluteString
+            updated.hostLabel = displayName.trimmed.nilIfBlank ?? updated.hostLabel
+            updated.lastUsedAt = .now
+            hosts[index] = updated
+            persistHosts()
+
+            if activeHostId == updated.id {
+                await selectHost(updated.id)
+            }
+            return true
+        } catch {
+            bannerMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func removeHost(_ host: CompanionHostRecord) {
         if activeHostId == host.id {
             activeSession?.stop()
@@ -246,6 +270,7 @@ final class HostSessionModel: ObservableObject {
             do {
                 try await client.connect()
                 let state = try await client.listConversations()
+                errorMessage = nil
                 applyConversationListState(state)
             } catch {
                 errorMessage = error.localizedDescription
@@ -318,6 +343,7 @@ final class HostSessionModel: ObservableObject {
     }
 
     private func applyConversationListState(_ state: ConversationListState) {
+        errorMessage = nil
         let sessionIndex = Dictionary(uniqueKeysWithValues: state.sessions.map { ($0.id, $0) })
         sessions = sessionIndex
         executionTargets = state.executionTargets ?? []
@@ -403,6 +429,7 @@ final class ConversationViewModel: ObservableObject {
             defer { isLoading = false }
             do {
                 let envelope = try await client.conversationBootstrap(conversationId: conversationId)
+                errorMessage = nil
                 applyBootstrap(envelope)
             } catch {
                 errorMessage = error.localizedDescription
@@ -596,6 +623,7 @@ final class ConversationViewModel: ObservableObject {
     }
 
     private func applyBootstrap(_ envelope: ConversationBootstrapEnvelope) {
+        errorMessage = nil
         sessionMeta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta ?? sessionMeta
         title = sessionMeta?.title ?? envelope.bootstrap.liveSession.title ?? title
         executionTargets = envelope.executionTargets
@@ -613,6 +641,7 @@ final class ConversationViewModel: ObservableObject {
     private func applyEvent(_ event: CompanionConversationEvent) {
         switch event {
         case .snapshot(let snapshotBlocks, _, _):
+            errorMessage = nil
             blocks = snapshotBlocks
             lastStreamingTextBlockId = nil
             lastStreamingThinkingBlockId = nil
@@ -697,7 +726,7 @@ final class ConversationViewModel: ObservableObject {
             errorMessage = message
             isStreaming = false
         case .open:
-            break
+            errorMessage = nil
         case .close:
             isStreaming = false
         case .unknown:

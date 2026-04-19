@@ -3,6 +3,21 @@ import XCTest
 
 @MainActor
 final class PersonalAgentCompanionTests: XCTestCase {
+    private let hostsStorageKey = "pa.ios.companion.hosts"
+    private let activeHostStorageKey = "pa.ios.companion.active-host-id"
+    private let surfaceInstallationIdKey = "pa.ios.companion.installation-id"
+
+    override func setUp() {
+        super.setUp()
+        clearStoredHostState()
+    }
+
+    override func tearDown() {
+        clearStoredHostState()
+        unsetenv("PA_IOS_MOCK_MODE")
+        super.tearDown()
+    }
+
     func testHostSessionBuildsPinnedOpenAndRecentSections() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()
@@ -21,6 +36,55 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setupLink?.code, "ABCD-EFGH-IJKL")
         XCTAssertEqual(setupLink?.hostLabel, "Patrick Mac")
         XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
+    }
+
+    func testUpdatingSavedHostChangesBaseURLAndLabel() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let original = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "http://127.0.0.1:3843",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        storeHosts([original])
+
+        let model = CompanionAppModel()
+        let saved = await model.updateHost(original, baseURLString: "https://mini.local:4444", displayName: "Mac mini")
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.hosts.first?.baseURL, "https://mini.local:4444")
+        XCTAssertEqual(model.hosts.first?.hostLabel, "Mac mini")
+    }
+
+    func testRemovingActiveHostFallsBackToNextSavedHost() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let first = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "http://127.0.0.1:3843",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        let second = CompanionHostRecord(
+            id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
+            baseURL: "http://mini.local:3843",
+            hostLabel: "Mac mini",
+            hostInstanceId: "host_2",
+            deviceId: "device_2",
+            deviceLabel: "iPhone"
+        )
+        storeHosts([first, second])
+
+        let model = CompanionAppModel()
+        await model.selectHost(first.id)
+        model.removeHost(first)
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(model.activeHostId, second.id)
+        XCTAssertEqual(model.hosts.map(\.id), [second.id])
     }
 
     func testConversationBootstrapLoadsTranscriptAndAttachments() async throws {
@@ -214,6 +278,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
                 rawData: Data(base64Encoded: previewPNGBase64) ?? Data()
             )
         )
+    }
+
+    private func clearStoredHostState() {
+        let defaults = UserDefaults.standard
+        defaults.removeObject(forKey: hostsStorageKey)
+        defaults.removeObject(forKey: activeHostStorageKey)
+        defaults.removeObject(forKey: surfaceInstallationIdKey)
+    }
+
+    private func storeHosts(_ hosts: [CompanionHostRecord]) {
+        let data = try! JSONEncoder().encode(hosts)
+        UserDefaults.standard.set(data, forKey: hostsStorageKey)
     }
 }
 

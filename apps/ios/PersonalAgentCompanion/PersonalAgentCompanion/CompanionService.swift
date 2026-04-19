@@ -523,7 +523,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
         }
 
         if topic == "app" {
-            let appEvent = try decodeAppEvent(from: eventObject)
+            let appEvent = (try? decodeAppEvent(from: eventObject)) ?? .close
             for continuation in appContinuations.values {
                 continuation.yield(appEvent)
             }
@@ -533,7 +533,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
         guard let key = dictionary["key"] as? String else {
             throw CompanionClientError.invalidResponse
         }
-        let event = try decodeConversationEvent(from: eventObject)
+        let event = (try? decodeConversationEvent(from: eventObject)) ?? .unknown
         if let continuations = conversationContinuations[key]?.values {
             for continuation in continuations {
                 continuation.yield(event)
@@ -572,7 +572,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
         switch type {
         case "snapshot":
-            let blocks = try decodeModel([DisplayBlock].self, from: event["blocks"] ?? [])
+            let blocks = decodeBlocksLossy(from: event["blocks"])
             return .snapshot(
                 blocks: blocks,
                 blockOffset: event["blockOffset"] as? Int ?? 0,
@@ -585,8 +585,8 @@ final class LiveCompanionClient: CompanionClientProtocol {
         case "turn_end":
             return .turnEnd
         case "user_message":
-            guard let block = event["block"] else { return .unknown }
-            return .userMessage(try decodeModel(DisplayBlock.self, from: block))
+            guard let block = event["block"], let decoded = try? decodeModel(DisplayBlock.self, from: block) else { return .unknown }
+            return .userMessage(decoded)
         case "text_delta":
             return .textDelta(event["delta"] as? String ?? "")
         case "thinking_delta":
@@ -614,8 +614,8 @@ final class LiveCompanionClient: CompanionClientProtocol {
         case "title_update":
             return .titleUpdate(event["title"] as? String ?? "Conversation")
         case "presence_state":
-            guard let state = event["state"] else { return .unknown }
-            return .presenceState(try decodeModel(LiveSessionPresenceState.self, from: state))
+            guard let state = event["state"], let decoded = try? decodeModel(LiveSessionPresenceState.self, from: state) else { return .unknown }
+            return .presenceState(decoded)
         case "error":
             return .error(event["message"] as? String ?? "Conversation event error")
         case "open":
@@ -624,6 +624,16 @@ final class LiveCompanionClient: CompanionClientProtocol {
             return .close
         default:
             return .unknown
+        }
+    }
+
+    private func decodeBlocksLossy(from object: Any?) -> [DisplayBlock] {
+        guard let rawBlocks = object as? [Any] else {
+            return []
+        }
+
+        return rawBlocks.compactMap { block in
+            try? decodeModel(DisplayBlock.self, from: block)
         }
     }
 

@@ -12,66 +12,92 @@ struct ConversationScreen: View {
     @State private var importedPhotoItems: [PhotosPickerItem] = []
     @State private var showingImageFileImporter = false
 
+    private var currentExecutionTargetLabel: String {
+        viewModel.executionTargets.first(where: { $0.id == viewModel.currentExecutionTargetId })?.label ?? "Local"
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(viewModel.blocks) { block in
-                        ConversationBlockView(block: block)
-                            .id(block.id)
-                    }
                     if viewModel.blocks.isEmpty && !viewModel.isLoading {
                         ContentUnavailableView(
                             "No transcript yet",
                             systemImage: "message",
                             description: Text("Send a prompt to start this conversation.")
                         )
+                        .foregroundStyle(CompanionTheme.textSecondary)
                         .frame(maxWidth: .infinity)
                         .padding(.top, 80)
                     }
+
+                    ForEach(viewModel.blocks) { block in
+                        ConversationBlockView(block: block)
+                            .id(block.id)
+                    }
                 }
-                .padding(.horizontal)
-                .padding(.top, 16)
-                .padding(.bottom, 120)
+                .padding(.horizontal, 14)
+                .padding(.top, 18)
+                .padding(.bottom, 132)
             }
+            .background(CompanionTheme.canvas.ignoresSafeArea())
             .navigationTitle(viewModel.title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItemGroup(placement: .topBarTrailing) {
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        ForEach(viewModel.executionTargets) { target in
-                            Button {
-                                viewModel.changeExecutionTarget(target.id)
-                            } label: {
-                                if viewModel.currentExecutionTargetId == target.id {
-                                    Label(target.label, systemImage: "checkmark")
-                                } else {
-                                    Text(target.label)
+                        Section("Execution target") {
+                            ForEach(viewModel.executionTargets) { target in
+                                Button {
+                                    viewModel.changeExecutionTarget(target.id)
+                                } label: {
+                                    if viewModel.currentExecutionTargetId == target.id {
+                                        Label(target.label, systemImage: "checkmark")
+                                    } else {
+                                        Text(target.label)
+                                    }
                                 }
                             }
                         }
-                    } label: {
-                        Label("Execution target", systemImage: "desktopcomputer")
-                    }
-                    Button {
-                        viewModel.takeOver()
-                    } label: {
-                        Label("Take over", systemImage: "hand.raised")
-                    }
-                    Button {
-                        showingAttachments = true
-                    } label: {
-                        Label("Attachments", systemImage: "paperclip")
-                    }
-                    Menu {
-                        Button {
-                            renameText = viewModel.title
-                            showingRename = true
-                        } label: {
-                            Label("Rename", systemImage: "pencil")
+
+                        Section("Conversation") {
+                            Button {
+                                viewModel.takeOver()
+                            } label: {
+                                Label("Take over here", systemImage: "hand.raised")
+                            }
+                            Button {
+                                showingAttachments = true
+                            } label: {
+                                Label("Saved drawings", systemImage: "paperclip")
+                            }
+                            Button {
+                                renameText = viewModel.title
+                                showingRename = true
+                            } label: {
+                                Label("Rename", systemImage: "pencil")
+                            }
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        HStack(spacing: 8) {
+                            Image(systemName: "desktopcomputer")
+                            Text(currentExecutionTargetLabel)
+                                .lineLimit(1)
+                            Image(systemName: "chevron.down")
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(CompanionTheme.panelRaised, in: Capsule())
+                        .overlay {
+                            Capsule()
+                                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                        }
+                        .foregroundStyle(CompanionTheme.textPrimary)
                     }
                 }
             }
@@ -139,194 +165,283 @@ struct ConversationScreen: View {
 
     private var composer: some View {
         VStack(spacing: 10) {
-            if !viewModel.promptImages.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(viewModel.promptImages) { image in
-                            VStack(alignment: .leading, spacing: 6) {
-                                if let uiImage = UIImage(data: image.previewData) {
-                                    Image(uiImage: uiImage)
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 92, height: 68)
-                                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                                }
-                                HStack {
-                                    Text(image.name)
-                                        .font(.caption2)
-                                        .lineLimit(1)
-                                    Spacer(minLength: 4)
-                                    Button(role: .destructive) {
-                                        viewModel.removePromptImage(image.id)
-                                    } label: {
-                                        Image(systemName: "xmark.circle.fill")
+            if !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty {
+                VStack(alignment: .leading, spacing: 10) {
+                    if !viewModel.promptImages.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(viewModel.promptImages) { image in
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        if let uiImage = UIImage(data: image.previewData) {
+                                            Image(uiImage: uiImage)
+                                                .resizable()
+                                                .scaledToFill()
+                                                .frame(width: 92, height: 68)
+                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        }
+                                        HStack {
+                                            Text(image.name)
+                                                .font(.caption2)
+                                                .foregroundStyle(CompanionTheme.textPrimary)
+                                                .lineLimit(1)
+                                            Spacer(minLength: 4)
+                                            Button(role: .destructive) {
+                                                viewModel.removePromptImage(image.id)
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                            }
+                                            .buttonStyle(.plain)
+                                        }
                                     }
-                                    .buttonStyle(.plain)
+                                    .frame(width: 96)
                                 }
                             }
-                            .frame(width: 96)
+                            .padding(.horizontal, 16)
                         }
                     }
-                    .padding(.horizontal)
+
+                    if !viewModel.promptAttachmentRefs.isEmpty {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(viewModel.promptAttachmentRefs) { ref in
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "scribble.variable")
+                                        Text(ref.title)
+                                            .lineLimit(1)
+                                        Button {
+                                            viewModel.removeAttachmentReference(ref.id)
+                                        } label: {
+                                            Image(systemName: "xmark.circle.fill")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .font(.caption)
+                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(CompanionTheme.panelRaised, in: Capsule())
+                                    .overlay {
+                                        Capsule()
+                                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                        }
+                    }
                 }
             }
 
-            if !viewModel.promptAttachmentRefs.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ForEach(viewModel.promptAttachmentRefs) { ref in
-                            HStack(spacing: 6) {
-                                Image(systemName: "scribble.variable")
-                                Text(ref.title)
-                                    .lineLimit(1)
-                                Button {
-                                    viewModel.removeAttachmentReference(ref.id)
-                                } label: {
-                                    Image(systemName: "xmark.circle.fill")
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .font(.caption)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.secondary.opacity(0.12), in: Capsule())
-                        }
-                    }
-                    .padding(.horizontal)
-                }
-            }
-
-            HStack(alignment: .bottom, spacing: 10) {
+            HStack(alignment: .bottom, spacing: 12) {
                 TextField("Message", text: $viewModel.promptText, axis: .vertical)
                     .lineLimit(1...6)
-                    .textFieldStyle(.roundedBorder)
-                PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
-                    Image(systemName: "photo")
-                        .imageScale(.large)
-                }
-                Button {
-                    showingImageFileImporter = true
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(CompanionTheme.canvas, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                    }
+
+                Menu {
+                    PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
+                        Label("Photo library", systemImage: "photo.on.rectangle")
+                    }
+                    Button {
+                        showingImageFileImporter = true
+                    } label: {
+                        Label("Image file", systemImage: "folder.badge.plus")
+                    }
+                    Button {
+                        showingAttachments = true
+                    } label: {
+                        Label("Saved drawing", systemImage: "paperclip")
+                    }
                 } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .imageScale(.large)
+                    Image(systemName: "plus.circle")
+                        .font(.title2)
+                        .foregroundStyle(CompanionTheme.textSecondary)
                 }
-                Button {
-                    showingAttachments = true
-                } label: {
-                    Image(systemName: "paperclip")
-                        .imageScale(.large)
-                }
+
                 if viewModel.isStreaming {
                     Button(role: .destructive) {
                         viewModel.abort()
                     } label: {
-                        Image(systemName: "stop.circle.fill")
-                            .imageScale(.large)
+                        Image(systemName: "stop.fill")
+                            .font(.headline)
+                            .frame(width: 42, height: 42)
+                            .background(.red.opacity(0.9), in: Circle())
+                            .foregroundStyle(.white)
                     }
                 } else {
                     Button {
                         viewModel.sendPrompt()
                     } label: {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .imageScale(.large)
+                        Image(systemName: "arrow.up")
+                            .font(.headline.weight(.bold))
+                            .frame(width: 42, height: 42)
+                            .background(
+                                (viewModel.promptText.trimmed.isEmpty && viewModel.promptImages.isEmpty && viewModel.promptAttachmentRefs.isEmpty)
+                                    ? CompanionTheme.panelBorder
+                                    : CompanionTheme.accent,
+                                in: Circle()
+                            )
+                            .foregroundStyle(.white)
                     }
                     .disabled(viewModel.promptText.trimmed.isEmpty && viewModel.promptImages.isEmpty && viewModel.promptAttachmentRefs.isEmpty)
                 }
             }
-            .padding(.horizontal)
-            .padding(.top, 10)
-            .padding(.bottom, 10)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
+            .padding(.bottom, 14)
         }
-        .background(.regularMaterial)
+        .background(CompanionTheme.panel)
+        .overlay(alignment: .top) {
+            Divider()
+                .overlay(CompanionTheme.panelBorder)
+        }
     }
 }
 
 private struct ConversationBlockView: View {
     let block: DisplayBlock
 
+    private var isUser: Bool { block.type == "user" }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            switch block.type {
-            case "user":
-                header("You", color: .blue)
-                if let text = block.text?.nilIfBlank {
-                    Text(text)
-                        .textSelection(.enabled)
-                }
-                if let images = block.images, !images.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
-                            ForEach(images) { image in
-                                DataURLImageView(dataURL: image.src)
-                                    .frame(width: 140, height: 100)
-                                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                            }
+        HStack {
+            if isUser { Spacer(minLength: 48) }
+
+            VStack(alignment: .leading, spacing: 10) {
+                header(roleTitle, color: roleColor)
+
+                content
+
+                Text(formatCompanionDate(block.ts))
+                    .font(.caption2)
+                    .foregroundStyle(CompanionTheme.textDim)
+            }
+            .padding(14)
+            .frame(maxWidth: 560, alignment: .leading)
+            .background(backgroundColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(borderColor, lineWidth: 1)
+            }
+
+            if !isUser { Spacer(minLength: 48) }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch block.type {
+        case "user":
+            if let text = block.text?.nilIfBlank {
+                MarkdownText(text)
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                    .textSelection(.enabled)
+            }
+            if let images = block.images, !images.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(images) { image in
+                            DataURLImageView(dataURL: image.src)
+                                .frame(width: 140, height: 100)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     }
                 }
-            case "text":
-                header("Assistant", color: .green)
-                Text(block.text ?? "")
-                    .textSelection(.enabled)
-            case "thinking":
-                header("Thinking", color: .secondary)
-                Text(block.text ?? "")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .textSelection(.enabled)
-            case "tool_use":
-                header(block.tool ?? "Tool", color: .orange)
-                if let output = block.output?.nilIfBlank {
-                    Text(output)
-                        .font(.footnote.monospaced())
-                        .textSelection(.enabled)
-                }
-                if let message = block.message?.nilIfBlank {
-                    Text(message)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
-                        .textSelection(.enabled)
-                }
-            case "context":
-                header(block.customType ?? "Context", color: .purple)
-                Text(block.text ?? "")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            case "summary":
-                header(block.title ?? "Summary", color: .teal)
-                Text(block.text ?? "")
-                if let detail = block.detail?.nilIfBlank {
-                    Text(detail)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            case "image":
-                header(block.caption ?? block.alt ?? "Image", color: .indigo)
-                DataURLImageView(dataURL: block.src)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 220)
-                    .clipShape(RoundedRectangle(cornerRadius: 14))
-                if let caption = block.caption?.nilIfBlank {
-                    Text(caption)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            case "error":
-                header("Error", color: .red)
-                Text(block.message ?? block.text ?? "Unknown error")
-                    .foregroundStyle(.red)
-            default:
-                header(block.type.capitalized, color: .secondary)
-                Text(block.text ?? block.output ?? block.message ?? "")
+            }
+        case "text":
+            MarkdownText(block.text ?? "")
+                .foregroundStyle(CompanionTheme.textPrimary)
+                .textSelection(.enabled)
+        case "thinking":
+            MarkdownText(block.text ?? "")
+                .font(.callout)
+                .foregroundStyle(CompanionTheme.textSecondary)
+                .textSelection(.enabled)
+        case "tool_use":
+            if let output = block.output?.nilIfBlank {
+                Text(output)
+                    .font(.footnote.monospaced())
+                    .foregroundStyle(CompanionTheme.textPrimary)
                     .textSelection(.enabled)
             }
-            Text(formatCompanionDate(block.ts))
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            if let message = block.message?.nilIfBlank {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .textSelection(.enabled)
+            }
+        case "context":
+            MarkdownText(block.text ?? "")
+                .font(.callout)
+                .foregroundStyle(CompanionTheme.textSecondary)
+        case "summary":
+            MarkdownText(block.text ?? "")
+                .foregroundStyle(CompanionTheme.textPrimary)
+            if let detail = block.detail?.nilIfBlank {
+                MarkdownText(detail)
+                    .font(.footnote)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+        case "image":
+            DataURLImageView(dataURL: block.src)
+                .frame(maxWidth: .infinity)
+                .frame(height: 220)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+            if let caption = block.caption?.nilIfBlank {
+                Text(caption)
+                    .font(.footnote)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+        case "error":
+            Text(block.message ?? block.text ?? "Unknown error")
+                .foregroundStyle(.red)
+        default:
+            MarkdownText(block.text ?? block.output ?? block.message ?? "")
+                .foregroundStyle(CompanionTheme.textPrimary)
+                .textSelection(.enabled)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+    }
+
+    private var roleTitle: String {
+        switch block.type {
+        case "user": return "You"
+        case "text": return "Assistant"
+        case "thinking": return "Thinking"
+        case "tool_use": return block.tool ?? "Tool"
+        case "context": return block.customType ?? "Context"
+        case "summary": return block.title ?? "Summary"
+        case "image": return block.caption ?? block.alt ?? "Image"
+        case "error": return "Error"
+        default: return block.type.capitalized
+        }
+    }
+
+    private var roleColor: Color {
+        switch block.type {
+        case "user": return CompanionTheme.accent
+        case "text": return .green
+        case "thinking": return CompanionTheme.textSecondary
+        case "tool_use": return .orange
+        case "context": return .purple
+        case "summary": return .teal
+        case "image": return .indigo
+        case "error": return .red
+        default: return CompanionTheme.textSecondary
+        }
+    }
+
+    private var backgroundColor: Color {
+        isUser ? CompanionTheme.accentSurface : CompanionTheme.panel
+    }
+
+    private var borderColor: Color {
+        isUser ? CompanionTheme.accent.opacity(0.45) : CompanionTheme.panelBorder
     }
 
     @ViewBuilder
@@ -337,6 +452,23 @@ private struct ConversationBlockView: View {
                 .frame(width: 8, height: 8)
             Text(title)
                 .font(.subheadline.weight(.semibold))
+                .foregroundStyle(CompanionTheme.textPrimary)
+        }
+    }
+}
+
+private struct MarkdownText: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        if let attributed = try? AttributedString(markdown: text) {
+            Text(attributed)
+        } else {
+            Text(text)
         }
     }
 }

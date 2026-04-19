@@ -67,14 +67,20 @@ struct ConversationListView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(session.host.hostLabel)
                             .font(.headline)
+                            .foregroundStyle(CompanionTheme.textPrimary)
                         Text(session.host.baseURL)
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(CompanionTheme.textSecondary)
                         Text("Paired as \(session.host.deviceLabel)")
                             .font(.footnote)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(CompanionTheme.textSecondary)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 8)
+                    .listRowBackground(CompanionTheme.panel)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                    }
                 }
 
                 ForEach(session.sections) { section in
@@ -83,6 +89,7 @@ struct ConversationListView: View {
                             NavigationLink(value: item.id) {
                                 ConversationRow(session: item)
                             }
+                            .listRowBackground(CompanionTheme.panel)
                         }
                     }
                 }
@@ -94,11 +101,17 @@ struct ConversationListView: View {
                             systemImage: "message",
                             description: Text("Create a new conversation on \(session.host.hostLabel) or resume one from a session file.")
                         )
+                        .foregroundStyle(CompanionTheme.textSecondary)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
             .listStyle(.insetGrouped)
             .navigationTitle("Personal Agent")
+            .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .navigationDestination(for: String.self) { conversationId in
                 ConversationScreen(viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]))
             }
@@ -179,6 +192,7 @@ private struct ConversationRow: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(session.title)
                     .font(.headline)
+                    .foregroundStyle(CompanionTheme.textPrimary)
                     .lineLimit(2)
                 Spacer(minLength: 8)
                 if session.needsAttention == true {
@@ -195,16 +209,16 @@ private struct ConversationRow: View {
                 }
             }
             .font(.caption)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(CompanionTheme.textSecondary)
             HStack {
                 Text(formatRelativeCompanionDate(session.lastActivityAt ?? session.timestamp))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(CompanionTheme.textDim)
                 Spacer()
                 if session.isLive == true {
                     Label("Live", systemImage: "dot.radiowaves.left.and.right")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(CompanionTheme.textSecondary)
                 }
             }
         }
@@ -318,37 +332,63 @@ struct PairHostView: View {
 struct HostSelectionView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject var appModel: CompanionAppModel
+    @State private var editingHost: CompanionHostRecord?
 
     var body: some View {
         NavigationStack {
             List {
                 ForEach(appModel.hosts, id: \.id) { (host: CompanionHostRecord) in
-                    Button {
-                        Task {
-                            await appModel.selectHost(host.id)
-                            dismiss()
-                        }
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(host.hostLabel)
-                                    .font(.headline)
-                                Spacer()
-                                if appModel.activeHostId == host.id {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.accentColor)
-                                }
+                    HStack(alignment: .top, spacing: 12) {
+                        Button {
+                            Task {
+                                await appModel.selectHost(host.id)
+                                dismiss()
                             }
-                            Text(host.baseURL)
-                                .font(.footnote)
+                        } label: {
+                            HostSummaryView(host: host, isActive: appModel.activeHostId == host.id)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+
+                        Menu {
+                            Button {
+                                editingHost = host
+                            } label: {
+                                Label("Edit", systemImage: "pencil")
+                            }
+                            Button(role: .destructive) {
+                                appModel.removeHost(host)
+                            } label: {
+                                Label("Delete", systemImage: "trash")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
+                                .font(.title3)
                                 .foregroundStyle(.secondary)
-                            Text("\(host.deviceLabel) · last used \(formatRelativeCompanionDate(ISO8601DateFormatter.flexible.string(from: host.lastUsedAt)))")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                        Button {
+                            editingHost = host
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
+                        .tint(.accentColor)
+                    }
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button(role: .destructive) {
+                            appModel.removeHost(host)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
                     }
-                    .buttonStyle(.plain)
-                    .swipeActions {
+                    .contextMenu {
+                        Button {
+                            editingHost = host
+                        } label: {
+                            Label("Edit", systemImage: "pencil")
+                        }
                         Button(role: .destructive) {
                             appModel.removeHost(host)
                         } label: {
@@ -361,6 +401,92 @@ struct HostSelectionView: View {
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
+                }
+            }
+            .sheet(item: $editingHost) { host in
+                HostEditorView(appModel: appModel, host: host)
+            }
+        }
+    }
+}
+
+private struct HostSummaryView: View {
+    let host: CompanionHostRecord
+    let isActive: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(host.hostLabel)
+                    .font(.headline)
+                Spacer()
+                if isActive {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.accentColor)
+                }
+            }
+            Text(host.baseURL)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Text("\(host.deviceLabel) · last used \(formatRelativeCompanionDate(ISO8601DateFormatter.flexible.string(from: host.lastUsedAt)))")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct HostEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var appModel: CompanionAppModel
+    let host: CompanionHostRecord
+
+    @State private var baseURL: String
+    @State private var displayName: String
+    @State private var isSaving = false
+
+    init(appModel: CompanionAppModel, host: CompanionHostRecord) {
+        self.appModel = appModel
+        self.host = host
+        _baseURL = State(initialValue: host.baseURL)
+        _displayName = State(initialValue: host.hostLabel)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Connection") {
+                    TextField("https://your-host.example.ts.net", text: $baseURL)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    TextField("Display name", text: $displayName)
+                    LabeledContent("Paired device") {
+                        Text(host.deviceLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section {
+                    Text("Edit the saved host URL or the local display name for this pairing. Delete removes the saved token from this phone and you can pair again later.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Edit host")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task {
+                            isSaving = true
+                            let saved = await appModel.updateHost(host, baseURLString: baseURL, displayName: displayName)
+                            isSaving = false
+                            if saved {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(isSaving || baseURL.trimmed.isEmpty)
                 }
             }
         }
