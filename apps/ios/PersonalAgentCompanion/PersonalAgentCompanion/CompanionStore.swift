@@ -299,6 +299,8 @@ final class HostSessionModel: ObservableObject {
                     switch event {
                     case .conversationListState(let state):
                         applyConversationListState(state)
+                    case .conversationListChanged:
+                        refresh()
                     case .open:
                         break
                     case .close:

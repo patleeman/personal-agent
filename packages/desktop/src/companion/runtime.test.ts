@@ -100,6 +100,38 @@ describe('desktop companion runtime', () => {
     }));
   });
 
+  it('emits lightweight app invalidation events instead of resending the full conversation list', async () => {
+    let appListener: ((event: { type: string; event?: unknown; message?: string }) => void) | null = null;
+    const unsubscribe = vi.fn();
+    const localController = {
+      subscribeDesktopAppEvents: vi.fn().mockImplementation(async (listener: (event: { type: string; event?: unknown; message?: string }) => void) => {
+        appListener = listener;
+        return unsubscribe;
+      }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    const events: unknown[] = [];
+    const stop = await runtime.subscribeApp((event) => {
+      events.push(event);
+    });
+
+    expect(events).toEqual([{ type: 'open' }]);
+    appListener?.({ type: 'event', event: { type: 'session_meta_changed', sessionId: 'conv-1' } });
+    expect(events).toEqual([
+      { type: 'open' },
+      { type: 'conversation_list_changed', sourceEvent: { type: 'session_meta_changed', sessionId: 'conv-1' } },
+    ]);
+
+    stop();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
   it('maps ios_native conversation subscriptions onto mobile_web live-session streams', async () => {
     const unsubscribe = vi.fn();
     const localController = {

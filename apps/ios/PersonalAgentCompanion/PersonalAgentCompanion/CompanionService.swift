@@ -35,6 +35,7 @@ struct AttachmentAssetDownload: Equatable {
 
 enum CompanionAppEvent: Equatable {
     case conversationListState(ConversationListState)
+    case conversationListChanged
     case open
     case close
     case error(String)
@@ -191,7 +192,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 
     func listConversations() async throws -> ConversationListState {
-        try await sendCommand(name: "conversations.list", payload: [:], as: ConversationListState.self)
+        try await authorizedJSON(path: "/companion/v1/conversations", method: "GET", body: nil, decode: ConversationListState.self)
     }
 
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] {
@@ -551,6 +552,8 @@ final class LiveCompanionClient: CompanionClientProtocol {
                 throw CompanionClientError.invalidResponse
             }
             return .conversationListState(try decodeModel(ConversationListState.self, from: stateObject))
+        case "conversation_list_changed":
+            return .conversationListChanged
         case "open":
             return .open
         case "close":

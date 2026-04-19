@@ -345,7 +345,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         throw new Error('Desktop app event subscriptions are unavailable.');
       }
 
-      onEvent({ type: 'conversation_list_state', state: await buildConversationListState(hostManager) });
+      onEvent({ type: 'open' });
       return localController.subscribeDesktopAppEvents(async (event) => {
         if (event.type === 'error') {
           onEvent({ type: 'error', message: event.message });
@@ -363,8 +363,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         }
 
         onEvent({
-          type: 'conversation_list_state',
-          state: await buildConversationListState(hostManager),
+          type: 'conversation_list_changed',
           sourceEvent: event.event,
         });
       });

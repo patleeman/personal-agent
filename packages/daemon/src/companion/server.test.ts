@@ -162,6 +162,15 @@ describe('daemon companion server', () => {
     const devices = await readJson(devicesResponse) as { devices: Array<{ id: string; deviceLabel: string }> };
     expect(devices.devices).toHaveLength(1);
 
+    const conversationsResponse = await fetch(`${baseUrl}/companion/v1/conversations`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(conversationsResponse.status).toBe(200);
+    expect(await readJson(conversationsResponse)).toEqual({
+      sessions: [{ id: 'conv-1', title: 'Conversation 1' }],
+      ordering: { sessionIds: ['conv-1'], pinnedSessionIds: ['conv-1'], archivedSessionIds: [], workspacePaths: [] },
+    });
+
     const attachmentsResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
     });

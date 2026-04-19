@@ -481,6 +481,16 @@ export class DaemonCompanionServer {
       return;
     }
 
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/conversations`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.listConversations());
+      return;
+    }
+
     const attachmentsMatch = /^\/companion\/v1\/conversations\/([^/]+)\/attachments$/.exec(pathname);
     if (attachmentsMatch && request.method === 'GET') {
       if (!await this.requireBearer(request, response)) {
