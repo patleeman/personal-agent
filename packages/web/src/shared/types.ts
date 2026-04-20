@@ -248,6 +248,7 @@ export interface ScheduledTaskSummary {
   model?: string;
   thinkingLevel?: string;
   cwd?: string;
+  catchUpWindowSeconds?: number;
   threadConversationId?: string;
   threadTitle?: string;
   lastStatus?: string;
@@ -272,6 +273,7 @@ export interface ScheduledTaskDetail {
   thinkingLevel?: string;
   cwd?: string;
   timeoutSeconds?: number;
+  catchUpWindowSeconds?: number;
   prompt: string;
   lastStatus?: string;
   lastRunAt?: string;

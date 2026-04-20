@@ -95,6 +95,7 @@ Common causes:
 - invalid task frontmatter
 - task file is in the wrong directory
 - one-time task already completed
+- cron automation has no catch-up window configured, so a sleep/offline miss is skipped instead of replayed
 - task run is failing and needs log inspection
 
 ## Durable run is stuck or failed

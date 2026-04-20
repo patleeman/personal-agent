@@ -1823,6 +1823,10 @@ export function Sidebar() {
     () => new Set(automationThreadTitleByConversationId.keys()),
     [automationThreadTitleByConversationId],
   );
+  const runningAutomationConversationIdSet = useMemo(
+    () => new Set((tasks ?? []).flatMap((task) => task.running && task.threadConversationId ? [task.threadConversationId] : [])),
+    [tasks],
+  );
   const filteredConversationItems = useMemo(() => orderedConversationItems.filter((item) => {
     const isAutomation = automationConversationIdSet.has(item.session.id);
     if (threadsFilterMode === 'automation') {
@@ -2754,11 +2758,12 @@ export function Sidebar() {
       : null;
 
     const isAutomation = automationConversationIdSet.has(session.id);
+    const isAutomationRunning = runningAutomationConversationIdSet.has(session.id);
 
     return (
       <OpenConversationRow
         key={session.id}
-        session={session}
+        session={isAutomationRunning && !session.isRunning ? { ...session, isRunning: true } : session}
         active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
         pinned={pinned}
         canDrag={canDrag}

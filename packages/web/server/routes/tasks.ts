@@ -57,6 +57,7 @@ function buildTaskDetailResponse(
     thinkingLevel: metadata.thinkingLevel,
     cwd: metadata.cwd,
     timeoutSeconds: metadata.timeoutSeconds,
+    ...(metadata.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: metadata.catchUpWindowSeconds } : {}),
     prompt: metadata.promptBody,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
@@ -99,6 +100,7 @@ export function registerTaskRoutes(
           model: taskWithThread.modelRef,
           thinkingLevel: taskWithThread.thinkingLevel,
           cwd: taskWithThread.cwd,
+          ...(taskWithThread.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: taskWithThread.catchUpWindowSeconds } : {}),
           threadConversationId: threadDetail.threadConversationId,
           threadTitle: threadDetail.threadTitle,
           lastStatus: runtime?.lastStatus,
@@ -129,6 +131,7 @@ export function registerTaskRoutes(
         thinkingLevel?: string | null;
         cwd?: string | null;
         timeoutSeconds?: number | null;
+        catchUpWindowSeconds?: number | null;
         prompt?: string;
         targetType?: string | null;
         threadMode?: string | null;
@@ -154,6 +157,7 @@ export function registerTaskRoutes(
         thinkingLevel: body.thinkingLevel,
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
+        ...(body.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: body.catchUpWindowSeconds } : {}),
         prompt: body.prompt ?? '',
         targetType,
       });
@@ -191,6 +195,7 @@ export function registerTaskRoutes(
         thinkingLevel?: string | null;
         cwd?: string | null;
         timeoutSeconds?: number | null;
+        catchUpWindowSeconds?: number | null;
         prompt?: string;
         targetType?: string | null;
         threadMode?: string | null;
@@ -222,6 +227,7 @@ export function registerTaskRoutes(
         thinkingLevel: body.thinkingLevel,
         cwd: body.cwd,
         timeoutSeconds: body.timeoutSeconds,
+        ...(body.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: body.catchUpWindowSeconds } : {}),
         prompt: body.prompt,
         targetType,
       });

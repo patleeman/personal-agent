@@ -267,6 +267,26 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Human thread');
   });
 
+  it('renders running state for automation-owned threads even when the conversation is not a live local session', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-auto']));
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [createSession({ id: 'conv-auto', title: 'Morning briefing thread', isRunning: false })],
+      tasks: [{
+        id: 'morning-briefing',
+        title: 'Morning briefing',
+        scheduleType: 'cron',
+        running: true,
+        enabled: true,
+        prompt: 'Assemble the morning briefing.',
+        threadConversationId: 'conv-auto',
+      }],
+    });
+
+    expect(html).toContain('aria-label="Running conversation"');
+    expect(html).toContain('Morning briefing thread');
+  });
+
   it('groups open conversations by working directory with collapsible headers and quick-start actions', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-a1', 'conv-b1', 'conv-a2']));
 

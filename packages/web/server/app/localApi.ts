@@ -504,6 +504,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
           prompt: taskWithThread.prompt.split('\n')[0]?.slice(0, 120) ?? '',
           model: taskWithThread.modelRef,
           cwd: taskWithThread.cwd,
+          ...(taskWithThread.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: taskWithThread.catchUpWindowSeconds } : {}),
           threadConversationId: threadDetail.threadConversationId,
           threadTitle: threadDetail.threadTitle,
           lastStatus: runtime?.lastStatus,
@@ -1795,6 +1796,7 @@ export async function createDesktopScheduledTask(input: {
   thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
+  catchUpWindowSeconds?: number | null;
   prompt?: string;
   targetType?: 'background-agent' | 'conversation' | null;
   conversationBehavior?: 'steer' | 'followUp' | null;
@@ -1826,6 +1828,7 @@ export async function updateDesktopScheduledTask(input: {
   thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
+  catchUpWindowSeconds?: number | null;
   prompt?: string;
   targetType?: 'background-agent' | 'conversation' | null;
   conversationBehavior?: 'steer' | 'followUp' | null;

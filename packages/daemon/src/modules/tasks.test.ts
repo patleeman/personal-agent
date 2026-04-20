@@ -8,9 +8,11 @@ import type { DaemonConfig } from '../config.js';
 import {
   closeAutomationDbs,
   createStoredAutomation,
+  listStoredAutomations,
   loadAutomationRuntimeStateMap,
   loadAutomationSchedulerState,
   saveAutomationSchedulerState,
+  setStoredAutomationThreadBinding,
 } from '../automation-store.js';
 import {
   createDurableRunManifest,
@@ -789,6 +791,114 @@ Run hourly task
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
     const persistedState = loadAutomationSchedulerState({ dbPath: resolveRuntimeDbPath(stateRoot) });
     expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
+
+    await module.stop?.(context);
+  });
+
+  it('runs one catch-up cron execution when the latest missed slot is still within the automation window', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'morning-brief',
+      profile: 'assistant',
+      title: 'Morning brief',
+      enabled: true,
+      cron: '0 10 * * *',
+      catchUpWindowSeconds: 15 * 60,
+      prompt: 'Assemble the morning briefing.',
+    });
+    setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
+
+    saveAutomationSchedulerState(
+      { lastEvaluatedAt: '2026-03-02T09:59:30.000-05:00' },
+      { dbPath },
+    );
+
+    expect(listStoredAutomations({ dbPath })[0]?.catchUpWindowSeconds).toBe(15 * 60);
+
+    const currentTime = new Date('2026-03-02T10:10:00.000-05:00');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    await waitForCondition(() => runTask.mock.calls.length === 1);
+
+    expect(runTask).toHaveBeenCalledTimes(1);
+    expect(runTask.mock.calls[0]?.[0].task.id).toBe('morning-brief');
+
+    await module.stop?.(context);
+  });
+
+  it('keeps cron automations skipped when the missed slot is outside the catch-up window', async () => {
+    const taskDir = createTempDir('tasks-module-definitions-');
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'morning-brief',
+      profile: 'assistant',
+      title: 'Morning brief',
+      enabled: true,
+      cron: '0 10 * * *',
+      catchUpWindowSeconds: 5 * 60,
+      prompt: 'Assemble the morning briefing.',
+    });
+    setStoredAutomationThreadBinding('morning-brief', { dbPath, mode: 'none' });
+
+    saveAutomationSchedulerState(
+      { lastEvaluatedAt: '2026-03-02T09:59:30.000-05:00' },
+      { dbPath },
+    );
+
+    let currentTime = new Date('2026-03-02T10:10:00.000-05:00');
+    const runTask = vi.fn(async (request: TaskRunRequest) => createRunResult(request, true, currentTime.toISOString()));
+
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      {
+        now: () => currentTime,
+        runTask,
+      },
+    );
+
+    const { context } = createContext(taskDir, stateRoot);
+
+    await module.start(context);
+
+    expect(runTask).not.toHaveBeenCalled();
+
+    currentTime = new Date('2026-03-02T10:10:30.000-05:00');
+    await module.handleEvent(createTimerEvent(), context);
+
+    expect(runTask).not.toHaveBeenCalled();
 
     await module.stop?.(context);
   });

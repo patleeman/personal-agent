@@ -9,7 +9,7 @@
  * Archive actions call archiveSession() → remove from pinned/open workspace → move into the archive.
  * Pinning removes a conversation from openIds and keeps it in the pinned shelf instead.
  */
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../client/api';
 import { LiveTitlesContext, useAppData, useSseConnection } from '../app/contexts';
 import { NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
@@ -64,8 +64,9 @@ export function useConversations() {
   const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
   const [archivedConversationIds, setArchivedConversationIds] = useState(() => readArchivedSessionIds());
   const { titles: liveTitles } = useContext(LiveTitlesContext);
-  const { sessions, setSessions } = useAppData();
+  const { sessions, tasks, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
+  const seenRunningAutomationIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     function handleConversationLayoutChanged() {
@@ -113,6 +114,49 @@ export function useConversations() {
     setSessions(next);
     return next;
   }, [setSessions]);
+
+  useEffect(() => {
+    if (tasks === null) {
+      return;
+    }
+
+    const nextRunningAutomationIds = new Set(tasks.filter((task) => task.running).map((task) => task.id));
+    const newlyRunningThreadIds = new Set(
+      tasks.flatMap((task) => (
+        task.running
+          && task.threadConversationId
+          && !seenRunningAutomationIdsRef.current.has(task.id)
+          ? [task.threadConversationId]
+          : []
+      )),
+    );
+
+    if (newlyRunningThreadIds.size > 0) {
+      const currentLayout = readConversationLayout();
+      const nextSessionIds = [...currentLayout.sessionIds];
+      let changed = false;
+
+      for (const threadId of newlyRunningThreadIds) {
+        if (currentLayout.pinnedSessionIds.includes(threadId) || nextSessionIds.includes(threadId)) {
+          continue;
+        }
+
+        nextSessionIds.push(threadId);
+        changed = true;
+      }
+
+      if (changed) {
+        const nextLayout = replaceConversationLayout({
+          sessionIds: nextSessionIds,
+          pinnedSessionIds: currentLayout.pinnedSessionIds,
+          archivedSessionIds: currentLayout.archivedSessionIds,
+        });
+        applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
+      }
+    }
+
+    seenRunningAutomationIdsRef.current = nextRunningAutomationIds;
+  }, [tasks]);
 
   const openSession = useCallback((id: string) => {
     setOpenIds(openConversationTab(id));
@@ -167,6 +211,11 @@ export function useConversations() {
     applyLayoutState(nextLayout, { setOpenIds, setPinnedIds, setArchivedConversationIds });
   }, []);
 
+  const automationThreadTitleBySessionId = useMemo(
+    () => new Map((tasks ?? []).flatMap((task) => task.threadConversationId ? [[task.threadConversationId, task.threadTitle ?? task.title ?? `Automation: ${task.id}`] as const] : [])),
+    [tasks],
+  );
+
   const withTitles = (sessions ?? []).map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
     const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
@@ -187,9 +236,9 @@ export function useConversations() {
         return session;
       }
 
-      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? 'Connecting…');
+      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…');
     }),
-    [liveTitles, pinnedIds, sessionsById],
+    [automationThreadTitleBySessionId, liveTitles, pinnedIds, sessionsById],
   );
   const tabs = useMemo(
     () => openIds.map((id) => {
@@ -198,9 +247,9 @@ export function useConversations() {
         return session;
       }
 
-      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? 'Connecting…');
+      return buildPlaceholderSessionMeta(id, normalizeConversationTitle(liveTitles.get(id)) ?? automationThreadTitleBySessionId.get(id) ?? 'Connecting…');
     }),
-    [liveTitles, openIds, sessionsById],
+    [automationThreadTitleBySessionId, liveTitles, openIds, sessionsById],
   );
   const archivedSessions = useMemo(
     () => withTitles.filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id)),

@@ -38,6 +38,7 @@ export interface ScheduledTaskFileMetadata {
   profile?: string;
   cwd?: string;
   timeoutSeconds?: number;
+  catchUpWindowSeconds?: number;
   prompt: string;
   promptBody: string;
 }
@@ -112,6 +113,7 @@ function hydrateMetadata(task: StoredAutomation): ScheduledTaskFileMetadata {
     profile: task.profile,
     cwd: task.cwd,
     timeoutSeconds: task.timeoutSeconds,
+    catchUpWindowSeconds: task.catchUpWindowSeconds,
     prompt: task.prompt.split('\n')[0]?.slice(0, 120) ?? '',
     promptBody: task.prompt,
   };

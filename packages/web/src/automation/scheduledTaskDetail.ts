@@ -29,6 +29,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.thinkingLevel)
     && isOptionalString(record.cwd)
     && isOptionalNumber(record.timeoutSeconds)
+    && isOptionalNumber(record.catchUpWindowSeconds)
     && isOptionalString(record.lastStatus)
     && isOptionalString(record.lastRunAt)
     && isOptionalString(record.threadConversationId)

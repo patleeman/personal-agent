@@ -193,6 +193,26 @@ function summarizeMissedCronRuns(
   };
 }
 
+function resolveCatchUpScheduledAt(
+  task: StoredAutomation,
+  missedRuns: MissedTaskRunSummary,
+  currentTime: Date,
+): string | undefined {
+  if (!task.catchUpWindowSeconds || task.catchUpWindowSeconds <= 0) {
+    return undefined;
+  }
+
+  const lastScheduledAtMs = Date.parse(missedRuns.lastScheduledAt);
+  if (!Number.isFinite(lastScheduledAtMs)) {
+    return undefined;
+  }
+
+  const ageMs = currentTime.getTime() - lastScheduledAtMs;
+  return ageMs <= task.catchUpWindowSeconds * 1000
+    ? missedRuns.lastScheduledAt
+    : undefined;
+}
+
 function toMissedTaskActivitySummary(taskId: string, missedRunCount: number): string {
   if (missedRunCount === 1) {
     return `Scheduled task ${taskId} was missed while the daemon was offline.`;
@@ -1260,9 +1280,23 @@ export function createTasksModule(
           continue;
         }
 
+        const dueThisMinute = cronMatches(task.schedule.parsed, tickTime);
+
         if (lastEvaluatedAt) {
           const missedRuns = summarizeMissedCronRuns(task.schedule.parsed, lastEvaluatedAt, tickTime);
           if (missedRuns) {
+            const catchUpScheduledAt = resolveCatchUpScheduledAt(task, missedRuns, tickTime);
+            if (
+              catchUpScheduledAt
+              && !dueThisMinute
+              && !activeRuns.has(task.key)
+              && !(task.targetType === 'conversation' && pendingConversationAutomationIds.has(task.id))
+            ) {
+              context.logger.info(`starting catch-up task run id=${task.id} scheduledAt=${catchUpScheduledAt}`);
+              startTaskRun(task, record, context);
+              continue;
+            }
+
             writeMissedTaskActivity(task, context, {
               detectedAt: nowIso,
               missedRuns,
@@ -1270,7 +1304,7 @@ export function createTasksModule(
           }
         }
 
-        if (!cronMatches(task.schedule.parsed, tickTime)) {
+        if (!dueThisMinute) {
           continue;
         }
 

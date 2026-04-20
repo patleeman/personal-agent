@@ -41,6 +41,7 @@ import type {
 import { timeAgo } from '../shared/utils';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { completeConversationOpenPhase } from '../client/perfDiagnostics';
+import { ensureConversationTabOpen } from '../session/sessionTabs';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import { ErrorState, IconButton, LoadingState, Pill, cx } from './ui';
 import { RichMarkdownRenderer } from './editor/RichMarkdownRenderer';
@@ -1350,6 +1351,7 @@ function CapabilitiesOverviewContext({
 }
 
 function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
+  const navigate = useNavigate();
   const { data, loading, error, refreshing, refetch } = useApi(() => api.taskDetail(taskId), `capabilities-task-rail:${taskId}`);
   const [runningNow, setRunningNow] = useState(false);
 
@@ -1361,11 +1363,16 @@ function CapabilitiesTaskContext({ taskId }: { taskId: string }) {
     setRunningNow(true);
     try {
       await api.runTaskNow(data.id);
-      await refetch({ resetLoading: false });
+      const refreshed = await refetch({ resetLoading: false });
+      const threadConversationId = refreshed?.threadConversationId ?? data.threadConversationId;
+      if (threadConversationId) {
+        ensureConversationTabOpen(threadConversationId);
+        navigate(`/conversations/${encodeURIComponent(threadConversationId)}`);
+      }
     } finally {
       setRunningNow(false);
     }
-  }, [data, refetch, runningNow]);
+  }, [data, navigate, refetch, runningNow]);
 
   if (loading && !data) return <LoadingState label="Loading task…" className="px-4 py-4" />;
   if (error && !data) return <ErrorState message={`Failed to load task: ${error}`} className="px-4 py-4" />;

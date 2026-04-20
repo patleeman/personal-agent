@@ -383,6 +383,7 @@ function listTasksForCurrentProfile() {
       prompt: taskWithThread.prompt.split('\n')[0]?.slice(0, 120) ?? '',
       model: taskWithThread.modelRef,
       cwd: taskWithThread.cwd,
+      ...(taskWithThread.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: taskWithThread.catchUpWindowSeconds } : {}),
       threadConversationId: threadDetail.threadConversationId,
       threadTitle: threadDetail.threadTitle,
       lastStatus: runtime?.lastStatus,

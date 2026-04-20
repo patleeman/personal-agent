@@ -51,6 +51,7 @@ const ScheduledTaskToolParams = Type.Object({
   model: Type.Optional(Type.String({ description: 'Full model ref, for example openai-codex/gpt-5.4.' })),
   cwd: Type.Optional(Type.String({ description: 'Working directory for the task.' })),
   timeoutSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Per-run timeout in seconds.' })),
+  catchUpWindowSeconds: Type.Optional(Type.Number({ minimum: 1, description: 'Run once after wake when the latest missed cron slot is still within this many seconds.' })),
   prompt: Type.Optional(Type.String({ description: 'Task prompt body.' })),
   deliverResultToConversation: Type.Optional(Type.Boolean({ description: 'Whether task completions should wake the current conversation later.' })),
   notifyOnSuccess: Type.Optional(Type.Boolean({ description: 'Whether successful task completions should create an in-app alert for the current conversation callback.' })),
@@ -215,6 +216,10 @@ function formatTaskDetail(
     lines.push(`deliverAs: ${task.conversationBehavior}`);
   }
 
+  if (task.catchUpWindowSeconds) {
+    lines.push(`catchUpWindowSeconds: ${task.catchUpWindowSeconds}`);
+  }
+
   if (task.modelRef) {
     lines.push(`model: ${task.modelRef}`);
   }
@@ -343,6 +348,7 @@ export function createScheduledTaskAgentExtension(options: {
                   modelRef: targetType === 'conversation' ? null : (params.model ?? existing.modelRef),
                   cwd,
                   timeoutSeconds: params.timeoutSeconds ?? existing.timeoutSeconds,
+                  ...(params.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: params.catchUpWindowSeconds } : existing.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: existing.catchUpWindowSeconds } : {}),
                   prompt: params.prompt ?? existing.prompt,
                   targetType,
                   conversationBehavior: deliverAs,
@@ -357,6 +363,7 @@ export function createScheduledTaskAgentExtension(options: {
                   modelRef: targetType === 'conversation' ? undefined : params.model,
                   cwd,
                   timeoutSeconds: params.timeoutSeconds,
+                  ...(params.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: params.catchUpWindowSeconds } : {}),
                   prompt: params.prompt ?? '',
                   targetType,
                   conversationBehavior: deliverAs,

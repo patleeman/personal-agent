@@ -551,6 +551,7 @@ export const api = {
     thinkingLevel?: string | null;
     cwd?: string | null;
     timeoutSeconds?: number | null;
+    catchUpWindowSeconds?: number | null;
     prompt: string;
     targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
@@ -580,6 +581,7 @@ export const api = {
     thinkingLevel?: string | null;
     cwd?: string | null;
     timeoutSeconds?: number | null;
+    catchUpWindowSeconds?: number | null;
     prompt?: string;
     targetType?: 'background-agent' | 'conversation' | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;

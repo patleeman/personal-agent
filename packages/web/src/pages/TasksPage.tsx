@@ -2,6 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
+import { ensureConversationTabOpen } from '../session/sessionTabs';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
 import { useAppData, useSseConnection } from '../app/contexts';
@@ -52,6 +53,20 @@ function formatThreadModeLabel(mode: 'dedicated' | 'existing' | 'none'): string 
     default:
       return 'Dedicated thread';
   }
+}
+
+function formatCatchUpWindowLabel(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) {
+    return 'Disabled';
+  }
+
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours}h`;
+  }
+
+  return `${minutes}m`;
 }
 
 function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
@@ -488,10 +503,18 @@ function AutomationDetailView({
     setRunningNow(true);
     try {
       const result = await api.runTaskNow(id);
-      await Promise.all([
+      const [refreshedDetail] = await Promise.all([
         refetch({ resetLoading: false }),
         onRefreshTasks(),
       ]);
+
+      const threadConversationId = refreshedDetail?.threadConversationId ?? detail?.threadConversationId;
+      if (threadConversationId) {
+        ensureConversationTabOpen(threadConversationId);
+        navigate(`/conversations/${encodeURIComponent(threadConversationId)}`);
+        return;
+      }
+
       setSelectedRun(result.runId);
     } catch (nextError) {
       console.error(nextError);
@@ -638,6 +661,7 @@ function AutomationDetailView({
                 <DetailMetaBlock label="Automation ID" value={effectiveSummary.id} />
                 <DetailMetaBlock label="Folder" value={folderLabel} />
                 {detail?.threadTitle && <DetailMetaBlock label="Thread title" value={detail.threadTitle} />}
+                {detail?.scheduleType === 'cron' && <DetailMetaBlock label="Catch-up" value={formatCatchUpWindowLabel(detail.catchUpWindowSeconds)} hint={detail.catchUpWindowSeconds ? 'run once after wake if the last missed slot is still fresh' : 'skip missed runs while the daemon was offline'} />}
                 {typeof detail?.timeoutSeconds === 'number' && <DetailMetaBlock label="Timeout" value={`${detail.timeoutSeconds}s`} />}
                 {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
                   <DetailMetaBlock label="Attempts" value={String(effectiveSummary.lastAttemptCount)} hint="last run retries" />

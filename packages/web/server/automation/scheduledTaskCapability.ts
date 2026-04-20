@@ -24,6 +24,7 @@ export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadI
   thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
+  catchUpWindowSeconds?: number | null;
   prompt: string;
   targetType?: string | null;
   conversationBehavior?: 'steer' | 'followUp' | null;
@@ -46,6 +47,7 @@ export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadI
   thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
+  catchUpWindowSeconds?: number | null;
   prompt?: string;
   targetType?: string | null;
   conversationBehavior?: 'steer' | 'followUp' | null;
@@ -78,6 +80,7 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
     model: task.modelRef,
     thinkingLevel: task.thinkingLevel,
     cwd: task.cwd,
+    ...(task.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: task.catchUpWindowSeconds } : {}),
     threadConversationId: threadDetail.threadConversationId,
     threadTitle: threadDetail.threadTitle,
     conversationBehavior: task.conversationBehavior,
@@ -116,6 +119,7 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     thinkingLevel: metadata.thinkingLevel,
     cwd: metadata.cwd,
     timeoutSeconds: metadata.timeoutSeconds,
+    ...(metadata.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: metadata.catchUpWindowSeconds } : {}),
     prompt: metadata.promptBody,
     conversationBehavior: task.conversationBehavior,
     ...(callbackBinding
@@ -232,6 +236,7 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     thinkingLevel: input.thinkingLevel,
     cwd: input.cwd,
     timeoutSeconds: input.timeoutSeconds,
+    ...(input.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: input.catchUpWindowSeconds } : {}),
     prompt: input.prompt ?? '',
     targetType,
     ...(targetType === 'conversation' ? { conversationBehavior: input.conversationBehavior } : {}),
@@ -285,6 +290,7 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     thinkingLevel: input.thinkingLevel,
     cwd: input.cwd,
     timeoutSeconds: input.timeoutSeconds,
+    ...(input.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: input.catchUpWindowSeconds } : {}),
     prompt: input.prompt,
     targetType,
     ...(targetType === 'conversation' ? { conversationBehavior: input.conversationBehavior } : {}),

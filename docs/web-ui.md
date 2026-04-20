@@ -101,9 +101,10 @@ Current capabilities:
 - choose whether an automation targets a background job or a conversation thread
 - choose whether an automation uses a dedicated thread, an existing thread, or no thread when that target allows it
 - open the automation-owned thread directly from the detail view
+- choose a per-automation catch-up window so missed cron runs can fire once after wake instead of being dropped
 - enable / disable automations
 - delete automations with an in-app confirmation step
-- run an automation immediately and watch the automation state refresh in place
+- run an automation immediately, jump into its owning thread, and keep that thread surfaced in Threads while the automation is running
 - inspect recent automation-owned run history directly from the automation detail view
 
 Time-based `conversation_queue` entries and scheduled `run.start_agent` prompts now land here as saved automations. Transient `after_turn` queue entries still stay conversation-local and do not appear in Automations.

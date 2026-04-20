@@ -45,6 +45,7 @@ interface TaskFormState {
   threadConversationId: string;
   model: string;
   thinkingLevel: string;
+  catchUpWindowMinutes: string;
   prompt: string;
 }
 
@@ -68,6 +69,7 @@ function createDefaultTaskFormState(): TaskFormState {
     threadConversationId: '',
     model: '',
     thinkingLevel: '',
+    catchUpWindowMinutes: '',
     prompt: '',
   };
 }
@@ -85,6 +87,7 @@ function createTaskFormState(task: ScheduledTaskDetail): TaskFormState {
     threadConversationId: task.threadConversationId ?? '',
     model: task.model ?? '',
     thinkingLevel: task.thinkingLevel ?? '',
+    catchUpWindowMinutes: task.catchUpWindowSeconds ? String(Math.max(1, Math.ceil(task.catchUpWindowSeconds / 60))) : '',
     prompt: task.prompt,
   };
 }
@@ -141,6 +144,34 @@ function resolveCronExpression(state: TaskFormState): string {
     : state.cronEditor.rawCron.trim();
 }
 
+function parseCatchUpWindowMinutes(value: string): number | undefined {
+  const normalized = value.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (!/^\d+$/.test(normalized)) {
+    return Number.NaN;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  return parsed > 0 ? parsed : Number.NaN;
+}
+
+function formatCatchUpWindowLabel(seconds: number | undefined): string {
+  if (!seconds || seconds <= 0) {
+    return 'Disabled';
+  }
+
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes % 60 === 0) {
+    const hours = minutes / 60;
+    return `${hours}h`;
+  }
+
+  return `${minutes}m`;
+}
+
 function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): string | null {
   if (!state.title.trim()) {
     return 'Title is required.';
@@ -153,6 +184,11 @@ function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): strin
   if (state.scheduleMode === 'cron') {
     if (!resolveCronExpression(state)) {
       return 'Cron is required.';
+    }
+
+    const catchUpWindowMinutes = parseCatchUpWindowMinutes(state.catchUpWindowMinutes);
+    if (Number.isNaN(catchUpWindowMinutes)) {
+      return 'Catch-up window must be a positive number of minutes.';
     }
   } else if (!state.atValue.trim() || !fromDateTimeLocalValue(state.atValue)) {
     return 'Choose when this one-time task should run.';
@@ -170,6 +206,10 @@ function validateTaskForm(state: TaskFormState, _mode: 'create' | 'edit'): strin
 }
 
 function createTaskMutationPayload(state: TaskFormState) {
+  const catchUpWindowMinutes = state.scheduleMode === 'cron'
+    ? parseCatchUpWindowMinutes(state.catchUpWindowMinutes)
+    : undefined;
+
   return {
     title: state.title.trim(),
     cron: state.scheduleMode === 'cron' ? resolveCronExpression(state) : null,
@@ -177,6 +217,7 @@ function createTaskMutationPayload(state: TaskFormState) {
     model: state.model.trim() || null,
     thinkingLevel: state.thinkingLevel.trim() || null,
     cwd: state.runIn === 'worktree' ? (state.projectPath.trim() || null) : null,
+    catchUpWindowSeconds: typeof catchUpWindowMinutes === 'number' && !Number.isNaN(catchUpWindowMinutes) ? catchUpWindowMinutes * 60 : null,
     prompt: state.prompt,
     targetType: state.targetType,
     threadMode: state.threadMode,
@@ -474,19 +515,38 @@ function TaskAdvancedMenu({
         </div>
 
         {value.scheduleMode === 'cron' && (
-          <div className="space-y-1.5">
-            <span className={FIELD_LABEL_CLASS}>Schedule editor</span>
-            <InlineSelect
-              value={value.cronEditor.mode}
-              onChange={(event) => onChange({ cronEditor: { ...value.cronEditor, mode: event.target.value as CronEditorState['mode'] } })}
-              className="w-full"
-              name="cronEditorMode"
-              aria-label="Schedule editor mode"
-            >
-              <option value="builder">Simple schedule</option>
-              <option value="raw">Raw cron</option>
-            </InlineSelect>
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Schedule editor</span>
+              <InlineSelect
+                value={value.cronEditor.mode}
+                onChange={(event) => onChange({ cronEditor: { ...value.cronEditor, mode: event.target.value as CronEditorState['mode'] } })}
+                className="w-full"
+                name="cronEditorMode"
+                aria-label="Schedule editor mode"
+              >
+                <option value="builder">Simple schedule</option>
+                <option value="raw">Raw cron</option>
+              </InlineSelect>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className={FIELD_LABEL_CLASS}>Catch-up window</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                value={value.catchUpWindowMinutes}
+                onChange={(event) => onChange({ catchUpWindowMinutes: event.target.value })}
+                className={cx(INLINE_INPUT_CLASS, 'w-full')}
+                name="catchUpWindowMinutes"
+                inputMode="numeric"
+                aria-label="Run if missed within minutes"
+                placeholder="Disabled"
+              />
+              <p className={FIELD_HELP_CLASS}>Run once after wake if the latest missed slot was within this many minutes. Leave blank to skip missed runs.</p>
+            </div>
+          </>
         )}
 
         <div className="space-y-1.5">
@@ -709,6 +769,9 @@ function TaskEditorForm({
   const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
   const advancedSummaryParts = [
     formatTargetTypeLabel(value.targetType),
+    value.scheduleMode === 'cron' && value.catchUpWindowMinutes.trim()
+      ? `catch up ${value.catchUpWindowMinutes.trim()}m`
+      : null,
     value.threadMode === 'existing'
       ? (selectedExistingThread?.label ?? 'Existing thread')
       : (value.threadMode === 'none' ? 'No thread' : null),
@@ -1105,6 +1168,12 @@ export function ScheduledTaskPanel({
               )}
             </div>
           </div>
+          {taskDetail.scheduleType === 'cron' && (
+            <div className="ui-detail-row">
+              <span className="ui-detail-label">catch-up</span>
+              <p className="ui-detail-value">{formatCatchUpWindowLabel(taskDetail.catchUpWindowSeconds)}</p>
+            </div>
+          )}
           {taskDetail.timeoutSeconds !== undefined && (
             <div className="ui-detail-row">
               <span className="ui-detail-label">timeout</span>
