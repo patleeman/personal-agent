@@ -36,13 +36,14 @@ describe('buildCompanionSetupState', () => {
       pairing,
       hostLabel: 'Patrick Mac',
       hostInstanceId: 'host-1',
+      resolveTailnetUrl: () => undefined,
     });
 
     expect(state.links).toEqual([]);
     expect(state.warnings[0]).toContain('loopback only');
   });
 
-  it('prefers LAN IPv4 addresses and omits tunnel interfaces when the companion host is wildcard', () => {
+  it('enumerates the tailnet url before non-loopback IPv4 addresses when the companion host is wildcard', () => {
     const state = buildCompanionSetupState({
       config: createTestConfig('0.0.0.0', 3845),
       pairing,
@@ -58,10 +59,11 @@ describe('buildCompanionSetupState', () => {
 
     expect(state.warnings).toEqual([]);
     expect(state.links.map((entry) => entry.baseUrl)).toEqual([
-      'http://192.168.1.25:3845',
       'https://my-host.tailnet.ts.net',
+      'http://192.168.1.25:3845',
+      'http://100.88.90.12:3845',
     ]);
-    expect(state.links[0]?.label).toContain('en0');
+    expect(state.links[0]?.label).toContain('Tailnet');
     expect(state.links[0]?.setupUrl).toContain('pa-companion://pair?');
     expect(state.links[0]?.setupUrl).toContain('code=ABCD-EFGH-IJKL');
   });
@@ -95,22 +97,6 @@ describe('buildCompanionSetupState', () => {
         baseUrl: 'http://mini.home:4444',
         setupUrl: expect.stringContaining('base=http%3A%2F%2Fmini.home%3A4444'),
       },
-    ]);
-  });
-
-  it('appends the tailnet url after a directly reachable configured host', () => {
-    const state = buildCompanionSetupState({
-      config: createTestConfig('mini.home', 4444),
-      pairing,
-      hostLabel: 'Patrick Mini',
-      hostInstanceId: 'host-2',
-      resolveTailnetUrl: () => 'https://mini.tailnet.ts.net',
-    });
-
-    expect(state.warnings).toEqual([]);
-    expect(state.links.map((entry) => entry.baseUrl)).toEqual([
-      'http://mini.home:4444',
-      'https://mini.tailnet.ts.net',
     ]);
   });
 });

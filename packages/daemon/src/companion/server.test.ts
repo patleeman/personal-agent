@@ -167,6 +167,10 @@ describe('daemon companion server', () => {
     expect(hello.hostLabel.length).toBeGreaterThan(0);
     expect(hello.protocolVersion).toBe('v1');
 
+    const aliasHelloResponse = await fetch(`${baseUrl}/v1/hello`);
+    expect(aliasHelloResponse.status).toBe(200);
+    expect(await readJson(aliasHelloResponse)).toEqual(hello);
+
     const setupResponse = await fetch(`${baseUrl}/companion/v1/admin/setup`, { method: 'POST' });
     expect(setupResponse.status).toBe(201);
     const setup = await readJson(setupResponse) as { pairing: { code: string }; links: Array<{ baseUrl: string; setupUrl: string }>; warnings: string[] };
@@ -179,7 +183,7 @@ describe('daemon companion server', () => {
     const pairing = await readJson(pairingCodeResponse) as { code: string };
     expect(pairing.code).toMatch(/^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/);
 
-    const pairResponse = await fetch(`${baseUrl}/companion/v1/auth/pair`, {
+    const pairResponse = await fetch(`${baseUrl}/v1/auth/pair`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: pairing.code, deviceLabel: 'Patrick iPhone' }),
@@ -215,7 +219,7 @@ describe('daemon companion server', () => {
     expect(assetResponse.headers.get('content-type')).toBe('image/png');
     expect(await assetResponse.text()).toBe('preview-bytes');
 
-    const { socket, firstMessage } = await openSocket(`${baseUrl!.replace('http://', 'ws://')}/companion/v1/socket`, paired.bearerToken);
+    const { socket, firstMessage } = await openSocket(`${baseUrl!.replace('http://', 'ws://')}/v1/socket`, paired.bearerToken);
     const ready = firstMessage as { type: string; device: { deviceLabel: string } };
     expect(ready).toEqual(expect.objectContaining({
       type: 'ready',

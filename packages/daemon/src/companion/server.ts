@@ -228,6 +228,14 @@ function buildHello(stateRoot: string): CompanionHostHello {
   };
 }
 
+function normalizeCompanionRequestPathname(pathname: string): string {
+  if (pathname === '/v1' || pathname.startsWith('/v1/')) {
+    return `/companion${pathname}`;
+  }
+
+  return pathname;
+}
+
 function buildSetupState(
   stateRoot: string,
   config: DaemonConfig,
@@ -446,7 +454,7 @@ export class DaemonCompanionServer {
 
   private async handleHttpRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
     const requestUrl = new URL(request.url || '/', 'http://localhost');
-    const pathname = requestUrl.pathname;
+    const pathname = normalizeCompanionRequestPathname(requestUrl.pathname);
 
     if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/hello`) {
       sendJson(response, 200, buildHello(this.stateRoot));
@@ -1105,7 +1113,7 @@ export class DaemonCompanionServer {
 
   private async handleUpgrade(request: IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
     const requestUrl = new URL(request.url || '/', 'http://localhost');
-    if (requestUrl.pathname !== COMPANION_SOCKET_PATH) {
+    if (normalizeCompanionRequestPathname(requestUrl.pathname) !== COMPANION_SOCKET_PATH) {
       socket.destroy();
       return;
     }
