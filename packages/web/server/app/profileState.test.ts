@@ -14,6 +14,7 @@ const {
   createAskUserQuestionAgentExtensionMock,
   createChangeWorkingDirectoryAgentExtensionMock,
   createConversationAutoModeAgentExtensionMock,
+  createConversationInspectAgentExtensionMock,
   createConversationQueueAgentExtensionMock,
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
@@ -38,6 +39,7 @@ const {
   createAskUserQuestionAgentExtensionMock: vi.fn(() => 'ask-user-question-extension'),
   createChangeWorkingDirectoryAgentExtensionMock: vi.fn(() => 'change-working-directory-extension'),
   createConversationAutoModeAgentExtensionMock: vi.fn(() => 'conversation-auto-mode-extension'),
+  createConversationInspectAgentExtensionMock: vi.fn(() => 'conversation-inspect-extension'),
   createConversationQueueAgentExtensionMock: vi.fn(() => 'conversation-queue-extension'),
   createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
@@ -83,6 +85,10 @@ vi.mock('../extensions/conversationAutoModeAgentExtension.js', () => ({
 
 vi.mock('../extensions/conversationQueueAgentExtension.js', () => ({
   createConversationQueueAgentExtension: createConversationQueueAgentExtensionMock,
+}));
+
+vi.mock('../extensions/conversationInspectAgentExtension.js', () => ({
+  createConversationInspectAgentExtension: createConversationInspectAgentExtensionMock,
 }));
 
 vi.mock('../extensions/reminderAgentExtension.js', () => ({
@@ -158,6 +164,7 @@ describe('createProfileState', () => {
     createAskUserQuestionAgentExtensionMock.mockClear();
     createChangeWorkingDirectoryAgentExtensionMock.mockClear();
     createConversationAutoModeAgentExtensionMock.mockClear();
+    createConversationInspectAgentExtensionMock.mockClear();
     createConversationQueueAgentExtensionMock.mockClear();
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
@@ -220,6 +227,7 @@ describe('createProfileState', () => {
       'ask-user-question-extension',
       'change-working-directory-extension',
       'run-extension',
+      'conversation-inspect-extension',
       'artifact-extension',
       'checkpoint-extension',
       'conversation-auto-mode-extension',
@@ -261,6 +269,7 @@ describe('createProfileState', () => {
         'ask-user-question-extension',
         'change-working-directory-extension',
         'run-extension',
+        'conversation-inspect-extension',
         'artifact-extension',
         'checkpoint-extension',
         'conversation-auto-mode-extension',

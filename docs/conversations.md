@@ -85,6 +85,18 @@ When auto mode is enabled, the conversation backend treats it as durable convers
 That hidden controller step should prefer continuing while useful work remains, and only stop auto mode when the task is complete for the user's request or blocked on a real dependency or missing user input.
 If overflow compaction interrupts one of those hidden auto-mode turns, the backend schedules a delayed recovery check and re-requests the hidden review if the session stays idle instead of resuming cleanly.
 
+## Cross-thread inspection
+
+Agents can inspect other conversations through the read-only `conversation_inspect` runtime tool.
+
+That tool is meant for:
+
+- listing live, running, or archived threads
+- querying visible transcript blocks in another conversation
+- doing incremental follow-up reads with signatures and block ids
+
+It is intentionally read-only and does not expose another thread's hidden reasoning.
+
 ## Async follow-through from a conversation
 
 A conversation often creates or receives other durable async surfaces:
