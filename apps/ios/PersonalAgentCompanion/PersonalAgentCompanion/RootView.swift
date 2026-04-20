@@ -608,11 +608,60 @@ private struct AutomationDetailView: View {
 }
 
 private struct AutomationEditorView: View {
+    private struct PickerOption: Identifiable {
+        let value: String
+        let label: String
+
+        var id: String { value }
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Binding var draft: ScheduledTaskEditorDraft
     @ObservedObject var session: HostSessionModel
     let title: String
     let onSave: () async -> Void
+
+    private var modelOptions: [PickerOption] {
+        var options = [
+            PickerOption(value: "", label: "Host default"),
+            PickerOption(value: "gpt-5.4", label: "GPT-5.4"),
+            PickerOption(value: "gpt-5.4-mini", label: "GPT-5.4 Mini"),
+            PickerOption(value: "gpt-5.2", label: "GPT-5.2"),
+            PickerOption(value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini"),
+            PickerOption(value: "claude-opus-4-6", label: "Claude Opus 4.6"),
+            PickerOption(value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6"),
+            PickerOption(value: "claude-haiku-4-6", label: "Claude Haiku 4.6"),
+            PickerOption(value: "gpt-4o", label: "GPT-4o"),
+            PickerOption(value: "gemini-2.5-pro", label: "Gemini 2.5 Pro"),
+            PickerOption(value: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro High"),
+        ]
+        if let current = draft.model.nilIfBlank, !options.contains(where: { $0.value == current }) {
+            options.append(PickerOption(value: current, label: current))
+        }
+        return options
+    }
+
+    private var thinkingLevelOptions: [PickerOption] {
+        [
+            PickerOption(value: "", label: "Unset"),
+            PickerOption(value: "off", label: "Off"),
+            PickerOption(value: "low", label: "Low"),
+            PickerOption(value: "medium", label: "Medium"),
+            PickerOption(value: "high", label: "High"),
+            PickerOption(value: "xhigh", label: "Extra high"),
+        ]
+    }
+
+    private var workingDirectoryOptions: [PickerOption] {
+        var options = [PickerOption(value: "", label: "Host default")]
+        for path in session.workspacePathOptions {
+            options.append(PickerOption(value: path, label: path))
+        }
+        if let current = draft.cwd.nilIfBlank, !options.contains(where: { $0.value == current }) {
+            options.append(PickerOption(value: current, label: current))
+        }
+        return options
+    }
 
     var body: some View {
         NavigationStack {
@@ -660,13 +709,26 @@ private struct AutomationEditorView: View {
                         .lineLimit(4...10)
                 }
                 Section("Runtime") {
-                    TextField("Model", text: $draft.model)
-                    TextField("Thinking level", text: $draft.thinkingLevel)
-                    TextField("Working directory", text: $draft.cwd)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    TextField("Timeout seconds", text: $draft.timeoutSeconds)
-                        .keyboardType(.numberPad)
+                    Picker("Model", selection: $draft.model) {
+                        ForEach(modelOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Thinking level", selection: $draft.thinkingLevel) {
+                        ForEach(thinkingLevelOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Working directory", selection: $draft.cwd) {
+                        ForEach(workingDirectoryOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
                 }
             }
             .navigationTitle(title)

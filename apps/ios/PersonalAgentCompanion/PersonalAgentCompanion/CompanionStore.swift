@@ -322,6 +322,18 @@ final class HostSessionModel: ObservableObject {
     private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
     private var appEventsTask: Task<Void, Never>?
 
+    var workspacePathOptions: [String] {
+        var seen = Set<String>()
+        var ordered: [String] = []
+        for candidate in currentOrdering.workspacePaths + sessions.values.map(\.cwd) {
+            guard let path = candidate.nilIfBlank, seen.insert(path).inserted else {
+                continue
+            }
+            ordered.append(path)
+        }
+        return ordered
+    }
+
     init(client: CompanionClientProtocol, installationSurfaceId: String) {
         self.client = client
         self.host = client.host
