@@ -100,6 +100,35 @@ describe('desktop companion runtime', () => {
     }));
   });
 
+  it('routes parallel prompts to the dedicated live-session endpoint', async () => {
+    const localController = {
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' })),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    conversationExecutionMocks.dispatchConversationExecutionRequest.mockResolvedValueOnce(null);
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.parallelPromptConversation({
+      conversationId: 'conv-1',
+      text: 'Investigate this in parallel.',
+      surfaceId: 'ios-surface-1',
+    })).resolves.toEqual({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' });
+
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/live-sessions/conv-1/parallel-prompt',
+      body: {
+        text: 'Investigate this in parallel.',
+        surfaceId: 'ios-surface-1',
+      },
+    });
+  });
+
   it('emits lightweight app invalidation events instead of resending the full conversation list', async () => {
     let appListener: ((event: { type: string; event?: unknown; message?: string }) => void) | null = null;
     const unsubscribe = vi.fn();

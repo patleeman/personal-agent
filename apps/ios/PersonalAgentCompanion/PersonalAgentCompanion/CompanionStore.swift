@@ -169,11 +169,12 @@ final class CompanionAppModel: ObservableObject {
             return
         }
 
+        let usingDeviceDemoData = environment["PA_IOS_USE_DEVICE_DEMO_DATA"] == "1"
         let record = CompanionHostRecord(
             id: UUID(uuidString: "99999999-9999-4999-8999-999999999999")!,
             baseURL: "https://demo.personal-agent.invalid",
-            hostLabel: "Demo Host",
-            hostInstanceId: "host_demo",
+            hostLabel: usingDeviceDemoData ? "Device Demo" : "Demo Host",
+            hostInstanceId: usingDeviceDemoData ? "host_device_demo" : "host_demo",
             deviceId: "device_demo",
             deviceLabel: "iPhone Demo"
         )
@@ -671,6 +672,7 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isStreaming = false
     @Published var errorMessage: String?
+    @Published var composerNotice: String?
     @Published var promptText: String = ""
     @Published var promptImages: [PromptImageDraft] = []
     @Published var promptAttachmentRefs: [PromptAttachmentReference] = []
@@ -680,6 +682,7 @@ final class ConversationViewModel: ObservableObject {
 
     private let client: CompanionClientProtocol
     private var streamTask: Task<Void, Never>?
+    private var composerNoticeTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
     private var lastStreamingThinkingBlockId: String?
 
@@ -707,6 +710,8 @@ final class ConversationViewModel: ObservableObject {
     func stop() {
         streamTask?.cancel()
         streamTask = nil
+        composerNoticeTask?.cancel()
+        composerNoticeTask = nil
     }
 
     func loadBootstrap() {
@@ -734,13 +739,14 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
-    func sendPrompt() {
+    func sendPrompt(mode requestedMode: ConversationPromptSubmissionMode? = nil) {
         let currentText = promptText
         let currentImages = promptImages
         let currentRefs = promptAttachmentRefs
         guard currentText.nilIfBlank != nil || !currentImages.isEmpty || !currentRefs.isEmpty else {
             return
         }
+        let resolvedMode = requestedMode ?? (isStreaming ? .steer : .submit)
         Task {
             do {
                 try await client.promptConversation(
@@ -748,11 +754,15 @@ final class ConversationViewModel: ObservableObject {
                     text: currentText,
                     images: currentImages,
                     attachmentRefs: currentRefs,
+                    mode: resolvedMode,
                     surfaceId: installationSurfaceId
                 )
                 promptText = ""
                 promptImages.removeAll()
                 promptAttachmentRefs.removeAll()
+                if let notice = resolvedMode.noticeMessage {
+                    showComposerNotice(notice)
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -986,6 +996,17 @@ final class ConversationViewModel: ObservableObject {
 
     func removePromptImage(_ id: UUID) {
         promptImages.removeAll { $0.id == id }
+    }
+
+    private func showComposerNotice(_ message: String) {
+        composerNoticeTask?.cancel()
+        composerNotice = message
+        composerNoticeTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            if !Task.isCancelled {
+                composerNotice = nil
+            }
+        }
     }
 
     func attachDrawingReference(attachment: ConversationAttachmentSummary, revision: Int?) {

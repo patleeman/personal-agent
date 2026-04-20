@@ -15,7 +15,7 @@ protocol CompanionClientProtocol: AnyObject {
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope
     func resumeConversation(_ input: ResumeConversationRequest) async throws -> ConversationBootstrapEnvelope
-    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], surfaceId: String) async throws
+    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws
     func abortConversation(conversationId: String) async throws
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
@@ -288,13 +288,16 @@ final class LiveCompanionClient: CompanionClientProtocol {
         return try await sendCommand(name: "conversation.resume", payload: payload, as: ConversationBootstrapEnvelope.self)
     }
 
-    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], surfaceId: String) async throws {
+    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws {
         var payload: [String: Any] = [
             "conversationId": conversationId,
             "surfaceId": surfaceId,
         ]
         if let trimmed = text.nilIfBlank {
             payload["text"] = trimmed
+        }
+        if let behavior = mode.behaviorValue {
+            payload["behavior"] = behavior
         }
         if !images.isEmpty {
             payload["images"] = images.map { image in
@@ -315,7 +318,8 @@ final class LiveCompanionClient: CompanionClientProtocol {
             }
         }
         struct ResponsePayload: Decodable { let ok: Bool }
-        _ = try await sendCommand(name: "conversation.prompt", payload: payload, as: ResponsePayload.self)
+        let commandName = mode == .parallel ? "conversation.parallel_prompt" : "conversation.prompt"
+        _ = try await sendCommand(name: commandName, payload: payload, as: ResponsePayload.self)
     }
 
     func abortConversation(conversationId: String) async throws {
@@ -1022,6 +1026,27 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 }
 
+private struct MockCompanionSnapshot: Decodable {
+    let hostLabel: String?
+    let generatedAt: String?
+    let conversations: [MockCompanionSnapshotConversation]
+}
+
+private struct MockCompanionSnapshotConversation: Decodable {
+    let sessionMeta: SessionMeta
+    let blocks: [DisplayBlock]
+    let toolUseCount: Int?
+}
+
+private struct MockCompanionSeed {
+    let host: CompanionHostRecord
+    let listState: ConversationListState
+    let conversations: [String: ConversationBootstrapEnvelope]
+    let attachmentsByConversation: [String: [ConversationAttachmentRecord]]
+    let artifactsByConversation: [String: [ConversationArtifactRecord]]
+    let checkpointsByConversation: [String: [ConversationCommitCheckpointRecord]]
+}
+
 @MainActor
 final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
@@ -1040,16 +1065,24 @@ final class MockCompanionClient: CompanionClientProtocol {
     private var conversationContinuations: [String: [UUID: AsyncStream<CompanionConversationEvent>.Continuation]] = [:]
 
     init() {
-        let host = CompanionHostRecord(
-            baseURL: "https://demo.personal-agent.invalid",
-            hostLabel: "Demo Host",
-            hostInstanceId: "host_demo",
-            deviceId: "device_demo",
-            deviceLabel: "iPhone Demo"
-        )
-        self.host = host
-
         let now = ISO8601DateFormatter.flexible.string(from: .now)
+        if let deviceDemoSeed = Self.loadDeviceDemoSeed() {
+            self.host = deviceDemoSeed.host
+            self.listState = deviceDemoSeed.listState
+            self.conversations = deviceDemoSeed.conversations
+            self.attachmentsByConversation = deviceDemoSeed.attachmentsByConversation
+            self.artifactsByConversation = deviceDemoSeed.artifactsByConversation
+            self.checkpointsByConversation = deviceDemoSeed.checkpointsByConversation
+        } else {
+            let host = CompanionHostRecord(
+                baseURL: "https://demo.personal-agent.invalid",
+                hostLabel: "Demo Host",
+                hostInstanceId: "host_demo",
+                deviceId: "device_demo",
+                deviceLabel: "iPhone Demo"
+            )
+            self.host = host
+
         let sourceRevision = ConversationAttachmentRevision(
             revision: 1,
             createdAt: now,
@@ -1150,11 +1183,13 @@ final class MockCompanionClient: CompanionClientProtocol {
                         meta: sessions[0],
                         blocks: [
                             DisplayBlock(type: "user", id: "u1", ts: now, text: "Build the iOS companion app", images: nil),
-                            DisplayBlock(type: "text", id: "a1", ts: now, text: "The daemon-backed companion API is ready. The iOS client now needs a native host list, conversation list, transcript, composer, and attachment views."),
-                            DisplayBlock(type: "thinking", id: "t1", ts: now, text: "Focus on the native host client API, keep execution target switching in the conversation toolbar, and make attachment handling feel first-class on mobile."),
+                            DisplayBlock(type: "thinking", id: "t1", ts: now, text: "Audit the current companion client surface, compare it to desktop, and focus on the transcript and composer experience first."),
+                            DisplayBlock(type: "tool_use", id: "tool-1", ts: now, title: "read AGENTS.md", tool: "read", input: .object(["path": .string("AGENTS.md")]), output: "# personal-agent repo instructions\n\nPrefer correct full implementations and validate UI changes visually.", durationMs: 780),
+                            DisplayBlock(type: "tool_use", id: "tool-2", ts: now, title: "inspect ConversationView.swift", tool: "read", input: .object(["path": .string("apps/ios/PersonalAgentCompanion/PersonalAgentCompanion/ConversationView.swift")]), output: "ConversationScreen currently renders message bubbles and a compact composer with attachment affordances.", durationMs: 1420),
+                            DisplayBlock(type: "text", id: "a1", ts: now, text: "The daemon-backed companion API is ready. The next step is to bring the conversation screen closer to desktop, tighten the composer, and make tool activity legible in the transcript."),
                         ],
                         blockOffset: 0,
-                        totalBlocks: 3,
+                        totalBlocks: 5,
                         signature: "demo-1"
                     ),
                     sessionDetailSignature: "demo-1",
@@ -1181,10 +1216,12 @@ final class MockCompanionClient: CompanionClientProtocol {
                         meta: sessions[1],
                         blocks: [
                             DisplayBlock(type: "summary", id: "s1", ts: now, text: "Release checklist is nearly finished.", title: "Summary", kind: "related"),
+                            DisplayBlock(type: "thinking", id: "t2", ts: now, text: "Confirm the macOS assets are notarized, then double-check the public release repo before announcing it."),
+                            DisplayBlock(type: "tool_use", id: "tool-3", ts: now, title: "release log", tool: "bash", input: .object(["command": .string("npm run release:desktop:patch")]), output: "Published v0.4.2 to patleeman/personal-agent-releases and stapled the DMG.", durationMs: 6910),
                             DisplayBlock(type: "text", id: "a2", ts: now, text: "Sign the build, upload the blockmaps, and update the GitHub release body."),
                         ],
                         blockOffset: 0,
-                        totalBlocks: 2,
+                        totalBlocks: 4,
                         signature: "demo-2"
                     ),
                     sessionDetailSignature: "demo-2",
@@ -1266,6 +1303,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             ],
             "conv-2": []
         ]
+        }
         self.tasks = [
             ScheduledTaskDetail(
                 id: "task-1",
@@ -1338,6 +1376,105 @@ final class MockCompanionClient: CompanionClientProtocol {
             links: [CompanionSetupLinkRecord(id: "link-1", label: "Tailnet", baseUrl: "https://demo.personal-agent.invalid", setupUrl: "pa-companion://pair?base=https%3A%2F%2Fdemo.personal-agent.invalid&code=ABCD-EFGH-IJKL")],
             warnings: []
         )
+    }
+
+    private static func loadDeviceDemoSeed() -> MockCompanionSeed? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["PA_IOS_USE_DEVICE_DEMO_DATA"] == "1" else {
+            return nil
+        }
+
+        let snapshotPath = environment["PA_IOS_DEMO_SNAPSHOT_FILE"]?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+            ?? defaultDeviceDemoSnapshotPath()
+        let snapshotURL = URL(fileURLWithPath: snapshotPath)
+        guard let data = try? Data(contentsOf: snapshotURL) else {
+            return nil
+        }
+        guard let snapshot = try? JSONDecoder().decode(MockCompanionSnapshot.self, from: data), !snapshot.conversations.isEmpty else {
+            return nil
+        }
+
+        let sessions = snapshot.conversations.map(\.sessionMeta)
+        let executionTargets = buildExecutionTargets(from: sessions)
+        let workspacePaths = Array(NSOrderedSet(array: sessions.map(\.cwd))).compactMap { $0 as? String }
+        let ordering = ConversationOrdering(
+            sessionIds: sessions.map(\.id),
+            pinnedSessionIds: sessions.first.map { [$0.id] } ?? [],
+            archivedSessionIds: [],
+            workspacePaths: workspacePaths
+        )
+        let host = CompanionHostRecord(
+            baseURL: "https://demo.personal-agent.invalid",
+            hostLabel: snapshot.hostLabel?.nilIfBlank ?? "Device Demo",
+            hostInstanceId: "host_device_demo",
+            deviceId: "device_demo",
+            deviceLabel: "iPhone Demo"
+        )
+
+        var conversations: [String: ConversationBootstrapEnvelope] = [:]
+        var attachmentsByConversation: [String: [ConversationAttachmentRecord]] = [:]
+        for conversation in snapshot.conversations {
+            let signature = "device-demo-\(conversation.sessionMeta.id)"
+            conversations[conversation.sessionMeta.id] = ConversationBootstrapEnvelope(
+                bootstrap: ConversationBootstrapState(
+                    conversationId: conversation.sessionMeta.id,
+                    sessionDetail: SessionDetail(
+                        meta: conversation.sessionMeta,
+                        blocks: conversation.blocks,
+                        blockOffset: 0,
+                        totalBlocks: conversation.blocks.count,
+                        signature: signature
+                    ),
+                    sessionDetailSignature: signature,
+                    sessionDetailUnchanged: false,
+                    sessionDetailAppendOnly: nil,
+                    liveSession: ConversationBootstrapLiveSession(
+                        live: conversation.sessionMeta.isLive ?? false,
+                        id: conversation.sessionMeta.id,
+                        cwd: conversation.sessionMeta.cwd,
+                        sessionFile: conversation.sessionMeta.file,
+                        title: conversation.sessionMeta.title,
+                        isStreaming: conversation.sessionMeta.isRunning,
+                        hasPendingHiddenTurn: false
+                    )
+                ),
+                sessionMeta: conversation.sessionMeta,
+                attachments: ConversationAttachmentListResponse(conversationId: conversation.sessionMeta.id, attachments: []),
+                executionTargets: executionTargets
+            )
+            attachmentsByConversation[conversation.sessionMeta.id] = []
+        }
+
+        return MockCompanionSeed(
+            host: host,
+            listState: ConversationListState(sessions: sessions, ordering: ordering, executionTargets: executionTargets),
+            conversations: conversations,
+            attachmentsByConversation: attachmentsByConversation,
+            artifactsByConversation: [:],
+            checkpointsByConversation: [:]
+        )
+    }
+
+    private static func buildExecutionTargets(from sessions: [SessionMeta]) -> [ExecutionTargetSummary] {
+        var targets: [ExecutionTargetSummary] = [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")]
+        var seen = Set(targets.map(\.id))
+        for session in sessions {
+            guard let remoteId = session.remoteHostId?.nilIfBlank, !seen.contains(remoteId) else {
+                continue
+            }
+            seen.insert(remoteId)
+            targets.append(ExecutionTargetSummary(id: remoteId, label: session.remoteHostLabel?.nilIfBlank ?? remoteId, kind: "ssh"))
+        }
+        return targets
+    }
+
+    private static func defaultDeviceDemoSnapshotPath() -> String {
+        URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("demo-data")
+            .appendingPathComponent("local-transcripts.json")
+            .path
     }
 
     func hello() async throws -> CompanionHello {
@@ -1443,11 +1580,77 @@ final class MockCompanionClient: CompanionClientProtocol {
         try await createConversation(.init(promptText: "", cwd: input.cwd, executionTargetId: input.executionTargetId), surfaceId: "ios-mock")
     }
 
-    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], surfaceId: String) async throws {
+    func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws {
         guard var envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
+
+        if mode == .parallel {
+            let childConversationId = "parallel-\(Int.random(in: 100...999))"
+            let parallelTitle = text.nilIfBlank ?? "Parallel prompt"
+            let childMeta = SessionMeta(
+                id: childConversationId,
+                file: "/tmp/\(childConversationId).jsonl",
+                timestamp: now,
+                cwd: detail.meta.cwd,
+                cwdSlug: detail.meta.cwdSlug,
+                model: detail.meta.model,
+                title: "Parallel: \(parallelTitle)",
+                messageCount: text.nilIfBlank == nil ? 0 : 1,
+                isRunning: false,
+                isLive: true,
+                lastActivityAt: now,
+                parentSessionFile: detail.meta.file,
+                parentSessionId: detail.meta.id,
+                sourceRunId: nil,
+                remoteHostId: detail.meta.remoteHostId,
+                remoteHostLabel: detail.meta.remoteHostLabel,
+                remoteConversationId: nil,
+                automationTaskId: nil,
+                automationTitle: nil,
+                needsAttention: false,
+                attentionUpdatedAt: nil,
+                attentionUnreadMessageCount: nil,
+                attentionUnreadActivityCount: nil,
+                attentionActivityIds: nil
+            )
+            let childBlocks = [
+                text.nilIfBlank.map {
+                    DisplayBlock(type: "user", id: UUID().uuidString, ts: now, text: $0)
+                },
+                DisplayBlock(type: "text", id: UUID().uuidString, ts: now, text: "This mock host started a parallel prompt in a separate conversation.")
+            ].compactMap { $0 }
+            conversations[childConversationId] = ConversationBootstrapEnvelope(
+                bootstrap: ConversationBootstrapState(
+                    conversationId: childConversationId,
+                    sessionDetail: SessionDetail(meta: childMeta, blocks: childBlocks, blockOffset: 0, totalBlocks: childBlocks.count, signature: UUID().uuidString),
+                    sessionDetailSignature: UUID().uuidString,
+                    sessionDetailUnchanged: false,
+                    sessionDetailAppendOnly: nil,
+                    liveSession: ConversationBootstrapLiveSession(live: true, id: childConversationId, cwd: childMeta.cwd, sessionFile: childMeta.file, title: childMeta.title, isStreaming: false, hasPendingHiddenTurn: false)
+                ),
+                sessionMeta: childMeta,
+                attachments: ConversationAttachmentListResponse(conversationId: childConversationId, attachments: []),
+                executionTargets: envelope.executionTargets
+            )
+            attachmentsByConversation[childConversationId] = []
+            artifactsByConversation[childConversationId] = []
+            checkpointsByConversation[childConversationId] = []
+            listState = ConversationListState(
+                sessions: [childMeta] + listState.sessions,
+                ordering: ConversationOrdering(
+                    sessionIds: [childConversationId] + listState.ordering.sessionIds,
+                    pinnedSessionIds: listState.ordering.pinnedSessionIds,
+                    archivedSessionIds: listState.ordering.archivedSessionIds,
+                    workspacePaths: listState.ordering.workspacePaths
+                ),
+                executionTargets: listState.executionTargets
+            )
+            emitApp(.conversationListState(listState))
+            return
+        }
+
         var blocks = detail.blocks
         if let trimmed = text.nilIfBlank {
             let userBlock = DisplayBlock(type: "user", id: UUID().uuidString, ts: now, text: trimmed, images: images.map { draft in
@@ -1461,7 +1664,17 @@ final class MockCompanionClient: CompanionClientProtocol {
             blocks.append(contextBlock)
         }
         let replyId = UUID().uuidString
-        let replyText = "Native companion prompt accepted. This mock host is simulating a streamed assistant response over the daemon companion socket."
+        let replyText: String
+        switch mode {
+        case .submit:
+            replyText = "Native companion prompt accepted. This mock host is simulating a streamed assistant response over the daemon companion socket."
+        case .steer:
+            replyText = "This mock host queued a steer prompt for the running conversation."
+        case .followUp:
+            replyText = "This mock host queued a follow-up prompt after the current turn."
+        case .parallel:
+            replyText = "This mock host started a parallel prompt."
+        }
         envelope = ConversationBootstrapEnvelope(
             bootstrap: ConversationBootstrapState(
                 conversationId: envelope.bootstrap.conversationId,
@@ -1477,7 +1690,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         conversations[conversationId] = envelope
         emitConversation(conversationId, .agentStart)
-        for chunk in ["Native companion prompt ", "accepted. This mock host ", "is simulating a streamed ", "assistant response over the daemon companion socket."] {
+        for chunk in replyText.split(separator: " ").map({ String($0) + " " }) {
             emitConversation(conversationId, .textDelta(chunk))
         }
         emitConversation(conversationId, .agentEnd)

@@ -15,6 +15,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
     override func tearDown() {
         clearStoredHostState()
         unsetenv("PA_IOS_MOCK_MODE")
+        unsetenv("PA_IOS_USE_DEVICE_DEMO_DATA")
+        unsetenv("PA_IOS_DEMO_SNAPSHOT_FILE")
         super.tearDown()
     }
 
@@ -104,6 +106,58 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.activeSession)
     }
 
+    func testMockClientCanLoadToolHeavyDeviceSnapshot() async throws {
+        let snapshotURL = FileManager.default.temporaryDirectory.appendingPathComponent("pa-ios-demo-snapshot-\(UUID().uuidString).json")
+        let conversation = MockCompanionSnapshotFixture(
+            sessionMeta: SessionMeta(
+                id: "local-demo-1",
+                file: "/tmp/local-demo-1.jsonl",
+                timestamp: ISO8601DateFormatter.flexible.string(from: .now),
+                cwd: "/Users/patrick/workingdir/personal-agent",
+                cwdSlug: "personal-agent",
+                model: "gpt-5.4",
+                title: "Real transcript demo",
+                messageCount: 6,
+                isRunning: false,
+                isLive: true,
+                lastActivityAt: ISO8601DateFormatter.flexible.string(from: .now),
+                parentSessionFile: nil,
+                parentSessionId: nil,
+                sourceRunId: nil,
+                remoteHostId: nil,
+                remoteHostLabel: nil,
+                remoteConversationId: nil,
+                automationTaskId: nil,
+                automationTitle: nil,
+                needsAttention: false,
+                attentionUpdatedAt: nil,
+                attentionUnreadMessageCount: nil,
+                attentionUnreadActivityCount: nil,
+                attentionActivityIds: nil
+            ),
+            blocks: [
+                DisplayBlock(type: "user", id: "u1", ts: ISO8601DateFormatter.flexible.string(from: .now), text: "Show me the transcript"),
+                DisplayBlock(type: "tool_use", id: "tool-1", ts: ISO8601DateFormatter.flexible.string(from: .now), tool: "read", input: .object(["path": .string("AGENTS.md")]), output: "Loaded AGENTS.md", durationMs: 1200),
+                DisplayBlock(type: "text", id: "a1", ts: ISO8601DateFormatter.flexible.string(from: .now), text: "Here is the transcript summary.")
+            ],
+            toolUseCount: 1
+        )
+        let snapshot = MockCompanionSnapshotFixtureFile(hostLabel: "Patrick Demo", generatedAt: ISO8601DateFormatter.flexible.string(from: .now), conversations: [conversation])
+        let data = try JSONEncoder().encode(snapshot)
+        try data.write(to: snapshotURL)
+
+        setenv("PA_IOS_USE_DEVICE_DEMO_DATA", "1", 1)
+        setenv("PA_IOS_DEMO_SNAPSHOT_FILE", snapshotURL.path, 1)
+
+        let client = MockCompanionClient()
+        let listState = try await client.listConversations()
+        let bootstrap = try await client.conversationBootstrap(conversationId: "local-demo-1")
+
+        XCTAssertEqual(client.host.hostLabel, "Patrick Demo")
+        XCTAssertEqual(listState.sessions.first?.id, "local-demo-1")
+        XCTAssertTrue(bootstrap.bootstrap.sessionDetail?.blocks.contains(where: { $0.type == "tool_use" }) == true)
+    }
+
     func testRemovingActiveHostFallsBackToNextSavedHost() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
         let first = CompanionHostRecord(
@@ -146,7 +200,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(model.title, "iOS companion app")
-        XCTAssertEqual(model.blocks.count, 3)
+        XCTAssertEqual(model.blocks.count, 5)
+        XCTAssertTrue(model.blocks.contains(where: { $0.type == "tool_use" }))
         XCTAssertEqual(model.savedAttachments.count, 1)
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
@@ -169,6 +224,26 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.promptText.isEmpty)
         XCTAssertGreaterThan(model.blocks.count, 3)
         XCTAssertTrue(model.blocks.contains(where: { $0.type == "user" && $0.text == "Ship the iOS host client" }))
+    }
+
+    func testParallelPromptCreatesChildConversationInMockClient() async throws {
+        let client = MockCompanionClient()
+        let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")
+        let conversationId = created.bootstrap.conversationId
+
+        try await client.promptConversation(
+            conversationId: conversationId,
+            text: "Investigate the build failure",
+            images: [],
+            attachmentRefs: [],
+            mode: .parallel,
+            surfaceId: "ios-test"
+        )
+
+        let list = try await client.listConversations()
+        XCTAssertTrue(list.sessions.contains(where: {
+            $0.parentSessionId == conversationId && $0.title == "Parallel: Investigate the build failure"
+        }))
     }
 
     func testAttachmentEditingDraftDownloadsSourceAndPreview() async throws {
@@ -371,6 +446,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
             text: "Reply with exactly COMPANION-OK and nothing else.",
             images: [],
             attachmentRefs: [PromptAttachmentReference(attachmentId: attachment.attachment.id, revision: nil, title: attachment.attachment.title)],
+            mode: .submit,
             surfaceId: surfaceId
         )
         await fulfillment(of: [responseExpectation], timeout: 120)
@@ -471,6 +547,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let data = try! JSONEncoder().encode(hosts)
         UserDefaults.standard.set(data, forKey: hostsStorageKey)
     }
+}
+
+private struct MockCompanionSnapshotFixture: Codable {
+    let sessionMeta: SessionMeta
+    let blocks: [DisplayBlock]
+    let toolUseCount: Int?
+}
+
+private struct MockCompanionSnapshotFixtureFile: Codable {
+    let hostLabel: String?
+    let generatedAt: String?
+    let conversations: [MockCompanionSnapshotFixture]
 }
 
 private struct LiveCompanionConfig: Decodable {

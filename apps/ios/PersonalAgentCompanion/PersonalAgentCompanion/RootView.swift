@@ -160,8 +160,7 @@ struct ConversationListView: View {
     @ObservedObject var session: HostSessionModel
     @State private var path: [String] = []
     @State private var showingHostSelection = false
-    @State private var showingPairHost = false
-    @State private var showingLaunchSheet = false
+    @State private var isCreatingConversation = false
     @State private var filterMode: FilterMode = .all
 
     var body: some View {
@@ -260,31 +259,26 @@ struct ConversationListView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button {
-                            showingLaunchSheet = true
-                        } label: {
-                            Label("New conversation", systemImage: "square.and.pencil")
+                    Button {
+                        guard !isCreatingConversation else {
+                            return
                         }
-                        Button {
-                            showingLaunchSheet = true
-                        } label: {
-                            Label("Resume from session file", systemImage: "arrow.clockwise")
-                        }
-                        Divider()
-                        Button {
-                            session.refresh()
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise.circle")
-                        }
-                        Button {
-                            showingPairHost = true
-                        } label: {
-                            Label("Pair another host", systemImage: "plus")
+                        Task {
+                            isCreatingConversation = true
+                            defer { isCreatingConversation = false }
+                            if let id = await session.createConversation(NewConversationRequest()) {
+                                path.append(id)
+                            }
                         }
                     } label: {
-                        Image(systemName: "plus.circle")
+                        if isCreatingConversation {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "square.and.pencil")
+                        }
                     }
+                    .disabled(isCreatingConversation)
+                    .accessibilityLabel("New conversation")
                 }
             }
             .overlay(alignment: .bottom) {
@@ -298,23 +292,6 @@ struct ConversationListView: View {
             }
             .sheet(isPresented: $showingHostSelection) {
                 HostSelectionView(appModel: appModel)
-            }
-            .sheet(isPresented: $showingPairHost) {
-                PairHostView(appModel: appModel)
-            }
-            .sheet(isPresented: $showingLaunchSheet) {
-                ConversationLaunchView(executionTargets: session.executionTargets) { action in
-                    switch action {
-                    case .create(let request):
-                        if let id = await session.createConversation(request) {
-                            path.append(id)
-                        }
-                    case .resume(let request):
-                        if let id = await session.resumeConversation(request) {
-                            path.append(id)
-                        }
-                    }
-                }
             }
         }
     }

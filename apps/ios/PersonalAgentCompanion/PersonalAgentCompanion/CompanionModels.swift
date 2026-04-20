@@ -13,6 +13,63 @@ enum CompanionTheme {
     static let textDim = Color(uiColor: .tertiaryLabel)
 }
 
+enum ConversationPromptSubmissionMode {
+    case submit
+    case steer
+    case followUp
+    case parallel
+
+    var behaviorValue: String? {
+        switch self {
+        case .steer:
+            return "steer"
+        case .followUp:
+            return "followUp"
+        case .submit, .parallel:
+            return nil
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .submit:
+            return "Send"
+        case .steer:
+            return "Steer"
+        case .followUp:
+            return "Follow up"
+        case .parallel:
+            return "Parallel"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .submit:
+            return "arrow.up"
+        case .steer:
+            return "wand.and.stars"
+        case .followUp:
+            return "arrow.turn.down.right"
+        case .parallel:
+            return "square.split.2x1"
+        }
+    }
+
+    var noticeMessage: String? {
+        switch self {
+        case .submit:
+            return nil
+        case .steer:
+            return "Steer prompt queued."
+        case .followUp:
+            return "Follow-up prompt queued."
+        case .parallel:
+            return "Parallel prompt started."
+        }
+    }
+}
+
 struct CompanionHostRecord: Codable, Identifiable, Equatable {
     var id: UUID
     var baseURL: String

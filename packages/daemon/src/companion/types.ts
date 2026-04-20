@@ -222,6 +222,7 @@ export interface CompanionRuntime {
   createConversation(input: CompanionConversationCreateInput): Promise<unknown>;
   resumeConversation(input: CompanionConversationResumeInput): Promise<unknown>;
   promptConversation(input: CompanionConversationPromptInput): Promise<unknown>;
+  parallelPromptConversation(input: CompanionConversationPromptInput): Promise<unknown>;
   abortConversation(input: CompanionConversationAbortInput): Promise<unknown>;
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;

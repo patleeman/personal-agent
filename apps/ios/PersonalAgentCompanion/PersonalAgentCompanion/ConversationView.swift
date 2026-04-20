@@ -27,6 +27,10 @@ struct ConversationScreen: View {
         buildTranscriptRenderItems(viewModel.blocks)
     }
 
+    private var composerHasContent: Bool {
+        viewModel.promptText.trimmed.nilIfBlank != nil || !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -159,15 +163,25 @@ struct ConversationScreen: View {
                 composer
             }
             .overlay(alignment: .top) {
-                if let message = viewModel.errorMessage {
-                    Text(message)
-                        .font(.footnote)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.red.opacity(0.92), in: Capsule())
-                        .foregroundStyle(.white)
-                        .padding(.top, 8)
+                VStack(spacing: 8) {
+                    if let message = viewModel.errorMessage {
+                        Text(message)
+                            .font(.footnote)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(.red.opacity(0.92), in: Capsule())
+                            .foregroundStyle(.white)
+                    }
+                    if let message = viewModel.composerNotice {
+                        Text(message)
+                            .font(.footnote)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(CompanionTheme.accent, in: Capsule())
+                            .foregroundStyle(.white)
+                    }
                 }
+                .padding(.top, 8)
             }
             .sheet(isPresented: $showingAttachments) {
                 AttachmentBrowserView(viewModel: viewModel)
@@ -351,33 +365,7 @@ struct ConversationScreen: View {
                         .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                 }
 
-                if viewModel.isStreaming {
-                    Button(role: .destructive) {
-                        viewModel.abort()
-                    } label: {
-                        Image(systemName: "stop.fill")
-                            .font(.headline)
-                            .frame(width: 42, height: 42)
-                            .background(.red.opacity(0.9), in: Circle())
-                            .foregroundStyle(.white)
-                    }
-                } else {
-                    Button {
-                        viewModel.sendPrompt()
-                    } label: {
-                        Image(systemName: "arrow.up")
-                            .font(.headline.weight(.bold))
-                            .frame(width: 42, height: 42)
-                            .background(
-                                (viewModel.promptText.trimmed.isEmpty && viewModel.promptImages.isEmpty && viewModel.promptAttachmentRefs.isEmpty)
-                                    ? CompanionTheme.panelBorder
-                                    : CompanionTheme.accent,
-                                in: Circle()
-                            )
-                            .foregroundStyle(.white)
-                    }
-                    .disabled(viewModel.promptText.trimmed.isEmpty && viewModel.promptImages.isEmpty && viewModel.promptAttachmentRefs.isEmpty)
-                }
+                composerActions
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
@@ -387,6 +375,71 @@ struct ConversationScreen: View {
         .overlay(alignment: .top) {
             Divider()
                 .overlay(CompanionTheme.panelBorder)
+        }
+    }
+
+    @ViewBuilder
+    private var composerActions: some View {
+        if viewModel.isStreaming {
+            HStack(spacing: 10) {
+                stopButton
+                if composerHasContent {
+                    promptSendButton(defaultMode: .steer, showStreamingOptions: true)
+                }
+            }
+        } else {
+            promptSendButton(defaultMode: .submit, showStreamingOptions: false)
+        }
+    }
+
+    private var stopButton: some View {
+        Button(role: .destructive) {
+            viewModel.abort()
+        } label: {
+            Image(systemName: "stop.fill")
+                .font(.headline)
+                .frame(width: 42, height: 42)
+                .background(.red.opacity(0.9), in: Circle())
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func promptSendButton(defaultMode: ConversationPromptSubmissionMode, showStreamingOptions: Bool) -> some View {
+        Button {
+            viewModel.sendPrompt(mode: defaultMode)
+        } label: {
+            Image(systemName: defaultMode.systemImage)
+                .font(.headline.weight(.bold))
+                .frame(width: 42, height: 42)
+                .background(composerHasContent ? CompanionTheme.accent : CompanionTheme.panelBorder, in: Circle())
+                .foregroundStyle(.white)
+        }
+        .disabled(!composerHasContent)
+        .contextMenu {
+            if showStreamingOptions {
+                queuedPromptActions
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var queuedPromptActions: some View {
+        Button {
+            viewModel.sendPrompt(mode: .steer)
+        } label: {
+            Label(ConversationPromptSubmissionMode.steer.title, systemImage: ConversationPromptSubmissionMode.steer.systemImage)
+        }
+
+        Button {
+            viewModel.sendPrompt(mode: .followUp)
+        } label: {
+            Label(ConversationPromptSubmissionMode.followUp.title, systemImage: ConversationPromptSubmissionMode.followUp.systemImage)
+        }
+
+        Button {
+            viewModel.sendPrompt(mode: .parallel)
+        } label: {
+            Label(ConversationPromptSubmissionMode.parallel.title, systemImage: ConversationPromptSubmissionMode.parallel.systemImage)
         }
     }
 }

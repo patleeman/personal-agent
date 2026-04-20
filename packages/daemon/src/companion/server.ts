@@ -1080,7 +1080,8 @@ export class DaemonCompanionServer {
         };
         return runtime.resumeConversation(input);
       }
-      case 'conversation.prompt': {
+      case 'conversation.prompt':
+      case 'conversation.parallel_prompt': {
         const input: CompanionConversationPromptInput = {
           conversationId: readRequiredString(payload.conversationId, 'conversationId'),
           text: readOptionalString(payload.text),
@@ -1092,6 +1093,9 @@ export class DaemonCompanionServer {
           contextMessages: Array.isArray(payload.contextMessages) ? payload.contextMessages as CompanionConversationPromptInput['contextMessages'] : undefined,
           surfaceId: readOptionalString(payload.surfaceId),
         };
+        if (message.name === 'conversation.parallel_prompt') {
+          return runtime.parallelPromptConversation(input);
+        }
         return runtime.promptConversation(input);
       }
       case 'conversation.abort': {

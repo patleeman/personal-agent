@@ -282,6 +282,20 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async parallelPromptConversation(input: CompanionConversationPromptInput) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/parallel-prompt`,
+        body: {
+          ...(input.text !== undefined ? { text: input.text } : {}),
+          ...(input.images ? { images: input.images } : {}),
+          ...(input.attachmentRefs ? { attachmentRefs: input.attachmentRefs } : {}),
+          ...(input.contextMessages ? { contextMessages: input.contextMessages } : {}),
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
     async abortConversation(input: CompanionConversationAbortInput) {
       return invokeDesktopApi(hostManager, {
         method: 'POST',

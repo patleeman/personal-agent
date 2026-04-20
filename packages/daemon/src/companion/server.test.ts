@@ -91,6 +91,7 @@ describe('daemon companion server', () => {
       createConversation: async () => ({ conversationId: 'created-1' }),
       resumeConversation: async () => ({ conversationId: 'resumed-1' }),
       promptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
+      parallelPromptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       abortConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       takeOverConversation: async (input) => ({ ok: true, surfaceId: input.surfaceId }),
       renameConversation: async (input) => ({ ok: true, title: input.name }),
