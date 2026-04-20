@@ -148,35 +148,16 @@ struct HostDashboardView: View {
 }
 
 struct ConversationListView: View {
-    enum FilterMode: String, CaseIterable, Identifiable {
-        case all = "All"
-        case human = "Human"
-        case automation = "Automation"
-
-        var id: String { rawValue }
-    }
-
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
     @State private var path: [String] = []
     @State private var showingHostSelection = false
     @State private var isCreatingConversation = false
-    @State private var filterMode: FilterMode = .all
 
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Section {
-                    Picker("Filter", selection: $filterMode) {
-                        ForEach(FilterMode.allCases) { mode in
-                            Text(mode.rawValue).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .listRowBackground(CompanionTheme.panel)
-                }
-
-                ForEach(filteredSections) { section in
+                ForEach(session.sections) { section in
                     Section(section.title) {
                         ForEach(section.sessions) { item in
                             NavigationLink(value: item.id) {
@@ -224,12 +205,12 @@ struct ConversationListView: View {
                     }
                 }
 
-                if filteredSections.isEmpty && !session.isLoading {
+                if session.sections.isEmpty && !session.isLoading {
                     Section {
                         ContentUnavailableView(
                             "No conversations",
                             systemImage: "message",
-                            description: Text("Create a new conversation on \(session.host.hostLabel) or resume one from a session file.")
+                            description: Text("Create a new conversation on \(session.host.hostLabel).")
                         )
                         .foregroundStyle(CompanionTheme.textSecondary)
                     }
@@ -292,23 +273,6 @@ struct ConversationListView: View {
             }
             .sheet(isPresented: $showingHostSelection) {
                 HostSelectionView(appModel: appModel)
-            }
-        }
-    }
-
-    private var filteredSections: [ConversationListSection] {
-        switch filterMode {
-        case .all:
-            return session.sections
-        case .human:
-            return session.sections.compactMap { section in
-                let items = section.sessions.filter { $0.automationTaskId == nil }
-                return items.isEmpty ? nil : ConversationListSection(id: section.id, title: section.title, sessions: items)
-            }
-        case .automation:
-            return session.sections.compactMap { section in
-                let items = section.sessions.filter { $0.automationTaskId != nil }
-                return items.isEmpty ? nil : ConversationListSection(id: section.id, title: section.title, sessions: items)
             }
         }
     }
