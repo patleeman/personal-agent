@@ -179,6 +179,32 @@ describe('Sidebar group drag reordering', () => {
     vi.unstubAllGlobals();
   });
 
+  it('does not persist remote cwd paths into saved local workspaces', async () => {
+    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-alpha']));
+    apiMocks.openConversationTabs.mockResolvedValue({
+      sessionIds: ['conv-remote-alpha'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [],
+    });
+
+    renderSidebar([
+      createSession({
+        id: 'conv-remote-alpha',
+        title: 'Remote alpha thread',
+        cwd: '/srv/repos/alpha',
+        cwdSlug: 'alpha',
+        remoteHostId: 'bender',
+        remoteHostLabel: 'Bender',
+      }),
+    ]);
+
+    await flushAsyncWork();
+
+    expect(localStorage.getItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY)).toBeNull();
+    expect(apiMocks.setSavedWorkspacePaths).not.toHaveBeenCalled();
+  });
+
   it('reorders local project sections and moves their threads with them', async () => {
     const alphaPath = '/tmp/alpha-worktree';
     const betaPath = '/tmp/beta-worktree';

@@ -408,6 +408,37 @@ describe('Sidebar', () => {
     expect(html.indexOf('Execution target: Bender')).toBeLessThan(html.indexOf('Remote alpha thread'));
   });
 
+  it('does not mirror remote cwd groups into local saved workspace slots', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-alpha', 'conv-remote-beta']));
+    storage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([]));
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-remote-alpha',
+          title: 'Remote alpha thread',
+          cwd: '/srv/repos/alpha',
+          cwdSlug: 'alpha',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+        }),
+        createSession({
+          id: 'conv-remote-beta',
+          title: 'Remote beta thread',
+          cwd: '/srv/repos/beta',
+          cwdSlug: 'beta',
+          remoteHostId: 'bender',
+          remoteHostLabel: 'Bender',
+        }),
+      ],
+    });
+
+    expect(html).toContain('title="Execution target: Bender"');
+    expect(html.match(/title="New conversation in \/srv\/repos\/alpha"/g) ?? []).toHaveLength(1);
+    expect(html.match(/title="New conversation in \/srv\/repos\/beta"/g) ?? []).toHaveLength(1);
+    expect(html).not.toContain('No threads yet.');
+  });
+
   it('renders saved custom cwd group labels when present', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(

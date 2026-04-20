@@ -607,6 +607,10 @@ function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId'
   };
 }
 
+function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'remoteHostId' | 'remoteHostLabel'>): string {
+  return resolveSessionExecutionTarget(session).isLocal ? session.cwd ?? '' : '';
+}
+
 function buildScopedConversationGroupKey(input: {
   executionTargetKey: string;
   executionTargetIsLocal: boolean;
@@ -1822,14 +1826,14 @@ export function Sidebar() {
     [pinnedSessions, visibleConversationTabs],
   );
   const pinnedWorkspacePaths = useMemo(
-    () => normalizeWorkspacePaths(pinnedSessions.map((session) => session.cwd ?? '')),
+    () => normalizeWorkspacePaths(pinnedSessions.map((session) => getLocalSessionWorkspacePath(session))),
     [pinnedSessions],
   );
   const openWorkspacePaths = useMemo(
     () => normalizeWorkspacePaths([
       draftCwd,
-      ...pinnedSessions.map((session) => session.cwd ?? ''),
-      ...visibleConversationTabs.map((session) => session.cwd ?? ''),
+      ...pinnedSessions.map((session) => getLocalSessionWorkspacePath(session)),
+      ...visibleConversationTabs.map((session) => getLocalSessionWorkspacePath(session)),
     ]),
     [draftCwd, pinnedSessions, visibleConversationTabs],
   );
