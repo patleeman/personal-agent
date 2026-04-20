@@ -32,7 +32,8 @@ const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
-  { id: 'settings-general', label: 'General', summary: 'Defaults, prompt sources, and roots' },
+  { id: 'settings-general', label: 'General', summary: 'Defaults, knowledge base, and roots' },
+  { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
   { id: 'settings-interface', label: 'Interface', summary: 'Saved browser UI state' },
@@ -2582,10 +2583,10 @@ export function SettingsPage() {
 
               <div className="flex flex-col gap-12">
                 <SettingsSection
-                  id="settings-general"
-                  label="General"
-                  description="Workspace defaults, prompt inputs, and other runtime-wide preferences."
-                  className="order-2"
+                  id="settings-skills"
+                  label="Skills"
+                  description="Skill discovery, bundled MCP wrappers, and extra runtime instructions."
+                  className="order-3"
                 >
                   <div className="space-y-0">
                     <SettingsPanel
@@ -2836,7 +2837,16 @@ export function SettingsPage() {
 
                 {instructionFilesSaveError && <p className="text-[12px] text-danger">{instructionFilesSaveError}</p>}
               </SettingsPanel>
+            </div>
+          </SettingsSection>
 
+          <SettingsSection
+            id="settings-general"
+            label="General"
+            description="Workspace defaults, knowledge base, and conversation behavior."
+            className="order-2"
+          >
+            <div className="space-y-0">
               <SettingsPanel
                 title="Default model"
                 description="Used for new chats and runs unless a model is picked explicitly."

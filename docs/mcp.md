@@ -85,7 +85,7 @@ Use the same server shape as `mcp_servers.json`:
 
 That keeps the workflow instructions and MCP wrapper definition together in one skill package while still letting explicit user config override server details when needed.
 
-The Settings page also surfaces bundled wrappers so you can see which active skills are contributing MCP servers and which ones were overridden by explicit config.
+The Settings page’s Skills section also surfaces bundled wrappers so you can see which active skills are contributing MCP servers and which ones were overridden by explicit config.
 
 ## Practical flow
 

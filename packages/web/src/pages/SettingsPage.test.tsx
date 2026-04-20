@@ -289,8 +289,10 @@ describe('SettingsPage', () => {
     expect(html).toContain('>Settings<');
     expect(html).toContain('aria-label="Settings sections"');
     expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-general"'));
-    expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
+    expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
+    expect(html.indexOf('href="#settings-skills"')).toBeLessThan(html.indexOf('href="#settings-providers"'));
     expect(html).toContain('Theme');
+    expect(html).toContain('Skills');
     expect(html).toContain('Skill folders');
     expect(html).toContain('Knowledge base');
     expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
@@ -307,6 +309,8 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
     expect(html).toContain('Theme and other visual preferences for the web UI.');
+    expect(html).toContain('Workspace defaults, knowledge base, and conversation behavior.');
+    expect(html).toContain('Skill discovery, bundled MCP wrappers, and extra runtime instructions.');
     expect(html).toContain('Load extra skill folders alongside the root skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
