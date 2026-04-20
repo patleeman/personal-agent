@@ -216,6 +216,20 @@ export class DesktopWindowController {
   }
 
   async openMainWindow(pathname = '/'): Promise<void> {
+    if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+      const currentUrl = this.mainWindow.webContents.getURL();
+      if (currentUrl) {
+        try {
+          const targetUrl = new URL(pathname, currentUrl).toString();
+          await this.loadWindowUrl(this.mainWindow, targetUrl);
+          return;
+        } catch {
+          // Fall back to resolving the route through the host manager when the
+          // existing window is still on a non-app URL like the startup error page.
+        }
+      }
+    }
+
     await this.openWindowForHost(this.hostManager.getActiveHostId(), pathname, 'main');
   }
 

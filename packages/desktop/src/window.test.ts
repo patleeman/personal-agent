@@ -202,6 +202,28 @@ describe('DesktopWindowController', () => {
     expect(window.focus).toHaveBeenCalledTimes(1);
   });
 
+  it('reuses the existing main window route without re-resolving the host base URL', async () => {
+    const controller = new DesktopWindowController({
+      getActiveHostId: vi.fn(() => {
+        throw new Error('should not re-resolve the active host');
+      }),
+      getHostBaseUrl: vi.fn(() => {
+        throw new Error('should not re-resolve the host base URL');
+      }),
+    } as never);
+    const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
+
+    (controller as unknown as { mainWindow: typeof window }).mainWindow = window;
+
+    await controller.openMainWindow('/settings');
+
+    expect(window.webContents.send).toHaveBeenCalledWith('personal-agent-desktop:navigate', {
+      route: '/settings',
+      replace: false,
+    });
+    expect(window.loadURL).not.toHaveBeenCalled();
+  });
+
   it('falls back to a full load when the host changes', async () => {
     const controller = new DesktopWindowController({} as never);
     const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
