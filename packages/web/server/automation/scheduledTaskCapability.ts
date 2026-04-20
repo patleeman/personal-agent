@@ -25,6 +25,7 @@ export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadI
   timeoutSeconds?: number | null;
   prompt: string;
   targetType?: string | null;
+  conversationBehavior?: 'steer' | 'followUp' | null;
 }
 
 export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadInput {
@@ -39,6 +40,7 @@ export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadI
   timeoutSeconds?: number | null;
   prompt?: string;
   targetType?: string | null;
+  conversationBehavior?: 'steer' | 'followUp' | null;
 }
 
 function summarizePrompt(value: string): string {
@@ -63,6 +65,7 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
     cwd: task.cwd,
     threadConversationId: threadDetail.threadConversationId,
     threadTitle: threadDetail.threadTitle,
+    conversationBehavior: task.conversationBehavior,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     lastSuccessAt: runtime?.lastSuccessAt,
@@ -88,6 +91,7 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     cwd: metadata.cwd,
     timeoutSeconds: metadata.timeoutSeconds,
     prompt: metadata.promptBody,
+    conversationBehavior: task.conversationBehavior,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     ...buildScheduledTaskThreadDetail(task),
@@ -144,6 +148,7 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt ?? '',
     targetType,
+    conversationBehavior: targetType === 'conversation' ? input.conversationBehavior : null,
   });
 
   const task = applyScheduledTaskThreadBinding(createdTask.id, {
@@ -194,6 +199,7 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt,
     targetType,
+    conversationBehavior: targetType === 'conversation' ? input.conversationBehavior : null,
   });
 
   const task = applyScheduledTaskThreadBinding(updatedTask.id, {

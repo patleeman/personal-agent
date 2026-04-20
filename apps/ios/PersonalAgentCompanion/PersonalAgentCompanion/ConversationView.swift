@@ -36,13 +36,36 @@ struct ConversationScreen: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
                     if viewModel.blocks.isEmpty && !viewModel.isLoading {
-                        EmptyConversationState(meta: viewModel.sessionMeta)
+                        EmptyConversationState(
+                            meta: viewModel.sessionMeta,
+                            canStartSimulation: viewModel.canSimulateRunningConversation && !viewModel.isStreaming,
+                            startSimulation: {
+                                viewModel.startRunningConversationSimulation()
+                            }
+                        )
+                    }
+
+                    if let presenceState = viewModel.presenceState,
+                       PresenceBannerView.shouldDisplay(state: presenceState, installationSurfaceId: viewModel.installationSurfaceId) {
+                        PresenceBannerView(
+                            state: presenceState,
+                            installationSurfaceId: viewModel.installationSurfaceId,
+                            onTakeOver: viewModel.takeOver
+                        )
+                    }
+
+                    if !viewModel.queuedSteeringPrompts.isEmpty || !viewModel.queuedFollowUpPrompts.isEmpty {
+                        QueuedPromptsShelf(viewModel: viewModel)
+                    }
+
+                    if !viewModel.parallelJobs.isEmpty {
+                        ParallelJobsShelf(viewModel: viewModel, onOpenConversation: onOpenConversation)
                     }
 
                     ForEach(transcriptItems) { item in
                         switch item {
                         case .message(let block):
-                            ConversationBlockView(block: block)
+                            ConversationBlockView(block: block, viewModel: viewModel)
                                 .id(item.id)
                         case .traceCluster(let cluster):
                             TraceClusterView(cluster: cluster, live: isLiveTraceCluster(cluster))
@@ -85,6 +108,13 @@ struct ConversationScreen: View {
                                 viewModel.takeOver()
                             } label: {
                                 Label("Take over here", systemImage: "hand.raised")
+                            }
+                            if viewModel.canSimulateRunningConversation && !viewModel.isStreaming {
+                                Button {
+                                    viewModel.startRunningConversationSimulation()
+                                } label: {
+                                    Label("Start simulated run", systemImage: "bolt.horizontal.circle")
+                                }
                             }
                             Button {
                                 Task {
@@ -182,7 +212,14 @@ struct ConversationScreen: View {
                 }
             }
             .sheet(isPresented: $showingCwdEditor) {
-                ConversationCwdEditorView(cwd: $cwdText) {
+                ConversationCwdEditorView(
+                    cwd: $cwdText,
+                    workspacePaths: viewModel.workspacePaths,
+                    remoteTargetId: viewModel.currentExecutionTargetId == "local" ? nil : viewModel.currentExecutionTargetId,
+                    browseRemote: { targetId, path in
+                        await viewModel.readRemoteDirectory(targetId: targetId, path: path)
+                    }
+                ) {
                     if let result = await viewModel.changeWorkingDirectory(cwdText), result.changed {
                         showingCwdEditor = false
                         onOpenConversation(result.id)
@@ -217,7 +254,7 @@ struct ConversationScreen: View {
                     await importPromptPhotos(newItems)
                 }
             }
-            .onAppear {
+            .task(id: viewModel.conversationId) {
                 viewModel.start()
             }
             .onDisappear {
@@ -522,8 +559,11 @@ private func buildTranscriptRenderItems(_ blocks: [DisplayBlock]) -> [Transcript
 
 private func isTraceConversationBlock(_ block: DisplayBlock) -> Bool {
     switch block.type {
-    case "thinking", "tool_use":
+    case "thinking":
         return true
+    case "tool_use":
+        let userFacingTools: Set<String> = ["artifact", "checkpoint", "ask_user_question"]
+        return !userFacingTools.contains(block.tool?.nilIfBlank ?? "")
     default:
         return false
     }
@@ -1014,6 +1054,7 @@ private struct TranscriptSectionLabel: View {
 
 private struct ConversationBlockView: View {
     let block: DisplayBlock
+    let viewModel: ConversationViewModel?
 
     private var isUser: Bool { block.type == "user" }
     private var showsHeader: Bool { block.type != "user" && block.type != "text" }
@@ -1075,17 +1116,23 @@ private struct ConversationBlockView: View {
                 .foregroundStyle(CompanionTheme.textSecondary)
                 .textSelection(.enabled)
         case "tool_use":
-            if let output = block.output?.nilIfBlank {
-                Text(output)
-                    .font(.footnote.monospaced())
-                    .foregroundStyle(CompanionTheme.textPrimary)
-                    .textSelection(.enabled)
-            }
-            if let message = block.message?.nilIfBlank {
-                Text(message)
-                    .font(.footnote)
-                    .foregroundStyle(.red)
-                    .textSelection(.enabled)
+            if block.tool == "ask_user_question", let viewModel, let presentation = readAskUserQuestionPresentation(block) {
+                AskUserQuestionCard(block: block, presentation: presentation, onSubmit: { reply in
+                    viewModel.submitPlainPrompt(reply)
+                })
+            } else {
+                if let output = block.output?.nilIfBlank {
+                    Text(output)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(CompanionTheme.textPrimary)
+                        .textSelection(.enabled)
+                }
+                if let message = block.message?.nilIfBlank {
+                    Text(message)
+                        .font(.footnote)
+                        .foregroundStyle(.red)
+                        .textSelection(.enabled)
+                }
             }
         case "context":
             MarkdownText(block.text ?? "")
@@ -1167,9 +1214,398 @@ private struct ConversationBlockView: View {
     }
 }
 
+private struct PresenceBannerView: View {
+    let state: LiveSessionPresenceState
+    let installationSurfaceId: String
+    let onTakeOver: () -> Void
+
+    static func shouldDisplay(state: LiveSessionPresenceState, installationSurfaceId: String) -> Bool {
+        if let controller = state.controllerSurfaceId?.nilIfBlank, controller != installationSurfaceId {
+            return true
+        }
+        return state.surfaces.count > 1
+    }
+
+    private var controllingHere: Bool {
+        state.controllerSurfaceId == installationSurfaceId
+    }
+
+    private var controllingElsewhere: Bool {
+        if let controller = state.controllerSurfaceId?.nilIfBlank {
+            return controller != installationSurfaceId
+        }
+        return false
+    }
+
+    private var summary: String {
+        if controllingHere {
+            return state.surfaces.count > 1
+                ? "This phone controls the conversation. \(state.surfaces.count) surfaces are connected."
+                : "This phone controls the conversation."
+        }
+        if controllingElsewhere {
+            return state.surfaces.count > 1
+                ? "Another surface controls the conversation. \(state.surfaces.count) surfaces are connected."
+                : "Another surface controls the conversation."
+        }
+        return state.surfaces.count == 1
+            ? "1 surface is connected."
+            : "\(state.surfaces.count) surfaces are connected."
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: controllingHere ? "hand.raised.fill" : "person.2")
+                .foregroundStyle(controllingElsewhere ? .orange : CompanionTheme.accent)
+            Text(summary)
+                .font(.footnote)
+                .foregroundStyle(CompanionTheme.textSecondary)
+            Spacer()
+            if controllingElsewhere {
+                Button("Take over") {
+                    onTakeOver()
+                }
+                .font(.footnote.weight(.semibold))
+            }
+        }
+        .padding(12)
+        .background(controllingElsewhere ? Color.orange.opacity(0.08) : CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(controllingElsewhere ? Color.orange.opacity(0.18) : CompanionTheme.panelBorder, lineWidth: 1)
+        }
+    }
+}
+
+private struct QueuedPromptsShelf: View {
+    @ObservedObject var viewModel: ConversationViewModel
+
+    private struct Item: Identifiable {
+        let id: String
+        let behavior: String
+        let index: Int
+        let preview: QueuedPromptPreview
+    }
+
+    private var items: [Item] {
+        let steering = viewModel.queuedSteeringPrompts.enumerated().map { Item(id: "steer-\($0.element.id)", behavior: "steer", index: $0.offset, preview: $0.element) }
+        let followUp = viewModel.queuedFollowUpPrompts.enumerated().map { Item(id: "followUp-\($0.element.id)", behavior: "followUp", index: $0.offset, preview: $0.element) }
+        return steering + followUp
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Queued")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CompanionTheme.textSecondary)
+            ForEach(items) { item in
+                HStack(alignment: .top, spacing: 10) {
+                    Text(item.behavior == "steer" ? "Steer" : "Follow up")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(item.behavior == "steer" ? .orange : .teal)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background((item.behavior == "steer" ? Color.orange : Color.teal).opacity(0.12), in: Capsule())
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(previewText(item.preview.text, maxLength: 160))
+                            .font(.footnote)
+                            .foregroundStyle(CompanionTheme.textPrimary)
+                        if item.preview.imageCount > 0 {
+                            Text("\(item.preview.imageCount) image\(item.preview.imageCount == 1 ? "" : "s")")
+                                .font(.caption2)
+                                .foregroundStyle(CompanionTheme.textDim)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    if item.preview.restorable != false {
+                        Button("Restore") {
+                            viewModel.restoreQueuedPrompt(behavior: item.behavior, index: item.index, previewId: item.preview.id)
+                        }
+                        .font(.caption.weight(.semibold))
+                    }
+                }
+                .padding(12)
+                .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                }
+            }
+        }
+    }
+}
+
+private struct ParallelJobsShelf: View {
+    @ObservedObject var viewModel: ConversationViewModel
+    let onOpenConversation: (String) -> Void
+
+    private func statusLabel(_ status: String) -> String {
+        switch status {
+        case "running": return "Running"
+        case "ready": return "Ready"
+        case "failed": return "Failed"
+        case "importing": return "Importing"
+        default: return status.capitalized
+        }
+    }
+
+    private func statusTint(_ status: String) -> Color {
+        switch status {
+        case "running": return .blue
+        case "ready": return CompanionTheme.accent
+        case "failed": return .red
+        case "importing": return .orange
+        default: return CompanionTheme.textSecondary
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Parallel")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(CompanionTheme.textSecondary)
+            ForEach(viewModel.parallelJobs) { job in
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Text(statusLabel(job.status))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(statusTint(job.status))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(statusTint(job.status).opacity(0.12), in: Capsule())
+                        Text(previewText(job.prompt, maxLength: 160))
+                            .font(.footnote)
+                            .foregroundStyle(CompanionTheme.textPrimary)
+                        Spacer()
+                    }
+                    if let preview = job.resultPreview?.nilIfBlank {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+                    if let error = job.error?.nilIfBlank {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    HStack(spacing: 14) {
+                        if job.status == "ready" || job.status == "failed" {
+                            Button("Import") { viewModel.manageParallelJob(job.id, action: "importNow") }
+                                .font(.caption.weight(.semibold))
+                        }
+                        if job.status == "running" {
+                            Button("Cancel") { viewModel.manageParallelJob(job.id, action: "cancel") }
+                                .font(.caption.weight(.semibold))
+                        } else if job.status != "importing" {
+                            Button("Skip") { viewModel.manageParallelJob(job.id, action: "skip") }
+                                .font(.caption.weight(.semibold))
+                        }
+                        Button("Open") { onOpenConversation(job.childConversationId) }
+                            .font(.caption.weight(.semibold))
+                    }
+                }
+                .padding(12)
+                .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                }
+            }
+        }
+    }
+}
+
+private typealias AskUserQuestionAnswers = [String: [String]]
+
+private struct AskUserQuestionOption: Identifiable {
+    let value: String
+    let label: String
+    let details: String?
+    var id: String { value }
+}
+
+private struct AskUserQuestionPrompt: Identifiable {
+    let id: String
+    let label: String
+    let details: String?
+    let style: String
+    let options: [AskUserQuestionOption]
+}
+
+private struct AskUserQuestionPresentation {
+    let details: String?
+    let questions: [AskUserQuestionPrompt]
+}
+
+private struct AskUserQuestionCard: View {
+    let block: DisplayBlock
+    let presentation: AskUserQuestionPresentation
+    let onSubmit: (String) -> Void
+
+    @State private var answers: AskUserQuestionAnswers = [:]
+
+    private var canSubmit: Bool {
+        presentation.questions.allSatisfy { !(answers[$0.id] ?? []).isEmpty }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let details = presentation.details?.nilIfBlank {
+                Text(details)
+                    .font(.footnote)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+            ForEach(presentation.questions) { question in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(question.label)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textPrimary)
+                    if let details = question.details?.nilIfBlank {
+                        Text(details)
+                            .font(.caption)
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+                    ForEach(question.options) { option in
+                        Button {
+                            toggle(option: option.value, for: question)
+                        } label: {
+                            HStack(spacing: 10) {
+                                Image(systemName: isSelected(option.value, for: question)
+                                    ? (question.style == "check" ? "checkmark.square.fill" : "largecircle.fill.circle")
+                                    : (question.style == "check" ? "square" : "circle"))
+                                    .foregroundStyle(CompanionTheme.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(option.label)
+                                        .foregroundStyle(CompanionTheme.textPrimary)
+                                    if let details = option.details?.nilIfBlank {
+                                        Text(details)
+                                            .font(.caption)
+                                            .foregroundStyle(CompanionTheme.textSecondary)
+                                    }
+                                }
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            Button("Submit") {
+                onSubmit(buildAskUserQuestionReplyText(presentation: presentation, answers: answers))
+            }
+            .disabled(!canSubmit)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func isSelected(_ value: String, for question: AskUserQuestionPrompt) -> Bool {
+        answers[question.id]?.contains(value) == true
+    }
+
+    private func toggle(option value: String, for question: AskUserQuestionPrompt) {
+        if question.style == "check" {
+            var selected = answers[question.id] ?? []
+            if selected.contains(value) {
+                selected.removeAll { $0 == value }
+            } else {
+                selected.append(value)
+            }
+            answers[question.id] = selected
+        } else {
+            answers[question.id] = [value]
+        }
+    }
+}
+
+private func readAskUserQuestionPresentation(_ block: DisplayBlock) -> AskUserQuestionPresentation? {
+    guard block.tool == "ask_user_question" else {
+        return nil
+    }
+    if let details = normalizeAskUserQuestionPresentation(from: block.details) {
+        return details
+    }
+    return normalizeAskUserQuestionPresentation(from: block.input)
+}
+
+private func normalizeAskUserQuestionPresentation(from value: JSONValue?) -> AskUserQuestionPresentation? {
+    guard let object = value?.objectValue else {
+        return nil
+    }
+    if let questionsValue = object["questions"]?.arrayValue {
+        let details = object["details"]?.stringValue
+        let questions = questionsValue.enumerated().compactMap { index, entry -> AskUserQuestionPrompt? in
+            guard let questionObject = entry.objectValue else { return nil }
+            let label = questionObject["label"]?.stringValue ?? questionObject["question"]?.stringValue
+            guard let label, let options = questionObject["options"]?.arrayValue else { return nil }
+            let normalizedOptions = options.compactMap { option -> AskUserQuestionOption? in
+                if let string = option.stringValue?.nilIfBlank {
+                    return AskUserQuestionOption(value: string, label: string, details: nil)
+                }
+                guard let optionObject = option.objectValue else { return nil }
+                let value = optionObject["value"]?.stringValue ?? optionObject["label"]?.stringValue
+                guard let value else { return nil }
+                return AskUserQuestionOption(
+                    value: value,
+                    label: optionObject["label"]?.stringValue ?? value,
+                    details: optionObject["details"]?.stringValue ?? optionObject["description"]?.stringValue
+                )
+            }
+            guard !normalizedOptions.isEmpty else { return nil }
+            return AskUserQuestionPrompt(
+                id: questionObject["id"]?.stringValue ?? "question-\(index + 1)",
+                label: label,
+                details: questionObject["details"]?.stringValue ?? questionObject["description"]?.stringValue,
+                style: questionObject["style"]?.stringValue == "check" || questionObject["style"]?.stringValue == "checkbox" ? "check" : "radio",
+                options: normalizedOptions
+            )
+        }
+        return questions.isEmpty ? nil : AskUserQuestionPresentation(details: details, questions: questions)
+    }
+    if let question = object["question"]?.stringValue ?? object["label"]?.stringValue,
+       let options = object["options"]?.arrayValue {
+        let normalizedOptions = options.compactMap { option -> AskUserQuestionOption? in
+            if let string = option.stringValue?.nilIfBlank {
+                return AskUserQuestionOption(value: string, label: string, details: nil)
+            }
+            guard let optionObject = option.objectValue else { return nil }
+            let value = optionObject["value"]?.stringValue ?? optionObject["label"]?.stringValue
+            guard let value else { return nil }
+            return AskUserQuestionOption(value: value, label: optionObject["label"]?.stringValue ?? value, details: optionObject["details"]?.stringValue)
+        }
+        return normalizedOptions.isEmpty ? nil : AskUserQuestionPresentation(
+            details: object["details"]?.stringValue,
+            questions: [AskUserQuestionPrompt(id: "question-1", label: question, details: object["details"]?.stringValue, style: "radio", options: normalizedOptions)]
+        )
+    }
+    return nil
+}
+
+private func buildAskUserQuestionReplyText(presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) -> String {
+    let entries = presentation.questions.compactMap { question -> String? in
+        let selectedValues = answers[question.id] ?? []
+        guard !selectedValues.isEmpty else { return nil }
+        let labels = question.options.filter { selectedValues.contains($0.value) }.map(\.label)
+        if presentation.questions.count == 1 && question.style == "radio" && labels.count == 1 {
+            return labels[0]
+        }
+        return "\(question.label): \(labels.joined(separator: ", "))"
+    }
+    if entries.count == 1 {
+        return entries[0]
+    }
+    return (["Answers:"] + entries.map { "- \($0)" }).joined(separator: "\n")
+}
+
 private extension JSONValue {
     var objectValue: [String: JSONValue]? {
         guard case .object(let value) = self else {
+            return nil
+        }
+        return value
+    }
+
+    var arrayValue: [JSONValue]? {
+        guard case .array(let value) = self else {
             return nil
         }
         return value
@@ -1249,6 +1685,8 @@ private struct RenameConversationView: View {
 
 private struct EmptyConversationState: View {
     let meta: SessionMeta?
+    let canStartSimulation: Bool
+    let startSimulation: () -> Void
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1258,9 +1696,23 @@ private struct EmptyConversationState: View {
             Text("No transcript yet")
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(CompanionTheme.textPrimary)
-            Text("Send a prompt to start this conversation.")
+            Text(canStartSimulation ? "Send a prompt or start a simulated running turn to test queued prompt behavior." : "Send a prompt to start this conversation.")
                 .font(.body)
                 .foregroundStyle(CompanionTheme.textSecondary)
+                .multilineTextAlignment(.center)
+            if canStartSimulation {
+                Button {
+                    startSimulation()
+                } label: {
+                    Label("Start simulated run", systemImage: "bolt.horizontal.circle")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(CompanionTheme.accent, in: Capsule())
+                        .foregroundStyle(.white)
+                }
+                .padding(.top, 6)
+            }
             if let meta {
                 VStack(spacing: 4) {
                     Text(meta.model)
@@ -1285,14 +1737,39 @@ private struct EmptyConversationState: View {
 private struct ConversationCwdEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var cwd: String
+    let workspacePaths: [String]
+    let remoteTargetId: String?
+    let browseRemote: (String, String?) async -> CompanionRemoteDirectoryListing?
     let onSave: () async -> Void
+
+    @State private var browserPath: String?
+    @State private var showingRemoteBrowser = false
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Working directory", text: $cwd)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                if !workspacePaths.isEmpty {
+                    Section("Suggested") {
+                        ForEach(workspacePaths, id: \.self) { path in
+                            Button(path) {
+                                cwd = path
+                            }
+                            .foregroundStyle(cwd == path ? CompanionTheme.accent : CompanionTheme.textPrimary)
+                        }
+                    }
+                }
+
+                Section("Working directory") {
+                    TextField("Working directory", text: $cwd)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                    if let remoteTargetId {
+                        Button("Browse remote directories") {
+                            browserPath = cwd.trimmed.nilIfBlank
+                            showingRemoteBrowser = true
+                        }
+                    }
+                }
             }
             .navigationTitle("Change cwd")
             .toolbar {
@@ -1309,7 +1786,77 @@ private struct ConversationCwdEditorView: View {
                     .disabled(cwd.trimmed.isEmpty)
                 }
             }
+            .sheet(isPresented: $showingRemoteBrowser) {
+                if let remoteTargetId {
+                    RemoteDirectoryBrowserView(
+                        targetId: remoteTargetId,
+                        initialPath: browserPath,
+                        browse: browseRemote,
+                        onSelect: { selectedPath in
+                            cwd = selectedPath
+                            showingRemoteBrowser = false
+                        }
+                    )
+                }
+            }
         }
+    }
+}
+
+private struct RemoteDirectoryBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
+    let targetId: String
+    let initialPath: String?
+    let browse: (String, String?) async -> CompanionRemoteDirectoryListing?
+    let onSelect: (String) -> Void
+
+    @State private var listing: CompanionRemoteDirectoryListing?
+    @State private var loading = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let listing {
+                    Section {
+                        Button("Use \(listing.path)") {
+                            onSelect(listing.path)
+                        }
+                    }
+                    if let parent = listing.parent?.nilIfBlank {
+                        Section {
+                            Button("..") {
+                                Task { await load(path: parent) }
+                            }
+                        }
+                    }
+                    Section(listing.path) {
+                        ForEach(listing.entries.filter({ $0.isDir })) { entry in
+                            Button(entry.name) {
+                                Task { await load(path: entry.path) }
+                            }
+                        }
+                    }
+                } else if loading {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("Remote directories")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .task {
+                await load(path: initialPath)
+            }
+        }
+    }
+
+    private func load(path: String?) async {
+        loading = true
+        listing = await browse(targetId, path)
+        loading = false
     }
 }
 
@@ -1322,11 +1869,26 @@ private struct ConversationModelPreferencesView: View {
     @State private var isLoading = false
 
     private var modelOptions: [CompanionPickerOption] {
-        companionModelOptions(current: model)
+        if let models = viewModel.modelState?.models, !models.isEmpty {
+            var options = models.map { CompanionPickerOption(value: $0.id, label: $0.name) }
+            if let current = model.nilIfBlank, !options.contains(where: { $0.value == current }) {
+                options.append(CompanionPickerOption(value: current, label: current))
+            }
+            return options
+        }
+        return companionModelOptions(current: model)
     }
 
     private var thinkingLevelOptions: [CompanionPickerOption] {
         companionThinkingLevelOptions(current: thinkingLevel)
+    }
+
+    private var selectedModel: CompanionModelInfo? {
+        viewModel.modelState?.models.first(where: { $0.id == model })
+    }
+
+    private var supportsFastMode: Bool {
+        companionSelectableServiceTierOptions(for: selectedModel).contains(where: { $0.value == "priority" })
     }
 
     var body: some View {
@@ -1347,7 +1909,9 @@ private struct ConversationModelPreferencesView: View {
                     }
                     .pickerStyle(.menu)
 
-                    Toggle("Fast mode", isOn: $fastModeEnabled)
+                    if supportsFastMode {
+                        Toggle("Fast mode", isOn: $fastModeEnabled)
+                    }
                 }
             }
             .navigationTitle("Model preferences")

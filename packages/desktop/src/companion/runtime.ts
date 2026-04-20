@@ -1,4 +1,5 @@
 import { Buffer } from 'node:buffer';
+import { randomUUID } from 'node:crypto';
 import type {
   CompanionAttachmentAssetInput,
   CompanionAttachmentCreateInput,
@@ -11,16 +12,21 @@ import type {
   CompanionConversationDuplicateInput,
   CompanionConversationExecutionTargetChangeInput,
   CompanionConversationModelPreferencesUpdateInput,
+  CompanionConversationParallelJobInput,
   CompanionConversationPromptInput,
+  CompanionConversationQueueRestoreInput,
   CompanionConversationRenameInput,
   CompanionConversationResumeInput,
   CompanionConversationSubscriptionInput,
   CompanionConversationTabsUpdateInput,
   CompanionConversationTakeoverInput,
   CompanionDurableRunLogInput,
+  CompanionRemoteDirectoryInput,
   CompanionRuntime,
   CompanionScheduledTaskInput,
   CompanionScheduledTaskUpdateInput,
+  CompanionSshTargetSaveInput,
+  CompanionSshTargetTestInput,
   CompanionSurfaceType,
 } from '@personal-agent/daemon';
 import type { DesktopApiStreamEvent } from '../hosts/types.js';
@@ -182,6 +188,51 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       };
     },
 
+    async readModels() {
+      const localController = hostManager.getHostController('local');
+      if (localController.readModels) {
+        return localController.readModels();
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: '/api/models',
+      });
+    },
+
+    async listSshTargets() {
+      return hostManager.getConnectionsState();
+    },
+
+    async saveSshTarget(input: CompanionSshTargetSaveInput) {
+      const id = input.id?.trim() || `ssh-${randomUUID().slice(0, 8)}`;
+      const record = {
+        id,
+        label: input.label.trim(),
+        kind: 'ssh' as const,
+        sshTarget: input.sshTarget.trim(),
+      };
+      await hostManager.saveHost(record);
+      return hostManager.getConnectionsState();
+    },
+
+    async deleteSshTarget(targetId: string) {
+      await hostManager.deleteHost(targetId);
+      return hostManager.getConnectionsState();
+    },
+
+    async testSshTarget(input: CompanionSshTargetTestInput) {
+      return hostManager.testSshConnection(input);
+    },
+
+    async readRemoteDirectory(input: CompanionRemoteDirectoryInput) {
+      const controller = hostManager.getHostController(input.executionTargetId);
+      if (!controller.readDirectory) {
+        throw new Error('Remote directory browsing is unavailable for this execution target.');
+      }
+      return controller.readDirectory(input.path);
+    },
+
     async readConversationBootstrap(input: CompanionConversationBootstrapInput) {
       const localController = hostManager.getHostController('local');
       const query = toQuery({
@@ -283,6 +334,18 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
     },
 
     async parallelPromptConversation(input: CompanionConversationPromptInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.submitLiveSessionParallelPrompt) {
+        return localController.submitLiveSessionParallelPrompt({
+          conversationId: input.conversationId,
+          ...(input.text !== undefined ? { text: input.text } : {}),
+          ...(input.images ? { images: input.images } : {}),
+          ...(input.attachmentRefs ? { attachmentRefs: input.attachmentRefs } : {}),
+          ...(input.contextMessages ? { contextMessages: input.contextMessages } : {}),
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        });
+      }
+
       return invokeDesktopApi(hostManager, {
         method: 'POST',
         path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/parallel-prompt`,
@@ -291,6 +354,40 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
           ...(input.images ? { images: input.images } : {}),
           ...(input.attachmentRefs ? { attachmentRefs: input.attachmentRefs } : {}),
           ...(input.contextMessages ? { contextMessages: input.contextMessages } : {}),
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
+    async restoreConversationQueuePrompt(input: CompanionConversationQueueRestoreInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.restoreQueuedLiveSessionMessage) {
+        return localController.restoreQueuedLiveSessionMessage(input);
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/dequeue`,
+        body: {
+          behavior: input.behavior,
+          index: input.index,
+          ...(input.previewId ? { previewId: input.previewId } : {}),
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
+    async manageConversationParallelJob(input: CompanionConversationParallelJobInput) {
+      const localController = hostManager.getHostController('local');
+      if (localController.manageLiveSessionParallelJob) {
+        return localController.manageLiveSessionParallelJob(input);
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/live-sessions/${encodeURIComponent(input.conversationId)}/parallel-jobs/${encodeURIComponent(input.jobId)}`,
+        body: {
+          action: input.action,
           ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
         },
       });

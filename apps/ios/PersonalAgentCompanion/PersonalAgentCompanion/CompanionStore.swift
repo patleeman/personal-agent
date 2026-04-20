@@ -326,6 +326,8 @@ final class HostSessionModel: ObservableObject {
     @Published private(set) var sections: [ConversationListSection] = []
     @Published private(set) var sessions: [String: SessionMeta] = [:]
     @Published private(set) var executionTargets: [ExecutionTargetSummary] = []
+    @Published private(set) var modelState: CompanionModelState?
+    @Published private(set) var sshTargets: [CompanionSshTargetRecord] = []
     @Published private(set) var isLoading = false
     @Published var errorMessage: String?
 
@@ -369,8 +371,15 @@ final class HostSessionModel: ObservableObject {
             defer { isLoading = false }
             do {
                 try await client.connect()
-                let state = try await client.listConversations()
+                async let conversationState = client.listConversations()
+                async let models = client.readModels()
+                async let sshTargetState = client.listSshTargets()
+                let state = try await conversationState
+                let nextModels = try await models
+                let nextSshTargets = try await sshTargetState
                 errorMessage = nil
+                modelState = nextModels
+                sshTargets = nextSshTargets.hosts
                 applyConversationListState(state)
             } catch {
                 errorMessage = error.localizedDescription
@@ -384,7 +393,9 @@ final class HostSessionModel: ObservableObject {
             conversationId: conversationId,
             installationSurfaceId: installationSurfaceId,
             initialSession: initialSession,
-            initialExecutionTargets: executionTargets
+            initialExecutionTargets: executionTargets,
+            initialWorkspacePaths: workspacePathOptions,
+            initialModelState: modelState
         )
     }
 
@@ -553,6 +564,59 @@ final class HostSessionModel: ObservableObject {
         }
     }
 
+    func listSshTargets() async -> [CompanionSshTargetRecord] {
+        do {
+            let state = try await client.listSshTargets()
+            sshTargets = state.hosts
+            return state.hosts
+        } catch {
+            errorMessage = error.localizedDescription
+            return []
+        }
+    }
+
+    func saveSshTarget(id: String?, label: String, sshTarget: String) async -> [CompanionSshTargetRecord] {
+        do {
+            let state = try await client.saveSshTarget(id: id, label: label, sshTarget: sshTarget)
+            sshTargets = state.hosts
+            executionTargets = [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")] + state.hosts.map { ExecutionTargetSummary(id: $0.id, label: $0.label, kind: "ssh") }
+            return state.hosts
+        } catch {
+            errorMessage = error.localizedDescription
+            return sshTargets
+        }
+    }
+
+    func deleteSshTarget(_ targetId: String) async -> [CompanionSshTargetRecord] {
+        do {
+            let state = try await client.deleteSshTarget(targetId: targetId)
+            sshTargets = state.hosts
+            executionTargets = [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")] + state.hosts.map { ExecutionTargetSummary(id: $0.id, label: $0.label, kind: "ssh") }
+            return state.hosts
+        } catch {
+            errorMessage = error.localizedDescription
+            return sshTargets
+        }
+    }
+
+    func testSshTarget(_ sshTarget: String) async -> CompanionSshTargetTestResult? {
+        do {
+            return try await client.testSshTarget(sshTarget: sshTarget)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func readRemoteDirectory(targetId: String, path: String?) async -> CompanionRemoteDirectoryListing? {
+        do {
+            return try await client.readRemoteDirectory(targetId: targetId, path: path)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func readDeviceAdminState() async -> CompanionDeviceAdminState? {
         do {
             return try await client.readDeviceAdminState()
@@ -677,9 +741,14 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var sessionMeta: SessionMeta?
     @Published private(set) var blocks: [DisplayBlock] = []
     @Published private(set) var executionTargets: [ExecutionTargetSummary]
+    @Published private(set) var workspacePaths: [String]
+    @Published private(set) var modelState: CompanionModelState?
     @Published private(set) var currentExecutionTargetId: String = "local"
     @Published private(set) var savedAttachments: [ConversationAttachmentSummary] = []
     @Published private(set) var presenceState: LiveSessionPresenceState?
+    @Published private(set) var queuedSteeringPrompts: [QueuedPromptPreview] = []
+    @Published private(set) var queuedFollowUpPrompts: [QueuedPromptPreview] = []
+    @Published private(set) var parallelJobs: [ParallelPromptPreview] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isStreaming = false
     @Published var errorMessage: String?
@@ -692,6 +761,8 @@ final class ConversationViewModel: ObservableObject {
     let installationSurfaceId: String
 
     private let client: CompanionClientProtocol
+    private let autoStartRunningSimulation: Bool
+    private var didAutoStartRunningSimulation = false
     private var streamTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
@@ -702,7 +773,9 @@ final class ConversationViewModel: ObservableObject {
         conversationId: String,
         installationSurfaceId: String,
         initialSession: SessionMeta?,
-        initialExecutionTargets: [ExecutionTargetSummary]
+        initialExecutionTargets: [ExecutionTargetSummary],
+        initialWorkspacePaths: [String] = [],
+        initialModelState: CompanionModelState? = nil
     ) {
         self.client = client
         self.conversationId = conversationId
@@ -710,11 +783,19 @@ final class ConversationViewModel: ObservableObject {
         self.sessionMeta = initialSession
         self.title = initialSession?.title ?? "Conversation"
         self.executionTargets = initialExecutionTargets
+        self.workspacePaths = initialWorkspacePaths
+        self.modelState = initialModelState
         self.currentExecutionTargetId = initialSession?.remoteHostId ?? "local"
+        self.autoStartRunningSimulation = ProcessInfo.processInfo.environment["PA_IOS_AUTO_START_MOCK_RUNNING"] == "1"
+    }
+
+    var canSimulateRunningConversation: Bool {
+        client.supportsRunningConversationSimulation
     }
 
     func start() {
         loadBootstrap()
+        refreshModelState()
         subscribeConversationEvents()
     }
 
@@ -750,6 +831,16 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func refreshModelState() {
+        Task {
+            do {
+                modelState = try await client.readModels()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     func sendPrompt(mode requestedMode: ConversationPromptSubmissionMode? = nil) {
         let currentText = promptText
         let currentImages = promptImages
@@ -773,6 +864,84 @@ final class ConversationViewModel: ObservableObject {
                 promptAttachmentRefs.removeAll()
                 if let notice = resolvedMode.noticeMessage {
                     showComposerNotice(notice)
+                }
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func submitPlainPrompt(_ text: String, mode: ConversationPromptSubmissionMode = .submit) {
+        guard let trimmed = text.trimmed.nilIfBlank else {
+            return
+        }
+        Task {
+            do {
+                try await client.promptConversation(
+                    conversationId: conversationId,
+                    text: trimmed,
+                    images: [],
+                    attachmentRefs: [],
+                    mode: mode,
+                    surfaceId: installationSurfaceId
+                )
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func restoreQueuedPrompt(behavior: String, index: Int, previewId: String?) {
+        Task {
+            do {
+                let restored = try await client.restoreQueuedPrompt(
+                    conversationId: conversationId,
+                    behavior: behavior,
+                    index: index,
+                    previewId: previewId,
+                    surfaceId: installationSurfaceId
+                )
+                let restoredImages = restored.images.map {
+                    PromptImageDraft(
+                        name: $0.name ?? "Image",
+                        mimeType: $0.mimeType,
+                        base64Data: $0.data,
+                        previewData: Data(base64Encoded: $0.data) ?? Data()
+                    )
+                }
+                let parts = [restored.text.trimmed.nilIfBlank, promptText.trimmed.nilIfBlank].compactMap { $0 }
+                promptText = parts.joined(separator: "\n\n")
+                if !restoredImages.isEmpty {
+                    promptImages = restoredImages + promptImages
+                }
+                showComposerNotice("Queued prompt restored.")
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func manageParallelJob(_ jobId: String, action: String) {
+        Task {
+            do {
+                let result = try await client.manageParallelJob(
+                    conversationId: conversationId,
+                    jobId: jobId,
+                    action: action,
+                    surfaceId: installationSurfaceId
+                )
+                switch result.status {
+                case "imported":
+                    showComposerNotice("Parallel response imported.")
+                    loadBootstrap()
+                case "queued":
+                    showComposerNotice("Parallel response queued.")
+                case "skipped":
+                    showComposerNotice("Parallel response skipped.")
+                case "cancelled":
+                    showComposerNotice("Parallel prompt cancelled.")
+                default:
+                    break
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -825,6 +994,19 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func startRunningConversationSimulation() {
+        guard canSimulateRunningConversation, !isStreaming else {
+            return
+        }
+        Task {
+            do {
+                try await client.simulateRunningConversation(conversationId: conversationId)
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
     func duplicateConversation() async -> String? {
         do {
             return try await client.duplicateConversation(conversationId: conversationId)
@@ -843,9 +1025,22 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func readRemoteDirectory(targetId: String, path: String?) async -> CompanionRemoteDirectoryListing? {
+        do {
+            return try await client.readRemoteDirectory(targetId: targetId, path: path)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func loadModelPreferences() async -> ConversationModelPreferencesState? {
         do {
-            return try await client.readConversationModelPreferences(conversationId: conversationId)
+            async let preferences = client.readConversationModelPreferences(conversationId: conversationId)
+            async let models = client.readModels()
+            let state = try await preferences
+            modelState = try await models
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -890,6 +1085,7 @@ final class ConversationViewModel: ObservableObject {
                 )
                 sessionMeta = meta
             }
+            refreshModelState()
             return state
         } catch {
             errorMessage = error.localizedDescription
@@ -1056,12 +1252,33 @@ final class ConversationViewModel: ObservableObject {
         currentExecutionTargetId = sessionMeta?.remoteHostId ?? envelope.bootstrap.sessionDetail?.meta.remoteHostId ?? "local"
         savedAttachments = envelope.attachments?.attachments ?? savedAttachments
         isStreaming = envelope.bootstrap.liveSession.isStreaming ?? false
+        if let currentModel = sessionMeta?.model, let existingModelState = modelState {
+            modelState = CompanionModelState(
+                currentModel: currentModel,
+                currentThinkingLevel: existingModelState.currentThinkingLevel,
+                currentServiceTier: existingModelState.currentServiceTier,
+                models: existingModelState.models
+            )
+        }
 
         if let detail = envelope.bootstrap.sessionDetail {
             blocks = detail.blocks
         } else if let appendOnly = envelope.bootstrap.sessionDetailAppendOnly {
             blocks.append(contentsOf: appendOnly.blocks)
         }
+
+        maybeAutoStartRunningSimulation()
+    }
+
+    private func maybeAutoStartRunningSimulation() {
+        guard autoStartRunningSimulation,
+              canSimulateRunningConversation,
+              !didAutoStartRunningSimulation,
+              !isStreaming else {
+            return
+        }
+        didAutoStartRunningSimulation = true
+        startRunningConversationSimulation()
     }
 
     private func applyEvent(_ event: CompanionConversationEvent) {
@@ -1079,6 +1296,11 @@ final class ConversationViewModel: ObservableObject {
             lastStreamingThinkingBlockId = nil
         case .userMessage(let block):
             blocks.append(block)
+        case .queueState(let steering, let followUp):
+            queuedSteeringPrompts = steering
+            queuedFollowUpPrompts = followUp
+        case .parallelState(let jobs):
+            parallelJobs = jobs
         case .textDelta(let delta):
             appendStreamingDelta(type: "text", delta: delta)
         case .thinkingDelta(let delta):

@@ -323,6 +323,10 @@ export class LocalHostController implements HostController {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    targetType?: 'background-agent' | 'conversation' | null;
+    conversationBehavior?: 'steer' | 'followUp' | null;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.createDesktopScheduledTask(input);
@@ -339,6 +343,10 @@ export class LocalHostController implements HostController {
     cwd?: string | null;
     timeoutSeconds?: number | null;
     prompt?: string;
+    targetType?: 'background-agent' | 'conversation' | null;
+    conversationBehavior?: 'steer' | 'followUp' | null;
+    threadMode?: 'dedicated' | 'existing' | 'none' | null;
+    threadConversationId?: string | null;
   }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.updateDesktopScheduledTask(input);

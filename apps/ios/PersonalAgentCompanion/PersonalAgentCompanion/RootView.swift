@@ -579,7 +579,15 @@ private struct AutomationEditorView: View {
     let onSave: () async -> Void
 
     private var modelOptions: [CompanionPickerOption] {
-        companionModelOptions(current: draft.model, defaultLabel: "Host default")
+        if let models = session.modelState?.models, !models.isEmpty {
+            var options = [CompanionPickerOption(value: "", label: "Host default")]
+            options += models.map { CompanionPickerOption(value: $0.id, label: $0.name) }
+            if let current = draft.model.nilIfBlank, !options.contains(where: { $0.value == current }) {
+                options.append(CompanionPickerOption(value: current, label: current))
+            }
+            return options
+        }
+        return companionModelOptions(current: draft.model, defaultLabel: "Host default")
     }
 
     private var thinkingLevelOptions: [CompanionPickerOption] {
@@ -608,6 +616,11 @@ private struct AutomationEditorView: View {
                         Text("Conversation").tag("conversation")
                     }
                     if draft.targetType == "conversation" {
+                        Picker("Deliver as", selection: $draft.conversationBehavior) {
+                            Text("Default").tag("")
+                            Text("Steer").tag("steer")
+                            Text("Follow up").tag("followUp")
+                        }
                         Picker("Thread", selection: $draft.threadMode) {
                             Text("Dedicated").tag("dedicated")
                             Text("Existing").tag("existing")
@@ -814,6 +827,8 @@ struct HostSettingsView: View {
     @State private var deviceState: CompanionDeviceAdminState?
     @State private var setupState: CompanionSetupState?
     @State private var editingDevice: CompanionPairedDeviceSummary?
+    @State private var editingSshTarget: CompanionSshTargetRecord?
+    @State private var showingNewSshTarget = false
     @State private var isLoading = false
 
     var body: some View {
@@ -828,6 +843,43 @@ struct HostSettingsView: View {
                     }
                     Button("Pair another host") {
                         showingPairHost = true
+                    }
+                }
+
+                Section("Execution targets") {
+                    ForEach(session.sshTargets) { target in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(target.label)
+                                Text(target.sshTarget)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Menu {
+                                Button("Test") {
+                                    Task {
+                                        if let result = await session.testSshTarget(target.sshTarget) {
+                                            appModel.bannerMessage = result.message
+                                        }
+                                    }
+                                }
+                                Button("Edit") {
+                                    editingSshTarget = target
+                                }
+                                Button("Delete", role: .destructive) {
+                                    Task {
+                                        _ = await session.deleteSshTarget(target.id)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    Button("Add SSH target") {
+                        showingNewSshTarget = true
                     }
                 }
 
@@ -912,11 +964,22 @@ struct HostSettingsView: View {
                     deviceState = await session.updatePairedDevice(device.id, label: nextLabel)
                 }
             }
+            .sheet(item: $editingSshTarget) { target in
+                SshTargetEditorView(target: target) { id, label, sshTarget in
+                    _ = await session.saveSshTarget(id: id, label: label, sshTarget: sshTarget)
+                }
+            }
+            .sheet(isPresented: $showingNewSshTarget) {
+                SshTargetEditorView(target: nil) { id, label, sshTarget in
+                    _ = await session.saveSshTarget(id: id, label: label, sshTarget: sshTarget)
+                }
+            }
         }
     }
 
     private func reload() async {
         isLoading = true
+        _ = await session.listSshTargets()
         deviceState = await session.readDeviceAdminState()
         isLoading = false
     }
@@ -952,6 +1015,53 @@ private struct DeviceRenameView: View {
                         }
                     }
                     .disabled(label.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct SshTargetEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    let target: CompanionSshTargetRecord?
+    let onSave: (String?, String, String) async -> Void
+
+    @State private var id: String
+    @State private var label: String
+    @State private var sshTarget: String
+
+    init(target: CompanionSshTargetRecord?, onSave: @escaping (String?, String, String) async -> Void) {
+        self.target = target
+        self.onSave = onSave
+        _id = State(initialValue: target?.id ?? "")
+        _label = State(initialValue: target?.label ?? "")
+        _sshTarget = State(initialValue: target?.sshTarget ?? "")
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Target id", text: $id)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                TextField("Label", text: $label)
+                TextField("patrick@buildbox", text: $sshTarget)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+            }
+            .navigationTitle(target == nil ? "Add SSH target" : "Edit SSH target")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            await onSave(id.nilIfBlank, label, sshTarget)
+                            dismiss()
+                        }
+                    }
+                    .disabled(id.trimmed.isEmpty || label.trimmed.isEmpty || sshTarget.trimmed.isEmpty)
                 }
             }
         }
@@ -1004,6 +1114,7 @@ private extension ScheduledTaskEditorDraft {
         self.timeoutSeconds = detail.timeoutSeconds.map(String.init) ?? ""
         self.prompt = detail.prompt ?? ""
         self.targetType = detail.targetType ?? "background-agent"
+        self.conversationBehavior = detail.conversationBehavior ?? ""
         self.threadMode = detail.threadConversationId == nil ? "dedicated" : "existing"
         self.threadConversationId = detail.threadConversationId ?? ""
     }
@@ -1380,6 +1491,7 @@ struct ConversationLaunchView: View {
 
     @Environment(\.dismiss) private var dismiss
     let executionTargets: [ExecutionTargetSummary]
+    let modelState: CompanionModelState?
     let onSubmit: (ConversationLaunchAction) async -> Void
 
     @State private var mode: Mode = .create
@@ -1388,11 +1500,27 @@ struct ConversationLaunchView: View {
     @State private var isSubmitting = false
 
     private var createModelOptions: [CompanionPickerOption] {
-        companionModelOptions(current: createRequest.model, defaultLabel: "Host default")
+        if let models = modelState?.models, !models.isEmpty {
+            var options = [CompanionPickerOption(value: "", label: "Host default")]
+            options += models.map { CompanionPickerOption(value: $0.id, label: $0.name) }
+            if let current = createRequest.model.nilIfBlank, !options.contains(where: { $0.value == current }) {
+                options.append(CompanionPickerOption(value: current, label: current))
+            }
+            return options
+        }
+        return companionModelOptions(current: createRequest.model, defaultLabel: "Host default")
     }
 
     private var createThinkingLevelOptions: [CompanionPickerOption] {
         companionThinkingLevelOptions(current: createRequest.thinkingLevel, unsetLabel: "Host default")
+    }
+
+    private var selectedCreateModel: CompanionModelInfo? {
+        modelState?.models.first(where: { $0.id == createRequest.model })
+    }
+
+    private var createSupportsFastMode: Bool {
+        companionSelectableServiceTierOptions(for: selectedCreateModel).contains(where: { $0.value == "priority" })
     }
 
     private var createFastModeBinding: Binding<Bool> {
@@ -1431,7 +1559,9 @@ struct ConversationLaunchView: View {
                             }
                         }
                         .pickerStyle(.menu)
-                        Toggle("Fast mode", isOn: createFastModeBinding)
+                        if createSupportsFastMode {
+                            Toggle("Fast mode", isOn: createFastModeBinding)
+                        }
                         Picker("Execution target", selection: $createRequest.executionTargetId) {
                             ForEach(targetOptions) { target in
                                 Text(target.label).tag(target.id)

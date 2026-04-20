@@ -193,7 +193,9 @@ final class PersonalAgentCompanionTests: XCTestCase {
             conversationId: "conv-1",
             installationSurfaceId: "ios-test",
             initialSession: nil,
-            initialExecutionTargets: []
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
         )
 
         model.loadBootstrap()
@@ -212,7 +214,9 @@ final class PersonalAgentCompanionTests: XCTestCase {
             conversationId: "conv-1",
             installationSurfaceId: "ios-test",
             initialSession: nil,
-            initialExecutionTargets: []
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
         )
         model.start()
         try await Task.sleep(for: .milliseconds(50))
@@ -224,6 +228,100 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.promptText.isEmpty)
         XCTAssertGreaterThan(model.blocks.count, 3)
         XCTAssertTrue(model.blocks.contains(where: { $0.type == "user" && $0.text == "Ship the iOS host client" }))
+    }
+
+    func testMockSimulationStartsRunningConversationAndStopsOnAbort() async throws {
+        let client = MockCompanionClient()
+        let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")
+        let conversationId = created.bootstrap.conversationId
+
+        try await client.simulateRunningConversation(conversationId: conversationId)
+        let running = try await client.conversationBootstrap(conversationId: conversationId)
+        XCTAssertEqual(running.bootstrap.liveSession.isStreaming, true)
+        XCTAssertTrue(running.bootstrap.sessionDetail?.blocks.contains(where: { $0.type == "tool_use" }) == true)
+
+        try await client.abortConversation(conversationId: conversationId)
+        let stopped = try await client.conversationBootstrap(conversationId: conversationId)
+        XCTAssertEqual(stopped.bootstrap.liveSession.isStreaming, false)
+        XCTAssertTrue(stopped.bootstrap.sessionDetail?.blocks.contains(where: { $0.title == "Simulation stopped" }) == true)
+    }
+
+    func testQueuedPromptModesWorkDuringMockSimulation() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.startRunningConversationSimulation()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isStreaming
+        }
+
+        model.promptText = "Stay focused on revoked-device handling"
+        model.sendPrompt(mode: .steer)
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.queuedSteeringPrompts.isEmpty
+        }
+
+        model.promptText = "Summarize the server diff after this turn"
+        model.sendPrompt(mode: .followUp)
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.queuedFollowUpPrompts.isEmpty
+        }
+
+        model.promptText = "Investigate the build failure in parallel"
+        model.sendPrompt(mode: .parallel)
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.parallelJobs.isEmpty
+        }
+    }
+
+    func testQueuedPromptRestorePrefillsComposer() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Queue this for later"
+        model.sendPrompt(mode: .followUp)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.queuedFollowUpPrompts.count == 1
+        }
+
+        let preview = try XCTUnwrap(model.queuedFollowUpPrompts.first)
+        model.restoreQueuedPrompt(behavior: "followUp", index: 0, previewId: preview.id)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.promptText.contains("Queue this for later")
+        }
+    }
+
+    func testHostSessionLoadsModelCatalogAndSshTargets() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+        session.refresh()
+        try await waitForCondition(timeout: .seconds(2)) {
+            session.modelState != nil && !session.sshTargets.isEmpty
+        }
+
+        XCTAssertTrue(session.modelState?.models.contains(where: { $0.id == "gpt-5.4" }) == true)
+        XCTAssertEqual(session.sshTargets.first?.label, "Buildbox")
     }
 
     func testParallelPromptCreatesChildConversationInMockClient() async throws {
@@ -252,7 +350,9 @@ final class PersonalAgentCompanionTests: XCTestCase {
             conversationId: "conv-1",
             installationSurfaceId: "ios-test",
             initialSession: nil,
-            initialExecutionTargets: []
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
         )
 
         let loadedRecord = await model.loadAttachment("att-1")
@@ -285,7 +385,9 @@ final class PersonalAgentCompanionTests: XCTestCase {
             conversationId: "conv-1",
             installationSurfaceId: "ios-test",
             initialSession: nil,
-            initialExecutionTargets: []
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
         )
 
         let artifacts = await model.listArtifacts()

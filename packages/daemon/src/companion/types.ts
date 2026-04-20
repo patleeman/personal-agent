@@ -165,6 +165,36 @@ export interface CompanionConversationSubscriptionInput {
   tailBlocks?: number;
 }
 
+export interface CompanionConversationQueueRestoreInput {
+  conversationId: string;
+  behavior: 'steer' | 'followUp';
+  index: number;
+  previewId?: string;
+  surfaceId?: string;
+}
+
+export interface CompanionConversationParallelJobInput {
+  conversationId: string;
+  jobId: string;
+  action: 'importNow' | 'skip' | 'cancel';
+  surfaceId?: string;
+}
+
+export interface CompanionSshTargetSaveInput {
+  id?: string;
+  label: string;
+  sshTarget: string;
+}
+
+export interface CompanionSshTargetTestInput {
+  sshTarget: string;
+}
+
+export interface CompanionRemoteDirectoryInput {
+  executionTargetId: string;
+  path?: string | null;
+}
+
 export interface CompanionScheduledTaskInput {
   title?: string;
   enabled?: boolean;
@@ -176,6 +206,7 @@ export interface CompanionScheduledTaskInput {
   timeoutSeconds?: number | null;
   prompt?: string;
   targetType?: string | null;
+  conversationBehavior?: string | null;
   threadMode?: string | null;
   threadConversationId?: string | null;
 }
@@ -218,11 +249,19 @@ export interface CompanionRuntime {
   updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
   duplicateConversation(input: CompanionConversationDuplicateInput): Promise<unknown>;
   listExecutionTargets(): Promise<unknown>;
+  readModels(): Promise<unknown>;
+  listSshTargets(): Promise<unknown>;
+  saveSshTarget(input: CompanionSshTargetSaveInput): Promise<unknown>;
+  deleteSshTarget(targetId: string): Promise<unknown>;
+  testSshTarget(input: CompanionSshTargetTestInput): Promise<unknown>;
+  readRemoteDirectory(input: CompanionRemoteDirectoryInput): Promise<unknown>;
   readConversationBootstrap(input: CompanionConversationBootstrapInput): Promise<unknown>;
   createConversation(input: CompanionConversationCreateInput): Promise<unknown>;
   resumeConversation(input: CompanionConversationResumeInput): Promise<unknown>;
   promptConversation(input: CompanionConversationPromptInput): Promise<unknown>;
   parallelPromptConversation(input: CompanionConversationPromptInput): Promise<unknown>;
+  restoreConversationQueuePrompt(input: CompanionConversationQueueRestoreInput): Promise<unknown>;
+  manageConversationParallelJob(input: CompanionConversationParallelJobInput): Promise<unknown>;
   abortConversation(input: CompanionConversationAbortInput): Promise<unknown>;
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;

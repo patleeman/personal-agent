@@ -194,6 +194,44 @@ struct ExecutionTargetSummary: Codable, Equatable, Identifiable {
     let kind: String
 }
 
+struct CompanionSshTargetRecord: Codable, Equatable, Identifiable {
+    let id: String
+    let label: String
+    let kind: String
+    let sshTarget: String
+}
+
+struct CompanionSshTargetState: Codable, Equatable {
+    let hosts: [CompanionSshTargetRecord]
+}
+
+struct CompanionSshTargetTestResult: Codable, Equatable {
+    let ok: Bool
+    let sshTarget: String
+    let os: String
+    let arch: String
+    let platformKey: String
+    let homeDirectory: String
+    let tempDirectory: String
+    let cacheDirectory: String
+    let message: String
+}
+
+struct CompanionRemoteDirectoryEntry: Codable, Equatable, Identifiable {
+    var id: String { path }
+
+    let name: String
+    let path: String
+    let isDir: Bool
+    let isHidden: Bool
+}
+
+struct CompanionRemoteDirectoryListing: Codable, Equatable {
+    let path: String
+    let parent: String?
+    let entries: [CompanionRemoteDirectoryEntry]
+}
+
 struct ConversationOrdering: Codable, Equatable {
     var sessionIds: [String]
     var pinnedSessionIds: [String]
@@ -530,11 +568,43 @@ struct AttachmentEditorDraft: Equatable {
     var previewAsset: AttachmentDraftAsset?
 }
 
+struct CompanionModelInfo: Codable, Equatable, Identifiable {
+    let id: String
+    let provider: String
+    let name: String
+    let context: Int
+    let supportedServiceTiers: [String]?
+}
+
+struct CompanionModelState: Codable, Equatable {
+    let currentModel: String
+    let currentThinkingLevel: String
+    let currentServiceTier: String
+    let models: [CompanionModelInfo]
+}
+
 struct ConversationModelPreferencesState: Codable, Equatable {
     let currentModel: String
     let currentThinkingLevel: String
     let currentServiceTier: String
     let hasExplicitServiceTier: Bool
+}
+
+struct CompanionQueueRestoreResult: Codable, Equatable {
+    let ok: Bool
+    let text: String
+    let images: [PromptImageDraftResponse]
+}
+
+struct CompanionParallelJobActionResult: Codable, Equatable {
+    let ok: Bool
+    let status: String
+}
+
+struct PromptImageDraftResponse: Codable, Equatable {
+    let data: String
+    let mimeType: String
+    let name: String?
 }
 
 struct CompanionPickerOption: Identifiable, Equatable {
@@ -581,6 +651,38 @@ func companionThinkingLevelOptions(current: String? = nil, unsetLabel: String? =
     ]
     if let current = current?.nilIfBlank, !options.contains(where: { $0.value == current }) {
         options.append(CompanionPickerOption(value: current, label: current))
+    }
+    return options
+}
+
+func companionSelectableServiceTierOptions(
+    for model: CompanionModelInfo?,
+    includeDefaultOption: Bool = false,
+    defaultLabel: String = "Default"
+) -> [CompanionPickerOption] {
+    let supported = Set(model?.supportedServiceTiers ?? [])
+    let ordered = ["auto", "default", "flex", "priority", "scale"]
+    var options: [CompanionPickerOption] = []
+    if includeDefaultOption {
+        options.append(CompanionPickerOption(value: "", label: defaultLabel))
+    }
+    for value in ordered where supported.contains(value) {
+        let label: String
+        switch value {
+        case "auto":
+            label = "Auto"
+        case "default":
+            label = "Default"
+        case "flex":
+            label = "Flex"
+        case "priority":
+            label = "Priority"
+        case "scale":
+            label = "Scale"
+        default:
+            label = value
+        }
+        options.append(CompanionPickerOption(value: value, label: label))
     }
     return options
 }
@@ -694,6 +796,7 @@ struct ScheduledTaskSummary: Codable, Equatable, Identifiable {
     let model: String?
     let thinkingLevel: String?
     let cwd: String?
+    let conversationBehavior: String?
     let threadConversationId: String?
     let threadTitle: String?
     let lastStatus: String?
@@ -717,6 +820,7 @@ struct ScheduledTaskDetail: Codable, Equatable, Identifiable {
     let cwd: String?
     let timeoutSeconds: Int?
     let prompt: String?
+    let conversationBehavior: String?
     let lastStatus: String?
     let lastRunAt: String?
     let threadConversationId: String?
@@ -746,6 +850,7 @@ struct ScheduledTaskEditorDraft: Equatable {
     var timeoutSeconds: String = ""
     var prompt: String = ""
     var targetType: String = "background-agent"
+    var conversationBehavior: String = ""
     var threadMode: String = "dedicated"
     var threadConversationId: String = ""
 }
@@ -925,12 +1030,37 @@ enum JSONValue: Codable, Equatable {
     }
 }
 
+struct QueuedPromptPreview: Codable, Equatable, Identifiable {
+    let id: String
+    let text: String
+    let imageCount: Int
+    let restorable: Bool?
+    let pending: Bool?
+}
+
+struct ParallelPromptPreview: Codable, Equatable, Identifiable {
+    let id: String
+    let prompt: String
+    let childConversationId: String
+    let status: String
+    let imageCount: Int
+    let attachmentRefs: [String]
+    let touchedFiles: [String]
+    let parentTouchedFiles: [String]
+    let overlapFiles: [String]
+    let sideEffects: [String]
+    let resultPreview: String?
+    let error: String?
+}
+
 enum CompanionConversationEvent: Equatable {
     case snapshot(blocks: [DisplayBlock], blockOffset: Int, totalBlocks: Int)
     case agentStart
     case agentEnd
     case turnEnd
     case userMessage(DisplayBlock)
+    case queueState(steering: [QueuedPromptPreview], followUp: [QueuedPromptPreview])
+    case parallelState([ParallelPromptPreview])
     case textDelta(String)
     case thinkingDelta(String)
     case toolStart(toolCallId: String, toolName: String, args: JSONValue?)

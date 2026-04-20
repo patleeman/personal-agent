@@ -60,6 +60,30 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('reads model state through the local controller when available', async () => {
+    const localController = {
+      readModels: vi.fn().mockResolvedValue({
+        currentModel: 'gpt-5.4',
+        currentThinkingLevel: 'high',
+        currentServiceTier: '',
+        models: [{ id: 'gpt-5.4', provider: 'openai', name: 'GPT-5.4', context: 128000, supportedServiceTiers: ['priority'] }],
+      }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.readModels()).resolves.toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [{ id: 'gpt-5.4', provider: 'openai', name: 'GPT-5.4', context: 128000, supportedServiceTiers: ['priority'] }],
+    });
+  });
+
   it('changes execution target then reloads bootstrap through the desktop API dispatcher', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ bootstrap: { conversationId: 'conv-1' } })),
@@ -98,6 +122,43 @@ describe('desktop companion runtime', () => {
       method: 'GET',
       path: '/api/conversations/conv-1/bootstrap',
     }));
+  });
+
+  it('restores queued prompts and manages parallel jobs through local controller helpers', async () => {
+    const localController = {
+      restoreQueuedLiveSessionMessage: vi.fn().mockResolvedValue({ ok: true, text: 'queued hello', images: [] }),
+      manageLiveSessionParallelJob: vi.fn().mockResolvedValue({ ok: true, status: 'imported' }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.restoreConversationQueuePrompt({
+      conversationId: 'conv-1',
+      behavior: 'followUp',
+      index: 0,
+      previewId: 'queue-1',
+    })).resolves.toEqual({ ok: true, text: 'queued hello', images: [] });
+    await expect(runtime.manageConversationParallelJob({
+      conversationId: 'conv-1',
+      jobId: 'job-1',
+      action: 'importNow',
+    })).resolves.toEqual({ ok: true, status: 'imported' });
+
+    expect(localController.restoreQueuedLiveSessionMessage).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      behavior: 'followUp',
+      index: 0,
+      previewId: 'queue-1',
+    });
+    expect(localController.manageLiveSessionParallelJob).toHaveBeenCalledWith({
+      conversationId: 'conv-1',
+      jobId: 'job-1',
+      action: 'importNow',
+    });
   });
 
   it('routes parallel prompts to the dedicated live-session endpoint', async () => {

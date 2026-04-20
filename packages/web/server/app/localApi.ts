@@ -1795,6 +1795,7 @@ export async function createDesktopScheduledTask(input: {
   timeoutSeconds?: number | null;
   prompt?: string;
   targetType?: 'background-agent' | 'conversation' | null;
+  conversationBehavior?: 'steer' | 'followUp' | null;
   threadMode?: 'dedicated' | 'existing' | 'none' | null;
   threadConversationId?: string | null;
 }) {
@@ -1818,6 +1819,7 @@ export async function updateDesktopScheduledTask(input: {
   timeoutSeconds?: number | null;
   prompt?: string;
   targetType?: 'background-agent' | 'conversation' | null;
+  conversationBehavior?: 'steer' | 'followUp' | null;
   threadMode?: 'dedicated' | 'existing' | 'none' | null;
   threadConversationId?: string | null;
 }) {

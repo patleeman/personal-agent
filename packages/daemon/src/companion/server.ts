@@ -24,19 +24,24 @@ import {
   type CompanionConversationDuplicateInput,
   type CompanionConversationExecutionTargetChangeInput,
   type CompanionConversationModelPreferencesUpdateInput,
+  type CompanionConversationParallelJobInput,
   type CompanionConversationPromptInput,
+  type CompanionConversationQueueRestoreInput,
   type CompanionConversationRenameInput,
   type CompanionConversationResumeInput,
   type CompanionConversationSubscriptionInput,
   type CompanionConversationTabsUpdateInput,
   type CompanionConversationTakeoverInput,
   type CompanionDurableRunLogInput,
+  type CompanionRemoteDirectoryInput,
   type CompanionHostHello,
   type CompanionPairedDeviceSummary,
   type CompanionRuntime,
   type CompanionRuntimeProvider,
   type CompanionScheduledTaskInput,
   type CompanionScheduledTaskUpdateInput,
+  type CompanionSshTargetSaveInput,
+  type CompanionSshTargetTestInput,
   type CompanionServerSocketMessage,
   type CompanionSetupState,
   type CompanionSocketErrorResponse,
@@ -525,6 +530,101 @@ export class DaemonCompanionServer {
       return;
     }
 
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/models`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readModels());
+      return;
+    }
+
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/ssh-targets`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.listSshTargets());
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/ssh-targets`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionSshTargetSaveInput = {
+        ...(readOptionalString(payload.id) ? { id: readOptionalString(payload.id) } : {}),
+        label: readRequiredString(payload.label, 'label'),
+        sshTarget: readRequiredString(payload.sshTarget, 'sshTarget'),
+      };
+      sendJson(response, 200, await runtime.saveSshTarget(input));
+      return;
+    }
+
+    const sshTargetMatch = /^\/companion\/v1\/ssh-targets\/([^/]+)$/.exec(pathname);
+    if (sshTargetMatch && request.method === 'PATCH') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionSshTargetSaveInput = {
+        id: decodeURIComponent(sshTargetMatch[1] || ''),
+        label: readRequiredString(payload.label, 'label'),
+        sshTarget: readRequiredString(payload.sshTarget, 'sshTarget'),
+      };
+      sendJson(response, 200, await runtime.saveSshTarget(input));
+      return;
+    }
+
+    if (sshTargetMatch && request.method === 'DELETE') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.deleteSshTarget(decodeURIComponent(sshTargetMatch[1] || '')));
+      return;
+    }
+
+    const sshTargetDirectoryMatch = /^\/companion\/v1\/ssh-targets\/([^/]+)\/directories$/.exec(pathname);
+    if (sshTargetDirectoryMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const input: CompanionRemoteDirectoryInput = {
+        executionTargetId: decodeURIComponent(sshTargetDirectoryMatch[1] || ''),
+        ...(requestUrl.searchParams.has('path') ? { path: requestUrl.searchParams.get('path') } : {}),
+      };
+      sendJson(response, 200, await runtime.readRemoteDirectory(input));
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/ssh-targets/test`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionSshTargetTestInput = {
+        sshTarget: readRequiredString(payload.sshTarget, 'sshTarget'),
+      };
+      sendJson(response, 200, await runtime.testSshTarget(input));
+      return;
+    }
+
     if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/conversations`) {
       if (!await this.requireBearer(request, response)) {
         return;
@@ -564,6 +664,49 @@ export class DaemonCompanionServer {
         conversationId: decodeURIComponent(duplicateConversationMatch[1] || ''),
       };
       sendJson(response, 200, await runtime.duplicateConversation(input));
+      return;
+    }
+
+    const conversationQueueRestoreMatch = /^\/companion\/v1\/conversations\/([^/]+)\/dequeue$/.exec(pathname);
+    if (conversationQueueRestoreMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationQueueRestoreInput = {
+        conversationId: decodeURIComponent(conversationQueueRestoreMatch[1] || ''),
+        behavior: payload.behavior === 'followUp' ? 'followUp' : 'steer',
+        index: readOptionalNonNegativeInteger(payload.index, 'index') ?? 0,
+        ...(readOptionalString(payload.previewId) ? { previewId: readOptionalString(payload.previewId) } : {}),
+        ...(readOptionalString(payload.surfaceId) ? { surfaceId: readOptionalString(payload.surfaceId) } : {}),
+      };
+      sendJson(response, 200, await runtime.restoreConversationQueuePrompt(input));
+      return;
+    }
+
+    const conversationParallelJobMatch = /^\/companion\/v1\/conversations\/([^/]+)\/parallel-jobs\/([^/]+)$/.exec(pathname);
+    if (conversationParallelJobMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const action = readRequiredString(payload.action, 'action');
+      if (action !== 'importNow' && action !== 'skip' && action !== 'cancel') {
+        throw new Error('action must be importNow, skip, or cancel.');
+      }
+      const input: CompanionConversationParallelJobInput = {
+        conversationId: decodeURIComponent(conversationParallelJobMatch[1] || ''),
+        jobId: decodeURIComponent(conversationParallelJobMatch[2] || ''),
+        action,
+        ...(readOptionalString(payload.surfaceId) ? { surfaceId: readOptionalString(payload.surfaceId) } : {}),
+      };
+      sendJson(response, 200, await runtime.manageConversationParallelJob(input));
       return;
     }
 
@@ -799,6 +942,7 @@ export class DaemonCompanionServer {
         ...(payload.timeoutSeconds !== undefined ? { timeoutSeconds: payload.timeoutSeconds === null ? null : readOptionalPositiveInteger(payload.timeoutSeconds, 'timeoutSeconds') } : {}),
         ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
         ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
+        ...(payload.conversationBehavior !== undefined ? { conversationBehavior: payload.conversationBehavior === null ? null : readOptionalString(payload.conversationBehavior) } : {}),
         ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
         ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
       };
@@ -837,6 +981,7 @@ export class DaemonCompanionServer {
         ...(payload.timeoutSeconds !== undefined ? { timeoutSeconds: payload.timeoutSeconds === null ? null : readOptionalPositiveInteger(payload.timeoutSeconds, 'timeoutSeconds') } : {}),
         ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
         ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
+        ...(payload.conversationBehavior !== undefined ? { conversationBehavior: payload.conversationBehavior === null ? null : readOptionalString(payload.conversationBehavior) } : {}),
         ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
         ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
       };

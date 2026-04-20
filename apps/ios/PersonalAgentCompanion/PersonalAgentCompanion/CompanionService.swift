@@ -4,18 +4,28 @@ import Security
 @MainActor
 protocol CompanionClientProtocol: AnyObject {
     var host: CompanionHostRecord { get }
+    var supportsRunningConversationSimulation: Bool { get }
 
     func hello() async throws -> CompanionHello
+    func simulateRunningConversation(conversationId: String) async throws
     func connect() async throws
     func disconnect()
     func listConversations() async throws -> ConversationListState
     func updateConversationTabs(ordering: ConversationOrdering) async throws
     func duplicateConversation(conversationId: String) async throws -> String
     func listExecutionTargets() async throws -> [ExecutionTargetSummary]
+    func readModels() async throws -> CompanionModelState
+    func listSshTargets() async throws -> CompanionSshTargetState
+    func saveSshTarget(id: String?, label: String, sshTarget: String) async throws -> CompanionSshTargetState
+    func deleteSshTarget(targetId: String) async throws -> CompanionSshTargetState
+    func testSshTarget(sshTarget: String) async throws -> CompanionSshTargetTestResult
+    func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope
     func resumeConversation(_ input: ResumeConversationRequest) async throws -> ConversationBootstrapEnvelope
     func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws
+    func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult
+    func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult
     func abortConversation(conversationId: String) async throws
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
@@ -150,6 +160,7 @@ final class KeychainStore {
 
 @MainActor
 final class LiveCompanionClient: CompanionClientProtocol {
+    var supportsRunningConversationSimulation: Bool { false }
     private struct PendingResponse {
         let complete: (Result<Any, Error>) -> Void
     }
@@ -208,6 +219,10 @@ final class LiveCompanionClient: CompanionClientProtocol {
         return try await Self.hello(baseURL: url, urlSession: urlSession)
     }
 
+    func simulateRunningConversation(conversationId: String) async throws {
+        throw CompanionClientError.notImplementedInMock
+    }
+
     func connect() async throws {
         try await connectIfNeeded()
     }
@@ -246,6 +261,49 @@ final class LiveCompanionClient: CompanionClientProtocol {
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] {
         struct ResultPayload: Decodable { let executionTargets: [ExecutionTargetSummary] }
         return try await sendCommand(name: "executionTargets.list", payload: [:], as: ResultPayload.self).executionTargets
+    }
+
+    func readModels() async throws -> CompanionModelState {
+        try await authorizedJSON(path: "/companion/v1/models", method: "GET", body: nil, decode: CompanionModelState.self)
+    }
+
+    func listSshTargets() async throws -> CompanionSshTargetState {
+        try await authorizedJSON(path: "/companion/v1/ssh-targets", method: "GET", body: nil, decode: CompanionSshTargetState.self)
+    }
+
+    func saveSshTarget(id: String?, label: String, sshTarget: String) async throws -> CompanionSshTargetState {
+        let path = if let id = id?.trimmed.nilIfBlank {
+            "/companion/v1/ssh-targets/\(id)"
+        } else {
+            "/companion/v1/ssh-targets"
+        }
+        let method = id?.trimmed.nilIfBlank == nil ? "POST" : "PATCH"
+        var body: [String: Any] = [
+            "label": label,
+            "sshTarget": sshTarget,
+        ]
+        if let id = id?.trimmed.nilIfBlank, method == "POST" {
+            body["id"] = id
+        }
+        return try await authorizedJSON(path: path, method: method, body: body, decode: CompanionSshTargetState.self)
+    }
+
+    func deleteSshTarget(targetId: String) async throws -> CompanionSshTargetState {
+        try await authorizedJSON(path: "/companion/v1/ssh-targets/\(targetId)", method: "DELETE", body: nil, decode: CompanionSshTargetState.self)
+    }
+
+    func testSshTarget(sshTarget: String) async throws -> CompanionSshTargetTestResult {
+        try await authorizedJSON(path: "/companion/v1/ssh-targets/test", method: "POST", body: ["sshTarget": sshTarget], decode: CompanionSshTargetTestResult.self)
+    }
+
+    func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
+        let endpoint: String
+        if let path = path?.trimmed.nilIfBlank {
+            endpoint = "/companion/v1/ssh-targets/\(targetId)/directories?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)"
+        } else {
+            endpoint = "/companion/v1/ssh-targets/\(targetId)/directories"
+        }
+        return try await authorizedJSON(path: endpoint, method: "GET", body: nil, decode: CompanionRemoteDirectoryListing.self)
     }
 
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
@@ -320,6 +378,22 @@ final class LiveCompanionClient: CompanionClientProtocol {
         struct ResponsePayload: Decodable { let ok: Bool }
         let commandName = mode == .parallel ? "conversation.parallel_prompt" : "conversation.prompt"
         _ = try await sendCommand(name: commandName, payload: payload, as: ResponsePayload.self)
+    }
+
+    func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult {
+        var body: [String: Any] = [
+            "behavior": behavior,
+            "index": index,
+            "surfaceId": surfaceId,
+        ]
+        if let previewId = previewId?.nilIfBlank {
+            body["previewId"] = previewId
+        }
+        return try await authorizedJSON(path: "/companion/v1/conversations/\(conversationId)/dequeue", method: "POST", body: body, decode: CompanionQueueRestoreResult.self)
+    }
+
+    func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult {
+        try await authorizedJSON(path: "/companion/v1/conversations/\(conversationId)/parallel-jobs/\(jobId)", method: "POST", body: ["action": action, "surfaceId": surfaceId], decode: CompanionParallelJobActionResult.self)
     }
 
     func abortConversation(conversationId: String) async throws {
@@ -651,6 +725,9 @@ final class LiveCompanionClient: CompanionClientProtocol {
             "targetType": draft.targetType,
             "threadMode": draft.threadMode,
         ]
+        if let conversationBehavior = draft.conversationBehavior.nilIfBlank {
+            body["conversationBehavior"] = conversationBehavior
+        }
         if let title = draft.title.nilIfBlank {
             body["title"] = title
         }
@@ -846,6 +923,13 @@ final class LiveCompanionClient: CompanionClientProtocol {
         case "user_message":
             guard let block = event["block"], let decoded = try? decodeModel(DisplayBlock.self, from: block) else { return .unknown }
             return .userMessage(decoded)
+        case "queue_state":
+            let steering = (event["steering"] as? [Any])?.compactMap { try? decodeModel(QueuedPromptPreview.self, from: $0) } ?? []
+            let followUp = (event["followUp"] as? [Any])?.compactMap { try? decodeModel(QueuedPromptPreview.self, from: $0) } ?? []
+            return .queueState(steering: steering, followUp: followUp)
+        case "parallel_state":
+            let jobs = (event["jobs"] as? [Any])?.compactMap { try? decodeModel(ParallelPromptPreview.self, from: $0) } ?? []
+            return .parallelState(jobs)
         case "text_delta":
             return .textDelta(event["delta"] as? String ?? "")
         case "thinking_delta":
@@ -1050,6 +1134,7 @@ private struct MockCompanionSeed {
 @MainActor
 final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
+    var supportsRunningConversationSimulation: Bool { true }
 
     private var listState: ConversationListState
     private var conversations: [String: ConversationBootstrapEnvelope]
@@ -1061,8 +1146,13 @@ final class MockCompanionClient: CompanionClientProtocol {
     private var runLogs: [String: String]
     private var deviceAdminState: CompanionDeviceAdminState
     private var setupState: CompanionSetupState
+    private var modelState: CompanionModelState
+    private var sshTargetState: CompanionSshTargetState
+    private var queuedPromptsByConversation: [String: (steering: [QueuedPromptPreview], followUp: [QueuedPromptPreview])] = [:]
+    private var parallelJobsByConversation: [String: [ParallelPromptPreview]] = [:]
     private var appContinuations: [UUID: AsyncStream<CompanionAppEvent>.Continuation] = [:]
     private var conversationContinuations: [String: [UUID: AsyncStream<CompanionConversationEvent>.Continuation]] = [:]
+    private var simulatedConversationTasks: [String: Task<Void, Never>] = [:]
 
     init() {
         let now = ISO8601DateFormatter.flexible.string(from: .now)
@@ -1320,6 +1410,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 cwd: "/Users/patrick/workingdir/personal-agent",
                 timeoutSeconds: 900,
                 prompt: "Review outstanding work and summarize priorities.",
+                conversationBehavior: nil,
                 lastStatus: "completed",
                 lastRunAt: now,
                 threadConversationId: "conv-1",
@@ -1376,6 +1467,20 @@ final class MockCompanionClient: CompanionClientProtocol {
             links: [CompanionSetupLinkRecord(id: "link-1", label: "Tailnet", baseUrl: "https://demo.personal-agent.invalid", setupUrl: "pa-companion://pair?base=https%3A%2F%2Fdemo.personal-agent.invalid&code=ABCD-EFGH-IJKL")],
             warnings: []
         )
+        self.modelState = CompanionModelState(
+            currentModel: "gpt-5.4",
+            currentThinkingLevel: "medium",
+            currentServiceTier: "",
+            models: [
+                CompanionModelInfo(id: "gpt-5.4", provider: "openai", name: "GPT-5.4", context: 128000, supportedServiceTiers: ["auto", "priority"]),
+                CompanionModelInfo(id: "gpt-5.4-mini", provider: "openai", name: "GPT-5.4 Mini", context: 128000, supportedServiceTiers: ["auto", "priority"]),
+                CompanionModelInfo(id: "claude-sonnet-4-6", provider: "anthropic", name: "Claude Sonnet 4.6", context: 200000, supportedServiceTiers: nil),
+                CompanionModelInfo(id: "gemini-2.5-pro", provider: "google", name: "Gemini 2.5 Pro", context: 1000000, supportedServiceTiers: ["default"]),
+            ]
+        )
+        self.sshTargetState = CompanionSshTargetState(hosts: [
+            CompanionSshTargetRecord(id: "ssh-1", label: "Buildbox", kind: "ssh", sshTarget: "patrick@buildbox")
+        ])
     }
 
     private static func loadDeviceDemoSeed() -> MockCompanionSeed? {
@@ -1489,6 +1594,101 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
     }
 
+    func simulateRunningConversation(conversationId: String) async throws {
+        guard simulatedConversationTasks[conversationId] == nil else {
+            return
+        }
+        guard conversations[conversationId]?.bootstrap.sessionDetail != nil else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+
+        let startTime = ISO8601DateFormatter.flexible.string(from: .now)
+        let thinkingBlockId = "sim-thinking-\(UUID().uuidString)"
+        let firstToolCallId = "sim-tool-\(UUID().uuidString)"
+
+        mutateConversation(conversationId: conversationId, isStreaming: true) { blocks in
+            blocks.append(DisplayBlock(
+                type: "thinking",
+                id: thinkingBlockId,
+                ts: startTime,
+                text: "Continuing a simulated turn so you can test steer, follow-up, and parallel prompt behavior while the conversation is still running."
+            ))
+            blocks.append(DisplayBlock(
+                type: "tool_use",
+                id: firstToolCallId,
+                ts: startTime,
+                title: "Inspect queued prompt state",
+                tool: "read",
+                input: .object(["path": .string("apps/ios/PersonalAgentCompanion/PersonalAgentCompanion/CompanionStore.swift")]),
+                output: "Loaded the conversation store to confirm queued prompt handling during the simulated run.",
+                durationMs: 640,
+                toolCallId: firstToolCallId
+            ))
+        }
+        emitConversation(conversationId, .agentStart)
+        emitConversationSnapshot(conversationId)
+
+        simulatedConversationTasks[conversationId] = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else {
+                return
+            }
+            self.mutateConversation(conversationId: conversationId, isStreaming: true) { blocks in
+                if let index = blocks.lastIndex(where: { $0.id == thinkingBlockId }) {
+                    let existing = blocks[index]
+                    blocks[index] = DisplayBlock(
+                        type: existing.type,
+                        id: existing.id,
+                        ts: existing.ts,
+                        text: (existing.text ?? "") + " Still working while you try queued prompt modes.",
+                        title: existing.title,
+                        kind: existing.kind,
+                        detail: existing.detail,
+                        tool: existing.tool,
+                        input: existing.input,
+                        output: existing.output,
+                        durationMs: existing.durationMs,
+                        toolCallId: existing.toolCallId,
+                        details: existing.details,
+                        outputDeferred: existing.outputDeferred,
+                        alt: existing.alt,
+                        src: existing.src,
+                        mimeType: existing.mimeType,
+                        width: existing.width,
+                        height: existing.height,
+                        caption: existing.caption,
+                        deferred: existing.deferred,
+                        message: existing.message,
+                        customType: existing.customType,
+                        images: existing.images
+                    )
+                }
+            }
+            self.emitConversationSnapshot(conversationId)
+
+            try? await Task.sleep(for: .milliseconds(700))
+            guard !Task.isCancelled else {
+                return
+            }
+            let secondToolCallId = "sim-tool-\(UUID().uuidString)"
+            let updateTime = ISO8601DateFormatter.flexible.string(from: .now)
+            self.mutateConversation(conversationId: conversationId, isStreaming: true) { blocks in
+                blocks.append(DisplayBlock(
+                    type: "tool_use",
+                    id: secondToolCallId,
+                    ts: updateTime,
+                    title: "Queue demo controls",
+                    tool: "bash",
+                    input: .object(["command": .string("simulate queued prompt controls")]),
+                    output: "The simulated turn is still active. Use the send button menu to try steer, follow-up, or parallel prompts.",
+                    durationMs: 920,
+                    toolCallId: secondToolCallId
+                ))
+            }
+            self.emitConversationSnapshot(conversationId)
+        }
+    }
+
     func connect() async throws {}
 
     func disconnect() {}
@@ -1507,6 +1707,61 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] { listState.executionTargets ?? [] }
+
+    func readModels() async throws -> CompanionModelState {
+        modelState
+    }
+
+    func listSshTargets() async throws -> CompanionSshTargetState {
+        sshTargetState
+    }
+
+    func saveSshTarget(id: String?, label: String, sshTarget: String) async throws -> CompanionSshTargetState {
+        let targetId = id?.trimmed.nilIfBlank ?? "ssh-\(Int.random(in: 100...999))"
+        let record = CompanionSshTargetRecord(id: targetId, label: label.trimmed, kind: "ssh", sshTarget: sshTarget.trimmed)
+        sshTargetState = CompanionSshTargetState(hosts: sshTargetState.hosts.filter { $0.id != targetId } + [record])
+        listState = ConversationListState(
+            sessions: listState.sessions,
+            ordering: listState.ordering,
+            executionTargets: [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")] + sshTargetState.hosts.map { ExecutionTargetSummary(id: $0.id, label: $0.label, kind: "ssh") }
+        )
+        emitApp(.conversationListState(listState))
+        return sshTargetState
+    }
+
+    func deleteSshTarget(targetId: String) async throws -> CompanionSshTargetState {
+        sshTargetState = CompanionSshTargetState(hosts: sshTargetState.hosts.filter { $0.id != targetId })
+        listState = ConversationListState(
+            sessions: listState.sessions,
+            ordering: listState.ordering,
+            executionTargets: [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")] + sshTargetState.hosts.map { ExecutionTargetSummary(id: $0.id, label: $0.label, kind: "ssh") }
+        )
+        emitApp(.conversationListState(listState))
+        return sshTargetState
+    }
+
+    func testSshTarget(sshTarget: String) async throws -> CompanionSshTargetTestResult {
+        CompanionSshTargetTestResult(ok: true, sshTarget: sshTarget, os: "linux", arch: "arm64", platformKey: "linux-arm64", homeDirectory: "/home/patrick", tempDirectory: "/tmp", cacheDirectory: "/home/patrick/.cache", message: "SSH target reachable.")
+    }
+
+    func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
+        let currentPath = path?.trimmed.nilIfBlank ?? "/Users/patrick/workingdir"
+        switch currentPath {
+        case "/Users/patrick/workingdir":
+            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/Users/patrick", entries: [
+                CompanionRemoteDirectoryEntry(name: "personal-agent", path: "/Users/patrick/workingdir/personal-agent", isDir: true, isHidden: false),
+                CompanionRemoteDirectoryEntry(name: "familiar", path: "/Users/patrick/workingdir/familiar", isDir: true, isHidden: false),
+            ])
+        case "/Users/patrick/workingdir/personal-agent":
+            return CompanionRemoteDirectoryListing(path: currentPath, parent: "/Users/patrick/workingdir", entries: [
+                CompanionRemoteDirectoryEntry(name: "apps", path: "\(currentPath)/apps", isDir: true, isHidden: false),
+                CompanionRemoteDirectoryEntry(name: "packages", path: "\(currentPath)/packages", isDir: true, isHidden: false),
+                CompanionRemoteDirectoryEntry(name: "docs", path: "\(currentPath)/docs", isDir: true, isHidden: false),
+            ])
+        default:
+            return CompanionRemoteDirectoryListing(path: currentPath, parent: URL(fileURLWithPath: currentPath).deletingLastPathComponent().path.nilIfBlank, entries: [])
+        }
+    }
 
     func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
         guard let value = conversations[conversationId] else {
@@ -1586,6 +1841,25 @@ final class MockCompanionClient: CompanionClientProtocol {
         }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
 
+        if mode == .steer || mode == .followUp {
+            let preview = QueuedPromptPreview(
+                id: "queue-\(Int.random(in: 100...999))",
+                text: text.nilIfBlank ?? "(empty prompt)",
+                imageCount: images.count,
+                restorable: true,
+                pending: true
+            )
+            var queueState = queuedPromptsByConversation[conversationId] ?? (steering: [], followUp: [])
+            if mode == .steer {
+                queueState.steering.insert(preview, at: 0)
+            } else {
+                queueState.followUp.insert(preview, at: 0)
+            }
+            queuedPromptsByConversation[conversationId] = queueState
+            emitConversation(conversationId, .queueState(steering: queueState.steering, followUp: queueState.followUp))
+            return
+        }
+
         if mode == .parallel {
             let childConversationId = "parallel-\(Int.random(in: 100...999))"
             let parallelTitle = text.nilIfBlank ?? "Parallel prompt"
@@ -1648,6 +1922,22 @@ final class MockCompanionClient: CompanionClientProtocol {
                 executionTargets: listState.executionTargets
             )
             emitApp(.conversationListState(listState))
+            let preview = ParallelPromptPreview(
+                id: "job-\(Int.random(in: 100...999))",
+                prompt: text.nilIfBlank ?? "Parallel prompt",
+                childConversationId: childConversationId,
+                status: "ready",
+                imageCount: images.count,
+                attachmentRefs: attachmentRefs.map(\.title),
+                touchedFiles: ["apps/ios/PersonalAgentCompanion/PersonalAgentCompanion/ConversationView.swift"],
+                parentTouchedFiles: [],
+                overlapFiles: [],
+                sideEffects: [],
+                resultPreview: "This mock host started a parallel prompt in a separate conversation.",
+                error: nil
+            )
+            parallelJobsByConversation[conversationId, default: []].insert(preview, at: 0)
+            emitConversation(conversationId, .parallelState(parallelJobsByConversation[conversationId] ?? []))
             return
         }
 
@@ -1697,7 +1987,108 @@ final class MockCompanionClient: CompanionClientProtocol {
         emitConversation(conversationId, .turnEnd)
     }
 
-    func abortConversation(conversationId: String) async throws {}
+    func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult {
+        var queueState = queuedPromptsByConversation[conversationId] ?? (steering: [], followUp: [])
+        let source = behavior == "followUp" ? queueState.followUp : queueState.steering
+        guard source.indices.contains(index) else {
+            throw CompanionClientError.requestFailed("Queued prompt changed before it could be restored. Try again.")
+        }
+        let candidate = source[index]
+        if let previewId = previewId?.nilIfBlank, candidate.id != previewId {
+            throw CompanionClientError.requestFailed("Queued prompt changed before it could be restored. Try again.")
+        }
+        if behavior == "followUp" {
+            queueState.followUp.remove(at: index)
+        } else {
+            queueState.steering.remove(at: index)
+        }
+        queuedPromptsByConversation[conversationId] = queueState
+        emitConversation(conversationId, .queueState(steering: queueState.steering, followUp: queueState.followUp))
+        return CompanionQueueRestoreResult(ok: true, text: candidate.text, images: [])
+    }
+
+    func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult {
+        var jobs = parallelJobsByConversation[conversationId] ?? []
+        guard let index = jobs.firstIndex(where: { $0.id == jobId }) else {
+            throw CompanionClientError.requestFailed("Parallel prompt no longer exists.")
+        }
+        switch action {
+        case "cancel":
+            jobs.remove(at: index)
+            parallelJobsByConversation[conversationId] = jobs
+            emitConversation(conversationId, .parallelState(jobs))
+            return CompanionParallelJobActionResult(ok: true, status: "cancelled")
+        case "skip":
+            jobs.remove(at: index)
+            parallelJobsByConversation[conversationId] = jobs
+            emitConversation(conversationId, .parallelState(jobs))
+            return CompanionParallelJobActionResult(ok: true, status: "skipped")
+        case "importNow":
+            var job = jobs[index]
+            job = ParallelPromptPreview(
+                id: job.id,
+                prompt: job.prompt,
+                childConversationId: job.childConversationId,
+                status: "importing",
+                imageCount: job.imageCount,
+                attachmentRefs: job.attachmentRefs,
+                touchedFiles: job.touchedFiles,
+                parentTouchedFiles: job.parentTouchedFiles,
+                overlapFiles: job.overlapFiles,
+                sideEffects: job.sideEffects,
+                resultPreview: job.resultPreview,
+                error: job.error
+            )
+            jobs[index] = job
+            parallelJobsByConversation[conversationId] = jobs
+            emitConversation(conversationId, .parallelState(jobs))
+            jobs.remove(at: index)
+            parallelJobsByConversation[conversationId] = jobs
+            emitConversation(conversationId, .parallelState(jobs))
+            if let childEnvelope = conversations[job.childConversationId],
+               let childDetail = childEnvelope.bootstrap.sessionDetail,
+               let parentEnvelope = conversations[conversationId],
+               let parentDetail = parentEnvelope.bootstrap.sessionDetail {
+                conversations[conversationId] = ConversationBootstrapEnvelope(
+                    bootstrap: ConversationBootstrapState(
+                        conversationId: parentEnvelope.bootstrap.conversationId,
+                        sessionDetail: SessionDetail(
+                            meta: parentDetail.meta,
+                            blocks: parentDetail.blocks + childDetail.blocks.filter { $0.type == "text" },
+                            blockOffset: 0,
+                            totalBlocks: parentDetail.blocks.count + childDetail.blocks.filter { $0.type == "text" }.count,
+                            signature: UUID().uuidString
+                        ),
+                        sessionDetailSignature: UUID().uuidString,
+                        sessionDetailUnchanged: false,
+                        sessionDetailAppendOnly: nil,
+                        liveSession: parentEnvelope.bootstrap.liveSession
+                    ),
+                    sessionMeta: parentEnvelope.sessionMeta,
+                    attachments: parentEnvelope.attachments,
+                    executionTargets: parentEnvelope.executionTargets
+                )
+            }
+            return CompanionParallelJobActionResult(ok: true, status: "imported")
+        default:
+            throw CompanionClientError.requestFailed("Unsupported parallel job action.")
+        }
+    }
+
+    func abortConversation(conversationId: String) async throws {
+        let simulationTask = simulatedConversationTasks.removeValue(forKey: conversationId)
+        simulationTask?.cancel()
+        guard simulationTask != nil else {
+            return
+        }
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        mutateConversation(conversationId: conversationId, isStreaming: false) { blocks in
+            blocks.append(DisplayBlock(type: "summary", id: UUID().uuidString, ts: now, text: "Stopped the simulated running turn.", title: "Simulation stopped", kind: "related"))
+        }
+        emitConversationSnapshot(conversationId)
+        emitConversation(conversationId, .agentEnd)
+        emitConversation(conversationId, .turnEnd)
+    }
 
     func takeOverConversation(conversationId: String, surfaceId: String) async throws {
         emitConversation(conversationId, .presenceState(.init(surfaces: [.init(surfaceId: surfaceId, surfaceType: "ios_native", connectedAt: ISO8601DateFormatter.flexible.string(from: .now))], controllerSurfaceId: surfaceId, controllerSurfaceType: "ios_native", controllerAcquiredAt: ISO8601DateFormatter.flexible.string(from: .now))))
@@ -1803,7 +2194,12 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let meta = conversations[conversationId]?.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
-        return ConversationModelPreferencesState(currentModel: meta.model, currentThinkingLevel: "medium", currentServiceTier: "standard", hasExplicitServiceTier: false)
+        return ConversationModelPreferencesState(
+            currentModel: meta.model,
+            currentThinkingLevel: modelState.currentThinkingLevel,
+            currentServiceTier: modelState.currentServiceTier,
+            hasExplicitServiceTier: !modelState.currentServiceTier.trimmed.isEmpty
+        )
     }
 
     func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState {
@@ -1839,7 +2235,18 @@ final class MockCompanionClient: CompanionClientProtocol {
         conversations[conversationId] = ConversationBootstrapEnvelope(bootstrap: envelope.bootstrap, sessionMeta: updatedMeta, attachments: envelope.attachments, executionTargets: envelope.executionTargets)
         listState = ConversationListState(sessions: listState.sessions.map { $0.id == conversationId ? updatedMeta : $0 }, ordering: listState.ordering, executionTargets: listState.executionTargets)
         emitApp(.conversationListState(listState))
-        return ConversationModelPreferencesState(currentModel: updatedMeta.model, currentThinkingLevel: thinkingLevel?.nilIfBlank ?? "medium", currentServiceTier: serviceTier?.nilIfBlank ?? "standard", hasExplicitServiceTier: serviceTier?.nilIfBlank != nil)
+        modelState = CompanionModelState(
+            currentModel: model?.nilIfBlank ?? updatedMeta.model,
+            currentThinkingLevel: thinkingLevel?.nilIfBlank ?? modelState.currentThinkingLevel,
+            currentServiceTier: serviceTier?.nilIfBlank ?? "",
+            models: modelState.models
+        )
+        return ConversationModelPreferencesState(
+            currentModel: updatedMeta.model,
+            currentThinkingLevel: modelState.currentThinkingLevel,
+            currentServiceTier: modelState.currentServiceTier,
+            hasExplicitServiceTier: !modelState.currentServiceTier.trimmed.isEmpty
+        )
     }
 
     func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary] {
@@ -1977,6 +2384,7 @@ final class MockCompanionClient: CompanionClientProtocol {
                 model: task.model,
                 thinkingLevel: task.thinkingLevel,
                 cwd: task.cwd,
+                conversationBehavior: task.conversationBehavior,
                 threadConversationId: task.threadConversationId,
                 threadTitle: task.threadTitle,
                 lastStatus: task.lastStatus,
@@ -2014,6 +2422,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             cwd: draft.cwd.nilIfBlank,
             timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
             prompt: draft.prompt.nilIfBlank,
+            conversationBehavior: draft.conversationBehavior.nilIfBlank,
             lastStatus: nil,
             lastRunAt: nil,
             threadConversationId: draft.threadConversationId.nilIfBlank,
@@ -2043,6 +2452,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             cwd: draft.cwd.nilIfBlank,
             timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
             prompt: draft.prompt.nilIfBlank,
+            conversationBehavior: draft.conversationBehavior.nilIfBlank,
             lastStatus: previous.lastStatus,
             lastRunAt: previous.lastRunAt,
             threadConversationId: draft.threadConversationId.nilIfBlank,
@@ -2148,6 +2558,10 @@ final class MockCompanionClient: CompanionClientProtocol {
             var bucket = self.conversationContinuations[conversationId] ?? [:]
             bucket[id] = continuation
             self.conversationContinuations[conversationId] = bucket
+            continuation.yield(.open)
+            let queueState = self.queuedPromptsByConversation[conversationId] ?? (steering: [], followUp: [])
+            continuation.yield(.queueState(steering: queueState.steering, followUp: queueState.followUp))
+            continuation.yield(.parallelState(self.parallelJobsByConversation[conversationId] ?? []))
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in
                     guard let self else { return }
@@ -2157,6 +2571,77 @@ final class MockCompanionClient: CompanionClientProtocol {
                 }
             }
         }
+    }
+
+    private func emitConversationSnapshot(_ conversationId: String) {
+        guard let detail = conversations[conversationId]?.bootstrap.sessionDetail else {
+            return
+        }
+        emitConversation(conversationId, .snapshot(blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks))
+    }
+
+    private func mutateConversation(conversationId: String, isStreaming: Bool? = nil, mutateBlocks: (inout [DisplayBlock]) -> Void) {
+        guard let envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
+            return
+        }
+        let previousMeta = envelope.sessionMeta ?? detail.meta
+        var blocks = detail.blocks
+        mutateBlocks(&blocks)
+        let updatedAt = ISO8601DateFormatter.flexible.string(from: .now)
+        let nextMeta = SessionMeta(
+            id: previousMeta.id,
+            file: previousMeta.file,
+            timestamp: previousMeta.timestamp,
+            cwd: previousMeta.cwd,
+            cwdSlug: previousMeta.cwdSlug,
+            model: previousMeta.model,
+            title: previousMeta.title,
+            messageCount: previousMeta.messageCount,
+            isRunning: isStreaming ?? previousMeta.isRunning,
+            isLive: previousMeta.isLive,
+            lastActivityAt: updatedAt,
+            parentSessionFile: previousMeta.parentSessionFile,
+            parentSessionId: previousMeta.parentSessionId,
+            sourceRunId: previousMeta.sourceRunId,
+            remoteHostId: previousMeta.remoteHostId,
+            remoteHostLabel: previousMeta.remoteHostLabel,
+            remoteConversationId: previousMeta.remoteConversationId,
+            automationTaskId: previousMeta.automationTaskId,
+            automationTitle: previousMeta.automationTitle,
+            needsAttention: previousMeta.needsAttention,
+            attentionUpdatedAt: previousMeta.attentionUpdatedAt,
+            attentionUnreadMessageCount: previousMeta.attentionUnreadMessageCount,
+            attentionUnreadActivityCount: previousMeta.attentionUnreadActivityCount,
+            attentionActivityIds: previousMeta.attentionActivityIds
+        )
+        let liveSession = ConversationBootstrapLiveSession(
+            live: envelope.bootstrap.liveSession.live,
+            id: envelope.bootstrap.liveSession.id,
+            cwd: envelope.bootstrap.liveSession.cwd,
+            sessionFile: envelope.bootstrap.liveSession.sessionFile,
+            title: envelope.bootstrap.liveSession.title,
+            isStreaming: isStreaming ?? envelope.bootstrap.liveSession.isStreaming,
+            hasPendingHiddenTurn: envelope.bootstrap.liveSession.hasPendingHiddenTurn
+        )
+        conversations[conversationId] = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: envelope.bootstrap.conversationId,
+                sessionDetail: SessionDetail(meta: nextMeta, blocks: blocks, blockOffset: detail.blockOffset, totalBlocks: blocks.count, signature: UUID().uuidString),
+                sessionDetailSignature: UUID().uuidString,
+                sessionDetailUnchanged: false,
+                sessionDetailAppendOnly: nil,
+                liveSession: liveSession
+            ),
+            sessionMeta: nextMeta,
+            attachments: envelope.attachments,
+            executionTargets: envelope.executionTargets
+        )
+        listState = ConversationListState(
+            sessions: listState.sessions.map { $0.id == conversationId ? nextMeta : $0 },
+            ordering: listState.ordering,
+            executionTargets: listState.executionTargets
+        )
+        emitApp(.conversationListState(listState))
     }
 
     private func emitApp(_ event: CompanionAppEvent) {
