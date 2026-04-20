@@ -256,5 +256,20 @@ describe('daemon companion server', () => {
     });
 
     socket.close();
+
+    const revokeResponse = await fetch(`${baseUrl}/companion/v1/admin/devices/${paired.device.id}`, {
+      method: 'DELETE',
+    });
+    expect(revokeResponse.status).toBe(200);
+    expect(await readJson(revokeResponse)).toEqual({
+      ok: true,
+      deleted: true,
+      devices: [],
+    });
+
+    const revokedConversationsResponse = await fetch(`${baseUrl}/companion/v1/conversations`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(revokedConversationsResponse.status).toBe(401);
   }, 15000);
 });

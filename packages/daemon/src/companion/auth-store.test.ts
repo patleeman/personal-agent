@@ -53,6 +53,7 @@ describe('companion auth store', () => {
       now: new Date('2026-04-18T10:30:00.000Z'),
     });
     expect(revoked?.revokedAt).toBe('2026-04-18T10:30:00.000Z');
+    expect(readCompanionDeviceAdminState(stateRoot).devices).toEqual([]);
     expect(readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
       now: new Date('2026-04-18T10:31:00.000Z'),
     })).toBeNull();

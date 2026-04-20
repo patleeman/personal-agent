@@ -211,6 +211,7 @@ export function readCompanionDeviceAdminState(stateRoot: string, options?: { now
       }))
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
     devices: store.devices
+      .filter((entry) => !entry.revokedAt)
       .map(toDeviceSummary)
       .sort((left, right) => right.lastUsedAt.localeCompare(left.lastUsedAt)),
   };
