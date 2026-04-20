@@ -185,6 +185,7 @@ export interface LocalApiModule {
   readDesktopConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   readDesktopConversationCheckpoints(conversationId: string): Promise<unknown>;
   readDesktopConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<unknown>;
+  createDesktopConversationCheckpoint(input: { conversationId: string; message: string; paths: string[] }): Promise<unknown>;
   readDesktopConversationAttachments(conversationId: string): Promise<unknown>;
   readDesktopConversationAttachment(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createDesktopConversationAttachment(input: {
