@@ -64,6 +64,7 @@ When the UI is running inside Electron, the desktop shell adds a few conversatio
 - `Cmd/Ctrl+Alt+R` — rename the current conversation
 - `Cmd/Ctrl+L` — focus the composer
 - `Cmd/Ctrl+Shift+L` — edit the working directory
+- `Cmd/Ctrl+F` — open the current page search bar and jump between matches with `Cmd/Ctrl+G`
 - `Cmd/Ctrl+\` — toggle the sidebar
 - `Cmd/Ctrl+Shift+\` — toggle the right rail
 - `Cmd/Ctrl+Shift+W` — hide the current window

@@ -398,6 +398,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onEditWorkingDirectory: () => {
       windowController?.sendShortcutToFocusedWindow('edit-working-directory');
     },
+    onFindInPage: () => {
+      windowController?.sendShortcutToFocusedWindow('find-in-page');
+    },
     onToggleSidebar: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-sidebar');
     },

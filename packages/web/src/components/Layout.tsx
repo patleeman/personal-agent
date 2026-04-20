@@ -5,11 +5,12 @@ import { CommandPalette } from './CommandPalette';
 import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { DesktopTopBar } from './DesktopTopBar';
+import { PageSearchBar } from './PageSearchBar';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
-import { readDesktopEnvironment } from '../desktop/desktopBridge';
+import { isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
@@ -477,6 +478,7 @@ export function Layout() {
     side: 'right',
   });
   const [railOpen, setRailOpen] = useState(true);
+  const pageSearchRootRef = useRef<HTMLDivElement | null>(null);
   const [registeredRightRailControl, setRegisteredRightRailControl] = useState<DesktopRightRailControl | null>(null);
   const railWidth = rail.width;
   const canShowContextRail = !(
@@ -578,20 +580,22 @@ export function Layout() {
 
           {sidebarOpen ? <ResizeHandle onMouseDown={sidebar.onMouseDown} /> : null}
 
-          <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
-            <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
-              <Outlet />
-            </main>
+          <div ref={pageSearchRootRef} className="flex min-w-0 flex-1 overflow-hidden">
+            <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
+              <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+                <Outlet />
+              </main>
 
-            {showContextRail ? (
-              <>
-                <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
-                <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
-                  <ContextRail />
-                </div>
-              </>
-            ) : null}
-          </RouteContentBoundary>
+              {showContextRail ? (
+                <>
+                  <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
+                  <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
+                    <ContextRail />
+                  </div>
+                </>
+              ) : null}
+            </RouteContentBoundary>
+          </div>
           </div>
         </div>
       </DesktopChromeContext.Provider>
@@ -601,6 +605,7 @@ export function Layout() {
       ))}
 
       <AlertToaster />
+      <PageSearchBar rootRef={pageSearchRootRef} desktopShell={desktopEnvironment?.isElectron ?? isDesktopShell()} />
       <CommandPalette />
     </>
   );

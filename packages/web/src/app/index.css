@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+::highlight(pa-page-search-match) {
+  background: rgb(var(--color-accent) / 0.18);
+}
+
+::highlight(pa-page-search-active) {
+  background: rgb(var(--color-accent) / 0.42);
+}
+
 @layer components {
   .ui-page-header {
     @apply sticky top-0 z-10 bg-base/95 backdrop-blur-sm border-b border-border-subtle px-6 py-4 flex items-center gap-4;

@@ -13,6 +13,7 @@ export interface DesktopApplicationMenuActions {
   onRenameConversation: () => void;
   onFocusComposer: () => void;
   onEditWorkingDirectory: () => void;
+  onFindInPage: () => void;
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
   onHideWindow: () => void;
@@ -148,6 +149,12 @@ export function buildDesktopApplicationMenuTemplate(
       { role: 'cut' },
       { role: 'copy' },
       { role: 'paste' },
+      { type: 'separator' },
+      {
+        label: 'Find on Page',
+        accelerator: 'CommandOrControl+F',
+        click: actions.onFindInPage,
+      },
       { role: 'selectAll' },
     ],
   };

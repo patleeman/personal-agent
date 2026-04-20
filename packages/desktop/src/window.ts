@@ -32,7 +32,8 @@ export type DesktopRendererShortcutAction =
   | 'toggle-conversation-archive'
   | 'focus-composer'
   | 'edit-working-directory'
-  | 'rename-conversation';
+  | 'rename-conversation'
+  | 'find-in-page';
 
 type ManagedWindowRole = 'main' | 'remote';
 

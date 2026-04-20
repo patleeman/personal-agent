@@ -64,6 +64,7 @@ Important behaviors:
 - the desktop shell keeps open conversation tabs warm by prefetching transcript bootstrap state and keeping background live threads subscribed, so switching tabs can reuse hot cache instead of cold-loading the thread again
 - the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
+- `Cmd/Ctrl+F` opens an in-app page search bar for the current surface, with `Enter` / `Shift+Enter` and `Cmd/Ctrl+G` / `Cmd/Ctrl+Shift+G` stepping through matches
 - conversation artifacts open inline in the thread workspace
 - commit checkpoints can show up as transcript cards with a scrollable inline unified diff peek that expands in place, then open a larger dedicated diff review modal from the conversation with continuous scrolling across files, responsive sizing, sidebar jump navigation, split / unified views, bundled structural diffs in the desktop build, GitHub / PR links, and a saved comment thread on the checkpoint; inline commit hashes in transcript markdown also open that review flow when they resolve against the thread checkpoint list or the current local git repo
 - the new-conversation empty state owns the draft workspace picker, including saved workspace selection and folder picking, and it shows the 10 most recent closed conversations under the picker so a fresh window still has quick context reuse; the draft header stays title-only

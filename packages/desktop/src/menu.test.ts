@@ -15,6 +15,7 @@ function createActions() {
     onRenameConversation: vi.fn(),
     onFocusComposer: vi.fn(),
     onEditWorkingDirectory: vi.fn(),
+    onFindInPage: vi.fn(),
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
     onHideWindow: vi.fn(),
@@ -62,6 +63,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Edit Working Directory', accelerator: 'CommandOrControl+Shift+L' }),
     ]));
 
+    const editMenu = template[2];
+    expect(editMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Find on Page', accelerator: 'CommandOrControl+F' }),
+    ]));
+
     const viewMenu = template[3];
     expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
@@ -105,6 +111,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Check for Updates…' }),
       expect.objectContaining({ label: 'Restart Runtime' }),
       expect.objectContaining({ label: 'Quit Personal Agent', accelerator: 'Alt+F4' }),
+    ]));
+
+    const editMenu = template[1];
+    expect(editMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: 'Find on Page', accelerator: 'CommandOrControl+F' }),
     ]));
   });
 });
