@@ -1,3 +1,4 @@
+import PencilKit
 import PhotosUI
 import SwiftUI
 import UniformTypeIdentifiers
@@ -2487,10 +2488,17 @@ private struct AttachmentEditorView: View {
     let title: String
     let onSave: () async -> Void
 
-    @State private var showingSourceImporter = false
-    @State private var showingPreviewImporter = false
-    @State private var previewPhotoItem: PhotosPickerItem?
+    @State private var drawing = PKDrawing()
+    @State private var backgroundPreviewData: Data?
+    @State private var originalSceneObject: [String: Any]?
+    @State private var canvasSize = CGSize(width: 1024, height: 768)
+    @State private var didLoadInitialState = false
     @State private var isSaving = false
+
+    private var canSave: Bool {
+        let hasExistingAttachment = draft.sourceAsset != nil && draft.previewAsset != nil
+        return hasExistingAttachment || !drawing.strokes.isEmpty || backgroundPreviewData != nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -2500,45 +2508,51 @@ private struct AttachmentEditorView: View {
                     TextField("Note", text: $draft.note, axis: .vertical)
                         .lineLimit(3...6)
                 }
-                Section("Assets") {
-                    Button {
-                        showingSourceImporter = true
-                    } label: {
-                        HStack {
-                            Label("Choose source file", systemImage: "doc.badge.plus")
-                            Spacer()
-                            Text(draft.sourceAsset?.fileName ?? "Required")
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
+
+                Section("Drawing") {
+                    HStack {
+                        Text("Canvas")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Clear") {
+                            drawing = PKDrawing()
+                        }
+                        .font(.caption.weight(.semibold))
+                        .disabled(drawing.strokes.isEmpty)
+                    }
+
+                    ScrollView([.horizontal, .vertical], showsIndicators: true) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(.white)
+                            if let backgroundPreviewData, let image = UIImage(data: backgroundPreviewData) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: canvasSize.width, height: canvasSize.height)
+                                    .clipShape(RoundedRectangle(cornerRadius: 16))
+                            }
+                            NativeDrawingCanvasView(drawing: $drawing)
+                                .frame(width: canvasSize.width, height: canvasSize.height)
+                                .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+                        .frame(width: canvasSize.width, height: canvasSize.height)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                         }
                     }
-                    PhotosPicker(selection: $previewPhotoItem, matching: .images) {
-                        HStack {
-                            Label("Pick preview image", systemImage: "photo")
-                            Spacer()
-                            Text(draft.previewAsset?.fileName ?? "Required")
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Button {
-                        showingPreviewImporter = true
-                    } label: {
-                        HStack {
-                            Label("Import preview file", systemImage: "folder.badge.plus")
-                            Spacer()
-                            Text(draft.previewAsset?.fileName ?? "Required")
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                }
-                if let previewAsset = draft.previewAsset, let image = UIImage(data: previewAsset.rawData) {
-                    Section("Preview") {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                    .frame(height: min(420, max(260, canvasSize.height * 0.35)))
+
+                    if backgroundPreviewData != nil {
+                        Text("Existing drawing content is shown as a background layer. Your pen strokes are saved as an editable overlay.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Use Apple Pencil or touch to sketch directly in the attachment editor.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }
@@ -2551,56 +2565,32 @@ private struct AttachmentEditorView: View {
                     Button(isSaving ? "Saving…" : "Save") {
                         Task {
                             isSaving = true
-                            await onSave()
+                            if let assets = buildNativeDrawingAttachmentAssets(
+                                title: draft.title,
+                                drawing: drawing,
+                                canvasSize: canvasSize,
+                                originalSceneObject: originalSceneObject,
+                                backgroundPreviewData: backgroundPreviewData
+                            ) {
+                                draft.sourceAsset = assets.source
+                                draft.previewAsset = assets.preview
+                                await onSave()
+                            }
                             isSaving = false
                         }
                     }
-                    .disabled(isSaving || draft.sourceAsset == nil || draft.previewAsset == nil)
+                    .disabled(isSaving || !canSave)
                 }
             }
-            .fileImporter(isPresented: $showingSourceImporter, allowedContentTypes: [.json, .data], allowsMultipleSelection: false) { result in
-                handleSourceImport(result)
+            .task {
+                guard !didLoadInitialState else { return }
+                didLoadInitialState = true
+                let loaded = loadNativeDrawingEditorState(from: draft)
+                drawing = loaded.drawing
+                backgroundPreviewData = loaded.backgroundPreviewData
+                originalSceneObject = loaded.originalSceneObject
+                canvasSize = loaded.canvasSize
             }
-            .fileImporter(isPresented: $showingPreviewImporter, allowedContentTypes: [.image], allowsMultipleSelection: false) { result in
-                handlePreviewImport(result)
-            }
-            .onChange(of: previewPhotoItem) { _, newItem in
-                guard let newItem else { return }
-                Task {
-                    if let asset = try? await AttachmentDraftAsset.fromPreviewPhoto(newItem) {
-                        draft.previewAsset = asset
-                    }
-                    previewPhotoItem = nil
-                }
-            }
-        }
-    }
-
-    private func handleSourceImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            Task {
-                if let asset = try? await AttachmentDraftAsset.fromSourceFile(url: url) {
-                    draft.sourceAsset = asset
-                }
-            }
-        case .failure:
-            break
-        }
-    }
-
-    private func handlePreviewImport(_ result: Result<[URL], Error>) {
-        switch result {
-        case .success(let urls):
-            guard let url = urls.first else { return }
-            Task {
-                if let asset = try? await AttachmentDraftAsset.fromPreviewFile(url: url) {
-                    draft.previewAsset = asset
-                }
-            }
-        case .failure:
-            break
         }
     }
 }
@@ -2669,4 +2659,260 @@ private extension AttachmentDraftAsset {
         let suffix = UTType(mimeType: mimeType)?.preferredFilenameExtension ?? "png"
         return AttachmentDraftAsset(fileName: "Preview.\(suffix)", mimeType: mimeType, base64Data: data.base64EncodedString(), rawData: data)
     }
+}
+
+private let nativeDrawingMetadataKey = "personalAgentNativeDrawingV1"
+private let nativeDrawingOverlayGroupId = "pa-native-drawing-overlay"
+private let defaultNativeCanvasSize = CGSize(width: 1024, height: 768)
+
+private struct NativeDrawingMetadata: Codable {
+    let version: Int
+    let drawingData: String
+    let backgroundPreviewData: String?
+    let canvasWidth: Double?
+    let canvasHeight: Double?
+}
+
+private struct NativeDrawingEditorState {
+    let drawing: PKDrawing
+    let backgroundPreviewData: Data?
+    let originalSceneObject: [String: Any]?
+    let canvasSize: CGSize
+}
+
+private struct NativeDrawingCanvasView: UIViewRepresentable {
+    @Binding var drawing: PKDrawing
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(drawing: $drawing)
+    }
+
+    func makeUIView(context: Context) -> PKCanvasView {
+        let canvasView = PKCanvasView()
+        canvasView.delegate = context.coordinator
+        canvasView.backgroundColor = .clear
+        canvasView.isOpaque = false
+        canvasView.drawingPolicy = .anyInput
+        canvasView.alwaysBounceVertical = false
+        canvasView.alwaysBounceHorizontal = false
+        canvasView.showsVerticalScrollIndicator = false
+        canvasView.showsHorizontalScrollIndicator = false
+        canvasView.drawing = drawing
+        canvasView.tool = PKInkingTool(.pen, color: .label, width: 4)
+        context.coordinator.installToolPicker(for: canvasView)
+        return canvasView
+    }
+
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        if uiView.drawing != drawing {
+            uiView.drawing = drawing
+        }
+        context.coordinator.installToolPicker(for: uiView)
+    }
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        @Binding private var drawing: PKDrawing
+        private let toolPicker = PKToolPicker()
+
+        init(drawing: Binding<PKDrawing>) {
+            _drawing = drawing
+        }
+
+        func installToolPicker(for canvasView: PKCanvasView) {
+            toolPicker.addObserver(canvasView)
+            toolPicker.setVisible(true, forFirstResponder: canvasView)
+            canvasView.becomeFirstResponder()
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            drawing = canvasView.drawing
+        }
+    }
+}
+
+private func loadNativeDrawingEditorState(from draft: AttachmentEditorDraft) -> NativeDrawingEditorState {
+    let sourceObject = draft.sourceAsset.flatMap { try? JSONSerialization.jsonObject(with: $0.rawData, options: [.fragmentsAllowed]) as? [String: Any] }
+    var drawing = PKDrawing()
+    var backgroundPreviewData = draft.previewAsset?.rawData
+    var canvasSize = defaultNativeCanvasSize
+
+    if let sourceObject,
+       let rawMetadata = sourceObject[nativeDrawingMetadataKey],
+       let metadata = try? decodeModel(NativeDrawingMetadata.self, from: rawMetadata),
+       let drawingData = Data(base64Encoded: metadata.drawingData),
+       let loadedDrawing = try? PKDrawing(data: drawingData) {
+        drawing = loadedDrawing
+        if let backgroundBase64 = metadata.backgroundPreviewData, let decoded = Data(base64Encoded: backgroundBase64) {
+            backgroundPreviewData = decoded
+        }
+        if let width = metadata.canvasWidth, let height = metadata.canvasHeight, width > 0, height > 0 {
+            canvasSize = CGSize(width: width, height: height)
+        }
+    } else if let previewData = backgroundPreviewData, let image = UIImage(data: previewData) {
+        canvasSize = image.size
+    }
+
+    return NativeDrawingEditorState(
+        drawing: drawing,
+        backgroundPreviewData: backgroundPreviewData,
+        originalSceneObject: sourceObject,
+        canvasSize: normalizedCanvasSize(canvasSize)
+    )
+}
+
+private func normalizedCanvasSize(_ size: CGSize) -> CGSize {
+    let width = max(640, size.width.isFinite ? size.width : defaultNativeCanvasSize.width)
+    let height = max(480, size.height.isFinite ? size.height : defaultNativeCanvasSize.height)
+    return CGSize(width: width, height: height)
+}
+
+private func buildNativeDrawingAttachmentAssets(
+    title: String,
+    drawing: PKDrawing,
+    canvasSize: CGSize,
+    originalSceneObject: [String: Any]?,
+    backgroundPreviewData: Data?
+) -> (source: AttachmentDraftAsset, preview: AttachmentDraftAsset)? {
+    let normalizedTitle = title.trimmed.nilIfBlank ?? "Drawing"
+    let fileNames = buildDrawingFileNames(normalizedTitle)
+    let effectiveCanvasSize = normalizedCanvasSize(canvasSize)
+
+    let previewData = renderNativeDrawingPreview(
+        drawing: drawing,
+        canvasSize: effectiveCanvasSize,
+        backgroundPreviewData: backgroundPreviewData
+    )
+    guard let previewData else {
+        return nil
+    }
+
+    var sceneObject = originalSceneObject ?? [
+        "type": "excalidraw",
+        "version": 2,
+        "source": "personal-agent-ios",
+        "elements": [],
+        "appState": ["viewBackgroundColor": "#ffffff"],
+        "files": [:],
+    ]
+
+    let existingElements = ((sceneObject["elements"] as? [Any]) ?? []).compactMap { $0 as? [String: Any] }.filter { element in
+        let groupIds = element["groupIds"] as? [String] ?? []
+        return !groupIds.contains(nativeDrawingOverlayGroupId)
+    }
+    sceneObject["elements"] = existingElements + buildNativeDrawingOverlayElements(from: drawing)
+
+    let metadata = NativeDrawingMetadata(
+        version: 1,
+        drawingData: drawing.dataRepresentation().base64EncodedString(),
+        backgroundPreviewData: backgroundPreviewData?.base64EncodedString(),
+        canvasWidth: effectiveCanvasSize.width,
+        canvasHeight: effectiveCanvasSize.height
+    )
+    guard let metadataData = try? JSONEncoder().encode(metadata),
+          let metadataObject = try? JSONSerialization.jsonObject(with: metadataData) else {
+        return nil
+    }
+    sceneObject[nativeDrawingMetadataKey] = metadataObject
+
+    guard let sourceData = try? jsonObjectData(sceneObject) else {
+        return nil
+    }
+
+    return (
+        source: AttachmentDraftAsset(
+            fileName: fileNames.sourceName,
+            mimeType: "application/vnd.excalidraw+json",
+            base64Data: sourceData.base64EncodedString(),
+            rawData: sourceData
+        ),
+        preview: AttachmentDraftAsset(
+            fileName: fileNames.previewName,
+            mimeType: "image/png",
+            base64Data: previewData.base64EncodedString(),
+            rawData: previewData
+        )
+    )
+}
+
+private func buildDrawingFileNames(_ title: String) -> (sourceName: String, previewName: String) {
+    let normalized = title
+        .trimmed
+        .replacingOccurrences(of: "\\s+", with: "-", options: .regularExpression)
+        .replacingOccurrences(of: "[^a-zA-Z0-9._-]+", with: "-", options: .regularExpression)
+        .replacingOccurrences(of: "-+", with: "-", options: .regularExpression)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+    let base = normalized.nilIfBlank ?? "drawing"
+    return ("\(base).excalidraw", "\(base).png")
+}
+
+private func renderNativeDrawingPreview(drawing: PKDrawing, canvasSize: CGSize, backgroundPreviewData: Data?) -> Data? {
+    let effectiveCanvasSize = normalizedCanvasSize(canvasSize)
+    let backgroundImage = backgroundPreviewData.flatMap(UIImage.init(data:))
+    let renderer = UIGraphicsImageRenderer(size: effectiveCanvasSize)
+    let image = renderer.image { context in
+        UIColor.white.setFill()
+        context.fill(CGRect(origin: .zero, size: effectiveCanvasSize))
+        backgroundImage?.draw(in: CGRect(origin: .zero, size: effectiveCanvasSize))
+        drawing.image(from: CGRect(origin: .zero, size: effectiveCanvasSize), scale: 1).draw(in: CGRect(origin: .zero, size: effectiveCanvasSize))
+    }
+    return image.pngData()
+}
+
+private func buildNativeDrawingOverlayElements(from drawing: PKDrawing) -> [[String: Any]] {
+    drawing.strokes.compactMap { stroke in
+        let sampledPoints = Array(stroke.path).map(\.location)
+        guard sampledPoints.count >= 2 else {
+            return nil
+        }
+
+        let minX = sampledPoints.map(\.x).min() ?? 0
+        let minY = sampledPoints.map(\.y).min() ?? 0
+        let maxX = sampledPoints.map(\.x).max() ?? minX
+        let maxY = sampledPoints.map(\.y).max() ?? minY
+        let relativePoints = sampledPoints.map { point in
+            [point.x - minX, point.y - minY]
+        }
+        let strokeWidth = max(1, sampledPoints.count > 0 ? stroke.path.first?.size.width ?? 3 : 3)
+
+        return [
+            "id": UUID().uuidString.lowercased(),
+            "type": "freedraw",
+            "x": minX,
+            "y": minY,
+            "width": maxX - minX,
+            "height": maxY - minY,
+            "angle": 0,
+            "strokeColor": hexString(for: stroke.ink.color),
+            "backgroundColor": "transparent",
+            "fillStyle": "solid",
+            "strokeWidth": strokeWidth,
+            "strokeStyle": "solid",
+            "roughness": 0,
+            "opacity": 100,
+            "groupIds": [nativeDrawingOverlayGroupId],
+            "frameId": NSNull(),
+            "roundness": NSNull(),
+            "seed": Int.random(in: 1...Int.max / 2),
+            "version": 1,
+            "versionNonce": Int.random(in: 1...Int.max / 2),
+            "isDeleted": false,
+            "boundElements": NSNull(),
+            "updated": Int(Date().timeIntervalSince1970 * 1000),
+            "link": NSNull(),
+            "locked": false,
+            "points": relativePoints,
+            "pressures": Array(repeating: 0.5, count: relativePoints.count),
+            "simulatePressure": true,
+            "lastCommittedPoint": relativePoints.last ?? [0, 0],
+        ]
+    }
+}
+
+private func hexString(for color: UIColor) -> String {
+    var red: CGFloat = 0
+    var green: CGFloat = 0
+    var blue: CGFloat = 0
+    var alpha: CGFloat = 0
+    color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+    return String(format: "#%02X%02X%02X", Int(red * 255), Int(green * 255), Int(blue * 255))
 }

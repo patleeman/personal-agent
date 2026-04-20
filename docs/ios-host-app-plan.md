@@ -47,10 +47,13 @@ The shipping iOS client currently covers:
 - live conversation transcript + prompt composer
 - prompt images + saved drawing attachment refs
 - compact internal-work transcript shelves for thinking + tool calls, matching the desktop model more closely than plain message bubbles
-- execution-target switching, takeover, abort, rename, working-directory changes, and per-thread model preferences
-- conversation artifact and commit-checkpoint browsing
-- saved attachment browse/read/create/update flows for drawing attachments
-- automation list/detail/create/edit/delete/run flows
+- runtime-driven model catalogs and service-tier support instead of hardcoded mobile-only model lists
+- execution-target switching, SSH target CRUD, local/remote cwd browsing, takeover, abort, rename, and per-thread model preferences
+- queued steer/follow-up restore, parallel-job management, and live presence/control-state display
+- native `ask_user_question` rendering and answer submission inside the conversation surface
+- conversation artifact browsing plus commit-checkpoint browsing and checkpoint creation
+- saved attachment browse/read/create/update flows for drawing attachments, including a native PencilKit-based drawing editor that exports Excalidraw-compatible source assets
+- automation list/detail/create/edit/delete/run flows, including callback delivery controls for background-agent automations
 - durable run detail/log/cancel flows, without a dedicated top-level Runs tab in the iOS shell
 - paired-device admin plus setup generation from iOS
 
@@ -480,7 +483,7 @@ That means an iOS client must be able to:
 - take over control
 - change its execution target between local and an existing SSH target
 
-V1 does **not** need SSH target CRUD from iOS.
+V1 originally did **not** require SSH target CRUD from iOS, but the current implementation now exposes SSH target management from the iOS host settings surface as well.
 
 So the daemon must own:
 

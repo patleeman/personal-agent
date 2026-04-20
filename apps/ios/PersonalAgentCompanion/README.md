@@ -16,11 +16,12 @@ apps/ios/PersonalAgentCompanion
 - mirror host conversation ordering with pinned/open/archived sections and native pin/archive/duplicate controls
 - open a conversation and stream transcript updates over the multiplexed companion socket
 - send prompts with text, prompt images, and saved drawing attachment refs
-- take over control, abort a turn, rename a conversation, change cwd, adjust model preferences, and switch execution target
-- browse conversation artifacts and commit checkpoints
-- browse saved drawing attachments, inspect revisions, and create/update attachment assets
-- manage automations from the phone, with durable-run details still reachable from the companion surfaces
-- manage paired devices and generate setup state for adding another device
+- restore queued steer/follow-up prompts, manage parallel jobs, and see live control/presence state from iPhone
+- take over control, abort a turn, rename a conversation, browse local/remote directories for cwd changes, adjust model preferences from the live host catalog, and switch execution target
+- browse conversation artifacts and commit checkpoints, and create new checkpoints from iOS
+- browse saved drawing attachments, inspect revisions, and create/update drawing assets with a native PencilKit editor that exports Excalidraw-compatible source + preview assets
+- manage automations from the phone, including background-agent callback delivery controls, with durable-run details still reachable from the companion surfaces
+- manage paired devices, setup state, and SSH targets from iOS
 
 ## Build and test
 
