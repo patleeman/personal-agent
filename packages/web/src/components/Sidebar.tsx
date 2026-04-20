@@ -76,6 +76,7 @@ const THREADS_CWD_GROUP_LABEL_OVERRIDES_STORAGE_KEY = buildSidebarNavSectionStor
 const THREADS_ORGANIZE_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-organize');
 const THREADS_FILTER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-filter');
 const THREADS_SORT_BY_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-sort-by');
+const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-manual-group-order');
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -98,6 +99,17 @@ type SidebarConversationItem = {
   section: ConversationShelf;
   pinned: boolean;
   originalIndex: number;
+};
+
+type SidebarConversationGroup = {
+  key: string;
+  cwd: string | null;
+  label: string;
+  defaultLabel: string;
+  items: SidebarConversationItem[];
+  executionTargetKey: string;
+  executionTargetLabel: string;
+  executionTargetIsLocal: boolean;
 };
 
 type PointerPosition = { x: number; y: number };
@@ -169,6 +181,23 @@ function sameStringLists(left: readonly string[], right: readonly string[]): boo
   }
 
   return left.every((value, index) => value === right[index]);
+}
+
+function normalizeStoredStringList(values: Iterable<unknown>): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+
+  for (const value of values) {
+    const key = typeof value === 'string' ? value.trim() : '';
+    if (!key || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(key);
+  }
+
+  return normalized;
 }
 
 function WorkspaceQuickSelectModal({
@@ -466,6 +495,33 @@ function readThreadsSortMode(): ThreadsSortMode {
 function writeThreadsSortMode(value: ThreadsSortMode): void {
   try {
     localStorage.setItem(THREADS_SORT_BY_STORAGE_KEY, value);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function readManualConversationGroupOrder(): string[] {
+  try {
+    const raw = localStorage.getItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? normalizeStoredStringList(parsed) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeManualConversationGroupOrder(groupKeys: readonly string[]): void {
+  try {
+    if (groupKeys.length > 0) {
+      localStorage.setItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY, JSON.stringify(groupKeys));
+      return;
+    }
+
+    localStorage.removeItem(THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY);
   } catch {
     // Ignore storage failures.
   }
@@ -854,22 +910,38 @@ function ConversationCwdGroupHeader({
   label,
   cwd,
   collapsed,
+  canDrag = false,
+  isDragging = false,
+  dropPosition = null,
+  dragId,
   onToggleCollapsed,
   onNewConversation,
   onOpenInFinder,
   onEditName,
   onArchiveThreads,
   onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
 }: {
   label: string;
   cwd: string | null;
   collapsed: boolean;
+  canDrag?: boolean;
+  isDragging?: boolean;
+  dropPosition?: OpenConversationDropPosition | null;
+  dragId?: string;
   onToggleCollapsed: () => void;
   onNewConversation: () => void;
   onOpenInFinder?: () => void | Promise<void>;
   onEditName?: () => void | Promise<void>;
   onArchiveThreads?: () => void | Promise<void>;
   onRemove?: () => void | Promise<void>;
+  onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onDrop?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const menuRootRef = useRef<HTMLDivElement | null>(null);
@@ -893,6 +965,10 @@ function ConversationCwdGroupHeader({
     + Number(Boolean(onRemove));
   const showMenuDivider = Boolean((onOpenInFinder || onEditName) && (onArchiveThreads || onRemove));
   const menuItemClass = 'ui-context-menu-item';
+  const toggleButtonClassName = [
+    'flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-primary transition-colors hover:bg-white/5',
+    canDrag && (isDragging ? 'cursor-grabbing opacity-60' : 'cursor-grab'),
+  ].filter(Boolean).join(' ');
 
   useEffect(() => {
     if (!menuOpen || typeof document === 'undefined') {
@@ -998,14 +1074,33 @@ function ConversationCwdGroupHeader({
   }
 
   return (
-    <div className="px-4 pt-1 pb-0.5" onContextMenu={handleContextMenu}>
+    <div
+      className="relative px-4 pt-1 pb-0.5"
+      onContextMenu={handleContextMenu}
+      draggable={canDrag}
+      onDragStart={canDrag ? onDragStart : undefined}
+      onDragOver={canDrag ? onDragOver : undefined}
+      onDrop={canDrag ? onDrop : undefined}
+      onDragEnd={canDrag ? onDragEnd : undefined}
+      data-sidebar-group-key={dragId}
+    >
+      {dropPosition ? (
+        <span
+          aria-hidden="true"
+          className={[
+            'pointer-events-none absolute left-4 right-4 z-10 h-0.5 rounded-full bg-accent/80',
+            dropPosition === 'before' ? 'top-0' : 'bottom-0',
+          ].join(' ')}
+        />
+      ) : null}
       <div className="flex items-center gap-1">
         <button
           type="button"
+          draggable={false}
           onClick={onToggleCollapsed}
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-md py-1 text-left text-primary transition-colors hover:bg-white/5"
+          className={toggleButtonClassName}
           title={hoverTitle}
           aria-label={toggleTitle}
           aria-expanded={!collapsed}
@@ -1018,6 +1113,7 @@ function ConversationCwdGroupHeader({
         {hasMenuActions ? (
           <button
             type="button"
+            draggable={false}
             onClick={handleMenuButtonClick}
             className="ui-icon-button ui-icon-button-compact shrink-0"
             title={workspaceActionsTitle}
@@ -1028,6 +1124,7 @@ function ConversationCwdGroupHeader({
         ) : null}
         <button
           type="button"
+          draggable={false}
           onClick={onNewConversation}
           className="ui-icon-button ui-icon-button-compact shrink-0"
           title={newConversationTitle}
@@ -1666,13 +1763,19 @@ export function Sidebar() {
   const [threadsOrganizeMode, setThreadsOrganizeMode] = useState<ThreadsOrganizeMode>(() => readThreadsOrganizeMode());
   const [threadsFilterMode, setThreadsFilterMode] = useState<ThreadsFilterMode>(() => readThreadsFilterMode());
   const [threadsSortMode, setThreadsSortMode] = useState<ThreadsSortMode>(() => readThreadsSortMode());
+  const [manualConversationGroupOrder, setManualConversationGroupOrder] = useState(() => readManualConversationGroupOrder());
   const [collapsedConversationGroupKeys, setCollapsedConversationGroupKeys] = useState(() => readCollapsedConversationGroupKeys());
   const [conversationGroupLabelOverrides, setConversationGroupLabelOverrides] = useState(() => readConversationGroupLabelOverrides());
   const [draggingSessionId, setDraggingSessionId] = useState<string | null>(null);
   const [draggingSection, setDraggingSection] = useState<ConversationShelf | null>(null);
+  const [draggingGroupKey, setDraggingGroupKey] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     section: ConversationShelf;
     sessionId: string | null;
+    position: OpenConversationDropPosition;
+  } | null>(null);
+  const [groupDropTarget, setGroupDropTarget] = useState<{
+    groupKey: string;
     position: OpenConversationDropPosition;
   } | null>(null);
   const conversationSurfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
@@ -1735,6 +1838,12 @@ export function Sidebar() {
     const normalized = normalizeWorkspacePaths(workspacePaths);
     writeStoredWorkspacePaths(normalized);
     setSavedWorkspacePaths(normalized);
+    return normalized;
+  }, []);
+  const persistManualConversationGroupOrder = useCallback((groupKeys: string[]) => {
+    const normalized = normalizeStoredStringList(groupKeys);
+    writeManualConversationGroupOrder(normalized);
+    setManualConversationGroupOrder(normalized);
     return normalized;
   }, []);
 
@@ -1848,6 +1957,10 @@ export function Sidebar() {
     ]),
     [filteredConversationItems, workspaceOrder],
   );
+  const manualConversationGroupOrderIndex = useMemo(
+    () => new Map(manualConversationGroupOrder.map((groupKey, index) => [groupKey, index] as const)),
+    [manualConversationGroupOrder],
+  );
 
   const activeConversationId = useMemo(() => {
     const match = location.pathname.match(/^\/conversations\/([^/]+)$/);
@@ -1915,16 +2028,7 @@ export function Sidebar() {
       ...remoteTargetBuckets,
     ];
 
-    const rows: Array<{
-      key: string;
-      cwd: string | null;
-      label: string;
-      defaultLabel: string;
-      items: SidebarConversationItem[];
-      executionTargetKey: string;
-      executionTargetLabel: string;
-      executionTargetIsLocal: boolean;
-    }> = [];
+    const rows: SidebarConversationGroup[] = [];
 
     for (const targetBucket of orderedTargetBuckets) {
       const groupsByCwdKey = new Map(
@@ -1953,27 +2057,57 @@ export function Sidebar() {
         seenGroupKeys.add(group.key);
       }
 
-      for (const group of groups) {
+      const targetRows = groups.map((group, groupIndex) => {
         const scopedGroupKey = buildScopedConversationGroupKey({
           executionTargetKey: targetBucket.executionTargetKey,
           executionTargetIsLocal: targetBucket.executionTargetIsLocal,
           cwdGroupKey: group.key,
         });
-        rows.push({
-          key: scopedGroupKey,
-          cwd: group.cwd,
-          defaultLabel: group.label,
-          label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || group.label,
-          items: group.items,
-          executionTargetKey: targetBucket.executionTargetKey,
-          executionTargetLabel: targetBucket.executionTargetLabel,
-          executionTargetIsLocal: targetBucket.executionTargetIsLocal,
+
+        return {
+          groupIndex,
+          row: {
+            key: scopedGroupKey,
+            cwd: group.cwd,
+            defaultLabel: group.label,
+            label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || group.label,
+            items: group.items,
+            executionTargetKey: targetBucket.executionTargetKey,
+            executionTargetLabel: targetBucket.executionTargetLabel,
+            executionTargetIsLocal: targetBucket.executionTargetIsLocal,
+          } satisfies SidebarConversationGroup,
+        };
+      });
+
+      if (threadsSortMode === 'manual') {
+        targetRows.sort((left, right) => {
+          const leftManualIndex = manualConversationGroupOrderIndex.get(left.row.key);
+          const rightManualIndex = manualConversationGroupOrderIndex.get(right.row.key);
+          if (leftManualIndex !== undefined || rightManualIndex !== undefined) {
+            if (leftManualIndex === undefined) {
+              return 1;
+            }
+            if (rightManualIndex === undefined) {
+              return -1;
+            }
+            if (leftManualIndex !== rightManualIndex) {
+              return leftManualIndex - rightManualIndex;
+            }
+          }
+
+          return left.groupIndex - right.groupIndex;
         });
       }
+
+      rows.push(...targetRows.map((entry) => entry.row));
     }
 
     return rows;
-  }, [conversationGroupLabelOverrides, conversationGroupLabels, filteredConversationItems, threadsFilterMode, threadsOrganizeMode, workspaceOrder]);
+  }, [conversationGroupLabelOverrides, conversationGroupLabels, filteredConversationItems, manualConversationGroupOrderIndex, threadsFilterMode, threadsOrganizeMode, threadsSortMode, workspaceOrder]);
+  const conversationGroupsByKey = useMemo(
+    () => new Map(groupedConversationRows.map((group) => [group.key, group] as const)),
+    [groupedConversationRows],
+  );
   const conversationGroupKeyBySessionId = useMemo(
     () => new Map(groupedConversationRows.flatMap((group) => group.items.map(({ session }) => [session.id, group.key] as const))),
     [groupedConversationRows],
@@ -1989,6 +2123,7 @@ export function Sidebar() {
     [filteredConversationItems, groupedConversationRows, threadsOrganizeMode],
   );
   const canReorderConversationRows = threadsFilterMode === 'all';
+  const canReorderConversationGroups = canReorderConversationRows && threadsOrganizeMode === 'project';
   const hotkeyConversationItems = useMemo(
     () => resolveSidebarConversationHotkeyOrder({
       organizeMode: threadsOrganizeMode,
@@ -2068,7 +2203,9 @@ export function Sidebar() {
   function clearDragState() {
     setDraggingSessionId(null);
     setDraggingSection(null);
+    setDraggingGroupKey(null);
     setDropTarget(null);
+    setGroupDropTarget(null);
   }
 
   function getDropPosition(event: DragEvent<HTMLDivElement>): OpenConversationDropPosition {
@@ -2086,12 +2223,34 @@ export function Sidebar() {
     return Boolean(draggedGroupKey && targetGroupKey && draggedGroupKey === targetGroupKey);
   }
 
+  function canDropConversationGroupOnGroup(draggedGroupKey: string, targetGroupKey: string): boolean {
+    const draggedGroup = conversationGroupsByKey.get(draggedGroupKey);
+    const targetGroup = conversationGroupsByKey.get(targetGroupKey);
+    return Boolean(
+      draggedGroup
+      && targetGroup
+      && draggedGroup.executionTargetKey === targetGroup.executionTargetKey,
+    );
+  }
+
   function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     setDraggingSessionId(sessionId);
     setDraggingSection(section);
+    setDraggingGroupKey(null);
     setDropTarget(null);
+    setGroupDropTarget(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', sessionId);
+  }
+
+  function handleConversationGroupDragStart(groupKey: string, event: DragEvent<HTMLDivElement>) {
+    setDraggingGroupKey(groupKey);
+    setDraggingSessionId(null);
+    setDraggingSection(null);
+    setDropTarget(null);
+    setGroupDropTarget(null);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/x-personal-agent-conversation-group', groupKey);
   }
 
   function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
@@ -2118,6 +2277,33 @@ export function Sidebar() {
       current?.section === section && current.sessionId === sessionId && current.position === position
         ? current
         : { section, sessionId, position }
+    ));
+  }
+
+  function handleConversationGroupDragOver(groupKey: string, event: DragEvent<HTMLDivElement>) {
+    const draggedGroupId = draggingGroupKey ?? event.dataTransfer.getData('application/x-personal-agent-conversation-group');
+    if (!draggedGroupId) {
+      return;
+    }
+
+    if (!canDropConversationGroupOnGroup(draggedGroupId, groupKey)) {
+      setGroupDropTarget(null);
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+
+    if (draggedGroupId === groupKey) {
+      setGroupDropTarget(null);
+      return;
+    }
+
+    const position = getDropPosition(event);
+    setGroupDropTarget((current) => (
+      current?.groupKey === groupKey && current.position === position
+        ? current
+        : { groupKey, position }
     ));
   }
 
@@ -2152,6 +2338,63 @@ export function Sidebar() {
     }
 
     moveSession(draggingSessionId, targetSection, targetSessionId, position);
+    clearDragState();
+  }
+
+  function handleConversationGroupDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const draggedGroupId = draggingGroupKey ?? event.dataTransfer.getData('application/x-personal-agent-conversation-group');
+    if (!draggedGroupId || draggedGroupId === targetGroupKey || !canDropConversationGroupOnGroup(draggedGroupId, targetGroupKey)) {
+      clearDragState();
+      return;
+    }
+
+    const draggedIndex = groupedConversationRows.findIndex((group) => group.key === draggedGroupId);
+    const targetIndex = groupedConversationRows.findIndex((group) => group.key === targetGroupKey);
+    if (draggedIndex === -1 || targetIndex === -1) {
+      clearDragState();
+      return;
+    }
+
+    const nextGroupedRows = [...groupedConversationRows];
+    const [draggedGroup] = nextGroupedRows.splice(draggedIndex, 1);
+    if (!draggedGroup) {
+      clearDragState();
+      return;
+    }
+
+    const adjustedTargetIndex = nextGroupedRows.findIndex((group) => group.key === targetGroupKey);
+    if (adjustedTargetIndex === -1) {
+      clearDragState();
+      return;
+    }
+
+    const insertIndex = getDropPosition(event) === 'before' ? adjustedTargetIndex : adjustedTargetIndex + 1;
+    nextGroupedRows.splice(insertIndex, 0, draggedGroup);
+
+    persistManualConversationGroupOrder(nextGroupedRows.map((group) => group.key));
+    replaceConversationLayout({
+      sessionIds: nextGroupedRows.flatMap((group) => group.items.filter((item) => item.section === 'open').map((item) => item.session.id)),
+      pinnedSessionIds: nextGroupedRows.flatMap((group) => group.items.filter((item) => item.section === 'pinned').map((item) => item.session.id)),
+      archivedSessionIds: archivedConversationIds,
+    });
+
+    const nextLocalWorkspacePaths = normalizeWorkspacePaths(
+      nextGroupedRows.flatMap((group) => group.executionTargetIsLocal && group.cwd ? [group.cwd] : []),
+    );
+    if (!sameStringLists(savedWorkspacePaths, nextLocalWorkspacePaths)) {
+      persistSavedWorkspacePathsState(nextLocalWorkspacePaths);
+      void api.setSavedWorkspacePaths(nextLocalWorkspacePaths).catch(() => {
+        // Ignore best-effort sync failures.
+      });
+    }
+
+    if (threadsSortMode !== 'manual') {
+      setThreadsSortMode('manual');
+      writeThreadsSortMode('manual');
+    }
+
     clearDragState();
   }
 
@@ -2856,6 +3099,10 @@ export function Sidebar() {
                 const showExecutionTargetHeader = !group.executionTargetIsLocal
                   && (!previousGroup || previousGroup.executionTargetKey !== group.executionTargetKey);
 
+                const groupDropPosition = canReorderConversationGroups && groupDropTarget?.groupKey === group.key && draggingGroupKey !== group.key
+                  ? groupDropTarget.position
+                  : null;
+
                 return (
                   <div key={`cwd:${group.key}`} className="space-y-0.5 pt-1.5 first:pt-0">
                     {showExecutionTargetHeader ? (
@@ -2865,12 +3112,20 @@ export function Sidebar() {
                       label={group.label}
                       cwd={group.cwd}
                       collapsed={collapsed}
+                      canDrag={canReorderConversationGroups}
+                      isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
+                      dropPosition={groupDropPosition}
+                      dragId={group.key}
                       onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
                       onNewConversation={() => handleNewConversation(group.cwd)}
                       onOpenInFinder={group.executionTargetIsLocal && group.cwd ? () => handleOpenConversationGroupInFinder(group.cwd, group.label) : undefined}
                       onEditName={() => handleRenameConversationGroup(group.key, group.defaultLabel, group.label)}
                       onArchiveThreads={groupSessionIds.length > 0 ? () => handleArchiveConversationGroup(group.label, groupSessionIds) : undefined}
                       onRemove={() => handleRemoveConversationGroup(group.key, group.label, group.cwd, groupSessionIds, groupIncludesDraft, group.executionTargetIsLocal)}
+                      onDragStart={canReorderConversationGroups ? (event) => handleConversationGroupDragStart(group.key, event) : undefined}
+                      onDragOver={canReorderConversationGroups ? (event) => handleConversationGroupDragOver(group.key, event) : undefined}
+                      onDrop={canReorderConversationGroups ? (event) => handleConversationGroupDrop(group.key, event) : undefined}
+                      onDragEnd={canReorderConversationGroups ? () => clearDragState() : undefined}
                     />
                     {!collapsed ? (
                       group.items.length > 0
