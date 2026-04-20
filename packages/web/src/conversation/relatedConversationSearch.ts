@@ -190,6 +190,7 @@ export function selectRecentConversationCandidates(
   return [...(sessions ?? [])]
     .filter((session) => session.messageCount > 0)
     .filter((session) => !options.closedOnly || isClosedConversation(session))
+    .filter((session) => workspaceCwd.length === 0 || normalizePath(session.cwd) === workspaceCwd)
     .filter((session) => {
       if (recentWindowMs === null) {
         return true;

@@ -19,7 +19,7 @@ function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' |
 }
 
 describe('selectRecentConversationCandidates', () => {
-  it('keeps only recent conversations and boosts the active workspace', () => {
+  it('keeps only recent conversations from the active workspace', () => {
     const sessions: SessionMeta[] = [
       buildSession({
         id: 'older',
@@ -46,7 +46,6 @@ describe('selectRecentConversationCandidates', () => {
       nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
     }).map((session) => session.id)).toEqual([
       'recent-current',
-      'recent-other',
     ]);
   });
 
@@ -87,7 +86,6 @@ describe('selectRecentConversationCandidates', () => {
       closedOnly: true,
     }).map((session) => session.id)).toEqual([
       'closed-current',
-      'closed-other',
     ]);
   });
 
@@ -148,7 +146,6 @@ describe('listRecentConversationResults', () => {
 
     expect(results.map((result) => result.sessionId)).toEqual([
       'recent-current',
-      'very-old-closed',
     ]);
     expect(results[0]?.sameWorkspace).toBe(true);
     expect(results[0]?.matchedTerms).toEqual([]);
