@@ -4,32 +4,14 @@ import VisionKit
 
 struct RootView: View {
     @ObservedObject var appModel: CompanionAppModel
-    @State private var showingPairHost = false
 
     var body: some View {
         Group {
             if let session = appModel.activeSession {
                 HostDashboardView(appModel: appModel, session: session)
             } else {
-                ContentUnavailableView {
-                    Label("Connect to a host", systemImage: "iphone.and.arrow.forward")
-                } description: {
-                    Text("Pair this device with a Personal Agent companion host and the app will mirror the host’s open and pinned conversations.")
-                } actions: {
-                    Button("Pair host") {
-                        showingPairHost = true
-                    }
-                    if !appModel.hosts.isEmpty {
-                        Button("Choose saved host") {
-                            appModel.hostSelectionPresented = true
-                        }
-                    }
-                }
-                .padding()
+                HostChooserRootView(appModel: appModel)
             }
-        }
-        .sheet(isPresented: $showingPairHost) {
-            PairHostView(appModel: appModel)
         }
         .sheet(isPresented: $appModel.hostSelectionPresented) {
             HostSelectionView(appModel: appModel)
@@ -48,6 +30,98 @@ struct RootView: View {
     }
 }
 
+private struct HostChooserRootView: View {
+    @ObservedObject var appModel: CompanionAppModel
+    @State private var editingHost: CompanionHostRecord?
+    @State private var showingPairHost = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if appModel.hosts.isEmpty {
+                    ContentUnavailableView {
+                        Label("Pair a host", systemImage: "server.rack")
+                    } description: {
+                        Text("Choose a Personal Agent host first, then work with chats, automations, and settings for that host.")
+                    } actions: {
+                        Button("Pair host") {
+                            showingPairHost = true
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 36)
+                    .listRowBackground(Color.clear)
+                } else {
+                    Section("Hosts") {
+                        ForEach(appModel.hosts, id: \.id) { host in
+                            HStack(alignment: .top, spacing: 12) {
+                                Button {
+                                    Task {
+                                        await appModel.selectHost(host.id)
+                                    }
+                                } label: {
+                                    HostSummaryView(host: host, isActive: appModel.activeHostId == host.id)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .buttonStyle(.plain)
+
+                                Menu {
+                                    Button {
+                                        editingHost = host
+                                    } label: {
+                                        Label("Edit", systemImage: "pencil")
+                                    }
+                                    Button(role: .destructive) {
+                                        appModel.removeHost(host)
+                                    } label: {
+                                        Label("Delete", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.title3)
+                                        .foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
+                                Button {
+                                    editingHost = host
+                                } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                .tint(.accentColor)
+                            }
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(role: .destructive) {
+                                    appModel.removeHost(host)
+                                } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Hosts")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingPairHost = true
+                    } label: {
+                        Label("Pair host", systemImage: "plus")
+                    }
+                }
+            }
+            .sheet(item: $editingHost) { host in
+                HostEditorView(appModel: appModel, host: host)
+            }
+            .sheet(isPresented: $showingPairHost) {
+                PairHostView(appModel: appModel)
+            }
+        }
+    }
+}
+
 struct HostDashboardView: View {
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
@@ -56,17 +130,12 @@ struct HostDashboardView: View {
         TabView {
             ConversationListView(appModel: appModel, session: session)
                 .tabItem {
-                    Label("Threads", systemImage: "message")
+                    Label("Chat", systemImage: "message")
                 }
 
             AutomationListView(session: session)
                 .tabItem {
                     Label("Automations", systemImage: "clock.arrow.circlepath")
-                }
-
-            RunsListView(session: session)
-                .tabItem {
-                    Label("Runs", systemImage: "bolt.horizontal.circle")
                 }
 
             HostSettingsView(appModel: appModel, session: session)
@@ -98,26 +167,6 @@ struct ConversationListView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(session.host.hostLabel)
-                            .font(.headline)
-                            .foregroundStyle(CompanionTheme.textPrimary)
-                        Text(session.host.baseURL)
-                            .font(.footnote)
-                            .foregroundStyle(CompanionTheme.textSecondary)
-                        Text("Paired as \(session.host.deviceLabel)")
-                            .font(.footnote)
-                            .foregroundStyle(CompanionTheme.textSecondary)
-                    }
-                    .padding(.vertical, 8)
-                    .listRowBackground(CompanionTheme.panel)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
-                    }
-                }
-
                 Section {
                     Picker("Filter", selection: $filterMode) {
                         ForEach(FilterMode.allCases) { mode in
@@ -190,10 +239,9 @@ struct ConversationListView: View {
             .scrollContentBackground(.hidden)
             .background(CompanionTheme.canvas)
             .listStyle(.insetGrouped)
-            .navigationTitle("Personal Agent")
+            .navigationTitle("Chat")
             .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .navigationDestination(for: String.self) { conversationId in
                 ConversationScreen(
                     viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]),

@@ -2,15 +2,15 @@ import Foundation
 import SwiftUI
 
 enum CompanionTheme {
-    static let canvas = Color(red: 0.06, green: 0.07, blue: 0.11)
-    static let panel = Color(red: 0.10, green: 0.12, blue: 0.18)
-    static let panelRaised = Color(red: 0.14, green: 0.16, blue: 0.23)
-    static let panelBorder = Color(red: 0.23, green: 0.25, blue: 0.35)
-    static let accent = Color(red: 0.53, green: 0.46, blue: 0.86)
-    static let accentSurface = Color(red: 0.20, green: 0.17, blue: 0.31)
-    static let textPrimary = Color.white
-    static let textSecondary = Color(red: 0.68, green: 0.71, blue: 0.80)
-    static let textDim = Color(red: 0.51, green: 0.55, blue: 0.66)
+    static let canvas = Color(uiColor: .systemGroupedBackground)
+    static let panel = Color(uiColor: .secondarySystemGroupedBackground)
+    static let panelRaised = Color(uiColor: .systemBackground)
+    static let panelBorder = Color.black.opacity(0.08)
+    static let accent = Color(red: 0.37, green: 0.33, blue: 0.86)
+    static let accentSurface = Color(red: 0.92, green: 0.90, blue: 0.98)
+    static let textPrimary = Color.primary
+    static let textSecondary = Color(uiColor: .secondaryLabel)
+    static let textDim = Color(uiColor: .tertiaryLabel)
 }
 
 struct CompanionHostRecord: Codable, Identifiable, Equatable {

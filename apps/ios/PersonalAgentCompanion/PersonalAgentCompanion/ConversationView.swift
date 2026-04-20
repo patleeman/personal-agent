@@ -23,6 +23,10 @@ struct ConversationScreen: View {
         viewModel.executionTargets.first(where: { $0.id == viewModel.currentExecutionTargetId })?.label ?? "Local"
     }
 
+    private var transcriptItems: [TranscriptRenderItem] {
+        buildTranscriptRenderItems(viewModel.blocks)
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -42,10 +46,20 @@ struct ConversationScreen: View {
                         .padding(.top, 80)
                     }
 
-                    ForEach(viewModel.blocks) { block in
-                        ConversationBlockView(block: block)
-                            .id(block.id)
+                    ForEach(transcriptItems) { item in
+                        switch item {
+                        case .message(let block):
+                            ConversationBlockView(block: block)
+                                .id(item.id)
+                        case .traceCluster(let cluster):
+                            TraceClusterView(cluster: cluster, live: isLiveTraceCluster(cluster))
+                                .id(item.id)
+                        }
                     }
+
+                    Color.clear
+                        .frame(height: 1)
+                        .id("conversation-bottom")
                 }
                 .padding(.horizontal, 14)
                 .padding(.top, 18)
@@ -56,7 +70,6 @@ struct ConversationScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -198,12 +211,7 @@ struct ConversationScreen: View {
             }
             .onChange(of: importedPhotoItems) { _, newItems in
                 Task {
-                    for item in newItems {
-                        if let draft = try? await PromptImageDraft.fromPhotosItem(item) {
-                            viewModel.addPromptImage(draft)
-                        }
-                    }
-                    importedPhotoItems.removeAll()
+                    await importPromptPhotos(newItems)
                 }
             }
             .onAppear {
@@ -213,12 +221,30 @@ struct ConversationScreen: View {
                 viewModel.stop()
             }
             .onChange(of: viewModel.blocks.count) { _, _ in
-                guard let last = viewModel.blocks.last else { return }
                 withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(last.id, anchor: .bottom)
+                    proxy.scrollTo("conversation-bottom", anchor: .bottom)
                 }
             }
         }
+    }
+
+    private func isLiveTraceCluster(_ cluster: TraceCluster) -> Bool {
+        if cluster.summary.hasRunning {
+            return true
+        }
+        guard viewModel.isStreaming, let lastClusterBlock = cluster.blocks.last else {
+            return false
+        }
+        return lastClusterBlock.type == "thinking" && viewModel.blocks.last?.id == lastClusterBlock.id
+    }
+
+    private func importPromptPhotos(_ items: [PhotosPickerItem]) async {
+        for item in items {
+            if let draft = try? await PromptImageDraft.fromPhotosItem(item) {
+                viewModel.addPromptImage(draft)
+            }
+        }
+        importedPhotoItems.removeAll()
     }
 
     private var composer: some View {
@@ -291,35 +317,38 @@ struct ConversationScreen: View {
             }
 
             HStack(alignment: .bottom, spacing: 12) {
-                TextField("Message", text: $viewModel.promptText, axis: .vertical)
-                    .lineLimit(1...6)
-                    .foregroundStyle(CompanionTheme.textPrimary)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(CompanionTheme.canvas, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                HStack(alignment: .bottom, spacing: 10) {
+                    Menu {
+                        PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
+                            Label("Photo library", systemImage: "photo.on.rectangle")
+                        }
+                        Button {
+                            showingImageFileImporter = true
+                        } label: {
+                            Label("Image file", systemImage: "folder.badge.plus")
+                        }
+                        Button {
+                            showingAttachments = true
+                        } label: {
+                            Label("Saved drawing", systemImage: "paperclip")
+                        }
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(CompanionTheme.accent)
+                            .frame(width: 28, height: 28)
                     }
 
-                Menu {
-                    PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
-                        Label("Photo library", systemImage: "photo.on.rectangle")
-                    }
-                    Button {
-                        showingImageFileImporter = true
-                    } label: {
-                        Label("Image file", systemImage: "folder.badge.plus")
-                    }
-                    Button {
-                        showingAttachments = true
-                    } label: {
-                        Label("Saved drawing", systemImage: "paperclip")
-                    }
-                } label: {
-                    Image(systemName: "plus.circle")
-                        .font(.title2)
-                        .foregroundStyle(CompanionTheme.textSecondary)
+                    TextField("Message", text: $viewModel.promptText, axis: .vertical)
+                        .lineLimit(1...6)
+                        .foregroundStyle(CompanionTheme.textPrimary)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                 }
 
                 if viewModel.isStreaming {
@@ -362,17 +391,599 @@ struct ConversationScreen: View {
     }
 }
 
+private enum TranscriptRenderItem: Identifiable {
+    case message(DisplayBlock)
+    case traceCluster(TraceCluster)
+
+    var id: String {
+        switch self {
+        case .message(let block):
+            return "message:\(block.id)"
+        case .traceCluster(let cluster):
+            return cluster.id
+        }
+    }
+}
+
+private struct TraceCluster: Identifiable {
+    let id: String
+    let blocks: [DisplayBlock]
+    let summary: TraceClusterSummary
+}
+
+private struct TraceClusterSummary {
+    let stepCount: Int
+    let categories: [TraceSummaryCategory]
+    let durationMs: Double?
+    let hasError: Bool
+    let hasRunning: Bool
+}
+
+private struct TraceSummaryCategory: Identifiable {
+    enum Kind {
+        case thinking
+        case tool
+    }
+
+    let id: String
+    let kind: Kind
+    let label: String
+    var count: Int
+    let tool: String?
+}
+
+private enum DisclosurePreference {
+    case auto
+    case open
+    case closed
+}
+
+private struct ToolDisplayMeta {
+    let label: String
+    let icon: String
+    let tint: Color
+    let background: Color
+}
+
+private let maxVisibleTraceBlocks = 5
+private let liveExpandedTraceTailCount = 3
+
+private func buildTranscriptRenderItems(_ blocks: [DisplayBlock]) -> [TranscriptRenderItem] {
+    var items: [TranscriptRenderItem] = []
+    var pendingTraceBlocks: [DisplayBlock] = []
+
+    func flushPendingTraceBlocks() {
+        guard !pendingTraceBlocks.isEmpty else {
+            return
+        }
+        let cluster = TraceCluster(
+            id: "trace:\(pendingTraceBlocks.first?.id ?? UUID().uuidString)",
+            blocks: pendingTraceBlocks,
+            summary: summarizeTraceCluster(pendingTraceBlocks)
+        )
+        items.append(.traceCluster(cluster))
+        pendingTraceBlocks.removeAll()
+    }
+
+    for block in blocks {
+        if isTraceConversationBlock(block) {
+            pendingTraceBlocks.append(block)
+        } else {
+            flushPendingTraceBlocks()
+            items.append(.message(block))
+        }
+    }
+
+    flushPendingTraceBlocks()
+    return items
+}
+
+private func isTraceConversationBlock(_ block: DisplayBlock) -> Bool {
+    switch block.type {
+    case "thinking", "tool_use":
+        return true
+    default:
+        return false
+    }
+}
+
+private func summarizeTraceCluster(_ blocks: [DisplayBlock]) -> TraceClusterSummary {
+    var categories: [TraceSummaryCategory] = []
+    var totalDurationMs = 0.0
+    var hasDuration = false
+    var hasError = false
+    var hasRunning = false
+
+    func appendCategory(id: String, kind: TraceSummaryCategory.Kind, label: String, tool: String? = nil) {
+        if let index = categories.firstIndex(where: { $0.id == id }) {
+            categories[index].count += 1
+            return
+        }
+        categories.append(TraceSummaryCategory(id: id, kind: kind, label: label, count: 1, tool: tool))
+    }
+
+    for block in blocks {
+        switch block.type {
+        case "thinking":
+            appendCategory(id: "thinking", kind: .thinking, label: "thinking")
+        case "tool_use":
+            let toolName = block.tool?.nilIfBlank ?? "tool"
+            appendCategory(id: "tool:\(toolName)", kind: .tool, label: toolName, tool: toolName)
+            if let durationMs = block.durationMs, durationMs > 0 {
+                totalDurationMs += durationMs
+                hasDuration = true
+            } else {
+                hasRunning = true
+            }
+            if block.message?.nilIfBlank != nil {
+                hasError = true
+            }
+        default:
+            break
+        }
+    }
+
+    return TraceClusterSummary(
+        stepCount: blocks.count,
+        categories: categories,
+        durationMs: hasDuration ? totalDurationMs : nil,
+        hasError: hasError,
+        hasRunning: hasRunning
+    )
+}
+
+private func resolveDisclosureOpen(autoOpen: Bool, preference: DisclosurePreference) -> Bool {
+    switch preference {
+    case .auto:
+        return autoOpen
+    case .open:
+        return true
+    case .closed:
+        return false
+    }
+}
+
+private func toggleDisclosurePreference(autoOpen: Bool, preference: DisclosurePreference) -> DisclosurePreference {
+    resolveDisclosureOpen(autoOpen: autoOpen, preference: preference) ? .closed : .open
+}
+
+private func toolMeta(_ tool: String?) -> ToolDisplayMeta {
+    switch tool?.nilIfBlank {
+    case "bash":
+        return ToolDisplayMeta(label: "bash", icon: "terminal", tint: .orange, background: .orange.opacity(0.08))
+    case "read":
+        return ToolDisplayMeta(label: "read", icon: "doc.text.magnifyingglass", tint: .indigo, background: .indigo.opacity(0.08))
+    case "edit":
+        return ToolDisplayMeta(label: "edit", icon: "square.and.pencil", tint: .blue, background: .blue.opacity(0.08))
+    case "write":
+        return ToolDisplayMeta(label: "write", icon: "doc.badge.plus", tint: .green, background: .green.opacity(0.08))
+    case "web_search":
+        return ToolDisplayMeta(label: "web_search", icon: "globe", tint: .teal, background: .teal.opacity(0.08))
+    case "run":
+        return ToolDisplayMeta(label: "run", icon: "bolt.horizontal.circle", tint: .purple, background: .purple.opacity(0.08))
+    case "scheduled_task":
+        return ToolDisplayMeta(label: "scheduled_task", icon: "clock.arrow.circlepath", tint: .purple, background: .purple.opacity(0.08))
+    case "artifact":
+        return ToolDisplayMeta(label: "artifact", icon: "doc.richtext", tint: .pink, background: .pink.opacity(0.08))
+    default:
+        let label = tool?.nilIfBlank ?? "tool"
+        return ToolDisplayMeta(label: label, icon: "wrench.adjustable", tint: .gray, background: .gray.opacity(0.08))
+    }
+}
+
+private func traceCategoryTint(_ category: TraceSummaryCategory) -> Color {
+    switch category.kind {
+    case .thinking:
+        return CompanionTheme.textSecondary
+    case .tool:
+        return toolMeta(category.tool).tint
+    }
+}
+
+private func previewText(_ text: String?, maxLength: Int = 84) -> String {
+    let normalized = (text ?? "")
+        .split(whereSeparator: \Character.isNewline)
+        .joined(separator: " ")
+        .replacingOccurrences(of: "\t", with: " ")
+        .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        .trimmed
+    guard !normalized.isEmpty else {
+        return ""
+    }
+    if normalized.count <= maxLength {
+        return normalized
+    }
+    let endIndex = normalized.index(normalized.startIndex, offsetBy: maxLength - 1)
+    return "\(normalized[..<endIndex])…"
+}
+
+private func formatDurationLabel(_ durationMs: Double?) -> String? {
+    guard let durationMs, durationMs > 0 else {
+        return nil
+    }
+    if durationMs >= 1000 {
+        return String(format: "%.1fs", durationMs / 1000)
+    }
+    return "\(Int(durationMs.rounded()))ms"
+}
+
+private func toolPreview(for block: DisplayBlock) -> String {
+    guard let input = block.input?.objectValue else {
+        return ""
+    }
+
+    if let command = input["command"]?.stringValue?.split(separator: "\n").first {
+        return previewText(String(command), maxLength: 72)
+    }
+    if let path = input["path"]?.stringValue {
+        return previewText(path, maxLength: 72)
+    }
+    if let url = input["url"]?.stringValue {
+        return previewText(url.replacingOccurrences(of: "https://", with: ""), maxLength: 72)
+    }
+    if let query = input["query"]?.stringValue {
+        return previewText(query, maxLength: 72)
+    }
+    if let action = input["action"]?.stringValue {
+        return previewText(action, maxLength: 72)
+    }
+    return ""
+}
+
+private func prettyJSONString(_ value: JSONValue?) -> String? {
+    guard let value else {
+        return nil
+    }
+    if case .string(let string) = value {
+        return string
+    }
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+    guard let data = try? encoder.encode(value), let string = String(data: data, encoding: .utf8) else {
+        return nil
+    }
+    return string
+}
+
+private func shouldAutoOpenTraceRow(block: DisplayBlock, index: Int, total: Int, live: Bool) -> Bool {
+    if block.type == "tool_use", block.durationMs == nil {
+        return true
+    }
+    guard live else {
+        return false
+    }
+    return index >= max(0, total - liveExpandedTraceTailCount)
+}
+
+private struct TraceSummaryChip: View {
+    let category: TraceSummaryCategory
+
+    var body: some View {
+        let tint = traceCategoryTint(category)
+        Text(category.count > 1 ? "\(category.label) ×\(category.count)" : category.label)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(tint.opacity(0.12), in: Capsule())
+    }
+}
+
+private struct TraceClusterView: View {
+    let cluster: TraceCluster
+    let live: Bool
+
+    @State private var preference: DisclosurePreference = .auto
+    @State private var showAllBlocks = false
+
+    private var autoOpen: Bool { live || cluster.summary.hasRunning }
+    private var open: Bool { resolveDisclosureOpen(autoOpen: autoOpen, preference: preference) }
+    private var hiddenBlockCount: Int { max(0, cluster.blocks.count - maxVisibleTraceBlocks) }
+
+    private var visibleBlocks: [DisplayBlock] {
+        if showAllBlocks || hiddenBlockCount == 0 {
+            return cluster.blocks
+        }
+        return Array(cluster.blocks.suffix(maxVisibleTraceBlocks))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                preference = toggleDisclosurePreference(autoOpen: autoOpen, preference: preference)
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        if autoOpen {
+                            ProgressView()
+                                .progressViewStyle(.circular)
+                                .tint(cluster.summary.hasError ? .red : CompanionTheme.accent)
+                                .scaleEffect(0.8)
+                        } else {
+                            Image(systemName: cluster.summary.hasError ? "exclamationmark.circle" : "ellipsis")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(cluster.summary.hasError ? .red : CompanionTheme.textSecondary)
+                        }
+
+                        Text(autoOpen ? "Working" : "Internal work")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(CompanionTheme.textPrimary)
+                        Text("· \(cluster.summary.stepCount) step\(cluster.summary.stepCount == 1 ? "" : "s")")
+                            .font(.caption)
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                        Spacer()
+                        if live {
+                            Text("live")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(CompanionTheme.accent)
+                        }
+                        if let duration = formatDurationLabel(cluster.summary.durationMs), !autoOpen {
+                            Text(duration)
+                                .font(.caption2)
+                                .foregroundStyle(CompanionTheme.textSecondary)
+                        }
+                        Text(open ? "Hide" : "Show")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+
+                    if !cluster.summary.categories.isEmpty {
+                        HStack(spacing: 6) {
+                            ForEach(Array(cluster.summary.categories.prefix(3))) { category in
+                                TraceSummaryChip(category: category)
+                            }
+                            let remaining = max(0, cluster.summary.categories.count - 3)
+                            if remaining > 0 {
+                                Text("+\(remaining) more")
+                                    .font(.caption2)
+                                    .foregroundStyle(CompanionTheme.textSecondary)
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(cluster.summary.hasError ? Color.red.opacity(0.06) : CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(cluster.summary.hasError ? Color.red.opacity(0.22) : CompanionTheme.panelBorder, lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+
+            if open {
+                VStack(alignment: .leading, spacing: 8) {
+                    if hiddenBlockCount > 0 {
+                        HStack(spacing: 8) {
+                            Text(showAllBlocks ? "Showing all \(cluster.blocks.count) steps." : "\(hiddenBlockCount) earlier step\(hiddenBlockCount == 1 ? "" : "s") summarized above.")
+                                .font(.caption)
+                                .foregroundStyle(CompanionTheme.textSecondary)
+                            Spacer()
+                            Button(showAllBlocks ? "Show latest \(maxVisibleTraceBlocks)" : "Show all") {
+                                showAllBlocks.toggle()
+                            }
+                            .font(.caption.weight(.semibold))
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(visibleBlocks.enumerated()), id: \.element.id) { index, block in
+                            switch block.type {
+                            case "thinking":
+                                ThinkingTraceRow(
+                                    block: block,
+                                    autoOpen: shouldAutoOpenTraceRow(block: block, index: index, total: visibleBlocks.count, live: live)
+                                )
+                            case "tool_use":
+                                ToolTraceRow(
+                                    block: block,
+                                    autoOpen: shouldAutoOpenTraceRow(block: block, index: index, total: visibleBlocks.count, live: live)
+                                )
+                            default:
+                                EmptyView()
+                            }
+                        }
+                    }
+                    .padding(.leading, 14)
+                    .overlay(alignment: .leading) {
+                        Rectangle()
+                            .fill(CompanionTheme.panelBorder)
+                            .frame(width: 1)
+                            .padding(.vertical, 4)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct ThinkingTraceRow: View {
+    let block: DisplayBlock
+    let autoOpen: Bool
+
+    @State private var preference: DisclosurePreference = .auto
+
+    private var open: Bool { resolveDisclosureOpen(autoOpen: autoOpen, preference: preference) }
+
+    var body: some View {
+        Button {
+            preference = toggleDisclosurePreference(autoOpen: autoOpen, preference: preference)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                    Text("Thinking")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                    Spacer()
+                    if autoOpen {
+                        Text("live")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+                    Text(open ? "Hide" : "Show")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+
+                if open {
+                    MarkdownText(block.text ?? "")
+                        .font(.callout)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .textSelection(.enabled)
+                } else {
+                    Text(previewText(block.text))
+                        .font(.caption)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(CompanionTheme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ToolTraceRow: View {
+    let block: DisplayBlock
+    let autoOpen: Bool
+
+    @State private var preference: DisclosurePreference = .auto
+
+    private var meta: ToolDisplayMeta { toolMeta(block.tool) }
+    private var isRunning: Bool { block.durationMs == nil }
+    private var isError: Bool { block.message?.nilIfBlank != nil }
+    private var open: Bool { resolveDisclosureOpen(autoOpen: autoOpen || isRunning, preference: preference) }
+    private var preview: String { toolPreview(for: block) }
+
+    var body: some View {
+        Button {
+            preference = toggleDisclosurePreference(autoOpen: autoOpen || isRunning, preference: preference)
+        } label: {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    if isRunning {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(meta.tint)
+                            .scaleEffect(0.75)
+                    } else {
+                        Image(systemName: meta.icon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(isError ? .red : meta.tint)
+                    }
+                    Text(meta.label)
+                        .font(.caption.weight(.semibold).monospaced())
+                        .foregroundStyle(isError ? .red : meta.tint)
+                    if !preview.isEmpty {
+                        Text(preview)
+                            .font(.caption)
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                            .lineLimit(1)
+                    }
+                    Spacer()
+                    if let duration = formatDurationLabel(block.durationMs), !isRunning {
+                        Text(duration)
+                            .font(.caption2)
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+                    if isRunning {
+                        Text("running…")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(meta.tint)
+                    }
+                    Text(open ? "Hide" : "Show")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+
+                if open {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if let input = prettyJSONString(block.input), !input.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                TranscriptSectionLabel(title: "Input", tint: meta.tint)
+                                Text(input)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                    .textSelection(.enabled)
+                            }
+                        }
+
+                        if let output = block.output?.nilIfBlank {
+                            VStack(alignment: .leading, spacing: 4) {
+                                TranscriptSectionLabel(title: isRunning ? "Live output" : "Output", tint: meta.tint)
+                                Text(output)
+                                    .font(.caption.monospaced())
+                                    .foregroundStyle(isError ? .red : CompanionTheme.textPrimary)
+                                    .textSelection(.enabled)
+                            }
+                        } else if isRunning {
+                            Text("Waiting for output…")
+                                .font(.caption)
+                                .foregroundStyle(CompanionTheme.textSecondary)
+                        } else if block.outputDeferred == true {
+                            Text("Older tool output is available on desktop.")
+                                .font(.caption)
+                                .foregroundStyle(CompanionTheme.textSecondary)
+                        }
+
+                        if let message = block.message?.nilIfBlank, message != block.output?.nilIfBlank {
+                            Text(message)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background((isError ? Color.red.opacity(0.08) : meta.background), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isError ? Color.red.opacity(0.2) : meta.tint.opacity(0.14), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct TranscriptSectionLabel: View {
+    let title: String
+    let tint: Color
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(tint)
+    }
+}
+
 private struct ConversationBlockView: View {
     let block: DisplayBlock
 
     private var isUser: Bool { block.type == "user" }
+    private var showsHeader: Bool { block.type != "user" && block.type != "text" }
 
     var body: some View {
         HStack {
             if isUser { Spacer(minLength: 48) }
 
-            VStack(alignment: .leading, spacing: 10) {
-                header(roleTitle, color: roleColor)
+            VStack(alignment: .leading, spacing: showsHeader ? 10 : 8) {
+                if showsHeader {
+                    header(roleTitle, color: roleColor)
+                }
 
                 content
 
@@ -380,7 +991,7 @@ private struct ConversationBlockView: View {
                     .font(.caption2)
                     .foregroundStyle(CompanionTheme.textDim)
             }
-            .padding(14)
+            .padding(12)
             .frame(maxWidth: 560, alignment: .leading)
             .background(backgroundColor, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
             .overlay {
@@ -468,8 +1079,6 @@ private struct ConversationBlockView: View {
 
     private var roleTitle: String {
         switch block.type {
-        case "user": return "You"
-        case "text": return "Assistant"
         case "thinking": return "Thinking"
         case "tool_use": return block.tool ?? "Tool"
         case "context": return block.customType ?? "Context"
@@ -482,10 +1091,8 @@ private struct ConversationBlockView: View {
 
     private var roleColor: Color {
         switch block.type {
-        case "user": return CompanionTheme.accent
-        case "text": return .green
         case "thinking": return CompanionTheme.textSecondary
-        case "tool_use": return .orange
+        case "tool_use": return toolMeta(block.tool).tint
         case "context": return .purple
         case "summary": return .teal
         case "image": return .indigo
@@ -495,11 +1102,14 @@ private struct ConversationBlockView: View {
     }
 
     private var backgroundColor: Color {
-        isUser ? CompanionTheme.accentSurface : CompanionTheme.panel
+        if isUser {
+            return CompanionTheme.accentSurface
+        }
+        return block.type == "text" ? CompanionTheme.panelRaised : CompanionTheme.panel
     }
 
     private var borderColor: Color {
-        isUser ? CompanionTheme.accent.opacity(0.45) : CompanionTheme.panelBorder
+        isUser ? CompanionTheme.accent.opacity(0.18) : CompanionTheme.panelBorder
     }
 
     @ViewBuilder
@@ -512,6 +1122,22 @@ private struct ConversationBlockView: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(CompanionTheme.textPrimary)
         }
+    }
+}
+
+private extension JSONValue {
+    var objectValue: [String: JSONValue]? {
+        guard case .object(let value) = self else {
+            return nil
+        }
+        return value
+    }
+
+    var stringValue: String? {
+        guard case .string(let value) = self else {
+            return nil
+        }
+        return value
     }
 }
 

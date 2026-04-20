@@ -68,7 +68,12 @@ From the repo root:
 
 ```bash
 npm run ios:dev:prepare
+npm run ios:dev
 ```
+
+`npm run ios:dev` starts the local companion host, boots the simulator, installs the app, and launches it already paired.
+
+If you want to manage the pieces separately, use:
 
 Terminal 1:
 
@@ -122,8 +127,7 @@ The test target includes a real-host round-trip that:
 - pairs against a live companion host
 - creates a conversation
 - creates and downloads an attachment
-- sends a real prompt over the companion socket
-- waits for a live streamed assistant response
+- fetches real conversation bootstrap state over the companion socket
 
 Fast path from the repo root:
 
@@ -131,7 +135,7 @@ Fast path from the repo root:
 npm run ios:test:live
 ```
 
-That targets only the real-host iOS integration tests against the local dev host and rewrites the config file automatically.
+That targets only the real-host iOS integration tests against the local dev host and rewrites the config file automatically. By default it does not send a real model prompt, so it stays fast and works even when you do not have model credentials loaded.
 
 Manual path: enable it with a config file before `xcodebuild test`:
 
@@ -140,7 +144,8 @@ Manual path: enable it with a config file before `xcodebuild test`:
   "enabled": true,
   "baseURL": "http://127.0.0.1:3845",
   "pairingCode": "XXXX-XXXX-XXXX",
-  "cwd": "/absolute/path/to/repo"
+  "cwd": "/absolute/path/to/repo",
+  "exercisePrompt": false
 }
 ```
 
@@ -157,7 +162,10 @@ PA_IOS_LIVE_COMPANION_TEST=1
 PA_IOS_LIVE_COMPANION_URL=http://127.0.0.1:3845
 PA_IOS_LIVE_COMPANION_PAIRING_CODE=XXXX-XXXX-XXXX
 PA_IOS_LIVE_COMPANION_CWD=/absolute/path/to/repo
+PA_IOS_LIVE_COMPANION_EXERCISE_PROMPT=1
 ```
+
+Set `PA_IOS_LIVE_COMPANION_EXERCISE_PROMPT=1` only when you want the live test to send a real model prompt and wait for a streamed assistant response.
 
 ## Bootstrap host env for simulator smoke tests
 

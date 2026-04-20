@@ -31,8 +31,9 @@ final class CompanionAppModel: ObservableObject {
             defaults.set(next, forKey: surfaceInstallationIdKey)
         }
         loadHosts()
+        seedMockHostIfNeeded()
         seedBootstrapHostIfNeeded()
-        bootstrapInitialSession()
+        bootstrapInitialSelection()
     }
 
     func pairHost(baseURLString: String, code: String, deviceLabel: String) async {
@@ -124,7 +125,7 @@ final class CompanionAppModel: ObservableObject {
             hosts[index] = updated
             persistHosts()
 
-            if activeHostId == updated.id {
+            if activeSession != nil, activeHostId == updated.id {
                 await selectHost(updated.id)
             }
             return true
@@ -144,8 +145,9 @@ final class CompanionAppModel: ObservableObject {
         transientTokens.removeValue(forKey: host.id)
         KeychainStore.shared.removeToken(for: host.id)
         persistHosts()
-        if activeHostId == nil, let next = hosts.first {
-            Task { await selectHost(next.id) }
+        if activeHostId == nil {
+            activeHostId = hosts.first?.id
+            persistHosts()
         }
     }
 
@@ -153,18 +155,31 @@ final class CompanionAppModel: ObservableObject {
         activeSession?.refresh()
     }
 
-    private func bootstrapInitialSession() {
-        if useMockMode {
-            Task { await selectHost(UUID()) }
-            return
-        }
+    private func bootstrapInitialSelection() {
         guard let value = defaults.string(forKey: activeHostStorageKey), let id = UUID(uuidString: value), hosts.contains(where: { $0.id == id }) else {
-            if let first = hosts.first {
-                Task { await selectHost(first.id) }
-            }
+            activeHostId = hosts.first?.id
+            persistHosts()
             return
         }
-        Task { await selectHost(id) }
+        activeHostId = id
+    }
+
+    private func seedMockHostIfNeeded() {
+        guard useMockMode, hosts.isEmpty else {
+            return
+        }
+
+        let record = CompanionHostRecord(
+            id: UUID(uuidString: "99999999-9999-4999-8999-999999999999")!,
+            baseURL: "https://demo.personal-agent.invalid",
+            hostLabel: "Demo Host",
+            hostInstanceId: "host_demo",
+            deviceId: "device_demo",
+            deviceLabel: "iPhone Demo"
+        )
+        hosts = [record]
+        activeHostId = record.id
+        persistHosts()
     }
 
     private func seedBootstrapHostIfNeeded() {

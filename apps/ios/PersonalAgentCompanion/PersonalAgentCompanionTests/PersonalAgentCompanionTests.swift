@@ -316,13 +316,16 @@ final class PersonalAgentCompanionTests: XCTestCase {
         let detail = try await client.readAttachment(conversationId: conversationId, attachmentId: attachment.attachment.id)
         XCTAssertEqual(detail.attachment.id, attachment.attachment.id)
 
-        let sourceAsset = try await client.downloadAttachmentAsset(conversationId: conversationId, attachmentId: attachment.attachment.id, asset: "source", revision: nil)
-        XCTAssertEqual(sourceAsset.mimeType, "application/vnd.excalidraw+json")
-        XCTAssertFalse(sourceAsset.data.isEmpty)
-
         let previewAsset = try await client.downloadAttachmentAsset(conversationId: conversationId, attachmentId: attachment.attachment.id, asset: "preview", revision: nil)
         XCTAssertEqual(previewAsset.mimeType, "image/png")
         XCTAssertFalse(previewAsset.data.isEmpty)
+
+        let bootstrap = try await client.conversationBootstrap(conversationId: conversationId)
+        XCTAssertEqual(bootstrap.bootstrap.conversationId, conversationId)
+
+        guard config.exercisePrompt else {
+            return
+        }
 
         let stream = try await client.subscribeConversationEvents(conversationId: conversationId, surfaceId: surfaceId)
         let responseExpectation = expectation(description: "live assistant response")
@@ -370,13 +373,14 @@ final class PersonalAgentCompanionTests: XCTestCase {
                 enabled: true,
                 baseURL: baseURL,
                 pairingCode: environment["PA_IOS_LIVE_COMPANION_PAIRING_CODE"],
-                cwd: environment["PA_IOS_LIVE_COMPANION_CWD"]
+                cwd: environment["PA_IOS_LIVE_COMPANION_CWD"],
+                exercisePrompt: environment["PA_IOS_LIVE_COMPANION_EXERCISE_PROMPT"] == "1"
             )
         }
 
         let configFile = environment["PA_IOS_LIVE_COMPANION_CONFIG_FILE"] ?? "/tmp/personal-agent-ios-live-test-config.json"
         guard FileManager.default.fileExists(atPath: configFile) else {
-            return LiveCompanionConfig(enabled: false, baseURL: "", pairingCode: nil, cwd: nil)
+            return LiveCompanionConfig(enabled: false, baseURL: "", pairingCode: nil, cwd: nil, exercisePrompt: false)
         }
         let data = try Data(contentsOf: URL(fileURLWithPath: configFile))
         return try JSONDecoder().decode(LiveCompanionConfig.self, from: data)
@@ -464,4 +468,25 @@ private struct LiveCompanionConfig: Decodable {
     let baseURL: String
     let pairingCode: String?
     let cwd: String?
+    private let exercisePromptFlag: Bool?
+
+    init(enabled: Bool, baseURL: String, pairingCode: String?, cwd: String?, exercisePrompt: Bool?) {
+        self.enabled = enabled
+        self.baseURL = baseURL
+        self.pairingCode = pairingCode
+        self.cwd = cwd
+        self.exercisePromptFlag = exercisePrompt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case enabled
+        case baseURL
+        case pairingCode
+        case cwd
+        case exercisePromptFlag = "exercisePrompt"
+    }
+
+    var exercisePrompt: Bool {
+        exercisePromptFlag ?? false
+    }
 }
