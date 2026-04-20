@@ -66,13 +66,6 @@ struct ConversationScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        if let meta = viewModel.sessionMeta {
-                            Section("Current session") {
-                                SessionMenuSummaryRow(label: "Model", value: meta.model)
-                                SessionMenuSummaryRow(label: "Working directory", value: meta.cwd)
-                            }
-                        }
-
                         Section("Execution target") {
                             ForEach(viewModel.executionTargets) { target in
                                 Button {
@@ -1288,24 +1281,6 @@ private struct EmptyConversationState: View {
     }
 }
 
-private struct SessionMenuSummaryRow: View {
-    let label: String
-    let value: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(label)
-                .font(.caption2)
-                .foregroundStyle(CompanionTheme.textDim)
-            Text(value)
-                .font(.footnote)
-                .foregroundStyle(CompanionTheme.textPrimary)
-                .lineLimit(3)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 2)
-    }
-}
 
 private struct ConversationCwdEditorView: View {
     @Environment(\.dismiss) private var dismiss
