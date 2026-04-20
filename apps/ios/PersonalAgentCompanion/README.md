@@ -43,6 +43,12 @@ For the fastest local UI smoke tests without a running host:
 npm run ios:demo
 ```
 
+If you want to open straight into a simulated in-progress turn so you can test steer, follow-up, and parallel prompts:
+
+```bash
+npm run ios:demo:running
+```
+
 That command:
 
 - pulls a few recent real transcripts from this Mac into `apps/ios/PersonalAgentCompanion/demo-data/local-transcripts.json`
@@ -50,7 +56,9 @@ That command:
 - boots the simulator
 - reinstalls the app with a clean sandbox
 - launches it in mock mode using those local transcripts as the demo seed
-- auto-connects to the demo host so you land in the conversation list immediately
+- auto-connects to the demo host
+- with `ios:demo`, lands in the conversation list
+- with `ios:demo:running`, opens the first demo conversation with a one-tap **Start simulated run** control so you can exercise steer, follow-up, and parallel prompt flows
 
 If you just want to refresh the local demo transcript snapshot without launching the app:
 

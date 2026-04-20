@@ -792,9 +792,7 @@ async function demoRefreshCommand() {
   }
 }
 
-async function demoCommand() {
-  loadDevEnvDefaults();
-  await demoRefreshCommand();
+async function launchDemo({ openConversation = false, startRunningConversation = false } = {}) {
   await buildInstallAndLaunchSimulator({
     device: simulatorDevice,
     resetAppState: true,
@@ -802,11 +800,25 @@ async function demoCommand() {
       SIMCTL_CHILD_PA_IOS_MOCK_MODE: '1',
       SIMCTL_CHILD_PA_IOS_USE_DEVICE_DEMO_DATA: '1',
       SIMCTL_CHILD_PA_IOS_AUTO_CONNECT_MOCK_HOST: '1',
-      SIMCTL_CHILD_PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION: '1',
+      ...(openConversation ? { SIMCTL_CHILD_PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION: '1' } : {}),
+      ...(startRunningConversation ? { SIMCTL_CHILD_PA_IOS_AUTO_START_MOCK_RUNNING: '1' } : {}),
       SIMCTL_CHILD_PA_IOS_DEMO_SNAPSHOT_FILE: demoSnapshotFile,
     },
   });
+}
+
+async function demoCommand() {
+  loadDevEnvDefaults();
+  await demoRefreshCommand();
+  await launchDemo();
   log(`Simulator launched in demo mode using ${demoSnapshotFile}`);
+}
+
+async function demoRunningCommand() {
+  loadDevEnvDefaults();
+  await demoRefreshCommand();
+  await launchDemo({ openConversation: true, startRunningConversation: true });
+  log(`Simulator launched in running-demo mode using ${demoSnapshotFile}`);
 }
 
 async function prepareCommand() {
@@ -885,6 +897,9 @@ try {
     case 'demo':
       await demoCommand();
       break;
+    case 'demo-running':
+      await demoRunningCommand();
+      break;
     case 'open-setup-url':
       await openSetupUrlCommand();
       break;
@@ -892,7 +907,7 @@ try {
       await testLiveCommand();
       break;
     default:
-      log('Usage: node scripts/ios-dev.mjs <prepare|host|sim|dev|demo-refresh|demo|open-setup-url|test-live>');
+      log('Usage: node scripts/ios-dev.mjs <prepare|host|sim|dev|demo-refresh|demo|demo-running|open-setup-url|test-live>');
       process.exit(command ? 1 : 0);
   }
 
