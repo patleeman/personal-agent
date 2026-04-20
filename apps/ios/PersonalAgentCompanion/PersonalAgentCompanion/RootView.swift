@@ -153,6 +153,7 @@ struct ConversationListView: View {
     @State private var path: [String] = []
     @State private var showingHostSelection = false
     @State private var isCreatingConversation = false
+    @State private var autoOpenedDemoConversation = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -274,6 +275,28 @@ struct ConversationListView: View {
             .sheet(isPresented: $showingHostSelection) {
                 HostSelectionView(appModel: appModel)
             }
+            .onAppear {
+                autoOpenFirstConversationIfNeeded()
+            }
+            .onChange(of: session.sections) { _, _ in
+                autoOpenFirstConversationIfNeeded()
+            }
+        }
+    }
+
+    private func autoOpenFirstConversationIfNeeded() {
+        guard !autoOpenedDemoConversation,
+              ProcessInfo.processInfo.environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1",
+              let firstConversationId = session.sections.first?.sessions.first?.id else {
+            return
+        }
+        autoOpenedDemoConversation = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            guard path.isEmpty else {
+                return
+            }
+            path = [firstConversationId]
         }
     }
 }

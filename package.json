@@ -16,6 +16,8 @@
     "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.config.mjs --publish never",
     "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.config.mjs --dir",
     "ios:dev": "node scripts/ios-dev.mjs dev",
+    "ios:demo": "node scripts/ios-dev.mjs demo",
+    "ios:demo:refresh": "node scripts/ios-dev.mjs demo-refresh",
     "ios:dev:prepare": "node scripts/ios-dev.mjs prepare",
     "ios:dev:host": "node scripts/ios-dev.mjs host",
     "ios:dev:sim": "node scripts/ios-dev.mjs sim",

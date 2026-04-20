@@ -159,9 +159,20 @@ final class CompanionAppModel: ObservableObject {
         guard let value = defaults.string(forKey: activeHostStorageKey), let id = UUID(uuidString: value), hosts.contains(where: { $0.id == id }) else {
             activeHostId = hosts.first?.id
             persistHosts()
+            autoConnectMockHostIfRequested()
             return
         }
         activeHostId = id
+        autoConnectMockHostIfRequested()
+    }
+
+    private func autoConnectMockHostIfRequested() {
+        guard useMockMode, environment["PA_IOS_AUTO_CONNECT_MOCK_HOST"] == "1", let activeHostId else {
+            return
+        }
+        Task {
+            await selectHost(activeHostId)
+        }
     }
 
     private func seedMockHostIfNeeded() {

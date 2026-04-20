@@ -37,7 +37,28 @@ xcodebuild test \
 
 ## Mock mode
 
-For local UI smoke tests without a running host:
+For the fastest local UI smoke tests without a running host:
+
+```bash
+npm run ios:demo
+```
+
+That command:
+
+- pulls a few recent real transcripts from this Mac into `apps/ios/PersonalAgentCompanion/demo-data/local-transcripts.json`
+- prefers conversations that already contain tool calls
+- boots the simulator
+- reinstalls the app with a clean sandbox
+- launches it in mock mode using those local transcripts as the demo seed
+- auto-connects to the demo host so you land in the conversation list immediately
+
+If you just want to refresh the local demo transcript snapshot without launching the app:
+
+```bash
+npm run ios:demo:refresh
+```
+
+Manual mock-mode launch still works too:
 
 ```bash
 cd apps/ios/PersonalAgentCompanion
@@ -52,7 +73,12 @@ APP=$(find ~/Library/Developer/Xcode/DerivedData/PersonalAgentCompanion-* \
 
 xcrun simctl boot 'iPhone 17 Pro'
 xcrun simctl install booted "$APP"
-SIMCTL_CHILD_PA_IOS_MOCK_MODE=1 xcrun simctl launch booted com.personalagent.ios.companion
+SIMCTL_CHILD_PA_IOS_MOCK_MODE=1 \
+SIMCTL_CHILD_PA_IOS_USE_DEVICE_DEMO_DATA=1 \
+SIMCTL_CHILD_PA_IOS_AUTO_CONNECT_MOCK_HOST=1 \
+SIMCTL_CHILD_PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION=1 \
+SIMCTL_CHILD_PA_IOS_DEMO_SNAPSHOT_FILE="$PWD/demo-data/local-transcripts.json" \
+  xcrun simctl launch booted com.personalagent.ios.companion
 ```
 
 Optional host convenience env var:

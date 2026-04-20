@@ -14,6 +14,7 @@ const hostPort = Number.parseInt(process.env.PA_IOS_DEV_PORT?.trim() || '3845', 
 const hostBaseUrl = process.env.PA_IOS_DEV_BASE_URL?.trim() || `http://127.0.0.1:${String(hostPort)}`;
 const hostMetadataFile = process.env.PA_IOS_DEV_METADATA_FILE?.trim() || '/tmp/personal-agent-ios-dev-host.json';
 const liveConfigFile = process.env.PA_IOS_LIVE_COMPANION_CONFIG_FILE?.trim() || '/tmp/personal-agent-ios-live-test-config.json';
+const demoSnapshotFile = resolve(repoRoot, 'apps/ios/PersonalAgentCompanion/demo-data/local-transcripts.json');
 const simulatorDevice = process.env.PA_IOS_SIMULATOR_DEVICE?.trim() || 'iPhone 17 Pro';
 const bundleId = process.env.PA_IOS_BUNDLE_ID?.trim() || 'com.personalagent.ios.companion';
 const projectPath = resolve(repoRoot, 'apps/ios/PersonalAgentCompanion/PersonalAgentCompanion.xcodeproj');
@@ -206,6 +207,145 @@ function toQuery(params) {
   }
   const query = search.toString();
   return query.length > 0 ? `?${query}` : '';
+}
+
+function clipString(value, limit = 2400) {
+  if (typeof value !== 'string') {
+    return value;
+  }
+  if (value.length <= limit) {
+    return value;
+  }
+  return `${value.slice(0, Math.max(0, limit - 1))}…`;
+}
+
+function sanitizeBlockForDemo(block) {
+  const next = {
+    ...block,
+    text: clipString(block.text, 900),
+    title: clipString(block.title, 200),
+    detail: clipString(block.detail, 900),
+    output: clipString(block.output, 1200),
+    message: clipString(block.message, 900),
+    alt: clipString(block.alt, 200),
+    caption: clipString(block.caption, 240),
+  };
+
+  if (typeof next.src === 'string' && next.src.startsWith('data:')) {
+    next.src = undefined;
+  }
+  if (Array.isArray(next.images)) {
+    next.images = next.images.slice(0, 4).map((image) => ({
+      ...image,
+      alt: clipString(image.alt, 200),
+      caption: clipString(image.caption, 240),
+      src: typeof image.src === 'string' && image.src.startsWith('data:') ? undefined : image.src,
+    }));
+  }
+
+  return next;
+}
+
+function sanitizeSessionForDemo(session) {
+  return {
+    ...session,
+    title: clipString(session.title, 140),
+    cwd: clipString(session.cwd, 240),
+    cwdSlug: clipString(session.cwdSlug, 80),
+    model: clipString(session.model, 80),
+  };
+}
+
+function massageDemoBlocks(blocks) {
+  const next = [...blocks];
+  const toolUseCount = next.filter((block) => block?.type === 'tool_use').length;
+  const last = next.at(-1);
+  if (toolUseCount >= 3 && last?.type === 'text' && typeof last.text === 'string' && last.text.length > 220) {
+    next[next.length - 1] = {
+      ...last,
+      text: clipString(last.text, 220),
+    };
+  }
+  return next;
+}
+
+function readSystemHostLabel() {
+  for (const [command, args] of [
+    ['scutil', ['--get', 'ComputerName']],
+    ['hostname', []],
+  ]) {
+    try {
+      const value = runCapture(command, args).trim();
+      if (value.length > 0) {
+        return value;
+      }
+    } catch {
+      // Ignore lookup failures and fall through.
+    }
+  }
+  return 'This Mac';
+}
+
+async function buildDeviceDemoSnapshot() {
+  loadDevEnvDefaults();
+  ensureBuildArtifacts();
+
+  const core = await importBuiltModule('packages/core/dist/index.js');
+  const localApi = await importBuiltModule('packages/web/dist-server/app/localApi.js');
+  await core.hydrateProcessEnvFromShell?.();
+
+  const sessions = await localApi.readDesktopSessions();
+  const candidates = [];
+
+  for (const [index, session] of sessions.slice(0, 12).entries()) {
+    try {
+      const response = await localApi.dispatchDesktopLocalApiRequest({
+        method: 'GET',
+        path: `/api/conversations/${encodeURIComponent(session.id)}/bootstrap?tailBlocks=32`,
+      });
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        continue;
+      }
+      const body = parseJsonResponseBody(response);
+      const detail = body?.sessionDetail ?? body?.bootstrap?.sessionDetail;
+      const blocks = Array.isArray(detail?.blocks) ? massageDemoBlocks(detail.blocks.map(sanitizeBlockForDemo)) : [];
+      if (blocks.length === 0) {
+        continue;
+      }
+      candidates.push({
+        index,
+        sessionMeta: sanitizeSessionForDemo(body?.sessionMeta ?? detail?.meta ?? session),
+        blocks,
+        toolUseCount: blocks.filter((block) => block?.type === 'tool_use').length,
+      });
+    } catch {
+      // Ignore unreadable sessions so a few bad conversations do not poison the demo seed.
+    }
+  }
+
+  const selected = [...candidates]
+    .sort((left, right) => {
+      const toolDelta = (right.toolUseCount > 0 ? 1 : 0) - (left.toolUseCount > 0 ? 1 : 0);
+      if (toolDelta !== 0) {
+        return toolDelta;
+      }
+      if (right.toolUseCount !== left.toolUseCount) {
+        return right.toolUseCount - left.toolUseCount;
+      }
+      return left.index - right.index;
+    })
+    .slice(0, 3)
+    .map((entry) => ({
+      sessionMeta: entry.sessionMeta,
+      blocks: entry.blocks,
+      toolUseCount: entry.toolUseCount,
+    }));
+
+  return {
+    hostLabel: `${readSystemHostLabel()} Demo`,
+    generatedAt: new Date().toISOString(),
+    conversations: selected,
+  };
 }
 
 async function createHeadlessCompanionRuntime(localApi) {
@@ -472,18 +612,22 @@ async function buildInstallAndLaunchSimulator(input) {
   ]);
 
   await bootSimulator(input.device);
+  if (input.resetAppState) {
+    spawnSync('xcrun', ['simctl', 'uninstall', deviceId, bundleId], { stdio: 'ignore' });
+  }
   runChecked('xcrun', ['simctl', 'install', deviceId, appPath]);
   spawnSync('xcrun', ['simctl', 'terminate', deviceId, bundleId], { stdio: 'ignore' });
 
   const launchEnv = {
     ...process.env,
-    SIMCTL_CHILD_PA_IOS_DEFAULT_HOST: input.baseURL,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_URL: input.baseURL,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_BEARER_TOKEN: input.bearerToken,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_LABEL: input.hostLabel,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_INSTANCE_ID: input.hostInstanceId,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_DEVICE_ID: input.deviceId,
-    SIMCTL_CHILD_PA_IOS_BOOTSTRAP_DEVICE_LABEL: input.deviceLabel,
+    ...(input.baseURL ? { SIMCTL_CHILD_PA_IOS_DEFAULT_HOST: input.baseURL } : {}),
+    ...(input.baseURL ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_URL: input.baseURL } : {}),
+    ...(input.bearerToken ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_BEARER_TOKEN: input.bearerToken } : {}),
+    ...(input.hostLabel ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_LABEL: input.hostLabel } : {}),
+    ...(input.hostInstanceId ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_HOST_INSTANCE_ID: input.hostInstanceId } : {}),
+    ...(input.deviceId ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_DEVICE_ID: input.deviceId } : {}),
+    ...(input.deviceLabel ? { SIMCTL_CHILD_PA_IOS_BOOTSTRAP_DEVICE_LABEL: input.deviceLabel } : {}),
+    ...(input.extraLaunchEnv ?? {}),
   };
   runChecked('xcrun', ['simctl', 'launch', deviceId, bundleId], { env: launchEnv });
 }
@@ -543,6 +687,7 @@ async function hostCommand() {
   log(`Metadata: ${hostMetadataFile}`);
   log('Use another terminal for:');
   log('  npm run ios:dev:sim');
+  log('  npm run ios:demo');
   log('  npm run ios:dev:setup-url');
   log('  npm run ios:test:live');
 
@@ -634,6 +779,36 @@ async function testLiveCommand() {
   });
 }
 
+async function demoRefreshCommand() {
+  const snapshot = await buildDeviceDemoSnapshot();
+  writeJson(demoSnapshotFile, snapshot);
+  log(`Wrote iOS demo transcripts to ${demoSnapshotFile}`);
+  if (!Array.isArray(snapshot.conversations) || snapshot.conversations.length === 0) {
+    log('No local transcripts were available, so the demo will fall back to the built-in sample data.');
+    return;
+  }
+  for (const conversation of snapshot.conversations) {
+    log(`- ${conversation.sessionMeta.title} (${conversation.toolUseCount} tool call${conversation.toolUseCount === 1 ? '' : 's'})`);
+  }
+}
+
+async function demoCommand() {
+  loadDevEnvDefaults();
+  await demoRefreshCommand();
+  await buildInstallAndLaunchSimulator({
+    device: simulatorDevice,
+    resetAppState: true,
+    extraLaunchEnv: {
+      SIMCTL_CHILD_PA_IOS_MOCK_MODE: '1',
+      SIMCTL_CHILD_PA_IOS_USE_DEVICE_DEMO_DATA: '1',
+      SIMCTL_CHILD_PA_IOS_AUTO_CONNECT_MOCK_HOST: '1',
+      SIMCTL_CHILD_PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION: '1',
+      SIMCTL_CHILD_PA_IOS_DEMO_SNAPSHOT_FILE: demoSnapshotFile,
+    },
+  });
+  log(`Simulator launched in demo mode using ${demoSnapshotFile}`);
+}
+
 async function prepareCommand() {
   loadDevEnvDefaults();
   runChecked('npm', ['--prefix', 'packages/core', 'run', 'build']);
@@ -704,6 +879,12 @@ try {
     case 'dev':
       await devCommand();
       break;
+    case 'demo-refresh':
+      await demoRefreshCommand();
+      break;
+    case 'demo':
+      await demoCommand();
+      break;
     case 'open-setup-url':
       await openSetupUrlCommand();
       break;
@@ -711,8 +892,12 @@ try {
       await testLiveCommand();
       break;
     default:
-      log('Usage: node scripts/ios-dev.mjs <prepare|host|sim|dev|open-setup-url|test-live>');
+      log('Usage: node scripts/ios-dev.mjs <prepare|host|sim|dev|demo-refresh|demo|open-setup-url|test-live>');
       process.exit(command ? 1 : 0);
+  }
+
+  if (command && command !== 'host' && command !== 'dev') {
+    process.exit(0);
   }
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));

@@ -29,6 +29,9 @@ tools/*/.build/
 # Logs
 *.log
 
+# Local iOS demo transcript snapshots
+apps/ios/PersonalAgentCompanion/demo-data/
+
 # Legacy in-repo conversation-maintenance state
 profiles/*/agent/state/conversation-maintenance/processed-conversations.json
 
