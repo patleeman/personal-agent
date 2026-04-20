@@ -28,6 +28,12 @@ const CODEX_MODEL = {
   id: 'gpt-5.4',
 } as const;
 
+const OTHER_MODEL = {
+  provider: 'anthropic',
+  api: 'anthropic',
+  id: 'claude-sonnet-4-5',
+} as const;
+
 function createJwt(payload: Record<string, unknown>): string {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -53,6 +59,32 @@ function assistantMessageEntry(id: string, text: string, model = OPENAI_MODEL) {
       role: 'assistant',
       provider: model.provider,
       model: model.id,
+      content: [{ type: 'text', text }],
+    },
+  };
+}
+
+function assistantToolCallEntry(id: string, callId: string, toolName: string, model = OPENAI_MODEL) {
+  return {
+    id,
+    type: 'message',
+    message: {
+      role: 'assistant',
+      provider: model.provider,
+      model: model.id,
+      content: [{ type: 'toolCall', id: callId, name: toolName, arguments: {} }],
+    },
+  };
+}
+
+function toolResultEntry(id: string, callId: string, toolName: string, text: string) {
+  return {
+    id,
+    type: 'message',
+    message: {
+      role: 'toolResult',
+      toolCallId: callId,
+      toolName,
       content: [{ type: 'text', text }],
     },
   };
@@ -166,6 +198,47 @@ describe('openai native compaction extension', () => {
         type: 'message',
         role: 'user',
         content: [{ type: 'input_text', text: 'Current prompt' }],
+      },
+    ]);
+  });
+
+  it('drops orphan tool outputs when reconstructing replay history across model changes', () => {
+    const state = reconstructNativeState([
+      {
+        id: 'compaction-1',
+        type: 'compaction',
+        summary: 'Portable summary',
+        details: {
+          nativeCompaction: {
+            version: 1,
+            provider: 'openai-responses-compact',
+            modelKey: modelKey(OPENAI_MODEL),
+            replacementHistory: [
+              {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'Native compacted context' }],
+              },
+            ],
+          },
+        },
+      },
+      userMessageEntry('user-1', 'Try another model'),
+      assistantToolCallEntry('assistant-1', 'call-1', 'read', OTHER_MODEL),
+      toolResultEntry('tool-1', 'call-1', 'read', 'README contents'),
+      userMessageEntry('user-2', 'Back on OpenAI now'),
+    ] as never[], OPENAI_MODEL);
+
+    expect(state?.explicitHistory).toEqual([
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'Native compacted context' }],
+      },
+      {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'Back on OpenAI now' }],
       },
     ]);
   });

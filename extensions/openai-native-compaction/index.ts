@@ -419,6 +419,38 @@ function assistantMatchesModel(message: AgentMessage, targetModelKey: string): b
   return !!provider && !!api && !!id && message.role === 'assistant' && message.provider === provider && message.model === id;
 }
 
+function sanitizeResponseHistory(items: ResponseItem[]): ResponseItem[] {
+  const knownToolCallIds = new Set<string>();
+  const sanitized: ResponseItem[] = [];
+
+  for (const item of items) {
+    if (item.type === 'function_call') {
+      const callId = typeof item.call_id === 'string' ? item.call_id.trim() : '';
+      if (!callId) {
+        continue;
+      }
+
+      knownToolCallIds.add(callId);
+      sanitized.push(item);
+      continue;
+    }
+
+    if (item.type === 'function_call_output') {
+      const callId = typeof item.call_id === 'string' ? item.call_id.trim() : '';
+      if (!callId || !knownToolCallIds.has(callId)) {
+        continue;
+      }
+
+      sanitized.push(item);
+      continue;
+    }
+
+    sanitized.push(item);
+  }
+
+  return sanitized;
+}
+
 export function reconstructNativeState(
   branchEntries: BranchEntry[],
   model: ModelLike,
@@ -458,7 +490,10 @@ export function reconstructNativeState(
 
   return {
     details: latestDetails,
-    explicitHistory: [...cloneJson(latestDetails.replacementHistory), ...pendingTurn.length ? [...trailing, ...pendingTurn] : trailing],
+    explicitHistory: sanitizeResponseHistory([
+      ...cloneJson(latestDetails.replacementHistory),
+      ...pendingTurn.length ? [...trailing, ...pendingTurn] : trailing,
+    ]),
   };
 }
 
@@ -573,7 +608,7 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
     const nativeState = reconstructNativeState(event.branchEntries as BranchEntry[], model);
     const input = nativeState
       ? nativeState.explicitHistory
-      : (event.branchEntries as BranchEntry[]).flatMap((entry) => entryToResponseItems(entry));
+      : sanitizeResponseHistory((event.branchEntries as BranchEntry[]).flatMap((entry) => entryToResponseItems(entry)));
 
     const shape = requestShapeBySession.get(sessionId);
 
@@ -632,7 +667,7 @@ export default function openaiNativeCompactionExtension(pi: ExtensionAPI): void 
             version: 1,
             provider: 'openai-responses-compact',
             modelKey: modelKey(model),
-            replacementHistory: remoteCompaction.value.output,
+            replacementHistory: sanitizeResponseHistory(remoteCompaction.value.output),
             ...(remoteCompaction.value.usage !== undefined ? { usage: remoteCompaction.value.usage } : {}),
           } satisfies NativeCompactionDetails,
         },
