@@ -92,6 +92,7 @@ Agents can inspect other conversations through the read-only `conversation_inspe
 That tool is meant for:
 
 - listing live, running, or archived threads
+- searching visible transcript text across conversations
 - querying visible transcript blocks in another conversation
 - doing incremental follow-up reads with signatures and block ids
 

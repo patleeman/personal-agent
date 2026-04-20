@@ -29,9 +29,11 @@ import {
   diffConversationInspectBlocks,
   formatConversationInspectDiffResult,
   formatConversationInspectQueryResult,
+  formatConversationInspectSearchResult,
   formatConversationInspectSessionList,
   listConversationInspectSessions,
   queryConversationInspectBlocks,
+  searchConversationInspectSessions,
 } from './conversationInspectCapability.js';
 
 beforeEach(() => {
@@ -49,6 +51,7 @@ describe('conversationInspectCapability', () => {
         id: 'conv-self',
         title: 'Current thread',
         cwd: '/repo',
+        file: '/sessions/conv-self.jsonl',
         timestamp: '2026-04-20T09:59:00.000Z',
         lastActivityAt: '2026-04-20T10:00:00.000Z',
         isLive: true,
@@ -59,6 +62,7 @@ describe('conversationInspectCapability', () => {
         id: 'conv-running',
         title: 'Other running thread',
         cwd: '/repo',
+        file: '/sessions/conv-running.jsonl',
         timestamp: '2026-04-20T09:58:00.000Z',
         lastActivityAt: '2026-04-20T09:59:30.000Z',
         isLive: true,
@@ -69,6 +73,7 @@ describe('conversationInspectCapability', () => {
         id: 'conv-archived',
         title: 'Old thread',
         cwd: '/repo/old',
+        file: '/sessions/conv-archived.jsonl',
         timestamp: '2026-04-20T08:00:00.000Z',
         lastActivityAt: '2026-04-20T08:00:00.000Z',
         isLive: false,
@@ -97,6 +102,90 @@ describe('conversationInspectCapability', () => {
       }),
     ]);
     expect(formatConversationInspectSessionList(result)).toContain('conv-running [running]');
+  });
+
+  it('searches visible transcript blocks across conversations and returns match snippets', () => {
+    listConversationSessionsSnapshotMock.mockReturnValue([
+      {
+        id: 'conv-self',
+        title: 'Current thread',
+        cwd: '/repo',
+        file: '/sessions/conv-self.jsonl',
+        timestamp: '2026-04-20T10:00:00.000Z',
+        lastActivityAt: '2026-04-20T10:00:00.000Z',
+        isLive: true,
+        isRunning: true,
+        messageCount: 10,
+      },
+      {
+        id: 'conv-search',
+        title: 'Deploy RCA',
+        cwd: '/repo',
+        file: '/sessions/conv-search.jsonl',
+        timestamp: '2026-04-20T09:59:00.000Z',
+        lastActivityAt: '2026-04-20T09:59:30.000Z',
+        isLive: true,
+        isRunning: true,
+        messageCount: 8,
+      },
+      {
+        id: 'conv-other',
+        title: 'Unrelated',
+        cwd: '/repo/other',
+        file: '/sessions/conv-other.jsonl',
+        timestamp: '2026-04-20T09:00:00.000Z',
+        lastActivityAt: '2026-04-20T09:00:00.000Z',
+        isLive: false,
+        isRunning: false,
+        messageCount: 4,
+      },
+    ]);
+    readSessionBlocksByFileMock.mockImplementation((filePath: string) => {
+      if (filePath === '/sessions/conv-search.jsonl') {
+        return {
+          blocks: [
+            { type: 'user', id: 'user-1', ts: '2026-04-20T10:00:00.000Z', text: 'Check the bloodhound scheduler.' },
+            {
+              type: 'tool_use',
+              id: 'tool-1',
+              ts: '2026-04-20T10:00:10.000Z',
+              tool: 'bash',
+              input: { command: 'grep chrono logs.txt' },
+              output: 'Chrono execution is stuck in high lag.',
+              toolCallId: 'call-1',
+            },
+          ],
+        };
+      }
+
+      return {
+        blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-20T09:00:00.000Z', text: 'Nothing interesting here.' }],
+      };
+    });
+
+    const result = searchConversationInspectSessions({
+      query: 'chrono',
+      currentConversationId: 'conv-self',
+    });
+
+    expect(result).toMatchObject({
+      query: 'chrono',
+      scope: 'all',
+      totalMatching: 1,
+      returnedCount: 1,
+    });
+    expect(result.matches).toEqual([
+      expect.objectContaining({
+        conversationId: 'conv-search',
+        title: 'Deploy RCA',
+        blockId: 'tool-1',
+        blockType: 'tool_use',
+        blockIndex: 1,
+      }),
+    ]);
+    expect(result.matches[0]?.snippet.toLowerCase()).toContain('chrono');
+    expect(formatConversationInspectSearchResult(result)).toContain('conv-search [running]');
+    expect(formatConversationInspectSearchResult(result)).toContain('tool-1 (tool_use)');
   });
 
   it('queries transcript blocks with type/tool/text filters', () => {

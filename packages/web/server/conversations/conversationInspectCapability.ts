@@ -8,7 +8,7 @@ import {
 import { readSessionBlocksByFile, type DisplayBlock } from './sessions.js';
 
 export const CONVERSATION_INSPECT_SCOPE_VALUES = ['all', 'live', 'running', 'archived'] as const;
-export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'query', 'diff'] as const;
+export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff'] as const;
 export const CONVERSATION_INSPECT_ORDER_VALUES = ['asc', 'desc'] as const;
 export const CONVERSATION_INSPECT_BLOCK_TYPE_VALUES = ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'] as const;
 
@@ -39,6 +39,10 @@ interface ConversationInspectSessionSummary {
   messageCount: number;
 }
 
+interface ConversationInspectSessionRecord extends ConversationInspectSessionSummary {
+  file: string;
+}
+
 interface InspectableBlockBase {
   id: string;
   index: number;
@@ -60,6 +64,27 @@ export interface ListConversationInspectResult {
   totalMatching: number;
   returnedCount: number;
   sessions: ConversationInspectSessionSummary[];
+}
+
+export interface SearchConversationInspectMatch {
+  conversationId: string;
+  title: string;
+  cwd: string;
+  lastActivityAt: string;
+  isLive: boolean;
+  isRunning: boolean;
+  blockId: string;
+  blockType: ConversationInspectBlockType;
+  blockIndex: number;
+  snippet: string;
+}
+
+export interface SearchConversationInspectResult {
+  query: string;
+  scope: ConversationInspectScope;
+  totalMatching: number;
+  returnedCount: number;
+  matches: SearchConversationInspectMatch[];
 }
 
 export interface QueryConversationInspectResult {
@@ -352,6 +377,94 @@ function matchesCwdFilter(sessionCwd: string, cwdFilter: string | undefined): bo
     || sessionCwd.includes(cwdFilter);
 }
 
+function collectInspectableSessions(input: {
+  scope?: unknown;
+  cwd?: unknown;
+  query?: unknown;
+  includeCurrent?: unknown;
+  currentConversationId?: string;
+} = {}): { scope: ConversationInspectScope; sessions: ConversationInspectSessionRecord[] } {
+  const scope = normalizeScope(input.scope);
+  const cwd = readOptionalString(input.cwd);
+  const query = readOptionalString(input.query)?.toLowerCase();
+  const includeCurrent = readOptionalBoolean(input.includeCurrent) ?? false;
+  const currentConversationId = readOptionalString(input.currentConversationId);
+
+  const sessions = listConversationSessionsSnapshot()
+    .map((session) => ({
+      id: session.id,
+      title: session.title,
+      cwd: session.cwd,
+      lastActivityAt: session.lastActivityAt ?? session.timestamp,
+      isLive: Boolean(session.isLive),
+      isRunning: Boolean(session.isRunning),
+      isCurrent: session.id === currentConversationId,
+      messageCount: session.messageCount,
+      file: session.file,
+    }))
+    .filter((session) => includeCurrent || !session.isCurrent)
+    .filter((session) => {
+      switch (scope) {
+        case 'running':
+          return session.isRunning;
+        case 'live':
+          return session.isLive;
+        case 'archived':
+          return !session.isLive;
+        default:
+          return true;
+      }
+    })
+    .filter((session) => matchesCwdFilter(session.cwd, cwd))
+    .filter((session) => {
+      if (!query) {
+        return true;
+      }
+
+      return session.id.toLowerCase().includes(query)
+        || session.title.toLowerCase().includes(query)
+        || session.cwd.toLowerCase().includes(query);
+    })
+    .sort((left, right) => {
+      if (left.isRunning !== right.isRunning) {
+        return left.isRunning ? -1 : 1;
+      }
+      if (left.isLive !== right.isLive) {
+        return left.isLive ? -1 : 1;
+      }
+      return right.lastActivityAt.localeCompare(left.lastActivityAt);
+    });
+
+  return { scope, sessions };
+}
+
+function extractQuerySnippet(text: string, query: string, maxCharacters: number): string {
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  const normalizedQuery = query.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!normalizedText || !normalizedQuery) {
+    return '';
+  }
+
+  const lowerText = normalizedText.toLowerCase();
+  const matchIndex = lowerText.indexOf(normalizedQuery);
+  if (matchIndex < 0) {
+    return truncateText(normalizedText, maxCharacters).text;
+  }
+
+  if (normalizedText.length <= maxCharacters) {
+    return normalizedText;
+  }
+
+  const remaining = Math.max(0, maxCharacters - normalizedQuery.length);
+  const leftContext = Math.floor(remaining / 2);
+  const rightContext = remaining - leftContext;
+  const start = Math.max(0, matchIndex - leftContext);
+  const end = Math.min(normalizedText.length, matchIndex + normalizedQuery.length + rightContext);
+  const rawSnippet = normalizedText.slice(start, end).trim();
+
+  return `${start > 0 ? '…' : ''}${rawSnippet}${end < normalizedText.length ? '…' : ''}`;
+}
+
 function resolveConversationSession(conversationIdInput: unknown): {
   conversationId: string;
   title: string;
@@ -469,58 +582,9 @@ export function listConversationInspectSessions(input: {
   includeCurrent?: unknown;
   currentConversationId?: string;
 } = {}): ListConversationInspectResult {
-  const scope = normalizeScope(input.scope);
-  const cwd = readOptionalString(input.cwd);
-  const query = readOptionalString(input.query)?.toLowerCase();
-  const includeCurrent = readOptionalBoolean(input.includeCurrent) ?? false;
-  const currentConversationId = readOptionalString(input.currentConversationId);
   const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
-
-  const sessions = listConversationSessionsSnapshot()
-    .map((session) => ({
-      id: session.id,
-      title: session.title,
-      cwd: session.cwd,
-      lastActivityAt: session.lastActivityAt ?? session.timestamp,
-      isLive: Boolean(session.isLive),
-      isRunning: Boolean(session.isRunning),
-      isCurrent: session.id === currentConversationId,
-      messageCount: session.messageCount,
-    }))
-    .filter((session) => includeCurrent || !session.isCurrent)
-    .filter((session) => {
-      switch (scope) {
-        case 'running':
-          return session.isRunning;
-        case 'live':
-          return session.isLive;
-        case 'archived':
-          return !session.isLive;
-        default:
-          return true;
-      }
-    })
-    .filter((session) => matchesCwdFilter(session.cwd, cwd))
-    .filter((session) => {
-      if (!query) {
-        return true;
-      }
-
-      return session.id.toLowerCase().includes(query)
-        || session.title.toLowerCase().includes(query)
-        || session.cwd.toLowerCase().includes(query);
-    })
-    .sort((left, right) => {
-      if (left.isRunning !== right.isRunning) {
-        return left.isRunning ? -1 : 1;
-      }
-      if (left.isLive !== right.isLive) {
-        return left.isLive ? -1 : 1;
-      }
-      return right.lastActivityAt.localeCompare(left.lastActivityAt);
-    });
-
-  const returned = sessions.slice(0, limit);
+  const { scope, sessions } = collectInspectableSessions(input);
+  const returned = sessions.slice(0, limit).map(({ file: _file, ...session }) => session);
 
   return {
     scope,
@@ -541,6 +605,81 @@ export function formatConversationInspectSessionList(result: ListConversationIns
       const current = session.isCurrent ? ' current' : '';
       return `- ${session.id} [${statusLabel(session)}${current}] ${session.title} · ${session.cwd} · ${session.lastActivityAt}`;
     }),
+  ].join('\n');
+}
+
+export function searchConversationInspectSessions(input: {
+  query?: unknown;
+  scope?: unknown;
+  cwd?: unknown;
+  limit?: unknown;
+  includeCurrent?: unknown;
+  currentConversationId?: string;
+  maxSnippetCharacters?: unknown;
+} = {}): SearchConversationInspectResult {
+  const query = readOptionalString(input.query);
+  if (!query) {
+    throw new ConversationInspectCapabilityInputError('query is required.');
+  }
+
+  const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
+  const maxSnippetCharacters = normalizePositiveInteger(input.maxSnippetCharacters, 240, 2_000);
+  const { scope, sessions } = collectInspectableSessions({
+    scope: input.scope,
+    cwd: input.cwd,
+    includeCurrent: input.includeCurrent,
+    currentConversationId: input.currentConversationId,
+  });
+  const needle = query.toLowerCase();
+
+  const matches: SearchConversationInspectMatch[] = [];
+
+  for (const session of sessions) {
+    const detail = readSessionBlocksByFile(session.file);
+    if (!detail) {
+      continue;
+    }
+
+    const matchEntry = detail.blocks
+      .map((block, index) => ({ block, index, searchText: buildBlockSearchText(block) }))
+      .find((entry) => entry.searchText.toLowerCase().includes(needle));
+    if (!matchEntry) {
+      continue;
+    }
+
+    matches.push({
+      conversationId: session.id,
+      title: session.title,
+      cwd: session.cwd,
+      lastActivityAt: session.lastActivityAt,
+      isLive: session.isLive,
+      isRunning: session.isRunning,
+      blockId: matchEntry.block.id,
+      blockType: matchEntry.block.type as ConversationInspectBlockType,
+      blockIndex: matchEntry.index,
+      snippet: extractQuerySnippet(matchEntry.searchText, query, maxSnippetCharacters),
+    });
+  }
+
+  const returned = matches.slice(0, limit);
+
+  return {
+    query,
+    scope,
+    totalMatching: matches.length,
+    returnedCount: returned.length,
+    matches: returned,
+  };
+}
+
+export function formatConversationInspectSearchResult(result: SearchConversationInspectResult): string {
+  if (result.matches.length === 0) {
+    return `No conversations matched transcript search ${JSON.stringify(result.query)} within scope=${result.scope}.`;
+  }
+
+  return [
+    `Transcript search (${result.returnedCount}/${result.totalMatching}) for ${JSON.stringify(result.query)} scope=${result.scope}:`,
+    ...result.matches.map((match) => `- ${match.conversationId} [${match.isRunning ? 'running' : match.isLive ? 'live' : 'archived'}] ${match.title} · ${match.cwd} · block ${match.blockId} (${match.blockType})\n  ${match.snippet}`),
   ].join('\n');
 }
 

@@ -4,6 +4,8 @@ import { createConversationInspectAgentExtension } from './conversationInspectAg
 const {
   listConversationInspectSessionsMock,
   formatConversationInspectSessionListMock,
+  searchConversationInspectSessionsMock,
+  formatConversationInspectSearchResultMock,
   queryConversationInspectBlocksMock,
   formatConversationInspectQueryResultMock,
   diffConversationInspectBlocksMock,
@@ -11,6 +13,8 @@ const {
 } = vi.hoisted(() => ({
   listConversationInspectSessionsMock: vi.fn(),
   formatConversationInspectSessionListMock: vi.fn(),
+  searchConversationInspectSessionsMock: vi.fn(),
+  formatConversationInspectSearchResultMock: vi.fn(),
   queryConversationInspectBlocksMock: vi.fn(),
   formatConversationInspectQueryResultMock: vi.fn(),
   diffConversationInspectBlocksMock: vi.fn(),
@@ -18,12 +22,14 @@ const {
 }));
 
 vi.mock('../conversations/conversationInspectCapability.js', () => ({
-  CONVERSATION_INSPECT_ACTION_VALUES: ['list', 'query', 'diff'],
+  CONVERSATION_INSPECT_ACTION_VALUES: ['list', 'search', 'query', 'diff'],
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES: ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'],
   CONVERSATION_INSPECT_ORDER_VALUES: ['asc', 'desc'],
   CONVERSATION_INSPECT_SCOPE_VALUES: ['all', 'live', 'running', 'archived'],
   listConversationInspectSessions: listConversationInspectSessionsMock,
   formatConversationInspectSessionList: formatConversationInspectSessionListMock,
+  searchConversationInspectSessions: searchConversationInspectSessionsMock,
+  formatConversationInspectSearchResult: formatConversationInspectSearchResultMock,
   queryConversationInspectBlocks: queryConversationInspectBlocksMock,
   formatConversationInspectQueryResult: formatConversationInspectQueryResultMock,
   diffConversationInspectBlocks: diffConversationInspectBlocksMock,
@@ -63,6 +69,8 @@ function createToolContext(conversationId = 'conv-self') {
 beforeEach(() => {
   listConversationInspectSessionsMock.mockReset();
   formatConversationInspectSessionListMock.mockReset();
+  searchConversationInspectSessionsMock.mockReset();
+  formatConversationInspectSearchResultMock.mockReset();
   queryConversationInspectBlocksMock.mockReset();
   formatConversationInspectQueryResultMock.mockReset();
   diffConversationInspectBlocksMock.mockReset();
@@ -80,9 +88,11 @@ describe('conversation inspect agent extension', () => {
     expect(guidelines).toContain('hidden reasoning');
   });
 
-  it('dispatches list, query, and diff actions to the capability layer', async () => {
+  it('dispatches list, search, query, and diff actions to the capability layer', async () => {
     listConversationInspectSessionsMock.mockReturnValue({ scope: 'running', totalMatching: 1, returnedCount: 1, sessions: [{ id: 'conv-2' }] });
     formatConversationInspectSessionListMock.mockReturnValue('list text');
+    searchConversationInspectSessionsMock.mockReturnValue({ query: 'chrono', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'conv-2' }] });
+    formatConversationInspectSearchResultMock.mockReturnValue('search text');
     queryConversationInspectBlocksMock.mockReturnValue({ conversationId: 'conv-2', returnedBlocks: 1, blocks: [{ id: 'block-1' }] });
     formatConversationInspectQueryResultMock.mockReturnValue('query text');
     diffConversationInspectBlocksMock.mockReturnValue({ conversationId: 'conv-2', unchanged: false, returnedBlocks: 1, blocks: [{ id: 'block-2' }] });
@@ -92,8 +102,9 @@ describe('conversation inspect agent extension', () => {
     const ctx = createToolContext('conv-self');
 
     const listResult = await tool.execute('tool-1', { action: 'list', scope: 'running' }, undefined, undefined, ctx);
-    const queryResult = await tool.execute('tool-2', { action: 'query', conversationId: 'conv-2', text: 'chrono' }, undefined, undefined, ctx);
-    const diffResult = await tool.execute('tool-3', { action: 'diff', conversationId: 'conv-2', afterBlockId: 'block-1' }, undefined, undefined, ctx);
+    const searchResult = await tool.execute('tool-2', { action: 'search', query: 'chrono' }, undefined, undefined, ctx);
+    const queryResult = await tool.execute('tool-3', { action: 'query', conversationId: 'conv-2', text: 'chrono' }, undefined, undefined, ctx);
+    const diffResult = await tool.execute('tool-4', { action: 'diff', conversationId: 'conv-2', afterBlockId: 'block-1' }, undefined, undefined, ctx);
 
     expect(listConversationInspectSessionsMock).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'running',
@@ -101,6 +112,13 @@ describe('conversation inspect agent extension', () => {
     }));
     expect(listResult.content[0]?.text).toBe('list text');
     expect(listResult.details).toMatchObject({ action: 'list', scope: 'running', totalMatching: 1 });
+
+    expect(searchConversationInspectSessionsMock).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'chrono',
+      currentConversationId: 'conv-self',
+    }));
+    expect(searchResult.content[0]?.text).toBe('search text');
+    expect(searchResult.details).toMatchObject({ action: 'search', query: 'chrono', totalMatching: 1 });
 
     expect(queryConversationInspectBlocksMock).toHaveBeenCalledWith(expect.objectContaining({
       conversationId: 'conv-2',

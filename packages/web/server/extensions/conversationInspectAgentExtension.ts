@@ -8,9 +8,11 @@ import {
   diffConversationInspectBlocks,
   formatConversationInspectDiffResult,
   formatConversationInspectQueryResult,
+  formatConversationInspectSearchResult,
   formatConversationInspectSessionList,
   listConversationInspectSessions,
   queryConversationInspectBlocks,
+  searchConversationInspectSessions,
 } from '../conversations/conversationInspectCapability.js';
 
 const ConversationInspectToolParams = Type.Object({
@@ -20,7 +22,7 @@ const ConversationInspectToolParams = Type.Object({
     description: 'List scope: all, live, running, or archived conversations.',
   })),
   cwd: Type.Optional(Type.String({ description: 'Optional cwd filter for list actions.' })),
-  query: Type.Optional(Type.String({ description: 'Optional metadata query for list actions. Matches conversation id, title, or cwd.' })),
+  query: Type.Optional(Type.String({ description: 'Query string for list/search actions. List matches metadata; search matches visible transcript text.' })),
   includeCurrent: Type.Optional(Type.Boolean({ description: 'Whether list should include the current conversation. Defaults to false.' })),
   types: Type.Optional(Type.Array(
     Type.Union(CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.map((value) => Type.Literal(value))),
@@ -41,6 +43,7 @@ const ConversationInspectToolParams = Type.Object({
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 200, description: 'Maximum items to return.' })),
   window: Type.Optional(Type.Number({ minimum: 1, maximum: 50, description: 'Context window size for aroundBlockId queries.' })),
   maxCharactersPerBlock: Type.Optional(Type.Number({ minimum: 1, maximum: 20000, description: 'Character cap per returned block.' })),
+  maxSnippetCharacters: Type.Optional(Type.Number({ minimum: 1, maximum: 2000, description: 'Character cap per returned search snippet.' })),
 });
 
 export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) => void {
@@ -52,7 +55,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
       promptSnippet: 'Inspect other conversations through read-only transcript queries.',
       promptGuidelines: [
         'Use this tool when you need visibility into other active conversations or saved threads.',
-        'Prefer list first to find the target conversation, then query or diff to inspect the transcript.',
+        'Prefer list first to find the target conversation, then use search, query, or diff to inspect the transcript.',
         'This tool is read-only. It does not message, steer, or modify other conversations.',
         'Cross-thread hidden reasoning is intentionally unavailable; query visible transcript blocks instead.',
         'Use diff with afterBlockId or knownSignature when you need a cheap follow-up read on a live thread.',
@@ -74,6 +77,26 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
               content: [{ type: 'text' as const, text: formatConversationInspectSessionList(result) }],
               details: {
                 action: 'list',
+                ...result,
+              },
+            };
+          }
+
+          case 'search': {
+            const result = searchConversationInspectSessions({
+              query: params.query,
+              scope: params.scope,
+              cwd: params.cwd,
+              limit: params.limit,
+              includeCurrent: params.includeCurrent,
+              currentConversationId: ctx.sessionManager.getSessionId(),
+              maxSnippetCharacters: params.maxSnippetCharacters,
+            });
+
+            return {
+              content: [{ type: 'text' as const, text: formatConversationInspectSearchResult(result) }],
+              details: {
+                action: 'search',
                 ...result,
               },
             };
