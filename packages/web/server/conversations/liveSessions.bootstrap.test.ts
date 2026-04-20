@@ -704,6 +704,108 @@ describe('liveSessions bootstrap helpers', () => {
     expect(registry.has('session-fork-source')).toBe(false);
   });
 
+  it('returns the summary fork before compaction finishes', async () => {
+    const runtimeRegistry = {
+      getAvailable: vi.fn(() => [{ id: 'gpt-5', provider: 'openai' }]),
+    };
+    const summaryManager = createMockManager({
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      getCwd: vi.fn(() => '/tmp/summary-workspace'),
+    });
+    const summarySession = createMockSession({
+      sessionId: 'session-summary-live',
+      cwd: '/tmp/summary-workspace',
+      manager: summaryManager,
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      model: { id: 'gpt-5', provider: 'openai' },
+      tools: [],
+    });
+
+    summarySession.session.compact.mockImplementation(() => new Promise(() => {}));
+
+    createRuntimeModelRegistryMock.mockReturnValue(runtimeRegistry);
+    sessionManagerForkFromMock.mockReturnValue(summaryManager);
+    createAgentSessionMock.mockResolvedValue({ session: summarySession.session });
+
+    setLiveEntry('session-summary-source', {
+      cwd: '/tmp/summary-workspace',
+      title: 'Summary source',
+      session: {
+        dispose: vi.fn(),
+        isStreaming: false,
+        sessionFile: '/tmp/source-session.jsonl',
+      },
+    });
+
+    const result = await Promise.race([
+      summarizeAndForkSession('session-summary-source').then((value) => ({ kind: 'resolved' as const, value })),
+      new Promise<{ kind: 'timeout' }>((resolve) => {
+        setTimeout(() => resolve({ kind: 'timeout' }), 20);
+      }),
+    ]);
+
+    expect(result).toEqual({
+      kind: 'resolved',
+      value: {
+        newSessionId: 'session-summary-live',
+        sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      },
+    });
+    expect(summarySession.session.compact).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the summary fork open and appends a notice when compaction fails', async () => {
+    const runtimeRegistry = {
+      getAvailable: vi.fn(() => [{ id: 'gpt-5', provider: 'openai' }]),
+    };
+    const summaryManager = createMockManager({
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      getCwd: vi.fn(() => '/tmp/summary-workspace'),
+    });
+    const summarySession = createMockSession({
+      sessionId: 'session-summary-live',
+      cwd: '/tmp/summary-workspace',
+      manager: summaryManager,
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+      model: { id: 'gpt-5', provider: 'openai' },
+      tools: [],
+    });
+
+    summarySession.session.compact.mockRejectedValue(new Error('compaction exploded'));
+
+    createRuntimeModelRegistryMock.mockReturnValue(runtimeRegistry);
+    sessionManagerForkFromMock.mockReturnValue(summaryManager);
+    createAgentSessionMock.mockResolvedValue({ session: summarySession.session });
+
+    setLiveEntry('session-summary-source', {
+      cwd: '/tmp/summary-workspace',
+      title: 'Summary source',
+      session: {
+        dispose: vi.fn(),
+        isStreaming: false,
+        sessionFile: '/tmp/source-session.jsonl',
+      },
+    });
+
+    await expect(summarizeAndForkSession('session-summary-source')).resolves.toEqual({
+      newSessionId: 'session-summary-live',
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(registry.has('session-summary-live')).toBe(true);
+    expect(logWarnMock).toHaveBeenCalledWith('summary fork compaction failed', expect.objectContaining({
+      sourceConversationId: 'session-summary-source',
+      conversationId: 'session-summary-live',
+      sessionFile: '/tmp/durable-sessions/--tmp-summary-workspace--/session-summary.jsonl',
+    }));
+    expect(summarySession.session.sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
+      customType: 'system_notice',
+      display: true,
+      content: 'Summarize & New could not compact this copy automatically: compaction exploded',
+    }));
+  });
+
   it('rewinds to a blank session when the selected entry is the first turn', async () => {
     const createdManager = createMockManager({
       sessionFile: '/tmp/rewind-root-session.jsonl',

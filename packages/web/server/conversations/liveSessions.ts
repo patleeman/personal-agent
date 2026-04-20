@@ -4724,12 +4724,25 @@ export async function summarizeAndForkSession(
     })()
     : await createSessionFromExisting(sourceSessionFile, entry.cwd, options);
 
-  try {
-    await compactSession(duplicated.id);
-  } catch (error) {
-    destroySession(duplicated.id);
-    throw error;
-  }
+  void compactSession(duplicated.id).catch(async (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    logWarn('summary fork compaction failed', {
+      sourceConversationId: sessionId,
+      conversationId: duplicated.id,
+      sessionFile: duplicated.sessionFile,
+      error: error instanceof Error ? { message: error.message, stack: error.stack } : message,
+    });
+
+    try {
+      await appendVisibleCustomMessage(
+        duplicated.id,
+        'system_notice',
+        `Summarize & New could not compact this copy automatically: ${message}`,
+      );
+    } catch {
+      // Ignore best-effort failure surfacing.
+    }
+  });
 
   return { newSessionId: duplicated.id, sessionFile: duplicated.sessionFile };
 }
