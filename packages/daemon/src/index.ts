@@ -188,6 +188,8 @@ export {
   loadAutomationSchedulerState,
   saveAutomationRuntimeStateMap,
   saveAutomationSchedulerState,
+  listAutomationActivityEntries,
+  appendAutomationActivityEntry,
   ensureLegacyTaskImports,
 } from './automation-store.js';
 export {
@@ -212,6 +214,9 @@ export type {
   LegacyAutomationImportIssue,
   AutomationMutationInput,
   AutomationSchedulerState,
+  AutomationActivityKind,
+  AutomationActivityOutcome,
+  AutomationActivityEntry,
 } from './automation-store.js';
 export type { ParsedTaskDefinition } from './modules/tasks-parser.js';
 export type {

@@ -259,6 +259,17 @@ export interface ScheduledTaskSummary {
 
 type ScheduledTaskThreadMode = 'dedicated' | 'existing' | 'none';
 
+export interface ScheduledTaskActivityEntry {
+  id: string;
+  kind: 'missed';
+  createdAt: string;
+  count: number;
+  firstScheduledAt: string;
+  lastScheduledAt: string;
+  exampleScheduledAt: string[];
+  outcome: 'skipped' | 'catch-up-started';
+}
+
 export interface ScheduledTaskDetail {
   id: string;
   title?: string;
@@ -277,6 +288,7 @@ export interface ScheduledTaskDetail {
   prompt: string;
   lastStatus?: string;
   lastRunAt?: string;
+  activity?: ScheduledTaskActivityEntry[];
   threadMode: ScheduledTaskThreadMode;
   threadConversationId?: string;
   threadTitle?: string;

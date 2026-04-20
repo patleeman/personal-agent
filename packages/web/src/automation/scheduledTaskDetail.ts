@@ -8,6 +8,28 @@ function isOptionalNumber(value: unknown): value is number | undefined {
   return value === undefined || typeof value === 'number';
 }
 
+function isOptionalActivity(value: unknown): boolean {
+  return value === undefined || (
+    Array.isArray(value)
+    && value.every((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return false;
+      }
+
+      const record = entry as Record<string, unknown>;
+      return typeof record.id === 'string'
+        && record.kind === 'missed'
+        && typeof record.createdAt === 'string'
+        && typeof record.count === 'number'
+        && typeof record.firstScheduledAt === 'string'
+        && typeof record.lastScheduledAt === 'string'
+        && Array.isArray(record.exampleScheduledAt)
+        && record.exampleScheduledAt.every((scheduledAt) => typeof scheduledAt === 'string')
+        && (record.outcome === 'skipped' || record.outcome === 'catch-up-started');
+    })
+  );
+}
+
 export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDetail {
   if (!value || typeof value !== 'object') {
     return false;
@@ -32,6 +54,7 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalNumber(record.catchUpWindowSeconds)
     && isOptionalString(record.lastStatus)
     && isOptionalString(record.lastRunAt)
+    && isOptionalActivity(record.activity)
     && isOptionalString(record.threadConversationId)
     && isOptionalString(record.threadTitle);
 }

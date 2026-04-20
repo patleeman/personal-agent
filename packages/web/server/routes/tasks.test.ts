@@ -7,6 +7,7 @@ const {
   ensureAutomationThreadMock,
   existsSyncMock,
   findTaskForProfileMock,
+  listAutomationActivityEntriesMock,
   invalidateAppTopicsMock,
   loadScheduledTasksForProfileMock,
   logErrorMock,
@@ -25,6 +26,7 @@ const {
   ensureAutomationThreadMock: vi.fn(),
   existsSyncMock: vi.fn(),
   findTaskForProfileMock: vi.fn(),
+  listAutomationActivityEntriesMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
   loadScheduledTasksForProfileMock: vi.fn(),
   logErrorMock: vi.fn(),
@@ -51,6 +53,7 @@ vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
   deleteStoredAutomation: deleteStoredAutomationMock,
   ensureAutomationThread: ensureAutomationThreadMock,
+  listAutomationActivityEntries: listAutomationActivityEntriesMock,
   normalizeAutomationTargetTypeForSelection: normalizeAutomationTargetTypeForSelectionMock,
   startScheduledTaskRun: startScheduledTaskRunMock,
   updateStoredAutomation: updateStoredAutomationMock,
@@ -149,6 +152,8 @@ describe('registerTaskRoutes', () => {
     ensureAutomationThreadMock.mockReset();
     existsSyncMock.mockReset();
     findTaskForProfileMock.mockReset();
+    listAutomationActivityEntriesMock.mockReset();
+    listAutomationActivityEntriesMock.mockReturnValue([]);
     invalidateAppTopicsMock.mockReset();
     loadScheduledTasksForProfileMock.mockReset();
     logErrorMock.mockReset();
@@ -391,6 +396,7 @@ describe('registerTaskRoutes', () => {
         cwd: '/repo',
         timeoutSeconds: 120,
         prompt: 'Saved prompt',
+        activity: [],
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
         threadMode: 'dedicated',
@@ -418,6 +424,7 @@ describe('registerTaskRoutes', () => {
         cwd: '/repo',
         timeoutSeconds: 120,
         prompt: 'Stored prompt',
+        activity: [],
         lastStatus: undefined,
         lastRunAt: undefined,
         threadMode: 'dedicated',
@@ -481,6 +488,7 @@ describe('registerTaskRoutes', () => {
         cwd: '/repo',
         timeoutSeconds: 120,
         prompt: 'Updated prompt',
+        activity: [],
         lastStatus: 'success',
         lastRunAt: '2026-04-09T15:00:00.000Z',
         threadMode: 'dedicated',
@@ -583,6 +591,7 @@ describe('registerTaskRoutes', () => {
       cwd: '/repo',
       timeoutSeconds: 120,
       prompt: 'Prompt body',
+      activity: [],
       lastStatus: 'success',
       lastRunAt: '2026-04-09T15:00:00.000Z',
       threadMode: 'dedicated',

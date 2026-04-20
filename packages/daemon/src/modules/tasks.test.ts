@@ -8,6 +8,7 @@ import type { DaemonConfig } from '../config.js';
 import {
   closeAutomationDbs,
   createStoredAutomation,
+  listAutomationActivityEntries,
   listStoredAutomations,
   loadAutomationRuntimeStateMap,
   loadAutomationSchedulerState,
@@ -736,6 +737,16 @@ Write daily report
 
     expect(runTask).not.toHaveBeenCalled();
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
+    expect(listAutomationActivityEntries('daily-report', { dbPath: resolveRuntimeDbPath(stateRoot) })).toEqual([
+      expect.objectContaining({
+        automationId: 'daily-report',
+        kind: 'missed',
+        count: 1,
+        outcome: 'skipped',
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      }),
+    ]);
 
     await module.stop?.(context);
   });
@@ -789,6 +800,16 @@ Run hourly task
     await module.handleEvent(createTimerEvent(), context);
 
     expect(listProfileActivityEntries({ stateRoot, profile: 'datadog' })).toHaveLength(0);
+    expect(listAutomationActivityEntries('hourly', { dbPath: resolveRuntimeDbPath(stateRoot) })).toEqual([
+      expect.objectContaining({
+        automationId: 'hourly',
+        kind: 'missed',
+        count: 2,
+        outcome: 'skipped',
+        firstScheduledAt: '2026-03-02T10:00:00.000Z',
+        lastScheduledAt: '2026-03-02T11:00:00.000Z',
+      }),
+    ]);
     const persistedState = loadAutomationSchedulerState({ dbPath: resolveRuntimeDbPath(stateRoot) });
     expect(persistedState.lastEvaluatedAt).toBe('2026-03-02T11:05:30.000Z');
 
@@ -845,6 +866,16 @@ Run hourly task
 
     expect(runTask).toHaveBeenCalledTimes(1);
     expect(runTask.mock.calls[0]?.[0].task.id).toBe('morning-brief');
+    expect(listAutomationActivityEntries('morning-brief', { dbPath })).toEqual([
+      expect.objectContaining({
+        automationId: 'morning-brief',
+        kind: 'missed',
+        count: 1,
+        outcome: 'catch-up-started',
+        firstScheduledAt: '2026-03-02T15:00:00.000Z',
+        lastScheduledAt: '2026-03-02T15:00:00.000Z',
+      }),
+    ]);
 
     await module.stop?.(context);
   });
@@ -894,6 +925,16 @@ Run hourly task
     await module.start(context);
 
     expect(runTask).not.toHaveBeenCalled();
+    expect(listAutomationActivityEntries('morning-brief', { dbPath })).toEqual([
+      expect.objectContaining({
+        automationId: 'morning-brief',
+        kind: 'missed',
+        count: 1,
+        outcome: 'skipped',
+        firstScheduledAt: '2026-03-02T15:00:00.000Z',
+        lastScheduledAt: '2026-03-02T15:00:00.000Z',
+      }),
+    ]);
 
     currentTime = new Date('2026-03-02T10:10:30.000-05:00');
     await module.handleEvent(createTimerEvent(), context);

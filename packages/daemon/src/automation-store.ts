@@ -56,6 +56,21 @@ export interface AutomationSchedulerState {
   lastEvaluatedAt?: string;
 }
 
+export type AutomationActivityKind = 'missed';
+export type AutomationActivityOutcome = 'skipped' | 'catch-up-started';
+
+export interface AutomationActivityEntry {
+  id: string;
+  automationId: string;
+  kind: AutomationActivityKind;
+  createdAt: string;
+  count: number;
+  firstScheduledAt: string;
+  lastScheduledAt: string;
+  exampleScheduledAt: string[];
+  outcome: AutomationActivityOutcome;
+}
+
 type StoredAutomationRow = {
   id: string;
   profile: string;
@@ -99,7 +114,16 @@ type AutomationStateRow = {
   one_time_completed_at: string | null;
 };
 
+type AutomationActivityRow = {
+  seq: number;
+  automation_id: string;
+  kind: string;
+  created_at: string;
+  payload_json: string | null;
+};
+
 const LEGACY_TASK_FILE_SUFFIX = '.task.md';
+const AUTOMATION_ACTIVITY_RETENTION_LIMIT = 100;
 const dbCache = new Map<string, SqliteDatabase>();
 
 export function closeAutomationDbs(): void {
@@ -131,6 +155,21 @@ function readOptionalPositiveInteger(value: number | null | undefined): number |
 
   const normalized = Math.floor(value);
   return normalized > 0 ? normalized : undefined;
+}
+
+function parseJsonRecord(value: string | null | undefined): Record<string, unknown> | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function buildSyntheticAutomationFilePath(id: string): string {
@@ -251,6 +290,18 @@ function openAutomationDb(dbPath: string = getAutomationDbPath()): SqliteDatabas
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS automation_activity (
+      seq INTEGER PRIMARY KEY AUTOINCREMENT,
+      automation_id TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      payload_json TEXT,
+      FOREIGN KEY (automation_id) REFERENCES automations(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_automation_activity_automation_id_created_at
+      ON automation_activity(automation_id, created_at DESC, seq DESC);
   `);
 
   const automationColumns = db.prepare('PRAGMA table_info(automations)').all() as Array<{ name?: string }>;
@@ -356,6 +407,43 @@ function rowToRuntimeState(row: AutomationStateRow): TaskRuntimeState {
     oneTimeResolvedAt: readOptionalString(row.one_time_resolved_at),
     oneTimeResolvedStatus: readOptionalString(row.one_time_resolved_status) as TaskRuntimeState['oneTimeResolvedStatus'],
     oneTimeCompletedAt: readOptionalString(row.one_time_completed_at),
+  };
+}
+
+function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationActivityEntry | undefined {
+  const payload = parseJsonRecord(row.payload_json);
+  const count = typeof payload?.count === 'number' && Number.isInteger(payload.count) && payload.count > 0
+    ? payload.count
+    : undefined;
+  const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' && Number.isFinite(Date.parse(payload.firstScheduledAt))
+    ? new Date(payload.firstScheduledAt).toISOString()
+    : undefined;
+  const lastScheduledAt = typeof payload?.lastScheduledAt === 'string' && Number.isFinite(Date.parse(payload.lastScheduledAt))
+    ? new Date(payload.lastScheduledAt).toISOString()
+    : undefined;
+  const exampleScheduledAt = Array.isArray(payload?.exampleScheduledAt)
+    ? payload.exampleScheduledAt
+      .filter((value): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value)))
+      .map((value) => new Date(value).toISOString())
+    : [];
+  const outcome = payload?.outcome === 'catch-up-started' || payload?.outcome === 'skipped'
+    ? payload.outcome
+    : undefined;
+
+  if (row.kind !== 'missed' || !count || !firstScheduledAt || !lastScheduledAt || !outcome) {
+    return undefined;
+  }
+
+  return {
+    id: `${row.automation_id}:${row.seq}`,
+    automationId: row.automation_id,
+    kind: 'missed',
+    createdAt: new Date(row.created_at).toISOString(),
+    count,
+    firstScheduledAt,
+    lastScheduledAt,
+    exampleScheduledAt,
+    outcome,
   };
 }
 
@@ -757,6 +845,107 @@ export function saveAutomationRuntimeStateMap(state: Record<string, TaskRuntimeS
   });
 
   tx();
+}
+
+export function listAutomationActivityEntries(
+  automationId: string,
+  options: { limit?: number; dbPath?: string } = {},
+): AutomationActivityEntry[] {
+  const normalizedAutomationId = readRequiredString(automationId, 'automationId');
+  const db = openAutomationDb(options.dbPath);
+  const limit = Math.max(1, Math.min(200, Math.floor(options.limit ?? 20)));
+  const rows = db.prepare(`
+    SELECT seq, automation_id, kind, created_at, payload_json
+    FROM automation_activity
+    WHERE automation_id = ?
+    ORDER BY created_at DESC, seq DESC
+    LIMIT ?
+  `).all(normalizedAutomationId, limit) as AutomationActivityRow[];
+
+  return rows
+    .map((row) => rowToAutomationActivityEntry(row))
+    .filter((entry): entry is AutomationActivityEntry => entry !== undefined);
+}
+
+export function appendAutomationActivityEntry(
+  automationId: string,
+  input: Omit<AutomationActivityEntry, 'id' | 'automationId'>,
+  options: { dbPath?: string } = {},
+): AutomationActivityEntry {
+  const normalizedAutomationId = readRequiredString(automationId, 'automationId');
+  const existing = getStoredAutomation(normalizedAutomationId, { dbPath: options.dbPath });
+  if (!existing) {
+    throw new Error(`Automation not found: ${normalizedAutomationId}`);
+  }
+
+  const createdAt = new Date(readRequiredString(input.createdAt, 'createdAt')).toISOString();
+  if (input.kind !== 'missed') {
+    throw new Error(`Unsupported automation activity kind: ${input.kind}`);
+  }
+
+  if (!Number.isInteger(input.count) || input.count <= 0) {
+    throw new Error('Automation activity count must be a positive integer.');
+  }
+
+  const firstScheduledAt = new Date(readRequiredString(input.firstScheduledAt, 'firstScheduledAt')).toISOString();
+  const lastScheduledAt = new Date(readRequiredString(input.lastScheduledAt, 'lastScheduledAt')).toISOString();
+  const exampleScheduledAt = input.exampleScheduledAt
+    .filter((value) => typeof value === 'string' && Number.isFinite(Date.parse(value)))
+    .map((value) => new Date(value).toISOString());
+  if (input.outcome !== 'skipped' && input.outcome !== 'catch-up-started') {
+    throw new Error(`Unsupported automation activity outcome: ${input.outcome}`);
+  }
+
+  const db = openAutomationDb(options.dbPath);
+  const insert = db.prepare(`
+    INSERT INTO automation_activity (automation_id, kind, created_at, payload_json)
+    VALUES (?, ?, ?, ?)
+  `);
+  const trim = db.prepare(`
+    DELETE FROM automation_activity
+    WHERE automation_id = ?
+      AND seq NOT IN (
+        SELECT seq
+        FROM automation_activity
+        WHERE automation_id = ?
+        ORDER BY created_at DESC, seq DESC
+        LIMIT ?
+      )
+  `);
+
+  let insertedSeq: number | bigint | undefined;
+  db.transaction(() => {
+    const insertResult = insert.run(
+      normalizedAutomationId,
+      'missed',
+      createdAt,
+      JSON.stringify({
+        count: input.count,
+        firstScheduledAt,
+        lastScheduledAt,
+        exampleScheduledAt,
+        outcome: input.outcome,
+      }),
+    ) as { lastInsertRowid?: number | bigint };
+    insertedSeq = insertResult.lastInsertRowid;
+    trim.run(normalizedAutomationId, normalizedAutomationId, AUTOMATION_ACTIVITY_RETENTION_LIMIT);
+  })();
+
+  if (insertedSeq === undefined) {
+    throw new Error('Failed to allocate automation activity entry id.');
+  }
+
+  const row = db.prepare(`
+    SELECT seq, automation_id, kind, created_at, payload_json
+    FROM automation_activity
+    WHERE seq = ?
+  `).get(insertedSeq) as AutomationActivityRow | undefined;
+  const entry = row ? rowToAutomationActivityEntry(row) : undefined;
+  if (!entry) {
+    throw new Error('Failed to read automation activity entry after insert.');
+  }
+
+  return entry;
 }
 
 export function ensureLegacyTaskImports(options: {

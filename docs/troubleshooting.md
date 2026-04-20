@@ -87,7 +87,7 @@ pa daemon status
 pa daemon logs
 ```
 
-Then inspect the automation detail page and its owned run history, or validate legacy task files with the `scheduled_task` tool.
+Then inspect the automation detail page, including its owned run history and Activity section, or validate legacy task files with the `scheduled_task` tool.
 
 Common causes:
 

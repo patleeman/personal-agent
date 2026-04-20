@@ -4,9 +4,11 @@ import {
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
+  listAutomationActivityEntries,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   updateStoredAutomation,
+  type AutomationActivityEntry,
   type StoredAutomation,
 } from '@personal-agent/daemon';
 import { invalidateAppTopics } from '../shared/appEvents.js';
@@ -102,7 +104,12 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
   };
 }
 
-export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskRuntimeEntry, callbackBinding?: ReturnType<typeof getTaskCallbackBinding>) {
+export function buildScheduledTaskDetail(
+  task: StoredAutomation,
+  runtime?: TaskRuntimeEntry,
+  callbackBinding?: ReturnType<typeof getTaskCallbackBinding>,
+  activity: AutomationActivityEntry[] = [],
+) {
   const metadata = toScheduledTaskMetadata(task);
   return {
     ...(runtime ?? {}),
@@ -121,6 +128,7 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     timeoutSeconds: metadata.timeoutSeconds,
     ...(metadata.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: metadata.catchUpWindowSeconds } : {}),
     prompt: metadata.promptBody,
+    activity,
     conversationBehavior: task.conversationBehavior,
     ...(callbackBinding
       ? {
@@ -164,8 +172,9 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
     ? ensureAutomationThread(resolvedTask.task.id)
     : resolvedTask.task;
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
+  const activity = listAutomationActivityEntries(task.id);
 
-  return buildScheduledTaskDetail(task, resolvedTask.runtime, callbackBinding);
+  return buildScheduledTaskDetail(task, resolvedTask.runtime, callbackBinding, activity);
 }
 
 function applyScheduledTaskCallbackBinding(
@@ -254,9 +263,10 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
 
   const savedTask = findTaskForProfile(profile, task.id);
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
+  const activity = listAutomationActivityEntries(task.id);
   return {
     ok: true as const,
-    task: buildScheduledTaskDetail(savedTask?.task ?? task, savedTask?.runtime, callbackBinding),
+    task: buildScheduledTaskDetail(savedTask?.task ?? task, savedTask?.runtime, callbackBinding, activity),
   };
 }
 
@@ -308,9 +318,10 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
 
   const refreshedTask = findTaskForProfile(profile, task.id);
   const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
+  const activity = listAutomationActivityEntries(task.id);
   return {
     ok: true as const,
-    task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime, callbackBinding),
+    task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime, callbackBinding, activity),
   };
 }
 

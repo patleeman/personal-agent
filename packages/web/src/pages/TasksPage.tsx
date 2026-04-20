@@ -9,7 +9,7 @@ import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
 import { formatTaskSchedule } from '../automation/taskSchedule';
-import type { DurableRunRecord, ScheduledTaskSummary } from '../shared/types';
+import type { DurableRunRecord, ScheduledTaskActivityEntry, ScheduledTaskSummary } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 
 function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
@@ -128,6 +128,28 @@ function automationRunStatus(run: DurableRunRecord): { text: string; cls: string
     return { text: 'Cancelled', cls: 'text-dim' };
   }
   return { text: status ?? 'Unknown', cls: 'text-dim' };
+}
+
+function automationActivityStatus(entry: ScheduledTaskActivityEntry): { text: string; cls: string } {
+  return entry.outcome === 'catch-up-started'
+    ? { text: 'Catch-up started', cls: 'text-accent' }
+    : { text: 'Skipped', cls: 'text-warning' };
+}
+
+function automationActivityHeadline(entry: ScheduledTaskActivityEntry): string {
+  return entry.count === 1 ? 'Missed run' : `Missed ${entry.count} runs`;
+}
+
+function automationActivitySummary(entry: ScheduledTaskActivityEntry): string {
+  if (entry.outcome === 'catch-up-started') {
+    return entry.count === 1
+      ? 'The daemon missed this slot while offline and started a catch-up run when it came back.'
+      : 'The daemon missed these slots while offline and started one catch-up run for the latest slot when it came back.';
+  }
+
+  return entry.count === 1
+    ? 'The daemon was offline, so this scheduled slot did not run.'
+    : 'The daemon was offline, so these scheduled slots did not run.';
 }
 
 function CreateTaskModal({ onClose }: { onClose: () => void }) {
@@ -482,6 +504,7 @@ function AutomationDetailView({
   const runHistoryLabel = taskRuns.length === 0
     ? (selectedRunId ? 'Opening run details…' : 'No runs yet')
     : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`;
+  const activityEntries = detail?.activity ?? [];
   const folderLabel = detail?.cwd || effectiveSummary?.cwd || 'Current workspace';
   const modelLabel = detail?.targetType === 'conversation'
     ? 'Not used for thread wakeups'
@@ -729,6 +752,45 @@ function AutomationDetailView({
                 </div>
               )}
             </section>
+
+            {detail && (
+              <section className="space-y-4 border-t border-border-subtle pt-6">
+                <div>
+                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Activity</h2>
+                  <p className="mt-1 text-[13px] text-secondary">Missed schedules and catch-up decisions for this automation.</p>
+                </div>
+
+                {activityEntries.length === 0 ? (
+                  <p className="text-[14px] text-secondary">No schedule events yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {activityEntries.map((entry) => {
+                      const statusMeta = automationActivityStatus(entry);
+
+                      return (
+                        <div key={entry.id} className="rounded-2xl border border-border-subtle/80 px-4 py-3">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[14px] font-medium text-primary">{automationActivityHeadline(entry)}</p>
+                                <span className={`text-[12px] ${statusMeta.cls}`}>{statusMeta.text}</span>
+                              </div>
+                              <p className="mt-1 text-[12px] text-secondary">{automationActivitySummary(entry)}</p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
+                                <span>Detected {timeAgo(entry.createdAt)}</span>
+                                <span>·</span>
+                                <span>Latest slot {timeAgo(entry.lastScheduledAt)}</span>
+                                {entry.count > 1 && <><span>·</span><span>First slot {timeAgo(entry.firstScheduledAt)}</span></>}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
         </div>
       </div>

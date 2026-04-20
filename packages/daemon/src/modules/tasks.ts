@@ -10,6 +10,7 @@ import {
 } from '@personal-agent/core';
 import type { TasksModuleConfig } from '../config.js';
 import {
+  appendAutomationActivityEntry,
   deleteStoredAutomation,
   ensureLegacyTaskImports,
   getStoredAutomation,
@@ -450,19 +451,35 @@ export function createTasksModule(
   };
 
   const writeMissedTaskActivity = (
-    task: ParsedTaskDefinition,
+    task: StoredAutomation,
     context: { logger: { info: (message: string) => void; warn: (message: string) => void }; paths: { root: string; stateRoot: string } },
     details: {
       detectedAt: string;
       missedRuns: MissedTaskRunSummary;
+      outcome: 'skipped' | 'catch-up-started';
     },
   ): void => {
     context.logger.info([
       toMissedTaskActivitySummary(task.id, details.missedRuns.count),
       `detectedAt=${details.detectedAt}`,
       `window=${details.missedRuns.firstScheduledAt}..${details.missedRuns.lastScheduledAt}`,
+      `outcome=${details.outcome}`,
       `details=${JSON.stringify(toMissedTaskActivityDetails({ task, missedRuns: details.missedRuns }))}`,
     ].join(' '));
+
+    try {
+      appendAutomationActivityEntry(task.id, {
+        kind: 'missed',
+        createdAt: details.detectedAt,
+        count: details.missedRuns.count,
+        firstScheduledAt: details.missedRuns.firstScheduledAt,
+        lastScheduledAt: details.missedRuns.lastScheduledAt,
+        exampleScheduledAt: details.missedRuns.exampleScheduledAt,
+        outcome: details.outcome,
+      }, { dbPath: runtimeDbPath });
+    } catch (error) {
+      context.logger.warn(`failed to record missed task activity id=${task.id}: ${(error as Error).message}`);
+    }
   };
 
   const createDurableTaskRunRecord = async (
@@ -1248,6 +1265,7 @@ export function createTasksModule(
                   lastScheduledAt: new Date(task.schedule.atMs).toISOString(),
                   exampleScheduledAt: [new Date(task.schedule.atMs).toISOString()],
                 },
+                outcome: 'skipped',
               });
             }
 
@@ -1292,6 +1310,11 @@ export function createTasksModule(
               && !activeRuns.has(task.key)
               && !(task.targetType === 'conversation' && pendingConversationAutomationIds.has(task.id))
             ) {
+              writeMissedTaskActivity(task, context, {
+                detectedAt: nowIso,
+                missedRuns,
+                outcome: 'catch-up-started',
+              });
               context.logger.info(`starting catch-up task run id=${task.id} scheduledAt=${catchUpScheduledAt}`);
               startTaskRun(task, record, context);
               continue;
@@ -1300,6 +1323,7 @@ export function createTasksModule(
             writeMissedTaskActivity(task, context, {
               detectedAt: nowIso,
               missedRuns,
+              outcome: 'skipped',
             });
           }
         }

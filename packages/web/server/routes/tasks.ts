@@ -12,9 +12,11 @@ import {
   createStoredAutomation,
   deleteStoredAutomation,
   ensureAutomationThread,
+  listAutomationActivityEntries,
   normalizeAutomationTargetTypeForSelection,
   startScheduledTaskRun,
   updateStoredAutomation,
+  type AutomationActivityEntry,
   type StoredAutomation,
 } from '@personal-agent/daemon';
 import { invalidateAppTopics, logError } from '../middleware/index.js';
@@ -40,6 +42,7 @@ function initializeTaskRoutesContext(context: Pick<ServerRouteContext, 'getCurre
 function buildTaskDetailResponse(
   task: StoredAutomation,
   runtime?: TaskRuntimeEntry,
+  activity: AutomationActivityEntry[] = [],
 ) {
   const metadata = toScheduledTaskMetadata(task);
   return {
@@ -59,6 +62,7 @@ function buildTaskDetailResponse(
     timeoutSeconds: metadata.timeoutSeconds,
     ...(metadata.catchUpWindowSeconds !== undefined ? { catchUpWindowSeconds: metadata.catchUpWindowSeconds } : {}),
     prompt: metadata.promptBody,
+    activity,
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     ...buildScheduledTaskThreadDetail(task),
@@ -173,7 +177,7 @@ export function registerTaskRoutes(
       const savedTask = findTaskForProfile(profile, task.id);
       res.status(201).json({
         ok: true,
-        task: buildTaskDetailResponse(savedTask?.task ?? task, savedTask?.runtime),
+        task: buildTaskDetailResponse(savedTask?.task ?? task, savedTask?.runtime, listAutomationActivityEntries(task.id)),
       });
     } catch (err) {
       logError('request handler error', {
@@ -241,7 +245,7 @@ export function registerTaskRoutes(
       invalidateAppTopics('tasks');
 
       const refreshedTask = findTaskForProfile(getCurrentProfileFn(), task.id);
-      res.json({ ok: true, task: buildTaskDetailResponse(refreshedTask?.task ?? task, refreshedTask?.runtime) });
+      res.json({ ok: true, task: buildTaskDetailResponse(refreshedTask?.task ?? task, refreshedTask?.runtime, listAutomationActivityEntries(task.id)) });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -279,7 +283,7 @@ export function registerTaskRoutes(
       const task = resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
         ? ensureAutomationThread(resolvedTask.task.id)
         : resolvedTask.task;
-      res.json(buildTaskDetailResponse(task, resolvedTask.runtime));
+      res.json(buildTaskDetailResponse(task, resolvedTask.runtime, listAutomationActivityEntries(task.id)));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
