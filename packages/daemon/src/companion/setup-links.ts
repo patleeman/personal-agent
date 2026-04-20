@@ -42,6 +42,10 @@ function isUsableIpv4Address(address: string): boolean {
   return !address.startsWith('127.') && !address.startsWith('169.254.');
 }
 
+function isTunnelInterfaceName(name: string): boolean {
+  return /^utun\d+$/i.test(name) || /^tailscale/i.test(name);
+}
+
 function compareInterfacePriority(left: string, right: string): number {
   const score = (value: string) => {
     if (/^en\d+$/i.test(value)) {
@@ -50,10 +54,7 @@ function compareInterfacePriority(left: string, right: string): number {
     if (/^ethernet/i.test(value)) {
       return 1;
     }
-    if (/^utun\d+$/i.test(value) || /^tailscale/i.test(value)) {
-      return 2;
-    }
-    return 3;
+    return 2;
   };
 
   return score(left) - score(right) || left.localeCompare(right);
@@ -94,7 +95,10 @@ export function buildCompanionSetupState(input: {
     addBaseUrl(label, `http://${formatHttpHost(host)}:${String(companionPort)}`);
   };
 
-  if (tailnetUrl) {
+  const addTailnetLink = () => {
+    if (!tailnetUrl) {
+      return;
+    }
     const tailnetHostLabel = (() => {
       try {
         return new URL(tailnetUrl).host || 'Tailnet HTTPS';
@@ -103,7 +107,7 @@ export function buildCompanionSetupState(input: {
       }
     })();
     addBaseUrl(`Tailnet · ${tailnetHostLabel}`, tailnetUrl);
-  }
+  };
 
   if (isLoopbackHost(companionHost)) {
     if (!tailnetUrl) {
@@ -113,7 +117,11 @@ export function buildCompanionSetupState(input: {
     const readInterfaces = input.readNetworkInterfaces ?? networkInterfaces;
     const interfaces = readInterfaces();
     const names = Object.keys(interfaces).sort(compareInterfacePriority);
+    let addedReachableInterface = false;
     for (const name of names) {
+      if (isTunnelInterfaceName(name)) {
+        continue;
+      }
       const entries = (interfaces as Record<string, Array<{ address: string; family: string | number; internal: boolean }> | undefined>)[name] ?? [];
       for (const entry of entries) {
         const family = typeof entry.family === 'string' ? entry.family : String(entry.family);
@@ -121,15 +129,18 @@ export function buildCompanionSetupState(input: {
           continue;
         }
         addHostLink(`${name} · ${entry.address}`, entry.address);
+        addedReachableInterface = true;
       }
     }
 
-    if (links.length === 0) {
+    if (!addedReachableInterface && !tailnetUrl) {
       warnings.push('No non-loopback IPv4 network address is available for QR pairing. Connect the host machine to Wi-Fi or Ethernet, or bind the companion host to a specific reachable address.');
     }
   } else {
     addHostLink('Configured host', companionHost);
   }
+
+  addTailnetLink();
 
   return {
     pairing: input.pairing,
