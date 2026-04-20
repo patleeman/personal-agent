@@ -12,13 +12,14 @@ apps/ios/PersonalAgentCompanion
 
 - pair to a companion host with manual pairing code entry or setup QR + bearer token
 - persist paired hosts locally and keep the token in Keychain
+- choose a host first, then work in a per-host Chat / Automations / Settings shell
 - mirror host conversation ordering with pinned/open/archived sections and native pin/archive/duplicate controls
 - open a conversation and stream transcript updates over the multiplexed companion socket
 - send prompts with text, prompt images, and saved drawing attachment refs
 - take over control, abort a turn, rename a conversation, change cwd, adjust model preferences, and switch execution target
 - browse conversation artifacts and commit checkpoints
 - browse saved drawing attachments, inspect revisions, and create/update attachment assets
-- manage automations and durable runs from the phone
+- manage automations from the phone, with durable-run details still reachable from the companion surfaces
 - manage paired devices and generate setup state for adding another device
 
 ## Build and test
@@ -180,4 +181,4 @@ PA_IOS_BOOTSTRAP_DEVICE_ID=device_...
 PA_IOS_BOOTSTRAP_DEVICE_LABEL=iPhone Simulator
 ```
 
-When these are present, the app inserts that host into local storage, stores the bearer token in Keychain, and opens it automatically.
+When these are present, the app inserts that host into local storage and stores the bearer token in Keychain so it is ready to pick from the host chooser.

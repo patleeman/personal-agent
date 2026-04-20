@@ -41,15 +41,17 @@ Current repo implementation:
 The shipping iOS client currently covers:
 
 - host pairing + local host persistence
+- a host-first shell: select one host, then work inside Chat / Automations / Settings for that host
 - setup QR onboarding via desktop-generated QR codes, custom `pa-companion://` setup links, and in-app QR scanning
 - conversation list mirroring pinned/open/archived ordering, plus native pin/archive/duplicate controls
 - live conversation transcript + prompt composer
 - prompt images + saved drawing attachment refs
+- compact internal-work transcript shelves for thinking + tool calls, matching the desktop model more closely than plain message bubbles
 - execution-target switching, takeover, abort, rename, working-directory changes, and per-thread model preferences
 - conversation artifact and commit-checkpoint browsing
 - saved attachment browse/read/create/update flows for drawing attachments
 - automation list/detail/create/edit/delete/run flows
-- durable run list/detail/log/cancel flows
+- durable run detail/log/cancel flows, without a dedicated top-level Runs tab in the iOS shell
 - paired-device admin plus setup generation from iOS
 
 ## Product thesis

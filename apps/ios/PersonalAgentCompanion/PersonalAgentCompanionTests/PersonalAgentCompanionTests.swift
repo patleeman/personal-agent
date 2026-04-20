@@ -94,6 +94,16 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.hosts.first?.baseURL, "http://192.168.1.23:3843")
     }
 
+    func testMockModeSeedsASelectableHostWithoutAutoConnecting() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+
+        let model = CompanionAppModel()
+
+        XCTAssertEqual(model.hosts.first?.hostLabel, "Demo Host")
+        XCTAssertEqual(model.activeHostId, model.hosts.first?.id)
+        XCTAssertNil(model.activeSession)
+    }
+
     func testRemovingActiveHostFallsBackToNextSavedHost() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
         let first = CompanionHostRecord(
