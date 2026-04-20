@@ -35,19 +35,8 @@ struct ConversationScreen: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 14) {
-                    if let meta = viewModel.sessionMeta {
-                        ConversationMetaBar(meta: meta)
-                    }
-
                     if viewModel.blocks.isEmpty && !viewModel.isLoading {
-                        ContentUnavailableView(
-                            "No transcript yet",
-                            systemImage: "message",
-                            description: Text("Send a prompt to start this conversation.")
-                        )
-                        .foregroundStyle(CompanionTheme.textSecondary)
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 80)
+                        EmptyConversationState(meta: viewModel.sessionMeta)
                     }
 
                     ForEach(transcriptItems) { item in
@@ -77,6 +66,13 @@ struct ConversationScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        if let meta = viewModel.sessionMeta {
+                            Section("Current session") {
+                                SessionMenuSummaryRow(label: "Model", value: meta.model)
+                                SessionMenuSummaryRow(label: "Working directory", value: meta.cwd)
+                            }
+                        }
+
                         Section("Execution target") {
                             ForEach(viewModel.executionTargets) { target in
                                 Button {
@@ -1258,34 +1254,56 @@ private struct RenameConversationView: View {
     }
 }
 
-private struct ConversationMetaBar: View {
-    let meta: SessionMeta
+private struct EmptyConversationState: View {
+    let meta: SessionMeta?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(meta.cwd)
-                .font(.caption)
+        VStack(spacing: 12) {
+            Image(systemName: "message")
+                .font(.system(size: 52, weight: .regular))
+                .foregroundStyle(CompanionTheme.textDim)
+            Text("No transcript yet")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(CompanionTheme.textPrimary)
+            Text("Send a prompt to start this conversation.")
+                .font(.body)
                 .foregroundStyle(CompanionTheme.textSecondary)
-                .lineLimit(2)
-            HStack(spacing: 8) {
-                Text(meta.model)
-                if let remoteHostLabel = meta.remoteHostLabel?.nilIfBlank {
-                    Text(remoteHostLabel)
+            if let meta {
+                VStack(spacing: 4) {
+                    Text(meta.model)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                    Text(meta.cwd)
+                        .font(.caption)
+                        .foregroundStyle(CompanionTheme.textDim)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
                 }
-                if let automationTitle = meta.automationTitle?.nilIfBlank {
-                    Text(automationTitle)
-                }
+                .padding(.top, 4)
             }
-            .font(.caption2)
-            .foregroundStyle(CompanionTheme.textDim)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 88)
+        .padding(.horizontal, 20)
+    }
+}
+
+private struct SessionMenuSummaryRow: View {
+    let label: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(CompanionTheme.textDim)
+            Text(value)
+                .font(.footnote)
+                .foregroundStyle(CompanionTheme.textPrimary)
+                .lineLimit(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
-        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -1325,16 +1343,36 @@ private struct ConversationModelPreferencesView: View {
     @ObservedObject var viewModel: ConversationViewModel
     @State private var model = ""
     @State private var thinkingLevel = ""
-    @State private var serviceTier = ""
+    @State private var fastModeEnabled = false
     @State private var isLoading = false
+
+    private var modelOptions: [CompanionPickerOption] {
+        companionModelOptions(current: model)
+    }
+
+    private var thinkingLevelOptions: [CompanionPickerOption] {
+        companionThinkingLevelOptions(current: thinkingLevel)
+    }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Preferences") {
-                    TextField("Model", text: $model)
-                    TextField("Thinking level", text: $thinkingLevel)
-                    TextField("Service tier", text: $serviceTier)
+                    Picker("Model", selection: $model) {
+                        ForEach(modelOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Picker("Thinking level", selection: $thinkingLevel) {
+                        ForEach(thinkingLevelOptions) { option in
+                            Text(option.label).tag(option.value)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    Toggle("Fast mode", isOn: $fastModeEnabled)
                 }
             }
             .navigationTitle("Model preferences")
@@ -1346,7 +1384,11 @@ private struct ConversationModelPreferencesView: View {
                     Button(isLoading ? "Saving…" : "Save") {
                         Task {
                             isLoading = true
-                            _ = await viewModel.saveModelPreferences(model: model, thinkingLevel: thinkingLevel, serviceTier: serviceTier)
+                            _ = await viewModel.saveModelPreferences(
+                                model: model,
+                                thinkingLevel: thinkingLevel,
+                                serviceTier: fastModeEnabled ? "priority" : ""
+                            )
                             isLoading = false
                             dismiss()
                         }
@@ -1357,7 +1399,7 @@ private struct ConversationModelPreferencesView: View {
                 guard let state = await viewModel.loadModelPreferences() else { return }
                 model = state.currentModel
                 thinkingLevel = state.currentThinkingLevel
-                serviceTier = state.currentServiceTier
+                fastModeEnabled = companionFastModeEnabled(serviceTier: state.currentServiceTier)
             }
         }
     }

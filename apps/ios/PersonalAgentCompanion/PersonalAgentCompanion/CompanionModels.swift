@@ -537,6 +537,58 @@ struct ConversationModelPreferencesState: Codable, Equatable {
     let hasExplicitServiceTier: Bool
 }
 
+struct CompanionPickerOption: Identifiable, Equatable {
+    let value: String
+    let label: String
+
+    var id: String { "\(label)|\(value)" }
+}
+
+func companionModelOptions(current: String? = nil, defaultLabel: String? = nil) -> [CompanionPickerOption] {
+    var options: [CompanionPickerOption] = []
+    if let defaultLabel {
+        options.append(CompanionPickerOption(value: "", label: defaultLabel))
+    }
+    options += [
+        CompanionPickerOption(value: "gpt-5.4", label: "GPT-5.4"),
+        CompanionPickerOption(value: "gpt-5.4-mini", label: "GPT-5.4 Mini"),
+        CompanionPickerOption(value: "gpt-5.2", label: "GPT-5.2"),
+        CompanionPickerOption(value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini"),
+        CompanionPickerOption(value: "claude-opus-4-6", label: "Claude Opus 4.6"),
+        CompanionPickerOption(value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6"),
+        CompanionPickerOption(value: "claude-haiku-4-6", label: "Claude Haiku 4.6"),
+        CompanionPickerOption(value: "gpt-4o", label: "GPT-4o"),
+        CompanionPickerOption(value: "gemini-2.5-pro", label: "Gemini 2.5 Pro"),
+        CompanionPickerOption(value: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro High"),
+    ]
+    if let current = current?.nilIfBlank, !options.contains(where: { $0.value == current }) {
+        options.append(CompanionPickerOption(value: current, label: current))
+    }
+    return options
+}
+
+func companionThinkingLevelOptions(current: String? = nil, unsetLabel: String? = nil) -> [CompanionPickerOption] {
+    var options: [CompanionPickerOption] = []
+    if let unsetLabel {
+        options.append(CompanionPickerOption(value: "", label: unsetLabel))
+    }
+    options += [
+        CompanionPickerOption(value: "off", label: "Off"),
+        CompanionPickerOption(value: "low", label: "Low"),
+        CompanionPickerOption(value: "medium", label: "Medium"),
+        CompanionPickerOption(value: "high", label: "High"),
+        CompanionPickerOption(value: "xhigh", label: "Extra high"),
+    ]
+    if let current = current?.nilIfBlank, !options.contains(where: { $0.value == current }) {
+        options.append(CompanionPickerOption(value: current, label: current))
+    }
+    return options
+}
+
+func companionFastModeEnabled(serviceTier: String) -> Bool {
+    serviceTier.trimmed == "priority"
+}
+
 struct ConversationCwdChangeResult: Codable, Equatable {
     let id: String
     let sessionFile: String

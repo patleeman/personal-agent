@@ -585,57 +585,27 @@ private struct AutomationDetailView: View {
 }
 
 private struct AutomationEditorView: View {
-    private struct PickerOption: Identifiable {
-        let value: String
-        let label: String
-
-        var id: String { value }
-    }
-
     @Environment(\.dismiss) private var dismiss
     @Binding var draft: ScheduledTaskEditorDraft
     @ObservedObject var session: HostSessionModel
     let title: String
     let onSave: () async -> Void
 
-    private var modelOptions: [PickerOption] {
-        var options = [
-            PickerOption(value: "", label: "Host default"),
-            PickerOption(value: "gpt-5.4", label: "GPT-5.4"),
-            PickerOption(value: "gpt-5.4-mini", label: "GPT-5.4 Mini"),
-            PickerOption(value: "gpt-5.2", label: "GPT-5.2"),
-            PickerOption(value: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini"),
-            PickerOption(value: "claude-opus-4-6", label: "Claude Opus 4.6"),
-            PickerOption(value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6"),
-            PickerOption(value: "claude-haiku-4-6", label: "Claude Haiku 4.6"),
-            PickerOption(value: "gpt-4o", label: "GPT-4o"),
-            PickerOption(value: "gemini-2.5-pro", label: "Gemini 2.5 Pro"),
-            PickerOption(value: "gemini-3.1-pro-high", label: "Gemini 3.1 Pro High"),
-        ]
-        if let current = draft.model.nilIfBlank, !options.contains(where: { $0.value == current }) {
-            options.append(PickerOption(value: current, label: current))
-        }
-        return options
+    private var modelOptions: [CompanionPickerOption] {
+        companionModelOptions(current: draft.model, defaultLabel: "Host default")
     }
 
-    private var thinkingLevelOptions: [PickerOption] {
-        [
-            PickerOption(value: "", label: "Unset"),
-            PickerOption(value: "off", label: "Off"),
-            PickerOption(value: "low", label: "Low"),
-            PickerOption(value: "medium", label: "Medium"),
-            PickerOption(value: "high", label: "High"),
-            PickerOption(value: "xhigh", label: "Extra high"),
-        ]
+    private var thinkingLevelOptions: [CompanionPickerOption] {
+        companionThinkingLevelOptions(current: draft.thinkingLevel, unsetLabel: "Unset")
     }
 
-    private var workingDirectoryOptions: [PickerOption] {
-        var options = [PickerOption(value: "", label: "Host default")]
+    private var workingDirectoryOptions: [CompanionPickerOption] {
+        var options = [CompanionPickerOption(value: "", label: "Host default")]
         for path in session.workspacePathOptions {
-            options.append(PickerOption(value: path, label: path))
+            options.append(CompanionPickerOption(value: path, label: path))
         }
         if let current = draft.cwd.nilIfBlank, !options.contains(where: { $0.value == current }) {
-            options.append(PickerOption(value: current, label: current))
+            options.append(CompanionPickerOption(value: current, label: current))
         }
         return options
     }
@@ -1430,6 +1400,21 @@ struct ConversationLaunchView: View {
     @State private var resumeRequest = ResumeConversationRequest()
     @State private var isSubmitting = false
 
+    private var createModelOptions: [CompanionPickerOption] {
+        companionModelOptions(current: createRequest.model, defaultLabel: "Host default")
+    }
+
+    private var createThinkingLevelOptions: [CompanionPickerOption] {
+        companionThinkingLevelOptions(current: createRequest.thinkingLevel, unsetLabel: "Host default")
+    }
+
+    private var createFastModeBinding: Binding<Bool> {
+        Binding(
+            get: { companionFastModeEnabled(serviceTier: createRequest.serviceTier) },
+            set: { createRequest.serviceTier = $0 ? "priority" : "" }
+        )
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -1447,9 +1432,19 @@ struct ConversationLaunchView: View {
                         TextField("Working directory", text: $createRequest.cwd)
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                        TextField("Model", text: $createRequest.model)
-                        TextField("Thinking level", text: $createRequest.thinkingLevel)
-                        TextField("Service tier", text: $createRequest.serviceTier)
+                        Picker("Model", selection: $createRequest.model) {
+                            ForEach(createModelOptions) { option in
+                                Text(option.label).tag(option.value)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Picker("Thinking level", selection: $createRequest.thinkingLevel) {
+                            ForEach(createThinkingLevelOptions) { option in
+                                Text(option.label).tag(option.value)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        Toggle("Fast mode", isOn: createFastModeBinding)
                         Picker("Execution target", selection: $createRequest.executionTargetId) {
                             ForEach(targetOptions) { target in
                                 Text(target.label).tag(target.id)
