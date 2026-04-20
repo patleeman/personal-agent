@@ -1,3 +1,5 @@
+import { readdirSync, statSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { getDesktopAppBaseUrl } from '../app-protocol.js';
 import { LocalBackendProcesses } from '../backend/local-backend-processes.js';
 import { loadLocalApiModule, type LocalApiModuleLoader } from '../local-api-module.js';
@@ -5,6 +7,7 @@ import type {
   DesktopApiStreamEvent,
   DesktopAppBridgeEvent,
   DesktopConversationBootstrapRequest,
+  DesktopConversationCheckpointCreateRequest,
   DesktopConversationCwdChangeRequest,
   DesktopConversationDeferredResumeMutationRequest,
   DesktopConversationDeferredResumeScheduleRequest,
@@ -171,6 +174,38 @@ export class LocalHostController implements HostController {
     return module.pickDesktopFolder(input);
   }
 
+  async readDirectory(path?: string | null) {
+    const targetPath = resolve(path?.trim() || process.cwd());
+    const stat = statSync(targetPath, { throwIfNoEntry: false });
+    if (!stat) {
+      throw new Error(`Directory not found: ${targetPath}`);
+    }
+    if (!stat.isDirectory()) {
+      throw new Error(`Not a directory: ${targetPath}`);
+    }
+
+    const entries = readdirSync(targetPath, { withFileTypes: true })
+      .map((entry) => ({
+        name: entry.name,
+        path: resolve(targetPath, entry.name),
+        isDir: entry.isDirectory(),
+        isHidden: entry.name.startsWith('.'),
+      }))
+      .sort((left, right) => {
+        if (left.isDir !== right.isDir) {
+          return left.isDir ? -1 : 1;
+        }
+        return left.name.localeCompare(right.name);
+      });
+
+    const parent = dirname(targetPath);
+    return {
+      path: targetPath,
+      ...(parent !== targetPath ? { parent } : {}),
+      entries,
+    };
+  }
+
   async readConversationTitleSettings(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationTitleSettings();
@@ -325,6 +360,13 @@ export class LocalHostController implements HostController {
     prompt?: string;
     targetType?: 'background-agent' | 'conversation' | null;
     conversationBehavior?: 'steer' | 'followUp' | null;
+    callbackConversationId?: string | null;
+    deliverOnSuccess?: boolean | null;
+    deliverOnFailure?: boolean | null;
+    notifyOnSuccess?: 'none' | 'passive' | 'disruptive' | null;
+    notifyOnFailure?: 'none' | 'passive' | 'disruptive' | null;
+    requireAck?: boolean | null;
+    autoResumeIfOpen?: boolean | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }): Promise<unknown> {
@@ -345,6 +387,13 @@ export class LocalHostController implements HostController {
     prompt?: string;
     targetType?: 'background-agent' | 'conversation' | null;
     conversationBehavior?: 'steer' | 'followUp' | null;
+    callbackConversationId?: string | null;
+    deliverOnSuccess?: boolean | null;
+    deliverOnFailure?: boolean | null;
+    notifyOnSuccess?: 'none' | 'passive' | 'disruptive' | null;
+    notifyOnFailure?: 'none' | 'passive' | 'disruptive' | null;
+    requireAck?: boolean | null;
+    autoResumeIfOpen?: boolean | null;
     threadMode?: 'dedicated' | 'existing' | 'none' | null;
     threadConversationId?: string | null;
   }): Promise<unknown> {
@@ -450,6 +499,11 @@ export class LocalHostController implements HostController {
   async readConversationCheckpoint(input: { conversationId: string; checkpointId: string }): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopConversationCheckpoint(input);
+  }
+
+  async createConversationCheckpoint(input: DesktopConversationCheckpointCreateRequest): Promise<unknown> {
+    const module = await this.loadLocalApi();
+    return module.createDesktopConversationCheckpoint(input);
   }
 
   async readConversationAttachments(conversationId: string): Promise<unknown> {

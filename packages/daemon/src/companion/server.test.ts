@@ -106,6 +106,7 @@ describe('daemon companion server', () => {
       changeConversationCwd: async (input) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
       readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
       updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
+      createConversationCheckpoint: async (input) => ({ id: 'checkpoint-1', conversationId: input.conversationId, title: input.message, shortSha: 'abc1234', commitSha: 'abc1234def', subject: input.message, fileCount: input.paths.length, linesAdded: 1, linesDeleted: 0, cwd: '/repo', authorName: 'Patrick', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
       listConversationArtifacts: async (conversationId) => ({ conversationId, artifacts: [] }),
       readConversationArtifact: async ({ conversationId, artifactId }) => ({ conversationId, artifact: { id: artifactId } }),
       listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),

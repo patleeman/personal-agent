@@ -498,11 +498,29 @@ private struct AutomationDetailView: View {
                     if let targetType = task.targetType?.nilIfBlank {
                         LabeledContent("Target") { Text(targetType) }
                     }
+                    if let deliverAs = task.conversationBehavior?.nilIfBlank {
+                        LabeledContent("Deliver as") { Text(deliverAs) }
+                    }
                     if let model = task.model?.nilIfBlank {
                         LabeledContent("Model") { Text(model) }
                     }
                     if let cwd = task.cwd?.nilIfBlank {
                         LabeledContent("Cwd") { Text(cwd).multilineTextAlignment(.trailing) }
+                    }
+                }
+                if let callbackConversationId = task.callbackConversationId?.nilIfBlank {
+                    Section("Callback") {
+                        LabeledContent("Conversation") { Text(callbackConversationId) }
+                        LabeledContent("Deliver on success") { Text((task.deliverOnSuccess ?? true) ? "Yes" : "No") }
+                        LabeledContent("Deliver on failure") { Text((task.deliverOnFailure ?? true) ? "Yes" : "No") }
+                        if let notifyOnSuccess = task.notifyOnSuccess?.nilIfBlank {
+                            LabeledContent("Notify on success") { Text(notifyOnSuccess) }
+                        }
+                        if let notifyOnFailure = task.notifyOnFailure?.nilIfBlank {
+                            LabeledContent("Notify on failure") { Text(notifyOnFailure) }
+                        }
+                        LabeledContent("Require ack") { Text((task.requireAck ?? true) ? "Yes" : "No") }
+                        LabeledContent("Auto resume") { Text((task.autoResumeIfOpen ?? true) ? "Yes" : "No") }
                     }
                 }
                 Section("Prompt") {
@@ -654,6 +672,42 @@ private struct AutomationEditorView: View {
                 Section("Prompt") {
                     TextField("Prompt", text: $draft.prompt, axis: .vertical)
                         .lineLimit(4...10)
+                }
+                if draft.targetType == "background-agent" {
+                    Section("Callback") {
+                        Toggle("Report back to conversation", isOn: Binding(
+                            get: { draft.callbackConversationId.nilIfBlank != nil },
+                            set: { enabled in
+                                if enabled {
+                                    draft.callbackConversationId = draft.callbackConversationId.nilIfBlank ?? session.sections.first?.sessions.first?.id ?? ""
+                                } else {
+                                    draft.callbackConversationId = ""
+                                }
+                            }
+                        ))
+                        if draft.callbackConversationId.nilIfBlank != nil {
+                            Picker("Conversation", selection: $draft.callbackConversationId) {
+                                Text("Choose conversation").tag("")
+                                ForEach(Array(session.sessions.values).sorted { $0.title < $1.title }, id: \.id) { meta in
+                                    Text(meta.title).tag(meta.id)
+                                }
+                            }
+                            Toggle("Deliver on success", isOn: $draft.deliverOnSuccess)
+                            Toggle("Deliver on failure", isOn: $draft.deliverOnFailure)
+                            Picker("Notify on success", selection: $draft.notifyOnSuccess) {
+                                Text("None").tag("none")
+                                Text("Passive").tag("passive")
+                                Text("Disruptive").tag("disruptive")
+                            }
+                            Picker("Notify on failure", selection: $draft.notifyOnFailure) {
+                                Text("None").tag("none")
+                                Text("Passive").tag("passive")
+                                Text("Disruptive").tag("disruptive")
+                            }
+                            Toggle("Require acknowledgment", isOn: $draft.requireAck)
+                            Toggle("Auto resume if open", isOn: $draft.autoResumeIfOpen)
+                        }
+                    }
                 }
                 Section("Runtime") {
                     Picker("Model", selection: $draft.model) {
@@ -1115,6 +1169,13 @@ private extension ScheduledTaskEditorDraft {
         self.prompt = detail.prompt ?? ""
         self.targetType = detail.targetType ?? "background-agent"
         self.conversationBehavior = detail.conversationBehavior ?? ""
+        self.callbackConversationId = detail.callbackConversationId ?? ""
+        self.deliverOnSuccess = detail.deliverOnSuccess ?? true
+        self.deliverOnFailure = detail.deliverOnFailure ?? true
+        self.notifyOnSuccess = detail.notifyOnSuccess ?? "disruptive"
+        self.notifyOnFailure = detail.notifyOnFailure ?? "disruptive"
+        self.requireAck = detail.requireAck ?? true
+        self.autoResumeIfOpen = detail.autoResumeIfOpen ?? true
         self.threadMode = detail.threadConversationId == nil ? "dedicated" : "existing"
         self.threadConversationId = detail.threadConversationId ?? ""
     }

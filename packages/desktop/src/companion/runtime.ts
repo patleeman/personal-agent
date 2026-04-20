@@ -7,6 +7,7 @@ import type {
   CompanionBinaryAsset,
   CompanionConversationAbortInput,
   CompanionConversationBootstrapInput,
+  CompanionConversationCheckpointCreateInput,
   CompanionConversationCreateInput,
   CompanionConversationCwdChangeInput,
   CompanionConversationDuplicateInput,
@@ -457,6 +458,18 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
           ...(input.serviceTier !== undefined ? { serviceTier: input.serviceTier } : {}),
           ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
         },
+      });
+    },
+
+    async createConversationCheckpoint(input: CompanionConversationCheckpointCreateInput) {
+      const localController = hostManager.getHostController('local');
+      if (!localController.createConversationCheckpoint) {
+        throw new Error('Conversation checkpoint creation is unavailable.');
+      }
+      return localController.createConversationCheckpoint({
+        conversationId: input.conversationId,
+        message: input.message,
+        paths: input.paths,
       });
     },
 

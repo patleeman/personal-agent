@@ -19,6 +19,7 @@ import {
   type CompanionCommandMessage,
   type CompanionConversationAbortInput,
   type CompanionConversationBootstrapInput,
+  type CompanionConversationCheckpointCreateInput,
   type CompanionConversationCreateInput,
   type CompanionConversationCwdChangeInput,
   type CompanionConversationDuplicateInput,
@@ -595,15 +596,15 @@ export class DaemonCompanionServer {
       return;
     }
 
-    const sshTargetDirectoryMatch = /^\/companion\/v1\/ssh-targets\/([^/]+)\/directories$/.exec(pathname);
-    if (sshTargetDirectoryMatch && request.method === 'GET') {
+    const executionTargetDirectoryMatch = /^\/companion\/v1\/(?:execution-targets|ssh-targets)\/([^/]+)\/directories$/.exec(pathname);
+    if (executionTargetDirectoryMatch && request.method === 'GET') {
       if (!await this.requireBearer(request, response)) {
         return;
       }
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
       const input: CompanionRemoteDirectoryInput = {
-        executionTargetId: decodeURIComponent(sshTargetDirectoryMatch[1] || ''),
+        executionTargetId: decodeURIComponent(executionTargetDirectoryMatch[1] || ''),
         ...(requestUrl.searchParams.has('path') ? { path: requestUrl.searchParams.get('path') } : {}),
       };
       sendJson(response, 200, await runtime.readRemoteDirectory(input));
@@ -796,6 +797,23 @@ export class DaemonCompanionServer {
       return;
     }
 
+    if (checkpointsMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionConversationCheckpointCreateInput = {
+        conversationId: decodeURIComponent(checkpointsMatch[1] || ''),
+        message: readRequiredString(payload.message, 'message'),
+        paths: readOptionalStringArray(payload.paths, 'paths') ?? [],
+      };
+      sendJson(response, 201, await runtime.createConversationCheckpoint(input));
+      return;
+    }
+
     const checkpointMatch = /^\/companion\/v1\/conversations\/([^/]+)\/checkpoints\/([^/]+)$/.exec(pathname);
     if (checkpointMatch && request.method === 'GET') {
       if (!await this.requireBearer(request, response)) {
@@ -943,6 +961,13 @@ export class DaemonCompanionServer {
         ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
         ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
         ...(payload.conversationBehavior !== undefined ? { conversationBehavior: payload.conversationBehavior === null ? null : readOptionalString(payload.conversationBehavior) } : {}),
+        ...(payload.callbackConversationId !== undefined ? { callbackConversationId: payload.callbackConversationId === null ? null : readOptionalString(payload.callbackConversationId) } : {}),
+        ...(payload.deliverOnSuccess !== undefined ? { deliverOnSuccess: payload.deliverOnSuccess === null ? null : Boolean(payload.deliverOnSuccess) } : {}),
+        ...(payload.deliverOnFailure !== undefined ? { deliverOnFailure: payload.deliverOnFailure === null ? null : Boolean(payload.deliverOnFailure) } : {}),
+        ...(payload.notifyOnSuccess !== undefined ? { notifyOnSuccess: payload.notifyOnSuccess === null ? null : readOptionalString(payload.notifyOnSuccess) } : {}),
+        ...(payload.notifyOnFailure !== undefined ? { notifyOnFailure: payload.notifyOnFailure === null ? null : readOptionalString(payload.notifyOnFailure) } : {}),
+        ...(payload.requireAck !== undefined ? { requireAck: payload.requireAck === null ? null : Boolean(payload.requireAck) } : {}),
+        ...(payload.autoResumeIfOpen !== undefined ? { autoResumeIfOpen: payload.autoResumeIfOpen === null ? null : Boolean(payload.autoResumeIfOpen) } : {}),
         ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
         ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
       };
@@ -982,6 +1007,13 @@ export class DaemonCompanionServer {
         ...(payload.prompt !== undefined ? { prompt: readOptionalString(payload.prompt) } : {}),
         ...(payload.targetType !== undefined ? { targetType: payload.targetType === null ? null : readOptionalString(payload.targetType) } : {}),
         ...(payload.conversationBehavior !== undefined ? { conversationBehavior: payload.conversationBehavior === null ? null : readOptionalString(payload.conversationBehavior) } : {}),
+        ...(payload.callbackConversationId !== undefined ? { callbackConversationId: payload.callbackConversationId === null ? null : readOptionalString(payload.callbackConversationId) } : {}),
+        ...(payload.deliverOnSuccess !== undefined ? { deliverOnSuccess: payload.deliverOnSuccess === null ? null : Boolean(payload.deliverOnSuccess) } : {}),
+        ...(payload.deliverOnFailure !== undefined ? { deliverOnFailure: payload.deliverOnFailure === null ? null : Boolean(payload.deliverOnFailure) } : {}),
+        ...(payload.notifyOnSuccess !== undefined ? { notifyOnSuccess: payload.notifyOnSuccess === null ? null : readOptionalString(payload.notifyOnSuccess) } : {}),
+        ...(payload.notifyOnFailure !== undefined ? { notifyOnFailure: payload.notifyOnFailure === null ? null : readOptionalString(payload.notifyOnFailure) } : {}),
+        ...(payload.requireAck !== undefined ? { requireAck: payload.requireAck === null ? null : Boolean(payload.requireAck) } : {}),
+        ...(payload.autoResumeIfOpen !== undefined ? { autoResumeIfOpen: payload.autoResumeIfOpen === null ? null : Boolean(payload.autoResumeIfOpen) } : {}),
         ...(payload.threadMode !== undefined ? { threadMode: payload.threadMode === null ? null : readOptionalString(payload.threadMode) } : {}),
         ...(payload.threadConversationId !== undefined ? { threadConversationId: payload.threadConversationId === null ? null : readOptionalString(payload.threadConversationId) } : {}),
       };

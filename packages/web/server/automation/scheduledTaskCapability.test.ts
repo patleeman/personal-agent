@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   clearTaskCallbackBindingMock,
+  getTaskCallbackBindingMock,
+  setTaskCallbackBindingMock,
   createStoredAutomationMock,
   deleteStoredAutomationMock,
   ensureAutomationThreadMock,
@@ -19,6 +21,8 @@ const {
   resolveScheduledTaskThreadBindingMock,
 } = vi.hoisted(() => ({
   clearTaskCallbackBindingMock: vi.fn(),
+  getTaskCallbackBindingMock: vi.fn(),
+  setTaskCallbackBindingMock: vi.fn(),
   createStoredAutomationMock: vi.fn(),
   deleteStoredAutomationMock: vi.fn(),
   ensureAutomationThreadMock: vi.fn(),
@@ -41,9 +45,15 @@ vi.mock('node:fs', () => ({
   readFileSync: readFileSyncMock,
 }));
 
-vi.mock('@personal-agent/core', () => ({
-  clearTaskCallbackBinding: clearTaskCallbackBindingMock,
-}));
+vi.mock('@personal-agent/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@personal-agent/core')>();
+  return {
+    ...actual,
+    clearTaskCallbackBinding: clearTaskCallbackBindingMock,
+    getTaskCallbackBinding: getTaskCallbackBindingMock,
+    setTaskCallbackBinding: setTaskCallbackBindingMock,
+  };
+});
 
 vi.mock('@personal-agent/daemon', () => ({
   createStoredAutomation: createStoredAutomationMock,
@@ -157,6 +167,9 @@ function toMetadata(task: TestTask) {
 describe('scheduledTaskCapability', () => {
   beforeEach(() => {
     clearTaskCallbackBindingMock.mockReset();
+    getTaskCallbackBindingMock.mockReset();
+    setTaskCallbackBindingMock.mockReset();
+    getTaskCallbackBindingMock.mockReturnValue(undefined);
     createStoredAutomationMock.mockReset();
     deleteStoredAutomationMock.mockReset();
     ensureAutomationThreadMock.mockReset();

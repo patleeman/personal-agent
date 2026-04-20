@@ -401,6 +401,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(checkpoint?.files.count, 1)
     }
 
+    func testCreateCheckpointAddsCheckpointRecord() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let created = await model.createCheckpoint(message: "Save mobile parity checkpoint", paths: ["apps/ios/PersonalAgentCompanion"])
+        let checkpoint = try XCTUnwrap(created)
+        let checkpoints = await model.listCheckpoints()
+
+        XCTAssertEqual(checkpoint.subject, "Save mobile parity checkpoint")
+        XCTAssertTrue(checkpoints.contains(where: { $0.id == checkpoint.id }))
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 
@@ -416,6 +435,30 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(devices?.devices.count, 1)
         let setup = await session.createSetupState()
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
+    }
+
+    func testAutomationEditorPersistsCallbackFields() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+        session.refresh()
+        try await Task.sleep(for: .milliseconds(50))
+
+        var draft = ScheduledTaskEditorDraft()
+        draft.title = "Nightly digest"
+        draft.prompt = "Summarize failures."
+        draft.targetType = "background-agent"
+        draft.callbackConversationId = "conv-1"
+        draft.deliverOnSuccess = false
+        draft.deliverOnFailure = true
+        draft.notifyOnSuccess = "none"
+        draft.notifyOnFailure = "disruptive"
+        draft.requireAck = true
+        draft.autoResumeIfOpen = false
+
+        let saved = await session.saveTask(taskId: nil, draft: draft)
+        let task = try XCTUnwrap(saved)
+        XCTAssertEqual(task.callbackConversationId, "conv-1")
+        XCTAssertEqual(task.deliverOnSuccess, false)
+        XCTAssertEqual(task.autoResumeIfOpen, false)
     }
 
     func testLiveSetupURLPairsAgainstDesktopHost() async throws {

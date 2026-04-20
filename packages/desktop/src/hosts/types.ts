@@ -185,6 +185,12 @@ export interface DesktopConversationModelPreferencesUpdateRequest {
   surfaceId?: string;
 }
 
+export interface DesktopConversationCheckpointCreateRequest {
+  conversationId: string;
+  message: string;
+  paths: string[];
+}
+
 export interface DesktopConversationDeferredResumeScheduleRequest {
   conversationId: string;
   delay?: string;
@@ -431,6 +437,7 @@ export interface HostController {
   readConversationArtifact?(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   readConversationCheckpoints?(conversationId: string): Promise<unknown>;
   readConversationCheckpoint?(input: { conversationId: string; checkpointId: string }): Promise<unknown>;
+  createConversationCheckpoint?(input: DesktopConversationCheckpointCreateRequest): Promise<unknown>;
   readConversationAttachments?(conversationId: string): Promise<unknown>;
   readConversationAttachment?(input: { conversationId: string; attachmentId: string }): Promise<unknown>;
   createConversationAttachment?(input: {

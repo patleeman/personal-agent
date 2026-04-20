@@ -36,6 +36,7 @@ protocol CompanionClientProtocol: AnyObject {
     func readConversationArtifact(conversationId: String, artifactId: String) async throws -> ConversationArtifactRecord
     func listConversationCheckpoints(conversationId: String) async throws -> [ConversationCommitCheckpointSummary]
     func readConversationCheckpoint(conversationId: String, checkpointId: String) async throws -> ConversationCommitCheckpointRecord
+    func createConversationCheckpoint(conversationId: String, message: String, paths: [String]) async throws -> ConversationCommitCheckpointRecord
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope
     func listAttachments(conversationId: String) async throws -> ConversationAttachmentListResponse
     func readAttachment(conversationId: String, attachmentId: String) async throws -> ConversationAttachmentDetailResponse
@@ -299,9 +300,9 @@ final class LiveCompanionClient: CompanionClientProtocol {
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
         let endpoint: String
         if let path = path?.trimmed.nilIfBlank {
-            endpoint = "/companion/v1/ssh-targets/\(targetId)/directories?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)"
+            endpoint = "/companion/v1/execution-targets/\(targetId)/directories?path=\(path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? path)"
         } else {
-            endpoint = "/companion/v1/ssh-targets/\(targetId)/directories"
+            endpoint = "/companion/v1/execution-targets/\(targetId)/directories"
         }
         return try await authorizedJSON(path: endpoint, method: "GET", body: nil, decode: CompanionRemoteDirectoryListing.self)
     }
@@ -490,6 +491,18 @@ final class LiveCompanionClient: CompanionClientProtocol {
             path: "/companion/v1/conversations/\(conversationId)/checkpoints/\(checkpointId)",
             method: "GET",
             body: nil,
+            decode: ConversationCommitCheckpointRecord.self
+        )
+    }
+
+    func createConversationCheckpoint(conversationId: String, message: String, paths: [String]) async throws -> ConversationCommitCheckpointRecord {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/checkpoints",
+            method: "POST",
+            body: [
+                "message": message,
+                "paths": paths,
+            ],
             decode: ConversationCommitCheckpointRecord.self
         )
     }
@@ -752,6 +765,15 @@ final class LiveCompanionClient: CompanionClientProtocol {
         }
         if let prompt = draft.prompt.nilIfBlank {
             body["prompt"] = prompt
+        }
+        if draft.targetType == "background-agent", let callbackConversationId = draft.callbackConversationId.nilIfBlank {
+            body["callbackConversationId"] = callbackConversationId
+            body["deliverOnSuccess"] = draft.deliverOnSuccess
+            body["deliverOnFailure"] = draft.deliverOnFailure
+            body["notifyOnSuccess"] = draft.notifyOnSuccess.nilIfBlank ?? "disruptive"
+            body["notifyOnFailure"] = draft.notifyOnFailure.nilIfBlank ?? "disruptive"
+            body["requireAck"] = draft.requireAck
+            body["autoResumeIfOpen"] = draft.autoResumeIfOpen
         }
         if draft.targetType == "conversation" && draft.threadMode == "existing", let threadConversationId = draft.threadConversationId.nilIfBlank {
             body["threadConversationId"] = threadConversationId
@@ -1411,6 +1433,13 @@ final class MockCompanionClient: CompanionClientProtocol {
                 timeoutSeconds: 900,
                 prompt: "Review outstanding work and summarize priorities.",
                 conversationBehavior: nil,
+                callbackConversationId: nil,
+                deliverOnSuccess: nil,
+                deliverOnFailure: nil,
+                notifyOnSuccess: nil,
+                notifyOnFailure: nil,
+                requireAck: nil,
+                autoResumeIfOpen: nil,
                 lastStatus: "completed",
                 lastRunAt: now,
                 threadConversationId: "conv-1",
@@ -2293,6 +2322,36 @@ final class MockCompanionClient: CompanionClientProtocol {
         return checkpoint
     }
 
+    func createConversationCheckpoint(conversationId: String, message: String, paths: [String]) async throws -> ConversationCommitCheckpointRecord {
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let normalizedPaths = paths.map { $0.trimmed }.filter { !$0.isEmpty }
+        let record = ConversationCommitCheckpointRecord(
+            id: UUID().uuidString.lowercased(),
+            conversationId: conversationId,
+            title: message,
+            cwd: conversations[conversationId]?.sessionMeta?.cwd ?? "/Users/patrick/workingdir/personal-agent",
+            commitSha: UUID().uuidString.replacingOccurrences(of: "-", with: ""),
+            shortSha: String(UUID().uuidString.replacingOccurrences(of: "-", with: "").prefix(7)),
+            subject: message,
+            body: nil,
+            authorName: "Patrick Lee",
+            authorEmail: "patrick@example.com",
+            committedAt: now,
+            createdAt: now,
+            updatedAt: now,
+            fileCount: max(1, normalizedPaths.count),
+            linesAdded: max(1, normalizedPaths.count * 5),
+            linesDeleted: max(0, normalizedPaths.count),
+            commentCount: 0,
+            files: (normalizedPaths.isEmpty ? ["."] : normalizedPaths).map {
+                ConversationCommitCheckpointFile(path: $0, previousPath: nil, status: "modified", additions: 5, deletions: 1, patch: "diff --git a/\($0) b/\($0)\n+mock checkpoint\n")
+            },
+            comments: []
+        )
+        checkpointsByConversation[conversationId, default: []].insert(record, at: 0)
+        return record
+    }
+
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope {
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
@@ -2385,6 +2444,13 @@ final class MockCompanionClient: CompanionClientProtocol {
                 thinkingLevel: task.thinkingLevel,
                 cwd: task.cwd,
                 conversationBehavior: task.conversationBehavior,
+                callbackConversationId: task.callbackConversationId,
+                deliverOnSuccess: task.deliverOnSuccess,
+                deliverOnFailure: task.deliverOnFailure,
+                notifyOnSuccess: task.notifyOnSuccess,
+                notifyOnFailure: task.notifyOnFailure,
+                requireAck: task.requireAck,
+                autoResumeIfOpen: task.autoResumeIfOpen,
                 threadConversationId: task.threadConversationId,
                 threadTitle: task.threadTitle,
                 lastStatus: task.lastStatus,
@@ -2423,6 +2489,13 @@ final class MockCompanionClient: CompanionClientProtocol {
             timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
             prompt: draft.prompt.nilIfBlank,
             conversationBehavior: draft.conversationBehavior.nilIfBlank,
+            callbackConversationId: draft.callbackConversationId.nilIfBlank,
+            deliverOnSuccess: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.deliverOnSuccess,
+            deliverOnFailure: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.deliverOnFailure,
+            notifyOnSuccess: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.notifyOnSuccess.nilIfBlank,
+            notifyOnFailure: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.notifyOnFailure.nilIfBlank,
+            requireAck: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.requireAck,
+            autoResumeIfOpen: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.autoResumeIfOpen,
             lastStatus: nil,
             lastRunAt: nil,
             threadConversationId: draft.threadConversationId.nilIfBlank,
@@ -2453,6 +2526,13 @@ final class MockCompanionClient: CompanionClientProtocol {
             timeoutSeconds: Int(draft.timeoutSeconds.trimmed),
             prompt: draft.prompt.nilIfBlank,
             conversationBehavior: draft.conversationBehavior.nilIfBlank,
+            callbackConversationId: draft.callbackConversationId.nilIfBlank,
+            deliverOnSuccess: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.deliverOnSuccess,
+            deliverOnFailure: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.deliverOnFailure,
+            notifyOnSuccess: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.notifyOnSuccess.nilIfBlank,
+            notifyOnFailure: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.notifyOnFailure.nilIfBlank,
+            requireAck: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.requireAck,
+            autoResumeIfOpen: draft.callbackConversationId.nilIfBlank == nil ? nil : draft.autoResumeIfOpen,
             lastStatus: previous.lastStatus,
             lastRunAt: previous.lastRunAt,
             threadConversationId: draft.threadConversationId.nilIfBlank,

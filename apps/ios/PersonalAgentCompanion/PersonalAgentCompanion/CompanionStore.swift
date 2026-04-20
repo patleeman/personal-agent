@@ -1129,6 +1129,15 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func createCheckpoint(message: String, paths: [String]) async -> ConversationCommitCheckpointRecord? {
+        do {
+            return try await client.createConversationCheckpoint(conversationId: conversationId, message: message, paths: paths)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func loadAttachment(_ attachmentId: String) async -> ConversationAttachmentRecord? {
         do {
             return try await client.readAttachment(conversationId: conversationId, attachmentId: attachmentId).attachment

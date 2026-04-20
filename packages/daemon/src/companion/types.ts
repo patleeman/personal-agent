@@ -158,6 +158,12 @@ export interface CompanionConversationModelPreferencesUpdateInput {
   surfaceId?: string;
 }
 
+export interface CompanionConversationCheckpointCreateInput {
+  conversationId: string;
+  message: string;
+  paths: string[];
+}
+
 export interface CompanionConversationSubscriptionInput {
   conversationId: string;
   surfaceId?: string;
@@ -207,6 +213,13 @@ export interface CompanionScheduledTaskInput {
   prompt?: string;
   targetType?: string | null;
   conversationBehavior?: string | null;
+  callbackConversationId?: string | null;
+  deliverOnSuccess?: boolean | null;
+  deliverOnFailure?: boolean | null;
+  notifyOnSuccess?: string | null;
+  notifyOnFailure?: string | null;
+  requireAck?: boolean | null;
+  autoResumeIfOpen?: boolean | null;
   threadMode?: string | null;
   threadConversationId?: string | null;
 }
@@ -268,6 +281,7 @@ export interface CompanionRuntime {
   changeConversationCwd(input: CompanionConversationCwdChangeInput): Promise<unknown>;
   readConversationModelPreferences(conversationId: string): Promise<unknown>;
   updateConversationModelPreferences(input: CompanionConversationModelPreferencesUpdateInput): Promise<unknown>;
+  createConversationCheckpoint(input: CompanionConversationCheckpointCreateInput): Promise<unknown>;
   listConversationArtifacts(conversationId: string): Promise<unknown>;
   readConversationArtifact(input: { conversationId: string; artifactId: string }): Promise<unknown>;
   listConversationCheckpoints(conversationId: string): Promise<unknown>;

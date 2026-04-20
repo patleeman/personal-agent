@@ -797,6 +797,13 @@ struct ScheduledTaskSummary: Codable, Equatable, Identifiable {
     let thinkingLevel: String?
     let cwd: String?
     let conversationBehavior: String?
+    let callbackConversationId: String?
+    let deliverOnSuccess: Bool?
+    let deliverOnFailure: Bool?
+    let notifyOnSuccess: String?
+    let notifyOnFailure: String?
+    let requireAck: Bool?
+    let autoResumeIfOpen: Bool?
     let threadConversationId: String?
     let threadTitle: String?
     let lastStatus: String?
@@ -821,6 +828,13 @@ struct ScheduledTaskDetail: Codable, Equatable, Identifiable {
     let timeoutSeconds: Int?
     let prompt: String?
     let conversationBehavior: String?
+    let callbackConversationId: String?
+    let deliverOnSuccess: Bool?
+    let deliverOnFailure: Bool?
+    let notifyOnSuccess: String?
+    let notifyOnFailure: String?
+    let requireAck: Bool?
+    let autoResumeIfOpen: Bool?
     let lastStatus: String?
     let lastRunAt: String?
     let threadConversationId: String?
@@ -851,6 +865,13 @@ struct ScheduledTaskEditorDraft: Equatable {
     var prompt: String = ""
     var targetType: String = "background-agent"
     var conversationBehavior: String = ""
+    var callbackConversationId: String = ""
+    var deliverOnSuccess: Bool = true
+    var deliverOnFailure: Bool = true
+    var notifyOnSuccess: String = "disruptive"
+    var notifyOnFailure: String = "disruptive"
+    var requireAck: Bool = true
+    var autoResumeIfOpen: Bool = true
     var threadMode: String = "dedicated"
     var threadConversationId: String = ""
 }

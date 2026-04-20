@@ -215,8 +215,8 @@ struct ConversationScreen: View {
                 ConversationCwdEditorView(
                     cwd: $cwdText,
                     workspacePaths: viewModel.workspacePaths,
-                    remoteTargetId: viewModel.currentExecutionTargetId == "local" ? nil : viewModel.currentExecutionTargetId,
-                    browseRemote: { targetId, path in
+                    executionTargetId: viewModel.currentExecutionTargetId,
+                    browseDirectory: { targetId, path in
                         await viewModel.readRemoteDirectory(targetId: targetId, path: path)
                     }
                 ) {
@@ -1738,12 +1738,12 @@ private struct ConversationCwdEditorView: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var cwd: String
     let workspacePaths: [String]
-    let remoteTargetId: String?
-    let browseRemote: (String, String?) async -> CompanionRemoteDirectoryListing?
+    let executionTargetId: String
+    let browseDirectory: (String, String?) async -> CompanionRemoteDirectoryListing?
     let onSave: () async -> Void
 
     @State private var browserPath: String?
-    @State private var showingRemoteBrowser = false
+    @State private var showingDirectoryBrowser = false
 
     var body: some View {
         NavigationStack {
@@ -1763,11 +1763,9 @@ private struct ConversationCwdEditorView: View {
                     TextField("Working directory", text: $cwd)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    if let remoteTargetId {
-                        Button("Browse remote directories") {
-                            browserPath = cwd.trimmed.nilIfBlank
-                            showingRemoteBrowser = true
-                        }
+                    Button(executionTargetId == "local" ? "Browse directories" : "Browse remote directories") {
+                        browserPath = cwd.trimmed.nilIfBlank
+                        showingDirectoryBrowser = true
                     }
                 }
             }
@@ -1786,18 +1784,16 @@ private struct ConversationCwdEditorView: View {
                     .disabled(cwd.trimmed.isEmpty)
                 }
             }
-            .sheet(isPresented: $showingRemoteBrowser) {
-                if let remoteTargetId {
-                    RemoteDirectoryBrowserView(
-                        targetId: remoteTargetId,
-                        initialPath: browserPath,
-                        browse: browseRemote,
-                        onSelect: { selectedPath in
-                            cwd = selectedPath
-                            showingRemoteBrowser = false
-                        }
-                    )
-                }
+            .sheet(isPresented: $showingDirectoryBrowser) {
+                RemoteDirectoryBrowserView(
+                    targetId: executionTargetId,
+                    initialPath: browserPath,
+                    browse: browseDirectory,
+                    onSelect: { selectedPath in
+                        cwd = selectedPath
+                        showingDirectoryBrowser = false
+                    }
+                )
             }
         }
     }
@@ -2042,6 +2038,7 @@ private struct CheckpointBrowserView: View {
     @ObservedObject var viewModel: ConversationViewModel
     @State private var checkpoints: [ConversationCommitCheckpointSummary] = []
     @State private var selectedCheckpoint: ConversationCommitCheckpointRecord?
+    @State private var showingCreateCheckpoint = false
 
     var body: some View {
         NavigationStack {
@@ -2071,6 +2068,13 @@ private struct CheckpointBrowserView: View {
             }
             .navigationTitle("Checkpoints")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingCreateCheckpoint = true
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
                 }
@@ -2080,6 +2084,63 @@ private struct CheckpointBrowserView: View {
             }
             .sheet(item: $selectedCheckpoint) { checkpoint in
                 CheckpointDetailView(checkpoint: checkpoint)
+            }
+            .sheet(isPresented: $showingCreateCheckpoint) {
+                CheckpointCreateView(viewModel: viewModel) { created in
+                    if let created {
+                        selectedCheckpoint = created
+                        checkpoints = await viewModel.listCheckpoints()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct CheckpointCreateView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var viewModel: ConversationViewModel
+    let onSaved: (ConversationCommitCheckpointRecord?) async -> Void
+
+    @State private var message = ""
+    @State private var pathsText = "."
+    @State private var isSaving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Checkpoint") {
+                    TextField("Commit message", text: $message)
+                    TextField("Paths", text: $pathsText, axis: .vertical)
+                        .lineLimit(3...8)
+                    Text("Enter one path per line. Use . for the whole current repo.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("New checkpoint")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task {
+                            isSaving = true
+                            let paths = pathsText
+                                .split(whereSeparator: \.isNewline)
+                                .map { String($0).trimmed }
+                                .filter { !$0.isEmpty }
+                            let created = await viewModel.createCheckpoint(message: message.trimmed, paths: paths)
+                            isSaving = false
+                            await onSaved(created)
+                            if created != nil {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(message.trimmed.isEmpty)
+                }
             }
         }
     }

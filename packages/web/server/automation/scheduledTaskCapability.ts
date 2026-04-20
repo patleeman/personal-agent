@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { clearTaskCallbackBinding } from '@personal-agent/core';
+import { clearTaskCallbackBinding, getTaskCallbackBinding, setTaskCallbackBinding } from '@personal-agent/core';
 import {
   createStoredAutomation,
   deleteStoredAutomation,
@@ -10,6 +10,7 @@ import {
   type StoredAutomation,
 } from '@personal-agent/daemon';
 import { invalidateAppTopics } from '../shared/appEvents.js';
+import { readSessionMeta } from '../conversations/sessions.js';
 import { loadScheduledTasksForProfile, toScheduledTaskMetadata, type TaskRuntimeEntry } from './scheduledTasks.js';
 import { findTaskForProfile, readRequiredTaskId } from './taskService.js';
 import { applyScheduledTaskThreadBinding, buildScheduledTaskThreadDetail, resolveScheduledTaskThreadBinding, type ScheduledTaskThreadInput } from './scheduledTaskThreads.js';
@@ -26,6 +27,13 @@ export interface ScheduledTaskCreateCapabilityInput extends ScheduledTaskThreadI
   prompt: string;
   targetType?: string | null;
   conversationBehavior?: 'steer' | 'followUp' | null;
+  callbackConversationId?: string | null;
+  deliverOnSuccess?: boolean | null;
+  deliverOnFailure?: boolean | null;
+  notifyOnSuccess?: 'none' | 'passive' | 'disruptive' | null;
+  notifyOnFailure?: 'none' | 'passive' | 'disruptive' | null;
+  requireAck?: boolean | null;
+  autoResumeIfOpen?: boolean | null;
 }
 
 export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadInput {
@@ -41,13 +49,20 @@ export interface ScheduledTaskUpdateCapabilityInput extends ScheduledTaskThreadI
   prompt?: string;
   targetType?: string | null;
   conversationBehavior?: 'steer' | 'followUp' | null;
+  callbackConversationId?: string | null;
+  deliverOnSuccess?: boolean | null;
+  deliverOnFailure?: boolean | null;
+  notifyOnSuccess?: 'none' | 'passive' | 'disruptive' | null;
+  notifyOnFailure?: 'none' | 'passive' | 'disruptive' | null;
+  requireAck?: boolean | null;
+  autoResumeIfOpen?: boolean | null;
 }
 
 function summarizePrompt(value: string): string {
   return value.split('\n')[0]?.slice(0, 120) ?? '';
 }
 
-function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntimeEntry) {
+function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntimeEntry, callbackBinding?: ReturnType<typeof getTaskCallbackBinding>) {
   const threadDetail = buildScheduledTaskThreadDetail(task);
   return {
     id: task.id,
@@ -66,6 +81,17 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
     threadConversationId: threadDetail.threadConversationId,
     threadTitle: threadDetail.threadTitle,
     conversationBehavior: task.conversationBehavior,
+    ...(callbackBinding
+      ? {
+          callbackConversationId: callbackBinding.conversationId,
+          deliverOnSuccess: callbackBinding.deliverOnSuccess,
+          deliverOnFailure: callbackBinding.deliverOnFailure,
+          notifyOnSuccess: callbackBinding.notifyOnSuccess,
+          notifyOnFailure: callbackBinding.notifyOnFailure,
+          requireAck: callbackBinding.requireAck,
+          autoResumeIfOpen: callbackBinding.autoResumeIfOpen,
+        }
+      : {}),
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     lastSuccessAt: runtime?.lastSuccessAt,
@@ -73,7 +99,7 @@ function buildScheduledTaskSummary(task: StoredAutomation, runtime?: TaskRuntime
   };
 }
 
-export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskRuntimeEntry) {
+export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskRuntimeEntry, callbackBinding?: ReturnType<typeof getTaskCallbackBinding>) {
   const metadata = toScheduledTaskMetadata(task);
   return {
     ...(runtime ?? {}),
@@ -92,6 +118,17 @@ export function buildScheduledTaskDetail(task: StoredAutomation, runtime?: TaskR
     timeoutSeconds: metadata.timeoutSeconds,
     prompt: metadata.promptBody,
     conversationBehavior: task.conversationBehavior,
+    ...(callbackBinding
+      ? {
+          callbackConversationId: callbackBinding.conversationId,
+          deliverOnSuccess: callbackBinding.deliverOnSuccess,
+          deliverOnFailure: callbackBinding.deliverOnFailure,
+          notifyOnSuccess: callbackBinding.notifyOnSuccess,
+          notifyOnFailure: callbackBinding.notifyOnFailure,
+          requireAck: callbackBinding.requireAck,
+          autoResumeIfOpen: callbackBinding.autoResumeIfOpen,
+        }
+      : {}),
     lastStatus: runtime?.lastStatus,
     lastRunAt: runtime?.lastRunAt,
     ...buildScheduledTaskThreadDetail(task),
@@ -108,7 +145,8 @@ export async function listScheduledTasksCapability(profile: string) {
     const taskWithThread = task.threadMode === 'dedicated' && !task.threadConversationId
       ? ensureAutomationThread(task.id)
       : task;
-    return buildScheduledTaskSummary(taskWithThread, loaded.runtimeState[task.id] ?? runtimeById.get(task.id));
+    const callbackBinding = getTaskCallbackBinding({ profile, taskId: taskWithThread.id });
+    return buildScheduledTaskSummary(taskWithThread, loaded.runtimeState[task.id] ?? runtimeById.get(task.id), callbackBinding);
   });
 }
 
@@ -121,8 +159,56 @@ export async function readScheduledTaskCapability(profile: string, taskId: strin
   const task = resolvedTask.task.threadMode === 'dedicated' && !resolvedTask.task.threadConversationId
     ? ensureAutomationThread(resolvedTask.task.id)
     : resolvedTask.task;
+  const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
 
-  return buildScheduledTaskDetail(task, resolvedTask.runtime);
+  return buildScheduledTaskDetail(task, resolvedTask.runtime, callbackBinding);
+}
+
+function applyScheduledTaskCallbackBinding(
+  profile: string,
+  taskId: string,
+  input: Pick<ScheduledTaskCreateCapabilityInput, 'callbackConversationId' | 'deliverOnSuccess' | 'deliverOnFailure' | 'notifyOnSuccess' | 'notifyOnFailure' | 'requireAck' | 'autoResumeIfOpen'>,
+  targetType: string,
+) {
+  if (targetType === 'conversation') {
+    clearTaskCallbackBinding({ profile, taskId });
+    return;
+  }
+
+  const hasExplicitCallbackConfig = input.callbackConversationId !== undefined
+    || input.deliverOnSuccess !== undefined
+    || input.deliverOnFailure !== undefined
+    || input.notifyOnSuccess !== undefined
+    || input.notifyOnFailure !== undefined
+    || input.requireAck !== undefined
+    || input.autoResumeIfOpen !== undefined;
+  if (!hasExplicitCallbackConfig) {
+    return;
+  }
+
+  const callbackConversationId = input.callbackConversationId?.trim();
+  if (!callbackConversationId) {
+    clearTaskCallbackBinding({ profile, taskId });
+    return;
+  }
+
+  const sessionMeta = readSessionMeta(callbackConversationId);
+  if (!sessionMeta?.file?.trim()) {
+    throw new Error('Callback conversation not found.');
+  }
+
+  setTaskCallbackBinding({
+    profile,
+    taskId,
+    conversationId: callbackConversationId,
+    sessionFile: sessionMeta.file,
+    ...(input.deliverOnSuccess !== undefined && input.deliverOnSuccess !== null ? { deliverOnSuccess: input.deliverOnSuccess } : {}),
+    ...(input.deliverOnFailure !== undefined && input.deliverOnFailure !== null ? { deliverOnFailure: input.deliverOnFailure } : {}),
+    ...(input.notifyOnSuccess !== undefined && input.notifyOnSuccess !== null ? { notifyOnSuccess: input.notifyOnSuccess } : {}),
+    ...(input.notifyOnFailure !== undefined && input.notifyOnFailure !== null ? { notifyOnFailure: input.notifyOnFailure } : {}),
+    ...(input.requireAck !== undefined && input.requireAck !== null ? { requireAck: input.requireAck } : {}),
+    ...(input.autoResumeIfOpen !== undefined && input.autoResumeIfOpen !== null ? { autoResumeIfOpen: input.autoResumeIfOpen } : {}),
+  });
 }
 
 export async function createScheduledTaskCapability(profile: string, input: ScheduledTaskCreateCapabilityInput) {
@@ -148,7 +234,7 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt ?? '',
     targetType,
-    conversationBehavior: targetType === 'conversation' ? input.conversationBehavior : null,
+    ...(targetType === 'conversation' ? { conversationBehavior: input.conversationBehavior } : {}),
   });
 
   const task = applyScheduledTaskThreadBinding(createdTask.id, {
@@ -158,12 +244,14 @@ export async function createScheduledTaskCapability(profile: string, input: Sche
     cwd: input.cwd,
   });
 
+  applyScheduledTaskCallbackBinding(profile, task.id, input, targetType);
   invalidateAppTopics('tasks');
 
   const savedTask = findTaskForProfile(profile, task.id);
+  const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
   return {
     ok: true as const,
-    task: buildScheduledTaskDetail(savedTask?.task ?? task, savedTask?.runtime),
+    task: buildScheduledTaskDetail(savedTask?.task ?? task, savedTask?.runtime, callbackBinding),
   };
 }
 
@@ -199,7 +287,7 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     timeoutSeconds: input.timeoutSeconds,
     prompt: input.prompt,
     targetType,
-    conversationBehavior: targetType === 'conversation' ? input.conversationBehavior : null,
+    ...(targetType === 'conversation' ? { conversationBehavior: input.conversationBehavior } : {}),
   });
 
   const task = applyScheduledTaskThreadBinding(updatedTask.id, {
@@ -209,12 +297,14 @@ export async function updateScheduledTaskCapability(profile: string, input: Sche
     cwd: input.cwd ?? updatedTask.cwd,
   });
 
+  applyScheduledTaskCallbackBinding(profile, task.id, input, targetType);
   invalidateAppTopics('tasks');
 
   const refreshedTask = findTaskForProfile(profile, task.id);
+  const callbackBinding = getTaskCallbackBinding({ profile, taskId: task.id });
   return {
     ok: true as const,
-    task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime),
+    task: buildScheduledTaskDetail(refreshedTask?.task ?? task, refreshedTask?.runtime, callbackBinding),
   };
 }
 
