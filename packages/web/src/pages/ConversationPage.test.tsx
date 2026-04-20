@@ -473,7 +473,9 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('Show right sidebar');
     expect(html).toContain('Saved workspace');
     expect(html).toContain('Use saved default workspace');
-    expect(html).toContain('Browse…');
+    expect(html).toContain('Choose workspace folder');
+    expect(html).toContain('More composer settings');
+    expect(html).not.toContain('Browse…');
     expect(html).not.toContain('Start typing to create a conversation.');
     expect(html).not.toContain('Edit path');
     expect(html).not.toContain('set working directory');

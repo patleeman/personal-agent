@@ -812,8 +812,8 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
   );
 }
 
-const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
-const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
+const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
 function FolderIcon({ className }: { className?: string }) {
   return (
@@ -821,6 +821,52 @@ function FolderIcon({ className }: { className?: string }) {
       <path d="M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z" />
       <path d="M3.75 9.75h16.5" />
     </svg>
+  );
+}
+
+function FolderPlusIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3.75 7.5A1.5 1.5 0 0 1 5.25 6h4.018a1.5 1.5 0 0 1 1.06.44l1.172 1.17a1.5 1.5 0 0 0 1.06.44h6.19a1.5 1.5 0 0 1 1.5 1.5v7.95a1.5 1.5 0 0 1-1.5 1.5H5.25a1.5 1.5 0 0 1-1.5-1.5V7.5Z" />
+      <path d="M3.75 9.75h16.5" />
+      <path d="M16.5 12.5v6" />
+      <path d="M13.5 15.5h6" />
+    </svg>
+  );
+}
+
+function MoreHorizontalIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+function BrowsePathButton({
+  busy,
+  title,
+  ariaLabel,
+  onClick,
+}: {
+  busy: boolean;
+  title: string;
+  ariaLabel: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-transparent text-secondary transition-colors hover:bg-surface/45 hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base disabled:opacity-50"
+      title={title}
+      aria-label={ariaLabel}
+    >
+      <FolderPlusIcon className={cx(busy && 'animate-pulse')} />
+    </button>
   );
 }
 
@@ -897,25 +943,174 @@ function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git'
   };
 }
 
+function ConversationThinkingLevelSelect({
+  value,
+  disabled,
+  variant = 'inline',
+  onChange,
+}: {
+  value: string;
+  disabled: boolean;
+  variant?: 'inline' | 'menu';
+  onChange: (thinkingLevel: string) => void;
+}) {
+  const selectClassName = variant === 'menu'
+    ? 'h-9 w-full min-w-0 appearance-none rounded-lg border border-border-subtle bg-surface/45 px-2.5 pr-7 text-[12px] font-medium text-primary outline-none transition-colors hover:bg-surface/65 focus-visible:border-accent/50 focus-visible:bg-surface/65 disabled:cursor-default disabled:opacity-40'
+    : cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[6.5rem] min-w-[5.75rem] appearance-none');
+
+  return (
+    <label className={variant === 'menu' ? 'relative flex min-w-0 items-center' : 'relative inline-flex min-w-0 items-center'}>
+      <span className="sr-only">Conversation thinking level</span>
+      <select
+        value={value}
+        onChange={(event) => { onChange(event.target.value); }}
+        disabled={disabled}
+        className={selectClassName}
+        aria-label="Conversation thinking level"
+      >
+        {THINKING_LEVEL_OPTIONS.map((option) => (
+          <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </label>
+  );
+}
+
+function ConversationFastModeToggle({
+  enabled,
+  disabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={enabled ? 'Disable fast mode' : 'Enable fast mode'}
+      title={enabled ? 'Disable fast mode' : 'Enable fast mode'}
+      onClick={onToggle}
+      disabled={disabled}
+      className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
+          enabled
+            ? 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]'
+            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+        )}
+      >
+        <span
+          className={cx(
+            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-[14px]' : 'translate-x-0',
+          )}
+        />
+      </span>
+      <span className={cx('leading-none', enabled && 'text-primary')}>Fast</span>
+    </button>
+  );
+}
+
+function ConversationCompactMenuToggle({
+  label,
+  enabled,
+  busy = false,
+  disabled,
+  tone,
+  title,
+  onToggle,
+}: {
+  label: string;
+  enabled: boolean;
+  busy?: boolean;
+  disabled: boolean;
+  tone: 'accent' | 'warning';
+  title: string;
+  onToggle: () => void;
+}) {
+  const activeTrackClassName = tone === 'warning'
+    ? 'border-warning/55 bg-warning/75 shadow-[0_0_8px_rgba(245,158,11,0.16)]'
+    : 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]';
+  const focusRingClassName = tone === 'warning'
+    ? 'focus-visible:ring-warning/25'
+    : 'focus-visible:ring-accent/25';
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-busy={busy}
+      aria-label={title}
+      title={title}
+      onClick={onToggle}
+      disabled={disabled || busy}
+      className={cx(
+        'group inline-flex w-full items-center justify-between rounded-lg border border-border-subtle bg-surface/45 px-2.5 py-2 text-[11px] font-medium text-secondary transition-colors hover:bg-surface/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40',
+        focusRingClassName,
+      )}
+    >
+      <span className={cx('leading-none', enabled && 'text-primary')}>{label}</span>
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
+          enabled
+            ? activeTrackClassName
+            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+          busy && 'opacity-80',
+        )}
+      >
+        <span
+          className={cx(
+            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-[14px]' : 'translate-x-0',
+            busy && 'animate-pulse',
+          )}
+        />
+      </span>
+    </button>
+  );
+}
+
 function ConversationPreferencesRow({
   models,
   currentModel,
   currentThinkingLevel,
   currentServiceTier,
   savingPreference,
+  showAutoModeToggle,
+  autoModeEnabled,
+  autoModeBusy,
   onSelectModel,
   onSelectThinkingLevel,
   onSelectServiceTier,
+  onToggleAutoMode,
 }: {
   models: ModelInfo[];
   currentModel: string;
   currentThinkingLevel: string;
   currentServiceTier: string;
   savingPreference: 'model' | 'thinking' | 'serviceTier' | null;
+  showAutoModeToggle: boolean;
+  autoModeEnabled: boolean;
+  autoModeBusy: boolean;
   onSelectModel: (modelId: string) => void;
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
+  onToggleAutoMode: () => void;
 }) {
+  const [compactMenuOpen, setCompactMenuOpen] = useState(false);
+  const compactMenuRef = useRef<HTMLDivElement | null>(null);
   const groupedModels = useMemo(() => groupModelsByProvider(models), [models]);
   const selectedModel = useMemo(
     () => models.find((model) => model.id === currentModel) ?? null,
@@ -930,6 +1125,33 @@ function ConversationPreferencesRow({
     [serviceTierOptions],
   );
   const fastModeEnabled = currentServiceTier === 'priority';
+
+  useEffect(() => {
+    if (!compactMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      if (compactMenuRef.current?.contains(event.target as Node)) {
+        return;
+      }
+
+      setCompactMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setCompactMenuOpen(false);
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [compactMenuOpen]);
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -954,53 +1176,91 @@ function ConversationPreferencesRow({
           <path d="m6 9 6 6 6-6" />
         </svg>
       </label>
-      <label className="relative inline-flex min-w-0 items-center">
-        <span className="sr-only">Conversation thinking level</span>
-        <select
+
+      <div className="hidden xl:flex items-center gap-2">
+        <ConversationThinkingLevelSelect
           value={currentThinkingLevel}
-          onChange={(event) => { onSelectThinkingLevel(event.target.value); }}
           disabled={savingPreference !== null}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[6.5rem] min-w-[5.75rem] appearance-none')}
-          aria-label="Conversation thinking level"
-        >
-          {THINKING_LEVEL_OPTIONS.map((option) => (
-            <option key={option.value || 'unset'} value={option.value}>{option.label}</option>
-          ))}
-        </select>
-        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </label>
-      {supportsFastMode && (
-        <button
+          onChange={onSelectThinkingLevel}
+        />
+        {supportsFastMode && (
+          <ConversationFastModeToggle
+            enabled={fastModeEnabled}
+            disabled={savingPreference !== null}
+            onToggle={() => { onSelectServiceTier(!fastModeEnabled); }}
+          />
+        )}
+        {showAutoModeToggle && (
+          <ConversationAutoModeToggle
+            enabled={autoModeEnabled}
+            busy={autoModeBusy}
+            disabled={false}
+            onToggle={onToggleAutoMode}
+          />
+        )}
+      </div>
+
+      <div ref={compactMenuRef} className="relative xl:hidden">
+        <IconButton
           type="button"
-          role="switch"
-          aria-checked={fastModeEnabled}
-          aria-label={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-          title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
-          onClick={() => { onSelectServiceTier(!fastModeEnabled); }}
-          disabled={savingPreference !== null}
-          className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
+          onClick={() => setCompactMenuOpen((current) => !current)}
+          className={cx(
+            'h-8 w-8 rounded-md border border-transparent transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/25 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+            compactMenuOpen && 'bg-surface/55 text-primary',
+          )}
+          aria-label="More composer settings"
+          aria-expanded={compactMenuOpen}
+          aria-haspopup="dialog"
+          title="More composer settings"
         >
-          <span
-            aria-hidden="true"
-            className={cx(
-              'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
-              fastModeEnabled
-                ? 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]'
-                : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
-            )}
-          >
-            <span
-              className={cx(
-                'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
-                fastModeEnabled ? 'translate-x-[14px]' : 'translate-x-0',
+          <MoreHorizontalIcon />
+        </IconButton>
+        {compactMenuOpen && (
+          <div className="ui-context-menu-shell absolute bottom-full right-0 z-50 mb-2 w-[15rem] p-2.5" role="dialog" aria-label="Composer settings">
+            <div className="flex flex-col gap-2">
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
+                <ConversationThinkingLevelSelect
+                  value={currentThinkingLevel}
+                  disabled={savingPreference !== null}
+                  variant="menu"
+                  onChange={(thinkingLevel) => {
+                    onSelectThinkingLevel(thinkingLevel);
+                    setCompactMenuOpen(false);
+                  }}
+                />
+              </div>
+              {supportsFastMode && (
+                <ConversationCompactMenuToggle
+                  label="Fast mode"
+                  enabled={fastModeEnabled}
+                  disabled={savingPreference !== null}
+                  tone="accent"
+                  title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+                  onToggle={() => {
+                    onSelectServiceTier(!fastModeEnabled);
+                    setCompactMenuOpen(false);
+                  }}
+                />
               )}
-            />
-          </span>
-          <span className={cx('leading-none', fastModeEnabled && 'text-primary')}>Fast</span>
-        </button>
-      )}
+              {showAutoModeToggle && (
+                <ConversationCompactMenuToggle
+                  label="Auto mode"
+                  enabled={autoModeEnabled}
+                  busy={autoModeBusy}
+                  disabled={false}
+                  tone="warning"
+                  title={autoModeBusy ? 'Updating auto mode…' : (autoModeEnabled ? 'Turn off conversation auto mode' : 'Turn on conversation auto mode')}
+                  onToggle={() => {
+                    onToggleAutoMode();
+                    setCompactMenuOpen(false);
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -6698,7 +6958,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-center gap-1.5">
                   {selectedExecutionTargetIsRemote ? (
-                    <label className="min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+                    <label className="min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
                       <span className="sr-only">Remote workspace path</span>
                       <input
                         value={draftCwdValue}
@@ -6708,14 +6968,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                             setDraftCwdError(null);
                           }
                         }}
-                        className="h-10 w-full bg-transparent font-mono text-[13px] text-primary outline-none placeholder:text-secondary/70"
+                        className="h-10 w-full min-w-0 bg-transparent font-mono text-[13px] text-primary outline-none placeholder:text-secondary/70"
                         aria-label="Remote workspace path"
                         placeholder="~/workingdir/project"
                         spellCheck={false}
                       />
                     </label>
                   ) : (
-                    <label className="relative min-w-[16rem] flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
+                    <label className="relative min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
                       <span className="sr-only">Saved workspace</span>
                       <select
                         value={draftCwdValue}
@@ -6755,16 +7015,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </label>
                   )}
 
-                  <button
-                    type="button"
+                  <BrowsePathButton
+                    busy={draftCwdPickBusy}
                     onClick={() => { void pickDraftConversationCwd(); }}
-                    disabled={draftCwdPickBusy}
-                    className="ui-action-button shrink-0 px-2.5 py-1.5 text-[11px]"
                     title={draftCwdPickBusy ? 'Choosing workspace…' : selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
-                    aria-label={selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
-                  >
-                    {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
-                  </button>
+                    ariaLabel={selectedExecutionTargetIsRemote ? `Choose directory on ${selectedExecutionTargetLabel}` : 'Choose workspace folder'}
+                  />
                 </div>
 
                 {selectedExecutionTargetIsRemote ? (
@@ -7576,18 +7832,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         currentThinkingLevel={currentThinkingLevel}
                         currentServiceTier={currentServiceTier}
                         savingPreference={savingPreference}
+                        showAutoModeToggle={Boolean(draft || id)}
+                        autoModeEnabled={conversationAutoModeEnabled}
+                        autoModeBusy={conversationAutoModeBusy}
                         onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
                         onSelectServiceTier={(enableFastMode) => { void saveServiceTierPreference(enableFastMode); }}
+                        onToggleAutoMode={() => { void toggleConversationAutoMode(); }}
                       />
-                      {(draft || id) && (
-                        <ConversationAutoModeToggle
-                          enabled={conversationAutoModeEnabled}
-                          busy={conversationAutoModeBusy}
-                          disabled={false}
-                          onToggle={() => { void toggleConversationAutoMode(); }}
-                        />
-                      )}
                     </div>
 
                     <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -7704,7 +7956,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
 
           {showComposerMeta ? (
-            <div className="conversation-composer-meta mt-1.5 flex min-h-4 items-start justify-between gap-3 px-3 text-[10px] text-dim">
+            <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-col gap-1.5 px-3 text-[10px] text-dim xl:flex-row xl:items-start xl:justify-between xl:gap-3">
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 overflow-hidden">
                 {showExecutionTargetPicker ? (
                   <label className="relative inline-flex min-w-0 items-center">
@@ -7736,7 +7988,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 ) : null}
 
                 {draft ? (
-                  <div className="flex min-w-0 items-center gap-1.5">
+                  <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none">
                     <FolderIcon className="shrink-0 text-dim/70" />
                     {selectedExecutionTargetIsRemote ? (
                       <>
@@ -7752,48 +8004,47 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           }}
                           placeholder="~/workingdir/project"
                           spellCheck={false}
-                          className="h-7 min-w-[12rem] max-w-[22rem] rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50"
+                          className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
                           aria-label="Remote workspace path"
                         />
-                        <button
-                          type="button"
+                        <BrowsePathButton
+                          busy={draftCwdPickBusy}
                           onClick={() => { void pickDraftConversationCwd(); }}
-                          disabled={draftCwdPickBusy}
-                          className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
                           title={draftCwdPickBusy ? 'Choosing folder…' : `Choose directory on ${selectedExecutionTargetLabel}`}
-                        >
-                          {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
-                        </button>
+                          ariaLabel={`Choose directory on ${selectedExecutionTargetLabel}`}
+                        />
                       </>
                     ) : (
                       <>
                         <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
-                        <select
-                          id="draft-composer-cwd"
-                          value={draftCwdValue}
-                          onChange={(event) => { setDraftConversationCwd(event.target.value); }}
-                          className="h-7 min-w-[12rem] max-w-[22rem] truncate appearance-none rounded-md bg-transparent pl-1 pr-2 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
-                        >
-                          <option value="">Default workspace</option>
-                          {availableDraftWorkspacePaths.map((workspacePath) => (
-                            <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
+                        <div className="relative min-w-0 flex-1 xl:max-w-[22rem]">
+                          <select
+                            id="draft-composer-cwd"
+                            value={draftCwdValue}
+                            onChange={(event) => { setDraftConversationCwd(event.target.value); }}
+                            className="h-7 w-full min-w-0 truncate appearance-none rounded-md bg-transparent pl-1 pr-6 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
+                          >
+                            <option value="">Default workspace</option>
+                            {availableDraftWorkspacePaths.map((workspacePath) => (
+                              <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
+                            ))}
+                          </select>
+                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70">
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </div>
+                        <BrowsePathButton
+                          busy={draftCwdPickBusy}
                           onClick={() => { void pickDraftConversationCwd(); }}
-                          disabled={draftCwdPickBusy}
-                          className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
                           title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                        >
-                          {draftCwdPickBusy ? 'Choosing…' : 'Browse…'}
-                        </button>
+                          ariaLabel="Choose folder"
+                        />
                       </>
                     )}
                   </div>
                 ) : conversationCwdEditorOpen ? (
                   <form
-                    className="flex min-w-0 items-center gap-1.5"
+                    className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none"
                     onSubmit={(event) => {
                       event.preventDefault();
                       void submitConversationCwdChange();
@@ -7818,18 +8069,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       placeholder={currentCwd ?? '~/workingdir/repo'}
                       spellCheck={false}
                       aria-label="Conversation working directory"
-                      className="h-7 min-w-[12rem] max-w-[22rem] rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50"
+                      className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
                       disabled={conversationCwdBusy || conversationCwdPickBusy}
                     />
-                    <button
-                      type="button"
+                    <BrowsePathButton
+                      busy={conversationCwdBusy || conversationCwdPickBusy}
                       onClick={() => { void pickConversationCwd(); }}
-                      disabled={conversationCwdBusy || conversationCwdPickBusy}
-                      className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50"
                       title={conversationCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                    >
-                      {conversationCwdPickBusy ? 'Choosing…' : 'Browse…'}
-                    </button>
+                      ariaLabel="Choose folder"
+                    />
                     <button type="submit" className="h-7 rounded-md px-2 text-[10px] text-accent transition-colors hover:bg-surface/45 disabled:opacity-50" disabled={conversationCwdBusy || conversationCwdPickBusy}>
                       {conversationCwdBusy ? 'Switching…' : 'Switch'}
                     </button>
@@ -7841,11 +8089,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   <button
                     type="button"
                     onClick={beginConversationCwdEdit}
-                    className="inline-flex min-w-0 max-w-[26rem] items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary"
+                    className="flex min-w-0 flex-1 max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary xl:max-w-[26rem] xl:flex-none"
                     title={currentCwd ? `Working directory: ${currentCwd}` : 'Set working directory'}
                   >
                     <FolderIcon className="shrink-0 text-dim/70" />
-                    <span className="truncate font-mono text-[11px]">{currentCwd || 'Set working directory'}</span>
+                    <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{currentCwd || 'Set working directory'}</span>
                   </button>
                 )}
 
@@ -7854,7 +8102,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 ) : null}
               </div>
 
-              <div className="flex min-w-0 shrink-0 items-center justify-end gap-2 overflow-hidden text-right">
+              <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden xl:shrink-0 xl:justify-end xl:text-right">
                 {!draft && branchLabel ? (
                   <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
                 ) : null}
