@@ -1449,16 +1449,138 @@ function fileIcon(type: string) {
   return Object.entries(FILE_ICONS).find(([k]) => type.startsWith(k))?.[1] ?? '📎';
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
+const MAX_PROMPT_IMAGE_DIMENSION = 2000;
+
+function readBlobAsDataUrl(blob: Blob, label: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error(`Failed to read ${file.name}`));
+      else reject(new Error(`Failed to read ${label}`));
     };
-    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${file.name}`));
-    reader.readAsDataURL(file);
+    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${label}`));
+    reader.readAsDataURL(blob);
   });
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return readBlobAsDataUrl(file, file.name);
+}
+
+function dataUrlToBase64(dataUrl: string): string {
+  const commaIndex = dataUrl.indexOf(',');
+  return commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+}
+
+function loadImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = () => reject(new Error('Failed to decode image.'));
+    image.src = dataUrl;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Failed to encode image.'));
+        return;
+      }
+
+      resolve(blob);
+    }, mimeType, quality);
+  });
+}
+
+function normalizePromptImageMimeType(mimeType: string): string {
+  const normalized = mimeType.trim().toLowerCase();
+  if (normalized === 'image/jpeg' || normalized === 'image/jpg') {
+    return 'image/jpeg';
+  }
+
+  if (normalized === 'image/webp') {
+    return 'image/webp';
+  }
+
+  return 'image/png';
+}
+
+export function constrainPromptImageDimensions(width: number, height: number, maxDimension = MAX_PROMPT_IMAGE_DIMENSION): { width: number; height: number } {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return {
+      width: Math.max(1, Math.round(width) || 1),
+      height: Math.max(1, Math.round(height) || 1),
+    };
+  }
+
+  const longSide = Math.max(width, height);
+  if (longSide <= maxDimension) {
+    return {
+      width: Math.round(width),
+      height: Math.round(height),
+    };
+  }
+
+  const scale = maxDimension / longSide;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+async function preparePromptImage(file: File): Promise<PromptImageInput> {
+  const previewUrl = await readFileAsDataUrl(file);
+  const mimeType = file.type || 'image/png';
+
+  try {
+    const image = await loadImageFromDataUrl(previewUrl);
+    const targetSize = constrainPromptImageDimensions(image.naturalWidth, image.naturalHeight);
+    if (targetSize.width === image.naturalWidth && targetSize.height === image.naturalHeight) {
+      return {
+        name: file.name,
+        mimeType,
+        data: dataUrlToBase64(previewUrl),
+        previewUrl,
+      } satisfies PromptImageInput;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = targetSize.width;
+    canvas.height = targetSize.height;
+
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('Failed to resize image.');
+    }
+
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(image, 0, 0, targetSize.width, targetSize.height);
+
+    const outputMimeType = normalizePromptImageMimeType(mimeType);
+    const outputBlob = await canvasToBlob(
+      canvas,
+      outputMimeType,
+      outputMimeType === 'image/png' ? undefined : 0.9,
+    );
+    const resizedPreviewUrl = await readBlobAsDataUrl(outputBlob, file.name);
+
+    return {
+      name: file.name,
+      mimeType: outputBlob.type || outputMimeType,
+      data: dataUrlToBase64(resizedPreviewUrl),
+      previewUrl: resizedPreviewUrl,
+    } satisfies PromptImageInput;
+  } catch {
+    return {
+      name: file.name,
+      mimeType,
+      data: dataUrlToBase64(previewUrl),
+      previewUrl,
+    } satisfies PromptImageInput;
+  }
 }
 
 function fileExtensionForMimeType(mimeType: string): string {
@@ -1509,17 +1631,7 @@ function restoreComposerImageFiles(
 
 async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
   const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-  const images = await Promise.all(imageFiles.map(async (file) => {
-    const previewUrl = await readFileAsDataUrl(file);
-    const commaIndex = previewUrl.indexOf(',');
-    return {
-      name: file.name,
-      mimeType: file.type || 'image/png',
-      data: commaIndex >= 0 ? previewUrl.slice(commaIndex + 1) : previewUrl,
-      previewUrl,
-    } satisfies PromptImageInput;
-  }));
-  return images;
+  return Promise.all(imageFiles.map((file) => preparePromptImage(file)));
 }
 
 type ComposerDrawingAttachment = DraftConversationDrawingAttachment;

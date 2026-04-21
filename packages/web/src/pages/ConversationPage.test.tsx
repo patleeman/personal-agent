@@ -14,6 +14,7 @@ import {
   shouldLoadConversationModels,
   shouldUseHealthyDesktopConversationState,
   shouldFetchConversationAttachments,
+  constrainPromptImageDimensions,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -102,6 +103,20 @@ describe('conversation attachment fetch gating', () => {
       conversationId: 'conv-123',
       drawingsPickerOpen: true,
     })).toBe(true);
+  });
+});
+
+describe('prompt image resizing', () => {
+  it('keeps images that already fit the provider limit unchanged', () => {
+    expect(constrainPromptImageDimensions(1600, 900)).toEqual({ width: 1600, height: 900 });
+  });
+
+  it('shrinks oversized landscape images to a 2000px long side', () => {
+    expect(constrainPromptImageDimensions(4000, 1000)).toEqual({ width: 2000, height: 500 });
+  });
+
+  it('shrinks oversized portrait images to a 2000px long side', () => {
+    expect(constrainPromptImageDimensions(1200, 3600)).toEqual({ width: 667, height: 2000 });
   });
 });
 
