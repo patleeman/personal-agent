@@ -600,6 +600,14 @@ async function bootSimulator(device) {
   return deviceId;
 }
 
+function revealSimulator(deviceId) {
+  const targetedOpen = spawnSync('open', ['-a', 'Simulator', '--args', '-CurrentDeviceUDID', deviceId], { stdio: 'ignore' });
+  if (targetedOpen.error || (targetedOpen.status ?? 0) !== 0) {
+    spawnSync('open', ['-a', 'Simulator'], { stdio: 'ignore' });
+  }
+  spawnSync('osascript', ['-e', 'tell application "Simulator" to activate'], { stdio: 'ignore' });
+}
+
 async function buildInstallAndLaunchSimulator(input) {
   const deviceId = await bootSimulator(input.device);
   runChecked('xcodebuild', [
@@ -630,6 +638,7 @@ async function buildInstallAndLaunchSimulator(input) {
     ...(input.extraLaunchEnv ?? {}),
   };
   runChecked('xcrun', ['simctl', 'launch', deviceId, bundleId], { env: launchEnv });
+  revealSimulator(deviceId);
 }
 
 function createSetupUrl({ baseURL, code, hostLabel, hostInstanceId }) {
@@ -747,6 +756,7 @@ async function openSetupUrlCommand() {
     hostInstanceId: hello.hostInstanceId,
   });
   runChecked('xcrun', ['simctl', 'openurl', deviceId, setupUrl]);
+  revealSimulator(deviceId);
   log(`Opened setup URL in Simulator:`);
   log(setupUrl);
 }
