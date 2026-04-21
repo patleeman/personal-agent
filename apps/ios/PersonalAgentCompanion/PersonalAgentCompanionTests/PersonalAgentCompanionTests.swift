@@ -25,9 +25,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         session.refresh()
         try await Task.sleep(for: .milliseconds(50))
 
-        XCTAssertEqual(session.sections.map(\.id), ["pinned", "open"])
-        XCTAssertEqual(session.sections.first?.sessions.first?.id, "conv-1")
-        XCTAssertEqual(session.sections.last?.sessions.first?.id, "conv-2")
+        XCTAssertEqual(session.chatSections.map(\.id), ["pinned", "open"])
+        XCTAssertEqual(session.chatSections.first?.sessions.first?.id, "conv-1")
+        XCTAssertEqual(session.chatSections.last?.sessions.first?.id, "conv-2")
+        XCTAssertTrue(session.archivedSessions.isEmpty)
     }
 
     func testCompanionSetupLinkParsesCustomPairURL() {
@@ -372,11 +373,13 @@ final class PersonalAgentCompanionTests: XCTestCase {
 
         await session.toggleArchived("conv-2")
         try await Task.sleep(for: .milliseconds(50))
-        XCTAssertTrue(session.sections.contains(where: { $0.id == "archived" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
+        XCTAssertEqual(session.chatSections.map(\.id), ["pinned"])
+        XCTAssertEqual(session.archivedSessions.map(\.id), ["conv-2"])
 
         await session.togglePinned("conv-2")
         try await Task.sleep(for: .milliseconds(50))
-        XCTAssertTrue(session.sections.contains(where: { $0.id == "pinned" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
+        XCTAssertTrue(session.archivedSessions.isEmpty)
+        XCTAssertTrue(session.chatSections.contains(where: { $0.id == "pinned" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
     }
 
     func testConversationLoadsArtifactsAndCheckpoints() async throws {

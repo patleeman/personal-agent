@@ -348,6 +348,14 @@ final class HostSessionModel: ObservableObject {
         return ordered
     }
 
+    var chatSections: [ConversationListSection] {
+        sections.filter { $0.id != "archived" }
+    }
+
+    var archivedSessions: [SessionMeta] {
+        sections.first(where: { $0.id == "archived" })?.sessions ?? []
+    }
+
     init(client: CompanionClientProtocol, installationSurfaceId: String) {
         self.client = client
         self.host = client.host

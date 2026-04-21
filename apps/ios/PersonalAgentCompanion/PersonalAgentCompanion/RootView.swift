@@ -133,6 +133,11 @@ struct HostDashboardView: View {
                     Label("Chat", systemImage: "message")
                 }
 
+            ArchivedConversationListView(session: session)
+                .tabItem {
+                    Label("Archived", systemImage: "archivebox")
+                }
+
             AutomationListView(session: session)
                 .tabItem {
                     Label("Automations", systemImage: "clock.arrow.circlepath")
@@ -158,7 +163,7 @@ struct ConversationListView: View {
     var body: some View {
         NavigationStack(path: $path) {
             List {
-                ForEach(session.sections) { section in
+                ForEach(session.chatSections) { section in
                     Section(section.title) {
                         ForEach(section.sessions) { item in
                             NavigationLink(value: item.id) {
@@ -177,7 +182,7 @@ struct ConversationListView: View {
                                 Button {
                                     Task { await session.toggleArchived(item.id) }
                                 } label: {
-                                    Label(section.id == "archived" ? "Restore" : "Archive", systemImage: section.id == "archived" ? "tray.and.arrow.up" : "archivebox")
+                                    Label("Archive", systemImage: "archivebox")
                                 }
                                 .tint(.orange)
                             }
@@ -190,7 +195,7 @@ struct ConversationListView: View {
                                 Button {
                                     Task { await session.toggleArchived(item.id) }
                                 } label: {
-                                    Label(section.id == "archived" ? "Restore" : "Archive", systemImage: section.id == "archived" ? "tray.and.arrow.up" : "archivebox")
+                                    Label("Archive", systemImage: "archivebox")
                                 }
                                 Button {
                                     Task {
@@ -206,12 +211,16 @@ struct ConversationListView: View {
                     }
                 }
 
-                if session.sections.isEmpty && !session.isLoading {
+                if session.chatSections.isEmpty && !session.isLoading {
                     Section {
                         ContentUnavailableView(
-                            "No conversations",
+                            session.archivedSessions.isEmpty ? "No conversations" : "No open conversations",
                             systemImage: "message",
-                            description: Text("Create a new conversation on \(session.host.hostLabel).")
+                            description: Text(
+                                session.archivedSessions.isEmpty
+                                    ? "Create a new conversation on \(session.host.hostLabel)."
+                                    : "Create a new conversation on \(session.host.hostLabel), or open Archived to restore an older thread."
+                            )
                         )
                         .foregroundStyle(CompanionTheme.textSecondary)
                     }
@@ -278,7 +287,7 @@ struct ConversationListView: View {
             .onAppear {
                 autoOpenFirstConversationIfNeeded()
             }
-            .onChange(of: session.sections) { _, _ in
+            .onChange(of: session.chatSections) { _, _ in
                 autoOpenFirstConversationIfNeeded()
             }
         }
@@ -287,7 +296,7 @@ struct ConversationListView: View {
     private func autoOpenFirstConversationIfNeeded() {
         guard !autoOpenedDemoConversation,
               ProcessInfo.processInfo.environment["PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION"] == "1",
-              let firstConversationId = session.sections.first?.sessions.first?.id else {
+              let firstConversationId = session.chatSections.first?.sessions.first?.id else {
             return
         }
         autoOpenedDemoConversation = true
@@ -297,6 +306,76 @@ struct ConversationListView: View {
                 return
             }
             path = [firstConversationId]
+        }
+    }
+}
+
+struct ArchivedConversationListView: View {
+    @ObservedObject var session: HostSessionModel
+    @State private var path: [String] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            List {
+                if session.archivedSessions.isEmpty && !session.isLoading {
+                    Section {
+                        ContentUnavailableView(
+                            "No archived conversations",
+                            systemImage: "archivebox",
+                            description: Text("Archived threads show up here. Unarchive one to move it back into Chat.")
+                        )
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                    }
+                } else {
+                    Section("Archived") {
+                        ForEach(session.archivedSessions) { item in
+                            NavigationLink(value: item.id) {
+                                ConversationRow(session: item)
+                            }
+                            .listRowBackground(CompanionTheme.panel)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                                Button {
+                                    Task { await session.toggleArchived(item.id) }
+                                } label: {
+                                    Label("Unarchive", systemImage: "tray.and.arrow.up")
+                                }
+                                .tint(.accentColor)
+                            }
+                            .contextMenu {
+                                Button {
+                                    Task { await session.toggleArchived(item.id) }
+                                } label: {
+                                    Label("Unarchive", systemImage: "tray.and.arrow.up")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .listStyle(.insetGrouped)
+            .navigationTitle("Archived")
+            .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .navigationDestination(for: String.self) { conversationId in
+                ConversationScreen(
+                    viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]),
+                    onOpenConversation: { nextId in
+                        path.append(nextId)
+                        session.refresh()
+                    }
+                )
+            }
+            .overlay(alignment: .bottom) {
+                if let message = session.errorMessage {
+                    ErrorBanner(message: message)
+                        .padding()
+                }
+            }
+            .refreshable {
+                session.refresh()
+            }
         }
     }
 }
