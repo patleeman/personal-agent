@@ -177,9 +177,11 @@ function TreeRow({
   const isRenaming = editState?.type === 'rename' && editState.id === node.entry.id;
 
   return (
-    <div
+    <button
+      type="button"
+      aria-label={node.entry.name}
       className={[
-        'group flex items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight',
+        'group flex w-full items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight text-left',
         isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
       ].join(' ')}
       style={{ paddingLeft: `${8 + depth * 14}px` }}
@@ -220,7 +222,7 @@ function TreeRow({
       ) : (
         <span className="flex-1 truncate">{node.entry.name}</span>
       )}
-    </div>
+    </button>
   );
 }
 
@@ -438,7 +440,7 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
 
     return (
       <div
-        className="flex items-center gap-1 px-2 py-[3px] text-[12px]"
+        className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
         style={{ paddingLeft: `${8 + depth * 14}px` }}
       >
         <span className="shrink-0 w-3" />
