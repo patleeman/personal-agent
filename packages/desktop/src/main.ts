@@ -11,6 +11,7 @@ import { resolveDesktopRuntimePaths } from './desktop-env.js';
 import { HostManager } from './hosts/host-manager.js';
 import { createDesktopCompanionRuntime } from './companion/runtime.js';
 import { resolveDesktopLaunchPresentation } from './launch-mode.js';
+import { applyDesktopRuntimeEnvironmentOverrides } from './runtime-env.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
@@ -209,6 +210,7 @@ async function openDesktopLogs(): Promise<void> {
 
 function configureDesktopRuntimeEnvironment(): void {
   hydrateProcessEnvFromShell();
+  applyDesktopRuntimeEnvironmentOverrides();
 
   const runtime = resolveDesktopRuntimePaths();
   process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';

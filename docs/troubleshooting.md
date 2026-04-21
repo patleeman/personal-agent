@@ -156,6 +156,8 @@ The local desktop backend intentionally refuses to start if:
 
 If a separate daemon is already healthy, the desktop app now refuses to attach to it instead of silently reusing it.
 
+Stable and testing desktop launches now use separate runtime homes by default, so they can run side by side without sharing a daemon. The testing desktop also shifts its companion listener off the stable default port.
+
 Stop or uninstall the external daemon, then relaunch the desktop app:
 
 ```bash

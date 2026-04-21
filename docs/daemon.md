@@ -34,6 +34,14 @@ By default, daemon state lives under:
 └── runs/
 ```
 
+The desktop testing launch uses its own runtime home instead:
+
+```text
+~/.local/state/personal-agent-testing/daemon/
+```
+
+That keeps stable and testing desktop launches from fighting over the same daemon socket and companion port.
+
 Important pieces:
 
 - `runtime.db` stores daemon-backed runtime state, including durable run metadata and task scheduler state
