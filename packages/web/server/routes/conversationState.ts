@@ -2,14 +2,9 @@ import { existsSync, statSync } from 'node:fs';
 import type { Express } from 'express';
 import { SessionManager, type ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import type { LiveSessionResourceOptions, ServerRouteContext } from './context.js';
-import { parsePendingOperation } from '@personal-agent/daemon';
 import {
   applyConversationModelPreferencesToSessionManager,
 } from '../conversations/conversationModelPreferences.js';
-import {
-  createWebLiveConversationRunId,
-  syncWebLiveConversationRun,
-} from '../conversations/conversationRuns.js';
 import {
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
@@ -21,13 +16,9 @@ import {
   destroySession,
   getAvailableModelObjects,
   isLive as isLocalLive,
-  promptSession as promptLocalSession,
-  queuePromptContext,
   readLiveSessionAutoModeState,
-  requestConversationAutoModeTurn,
   registry as liveRegistry,
   renameSession,
-  resumeSession as resumeLocalSession,
   setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
@@ -36,9 +27,6 @@ import {
   renameStoredSession,
 } from '../conversations/sessions.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import {
-  getDurableRun,
-} from '../automation/durableRuns.js';
 import {
   logError,
   logSlowConversationPerf,
@@ -370,143 +358,25 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      if (isLocalLive(conversationId)) {
-        const liveEntry = liveRegistry.get(conversationId);
-
-        if (liveEntry?.session.sessionFile) {
-          await syncWebLiveConversationRun({
-            conversationId,
-            sessionFile: liveEntry.session.sessionFile,
-            cwd: liveEntry.cwd,
-            title: liveEntry.title,
-            profile: getCurrentProfileFn(),
-            state: 'running',
-            pendingOperation: null,
-          });
-        }
-
-        res.json({
-          conversationId,
-          live: true,
-          recovered: true,
-          replayedPendingOperation: false,
-          usedFallbackPrompt: false,
-        });
-        return;
-      }
-
-      const runDetail = await getDurableRun(createWebLiveConversationRunId(conversationId));
-      const payload = runDetail?.run.checkpoint?.payload;
-      const checkpointPayload = payload && typeof payload === 'object' && !Array.isArray(payload)
-        ? payload as Record<string, unknown>
-        : {};
-      const readCheckpointString = (key: string): string | undefined => {
-        const value = checkpointPayload[key];
-        return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-      };
-
-      const pendingOperation = parsePendingOperation(checkpointPayload.pendingOperation);
-      const sessionDetail = readSessionBlocks(conversationId);
-      const sessionFile = sessionDetail?.meta.file
-        ?? readCheckpointString('sessionFile')
-        ?? runDetail?.run.manifest?.source?.filePath?.trim();
-
-      if (!sessionFile || !existsSync(sessionFile)) {
-        res.status(404).json({ error: 'Conversation not found.' });
-        return;
-      }
-
-      const currentProfile = getCurrentProfileFn();
-      const manifestSpec = runDetail?.run.manifest?.spec;
-      const manifestCwd = typeof manifestSpec?.cwd === 'string' && manifestSpec.cwd.trim().length > 0
-        ? manifestSpec.cwd.trim()
-        : undefined;
-      const resumed = await resumeLocalSession(sessionFile, {
-        ...buildLiveSessionResourceOptionsFn(),
-        extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+      const recovered = await recoverConversationCapability(conversationId, {
+        getCurrentProfile: getCurrentProfileFn,
+        buildLiveSessionResourceOptions: buildLiveSessionResourceOptionsFn,
+        buildLiveSessionExtensionFactories: buildLiveSessionExtensionFactoriesFn,
+        flushLiveDeferredResumes: flushLiveDeferredResumesFn,
       });
-      await flushLiveDeferredResumesFn();
-
-      const resumedEntry = liveRegistry.get(resumed.id);
-      const effectiveCwd = resumedEntry?.cwd
-        ?? sessionDetail?.meta.cwd
-        ?? readCheckpointString('cwd')
-        ?? manifestCwd;
-      const effectiveTitle = sessionDetail?.meta.title ?? readCheckpointString('title');
-      const effectiveProfile = readCheckpointString('profile') ?? currentProfile;
-
-      if (!effectiveCwd) {
-        res.status(500).json({ error: 'Could not determine the conversation working directory.' });
-        return;
-      }
-
-      const recoveryOperation = pendingOperation ?? null;
-      const replayedPendingOperation = Boolean(pendingOperation);
-      const usedFallbackPrompt = false;
-
-      await syncWebLiveConversationRun({
-        conversationId: resumed.id,
-        sessionFile,
-        cwd: effectiveCwd,
-        title: effectiveTitle,
-        profile: effectiveProfile,
-        state: 'running',
-        pendingOperation: recoveryOperation,
-      });
-
-      if (recoveryOperation) {
-        for (const message of recoveryOperation.contextMessages ?? []) {
-          await queuePromptContext(resumed.id, message.customType, message.content);
-        }
-
-        promptLocalSession(
-          resumed.id,
-          recoveryOperation.text,
-          recoveryOperation.behavior,
-          recoveryOperation.images,
-        ).catch(async (error) => {
-          await syncWebLiveConversationRun({
-            conversationId: resumed.id,
-            sessionFile,
-            cwd: effectiveCwd,
-            title: effectiveTitle,
-            profile: effectiveProfile,
-            state: 'failed',
-            lastError: error instanceof Error ? error.message : String(error),
-          });
-
-          logError('conversation recovery error', {
-            sessionId: resumed.id,
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          });
-        });
-      } else if (resumedEntry?.session.sessionManager
-        && readConversationAutoModeStateFromSessionManager(resumedEntry.session.sessionManager).enabled) {
-        queueMicrotask(() => {
-          void Promise.resolve(requestConversationAutoModeTurn(resumed.id)).catch((error) => {
-            logError('conversation recovery auto mode request failed', {
-              sessionId: resumed.id,
-              message: error instanceof Error ? error.message : String(error),
-              stack: error instanceof Error ? error.stack : undefined,
-            });
-          });
-        });
-      }
-
-      res.json({
-        conversationId: resumed.id,
-        live: true,
-        recovered: true,
-        replayedPendingOperation,
-        usedFallbackPrompt,
-      });
+      res.json(recovered);
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
+        message,
         stack: err instanceof Error ? err.stack : undefined,
       });
-      res.status(500).json({ error: String(err) });
+      const status = message === 'Conversation not found.'
+        ? 404
+        : message === 'conversationId required'
+          ? 400
+          : 500;
+      res.status(status).json({ error: message });
     }
   });
 

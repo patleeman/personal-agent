@@ -26,6 +26,7 @@ import {
   queuePromptContext,
   readLiveSessionAutoModeState,
   registry,
+  repairLiveSessionTranscriptTail,
   requestConversationAutoModeContinuationTurn,
   requestConversationAutoModeTurn,
   refreshAllLiveSessionModelRegistries,
@@ -268,6 +269,156 @@ describe('resolveStableForkEntryId', () => {
     ].join('\n'));
 
     expect(resolveStableForkEntryId(sessionFile, { activeTurnInProgress: true })).toBe('assistant-1');
+  });
+});
+
+describe('repairLiveSessionTranscriptTail', () => {
+  it('branches away from an assistant error tail with a visible recovery summary', () => {
+    const branchWithSummary = vi.fn();
+    const branch = vi.fn();
+    const resetLeaf = vi.fn();
+    const buildSessionContext = vi.fn(() => ({
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] }],
+      thinkingLevel: 'off',
+      model: null,
+    }));
+    const send = vi.fn();
+    const state = {
+      messages: [{ role: 'assistant', content: [{ type: 'text', text: 'boom' }], stopReason: 'error', errorMessage: 'Codex error: upstream overloaded' }],
+      streamingMessage: null,
+    };
+
+    setLiveEntry('session-error-tail', {
+      sessionId: 'session-error-tail',
+      cwd: '/tmp/workspace',
+      listeners: new Set([{ tailBlocks: undefined, send }]),
+      title: 'Error tail',
+      session: {
+        state,
+        isStreaming: false,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-20T10:00:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] },
+            },
+            {
+              type: 'message',
+              id: 'assistant-error-1',
+              parentId: 'user-1',
+              timestamp: '2026-04-20T10:00:01.000Z',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'thinking', thinking: 'Trying again…' }],
+                stopReason: 'error',
+                errorMessage: 'Codex error: upstream overloaded',
+              },
+            },
+          ],
+          getEntry: (id: string) => ({
+            'user-1': {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-20T10:00:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] },
+            },
+          } as Record<string, unknown>)[id],
+          branch,
+          branchWithSummary,
+          resetLeaf,
+          buildSessionContext,
+        },
+        getContextUsage: () => null,
+      },
+    });
+    const recoveredEntry = registry.get('session-error-tail');
+    if (recoveredEntry) {
+      recoveredEntry.currentTurnError = 'Codex error: upstream overloaded';
+    }
+
+    const result = repairLiveSessionTranscriptTail('session-error-tail');
+
+    expect(result).toMatchObject({
+      recoverable: true,
+      repaired: true,
+      reason: 'assistant_error',
+    });
+    expect(branchWithSummary).toHaveBeenCalledWith(
+      'user-1',
+      expect.stringContaining('Recovered from a failed tail'),
+      expect.objectContaining({
+        source: 'conversation-recovery',
+        reason: 'assistant_error',
+        errorMessage: 'Codex error: upstream overloaded',
+      }),
+    );
+    expect(branch).not.toHaveBeenCalled();
+    expect(resetLeaf).not.toHaveBeenCalled();
+    expect(state.messages).toEqual([{ role: 'user', content: [{ type: 'text', text: 'Retry the request.' }] }]);
+    expect(registry.get('session-error-tail')?.currentTurnError).toBeNull();
+    expect(send).toHaveBeenCalledWith(expect.objectContaining({ type: 'snapshot' }));
+  });
+
+  it('reports recoverable dangling tool-call tails even when summaries are unavailable', () => {
+    const state = {
+      messages: [{ role: 'assistant', content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'README.md' } }] }],
+      streamingMessage: null,
+    };
+
+    setLiveEntry('session-dangling-tail', {
+      sessionId: 'session-dangling-tail',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Dangling tail',
+      session: {
+        state,
+        isStreaming: false,
+        sessionManager: {
+          getBranch: () => [
+            {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-20T10:01:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Check the file.' }] },
+            },
+            {
+              type: 'message',
+              id: 'assistant-1',
+              parentId: 'user-1',
+              timestamp: '2026-04-20T10:01:01.000Z',
+              message: {
+                role: 'assistant',
+                content: [{ type: 'toolCall', id: 'call_1', name: 'read', arguments: { path: 'README.md' } }],
+                stopReason: 'toolUse',
+              },
+            },
+          ],
+          getEntry: (id: string) => ({
+            'user-1': {
+              type: 'message',
+              id: 'user-1',
+              parentId: null,
+              timestamp: '2026-04-20T10:01:00.000Z',
+              message: { role: 'user', content: [{ type: 'text', text: 'Check the file.' }] },
+            },
+          } as Record<string, unknown>)[id],
+        },
+      },
+    });
+
+    const result = repairLiveSessionTranscriptTail('session-dangling-tail');
+
+    expect(result).toEqual({
+      recoverable: true,
+      repaired: false,
+      reason: 'dangling_tool_call',
+      summary: 'Recovered from an unfinished tool-use tail so the conversation can continue from the last stable point.',
+    });
   });
 });
 

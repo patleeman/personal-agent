@@ -3903,6 +3903,156 @@ function repairDanglingToolCallContext(session: Pick<AgentSession, 'sessionManag
   return true;
 }
 
+type TranscriptTailRecoveryReason = 'assistant_error' | 'dangling_tool_call';
+
+interface TranscriptTailRecoveryPlan {
+  targetEntryId: string | null;
+  reason: TranscriptTailRecoveryReason;
+  summary: string;
+  details?: unknown;
+}
+
+function resolveVisibleSessionBranchTargetId(
+  sessionManager: Pick<SessionManager, 'getEntry'>,
+  entryId: string | null | undefined,
+): string | null {
+  let targetEntryId = entryId ?? null;
+  while (targetEntryId) {
+    const targetEntry = sessionManager.getEntry(targetEntryId);
+    if (!targetEntry || !isHiddenSessionBranchEntry(targetEntry)) {
+      break;
+    }
+    targetEntryId = targetEntry.parentId ?? null;
+  }
+  return targetEntryId;
+}
+
+function buildTranscriptTailRecoveryPlan(
+  input: {
+    targetEntryId: string | null;
+    reason: TranscriptTailRecoveryReason;
+    errorMessage?: string;
+  },
+): TranscriptTailRecoveryPlan {
+  const summaryLines = input.reason === 'assistant_error'
+    ? ['Recovered from a failed tail so the conversation can continue from the last stable point.']
+    : ['Recovered from an unfinished tool-use tail so the conversation can continue from the last stable point.'];
+
+  const errorMessage = input.errorMessage?.trim();
+  if (errorMessage) {
+    summaryLines.push(`Error: ${errorMessage}`);
+  }
+
+  return {
+    targetEntryId: input.targetEntryId,
+    reason: input.reason,
+    summary: summaryLines.join('\n'),
+    details: {
+      source: 'conversation-recovery',
+      reason: input.reason,
+      ...(errorMessage ? { errorMessage } : {}),
+    },
+  };
+}
+
+function resolveTranscriptTailRecoveryPlan(
+  sessionManager: Pick<SessionManager, 'getBranch' | 'getEntry'>,
+): TranscriptTailRecoveryPlan | null {
+  const branch = sessionManager.getBranch();
+  if (branch.length === 0) {
+    return null;
+  }
+
+  const leafEntry = branch[branch.length - 1];
+  if (leafEntry?.type === 'message' && leafEntry.message.role === 'assistant') {
+    const errorMessage = getAssistantErrorDisplayMessage(leafEntry.message);
+    if (errorMessage) {
+      return buildTranscriptTailRecoveryPlan({
+        targetEntryId: resolveVisibleSessionBranchTargetId(sessionManager, leafEntry.parentId ?? null),
+        reason: 'assistant_error',
+        errorMessage,
+      });
+    }
+  }
+
+  const danglingToolCallRepairLeafId = resolveDanglingToolCallRepairLeafId(sessionManager);
+  if (danglingToolCallRepairLeafId !== undefined) {
+    return buildTranscriptTailRecoveryPlan({
+      targetEntryId: danglingToolCallRepairLeafId,
+      reason: 'dangling_tool_call',
+    });
+  }
+
+  return null;
+}
+
+export function repairLiveSessionTranscriptTail(sessionId: string): {
+  recoverable: boolean;
+  repaired: boolean;
+  reason: TranscriptTailRecoveryReason | null;
+  summary?: string;
+} {
+  const entry = registry.get(sessionId);
+  if (!entry) {
+    throw new Error(`Session ${sessionId} is not live`);
+  }
+
+  const sessionManager = entry.session.sessionManager as Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'branchWithSummary' | 'resetLeaf' | 'buildSessionContext'>> | undefined;
+  if (!sessionManager
+    || typeof sessionManager.getBranch !== 'function'
+    || typeof sessionManager.getEntry !== 'function') {
+    return {
+      recoverable: false,
+      repaired: false,
+      reason: null,
+    };
+  }
+
+  const plan = resolveTranscriptTailRecoveryPlan(sessionManager as Pick<SessionManager, 'getBranch' | 'getEntry'>);
+  if (!plan) {
+    return {
+      recoverable: false,
+      repaired: false,
+      reason: null,
+    };
+  }
+
+  if (typeof sessionManager.resetLeaf !== 'function'
+    || typeof sessionManager.buildSessionContext !== 'function'
+    || (plan.targetEntryId !== null
+      && typeof sessionManager.branch !== 'function'
+      && typeof sessionManager.branchWithSummary !== 'function')) {
+    return {
+      recoverable: true,
+      repaired: false,
+      reason: plan.reason,
+      summary: plan.summary,
+    };
+  }
+
+  if (plan.targetEntryId === null) {
+    sessionManager.resetLeaf();
+  } else if (typeof sessionManager.branchWithSummary === 'function') {
+    sessionManager.branchWithSummary(plan.targetEntryId, plan.summary, plan.details);
+  } else if (typeof sessionManager.branch === 'function') {
+    sessionManager.branch(plan.targetEntryId);
+  }
+
+  entry.session.state.messages = sessionManager.buildSessionContext().messages;
+  entry.currentTurnError = null;
+  broadcastSnapshot(entry);
+  clearContextUsageTimer(entry);
+  broadcastContextUsage(entry, true);
+  publishSessionMetaChanged(sessionId);
+
+  return {
+    recoverable: true,
+    repaired: true,
+    reason: plan.reason,
+    summary: plan.summary,
+  };
+}
+
 async function runPromptOnLiveEntry(
   entry: LiveEntry,
   text: string,
@@ -3913,7 +4063,7 @@ async function runPromptOnLiveEntry(
   const hasImages = Boolean(images && images.length > 0);
 
   if (behavior === undefined) {
-    repairDanglingToolCallContext(session);
+    repairLiveSessionTranscriptTail(entry.sessionId);
   }
 
   const runPrompt = async (allowImages: boolean): Promise<void> => {

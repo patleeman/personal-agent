@@ -636,40 +636,7 @@ describe('registerConversationStateRoutes', () => {
     expect(res.json).toHaveBeenCalledWith({ error: 'conversation id required' });
   });
 
-  it('recovers live conversations without injecting a synthetic follow-up prompt', async () => {
-    const { postHandler } = createHarness({ getCurrentProfile: () => 'assistant' });
-    const handler = postHandler('/api/conversations/:id/recover');
-    const res = createResponse();
-
-    isLocalLiveMock.mockReturnValueOnce(true);
-    liveRegistry.set('conversation-1', {
-      cwd: '/repo/live',
-      title: 'Live title',
-      session: { sessionFile: '/sessions/conversation-1.json' },
-    });
-
-    await handler({ params: { id: 'conversation-1' } }, res);
-
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'conversation-1',
-      sessionFile: '/sessions/conversation-1.json',
-      cwd: '/repo/live',
-      title: 'Live title',
-      profile: 'assistant',
-      state: 'running',
-    }));
-    expect(syncWebLiveConversationRunMock.mock.calls[0]?.[0]?.pendingOperation).toBeNull();
-    expect(promptLocalSessionMock).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({
-      conversationId: 'conversation-1',
-      live: true,
-      recovered: true,
-      replayedPendingOperation: false,
-      usedFallbackPrompt: false,
-    });
-  });
-
-  it('replays pending operations when recovering stored conversations', async () => {
+  it('delegates recovery requests to the recovery capability', async () => {
     const flushLiveDeferredResumesMock = vi.fn().mockResolvedValue(undefined);
     const { postHandler } = createHarness({
       getCurrentProfile: () => 'assistant',
@@ -679,72 +646,23 @@ describe('registerConversationStateRoutes', () => {
     });
     const handler = postHandler('/api/conversations/:id/recover');
     const res = createResponse();
-    const pendingOperation = {
-      type: 'prompt' as const,
-      text: 'Continue the deployment review.',
-      behavior: 'append' as const,
-      images: ['diagram.png'],
-      contextMessages: [
-        { customType: 'referenced_context', content: 'Remember the staging note.' },
-      ],
-      enqueuedAt: '2026-04-09T18:00:00.000Z',
-    };
 
-    createWebLiveConversationRunIdMock.mockReturnValueOnce('web-run:conversation-1');
-    getDurableRunMock.mockResolvedValueOnce({
-      run: {
-        checkpoint: {
-          payload: {
-            pendingOperation: { type: 'prompt', text: 'ignored' },
-            profile: ' reviewer ',
-          },
-        },
-        manifest: {
-          source: { filePath: ' /sessions/conversation-1.json ' },
-          spec: { cwd: ' /manifest-cwd ' },
-        },
-      },
+    recoverConversationCapabilityMock.mockResolvedValueOnce({
+      conversationId: 'conversation-1-live',
+      live: true,
+      recovered: true,
+      replayedPendingOperation: true,
+      usedFallbackPrompt: false,
     });
-    parsePendingOperationMock.mockReturnValueOnce(pendingOperation);
-    readSessionBlocksMock.mockReturnValueOnce({
-      meta: {
-        file: '/sessions/conversation-1.json',
-        cwd: '/repo/stored',
-        title: 'Stored title',
-      },
-    });
-    resumeLocalSessionMock.mockResolvedValueOnce({ id: 'conversation-1-live' });
-    liveRegistry.set('conversation-1-live', { cwd: '/repo/resumed' });
 
     await handler({ params: { id: 'conversation-1' } }, res);
 
-    expect(createWebLiveConversationRunIdMock).toHaveBeenCalledWith('conversation-1');
-    expect(getDurableRunMock).toHaveBeenCalledWith('web-run:conversation-1');
-    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/conversation-1.json', {
-      additionalExtensionPaths: ['extensions'],
-      extensionFactories: ['factory'],
-    });
-    expect(flushLiveDeferredResumesMock).toHaveBeenCalledTimes(1);
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith({
-      conversationId: 'conversation-1-live',
-      sessionFile: '/sessions/conversation-1.json',
-      cwd: '/repo/resumed',
-      title: 'Stored title',
-      profile: 'reviewer',
-      state: 'running',
-      pendingOperation,
-    });
-    expect(queuePromptContextMock).toHaveBeenCalledWith(
-      'conversation-1-live',
-      'referenced_context',
-      'Remember the staging note.',
-    );
-    expect(promptLocalSessionMock).toHaveBeenCalledWith(
-      'conversation-1-live',
-      'Continue the deployment review.',
-      'append',
-      ['diagram.png'],
-    );
+    expect(recoverConversationCapabilityMock).toHaveBeenCalledWith('conversation-1', expect.objectContaining({
+      getCurrentProfile: expect.any(Function),
+      buildLiveSessionResourceOptions: expect.any(Function),
+      buildLiveSessionExtensionFactories: expect.any(Function),
+      flushLiveDeferredResumes: flushLiveDeferredResumesMock,
+    }));
     expect(res.json).toHaveBeenCalledWith({
       conversationId: 'conversation-1-live',
       live: true,
@@ -754,76 +672,30 @@ describe('registerConversationStateRoutes', () => {
     });
   });
 
-  it('recovers stored conversations without fabricating a resume prompt', async () => {
-    const { postHandler } = createHarness({ getCurrentProfile: () => 'assistant' });
+  it('maps missing conversations from the recovery capability to 404s', async () => {
+    const { postHandler } = createHarness();
     const handler = postHandler('/api/conversations/:id/recover');
     const res = createResponse();
 
-    createWebLiveConversationRunIdMock.mockReturnValueOnce('web-run:conversation-2');
-    getDurableRunMock.mockResolvedValueOnce({
-      run: {
-        checkpoint: {
-          payload: {
-            sessionFile: ' /sessions/from-checkpoint.json ',
-            cwd: ' /checkpoint-cwd ',
-            title: ' Checkpoint title ',
-            profile: ' analyst ',
-          },
-        },
-        manifest: {
-          source: { filePath: ' /sessions/from-manifest.json ' },
-          spec: { cwd: ' /manifest-cwd ' },
-        },
-      },
-    });
-    readSessionBlocksMock.mockReturnValueOnce(null);
-    resumeLocalSessionMock.mockResolvedValueOnce({ id: 'conversation-2-live' });
-    liveRegistry.set('conversation-2-live', {
-      cwd: '/checkpoint-cwd',
-      session: {
-        sessionManager: {
-          getEntries: () => [{
-            type: 'custom',
-            customType: 'conversation-auto-mode',
-            data: {
-              enabled: true,
-              updatedAt: '2026-04-12T15:12:00.000Z',
-            },
-          }],
-        },
-      },
-    });
-    readConversationAutoModeStateFromSessionManagerMock.mockReturnValueOnce({
-      enabled: true,
-      stopReason: null,
-      updatedAt: '2026-04-12T15:12:00.000Z',
-    });
+    recoverConversationCapabilityMock.mockRejectedValueOnce(new Error('Conversation not found.'));
+
+    await handler({ params: { id: 'conversation-missing' } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Conversation not found.' });
+  });
+
+  it('maps invalid recovery input from the capability to 400s', async () => {
+    const { postHandler } = createHarness();
+    const handler = postHandler('/api/conversations/:id/recover');
+    const res = createResponse();
+
+    recoverConversationCapabilityMock.mockRejectedValueOnce(new Error('conversationId required'));
 
     await handler({ params: { id: 'conversation-2' } }, res);
-    await Promise.resolve();
 
-    expect(resumeLocalSessionMock).toHaveBeenCalledWith('/sessions/from-checkpoint.json', {
-      additionalExtensionPaths: [],
-      extensionFactories: [],
-    });
-    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
-      conversationId: 'conversation-2-live',
-      sessionFile: '/sessions/from-checkpoint.json',
-      cwd: '/checkpoint-cwd',
-      title: 'Checkpoint title',
-      profile: 'analyst',
-      state: 'running',
-    }));
-    expect(syncWebLiveConversationRunMock.mock.calls[0]?.[0]?.pendingOperation).toBeNull();
-    expect(promptLocalSessionMock).not.toHaveBeenCalled();
-    expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-2-live');
-    expect(res.json).toHaveBeenCalledWith({
-      conversationId: 'conversation-2-live',
-      live: true,
-      recovered: true,
-      replayedPendingOperation: false,
-      usedFallbackPrompt: false,
-    });
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({ error: 'conversationId required' });
   });
 
   it('validates and renames conversation titles for live and stored sessions', async () => {

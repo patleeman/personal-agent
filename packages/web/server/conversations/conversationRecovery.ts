@@ -16,11 +16,12 @@ import {
   isLive as isLiveSession,
   promptSession,
   queuePromptContext,
+  repairLiveSessionTranscriptTail,
   requestConversationAutoModeTurn,
   registry as liveRegistry,
   resumeSession,
 } from './liveSessions.js';
-import { readSessionBlocks } from './sessions.js';
+import { readSessionBlocks, type DisplayBlock } from './sessions.js';
 
 interface RecoveryLoaderOptions {
   extensionFactories?: ExtensionFactory[];
@@ -99,6 +100,125 @@ function isSyntheticResumeFallbackOperation(
     && !hasContextMessages;
 }
 
+function isTerminalBashDisplayBlock(block: DisplayBlock | null | undefined): boolean {
+  if (!block || block.type !== 'tool_use' || block.tool !== 'bash') {
+    return false;
+  }
+
+  const details = block.details;
+  return typeof details === 'object'
+    && details !== null
+    && !Array.isArray(details)
+    && (details as { displayMode?: unknown }).displayMode === 'terminal';
+}
+
+function displayBlockNeedsResumeFallback(block: DisplayBlock | null | undefined): boolean {
+  if (!block) {
+    return false;
+  }
+
+  switch (block.type) {
+    case 'error':
+      return true;
+    case 'thinking':
+      return true;
+    case 'tool_use':
+      return !isTerminalBashDisplayBlock(block);
+    default:
+      return false;
+  }
+}
+
+async function continueRecoveredConversation(input: {
+  conversationId: string;
+  sessionFile?: string;
+  cwd: string;
+  title?: string;
+  profile: string;
+  recoveryOperation: WebLiveConversationPendingOperation | null;
+  lastBlock?: DisplayBlock | null;
+}): Promise<Pick<RecoverConversationResult, 'replayedPendingOperation' | 'usedFallbackPrompt'>> {
+  const repairedTail = repairLiveSessionTranscriptTail(input.conversationId);
+  const liveEntry = liveRegistry.get(input.conversationId);
+  const autoModeEnabled = Boolean(
+    liveEntry?.session.sessionManager
+    && readConversationAutoModeStateFromSessionManager(liveEntry.session.sessionManager).enabled,
+  );
+
+  const fallbackPrompt = readWebUiConfig().resumeFallbackPrompt.trim();
+  const shouldUseFallbackPrompt = !input.recoveryOperation
+    && !autoModeEnabled
+    && fallbackPrompt.length > 0
+    && (repairedTail.recoverable || displayBlockNeedsResumeFallback(input.lastBlock));
+
+  const promptOperation = input.recoveryOperation ?? (shouldUseFallbackPrompt
+    ? {
+        type: 'prompt' as const,
+        text: fallbackPrompt,
+        enqueuedAt: new Date().toISOString(),
+      }
+    : null);
+
+  const sessionFile = input.sessionFile?.trim();
+  if (sessionFile) {
+    await syncWebLiveConversationRun({
+      conversationId: input.conversationId,
+      sessionFile,
+      cwd: input.cwd,
+      title: input.title,
+      profile: input.profile,
+      state: 'running',
+      pendingOperation: promptOperation,
+    });
+  }
+
+  if (promptOperation) {
+    for (const message of promptOperation.contextMessages ?? []) {
+      await queuePromptContext(input.conversationId, message.customType, message.content);
+    }
+
+    promptSession(
+      input.conversationId,
+      promptOperation.text,
+      promptOperation.behavior,
+      promptOperation.images,
+    ).catch(async (error) => {
+      if (sessionFile) {
+        await syncWebLiveConversationRun({
+          conversationId: input.conversationId,
+          sessionFile,
+          cwd: input.cwd,
+          title: input.title,
+          profile: input.profile,
+          state: 'failed',
+          lastError: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      logError('conversation recovery error', {
+        sessionId: input.conversationId,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+    });
+  } else if (autoModeEnabled) {
+    queueMicrotask(() => {
+      void Promise.resolve(requestConversationAutoModeTurn(input.conversationId)).catch((error) => {
+        logError('conversation recovery auto mode request failed', {
+          sessionId: input.conversationId,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+        });
+      });
+    });
+  }
+
+  return {
+    replayedPendingOperation: Boolean(input.recoveryOperation),
+    usedFallbackPrompt: shouldUseFallbackPrompt,
+  };
+}
+
 export async function recoverConversationCapability(
   conversationIdInput: string,
   context: RecoverConversationCapabilityContext,
@@ -110,25 +230,22 @@ export async function recoverConversationCapability(
 
   if (isLiveSession(conversationId)) {
     const liveEntry = liveRegistry.get(conversationId);
-
-    if (liveEntry?.session.sessionFile) {
-      await syncWebLiveConversationRun({
-        conversationId,
-        sessionFile: liveEntry.session.sessionFile,
-        cwd: liveEntry.cwd,
-        title: liveEntry.title,
-        profile: context.getCurrentProfile(),
-        state: 'running',
-        pendingOperation: null,
-      });
-    }
+    const liveSessionDetail = readSessionBlocks(conversationId);
+    const continuation = await continueRecoveredConversation({
+      conversationId,
+      sessionFile: liveEntry?.session.sessionFile,
+      cwd: liveEntry?.cwd ?? liveSessionDetail?.meta.cwd ?? '',
+      title: liveEntry?.title ?? liveSessionDetail?.meta.title,
+      profile: context.getCurrentProfile(),
+      recoveryOperation: null,
+      lastBlock: liveSessionDetail?.blocks.at(-1) ?? null,
+    });
 
     return {
       conversationId,
       live: true,
       recovered: true,
-      replayedPendingOperation: false,
-      usedFallbackPrompt: false,
+      ...continuation,
     };
   }
 
@@ -172,66 +289,21 @@ export async function recoverConversationCapability(
     throw new Error('Could not determine the conversation working directory.');
   }
 
-  const recoveryOperation = pendingOperation ?? null;
-  const replayedPendingOperation = Boolean(pendingOperation);
-  const usedFallbackPrompt = false;
-
-  await syncWebLiveConversationRun({
+  const continuation = await continueRecoveredConversation({
     conversationId: resumed.id,
     sessionFile,
     cwd: effectiveCwd,
     title: effectiveTitle,
     profile: effectiveProfile,
-    state: 'running',
-    pendingOperation: recoveryOperation,
+    recoveryOperation: pendingOperation ?? null,
+    lastBlock: sessionDetail?.blocks.at(-1) ?? null,
   });
-
-  if (recoveryOperation) {
-    for (const message of recoveryOperation.contextMessages ?? []) {
-      await queuePromptContext(resumed.id, message.customType, message.content);
-    }
-
-    promptSession(
-      resumed.id,
-      recoveryOperation.text,
-      recoveryOperation.behavior as 'steer' | 'followUp' | undefined,
-      recoveryOperation.images,
-    ).catch(async (error) => {
-      await syncWebLiveConversationRun({
-        conversationId: resumed.id,
-        sessionFile,
-        cwd: effectiveCwd,
-        title: effectiveTitle,
-        profile: effectiveProfile,
-        state: 'failed',
-        lastError: error instanceof Error ? error.message : String(error),
-      });
-
-      logError('conversation recovery error', {
-        sessionId: resumed.id,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    });
-  } else if (resumedEntry?.session.sessionManager
-    && readConversationAutoModeStateFromSessionManager(resumedEntry.session.sessionManager).enabled) {
-    queueMicrotask(() => {
-      void Promise.resolve(requestConversationAutoModeTurn(resumed.id)).catch((error) => {
-        logError('conversation recovery auto mode request failed', {
-          sessionId: resumed.id,
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        });
-      });
-    });
-  }
 
   return {
     conversationId: resumed.id,
     live: true,
     recovered: true,
-    replayedPendingOperation,
-    usedFallbackPrompt,
+    ...continuation,
   };
 }
 
