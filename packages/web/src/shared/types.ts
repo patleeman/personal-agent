@@ -1158,3 +1158,26 @@ export interface ToolsState {
   mcp: McpState;
   packageInstall: PackageInstallState;
 }
+
+
+// ── Vault editor ──────────────────────────────────────────────────────────────
+
+export interface VaultEntry {
+  id: string;
+  kind: 'file' | 'folder';
+  name: string;
+  path: string;
+  sizeBytes: number;
+  updatedAt: string;
+}
+
+export interface VaultTreeResult {
+  root: string;
+  entries: VaultEntry[];
+}
+
+export interface VaultFileContent {
+  id: string;
+  content: string;
+  updatedAt: string;
+}

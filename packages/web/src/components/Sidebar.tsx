@@ -1,5 +1,6 @@
 import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { VaultFileTree } from './knowledge/VaultFileTree';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../client/api';
 import { useAppData } from '../app/contexts';
@@ -3040,6 +3041,16 @@ export function Sidebar() {
 
   const newConversationHotkeyLabel = getNewConversationHotkeyLabel();
   const chatButtonActive = location.pathname === DRAFT_CONVERSATION_ROUTE;
+  const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
+  const [knowledgeSearchParams, setKnowledgeSearchParams] = useSearchParams();
+  const knowledgeActiveFileId = isKnowledgeRoute ? (knowledgeSearchParams.get('file') ?? null) : null;
+  const handleKnowledgeFileSelect = useCallback((id: string) => {
+    if (!id) {
+      setKnowledgeSearchParams({}, { replace: true });
+    } else {
+      setKnowledgeSearchParams({ file: id }, { replace: true });
+    }
+  }, [setKnowledgeSearchParams]);
 
   return (
     <>
@@ -3060,9 +3071,10 @@ export function Sidebar() {
             </button>
           </div>
           <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
+          <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
         </div>
 
-        <div className="px-4 pt-1 pb-0.5">
+        <div className="px-4 pt-1 pb-0.5" style={{ display: location.pathname.startsWith('/knowledge') ? 'none' : '' }}>
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">Threads</p>
             <ThreadsFilterButton
@@ -3086,7 +3098,16 @@ export function Sidebar() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0 pb-3">
+        {isKnowledgeRoute ? (
+          <div className="flex-1 overflow-hidden min-h-0">
+            <VaultFileTree
+              activeFileId={knowledgeActiveFileId}
+              onFileSelect={handleKnowledgeFileSelect}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex-1 overflow-y-auto min-h-0 pb-3" style={{ display: isKnowledgeRoute ? 'none' : '' }}>
           <div className="py-0.5 space-y-0.5">
             {!loading && renderedConversationItems.length === 0 && !(threadsOrganizeMode === 'project' && groupedConversationRows.length > 0) ? (
               <p className="px-4 py-2 text-[12px] text-dim">{threadsFilterMode === 'automation' ? 'No automation threads yet.' : threadsFilterMode === 'human' ? 'No human threads yet.' : 'No open conversations yet.'}</p>

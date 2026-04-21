@@ -10,6 +10,7 @@ import { registerMemoryNotesRoutes } from './memoryNotes.js';
 import { registerModelRoutes } from './models.js';
 import { registerRunAppRoutes } from './runsApp.js';
 import { registerRunsOpsRoutes } from './runsOps.js';
+import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
@@ -43,6 +44,8 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
 
   registerFilePickerRoutes(app, context);
   registerFolderPickerRoutes(app, context);
+
+  registerVaultEditorRoutes(app);
 
   registerRunsOpsRoutes(app);
 }

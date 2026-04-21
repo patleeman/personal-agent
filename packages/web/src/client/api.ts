@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultFileListResult, VaultRootState } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultEntry, VaultFileContent, VaultFileListResult, VaultRootState, VaultTreeResult } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -1283,4 +1283,26 @@ export const api = {
       ...(surfaceId ? { surfaceId } : {}),
     });
   },
+};
+
+// ── Vault editor ─────────────────────────────────────────────────────────────
+
+export const vaultApi = {
+  tree: (dir?: string) =>
+    get<VaultTreeResult>(`/vault/tree${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`),
+
+  readFile: (id: string) =>
+    get<VaultFileContent>(`/vault/file?id=${encodeURIComponent(id)}`),
+
+  writeFile: (id: string, content: string) =>
+    requestJson<VaultEntry>('PUT', '/vault/file', { id, content }),
+
+  deleteFile: (id: string) =>
+    del<{ ok: boolean }>(`/vault/file?id=${encodeURIComponent(id)}`),
+
+  rename: (id: string, newName: string) =>
+    post<VaultEntry>('/vault/rename', { id, newName }),
+
+  createFolder: (id: string) =>
+    post<VaultEntry>('/vault/folder', { id }),
 };

@@ -132,6 +132,7 @@ const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('../pages/Tas
 const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
 const SystemPage = lazyRouteWithRecovery('system-page', () => import('../pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () => import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })));
 
 function suspendRoute(element: React.ReactNode) {
   return (
@@ -399,8 +400,8 @@ export function App() {
                       <Route path="system" element={suspendRoute(<SystemPage />)} />
                       <Route path="runs" element={<DeletedStandaloneRunsRedirect />} />
                       <Route path="runs/:id" element={<DeletedStandaloneRunsRedirect />} />
-                      <Route path="knowledge" element={<LegacyWebRouteRedirect />} />
-                      <Route path="knowledge/*" element={<LegacyWebRouteRedirect />} />
+                      <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
+                      <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
                       <Route path="notes" element={<LegacyWebRouteRedirect />} />
                       <Route path="notes/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="memories" element={<LegacyWebRouteRedirect />} />
