@@ -6,6 +6,7 @@ import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
 import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
+import { captureDesktopScreenshot } from './screenshot.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
@@ -359,6 +360,8 @@ export function registerDesktopIpc(options: {
 
     return controller.pickFolder(input);
   });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:capture-screenshot`, async () => captureDesktopScreenshot());
 
   ipcMain.handle(`${CHANNEL_PREFIX}:read-conversation-title-settings`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)

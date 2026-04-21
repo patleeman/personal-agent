@@ -3013,6 +3013,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [mentionIdx, setMentionIdx] = useState(0);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
   const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
   const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
@@ -5260,6 +5261,39 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     fileInputRef.current?.click();
   }
 
+  async function captureComposerScreenshot() {
+    if (composerDisabled || screenshotCaptureBusy) {
+      return;
+    }
+
+    setScreenshotCaptureBusy(true);
+    try {
+      const desktopBridge = getDesktopBridge();
+      if (!desktopBridge) {
+        throw new Error('Screenshot capture is only available in the desktop app.');
+      }
+
+      const result = await desktopBridge.captureScreenshot();
+      if (result.cancelled || !result.image) {
+        return;
+      }
+
+      setAttachments((current) => [
+        ...current,
+        base64ToFile(
+          result.image.data,
+          result.image.mimeType,
+          result.image.name?.trim() || 'Screenshot.png',
+        ),
+      ]);
+      textareaRef.current?.focus();
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
+    } finally {
+      setScreenshotCaptureBusy(false);
+    }
+  }
+
   function openDrawingEditor() {
     setEditingDrawingLocalId('__new__');
   }
@@ -6814,6 +6848,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
   const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext || wholeLineBashRunning;
+  const screenshotCaptureAvailable = getDesktopBridge() !== null
+    && (typeof navigator === 'undefined' || /Mac/i.test(navigator.userAgent));
   const renameConversationDisabled = conversationNeedsTakeover
     || conversationCwdEditorOpen
     || conversationCwdBusy;
@@ -7813,6 +7849,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           <path d="M5 12h14" />
                         </svg>
                       </button>
+                      {screenshotCaptureAvailable && (
+                        <button
+                          type="button"
+                          onClick={() => { void captureComposerScreenshot(); }}
+                          disabled={composerDisabled || screenshotCaptureBusy}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
+                          title="Capture screenshot"
+                          aria-label="Capture screenshot"
+                        >
+                          {screenshotCaptureBusy ? (
+                            <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                          ) : (
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z" />
+                              <path d="M9 5 10.5 3.5h3L15 5" />
+                              <circle cx="12" cy="12" r="3.25" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={openDrawingEditor}

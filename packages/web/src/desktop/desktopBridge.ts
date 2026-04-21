@@ -96,6 +96,15 @@ interface DesktopConversationCwdGroupContextMenuRequest {
   canRemove?: boolean;
 }
 
+export interface DesktopScreenshotCaptureResult {
+  cancelled: boolean;
+  image?: {
+    name?: string;
+    mimeType: string;
+    data: string;
+  };
+}
+
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
   getConnections(): Promise<DesktopConnectionsState>;
@@ -133,6 +142,7 @@ export interface PersonalAgentDesktopBridge {
   readTools?(options?: { profile?: string }): Promise<ToolsState>;
   updateVaultRoot(root: string | null): Promise<VaultRootState>;
   pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
+  captureScreenshot(): Promise<DesktopScreenshotCaptureResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;
   updateConversationTitleSettings(input: { enabled?: boolean; model?: string | null }): Promise<ConversationTitleSettingsState>;
   readConversationPlansWorkspace(): Promise<ConversationAutomationWorkspaceState>;
