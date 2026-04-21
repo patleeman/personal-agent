@@ -261,6 +261,17 @@
     @apply rounded-2xl border border-steel/20 bg-surface/60 px-3.5 py-3;
   }
 
+  .ui-terminal-block {
+    @apply overflow-hidden rounded-xl border font-mono text-[12px] text-secondary;
+    background-color: rgb(var(--color-terminal-surface));
+    border-color: rgb(var(--color-terminal-border) / 0.9);
+  }
+
+  .ui-terminal-block__chrome {
+    background-color: rgb(var(--color-terminal-chrome) / 0.82);
+    border-color: rgb(var(--color-terminal-border) / 0.72);
+  }
+
   .ui-message-meta {
     @apply text-[10px] text-dim;
   }
@@ -1167,6 +1178,9 @@
   --color-selection:      184 198 244;
   --color-hover:          218 222 230;
   --color-active:         207 212 223;
+  --color-terminal-surface: 244 246 250;
+  --color-terminal-chrome:  236 239 246;
+  --color-terminal-border:  191 198 213;
 }
 
 /* ─── Adapted Tokyo Night dark theme ──────────────────────────────────────── */
@@ -1193,6 +1207,9 @@
   --color-selection:      68  86  146;
   --color-hover:          49  55  80;
   --color-active:         60  68  98;
+  --color-terminal-surface: 11  14  19;
+  --color-terminal-chrome:  15  18  26;
+  --color-terminal-border:  43  49  72;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */

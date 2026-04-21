@@ -1035,6 +1035,7 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('npm run release:publish');
     expect(html).toContain('/bin/bash: npm: command not found');
     expect(html).toContain('no context');
+    expect(html).toContain('ui-terminal-block');
     expect(html).not.toContain('Internal work');
     expect(html).not.toContain('&quot;command&quot;');
   });

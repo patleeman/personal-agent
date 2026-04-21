@@ -839,10 +839,10 @@ function TerminalToolBlock({
   return (
     <div className="group space-y-1.5">
       <div className={cx(
-        'overflow-hidden rounded-xl border bg-[rgb(11,14,19)] font-mono text-[12px] text-secondary',
-        isError ? 'border-danger/35' : 'border-border-subtle/80',
+        'ui-terminal-block',
+        isError ? 'border-danger/35' : null,
       )}>
-        <div className="flex items-center gap-2 border-b border-white/5 px-3 py-2 text-[11px]">
+        <div className="ui-terminal-block__chrome flex items-center gap-2 border-b px-3 py-2 text-[11px]">
           {isRunning ? (
             <span className="h-3.5 w-3.5 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent animate-spin text-accent" />
           ) : (
@@ -866,7 +866,7 @@ function TerminalToolBlock({
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-white/5 px-3 py-2 text-[10px] text-dim">
+        <div className="ui-terminal-block__chrome flex flex-wrap items-center gap-2 border-t px-3 py-2 text-[10px] text-dim">
           {footerBits.map((bit) => (
             <span key={bit}>{bit}</span>
           ))}
