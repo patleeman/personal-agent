@@ -322,7 +322,7 @@ struct ArchivedConversationListView: View {
                         ContentUnavailableView(
                             "No archived conversations",
                             systemImage: "archivebox",
-                            description: Text("Archived threads show up here. Unarchive one to move it back into Chat.")
+                            description: Text("Archived and older hidden threads show up here. Unarchive one to move it back into Chat.")
                         )
                         .foregroundStyle(CompanionTheme.textSecondary)
                     }
@@ -335,7 +335,7 @@ struct ArchivedConversationListView: View {
                             .listRowBackground(CompanionTheme.panel)
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
                                 Button {
-                                    Task { await session.toggleArchived(item.id) }
+                                    Task { await session.restoreConversation(item.id) }
                                 } label: {
                                     Label("Unarchive", systemImage: "tray.and.arrow.up")
                                 }
@@ -343,7 +343,7 @@ struct ArchivedConversationListView: View {
                             }
                             .contextMenu {
                                 Button {
-                                    Task { await session.toggleArchived(item.id) }
+                                    Task { await session.restoreConversation(item.id) }
                                 } label: {
                                     Label("Unarchive", systemImage: "tray.and.arrow.up")
                                 }

@@ -349,11 +349,13 @@ final class HostSessionModel: ObservableObject {
     }
 
     var chatSections: [ConversationListSection] {
-        sections.filter { $0.id != "archived" }
+        sections.filter { $0.id != "archived" && $0.id != "recent" }
     }
 
     var archivedSessions: [SessionMeta] {
-        sections.first(where: { $0.id == "archived" })?.sessions ?? []
+        sections
+            .filter { $0.id == "archived" || $0.id == "recent" }
+            .flatMap(\.sessions)
     }
 
     init(client: CompanionClientProtocol, installationSurfaceId: String) {
@@ -461,6 +463,15 @@ final class HostSessionModel: ObservableObject {
         } else {
             next.archivedSessionIds.append(conversationId)
             next.pinnedSessionIds.removeAll { $0 == conversationId }
+        }
+        await saveOrdering(next)
+    }
+
+    func restoreConversation(_ conversationId: String) async {
+        var next = currentOrdering
+        next.archivedSessionIds.removeAll { $0 == conversationId }
+        if !next.sessionIds.contains(conversationId) {
+            next.sessionIds.append(conversationId)
         }
         await saveOrdering(next)
     }

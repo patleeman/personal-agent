@@ -13,7 +13,7 @@ apps/ios/PersonalAgentCompanion
 - pair to a companion host with manual pairing code entry or setup QR + bearer token
 - persist paired hosts locally and keep the token in Keychain
 - choose a host first, then work in a per-host Chat / Archived / Automations / Settings shell
-- mirror host conversation ordering with pinned/open lists plus a dedicated Archived tab, and native pin/archive/unarchive/duplicate controls
+- mirror host conversation ordering with pinned/open lists plus a dedicated Archived tab for archived and older hidden threads, and native pin/archive/unarchive/duplicate controls
 - open a conversation and stream transcript updates over the multiplexed companion socket
 - send prompts with text, prompt images, and saved drawing attachment refs
 - restore queued steer/follow-up prompts, manage parallel jobs, and see live control/presence state from iPhone

@@ -366,7 +366,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(draft.previewAsset?.mimeType, "image/png")
     }
 
-    func testHostSessionCanArchiveAndPinConversations() async throws {
+    func testHostSessionCanArchiveRestoreAndPinConversations() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()
         try await Task.sleep(for: .milliseconds(50))
@@ -376,6 +376,13 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.chatSections.map(\.id), ["pinned"])
         XCTAssertEqual(session.archivedSessions.map(\.id), ["conv-2"])
 
+        await session.restoreConversation("conv-2")
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(session.archivedSessions.isEmpty)
+        XCTAssertTrue(session.chatSections.contains(where: { $0.id == "open" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
+
+        await session.toggleArchived("conv-2")
+        try await Task.sleep(for: .milliseconds(50))
         await session.togglePinned("conv-2")
         try await Task.sleep(for: .milliseconds(50))
         XCTAssertTrue(session.archivedSessions.isEmpty)
