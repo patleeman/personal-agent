@@ -13,6 +13,7 @@ struct ConversationScreen: View {
     @State private var showingRename = false
     @State private var renameText = ""
     @State private var importedPhotoItems: [PhotosPickerItem] = []
+    @State private var showingPhotoLibraryPicker = false
     @State private var showingImageFileImporter = false
     @State private var showingCwdEditor = false
     @State private var cwdText = ""
@@ -250,6 +251,7 @@ struct ConversationScreen: View {
                     viewModel.errorMessage = error.localizedDescription
                 }
             }
+            .photosPicker(isPresented: $showingPhotoLibraryPicker, selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images)
             .onChange(of: importedPhotoItems) { _, newItems in
                 Task {
                     await importPromptPhotos(newItems)
@@ -360,7 +362,9 @@ struct ConversationScreen: View {
             HStack(alignment: .bottom, spacing: 12) {
                 HStack(alignment: .bottom, spacing: 10) {
                     Menu {
-                        PhotosPicker(selection: $importedPhotoItems, maxSelectionCount: 6, matching: .images) {
+                        Button {
+                            showingPhotoLibraryPicker = true
+                        } label: {
                             Label("Photo library", systemImage: "photo.on.rectangle")
                         }
                         Button {
