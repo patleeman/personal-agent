@@ -5,37 +5,33 @@ import {
   useState,
 } from 'react';
 import { vaultApi } from '../../client/api';
-import type { VaultEntry } from '../../shared/types';
+import type { VaultEntry, VaultSearchResult } from '../../shared/types';
+import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0"
-    >
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
+      className="shrink-0">
       <path d={d} />
     </svg>
   );
 }
 
 const ICON = {
-  folder: 'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
+  folder:     'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
   folderOpen: 'M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66h3.96A2.25 2.25 0 0 1 20.25 8.25v1.526',
-  file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  chevRight: 'm9 6 6 6-6 6',
-  plus: 'M12 5v14M5 12h14',
+  file:       'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
+  chevRight:  'm9 6 6 6-6 6',
+  plus:       'M12 5v14M5 12h14',
   folderPlus: 'M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z',
-  trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
-  pencil: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
+  trash:      'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
+  pencil:     'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
+  move:       'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
+  search:     'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
+  x:          'M6 18 18 6M6 6l12 12',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -43,13 +39,11 @@ const ICON = {
 export interface FileTreeProps {
   activeFileId: string | null;
   onFileSelect: (id: string) => void;
-  onFileCreated?: (id: string) => void;
-  refreshKey?: number;
 }
 
 interface TreeNode {
   entry: VaultEntry;
-  children: TreeNode[] | null; // null = not loaded yet
+  children: TreeNode[] | null;
   expanded: boolean;
 }
 
@@ -58,323 +52,336 @@ type EditState =
   | { type: 'new-file'; parentDir: string; value: string }
   | { type: 'new-folder'; parentDir: string; value: string };
 
+interface ContextMenuState { x: number; y: number; entry: VaultEntry }
+
 // ── Context menu ──────────────────────────────────────────────────────────────
 
-interface ContextMenuState {
-  x: number;
-  y: number;
-  entry: VaultEntry;
-}
-
-function ContextMenu({
-  state,
-  onRename,
-  onDelete,
-  onClose,
-}: {
+function ContextMenu({ state, onRename, onMove, onDelete, onClose }: {
   state: ContextMenuState;
   onRename: () => void;
+  onMove: () => void;
   onDelete: () => void;
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        onClose();
-      }
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener('mousedown', fn);
+    return () => document.removeEventListener('mousedown', fn);
   }, [onClose]);
 
   return (
-    <div
-      ref={ref}
-      className="fixed z-50 min-w-[140px] rounded-lg border border-border-default bg-elevated shadow-lg py-1 text-[12px]"
-      style={{ left: state.x, top: state.y }}
-    >
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-secondary hover:bg-accent/10 hover:text-primary"
-        onClick={() => { onRename(); onClose(); }}
-      >
-        <Ico d={ICON.pencil} size={12} />
-        Rename
+    <div ref={ref} className="fixed z-50 min-w-[148px] rounded-lg border border-border-default bg-elevated shadow-lg py-1 text-[12px]"
+      style={{ left: state.x, top: state.y }}>
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-secondary hover:bg-accent/10 hover:text-primary"
+        onClick={() => { onRename(); onClose(); }}>
+        <Ico d={ICON.pencil} size={12} /> Rename
       </button>
-      <button
-        type="button"
-        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-danger hover:bg-danger/10"
-        onClick={() => { onDelete(); onClose(); }}
-      >
-        <Ico d={ICON.trash} size={12} />
-        Delete
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-secondary hover:bg-accent/10 hover:text-primary"
+        onClick={() => { onMove(); onClose(); }}>
+        <Ico d={ICON.move} size={12} /> Move to…
       </button>
+      <div className="my-1 border-t border-border-subtle" />
+      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-danger hover:bg-danger/10"
+        onClick={() => { onDelete(); onClose(); }}>
+        <Ico d={ICON.trash} size={12} /> Delete
+      </button>
+    </div>
+  );
+}
+
+// ── Move modal ────────────────────────────────────────────────────────────────
+
+function MoveModal({ entry, onConfirm, onClose }: {
+  entry: VaultEntry;
+  onConfirm: (targetDir: string) => void;
+  onClose: () => void;
+}) {
+  const [folders, setFolders] = useState<Array<{ id: string; label: string }>>([]);
+  const [selected, setSelected] = useState('');
+
+  useEffect(() => {
+    // Collect all folders via BFS
+    const collect = async (dir: string, depth: number): Promise<Array<{ id: string; label: string }>> => {
+      if (depth > 6) return [];
+      const result = await vaultApi.tree(dir || undefined);
+      const thisFolders = result.entries.filter((e) => e.kind === 'folder');
+      const items: Array<{ id: string; label: string }> = [
+        { id: '', label: '/ (vault root)' },
+      ];
+      for (const f of thisFolders) {
+        items.push({ id: f.id, label: f.id });
+        const children = await collect(f.id, depth + 1);
+        items.push(...children.filter((c) => c.id !== ''));
+      }
+      return items;
+    };
+    collect('', 0).then((items) => {
+      // Deduplicate
+      const seen = new Set<string>();
+      setFolders(items.filter((i) => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
+    }).catch(() => {});
+  }, []);
+
+  const currentDir = entry.kind === 'file'
+    ? entry.id.split('/').slice(0, -1).join('/') + (entry.id.includes('/') ? '/' : '')
+    : entry.id;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-80 p-5" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-[13px] font-semibold text-primary mb-1">Move "{entry.name}"</h3>
+        <p className="text-[11px] text-dim mb-3">Select destination folder</p>
+        <select
+          className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 mb-4 outline-none focus:border-accent"
+          value={selected}
+          onChange={(e) => setSelected(e.target.value)}
+        >
+          {folders.map((f) => (
+            <option key={f.id} value={f.id} disabled={f.id === currentDir}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="ui-action-button text-[12px]" onClick={onClose}>Cancel</button>
+          <button type="button" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90"
+            onClick={() => { onConfirm(selected); onClose(); }}>
+            Move
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ── Inline name input ─────────────────────────────────────────────────────────
 
-function NameInput({
-  value,
-  onChange,
-  onConfirm,
-  onCancel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  onConfirm: () => void;
-  onCancel: () => void;
+function NameInput({ value, onChange, onConfirm, onCancel }: {
+  value: string; onChange: (v: string) => void; onConfirm: () => void; onCancel: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
-
   return (
-    <input
-      ref={ref}
-      type="text"
-      value={value}
+    <input ref={ref} type="text" value={value}
       onChange={(e) => onChange(e.target.value)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.preventDefault(); onConfirm(); }
-        if (e.key === 'Escape') { e.preventDefault(); onCancel(); }
-      }}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onConfirm(); } if (e.key === 'Escape') { e.preventDefault(); onCancel(); } }}
       onBlur={onCancel}
       className="flex-1 min-w-0 bg-accent/10 rounded px-1 py-0 text-[12px] text-primary outline-none border border-accent/40"
-      onClick={(e) => e.stopPropagation()}
-    />
+      onClick={(e) => e.stopPropagation()} />
   );
 }
 
-// ── Tree node row ─────────────────────────────────────────────────────────────
-
-function TreeRow({
-  node,
-  depth,
-  isActive,
-  editState,
-  onSelect,
-  onToggle,
-  onContextMenu,
-  onEditChange,
-  onEditConfirm,
-  onEditCancel,
-}: {
-  node: TreeNode;
-  depth: number;
-  isActive: boolean;
-  editState: EditState | null;
-  onSelect: () => void;
-  onToggle: () => void;
-  onContextMenu: (e: React.MouseEvent) => void;
-  onEditChange: (v: string) => void;
-  onEditConfirm: () => void;
-  onEditCancel: () => void;
-}) {
-  const isFolder = node.entry.kind === 'folder';
-  const isRenaming = editState?.type === 'rename' && editState.id === node.entry.id;
-
-  return (
-    <button
-      type="button"
-      aria-label={node.entry.name}
-      className={[
-        'group flex w-full items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight text-left',
-        isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
-      ].join(' ')}
-      style={{ paddingLeft: `${8 + depth * 14}px` }}
-      onClick={isFolder ? onToggle : onSelect}
-      onContextMenu={onContextMenu}
-    >
-      {/* chevron for folders */}
-      {isFolder ? (
-        <span
-          className="shrink-0 w-3 flex items-center justify-center text-dim"
-          style={{
-            transform: node.expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-            transition: 'transform 120ms',
-          }}
-        >
-          <Ico d={ICON.chevRight} size={10} />
-        </span>
-      ) : (
-        <span className="shrink-0 w-3" />
-      )}
-
-      {/* icon */}
-      <span className="shrink-0 text-dim">
-        {isFolder
-          ? <Ico d={node.expanded ? ICON.folderOpen : ICON.folder} size={12} />
-          : <Ico d={ICON.file} size={12} />
-        }
-      </span>
-
-      {/* name or rename input */}
-      {isRenaming ? (
-        <NameInput
-          value={(editState as { value: string }).value}
-          onChange={onEditChange}
-          onConfirm={onEditConfirm}
-          onCancel={onEditCancel}
-        />
-      ) : (
-        <span className="flex-1 truncate">{node.entry.name}</span>
-      )}
-    </button>
-  );
-}
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Tree helpers ──────────────────────────────────────────────────────────────
 
 function idToDir(id: string): string {
-  // folder ids end with /, files don't
   if (id.endsWith('/')) return id;
   const parts = id.split('/');
   parts.pop();
-  return parts.length > 0 ? parts.join('/') + '/' : '';
-}
-
-async function loadChildren(node: TreeNode): Promise<VaultEntry[]> {
-  const dir = node.entry.kind === 'folder' ? node.entry.id : idToDir(node.entry.id);
-  const result = await vaultApi.tree(dir);
-  return result.entries;
+  return parts.length > 0 ? `${parts.join('/')}/` : '';
 }
 
 function buildNode(entry: VaultEntry): TreeNode {
   return { entry, children: null, expanded: false };
 }
 
-function applyChildrenToTree(
-  nodes: TreeNode[],
-  targetId: string,
-  children: VaultEntry[],
-): TreeNode[] {
+function applyChildren(nodes: TreeNode[], targetId: string, children: VaultEntry[]): TreeNode[] {
   return nodes.map((n) => {
-    if (n.entry.id === targetId) {
-      return { ...n, children: children.map(buildNode), expanded: true };
-    }
-    if (n.children) {
-      return { ...n, children: applyChildrenToTree(n.children, targetId, children) };
-    }
+    if (n.entry.id === targetId) return { ...n, children: children.map(buildNode), expanded: true };
+    if (n.children) return { ...n, children: applyChildren(n.children, targetId, children) };
     return n;
   });
 }
 
-function toggleExpanded(nodes: TreeNode[], targetId: string): TreeNode[] {
+function toggleNode(nodes: TreeNode[], id: string): TreeNode[] {
   return nodes.map((n) => {
-    if (n.entry.id === targetId) return { ...n, expanded: !n.expanded };
-    if (n.children) return { ...n, children: toggleExpanded(n.children, targetId) };
+    if (n.entry.id === id) return { ...n, expanded: !n.expanded };
+    if (n.children) return { ...n, children: toggleNode(n.children, id) };
     return n;
   });
 }
 
-function renameInTree(nodes: TreeNode[], oldId: string, newEntry: VaultEntry): TreeNode[] {
+function updateEntry(nodes: TreeNode[], oldId: string, newEntry: VaultEntry): TreeNode[] {
   return nodes.map((n) => {
     if (n.entry.id === oldId) return { ...n, entry: newEntry };
-    if (n.children) return { ...n, children: renameInTree(n.children, oldId, newEntry) };
+    if (n.children) return { ...n, children: updateEntry(n.children, oldId, newEntry) };
     return n;
   });
 }
 
-function deleteFromTree(nodes: TreeNode[], targetId: string): TreeNode[] {
-  return nodes
-    .filter((n) => n.entry.id !== targetId)
-    .map((n) => n.children ? { ...n, children: deleteFromTree(n.children, targetId) } : n);
+function removeEntry(nodes: TreeNode[], id: string): TreeNode[] {
+  return nodes.filter((n) => n.entry.id !== id)
+    .map((n) => n.children ? { ...n, children: removeEntry(n.children, id) } : n);
 }
 
-function insertIntoTree(nodes: TreeNode[], parentDir: string, newEntry: VaultEntry): TreeNode[] {
-  if (!parentDir) {
-    return [...nodes, buildNode(newEntry)];
-  }
+function insertEntry(nodes: TreeNode[], parentDir: string, entry: VaultEntry): TreeNode[] {
+  if (!parentDir) return [...nodes, buildNode(entry)];
   return nodes.map((n) => {
-    if (n.entry.id === parentDir && n.children !== null) {
-      return { ...n, children: [...n.children, buildNode(newEntry)] };
-    }
-    if (n.children) {
-      return { ...n, children: insertIntoTree(n.children, parentDir, newEntry) };
-    }
+    if (n.entry.id === parentDir && n.children !== null) return { ...n, children: [...n.children, buildNode(entry)] };
+    if (n.children) return { ...n, children: insertEntry(n.children, parentDir, entry) };
     return n;
   });
+}
+
+// ── Search results ────────────────────────────────────────────────────────────
+
+function SearchResults({ results, activeId, onSelect }: {
+  results: VaultSearchResult[];
+  activeId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  if (results.length === 0) {
+    return <p className="px-3 py-4 text-[12px] text-dim text-center">No results</p>;
+  }
+  return (
+    <div className="space-y-px py-1">
+      {results.map((r) => (
+        <button key={r.id} type="button" aria-label={r.name}
+          className={['flex w-full flex-col items-start px-3 py-2 rounded-md text-left gap-0.5',
+            activeId === r.id ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+          ].join(' ')}
+          onClick={() => onSelect(r.id)}>
+          <span className="text-[12px] font-medium truncate w-full">{r.name.replace(/\.md$/, '')}</span>
+          {r.excerpt ? <span className="text-[11px] text-dim line-clamp-2 leading-relaxed">{r.excerpt}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refreshKey }: FileTreeProps) {
+export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [roots, setRoots] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
   const [editState, setEditState] = useState<EditState | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<VaultSearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Load root entries
+  // ── Load root ───────────────────────────────────────────────────────────────
+
   const loadRoot = useCallback(async () => {
     setLoading(true);
     try {
       const result = await vaultApi.tree();
       setRoots(result.entries.map(buildNode));
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { void loadRoot(); }, [loadRoot, refreshKey]);
+  useEffect(() => { void loadRoot(); }, [loadRoot]);
 
-  // Expand a folder node
+  // Listen for kb events from editor
+  useEffect(() => {
+    const offs = [
+      onKBEvent('kb:entries-changed', () => void loadRoot()),
+      onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
+        // Try to update in-tree without full reload
+        vaultApi.tree(idToDir(newId)).then((r) => {
+          const found = r.entries.find((e) => e.id === newId);
+          if (found) setRoots((prev) => updateEntry(prev, oldId, found));
+          else void loadRoot();
+        }).catch(() => void loadRoot());
+      }),
+      onKBEvent<{ id: string }>('kb:file-created', () => void loadRoot()),
+      onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
+        setRoots((prev) => removeEntry(prev, id));
+      }),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [loadRoot]);
+
+  // ── Search ──────────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); return; }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const res = await vaultApi.search(searchQuery.trim());
+        setSearchResults(res.results);
+      } catch { setSearchResults([]); }
+      finally { setSearching(false); }
+    }, 220);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [searchQuery]);
+
+  // Cmd+F focuses search
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+        // Only when on a KB page
+        if (window.location.pathname.startsWith('/knowledge')) {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
+  // ── Tree expansion ──────────────────────────────────────────────────────────
+
   const handleToggle = useCallback(async (node: TreeNode) => {
-    if (node.children !== null) {
-      setRoots((prev) => toggleExpanded(prev, node.entry.id));
-      return;
-    }
-    const children = await loadChildren(node);
-    setRoots((prev) => applyChildrenToTree(prev, node.entry.id, children));
+    if (node.children !== null) { setRoots((prev) => toggleNode(prev, node.entry.id)); return; }
+    const dir = node.entry.kind === 'folder' ? node.entry.id : idToDir(node.entry.id);
+    const result = await vaultApi.tree(dir);
+    setRoots((prev) => applyChildren(prev, node.entry.id, result.entries));
   }, []);
 
-  // Context menu
+  // ── Context menu ────────────────────────────────────────────────────────────
+
   const handleContextMenu = useCallback((e: React.MouseEvent, entry: VaultEntry) => {
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     setContextMenu({ x: e.clientX, y: e.clientY, entry });
   }, []);
 
-  // Rename
-  const startRename = useCallback((entry: VaultEntry) => {
-    setEditState({ type: 'rename', id: entry.id, value: entry.name });
-  }, []);
+  // ── Rename ──────────────────────────────────────────────────────────────────
 
   const confirmRename = useCallback(async () => {
     if (!editState || editState.type !== 'rename') return;
     const newName = editState.value.trim();
-    if (!newName || newName === editState.id.split('/').filter(Boolean).pop()) {
-      setEditState(null);
-      return;
-    }
+    const oldBasename = editState.id.split('/').filter(Boolean).pop() ?? '';
+    if (!newName || newName === oldBasename) { setEditState(null); return; }
     try {
       const updated = await vaultApi.rename(editState.id, newName);
-      setRoots((prev) => renameInTree(prev, editState.id, updated));
+      setRoots((prev) => updateEntry(prev, editState.id, updated));
+      emitKBEvent('kb:file-renamed', { oldId: editState.id, newId: updated.id });
       if (activeFileId === editState.id) onFileSelect(updated.id);
-    } catch (err) {
-      console.error('rename failed', err);
-    }
+    } catch (err) { console.error('rename failed', err); }
     setEditState(null);
   }, [editState, activeFileId, onFileSelect]);
 
-  // Delete
+  // ── Delete ──────────────────────────────────────────────────────────────────
+
   const handleDelete = useCallback(async (entry: VaultEntry) => {
     if (!window.confirm(`Delete "${entry.name}"?`)) return;
     try {
       await vaultApi.deleteFile(entry.id);
-      setRoots((prev) => deleteFromTree(prev, entry.id));
+      setRoots((prev) => removeEntry(prev, entry.id));
+      emitKBEvent('kb:file-deleted', { id: entry.id });
       if (activeFileId === entry.id) onFileSelect('');
-    } catch (err) {
-      console.error('delete failed', err);
-    }
+    } catch (err) { console.error('delete failed', err); }
   }, [activeFileId, onFileSelect]);
 
-  // New file
-  const startNewFile = useCallback((parentDir: string) => {
-    setEditState({ type: 'new-file', parentDir, value: 'untitled.md' });
-  }, []);
+  // ── Move ────────────────────────────────────────────────────────────────────
+
+  const handleMove = useCallback(async (entry: VaultEntry, targetDir: string) => {
+    try {
+      const updated = await vaultApi.move(entry.id, targetDir);
+      setRoots((prev) => removeEntry(prev, entry.id));
+      emitKBEvent('kb:entries-changed');
+      if (activeFileId === entry.id) onFileSelect(updated.id);
+    } catch (err) { console.error('move failed', err); }
+  }, [activeFileId, onFileSelect]);
+
+  // ── New file/folder ─────────────────────────────────────────────────────────
 
   const confirmNewFile = useCallback(async () => {
     if (!editState || editState.type !== 'new-file') return;
@@ -387,24 +394,13 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
       const result = await vaultApi.tree(editState.parentDir || undefined);
       const newEntry = result.entries.find((e) => e.id === id);
       if (newEntry) {
-        if (!editState.parentDir) {
-          setRoots((prev) => [...prev, buildNode(newEntry)]);
-        } else {
-          setRoots((prev) => insertIntoTree(prev, editState.parentDir, newEntry));
-        }
-        onFileCreated?.(id);
+        setRoots((prev) => insertEntry(prev, editState.parentDir, newEntry));
+        emitKBEvent('kb:file-created', { id });
         onFileSelect(id);
       }
-    } catch (err) {
-      console.error('new file failed', err);
-    }
+    } catch (err) { console.error('new file failed', err); }
     setEditState(null);
-  }, [editState, onFileCreated, onFileSelect]);
-
-  // New folder
-  const startNewFolder = useCallback((parentDir: string) => {
-    setEditState({ type: 'new-folder', parentDir, value: 'New Folder' });
-  }, []);
+  }, [editState, onFileSelect]);
 
   const confirmNewFolder = useCallback(async () => {
     if (!editState || editState.type !== 'new-folder') return;
@@ -413,14 +409,9 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
     const id = editState.parentDir ? `${editState.parentDir}${name}/` : `${name}/`;
     try {
       const newEntry = await vaultApi.createFolder(id);
-      if (!editState.parentDir) {
-        setRoots((prev) => [buildNode(newEntry), ...prev]);
-      } else {
-        setRoots((prev) => insertIntoTree(prev, editState.parentDir, newEntry));
-      }
-    } catch (err) {
-      console.error('new folder failed', err);
-    }
+      setRoots((prev) => insertEntry(prev, editState.parentDir, newEntry));
+      emitKBEvent('kb:entries-changed');
+    } catch (err) { console.error('new folder failed', err); }
     setEditState(null);
   }, [editState]);
 
@@ -431,53 +422,64 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
     if (editState.type === 'new-folder') void confirmNewFolder();
   }, [editState, confirmRename, confirmNewFile, confirmNewFolder]);
 
-  // ── Render tree recursively ───────────────────────────────────────────────
-
-  function renderNewItemRow(depth: number, type: 'file' | 'folder') {
-    if (!editState) return null;
-    if (type === 'file' && editState.type !== 'new-file') return null;
-    if (type === 'folder' && editState.type !== 'new-folder') return null;
-
-    return (
-      <div
-        className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
-        style={{ paddingLeft: `${8 + depth * 14}px` }}
-      >
-        <span className="shrink-0 w-3" />
-        <span className="shrink-0 text-dim">
-          {type === 'folder' ? <Ico d={ICON.folder} size={12} /> : <Ico d={ICON.file} size={12} />}
-        </span>
-        <NameInput
-          value={editState.value}
-          onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-          onConfirm={handleEditConfirm}
-          onCancel={() => setEditState(null)}
-        />
-      </div>
-    );
-  }
+  // ── Tree renderer ───────────────────────────────────────────────────────────
 
   function renderNodes(nodes: TreeNode[], depth: number): React.ReactNode {
     return nodes.map((node) => {
+      const isFolder = node.entry.kind === 'folder';
       const isActive = activeFileId === node.entry.id;
-      const isEditingThis = editState?.type === 'rename' && editState.id === node.entry.id;
+      const isRenaming = editState?.type === 'rename' && editState.id === node.entry.id;
 
       return (
         <div key={node.entry.id}>
-          <TreeRow
-            node={node}
-            depth={depth}
-            isActive={isActive}
-            editState={isEditingThis ? editState : null}
-            onSelect={() => onFileSelect(node.entry.id)}
-            onToggle={() => { void handleToggle(node); }}
+          <button
+            type="button"
+            aria-label={node.entry.name}
+            className={['group flex w-full items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight text-left',
+              isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+            ].join(' ')}
+            style={{ paddingLeft: `${8 + depth * 14}px` }}
+            onClick={isFolder ? () => { void handleToggle(node); } : () => onFileSelect(node.entry.id)}
             onContextMenu={(e) => handleContextMenu(e, node.entry)}
-            onEditChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-            onEditConfirm={handleEditConfirm}
-            onEditCancel={() => setEditState(null)}
-          />
-          {node.entry.kind === 'folder' && node.expanded && node.children !== null && (
+          >
+            <span className="shrink-0 w-3 flex items-center justify-center text-dim"
+              style={{ transform: isFolder ? (node.expanded ? 'rotate(90deg)' : 'rotate(0deg)') : 'none', transition: 'transform 120ms' }}>
+              {isFolder ? <Ico d={ICON.chevRight} size={10} /> : <span className="w-3" />}
+            </span>
+            <span className="shrink-0 text-dim">
+              {isFolder ? <Ico d={node.expanded ? ICON.folderOpen : ICON.folder} size={12} /> : <Ico d={ICON.file} size={12} />}
+            </span>
+            {isRenaming ? (
+              <NameInput value={(editState as { value: string }).value}
+                onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
+                onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
+            ) : (
+              <span className="flex-1 truncate">{node.entry.name}</span>
+            )}
+          </button>
+          {isFolder && node.expanded && node.children !== null && (
             <div>
+              {/* Inline new-item rows inside folder */}
+              {editState?.type === 'new-folder' && editState.parentDir === node.entry.id && (
+                <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
+                  style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
+                  <span className="shrink-0 w-3" />
+                  <span className="shrink-0 text-dim"><Ico d={ICON.folder} size={12} /></span>
+                  <NameInput value={editState.value}
+                    onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
+                    onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
+                </div>
+              )}
+              {editState?.type === 'new-file' && editState.parentDir === node.entry.id && (
+                <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
+                  style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
+                  <span className="shrink-0 w-3" />
+                  <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
+                  <NameInput value={editState.value}
+                    onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
+                    onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
+                </div>
+              )}
               {renderNodes(node.children, depth + 1)}
             </div>
           )}
@@ -486,40 +488,75 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
     });
   }
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  const inSearch = searchQuery.trim().length > 0;
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center gap-1 px-3 py-1.5 shrink-0">
-        <p className="ui-section-label flex-1">Knowledge Base</p>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="New file"
-          onClick={() => startNewFile('')}
-        >
-          <Ico d={ICON.plus} size={12} />
-        </button>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="New folder"
-          onClick={() => startNewFolder('')}
-        >
-          <Ico d={ICON.folderPlus} size={12} />
-        </button>
+      {/* Search bar */}
+      <div className="px-2 pt-1.5 pb-1 shrink-0">
+        <div className="flex items-center gap-1.5 rounded-md bg-surface border border-border-subtle px-2 py-1.5 focus-within:border-accent/50">
+          <span className="text-dim shrink-0"><Ico d={ICON.search} size={11} /></span>
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder="Search…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-0 bg-transparent text-[12px] text-primary outline-none placeholder:text-dim"
+          />
+          {searchQuery && (
+            <button type="button" className="text-dim hover:text-primary shrink-0" onClick={() => setSearchQuery('')}>
+              <Ico d={ICON.x} size={10} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* Tree */}
+      {/* Header (hidden while searching) */}
+      {!inSearch && (
+        <div className="flex items-center gap-1 px-3 py-0.5 shrink-0">
+          <p className="ui-section-label flex-1">Knowledge Base</p>
+          <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
+            onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
+            <Ico d={ICON.plus} size={12} />
+          </button>
+          <button type="button" className="ui-icon-button ui-icon-button-compact" title="New folder"
+            onClick={() => setEditState({ type: 'new-folder', parentDir: '', value: 'New Folder' })}>
+            <Ico d={ICON.folderPlus} size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Content */}
       <div className="flex-1 overflow-y-auto min-h-0 px-1 pb-3">
-        {loading ? (
+        {inSearch ? (
+          searching
+            ? <p className="px-3 py-4 text-[12px] text-dim text-center animate-pulse">Searching…</p>
+            : <SearchResults results={searchResults} activeId={activeFileId} onSelect={(id) => { onFileSelect(id); setSearchQuery(''); }} />
+        ) : loading ? (
           <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
         ) : (
           <div className="space-y-px">
-            {/* Root-level new item rows */}
-            {editState?.type === 'new-folder' && !editState.parentDir && renderNewItemRow(0, 'folder')}
-            {editState?.type === 'new-file' && !editState.parentDir && renderNewItemRow(0, 'file')}
+            {editState?.type === 'new-folder' && !editState.parentDir && (
+              <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]">
+                <span className="shrink-0 w-3" />
+                <span className="shrink-0 text-dim"><Ico d={ICON.folder} size={12} /></span>
+                <NameInput value={editState.value}
+                  onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
+                  onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
+              </div>
+            )}
+            {editState?.type === 'new-file' && !editState.parentDir && (
+              <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]">
+                <span className="shrink-0 w-3" />
+                <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
+                <NameInput value={editState.value}
+                  onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
+                  onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
+              </div>
+            )}
             {renderNodes(roots, 0)}
           </div>
         )}
@@ -527,12 +564,18 @@ export function VaultFileTree({ activeFileId, onFileSelect, onFileCreated, refre
 
       {/* Context menu */}
       {contextMenu && (
-        <ContextMenu
-          state={contextMenu}
-          onRename={() => startRename(contextMenu.entry)}
+        <ContextMenu state={contextMenu}
+          onRename={() => setEditState({ type: 'rename', id: contextMenu.entry.id, value: contextMenu.entry.name })}
+          onMove={() => setMoveEntry(contextMenu.entry)}
           onDelete={() => { void handleDelete(contextMenu.entry); }}
-          onClose={() => setContextMenu(null)}
-        />
+          onClose={() => setContextMenu(null)} />
+      )}
+
+      {/* Move modal */}
+      {moveEntry && (
+        <MoveModal entry={moveEntry}
+          onConfirm={(targetDir) => { void handleMove(moveEntry, targetDir); }}
+          onClose={() => setMoveEntry(null)} />
       )}
     </div>
   );

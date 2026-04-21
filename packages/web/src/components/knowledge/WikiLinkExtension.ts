@@ -3,17 +3,11 @@ import { Suggestion } from '@tiptap/suggestion';
 import type { SuggestionProps, SuggestionKeyDownProps } from '@tiptap/suggestion';
 import type { VaultEntry } from '../../shared/types';
 
-// ── WikiLink node ─────────────────────────────────────────────────────────────
-//
-// Represents [[Note Name]] or [[Note Name|Display Text]] wikilinks.
-// Serializes back to [[target]] in markdown.
-
 export interface WikiLinkAttributes {
-  target: string;   // the linked file name (no .md)
-  label: string | null; // display text override
+  target: string;
+  label: string | null;
 }
 
-// Vault entries are passed in at creation time so the suggestion can search them.
 export type WikiLinkSuggestionRenderer = () => {
   onStart: (props: SuggestionProps<VaultEntry>) => void;
   onUpdate: (props: SuggestionProps<VaultEntry>) => void;
@@ -51,9 +45,9 @@ export function buildWikiLinkExtension(
       }), node.attrs.label ?? node.attrs.target];
     },
 
-    // ── Markdown integration ────────────────────────────────────────────────
+    // ── Markdown ──────────────────────────────────────────────────────────────
 
-    // @ts-ignore - TipTap v3 markdown extension reads these config fields
+    // @ts-ignore — TipTap v3 markdown extension reads these
     markdownTokenName: 'wikiLink',
 
     // @ts-ignore
@@ -64,22 +58,13 @@ export function buildWikiLinkExtension(
       tokenize(src: string) {
         const match = src.match(/^\[\[([^\[\]\|]+)(?:\|([^\[\]]+))?\]\]/);
         if (!match) return undefined;
-        return {
-          type: 'wikiLink',
-          raw: match[0],
-          target: match[1]!.trim(),
-          label: match[2]?.trim() ?? null,
-          tokens: [],
-        };
+        return { type: 'wikiLink', raw: match[0], target: match[1]!.trim(), label: match[2]?.trim() ?? null, tokens: [] };
       },
     },
 
     // @ts-ignore
     parseMarkdown(token: { target: string; label: string | null }) {
-      return {
-        type: 'wikiLink',
-        attrs: { target: token.target, label: token.label },
-      };
+      return { type: 'wikiLink', attrs: { target: token.target, label: token.label } };
     },
 
     // @ts-ignore
@@ -88,37 +73,46 @@ export function buildWikiLinkExtension(
       return label ? `[[${target}|${label}]]` : `[[${target}]]`;
     },
 
-    // ── Click to navigate ───────────────────────────────────────────────────
+    // ── Node view — handles broken link styling and click navigation ──────────
 
     addNodeView() {
-      return ({ node, HTMLAttributes }) => {
+      return ({ node }) => {
         const span = document.createElement('span');
-        span.className = 'kb-wikilink';
-        span.setAttribute('data-wikilink', node.attrs.target);
-        span.textContent = node.attrs.label ?? node.attrs.target;
+        const target = node.attrs.target as string;
+
+        const updateState = () => {
+          const entries = getEntries();
+          const exists = entries.some((e) =>
+            e.kind === 'file' && (
+              e.name === target ||
+              e.name === `${target}.md` ||
+              e.id === target ||
+              e.id === `${target}.md`
+            ),
+          );
+          span.className = exists ? 'kb-wikilink' : 'kb-wikilink kb-wikilink-broken';
+          span.setAttribute('data-wikilink', target);
+          span.setAttribute('title', exists ? `Open ${target}` : `"${target}" not found`);
+          span.textContent = node.attrs.label ?? target;
+        };
+
+        updateState();
 
         span.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          // Find file by name (without .md) or id
-          const target = node.attrs.target as string;
           const entries = getEntries();
           const found = entries.find((e) =>
-            e.name === target ||
-            e.name === `${target}.md` ||
-            e.id === target ||
-            e.id === `${target}.md`,
+            e.name === target || e.name === `${target}.md` || e.id === target || e.id === `${target}.md`,
           );
-          if (found) {
-            onFileNavigate(found.id);
-          }
+          if (found) onFileNavigate(found.id);
         });
 
-        return { dom: span };
+        return { dom: span, update: () => { updateState(); return true; } };
       };
     },
 
-    // ── Suggestion (typing [[ triggers autocomplete) ─────────────────────────
+    // ── Suggestion ────────────────────────────────────────────────────────────
 
     addProseMirrorPlugins() {
       const rendered = renderSuggestion();
@@ -129,6 +123,7 @@ export function buildWikiLinkExtension(
           char: '[[',
           allowSpaces: true,
           items: ({ query }) => {
+            // Always use latest entries (ref is updated on kb events)
             const q = query.toLowerCase();
             const entries = getEntries().filter((e) => e.kind === 'file');
             if (!q) return entries.slice(0, 12);
@@ -140,12 +135,8 @@ export function buildWikiLinkExtension(
             const target = props.name.replace(/\.md$/, '');
             editor.chain().focus()
               .deleteRange(range)
-              .insertContent({
-                type: 'wikiLink',
-                attrs: { target, label: null },
-              })
+              .insertContent({ type: 'wikiLink', attrs: { target, label: null } })
               .run();
-            // Insert a space after the node so the cursor exits it
             editor.commands.insertContent(' ');
           },
           render: () => rendered,

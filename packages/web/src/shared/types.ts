@@ -1189,17 +1189,23 @@ export interface VaultBacklink {
 }
 
 export interface VaultBacklinksResult {
+  id: string;
+  targetName?: string;
   backlinks: VaultBacklink[];
 }
 
-export interface VaultBacklink {
+export interface VaultSearchResult {
   id: string;
   name: string;
   excerpt: string;
+  matchCount: number;
 }
 
-export interface VaultBacklinksResult {
+export interface VaultSearchResponse {
+  results: VaultSearchResult[];
+}
+
+export interface VaultImageUploadResult {
   id: string;
-  targetName: string;
-  backlinks: VaultBacklink[];
+  url: string;
 }

@@ -7,10 +7,12 @@ import { Link } from '@tiptap/extension-link';
 import { TaskList } from '@tiptap/extension-task-list';
 import { TaskItem } from '@tiptap/extension-task-item';
 import { Placeholder } from '@tiptap/extension-placeholder';
-import { vaultApi } from '../../client/api';
+import { Image } from '@tiptap/extension-image';
+import { api, vaultApi } from '../../client/api';
 import type { VaultBacklink, VaultEntry } from '../../shared/types';
 import { buildWikiLinkExtension } from './WikiLinkExtension';
 import { buildWikiLinkRenderer } from './WikiLinkSuggestion';
+import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -24,28 +26,25 @@ function Ico({ d, size = 13 }: { d: string; size?: number }) {
 }
 
 const ICON = {
-  bold:   'M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z',
-  italic: 'M19 4h-9M14 20H5M15 4 9 20',
-  strike: 'M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16',
-  code:   'm16 18 6-6-6-6M8 6l-6 6 6 6',
-  quote:  'M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z',
-  link:   'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71 M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71',
+  bold:     'M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z',
+  italic:   'M19 4h-9M14 20H5M15 4 9 20',
+  strike:   'M16 4H9a3 3 0 0 0-2.83 4M14 12a4 4 0 0 1 0 8H6M4 12h16',
+  code:     'm16 18 6-6-6-6M8 6l-6 6 6 6',
+  quote:    'M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z',
   backlink: 'M9 15 3 9l6-6M3 9h12a6 6 0 0 1 0 12h-3',
+  tag:      'M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z M6 6h.008v.008H6V6Z',
+  chevDown: 'm6 9 6 6 6-6',
+  image:    'M2.25 15.75l5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z',
 };
 
 function ToolbarButton({ active, onClick, title, children }: {
   active?: boolean; onClick: () => void; title: string; children: React.ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      title={title}
-      onMouseDown={(e) => { e.preventDefault(); onClick(); }}
-      className={[
-        'flex items-center justify-center w-7 h-7 rounded transition-colors',
+    <button type="button" title={title} onMouseDown={(e) => { e.preventDefault(); onClick(); }}
+      className={['flex items-center justify-center w-7 h-7 rounded transition-colors',
         active ? 'bg-accent/20 text-accent' : 'text-secondary hover:bg-accent/10 hover:text-primary',
-      ].join(' ')}
-    >
+      ].join(' ')}>
       {children}
     </button>
   );
@@ -55,24 +54,150 @@ function ToolbarButton({ active, onClick, title, children }: {
 
 const AUTOSAVE_MS = 800;
 
-function useAutosave(fileId: string | null, getMarkdown: () => string, dirty: boolean, onSaved: () => void) {
+function useAutosave(
+  fileId: string | null,
+  getContent: () => string,
+  dirty: boolean,
+  onSaved: () => void,
+) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saving = useRef(false);
-
   useEffect(() => {
     if (!fileId || !dirty) return;
     if (timer.current) clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
       if (saving.current) return;
       saving.current = true;
-      try {
-        await vaultApi.writeFile(fileId, getMarkdown());
-        onSaved();
-      } finally { saving.current = false; }
+      try { await vaultApi.writeFile(fileId, getContent()); onSaved(); }
+      finally { saving.current = false; }
     }, AUTOSAVE_MS);
     return () => { if (timer.current) clearTimeout(timer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId, dirty, onSaved]);
+}
+
+// ── Frontmatter ───────────────────────────────────────────────────────────────
+
+interface Frontmatter { tags: string[]; aliases: string[]; [key: string]: unknown }
+
+function parseFrontmatter(raw: string): { frontmatter: Frontmatter; body: string } {
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { frontmatter: { tags: [], aliases: [] }, body: raw };
+  const yaml = match[1] ?? '';
+  const body = (match[2] ?? '').replace(/^\n+/, '');
+  const fm: Frontmatter = { tags: [], aliases: [] };
+  for (const line of yaml.split('\n')) {
+    const kv = line.match(/^(\w+):\s*(.*)$/);
+    if (!kv) continue;
+    const key = kv[1]!;
+    const val = kv[2]!.trim();
+    if (val.startsWith('[') && val.endsWith(']')) {
+      fm[key] = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
+    } else {
+      fm[key] = val.replace(/^['"]|['"]$/g, '');
+    }
+  }
+  if (!Array.isArray(fm.tags)) fm.tags = [];
+  if (!Array.isArray(fm.aliases)) fm.aliases = [];
+  return { frontmatter: fm, body };
+}
+
+function serializeFrontmatter(fm: Frontmatter): string {
+  const lines: string[] = ['---'];
+  for (const [k, v] of Object.entries(fm)) {
+    if (Array.isArray(v)) {
+      lines.push(`${k}: [${v.map((s) => `"${s}"`).join(', ')}]`);
+    } else if (v !== '' && v !== null && v !== undefined) {
+      lines.push(`${k}: ${v}`);
+    }
+  }
+  lines.push('---');
+  return lines.join('\n') + '\n\n';
+}
+
+function FrontmatterPanel({ fm, onChange }: { fm: Frontmatter; onChange: (fm: Frontmatter) => void }) {
+  const [open, setOpen] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const hasTags = fm.tags.length > 0;
+
+  return (
+    <div className="kb-fm-panel">
+      <button type="button" className="kb-fm-toggle" onClick={() => setOpen((o) => !o)}>
+        <Ico d={ICON.tag} size={11} />
+        <span>{hasTags ? fm.tags.join(', ') : 'Add tags…'}</span>
+        <Ico d={ICON.chevDown} size={11} />
+      </button>
+      {open && (
+        <div className="kb-fm-body">
+          <div className="kb-fm-row">
+            <span className="kb-fm-label">Tags</span>
+            <div className="flex flex-wrap gap-1 items-center flex-1">
+              {fm.tags.map((t) => (
+                <span key={t} className="kb-fm-tag">
+                  {t}
+                  <button type="button" className="ml-1 opacity-60 hover:opacity-100"
+                    onClick={() => onChange({ ...fm, tags: fm.tags.filter((x) => x !== t) })}>×</button>
+                </span>
+              ))}
+              <input
+                type="text"
+                placeholder="Add tag…"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
+                    e.preventDefault();
+                    const newTag = tagInput.trim().replace(/^#/, '');
+                    if (!fm.tags.includes(newTag)) onChange({ ...fm, tags: [...fm.tags, newTag] });
+                    setTagInput('');
+                  }
+                }}
+                className="bg-transparent outline-none text-[11px] text-primary placeholder:text-dim min-w-[80px] flex-1"
+              />
+            </div>
+          </div>
+          {fm.aliases.length > 0 && (
+            <div className="kb-fm-row">
+              <span className="kb-fm-label">Aliases</span>
+              <span className="text-[11px] text-secondary">{fm.aliases.join(', ')}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Editable title ────────────────────────────────────────────────────────────
+
+function EditableTitle({ fileName, fileId, onRenamed }: {
+  fileName: string; fileId: string; onRenamed: (newId: string) => void;
+}) {
+  const [value, setValue] = useState(fileName);
+  const [renaming, setRenaming] = useState(false);
+  useEffect(() => { setValue(fileName); }, [fileName]);
+
+  const commit = useCallback(async () => {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === fileName) { setValue(fileName); setRenaming(false); return; }
+    const newName = trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
+    try {
+      const updated = await vaultApi.rename(fileId, newName);
+      emitKBEvent('kb:file-renamed', { oldId: fileId, newId: updated.id });
+      onRenamed(updated.id);
+    } catch { setValue(fileName); }
+    setRenaming(false);
+  }, [value, fileName, fileId, onRenamed]);
+
+  if (renaming) {
+    return (
+      <input className="kb-title-input" value={value}
+        onChange={(e) => setValue(e.target.value)} autoFocus
+        onBlur={() => { void commit(); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void commit(); } if (e.key === 'Escape') { setValue(fileName); setRenaming(false); } }} />
+    );
+  }
+  return <h1 className="kb-title" onClick={() => setRenaming(true)} title="Click to rename">{fileName}</h1>;
 }
 
 // ── Backlinks panel ───────────────────────────────────────────────────────────
@@ -83,94 +208,26 @@ function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (i
 
   useEffect(() => {
     setLoading(true);
-    vaultApi.backlinks(fileId)
-      .then((r) => setBacklinks(r.backlinks))
-      .catch(() => setBacklinks([]))
+    vaultApi.backlinks(fileId).then((r) => setBacklinks(r.backlinks)).catch(() => setBacklinks([]))
       .finally(() => setLoading(false));
   }, [fileId]);
 
-  if (loading) return null;
-  if (backlinks.length === 0) return null;
+  if (loading || backlinks.length === 0) return null;
 
   return (
     <div className="kb-backlinks">
-      <div className="kb-backlinks-header">
-        <Ico d={ICON.backlink} size={12} />
+      <div className="kb-backlinks-header"><Ico d={ICON.backlink} size={12} />
         <span>{backlinks.length} backlink{backlinks.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="kb-backlinks-list">
         {backlinks.map((bl) => (
-          <button
-            key={bl.id}
-            type="button"
-            className="kb-backlink-item"
-            onClick={() => onNavigate(bl.id)}
-          >
+          <button key={bl.id} type="button" className="kb-backlink-item" onClick={() => onNavigate(bl.id)}>
             <span className="kb-backlink-name">{bl.name.replace(/\.md$/, '')}</span>
             <span className="kb-backlink-excerpt">{bl.excerpt}</span>
           </button>
         ))}
       </div>
     </div>
-  );
-}
-
-// ── Editable title ────────────────────────────────────────────────────────────
-
-function EditableTitle({ fileName, fileId, onRenamed }: {
-  fileName: string;
-  fileId: string;
-  onRenamed: (newId: string) => void;
-}) {
-  const [value, setValue] = useState(fileName);
-  const [renaming, setRenaming] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Sync when file changes
-  useEffect(() => { setValue(fileName); }, [fileName]);
-
-  const commit = useCallback(async () => {
-    const trimmed = value.trim();
-    if (!trimmed || trimmed === fileName) {
-      setValue(fileName);
-      setRenaming(false);
-      return;
-    }
-    const newName = trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
-    try {
-      const updated = await vaultApi.rename(fileId, newName);
-      onRenamed(updated.id);
-    } catch {
-      setValue(fileName);
-    }
-    setRenaming(false);
-  }, [value, fileName, fileId, onRenamed]);
-
-  if (renaming) {
-    return (
-      <input
-        ref={inputRef}
-        className="kb-title-input"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => { void commit(); }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') { e.preventDefault(); void commit(); }
-          if (e.key === 'Escape') { setValue(fileName); setRenaming(false); }
-        }}
-        autoFocus
-      />
-    );
-  }
-
-  return (
-    <h1
-      className="kb-title"
-      onClick={() => setRenaming(true)}
-      title="Click to rename"
-    >
-      {fileName}
-    </h1>
   );
 }
 
@@ -184,34 +241,56 @@ export interface VaultEditorProps {
 }
 
 export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }: VaultEditorProps) {
+  const [frontmatter, setFrontmatter] = useState<Frontmatter>({ tags: [], aliases: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const currentFileId = useRef<string | null>(null);
+  const fmRef = useRef<Frontmatter>({ tags: [], aliases: [] });
 
-  // Vault entries for wikilink autocomplete
+  // Vault entries for wikilink autocomplete — refresh on kb events
   const [allEntries, setAllEntries] = useState<VaultEntry[]>([]);
-  useEffect(() => {
-    vaultApi.tree().then((r) => setAllEntries(r.entries)).catch(() => {});
+  const entriesRef = useRef<VaultEntry[]>([]);
+  const loadEntries = useCallback(async () => {
+    try {
+      const { files } = await api.vaultFiles();
+      const markdownFiles = files
+        .filter((entry) => entry.kind === 'file' && entry.name.endsWith('.md'))
+        .map((entry) => ({ ...entry }));
+      setAllEntries(markdownFiles);
+      entriesRef.current = markdownFiles;
+    } catch {
+      // silent
+    }
   }, []);
-  const entriesRef = useRef(allEntries);
+
+  useEffect(() => { void loadEntries(); }, [loadEntries]);
   useEffect(() => { entriesRef.current = allEntries; }, [allEntries]);
 
-  // Stable renderer — created once
+  // Refresh entries on any KB mutation
+  useEffect(() => {
+    const offs = [
+      onKBEvent('kb:entries-changed', () => void loadEntries()),
+      onKBEvent('kb:file-created', () => void loadEntries()),
+      onKBEvent('kb:file-renamed', () => void loadEntries()),
+      onKBEvent('kb:file-deleted', () => void loadEntries()),
+    ];
+    return () => offs.forEach((off) => off());
+  }, [loadEntries]);
+
   const suggestionRenderer = useRef(buildWikiLinkRenderer());
+  const fileIdRef = useRef<string | null>(null);
 
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
-        codeBlock: { HTMLAttributes: { class: 'kb-code-block' } },
-      }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: { HTMLAttributes: { class: 'kb-code-block' } } }),
       Markdown.configure({ html: false, transformPastedText: true, transformCopiedText: false }),
       Link.configure({ openOnClick: false }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: 'Start writing…' }),
+      Image.configure({ inline: false, allowBase64: false }),
       buildWikiLinkExtension(
         () => entriesRef.current,
         onFileNavigate,
@@ -219,29 +298,73 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       ),
     ],
     content: '',
-    editorProps: { attributes: { class: 'kb-editor-content' } },
+    editorProps: {
+      attributes: { class: 'kb-editor-content' },
+      handlePaste: (view, event) => {
+        // Image paste
+        const items = Array.from(event.clipboardData?.items ?? []);
+        const imgItem = items.find((i) => i.type.startsWith('image/'));
+        if (!imgItem || !fileIdRef.current) return false;
+        const blob = imgItem.getAsFile();
+        if (!blob) return false;
+        event.preventDefault();
+        const ext = blob.type.replace('image/', '').replace('jpeg', 'jpg');
+        const filename = `paste-${Date.now()}.${ext}`;
+        const reader = new FileReader();
+        reader.onload = async () => {
+          try {
+            const result = await vaultApi.uploadImage(filename, reader.result as string);
+            editor?.commands.setImage({ src: result.url });
+          } catch (err) { console.error('image upload failed', err); }
+        };
+        reader.readAsDataURL(blob);
+        return true;
+      },
+      handleDrop: (view, event) => {
+        if (!fileIdRef.current) return false;
+        const files = Array.from(event.dataTransfer?.files ?? []).filter((f) => f.type.startsWith('image/'));
+        if (!files.length) return false;
+        event.preventDefault();
+        for (const file of files) {
+          const ext = file.type.replace('image/', '').replace('jpeg', 'jpg');
+          const filename = `drop-${Date.now()}.${ext}`;
+          const reader = new FileReader();
+          reader.onload = async () => {
+            try {
+              const result = await vaultApi.uploadImage(filename, reader.result as string);
+              editor?.commands.setImage({ src: result.url });
+            } catch (err) { console.error('image upload failed', err); }
+          };
+          reader.readAsDataURL(file);
+        }
+        return true;
+      },
+    },
     onUpdate: () => { if (currentFileId.current) setDirty(true); },
   });
 
-  // Load file when fileId changes
+  // Keep fileIdRef in sync for paste handlers
+  useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
+
+  // Load file
   useEffect(() => {
     if (!fileId) {
       currentFileId.current = null;
+      fileIdRef.current = null;
       editor?.commands.setContent('', { contentType: 'markdown' });
-      setError(null);
+      setError(null); setFrontmatter({ tags: [], aliases: [] });
       return;
     }
-
     currentFileId.current = null;
-    setLoading(true);
-    setDirty(false);
-    setError(null);
+    setLoading(true); setDirty(false); setError(null);
 
     vaultApi.readFile(fileId)
       .then(({ content }) => {
-        setError(null);
+        const { frontmatter: fm, body } = parseFrontmatter(content);
+        setFrontmatter(fm);
+        fmRef.current = fm;
         if (editor) {
-          editor.commands.setContent(content, { contentType: 'markdown' });
+          editor.commands.setContent(body, { contentType: 'markdown' });
           editor.commands.focus('start');
         }
         currentFileId.current = fileId;
@@ -251,13 +374,25 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fileId]);
 
-  const getMarkdown = useCallback(() => editor?.storage.markdown.getMarkdown() as string ?? '', [editor]);
+  // Build full file content (frontmatter + body) for saving
+  const getContent = useCallback(() => {
+    const body = editor?.storage.markdown.getMarkdown() as string ?? '';
+    const fm = fmRef.current;
+    const hasFm = fm.tags.length > 0 || fm.aliases.length > 0 ||
+      Object.keys(fm).some((k) => k !== 'tags' && k !== 'aliases' && fm[k] !== '' && fm[k] != null);
+    return hasFm ? serializeFrontmatter(fm) + body : body;
+  }, [editor]);
+
+  const handleFmChange = useCallback((newFm: Frontmatter) => {
+    setFrontmatter(newFm);
+    fmRef.current = newFm;
+    if (currentFileId.current) setDirty(true);
+  }, []);
+
   const handleSaved = useCallback(() => { setDirty(false); setSavedAt(Date.now()); }, []);
-  useAutosave(fileId ?? null, getMarkdown, dirty, handleSaved);
+  useAutosave(fileId ?? null, getContent, dirty, handleSaved);
 
-  const titleName = fileName?.replace(/\.md$/, '') ?? '';
-
-  // ── Empty / loading / error states ────────────────────────────────────────
+  // ── States ────────────────────────────────────────────────────────────────
 
   if (!fileId) {
     return (
@@ -266,28 +401,20 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       </div>
     );
   }
-
   if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center text-dim text-[13px] animate-pulse">
-        Loading…
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center text-dim text-[13px] animate-pulse">Loading…</div>;
   }
-
   if (error) {
-    return (
-      <div className="flex h-full items-center justify-center text-danger text-[13px] px-8 text-center">
-        {error}
-      </div>
-    );
+    return <div className="flex h-full items-center justify-center text-danger text-[13px] px-8 text-center">{error}</div>;
   }
 
-  // ── Main editor layout ────────────────────────────────────────────────────
+  const titleName = (fileName ?? '').replace(/\.md$/, '');
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col h-full">
-      {/* Save status bar */}
+      {/* Status bar */}
       <div className="flex items-center gap-2 px-6 py-1.5 shrink-0 border-b border-border-subtle">
         <span className="text-[11px] text-dim truncate font-mono">{fileId}</span>
         <span className="ml-auto text-[11px] text-dim shrink-0">
@@ -312,10 +439,10 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
             <Ico d={ICON.code} />
           </ToolbarButton>
           <div className="w-px h-4 bg-border-subtle mx-0.5 shrink-0" />
-          <ToolbarButton active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="Heading 1">
+          <ToolbarButton active={editor.isActive('heading', { level: 1 })} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="H1">
             <span className="text-[10px] font-bold leading-none">H1</span>
           </ToolbarButton>
-          <ToolbarButton active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="Heading 2">
+          <ToolbarButton active={editor.isActive('heading', { level: 2 })} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="H2">
             <span className="text-[10px] font-bold leading-none">H2</span>
           </ToolbarButton>
           <ToolbarButton active={editor.isActive('blockquote')} onClick={() => editor.chain().focus().toggleBlockquote().run()} title="Blockquote">
@@ -324,20 +451,16 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
         </BubbleMenu>
       )}
 
-      {/* Scrollable content area */}
+      {/* Scrollable editor area */}
       <div className="flex-1 overflow-y-auto min-h-0">
         <div className="kb-editor-wrapper">
-          {/* Editable title */}
+          <FrontmatterPanel fm={frontmatter} onChange={handleFmChange} />
           <EditableTitle
             fileName={titleName}
             fileId={fileId}
-            onRenamed={(newId) => onFileRenamed(fileId, newId)}
+            onRenamed={(newId) => { onFileRenamed(fileId, newId); }}
           />
-
-          {/* TipTap content */}
           <EditorContent editor={editor} />
-
-          {/* Backlinks */}
           <BacklinksPanel fileId={fileId} onNavigate={onFileNavigate} />
         </div>
       </div>

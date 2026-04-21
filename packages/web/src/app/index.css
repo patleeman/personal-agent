@@ -1531,3 +1531,255 @@ body {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
+
+/* ── KB: Broken wikilinks ─────────────────────────────────────────────────── */
+.kb-wikilink-broken {
+  color: rgb(var(--color-danger));
+  background: rgb(var(--color-danger) / 0.08);
+  text-decoration: line-through;
+  text-decoration-color: rgb(var(--color-danger) / 0.5);
+}
+.kb-wikilink-broken:hover { background: rgb(var(--color-danger) / 0.14); }
+
+/* ── KB: Frontmatter editor ───────────────────────────────────────────────── */
+.kb-fm-root {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgb(var(--color-border-subtle));
+}
+.kb-fm-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+}
+.kb-fm-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: rgb(var(--color-accent) / 0.1);
+  border: 1px solid rgb(var(--color-accent) / 0.25);
+  border-radius: 999px;
+  font-size: 11px;
+  color: rgb(var(--color-accent));
+  font-weight: 500;
+}
+.kb-fm-tag-remove {
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+.kb-fm-tag-remove:hover { opacity: 1; }
+.kb-fm-tag-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: rgb(var(--color-secondary));
+  min-width: 80px;
+  flex: 1;
+  font-family: inherit;
+}
+.kb-fm-tag-input::placeholder { color: rgb(var(--color-dim)); }
+.kb-fm-expand-btn {
+  margin-left: auto;
+  font-size: 11px;
+  color: rgb(var(--color-dim));
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+.kb-fm-expand-btn:hover { color: rgb(var(--color-secondary)); background: rgb(var(--color-elevated)); }
+.kb-fm-fields {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.kb-fm-field-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.kb-fm-field-key {
+  font-size: 11px;
+  color: rgb(var(--color-dim));
+  min-width: 80px;
+  font-weight: 500;
+  flex-shrink: 0;
+  font-family: inherit;
+  background: none;
+  border: none;
+  outline: none;
+  border-bottom: 1px dashed transparent;
+  padding: 1px 0;
+}
+.kb-fm-field-key:focus { border-bottom-color: rgb(var(--color-accent) / 0.4); color: rgb(var(--color-secondary)); }
+.kb-fm-field-key::placeholder { color: rgb(var(--color-dim) / 0.5); }
+.kb-fm-field-val {
+  flex: 1;
+  font-size: 12px;
+  color: rgb(var(--color-primary));
+  background: none;
+  border: none;
+  outline: none;
+  border-bottom: 1px solid transparent;
+  padding: 1px 0;
+  font-family: inherit;
+}
+.kb-fm-field-val:focus { border-bottom-color: rgb(var(--color-accent) / 0.4); }
+
+/* ── KB: Sidebar search ───────────────────────────────────────────────────── */
+.kb-search-root { position: relative; }
+.kb-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgb(var(--color-elevated));
+  border: 1px solid rgb(var(--color-border-subtle));
+  border-radius: 6px;
+}
+.kb-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 12px;
+  color: rgb(var(--color-primary));
+  font-family: inherit;
+}
+.kb-search-input::placeholder { color: rgb(var(--color-dim)); }
+.kb-search-results {
+  margin-top: 4px;
+  border: 1px solid rgb(var(--color-border-subtle));
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgb(var(--color-surface));
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* ── KB: Quick-open (Cmd+P) ───────────────────────────────────────────────── */
+.kb-quickopen-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgb(0 0 0 / 0.3);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+}
+.kb-quickopen-modal {
+  width: 520px;
+  max-width: 90vw;
+  background: rgb(var(--color-elevated));
+  border: 1px solid rgb(var(--color-border-default));
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgb(0 0 0 / 0.25);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+}
+.kb-quickopen-input-wrap {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgb(var(--color-border-subtle));
+}
+.kb-quickopen-input {
+  width: 100%;
+  background: none;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  color: rgb(var(--color-primary));
+  font-family: inherit;
+}
+.kb-quickopen-input::placeholder { color: rgb(var(--color-dim)); }
+.kb-quickopen-results {
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── KB: Images ───────────────────────────────────────────────────────────── */
+.kb-editor-content img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 0.75em 0;
+  display: block;
+}
+
+/* ── KB: Broken wikilinks ─────────────────────────────────────────────────── */
+.kb-wikilink-broken {
+  color: rgb(var(--color-danger) / 0.8);
+  background: rgb(var(--color-danger) / 0.08);
+  text-decoration: line-through;
+  cursor: not-allowed;
+}
+.kb-wikilink-broken:hover { background: rgb(var(--color-danger) / 0.14); }
+
+/* ── KB: Frontmatter panel ────────────────────────────────────────────────── */
+.kb-fm-panel {
+  margin-bottom: 1rem;
+  border: 1px solid rgb(var(--color-border-subtle));
+  border-radius: 8px;
+  overflow: hidden;
+}
+.kb-fm-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: rgb(var(--color-dim));
+  background: rgb(var(--color-elevated));
+  cursor: pointer;
+  text-align: left;
+  transition: color 80ms;
+}
+.kb-fm-toggle:hover { color: rgb(var(--color-secondary)); }
+.kb-fm-toggle span:first-of-type { flex: 1; }
+.kb-fm-body { padding: 8px 10px; border-top: 1px solid rgb(var(--color-border-subtle)); }
+.kb-fm-row { display: flex; align-items: flex-start; gap: 8px; padding: 3px 0; }
+.kb-fm-label { font-size: 11px; color: rgb(var(--color-dim)); font-weight: 500; width: 56px; flex-shrink: 0; padding-top: 1px; }
+.kb-fm-tag {
+  display: inline-flex;
+  align-items: center;
+  background: rgb(var(--color-accent) / 0.12);
+  color: rgb(var(--color-accent));
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  cursor: default;
+}
+
+/* ── KB: Command palette ──────────────────────────────────────────────────── */
+.kb-palette {
+  width: 560px;
+  max-width: calc(100vw - 2rem);
+  background: rgb(var(--color-elevated));
+  border: 1px solid rgb(var(--color-border-default));
+  border-radius: 12px;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.3);
+  overflow: hidden;
+}
+
+/* ── KB: Images ───────────────────────────────────────────────────────────── */
+.kb-editor-content img {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 0.75em 0;
+  display: block;
+}

@@ -37,6 +37,7 @@ Useful notes:
 Current desktop routes/operators surfaces are:
 
 - **Conversations** — draft, saved, open, pinned, archived, and live thread work
+- **Knowledge** — vault-style markdown workspace with file tree, search, quick-open, rich editing, wikilinks, backlinks, and frontmatter
 - **Automations** — scheduled tasks and task detail/editing
 - **Settings** — appearance, general defaults, providers, SSH remotes, and interface reset tools
 
@@ -44,7 +45,7 @@ A few older routes now redirect instead of acting as first-class destinations:
 
 - `/system`, `/tools`, and `/instructions` redirect to **Settings**
 - `/tasks`, `/scheduled`, and `/runs` redirect to **Automations**
-- `/knowledge`, `/notes`, `/skills`, and `/nodes` redirect away from the old knowledge browser concept
+- `/notes`, `/skills`, and `/nodes` redirect into **Knowledge**
 
 ## Conversations
 
@@ -88,6 +89,18 @@ Async state now lives on the owning surface:
 - conversation-linked work shows up in the thread and conversation attention state
 - automation-linked work shows up on the automation detail page and its owning thread
 - alert delivery remains separate from durable ownership and can point back into those surfaces
+
+## Knowledge
+
+The **Knowledge** route is the local vault editor for markdown docs, notes, skills, and project files.
+
+Current capabilities:
+
+- sidebar file tree with folder expansion plus file/folder create, rename, move, and delete actions
+- full-text search in the sidebar and `Cmd/Ctrl+P` quick-open for jumping by file name/path
+- TipTap-based markdown editor with autosave, inline title rename, task lists, formatting bubble menu, and image paste/drag upload into `_attachments/`
+- `[[wikilinks]]` with autocomplete, broken-link styling, and backlinks for the current note
+- lightweight frontmatter/tag editing above the document body
 
 ## Automations
 
