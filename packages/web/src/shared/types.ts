@@ -1181,3 +1181,25 @@ export interface VaultFileContent {
   content: string;
   updatedAt: string;
 }
+
+export interface VaultBacklink {
+  id: string;
+  name: string;
+  excerpt: string;
+}
+
+export interface VaultBacklinksResult {
+  backlinks: VaultBacklink[];
+}
+
+export interface VaultBacklink {
+  id: string;
+  name: string;
+  excerpt: string;
+}
+
+export interface VaultBacklinksResult {
+  id: string;
+  targetName: string;
+  backlinks: VaultBacklink[];
+}

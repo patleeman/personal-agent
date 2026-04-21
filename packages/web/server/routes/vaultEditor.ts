@@ -15,7 +15,7 @@ import {
   type Dirent,
   type Stats,
 } from 'node:fs';
-import { basename, dirname, join, relative, resolve } from 'node:path';
+import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { getVaultRoot } from '@personal-agent/core';
 import { logError } from '../middleware/index.js';
 
@@ -94,6 +94,68 @@ function readDirEntries(root: string, abs: string): VaultEntry[] {
       if (a.kind !== b.kind) return a.kind === 'folder' ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
+}
+
+// ── Route registration ────────────────────────────────────────────────────────
+
+// ── Backlinks ────────────────────────────────────────────────────────────────
+
+interface BacklinkResult {
+  id: string;
+  name: string;
+  excerpt: string;
+}
+
+function collectAllMarkdownFiles(root: string): string[] {
+  const results: string[] = [];
+  const stack = [root];
+  while (stack.length) {
+    const dir = stack.pop() as string;
+    let entries: Dirent[];
+    try { entries = readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      if (entry.isSymbolicLink()) continue;
+      const abs = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (!SKIPPED_DIRS.has(entry.name)) stack.push(abs);
+      } else if (entry.isFile() && extname(entry.name) === '.md') {
+        results.push(abs);
+      }
+    }
+  }
+  return results;
+}
+
+function findBacklinks(targetId: string, root: string): BacklinkResult[] {
+  // targetId may be "notes/foo.md" — derive the note name without extension
+  const targetName = basename(targetId).replace(/\.md$/i, '');
+  const escapedName = targetName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(`\\[\\[${escapedName}(?:\\|[^\\]]*)?\\]\\]`, 'gi');
+
+  const results: BacklinkResult[] = [];
+  const files = collectAllMarkdownFiles(root);
+
+  for (const filePath of files) {
+    const fileId = relative(root, filePath).replace(/\\/g, '/');
+    if (fileId === targetId) continue; // skip the file itself
+    let content: string;
+    try { content = readFileSync(filePath, 'utf-8'); } catch { continue; }
+    if (!pattern.test(content)) continue;
+    pattern.lastIndex = 0;
+
+    // Build a short excerpt around the first match
+    const matchIndex = content.search(pattern);
+    pattern.lastIndex = 0;
+    const start = Math.max(0, matchIndex - 60);
+    const end = Math.min(content.length, matchIndex + 80);
+    let excerpt = content.slice(start, end).replace(/\n+/g, ' ').trim();
+    if (start > 0) excerpt = `…${excerpt}`;
+    if (end < content.length) excerpt = `${excerpt}…`;
+
+    results.push({ id: fileId, name: basename(filePath), excerpt });
+  }
+
+  return results;
 }
 
 // ── Route registration ────────────────────────────────────────────────────────
@@ -260,6 +322,23 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       res.json(entryFromStat(root, abs, stats));
     } catch (err) {
       logError('vault/folder error', { message: String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // GET /api/vault/backlinks?id=<rel-id>  — find files that [[wikilink]] to this file
+  router.get('/api/vault/backlinks', (req, res) => {
+    try {
+      const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
+      if (!id) {
+        res.status(400).json({ error: 'id is required' });
+        return;
+      }
+      const root = getRoot();
+      const backlinks = findBacklinks(id, root);
+      res.json({ id, backlinks });
+    } catch (err) {
+      logError('vault/backlinks error', { message: String(err) });
       res.status(500).json({ error: String(err) });
     }
   });
