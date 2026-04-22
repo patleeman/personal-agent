@@ -236,6 +236,24 @@ describe('LocalBackendProcesses', () => {
     expect(mocks.syncCompanionTailscaleServe).toHaveBeenCalledWith({ enabled: true, port: 3843 });
   });
 
+  it('syncs companion publishing against the live listener port when startup had to fall back', async () => {
+    const backend = new LocalBackendProcesses();
+
+    await backend.ensureStarted();
+    const daemon = lastDaemonInstance();
+    daemon.getCompanionUrl.mockReturnValue('http://0.0.0.0:4021');
+    mocks.loadDaemonConfig.mockReturnValue({ companion: { enabled: true, host: '0.0.0.0', port: 3843 } });
+
+    await expect(backend.ensureCompanionNetworkReachable()).resolves.toEqual({
+      changed: false,
+      url: 'http://0.0.0.0:4021',
+    });
+
+    expect(mocks.updateMachineConfigSection).not.toHaveBeenCalled();
+    expect(daemon.updateCompanionConfig).not.toHaveBeenCalled();
+    expect(mocks.syncCompanionTailscaleServe).toHaveBeenCalledWith({ enabled: true, port: 4021 });
+  });
+
   it('keeps local-network setup working even if companion tailnet publishing is unavailable', async () => {
     const backend = new LocalBackendProcesses();
 

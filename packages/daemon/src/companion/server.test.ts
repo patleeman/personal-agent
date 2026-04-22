@@ -1,4 +1,5 @@
 import { mkdtempSync } from 'node:fs';
+import { createServer as createHttpServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -425,4 +426,97 @@ describe('daemon companion server', () => {
     });
     expect(revokedConversationsResponse.status).toBe(401);
   }, 15000);
+
+  it('falls back to an available port when the preferred companion port is busy', async () => {
+    const stateRoot = createTempDir('pa-companion-fallback-');
+    const busyServer = createHttpServer();
+
+    await new Promise<void>((resolve) => {
+      busyServer.listen(0, '127.0.0.1', () => resolve());
+    });
+
+    const busyAddress = busyServer.address();
+    if (!busyAddress || typeof busyAddress === 'string') {
+      throw new Error('Expected a TCP address for the busy companion port test.');
+    }
+
+    const runtime = {
+      listConversations: async () => ({ sessions: [], ordering: { sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] } }),
+      updateConversationTabs: async () => ({ ok: true }),
+      duplicateConversation: async () => ({ ok: true, conversationId: 'duplicate-1' }),
+      listExecutionTargets: async () => ({ executionTargets: [] }),
+      readModels: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] }),
+      listSshTargets: async () => ({ hosts: [] }),
+      saveSshTarget: async () => ({ hosts: [] }),
+      deleteSshTarget: async () => ({ ok: true, deleted: true, targetId: 'ssh-1' }),
+      testSshTarget: async () => ({ ok: true, sshTarget: 'patrick@host', os: 'linux', arch: 'arm64', platformKey: 'linux-arm64', homeDirectory: '/home/patrick', tempDirectory: '/tmp', cacheDirectory: '/tmp/.cache', message: 'reachable' }),
+      readRemoteDirectory: async () => ({ path: '/repo', entries: [] }),
+      readConversationBootstrap: async (input: any) => ({ conversationId: input.conversationId, bootstrap: true }),
+      createConversation: async () => ({ conversationId: 'created-1' }),
+      resumeConversation: async () => ({ conversationId: 'resumed-1' }),
+      promptConversation: async (input: any) => ({ ok: true, conversationId: input.conversationId }),
+      parallelPromptConversation: async (input: any) => ({ ok: true, conversationId: input.conversationId }),
+      restoreConversationQueuePrompt: async () => ({ ok: true, behavior: 'steer', index: 0, text: 'queued hello', images: [] }),
+      manageConversationParallelJob: async () => ({ ok: true, status: 'skipped' }),
+      abortConversation: async (input: any) => ({ ok: true, conversationId: input.conversationId }),
+      takeOverConversation: async () => ({ ok: true, surfaceId: 'surface-1' }),
+      renameConversation: async () => ({ ok: true, title: 'Conversation' }),
+      changeConversationCwd: async (input: any) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
+      readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
+      updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
+      createConversationCheckpoint: async () => ({ id: 'checkpoint-1', conversationId: 'conversation-1', title: 'Checkpoint', shortSha: 'abc1234', commitSha: 'abc1234def', subject: 'Checkpoint', fileCount: 0, linesAdded: 0, linesDeleted: 0, cwd: '/repo', authorName: 'Patrick', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
+      listConversationArtifacts: async () => ({ conversationId: 'conversation-1', artifacts: [] }),
+      readConversationArtifact: async () => ({ conversationId: 'conversation-1', artifact: { id: 'artifact-1' } }),
+      listConversationCheckpoints: async () => ({ conversationId: 'conversation-1', checkpoints: [] }),
+      readConversationCheckpoint: async () => ({ conversationId: 'conversation-1', checkpoint: { id: 'checkpoint-1' } }),
+      changeConversationExecutionTarget: async () => ({ ok: true, executionTargetId: 'local' }),
+      listConversationAttachments: async () => ({ conversationId: 'conversation-1', attachments: [] }),
+      readConversationAttachment: async () => ({ conversationId: 'conversation-1', attachment: { id: 'attachment-1' } }),
+      createConversationAttachment: async () => ({ conversationId: 'conversation-1', attachment: { id: 'attachment-1' } }),
+      updateConversationAttachment: async () => ({ conversationId: 'conversation-1', attachment: { id: 'attachment-1' } }),
+      readConversationAttachmentAsset: async () => ({ data: Buffer.from('bytes', 'utf-8'), mimeType: 'image/png' }),
+      listKnowledgeEntries: async () => ({ root: '/vault', entries: [] }),
+      searchKnowledge: async () => ({ results: [] }),
+      readKnowledgeFile: async () => ({ id: 'notes/test.md', content: '# test', updatedAt: '2026-04-19T00:00:00.000Z' }),
+      writeKnowledgeFile: async () => ({ id: 'notes/test.md', kind: 'file', name: 'test.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      createKnowledgeFolder: async () => ({ id: 'notes/', kind: 'folder', name: 'notes', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      renameKnowledgeEntry: async () => ({ id: 'notes/renamed.md', kind: 'file', name: 'renamed.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      deleteKnowledgeEntry: async () => ({ ok: true }),
+      createKnowledgeImageAsset: async () => ({ id: '_attachments/image.png', url: '/api/vault/asset?id=_attachments%2Fimage.png' }),
+      importKnowledge: async () => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: 'url', title: 'Shared link' }),
+      listScheduledTasks: async () => ({ tasks: [] }),
+      readScheduledTask: async () => ({ taskId: 'task-1', title: 'Task' }),
+      readScheduledTaskLog: async () => ({ path: '/tmp/task-1.log', log: '' }),
+      createScheduledTask: async () => ({ ok: true, task: { taskId: 'task-1', title: 'Task' } }),
+      updateScheduledTask: async () => ({ ok: true, task: { taskId: 'task-1', title: 'Task' } }),
+      deleteScheduledTask: async () => ({ ok: true, deleted: true, taskId: 'task-1' }),
+      runScheduledTask: async () => ({ ok: true, accepted: true, runId: 'run-1' }),
+      listDurableRuns: async () => ({ runs: [] }),
+      readDurableRun: async () => ({ run: { runId: 'run-1' } }),
+      readDurableRunLog: async () => ({ path: '/tmp/run-1.log', log: '' }),
+      cancelDurableRun: async () => ({ cancelled: true, runId: 'run-1' }),
+      subscribeApp: async () => () => undefined,
+      subscribeConversation: async () => () => undefined,
+    } as unknown as CompanionRuntime;
+
+    const config = createTestConfig(stateRoot);
+    config.companion = { enabled: true, host: '127.0.0.1', port: busyAddress.port };
+    const server = new DaemonCompanionServer(config, stateRoot, async () => runtime);
+    servers.push(server);
+
+    try {
+      await server.start();
+      expect(server.getPortFallbackFrom()).toBe(busyAddress.port);
+      const baseUrl = server.getUrl();
+      expect(baseUrl).toBeTruthy();
+      expect(baseUrl).not.toContain(`:${String(busyAddress.port)}`);
+
+      const helloResponse = await fetch(`${baseUrl}/companion/v1/hello`);
+      expect(helloResponse.status).toBe(200);
+      const hello = await readJson(helloResponse) as { protocolVersion: string };
+      expect(hello.protocolVersion).toBe('v1');
+    } finally {
+      await new Promise<void>((resolve) => busyServer.close(() => resolve()));
+    }
+  });
 });

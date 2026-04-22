@@ -42,6 +42,8 @@ The desktop testing launch uses its own runtime home instead:
 
 That keeps stable and testing desktop launches from fighting over the same daemon socket and companion port.
 
+If the configured companion TCP port is already busy, the daemon now falls back to an available local port instead of failing startup. The desktop shell proxies against the live listener, and setup/pairing flows expose the actual chosen port.
+
 Important pieces:
 
 - `runtime.db` stores daemon-backed runtime state, including durable run metadata and task scheduler state

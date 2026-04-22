@@ -22,6 +22,20 @@ function isLoopbackHost(value: string | undefined): boolean {
     || normalized === '::ffff:127.0.0.1';
 }
 
+function readPortFromUrl(value: string | null | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  try {
+    const parsed = new URL(value);
+    const port = Number.parseInt(parsed.port, 10);
+    return Number.isInteger(port) && port > 0 ? port : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export class LocalBackendProcesses {
   private daemon?: PersonalAgentDaemon;
   private clearInProcessClientBinding?: () => void;
@@ -137,7 +151,7 @@ export class LocalBackendProcesses {
     try {
       syncCompanionTailscaleServe({
         enabled: true,
-        port: currentPort,
+        port: readPortFromUrl(url) ?? currentPort,
       });
     } catch {
       // Tailnet publishing is best-effort for companion QR setup. Local-network pairing can still work without it.

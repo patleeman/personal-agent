@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { app, protocol, session } from 'electron';
-import { loadDaemonConfig } from '@personal-agent/daemon';
+import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
@@ -114,12 +114,30 @@ function normalizeCompanionProxyHost(host: string): string {
   return host;
 }
 
-async function proxyCompanionRequest(request: Request): Promise<Response> {
+async function resolveCompanionProxyBaseUrl(): Promise<string> {
+  const transport = getDaemonClientTransportOverride();
+  if (transport?.getCompanionUrl) {
+    try {
+      const runtimeUrl = await transport.getCompanionUrl();
+      if (runtimeUrl) {
+        const targetUrl = new URL(runtimeUrl);
+        targetUrl.hostname = normalizeCompanionProxyHost(targetUrl.hostname);
+        return targetUrl.toString();
+      }
+    } catch {
+      // Fall back to config-based routing when the in-process runtime cannot expose a live companion URL.
+    }
+  }
+
   const config = loadDaemonConfig();
   const host = normalizeCompanionProxyHost(config.companion?.host ?? '127.0.0.1');
   const port = config.companion?.port ?? 3843;
+  return `http://${host.includes(':') ? `[${host}]` : host}:${String(port)}`;
+}
+
+async function proxyCompanionRequest(request: Request): Promise<Response> {
   const sourceUrl = new URL(request.url);
-  const targetBase = `http://${host.includes(':') ? `[${host}]` : host}:${String(port)}`;
+  const targetBase = await resolveCompanionProxyBaseUrl();
   const targetUrl = new URL(`${sourceUrl.pathname}${sourceUrl.search}`, targetBase);
   const headers = new Headers(request.headers);
   headers.delete('host');

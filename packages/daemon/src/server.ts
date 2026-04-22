@@ -264,6 +264,10 @@ export class PersonalAgentDaemon {
 
     this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
     await this.companionServer.start();
+    const fallbackPort = this.companionServer.getPortFallbackFrom();
+    if (fallbackPort) {
+      this.log('warn', `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`);
+    }
 
     this.running = true;
     this.log('info', `personal-agentd started pid=${this.pid} socket=${this.paths.socketPath}`);
@@ -370,6 +374,10 @@ export class PersonalAgentDaemon {
     try {
       this.companionServer = new DaemonCompanionServer(this.config, this.paths.root, this.companionRuntimeProvider);
       await this.companionServer.start();
+      const fallbackPort = this.companionServer.getPortFallbackFrom();
+      if (fallbackPort) {
+        this.log('warn', `companion port ${String(fallbackPort)} unavailable; fell back to ${this.companionServer.getUrl() ?? 'an available port'}`);
+      }
       return { url: this.companionServer.getUrl() };
     } catch (error) {
       this.config.companion = previous;

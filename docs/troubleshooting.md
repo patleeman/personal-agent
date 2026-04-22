@@ -158,6 +158,8 @@ If a separate daemon is already healthy, the desktop app now refuses to attach t
 
 Stable and testing desktop launches now use separate runtime homes by default, so they can run side by side without sharing a daemon. The testing desktop also shifts its companion listener off the stable default port.
 
+If the companion listener's preferred port is busy anyway, the daemon now falls back to an available local port instead of aborting startup. Companion setup links and the desktop companion proxy use the live port automatically.
+
 Stop or uninstall the external daemon, then relaunch the desktop app:
 
 ```bash

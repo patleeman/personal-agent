@@ -19,6 +19,7 @@ const daemonMocks = vi.hoisted(() => ({
       port: 3843,
     },
   })),
+  getDaemonClientTransportOverride: vi.fn(() => undefined),
 }));
 
 vi.mock('electron', () => ({
@@ -37,6 +38,7 @@ vi.mock('electron', () => ({
 
 vi.mock('@personal-agent/daemon', () => ({
   loadDaemonConfig: daemonMocks.loadDaemonConfig,
+  getDaemonClientTransportOverride: daemonMocks.getDaemonClientTransportOverride,
 }));
 
 import { createDesktopProtocolHandler } from './app-protocol.js';
@@ -109,6 +111,7 @@ describe('createDesktopProtocolHandler', () => {
         port: 3843,
       },
     });
+    daemonMocks.getDaemonClientTransportOverride.mockReturnValue(undefined);
   });
 
   it('serves local conversation resources through the in-process API dispatcher', async () => {
@@ -295,6 +298,39 @@ describe('createDesktopProtocolHandler', () => {
         headers: expect.anything(),
         body: undefined,
       });
+      expect(await response.json()).toEqual({ ok: true });
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('prefers the live in-process companion url when the daemon fell back to another port', async () => {
+    daemonMocks.loadDaemonConfig.mockReturnValue({
+      companion: {
+        host: '127.0.0.1',
+        port: 3843,
+      },
+    });
+    daemonMocks.getDaemonClientTransportOverride.mockImplementation(() => ({
+      getCompanionUrl: vi.fn().mockResolvedValue('http://0.0.0.0:4123'),
+    }) as never);
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+      },
+    }));
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+    const handler = createDesktopProtocolHandler({
+      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock()),
+    });
+
+    try {
+      const response = await handler(new Request('personal-agent://app/companion/v1/hello'));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const targetUrl = fetchMock.mock.calls[0]?.[0];
+      expect(targetUrl instanceof URL ? targetUrl.href : targetUrl).toBe('http://127.0.0.1:4123/companion/v1/hello');
       expect(await response.json()).toEqual({ ok: true });
     } finally {
       globalThis.fetch = originalFetch;

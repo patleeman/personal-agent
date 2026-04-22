@@ -349,6 +349,7 @@ export class DaemonCompanionServer {
   private httpServer?: HttpServer;
   private websocketServer?: WebSocketServer;
   private listeningAddress: { host: string; port: number } | null = null;
+  private portFallbackFrom: number | null = null;
 
   constructor(
     private readonly config: DaemonConfig,
@@ -356,37 +357,88 @@ export class DaemonCompanionServer {
     private readonly runtimeProvider?: CompanionRuntimeProvider,
   ) {}
 
-  async start(): Promise<void> {
-    if (this.config.companion?.enabled === false || this.httpServer) {
-      return;
-    }
-
-    this.websocketServer = new WebSocketServer({ noServer: true });
-    this.httpServer = createServer((request, response) => {
+  private async createListeningServerAttempt(host: string, port: number): Promise<{
+    httpServer: HttpServer;
+    websocketServer: WebSocketServer;
+    address: { host: string; port: number };
+  }> {
+    const websocketServer = new WebSocketServer({ noServer: true });
+    const httpServer = createServer((request, response) => {
       void this.handleHttpRequest(request, response).catch((error) => {
         sendError(response, 500, error instanceof Error ? error.message : String(error));
       });
     });
 
-    this.httpServer.on('upgrade', (request, socket, head) => {
+    httpServer.on('upgrade', (request, socket, head) => {
       void this.handleUpgrade(request, socket, head).catch(() => {
         socket.destroy();
       });
     });
 
-    await new Promise<void>((resolve, reject) => {
-      this.httpServer?.once('error', reject);
-      this.httpServer?.listen(this.config.companion?.port ?? 3843, this.config.companion?.host ?? '127.0.0.1', () => resolve());
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error) => {
+          reject(error);
+        };
 
-    const address = this.httpServer.address();
-    if (address && typeof address === 'object') {
-      const info = address as AddressInfo;
-      this.listeningAddress = {
+        httpServer.once('error', onError);
+        httpServer.listen(port, host, () => {
+          httpServer.off('error', onError);
+          resolve();
+        });
+      });
+    } catch (error) {
+      websocketServer.close();
+      throw error;
+    }
+
+    const address = httpServer.address();
+    if (!address || typeof address === 'string') {
+      websocketServer.close();
+      await new Promise<void>((resolve) => {
+        httpServer.close(() => resolve());
+      });
+      throw new Error('Companion server did not expose a TCP address.');
+    }
+
+    const info = address as AddressInfo;
+    return {
+      httpServer,
+      websocketServer,
+      address: {
         host: info.address,
         port: info.port,
-      };
+      },
+    };
+  }
+
+  async start(): Promise<void> {
+    if (this.config.companion?.enabled === false || this.httpServer) {
+      return;
     }
+
+    const host = this.config.companion?.host ?? '127.0.0.1';
+    const preferredPort = this.config.companion?.port ?? 3843;
+
+    try {
+      const attempt = await this.createListeningServerAttempt(host, preferredPort);
+      this.httpServer = attempt.httpServer;
+      this.websocketServer = attempt.websocketServer;
+      this.listeningAddress = attempt.address;
+      this.portFallbackFrom = null;
+      return;
+    } catch (error) {
+      const bindError = error as NodeJS.ErrnoException;
+      if (preferredPort <= 0 || bindError.code !== 'EADDRINUSE') {
+        throw error;
+      }
+    }
+
+    const fallbackAttempt = await this.createListeningServerAttempt(host, 0);
+    this.httpServer = fallbackAttempt.httpServer;
+    this.websocketServer = fallbackAttempt.websocketServer;
+    this.listeningAddress = fallbackAttempt.address;
+    this.portFallbackFrom = preferredPort;
   }
 
   async stop(): Promise<void> {
@@ -411,6 +463,7 @@ export class DaemonCompanionServer {
 
     this.httpServer = undefined;
     this.listeningAddress = null;
+    this.portFallbackFrom = null;
   }
 
   getUrl(): string | null {
@@ -420,6 +473,10 @@ export class DaemonCompanionServer {
 
     const host = this.listeningAddress.host.includes(':') ? `[${this.listeningAddress.host}]` : this.listeningAddress.host;
     return `http://${host}:${this.listeningAddress.port}`;
+  }
+
+  getPortFallbackFrom(): number | null {
+    return this.portFallbackFrom;
   }
 
   private async authenticateBearer(request: IncomingMessage) {
