@@ -56,6 +56,7 @@ function useAutosave(
   getContent: () => string,
   dirty: boolean,
   onSaved: () => void,
+  onError: (message: string | null) => void,
 ) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saving = useRef(false);
@@ -65,12 +66,18 @@ function useAutosave(
     timer.current = setTimeout(async () => {
       if (saving.current) return;
       saving.current = true;
-      try { await vaultApi.writeFile(fileId, getContent()); onSaved(); }
-      finally { saving.current = false; }
+      try {
+        await vaultApi.writeFile(fileId, getContent());
+        onSaved();
+      } catch (error) {
+        onError(error instanceof Error ? error.message : String(error));
+      } finally {
+        saving.current = false;
+      }
     }, AUTOSAVE_MS);
     return () => { if (timer.current) clearTimeout(timer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId, dirty, onSaved]);
+  }, [fileId, dirty, onSaved, onError]);
 }
 
 // ── Frontmatter ───────────────────────────────────────────────────────────────
@@ -189,6 +196,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const currentFileId = useRef<string | null>(null);
   const fmRef = useRef<Frontmatter>({ tags: [], aliases: [] });
 
@@ -291,31 +299,49 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
   // Load file
   useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
     if (!fileId) {
       currentFileId.current = null;
       fileIdRef.current = null;
       fmRef.current = { tags: [], aliases: [] };
-      editor?.commands.setContent('', { contentType: 'markdown' });
+      editor.commands.setContent('', { contentType: 'markdown' });
+      setDirty(false);
       setError(null);
+      setSaveError(null);
       return;
     }
+
+    let cancelled = false;
     currentFileId.current = null;
-    setLoading(true); setDirty(false); setError(null);
+    setLoading(true);
+    setDirty(false);
+    setError(null);
+    setSaveError(null);
 
     vaultApi.readFile(fileId)
       .then(({ content }) => {
+        if (cancelled) return;
         const { frontmatter: fm, body } = parseFrontmatter(content);
         fmRef.current = fm;
-        if (editor) {
-          editor.commands.setContent(body, { contentType: 'markdown' });
-          editor.commands.focus('start');
-        }
+        editor.commands.setContent(body, { contentType: 'markdown' });
         currentFileId.current = fileId;
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId]);
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fileId, editor]);
 
   // Build full file content (frontmatter + body) for saving
   const getContent = useCallback(() => {
@@ -326,8 +352,12 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     return hasFm ? serializeFrontmatter(fm) + body : body;
   }, [editor]);
 
-  const handleSaved = useCallback(() => { setDirty(false); setSavedAt(Date.now()); }, []);
-  useAutosave(fileId ?? null, getContent, dirty, handleSaved);
+  const handleSaved = useCallback(() => {
+    setDirty(false);
+    setSaveError(null);
+    setSavedAt(Date.now());
+  }, []);
+  useAutosave(fileId ?? null, getContent, dirty, handleSaved, setSaveError);
 
   // ── States ────────────────────────────────────────────────────────────────
 
@@ -354,8 +384,8 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       {/* Status bar */}
       <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-1.5">
         <span className="text-[11px] text-dim truncate font-mono">{fileId}</span>
-        <span className="ml-auto text-[11px] text-dim shrink-0">
-          {dirty ? 'Unsaved' : savedAt ? 'Saved' : ''}
+        <span className={['ml-auto text-[11px] shrink-0', saveError ? 'text-danger' : 'text-dim'].join(' ')}>
+          {saveError ? 'Save failed' : dirty ? 'Unsaved' : savedAt ? 'Saved' : ''}
         </span>
       </div>
 
