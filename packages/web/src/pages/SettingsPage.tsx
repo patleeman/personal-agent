@@ -312,16 +312,6 @@ function ThemeButton({
   );
 }
 
-function SettingsHero() {
-  return (
-    <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent/20 bg-accent/10 text-accent shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M10.5 6h3m-1.5-3v6m4.348-2.826 2.121 2.121m-12.728 0 2.121-2.121m8.486 8.486 2.121 2.121m-12.728 0 2.121-2.121M6 10.5H3m18 0h-3m-5.25 7.5v3m0-18v3" />
-      </svg>
-    </div>
-  );
-}
-
 function SettingsSection({
   id,
   label,
@@ -1443,10 +1433,6 @@ export function SettingsPage() {
   const settingsScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
-  const pageMeta = [
-    theme,
-    modelState?.currentModel ?? null,
-  ].filter(Boolean).join(' · ');
   const visibleQuickLinks = useMemo(
     () => (desktopEnvironment?.isElectron || isDesktopShell())
       ? SETTINGS_QUICK_LINKS
@@ -2561,24 +2547,14 @@ export function SettingsPage() {
         <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14">
           <div className="min-w-0">
             <div className="mx-auto flex w-full max-w-[58rem] flex-col gap-12">
-              <div className="space-y-6">
-                <div className="flex justify-end">
-                  <ToolbarButton
-                    className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                    onClick={handleRefresh}
-                  >
-                    ↻ Refresh
-                  </ToolbarButton>
-                </div>
-
-                <div className="mx-auto flex max-w-[38rem] flex-col items-center text-center">
-                  <SettingsHero />
-                  <h1 className="ui-page-title mt-5 text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Settings</h1>
-                  {pageMeta ? <p className="ui-page-meta mt-1.5 text-[12px]">{pageMeta}</p> : null}
-                  <p className="mt-4 text-[14px] leading-7 text-secondary">
-                    Appearance, workspace defaults, providers, and local browser state in one place.
-                  </p>
-                </div>
+              <div className="flex justify-end">
+                <h1 className="sr-only">Settings</h1>
+                <ToolbarButton
+                  className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+                  onClick={handleRefresh}
+                >
+                  ↻ Refresh
+                </ToolbarButton>
               </div>
 
               <div className="flex flex-col gap-12">

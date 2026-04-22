@@ -285,8 +285,7 @@ describe('SettingsPage', () => {
   it('renders the reorganized single-page settings view', () => {
     const html = renderPage('/settings');
 
-    expect(html).toContain('ui-page-title');
-    expect(html).toContain('>Settings<');
+    expect(html).toContain('class="sr-only">Settings<');
     expect(html).toContain('aria-label="Settings sections"');
     expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-general"'));
     expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
@@ -317,6 +316,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
+    expect(html).not.toContain('Appearance, workspace defaults, providers, and local browser state in one place.');
   });
 
   it('renders a fast mode toggle for models that support priority tier', () => {
@@ -331,8 +331,7 @@ describe('SettingsPage', () => {
   it('renders the same consolidated settings page for legacy query routes', () => {
     const html = renderPage('/settings?page=system-daemon');
 
-    expect(html).toContain('ui-page-title');
-    expect(html).toContain('>Settings<');
+    expect(html).toContain('class="sr-only">Settings<');
     expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Restart daemon');
