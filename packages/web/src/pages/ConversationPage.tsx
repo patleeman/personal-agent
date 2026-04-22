@@ -32,7 +32,13 @@ import {
 import { truncateConversationCwdFromFront } from '../conversation/conversationCwdHistory';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
-import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
+import {
+  THINKING_LEVEL_OPTIONS,
+  getModelSelectableServiceTierOptions,
+  hasSelectableModelId,
+  groupModelsByProvider,
+  resolveSelectableModelId,
+} from '../model/modelPreferences';
 import { useAppData, useAppEvents, useLiveTitles } from '../app/contexts';
 import { filterModelPickerItems } from '../model/modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferred-resume/deferredResumeSlashCommand';
@@ -2685,6 +2691,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const [currentServiceTier, setCurrentServiceTier] = useState<string>('');
   const [hasExplicitServiceTier, setHasExplicitServiceTier] = useState(false);
+  const resolvedCurrentModelId = useMemo(() => resolveSelectableModelId({
+    requestedModel: currentModel,
+    defaultModel,
+    models,
+  }), [currentModel, defaultModel, models]);
+  const createLiveSessionPreferenceInput = useMemo(() => ({
+    ...(resolvedCurrentModelId ? { model: resolvedCurrentModelId } : {}),
+    ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
+    ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
+  }), [currentThinkingLevel, currentServiceTier, hasExplicitServiceTier, resolvedCurrentModelId]);
   const [conversationAutoModeState, setConversationAutoModeState] = useState<ConversationAutoModeState | null>(null);
   const [conversationAutoModeBusy, setConversationAutoModeBusy] = useState(false);
   const initialModelPreferenceState = useMemo(() => resolveConversationInitialModelPreferenceState({
@@ -2829,7 +2845,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         readDraftConversationServiceTier(),
         defaultServiceTier,
       );
-      setCurrentModel(readDraftConversationModel().trim() || defaultModel);
+      setCurrentModel(resolveSelectableModelId({
+        requestedModel: readDraftConversationModel(),
+        defaultModel,
+        models,
+      }));
       setCurrentThinkingLevel(readDraftConversationThinkingLevel().trim() || defaultThinkingLevel);
       setCurrentServiceTier(serviceTierState.currentServiceTier);
       setHasExplicitServiceTier(serviceTierState.hasExplicitServiceTier);
@@ -2841,7 +2861,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     return () => {
       window.removeEventListener(DRAFT_CONVERSATION_STATE_CHANGED_EVENT, syncDraftPreferences);
     };
-  }, [defaultModel, defaultThinkingLevel, defaultServiceTier, draft]);
+  }, [defaultModel, defaultThinkingLevel, defaultServiceTier, draft, models]);
+
+  useEffect(() => {
+    if (!draft || models.length === 0) {
+      return;
+    }
+
+    const storedDraftModel = readDraftConversationModel();
+    if (!storedDraftModel || hasSelectableModelId(models, storedDraftModel)) {
+      return;
+    }
+
+    clearDraftConversationModel();
+  }, [draft, models]);
 
   useEffect(() => {
     if (!draft) {
@@ -4923,11 +4956,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
     }
 
-    const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
-      ...(currentModel ? { model: currentModel } : {}),
-      ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-      ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
-    });
+    const created = await api.createLiveSession(
+      draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined,
+      undefined,
+      createLiveSessionPreferenceInput,
+    );
     if (draftExecutionTarget === 'local') {
       primeCreatedConversationOpenCaches(created, {
         tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
@@ -4975,7 +5008,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     });
 
     return newId;
-  }, [conversationEventVersion, conversationVersionKey, currentModel, currentThinkingLevel, currentServiceTier, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, draftCwdValue, hasExplicitServiceTier, id, input, navigate]);
+  }, [conversationEventVersion, conversationVersionKey, createLiveSessionPreferenceInput, currentModel, currentThinkingLevel, currentServiceTier, defaultModel, defaultThinkingLevel, defaultServiceTier, draft, draftCwdValue, hasExplicitServiceTier, id, input, navigate]);
 
   const toggleConversationAutoMode = useCallback(async () => {
     if (conversationAutoModeBusy) {
@@ -5240,11 +5273,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
       await api.destroySession(id, currentSurfaceId).catch(() => {});
       const cwd = visibleSessionDetail?.meta.cwd ?? undefined;
-      const created = await api.createLiveSession(cwd, undefined, {
-        ...(currentModel ? { model: currentModel } : {}),
-        ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-        ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
-      });
+      const created = await api.createLiveSession(cwd, undefined, createLiveSessionPreferenceInput);
       primeCreatedConversationOpenCaches(created, {
         tailBlocks: INITIAL_HISTORICAL_TAIL_BLOCKS,
         bootstrapVersionKey: conversationVersionKey,
@@ -6123,11 +6152,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           throw new Error(`Choose a remote directory on ${selectedExecutionTargetLabel} first.`);
         }
 
-        const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
-          ...(currentModel ? { model: currentModel } : {}),
-          ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-          ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
-        });
+        const created = await api.createLiveSession(
+          draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined,
+          undefined,
+          createLiveSessionPreferenceInput,
+        );
         conversationId = created.id;
         if (draftExecutionTarget !== 'local') {
           await applyDraftExecutionTarget(created.id, draftRemoteCwd);
@@ -6301,11 +6330,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setPendingAssistantStatusLabel('Creating conversation…');
 
           try {
-            const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
-              ...(currentModel ? { model: currentModel } : {}),
-              ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-              ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
-            });
+            const created = await api.createLiveSession(
+              draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined,
+              undefined,
+              createLiveSessionPreferenceInput,
+            );
             createdSessionId = created.id;
             if (draftExecutionTarget === 'local') {
               primeCreatedConversationOpenCaches(created, {
@@ -6387,11 +6416,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         let createdSessionId: string | null = null;
         let navigatedToCreatedConversation = false;
         try {
-          const created = await api.createLiveSession(draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined, undefined, {
-            ...(currentModel ? { model: currentModel } : {}),
-            ...(currentThinkingLevel ? { thinkingLevel: currentThinkingLevel } : {}),
-            ...buildConversationServiceTierPreferenceInput({ currentServiceTier, hasExplicitServiceTier }),
-          });
+          const created = await api.createLiveSession(
+            draftExecutionTarget === 'local' ? (draftCwdValue || undefined) : undefined,
+            undefined,
+            createLiveSessionPreferenceInput,
+          );
           createdSessionId = created.id;
           if (draftExecutionTarget === 'local') {
             primeCreatedConversationOpenCaches(created, {

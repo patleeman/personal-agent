@@ -1,5 +1,9 @@
 import type { ModelInfo } from '../shared/types';
 
+function normalizeModelId(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 export const THINKING_LEVEL_OPTIONS = [
   { value: '', label: 'Unset' },
   { value: 'off', label: 'Off' },
@@ -40,6 +44,32 @@ export function getModelSelectableServiceTierOptions(
   }
 
   return [{ value: '', label: options?.includeDefaultOption ? (options.defaultLabel ?? 'Default') : 'Unset' }, ...supportedOptions];
+}
+
+export function hasSelectableModelId<T extends Pick<ModelInfo, 'id'>>(
+  models: readonly T[],
+  modelId: string | null | undefined,
+): boolean {
+  const normalizedModelId = normalizeModelId(modelId);
+  return normalizedModelId.length > 0 && models.some((model) => model.id === normalizedModelId);
+}
+
+export function resolveSelectableModelId<T extends Pick<ModelInfo, 'id'>>(
+  input: {
+    requestedModel?: string | null;
+    defaultModel?: string | null;
+    models: readonly T[];
+  },
+): string {
+  if (hasSelectableModelId(input.models, input.requestedModel)) {
+    return normalizeModelId(input.requestedModel);
+  }
+
+  if (hasSelectableModelId(input.models, input.defaultModel)) {
+    return normalizeModelId(input.defaultModel);
+  }
+
+  return input.models[0]?.id ?? '';
 }
 
 export function groupModelsByProvider<T extends Pick<ModelInfo, 'provider'>>(models: T[]): Array<[string, T[]]> {
