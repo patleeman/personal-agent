@@ -1525,53 +1525,104 @@ body {
   padding: 4px;
 }
 
-/* ── KB: Backlinks panel ──────────────────────────────────────────────────── */
+/* ── KB: Backlinks disclosure ─────────────────────────────────────────────── */
 
-.kb-backlinks {
-  margin-top: 4rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid rgb(var(--color-border-subtle));
+.kb-bl-panel {
+  margin-top: 3rem;
 }
 
-.kb-backlinks-header {
-  display: flex;
+.kb-bl-toggle {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  max-width: 100%;
+  padding: 2px 0 4px;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: rgb(var(--color-dim));
-  margin-bottom: 0.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: color 80ms, opacity 80ms;
+  opacity: 0.82;
+}
+.kb-bl-toggle:hover {
+  color: rgb(var(--color-secondary));
+  opacity: 1;
+}
+.kb-bl-toggle:focus-visible {
+  outline: none;
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-color: rgb(var(--color-accent) / 0.45);
+  text-underline-offset: 0.18em;
+}
+
+.kb-bl-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.kb-bl-toggle-label {
+  color: rgb(var(--color-secondary));
+  font-weight: 600;
+}
+
+.kb-bl-toggle-meta {
+  min-width: 0;
+  color: rgb(var(--color-dim));
+}
+
+.kb-bl-chevron {
+  flex-shrink: 0;
+  color: rgb(var(--color-dim));
+  transition: transform 120ms ease;
+}
+
+.kb-bl-panel-open .kb-bl-toggle {
+  display: flex;
+  width: 100%;
+  padding: 2px 0 9px;
+  opacity: 1;
+}
+
+.kb-bl-toggle[aria-expanded="true"] .kb-bl-chevron {
+  transform: rotate(180deg);
+}
+
+.kb-bl-body {
+  padding: 0 0 10px;
 }
 
 .kb-backlinks-list {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .kb-backlink-item {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 3px;
-  padding: 10px 12px;
-  background: rgb(var(--color-elevated));
-  border: 1px solid rgb(var(--color-border-subtle));
-  border-radius: 8px;
+  gap: 2px;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
   cursor: pointer;
   text-align: left;
   width: 100%;
-  transition: border-color 100ms, background 100ms;
+  transition: background 80ms, border-color 80ms;
 }
 .kb-backlink-item:hover {
   background: rgb(var(--color-accent) / 0.06);
-  border-color: rgb(var(--color-accent) / 0.3);
+  border-color: rgb(var(--color-accent) / 0.15);
 }
 
 .kb-backlink-name {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: rgb(var(--color-primary));
 }

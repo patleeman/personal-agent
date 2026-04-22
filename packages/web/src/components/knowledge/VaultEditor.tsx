@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import { StarterKit } from '@tiptap/starter-kit';
@@ -127,10 +127,13 @@ function EditableTitle({ fileName, fileId, onRenamed }: {
 // ── Backlinks panel ───────────────────────────────────────────────────────────
 
 function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (id: string) => void }) {
+  const contentId = useId();
   const [backlinks, setBacklinks] = useState<VaultBacklink[]>([]);
   const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    setOpen(false);
     setLoading(true);
     vaultApi.backlinks(fileId).then((r) => setBacklinks(r.backlinks)).catch(() => setBacklinks([]))
       .finally(() => setLoading(false));
@@ -138,19 +141,36 @@ function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (i
 
   if (loading || backlinks.length === 0) return null;
 
+  const summary = `${backlinks.length} backlink${backlinks.length !== 1 ? 's' : ''}`;
+
   return (
-    <div className="kb-backlinks">
-      <div className="kb-backlinks-header"><Ico d={ICON.backlink} size={12} />
-        <span>{backlinks.length} backlink{backlinks.length !== 1 ? 's' : ''}</span>
-      </div>
-      <div className="kb-backlinks-list">
-        {backlinks.map((bl) => (
-          <button key={bl.id} type="button" className="kb-backlink-item" onClick={() => onNavigate(bl.id)}>
-            <span className="kb-backlink-name">{bl.name.replace(/\.md$/, '')}</span>
-            <span className="kb-backlink-excerpt">{bl.excerpt}</span>
-          </button>
-        ))}
-      </div>
+    <div className={open ? 'kb-bl-panel kb-bl-panel-open' : 'kb-bl-panel'}>
+      <button
+        type="button"
+        className="kb-bl-toggle"
+        onClick={() => setOpen((current) => !current)}
+        aria-expanded={open}
+        aria-controls={contentId}
+      >
+        <span className="kb-bl-summary">
+          <span className="kb-bl-toggle-label">Backlinks</span>
+          <span className="kb-bl-toggle-meta">{summary}</span>
+        </span>
+        <span className="kb-bl-chevron" aria-hidden="true">⌄</span>
+      </button>
+
+      {open ? (
+        <div id={contentId} className="kb-bl-body">
+          <div className="kb-backlinks-list">
+            {backlinks.map((bl) => (
+              <button key={bl.id} type="button" className="kb-backlink-item" onClick={() => onNavigate(bl.id)}>
+                <span className="kb-backlink-name">{bl.name.replace(/\.md$/, '')}</span>
+                <span className="kb-backlink-excerpt">{bl.excerpt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
