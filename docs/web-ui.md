@@ -50,6 +50,7 @@ Use it for:
 - file tree navigation
 - persisted folder expansion state
 - markdown editing
+- frontmatter disclosure and tag editing
 - full-text search
 - quick-open
 - wikilinks and backlinks

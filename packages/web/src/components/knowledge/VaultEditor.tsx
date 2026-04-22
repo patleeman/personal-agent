@@ -10,10 +10,12 @@ import { Placeholder } from '@tiptap/extension-placeholder';
 import { Image } from '@tiptap/extension-image';
 import { api, vaultApi } from '../../client/api';
 import type { VaultBacklink, VaultEntry } from '../../shared/types';
+import { parseMarkdownDocument, stringifyMarkdownFrontmatter, type MarkdownFrontmatter } from '../../knowledge/markdownDocument';
 import { buildWikiLinkExtension } from './WikiLinkExtension';
 import { buildWikiLinkRenderer } from './WikiLinkSuggestion';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { readMarkdownFromEditor } from './markdownEditorContent';
+import { FrontmatterDisclosure } from './FrontmatterDisclosure';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -88,42 +90,7 @@ function useAutosave(
 
 // ── Frontmatter ───────────────────────────────────────────────────────────────
 
-interface Frontmatter { tags: string[]; aliases: string[]; [key: string]: unknown }
-
-function parseFrontmatter(raw: string): { frontmatter: Frontmatter; body: string } {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { frontmatter: { tags: [], aliases: [] }, body: raw };
-  const yaml = match[1] ?? '';
-  const body = (match[2] ?? '').replace(/^\n+/, '');
-  const fm: Frontmatter = { tags: [], aliases: [] };
-  for (const line of yaml.split('\n')) {
-    const kv = line.match(/^(\w+):\s*(.*)$/);
-    if (!kv) continue;
-    const key = kv[1]!;
-    const val = kv[2]!.trim();
-    if (val.startsWith('[') && val.endsWith(']')) {
-      fm[key] = val.slice(1, -1).split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean);
-    } else {
-      fm[key] = val.replace(/^['"]|['"]$/g, '');
-    }
-  }
-  if (!Array.isArray(fm.tags)) fm.tags = [];
-  if (!Array.isArray(fm.aliases)) fm.aliases = [];
-  return { frontmatter: fm, body };
-}
-
-function serializeFrontmatter(fm: Frontmatter): string {
-  const lines: string[] = ['---'];
-  for (const [k, v] of Object.entries(fm)) {
-    if (Array.isArray(v)) {
-      lines.push(`${k}: [${v.map((s) => `"${s}"`).join(', ')}]`);
-    } else if (v !== '' && v !== null && v !== undefined) {
-      lines.push(`${k}: ${v}`);
-    }
-  }
-  lines.push('---');
-  return lines.join('\n') + '\n\n';
-}
+type Frontmatter = MarkdownFrontmatter;
 
 // ── Editable title ────────────────────────────────────────────────────────────
 
@@ -174,7 +141,7 @@ function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (i
   return (
     <div className="kb-backlinks">
       <div className="kb-backlinks-header"><Ico d={ICON.backlink} size={12} />
-        <span>Linked from {backlinks.length} note{backlinks.length !== 1 ? 's' : ''}</span>
+        <span>{backlinks.length} backlink{backlinks.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="kb-backlinks-list">
         {backlinks.map((bl) => (
@@ -198,6 +165,7 @@ export interface VaultEditorProps {
 }
 
 export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }: VaultEditorProps) {
+  const [frontmatter, setFrontmatter] = useState<Frontmatter>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -205,7 +173,11 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const currentFileId = useRef<string | null>(null);
-  const fmRef = useRef<Frontmatter>({ tags: [], aliases: [] });
+  const fmRef = useRef<Frontmatter>({});
+  const rawFrontmatterRef = useRef<string | null>(null);
+  const frontmatterErrorRef = useRef<string | null>(null);
+  const [frontmatterError, setFrontmatterError] = useState<string | null>(null);
+  const [rawFrontmatter, setRawFrontmatter] = useState<string | null>(null);
 
   // Vault entries for wikilink autocomplete — refresh on kb events
   const [allEntries, setAllEntries] = useState<VaultEntry[]>([]);
@@ -311,60 +283,63 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
   // Load file
   useEffect(() => {
-    if (!editor) {
-      return;
-    }
-
     if (!fileId) {
       currentFileId.current = null;
       fileIdRef.current = null;
-      fmRef.current = { tags: [], aliases: [] };
-      editor.commands.setContent('', { contentType: 'markdown' });
+      editor?.commands.setContent('', { contentType: 'markdown' });
       setDirty(false);
       setError(null);
       setSaveError(null);
       setRevision(0);
+      setFrontmatter({});
+      setFrontmatterError(null);
+      setRawFrontmatter(null);
+      fmRef.current = {};
+      rawFrontmatterRef.current = null;
+      frontmatterErrorRef.current = null;
       return;
     }
-
-    let cancelled = false;
     currentFileId.current = null;
-    setLoading(true);
-    setDirty(false);
-    setError(null);
-    setSaveError(null);
-    setRevision(0);
+    setLoading(true); setDirty(false); setError(null); setSaveError(null); setRevision(0);
 
     vaultApi.readFile(fileId)
       .then(({ content }) => {
-        if (cancelled) return;
-        const { frontmatter: fm, body } = parseFrontmatter(content);
+        const { frontmatter: parsedFrontmatter, rawFrontmatter: nextRawFrontmatter, frontmatterError: nextFrontmatterError, body } = parseMarkdownDocument(content);
+        const fm = parsedFrontmatter ?? {};
+        setFrontmatter(fm);
         fmRef.current = fm;
-        editor.commands.setContent(body, { contentType: 'markdown' });
+        setRawFrontmatter(nextRawFrontmatter);
+        rawFrontmatterRef.current = nextRawFrontmatter;
+        setFrontmatterError(nextFrontmatterError);
+        frontmatterErrorRef.current = nextFrontmatterError;
+        if (editor) {
+          editor.commands.setContent(body, { contentType: 'markdown' });
+          editor.commands.focus('start');
+        }
         currentFileId.current = fileId;
       })
-      .catch((err: unknown) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [fileId, editor]);
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileId]);
 
   // Build full file content (frontmatter + body) for saving
   const getContent = useCallback(() => {
     const body = readMarkdownFromEditor(editor);
-    const fm = fmRef.current;
-    const hasFm = fm.tags.length > 0 || fm.aliases.length > 0 ||
-      Object.keys(fm).some((k) => k !== 'tags' && k !== 'aliases' && fm[k] !== '' && fm[k] != null);
-    return hasFm ? serializeFrontmatter(fm) + body : body;
+    if (frontmatterErrorRef.current && rawFrontmatterRef.current !== null) {
+      return `---\n${rawFrontmatterRef.current}\n---\n\n${body.replace(/^\n+/, '')}`;
+    }
+
+    return stringifyMarkdownFrontmatter(fmRef.current, body);
   }, [editor]);
+
+  const handleFmChange = useCallback((newFm: Frontmatter) => {
+    setFrontmatter(newFm);
+    fmRef.current = newFm;
+    setFrontmatterError(null);
+    frontmatterErrorRef.current = null;
+    if (currentFileId.current) setDirty(true);
+  }, []);
 
   const handleSaved = useCallback(() => {
     setDirty(false);
@@ -377,7 +352,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
   if (!fileId) {
     return (
-      <div className="flex h-full w-full flex-1 items-center justify-center text-dim text-[13px] px-6 text-center">
+      <div className="flex h-full w-full flex-1 items-center justify-center px-6 text-center text-[13px] text-dim">
         Select a file to edit, or import a URL from the knowledge sidebar.
       </div>
     );
@@ -397,8 +372,8 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
       {/* Status bar */}
       <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-1.5">
-        <span className="text-[11px] text-dim truncate font-mono">{fileId}</span>
-        <span className={['ml-auto text-[11px] shrink-0', saveError ? 'text-danger' : 'text-dim'].join(' ')} title={saveError ?? undefined}>
+        <span className="truncate font-mono text-[11px] text-dim">{fileId}</span>
+        <span className={["ml-auto shrink-0 text-[11px]", saveError ? 'text-danger' : 'text-dim'].join(' ')} title={saveError ?? undefined}>
           {saveError ? 'Save failed' : dirty ? 'Unsaved' : savedAt ? 'Saved' : ''}
         </span>
       </div>
@@ -434,6 +409,12 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
       <div className="kb-editor-shell">
         <div className="kb-editor-wrapper">
+          <FrontmatterDisclosure
+            frontmatter={frontmatter}
+            rawFrontmatter={rawFrontmatter}
+            parseError={frontmatterError}
+            onChange={handleFmChange}
+          />
           <EditableTitle
             fileName={titleName}
             fileId={fileId}
