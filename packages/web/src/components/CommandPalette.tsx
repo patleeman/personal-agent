@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { api } from '../client/api';
+import { api, vaultApi } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
   COMMAND_PALETTE_SCOPE_SECTIONS,
@@ -11,30 +11,47 @@ import {
   type CommandPaletteSection,
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
-import { useAppData } from '../app/contexts';
 import { useConversations } from '../hooks/useConversations';
-import type { ScheduledTaskSummary, SessionMeta } from '../shared/types';
+import type { SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
+import { onKBEvent } from './knowledge/knowledgeEvents';
 import { cx } from './ui';
 
 type CommandPaletteAction =
   | { kind: 'navigate'; to: string }
   | { kind: 'restoreArchivedConversation'; conversationId: string }
-  | { kind: 'setScope'; scope: CommandPaletteScope };
+  | { kind: 'openFile'; fileId: string };
 
 interface ScopedSessionMeta extends SessionMeta {
   pinned?: boolean;
 }
 
 const THREADS_EMPTY_QUERY_PAGE_SIZE = 50;
+const FILE_SEARCH_LIMIT = 50;
+const FILE_CONTENT_SEARCH_DEBOUNCE_MS = 160;
 
 function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop:not([data-command-palette="true"])') !== null;
 }
 
+function isPrimaryModifierPressed(event: KeyboardEvent): boolean {
+  return event.metaKey || event.ctrlKey;
+}
+
+function normalizeHotkeyKey(event: KeyboardEvent): string {
+  return event.key.length === 1 ? event.key.toLowerCase() : event.key;
+}
+
 function isCommandPaletteHotkey(event: KeyboardEvent): boolean {
-  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
-  return key === 'k' && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+  return normalizeHotkeyKey(event) === 'k' && isPrimaryModifierPressed(event) && !event.altKey && !event.shiftKey;
+}
+
+function isFilePaletteHotkey(event: KeyboardEvent): boolean {
+  return normalizeHotkeyKey(event) === 'p' && isPrimaryModifierPressed(event) && !event.altKey && !event.shiftKey;
+}
+
+function isSearchAllHotkey(event: KeyboardEvent): boolean {
+  return normalizeHotkeyKey(event) === 'f' && isPrimaryModifierPressed(event) && !event.altKey && event.shiftKey;
 }
 
 function isMacPlatform(): boolean {
@@ -54,115 +71,19 @@ function excerpt(value: string | undefined, maxLength = 110): string | undefined
   return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized;
 }
 
-function taskStatusText(task: ScheduledTaskSummary): string {
-  if (task.running) return 'running';
-  if (task.lastStatus === 'success') return 'ok';
-  if (task.lastStatus === 'failure') return 'failed';
-  if (!task.enabled) return 'disabled';
-  return 'pending';
+function fileTitle(name: string): string {
+  return name.replace(/\.md$/i, '');
 }
 
-function humanizeTaskCron(cron: string | undefined): string | undefined {
-  if (!cron) {
-    return undefined;
-  }
-
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) {
-    return cron;
-  }
-
-  const [min, hour, dom, month, dow] = parts;
-  if (dom === '*' && month === '*' && dow === '*') {
-    if (hour === '*' && min === '*') {
-      return 'every minute';
-    }
-
-    const minuteStep = min.match(/^\*\/(\d+)$/);
-    if (hour === '*' && minuteStep) {
-      return `every ${minuteStep[1]} min`;
-    }
-
-    if (hour === '*' && min !== '*') {
-      return `every hour at :${min.padStart(2, '0')}`;
-    }
-
-    const hourStep = hour.match(/^\*\/(\d+)$/);
-    if (hourStep && min !== '*') {
-      return `every ${hourStep[1]}h at :${min.padStart(2, '0')}`;
-    }
-
-    if (hour !== '*' && min !== '*') {
-      return `daily at ${hour.padStart(2, '0')}:${min.padStart(2, '0')}`;
-    }
-  }
-
-  return cron;
-}
-
-function buildNavItems(): CommandPaletteItem<CommandPaletteAction>[] {
-  return [
-    {
-      id: 'nav:new-chat',
-      section: 'nav',
-      title: 'New chat',
-      subtitle: 'Start a fresh conversation',
-      keywords: ['conversation', 'new', 'chat'],
-      order: 0,
-      action: { kind: 'navigate', to: '/conversations/new' },
-    },
-    {
-      id: 'nav:scheduled',
-      section: 'nav',
-      title: 'Automations',
-      subtitle: 'Browse unattended automation',
-      keywords: ['automation', 'scheduled', 'tasks', 'cron'],
-      order: 8,
-      action: { kind: 'navigate', to: '/automations' },
-    },
-    {
-      id: 'nav:threads',
-      section: 'nav',
-      title: 'Threads',
-      subtitle: 'Search archived conversations',
-      keywords: ['archive', 'restore', 'history', 'messages', 'threads', 'fuzzy'],
-      order: 12,
-      action: { kind: 'setScope', scope: 'threads' },
-    },
-    {
-      id: 'nav:system',
-      section: 'nav',
-      title: 'System',
-      subtitle: 'Inspect services, logs, and operational state',
-      keywords: ['daemon', 'web ui', 'status', 'services', 'logs', 'operations'],
-      order: 13,
-      action: { kind: 'navigate', to: '/settings?page=system' },
-    },
-    {
-      id: 'nav:daemon',
-      section: 'nav',
-      title: 'Daemon',
-      subtitle: 'Inspect runtime health, queue depth, and daemon logs',
-      keywords: ['system', 'daemon', 'queue', 'runtime', 'background'],
-      order: 15,
-      action: { kind: 'navigate', to: '/settings?page=system-daemon' },
-    },
-    {
-      id: 'nav:settings',
-      section: 'nav',
-      title: 'Settings',
-      subtitle: 'Adjust UI, profile, and model preferences',
-      keywords: ['preferences', 'config'],
-      order: 18,
-      action: { kind: 'navigate', to: '/settings' },
-    },
-  ];
+function fileLocation(id: string): string | undefined {
+  const parts = id.split('/').slice(0, -1).filter(Boolean);
+  return parts.length > 0 ? parts.join('/') : undefined;
 }
 
 function buildConversationItems(
   section: 'open' | 'archived',
   sessions: ScopedSessionMeta[],
-  archivedSearchIndex: Record<string, string> = {},
+  conversationSearchIndex: Record<string, string> = {},
 ): CommandPaletteItem<CommandPaletteAction>[] {
   const orderedSessions = section === 'archived'
     ? [...sessions].sort((left, right) => {
@@ -192,15 +113,13 @@ function buildConversationItems(
       metaParts.push(session.model.split('/').pop() ?? session.model);
     }
 
-    const archivedSearchText = section === 'archived' ? archivedSearchIndex[session.id] ?? '' : '';
-
     return {
       id: `${section}:${session.id}`,
       section,
       title: session.title,
       subtitle: session.cwd,
       meta: metaParts.join(' · '),
-      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug, archivedSearchText],
+      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug, conversationSearchIndex[session.id] ?? ''],
       order: index,
       action: section === 'archived'
         ? { kind: 'restoreArchivedConversation', conversationId: session.id }
@@ -209,64 +128,55 @@ function buildConversationItems(
   });
 }
 
-function buildTaskItems(tasks: ScheduledTaskSummary[]): CommandPaletteItem<CommandPaletteAction>[] {
-  const orderedTasks = [...tasks].sort((left, right) => {
-    if (left.running !== right.running) {
-      return left.running ? -1 : 1;
-    }
-
-    const leftTimestamp = left.lastRunAt ?? '';
-    const rightTimestamp = right.lastRunAt ?? '';
-    if (leftTimestamp !== rightTimestamp) {
-      return rightTimestamp.localeCompare(leftTimestamp);
-    }
-
-    return left.id.localeCompare(right.id);
-  });
-
-  return orderedTasks.map((task, index) => {
-    const metaParts = [taskStatusText(task)];
-    const cronText = humanizeTaskCron(task.cron);
-    if (cronText) {
-      metaParts.push(cronText);
-    }
-    if (task.lastRunAt) {
-      metaParts.push(`last run ${timeAgo(task.lastRunAt)}`);
-    }
-    if (task.model) {
-      metaParts.push(task.model.split('/').pop() ?? task.model);
-    }
-
-    return {
-      id: `task:${task.id}`,
-      section: 'tasks',
-      title: task.id,
-      subtitle: excerpt(task.prompt, 120) ?? task.filePath,
-      meta: metaParts.join(' · '),
-      keywords: [task.id, task.filePath, task.scheduleType, task.prompt, task.cron ?? '', task.model ?? '', task.lastStatus ?? ''],
+function buildFileItems(files: VaultEntry[]): CommandPaletteItem<CommandPaletteAction>[] {
+  return files
+    .filter((file) => file.kind === 'file' && file.name.endsWith('.md'))
+    .map((file, index) => ({
+      id: `file:${file.id}`,
+      section: 'files' as const,
+      title: fileTitle(file.name),
+      subtitle: fileLocation(file.id),
+      meta: file.id,
+      keywords: [file.id, file.name, file.path],
       order: index,
-      action: { kind: 'navigate', to: `/automations/${encodeURIComponent(task.id)}` },
-    };
-  });
+      action: { kind: 'openFile', fileId: file.id },
+    }));
+}
+
+function buildFileSearchItems(results: VaultSearchResult[]): CommandPaletteItem<CommandPaletteAction>[] {
+  return results.map((result, index) => ({
+    id: `file-search:${result.id}`,
+    section: 'files' as const,
+    title: fileTitle(result.name),
+    subtitle: fileLocation(result.id),
+    meta: excerpt(result.excerpt, 140) ?? result.id,
+    keywords: [result.id, result.name, result.excerpt],
+    order: index,
+    action: { kind: 'openFile', fileId: result.id },
+  }));
 }
 
 function emptyStateCopy(scope: CommandPaletteScope, query: string): string {
   if (query.trim().length > 0) {
     switch (scope) {
+      case 'files':
+        return `No files match “${query}”.`;
+      case 'search':
+        return `Nothing matches “${query}”.`;
       case 'threads':
-        return `No threads match “${query}”.`;
-      case 'commands':
       default:
-        return `No commands match “${query}”.`;
+        return `No threads match “${query}”.`;
     }
   }
 
   switch (scope) {
+    case 'files':
+      return 'No knowledge files yet.';
+    case 'search':
+      return 'Type to search threads and files.';
     case 'threads':
-      return 'No archived conversations yet.';
-    case 'commands':
     default:
-      return 'Nothing to show yet.';
+      return 'No threads yet.';
   }
 }
 
@@ -276,7 +186,6 @@ export function CommandPalette() {
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const macPlatform = useMemo(() => isMacPlatform(), []);
-  const { tasks } = useAppData();
   const {
     pinnedSessions,
     tabs,
@@ -291,31 +200,46 @@ export function CommandPalette() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [archivedVisibleLimit, setArchivedVisibleLimit] = useState(THREADS_EMPTY_QUERY_PAGE_SIZE);
-  const [archivedSearchIndex, setArchivedSearchIndex] = useState<Record<string, string>>({});
-  const [archivedSearchLoading, setArchivedSearchLoading] = useState(false);
-  const [archivedSearchError, setArchivedSearchError] = useState<string | null>(null);
+  const [conversationSearchIndex, setConversationSearchIndex] = useState<Record<string, string>>({});
+  const [conversationSearchLoading, setConversationSearchLoading] = useState(false);
+  const [conversationSearchError, setConversationSearchError] = useState<string | null>(null);
+  const [vaultFiles, setVaultFiles] = useState<VaultEntry[]>([]);
+  const [vaultFilesLoading, setVaultFilesLoading] = useState(false);
+  const [vaultFilesError, setVaultFilesError] = useState<string | null>(null);
+  const [vaultSearchResults, setVaultSearchResults] = useState<VaultSearchResult[]>([]);
+  const [vaultSearchLoading, setVaultSearchLoading] = useState(false);
+  const [vaultSearchError, setVaultSearchError] = useState<string | null>(null);
 
-  const openConversationItems = useMemo(
-    () => buildConversationItems('open', [
+  const openThreadSessions = useMemo(
+    () => [
       ...pinnedSessions.map((session) => ({ ...session, pinned: true } satisfies ScopedSessionMeta)),
       ...tabs,
-    ]),
+    ],
     [pinnedSessions, tabs],
   );
-  const archivedConversationItems = useMemo(
-    () => buildConversationItems('archived', archivedSessions, archivedSearchIndex),
-    [archivedSearchIndex, archivedSessions],
+
+  const openConversationItems = useMemo(
+    () => buildConversationItems('open', openThreadSessions, conversationSearchIndex),
+    [conversationSearchIndex, openThreadSessions],
   );
-  const taskItems = useMemo(() => buildTaskItems(tasks ?? []), [tasks]);
-  const items = useMemo(
-    () => [
-      ...buildNavItems(),
+  const archivedConversationItems = useMemo(
+    () => buildConversationItems('archived', archivedSessions, conversationSearchIndex),
+    [archivedSessions, conversationSearchIndex],
+  );
+  const fileItems = useMemo(() => buildFileItems(vaultFiles), [vaultFiles]);
+  const searchedFileItems = useMemo(() => buildFileSearchItems(vaultSearchResults), [vaultSearchResults]);
+  const allItems = useMemo(() => {
+    const filesForScope = scope === 'search' && query.trim().length > 0
+      ? searchedFileItems
+      : fileItems;
+
+    return [
       ...openConversationItems,
       ...archivedConversationItems,
-      ...taskItems,
-    ],
-    [archivedConversationItems, openConversationItems, taskItems],
-  );
+      ...filesForScope,
+    ];
+  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedFileItems]);
+
   const emptyQueryLimits = useMemo(
     () => (scope === 'threads' && query.trim().length === 0
       ? { archived: archivedVisibleLimit }
@@ -323,8 +247,8 @@ export function CommandPalette() {
     [archivedVisibleLimit, query, scope],
   );
   const groups = useMemo(
-    () => searchCommandPaletteItems(items, { query, scope, emptyQueryLimits }),
-    [emptyQueryLimits, items, query, scope],
+    () => searchCommandPaletteItems(allItems, { query, scope, emptyQueryLimits }),
+    [allItems, emptyQueryLimits, query, scope],
   );
   const visibleItems = useMemo(
     () => groups.flatMap((group) => group.items),
@@ -347,6 +271,19 @@ export function CommandPalette() {
     setOpen(true);
   }, []);
 
+  const loadVaultFiles = useCallback(async () => {
+    setVaultFilesLoading(true);
+    setVaultFilesError(null);
+    try {
+      const result = await api.vaultFiles();
+      setVaultFiles(result.files);
+    } catch (error) {
+      setVaultFilesError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setVaultFilesLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     function handleOpenPalette(event: Event) {
       const detail = (event as CustomEvent<OpenCommandPaletteDetail>).detail;
@@ -356,6 +293,180 @@ export function CommandPalette() {
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
     return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
   }, [openPalette]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (scope !== 'files' && scope !== 'search') {
+      return;
+    }
+
+    if (vaultFilesLoading || vaultFiles.length > 0) {
+      return;
+    }
+
+    void loadVaultFiles();
+  }, [loadVaultFiles, open, scope, vaultFiles.length, vaultFilesLoading]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const offHandlers = [
+      onKBEvent('kb:entries-changed', () => { void loadVaultFiles(); }),
+      onKBEvent('kb:file-created', () => { void loadVaultFiles(); }),
+      onKBEvent('kb:file-renamed', () => { void loadVaultFiles(); }),
+      onKBEvent('kb:file-deleted', () => { void loadVaultFiles(); }),
+    ];
+
+    return () => offHandlers.forEach((off) => off());
+  }, [loadVaultFiles, open]);
+
+  const searchableConversationIds = useMemo(
+    () => [
+      ...openThreadSessions,
+      ...archivedSessions,
+    ]
+      .filter((session) => typeof session.file === 'string' && session.file.trim().length > 0)
+      .map((session) => session.id),
+    [archivedSessions, openThreadSessions],
+  );
+  const shouldIndexConversationSearch = open
+    && query.trim().length > 0
+    && (scope === 'threads' || scope === 'search');
+  const archivedGroup = useMemo(
+    () => groups.find((group) => group.section === 'archived') ?? null,
+    [groups],
+  );
+  const canLoadMoreArchivedThreads = Boolean(
+    open
+    && scope === 'threads'
+    && query.trim().length === 0
+    && archivedGroup
+    && archivedGroup.total > archivedGroup.items.length,
+  );
+
+  useEffect(() => {
+    if (!canLoadMoreArchivedThreads) {
+      return;
+    }
+
+    const listElement = listRef.current;
+    if (!listElement) {
+      return;
+    }
+
+    if (listElement.scrollHeight > listElement.clientHeight + 8) {
+      return;
+    }
+
+    setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
+  }, [canLoadMoreArchivedThreads, groups]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    if (searchableConversationIds.length === 0) {
+      setConversationSearchIndex({});
+      setConversationSearchError(null);
+      setConversationSearchLoading(false);
+      return;
+    }
+
+    if (!shouldIndexConversationSearch) {
+      setConversationSearchLoading(false);
+      return;
+    }
+
+    const missingSessionIds = searchableConversationIds
+      .filter((sessionId) => conversationSearchIndex[sessionId] === undefined)
+      .slice(0, 25);
+    if (missingSessionIds.length === 0) {
+      setConversationSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setConversationSearchLoading(true);
+    setConversationSearchError(null);
+
+    api.sessionSearchIndex(missingSessionIds)
+      .then((result) => {
+        if (cancelled) {
+          return;
+        }
+
+        setConversationSearchIndex((current) => ({
+          ...current,
+          ...result.index,
+        }));
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+
+        setConversationSearchError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setConversationSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [conversationSearchIndex, open, query, scope, searchableConversationIds, shouldIndexConversationSearch]);
+
+  const shouldSearchFilesByContent = open
+    && scope === 'search'
+    && query.trim().length > 0;
+
+  useEffect(() => {
+    if (!shouldSearchFilesByContent) {
+      setVaultSearchLoading(false);
+      setVaultSearchError(null);
+      setVaultSearchResults([]);
+      return;
+    }
+
+    let cancelled = false;
+    setVaultSearchLoading(true);
+    setVaultSearchError(null);
+
+    const handle = window.setTimeout(() => {
+      void vaultApi.search(query.trim(), FILE_SEARCH_LIMIT)
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
+          setVaultSearchResults(result.results);
+        })
+        .catch((error) => {
+          if (cancelled) {
+            return;
+          }
+          setVaultSearchError(error instanceof Error ? error.message : String(error));
+          setVaultSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setVaultSearchLoading(false);
+          }
+        });
+    }, FILE_CONTENT_SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+  }, [query, shouldSearchFilesByContent]);
 
   const activateItem = useCallback(async (item: CommandPaletteItem<CommandPaletteAction>) => {
     if (item.disabled) {
@@ -376,12 +487,9 @@ export function CommandPalette() {
           navigate(`/conversations/${encodeURIComponent(item.action.conversationId)}`);
           closePalette();
           return;
-        case 'setScope':
-          setScope(item.action.scope);
-          setQuery('');
-          setCursor(0);
-          setBusyItemId(null);
-          window.requestAnimationFrame(() => inputRef.current?.focus());
+        case 'openFile':
+          navigate(`/knowledge?file=${encodeURIComponent(item.action.fileId)}`);
+          closePalette();
           return;
         default:
           return;
@@ -428,116 +536,30 @@ export function CommandPalette() {
     listRef.current?.querySelector(`[data-command-palette-idx="${cursor}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [cursor, open]);
 
-  const archivedSessionIds = useMemo(
-    () => archivedSessions.map((session) => session.id),
-    [archivedSessions],
-  );
-  const shouldIndexArchivedSearch = open
-    && query.trim().length > 0
-    && scope === 'threads';
-  const archivedGroup = useMemo(
-    () => groups.find((group) => group.section === 'archived') ?? null,
-    [groups],
-  );
-  const canLoadMoreArchivedThreads = Boolean(
-    open
-    && scope === 'threads'
-    && query.trim().length === 0
-    && archivedGroup
-    && archivedGroup.total > archivedGroup.items.length,
-  );
-
-  useEffect(() => {
-    if (!canLoadMoreArchivedThreads) {
-      return;
-    }
-
-    const listElement = listRef.current;
-    if (!listElement) {
-      return;
-    }
-
-    if (listElement.scrollHeight > listElement.clientHeight + 8) {
-      return;
-    }
-
-    setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
-  }, [canLoadMoreArchivedThreads, groups]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (archivedSessionIds.length === 0) {
-      setArchivedSearchIndex({});
-      setArchivedSearchError(null);
-      setArchivedSearchLoading(false);
-      return;
-    }
-
-    if (!shouldIndexArchivedSearch) {
-      setArchivedSearchLoading(false);
-      return;
-    }
-
-    const missingSessionIds = archivedSessionIds
-      .filter((sessionId) => archivedSearchIndex[sessionId] === undefined)
-      .slice(0, 25);
-    if (missingSessionIds.length === 0) {
-      setArchivedSearchLoading(false);
-      return;
-    }
-
-    let cancelled = false;
-    setArchivedSearchLoading(true);
-    setArchivedSearchError(null);
-
-    api.sessionSearchIndex(missingSessionIds)
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-
-        setArchivedSearchIndex((current) => ({
-          ...current,
-          ...result.index,
-        }));
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setArchivedSearchError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setArchivedSearchLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [archivedSearchIndex, archivedSessionIds, open, query, scope, shouldIndexArchivedSearch]);
-
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || event.isComposing) {
         return;
       }
 
-      if (isCommandPaletteHotkey(event)) {
+      const nextScope = isSearchAllHotkey(event)
+        ? 'search'
+        : isFilePaletteHotkey(event)
+          ? 'files'
+          : isCommandPaletteHotkey(event)
+            ? 'threads'
+            : null;
+
+      if (nextScope) {
         if (!open && hasBlockingOverlayOpen()) {
           return;
         }
 
         event.preventDefault();
-        if (open) {
+        if (isCommandPaletteHotkey(event) && open) {
           closePalette();
         } else {
-          openPalette();
+          openPalette({ scope: nextScope });
         }
         return;
       }
@@ -626,6 +648,7 @@ export function CommandPalette() {
   const visibleCount = visibleItems.length;
   const loadingSections = useMemo(() => {
     const sections = new Set<CommandPaletteSection>();
+
     if (sessionsLoading) {
       for (const section of COMMAND_PALETTE_SCOPE_SECTIONS[scope]) {
         if (section === 'open' || section === 'archived') {
@@ -633,18 +656,28 @@ export function CommandPalette() {
         }
       }
     }
-    if (scope === 'threads' && archivedSearchLoading) {
+
+    if (conversationSearchLoading && (scope === 'threads' || scope === 'search')) {
+      sections.add('open');
       sections.add('archived');
     }
-    if (scope === 'commands' && tasks === null) {
-      sections.add('tasks');
+
+    if ((scope === 'files' || scope === 'search') && vaultFilesLoading && fileItems.length === 0) {
+      sections.add('files');
     }
+
+    if (scope === 'search' && vaultSearchLoading) {
+      sections.add('files');
+    }
+
     return [...sections];
-  }, [archivedSearchLoading, scope, sessionsLoading, tasks]);
-  const showSectionHeaders = scope === 'commands' && groups.length > 1;
+  }, [conversationSearchLoading, fileItems.length, scope, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
+  const showSectionHeaders = groups.length > 1;
   const searchPlaceholder = scope === 'threads'
     ? 'Search threads…'
-    : 'Search commands, tabs, and automations…';
+    : scope === 'files'
+      ? 'Open files…'
+      : 'Search threads and files…';
 
   if (!open) {
     return null;
@@ -755,12 +788,6 @@ export function CommandPalette() {
         >
           {groups.map((group) => (
             <section key={group.section} className="pb-2 last:pb-0">
-              {!showSectionHeaders && scope === 'threads' && group.section === 'archived' ? (
-                <div className="px-2.5 pb-1 flex items-center gap-2">
-                  <p className="ui-section-label">{group.label}</p>
-                  <span className="ui-section-count">{group.items.length}{group.total > group.items.length ? `/${group.total}` : ''}</span>
-                </div>
-              ) : null}
               {showSectionHeaders && (
                 <div className="px-2.5 pb-1 flex items-center gap-2">
                   <p className="ui-section-label">{group.label}</p>
@@ -828,13 +855,25 @@ export function CommandPalette() {
             </section>
           ))}
 
-          {archivedSearchError && scope === 'threads' && (
+          {conversationSearchError && (scope === 'threads' || scope === 'search') && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to index archived messages: {archivedSearchError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to index thread contents: {conversationSearchError}</p>
             </section>
           )}
 
-          {visibleCount === 0 && loadingSections.length === 0 && !(archivedSearchError && scope === 'threads') && (
+          {vaultFilesError && (scope === 'files' || scope === 'search') && (
+            <section className="pb-2 last:pb-0">
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to load files: {vaultFilesError}</p>
+            </section>
+          )}
+
+          {vaultSearchError && scope === 'search' && (
+            <section className="pb-2 last:pb-0">
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search file contents: {vaultSearchError}</p>
+            </section>
+          )}
+
+          {visibleCount === 0 && loadingSections.length === 0 && !(conversationSearchError && (scope === 'threads' || scope === 'search')) && !(vaultFilesError && (scope === 'files' || scope === 'search')) && !(vaultSearchError && scope === 'search') && (
             <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
           )}
         </div>

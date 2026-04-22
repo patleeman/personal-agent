@@ -5,7 +5,8 @@ import {
   useState,
 } from 'react';
 import { vaultApi } from '../../client/api';
-import type { VaultEntry, VaultSearchResult } from '../../shared/types';
+import type { VaultEntry } from '../../shared/types';
+import { openCommandPalette } from '../../commands/commandPaletteEvents';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { VAULT_ENTRY_DRAG_TYPE, canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
@@ -32,7 +33,6 @@ const ICON = {
   pencil:     'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
   move:       'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
   search:     'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
-  x:          'M6 18 18 6M6 6l12 12',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -224,32 +224,6 @@ function insertEntry(nodes: TreeNode[], parentDir: string, entry: VaultEntry): T
   });
 }
 
-// ── Search results ────────────────────────────────────────────────────────────
-
-function SearchResults({ results, activeId, onSelect }: {
-  results: VaultSearchResult[];
-  activeId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  if (results.length === 0) {
-    return <p className="px-3 py-4 text-[12px] text-dim text-center">No results</p>;
-  }
-  return (
-    <div className="space-y-px py-1">
-      {results.map((r) => (
-        <button key={r.id} type="button" aria-label={r.name}
-          className={['flex w-full flex-col items-start px-3 py-2 rounded-md text-left gap-0.5',
-            activeId === r.id ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
-          ].join(' ')}
-          onClick={() => onSelect(r.id)}>
-          <span className="text-[12px] font-medium truncate w-full">{r.name.replace(/\.md$/, '')}</span>
-          {r.excerpt ? <span className="text-[11px] text-dim line-clamp-2 leading-relaxed">{r.excerpt}</span> : null}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
@@ -260,11 +234,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
   const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<VaultSearchResult[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load root ───────────────────────────────────────────────────────────────
 
@@ -297,37 +266,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     ];
     return () => offs.forEach((off) => off());
   }, [loadRoot]);
-
-  // ── Search ──────────────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!searchQuery.trim()) { setSearchResults([]); setSearching(false); return; }
-    setSearching(true);
-    searchTimer.current = setTimeout(async () => {
-      try {
-        const res = await vaultApi.search(searchQuery.trim());
-        setSearchResults(res.results);
-      } catch { setSearchResults([]); }
-      finally { setSearching(false); }
-    }, 220);
-    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
-  }, [searchQuery]);
-
-  // Cmd+F focuses search
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
-        // Only when on a KB page
-        if (window.location.pathname.startsWith('/knowledge')) {
-          e.preventDefault();
-          searchInputRef.current?.focus();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
 
   // ── Tree expansion ──────────────────────────────────────────────────────────
 
@@ -551,56 +489,34 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
-  const inSearch = searchQuery.trim().length > 0;
-
   return (
     <div className="flex flex-col h-full">
-      {/* Search bar */}
-      <div className="px-2 pt-1.5 pb-1 shrink-0">
-        <div className="flex items-center gap-1.5 rounded-md bg-surface border border-border-subtle px-2 py-1.5 focus-within:border-accent/50">
-          <span className="text-dim shrink-0"><Ico d={ICON.search} size={11} /></span>
-          <input
-            ref={searchInputRef}
-            type="text"
-            placeholder="Search…"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent text-[12px] text-primary outline-none placeholder:text-dim"
-          />
-          {searchQuery && (
-            <button type="button" className="text-dim hover:text-primary shrink-0" onClick={() => setSearchQuery('')}>
-              <Ico d={ICON.x} size={10} />
-            </button>
-          )}
-        </div>
+      <div className={['flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md', dropTargetDir === '' ? 'bg-accent/8 ring-1 ring-inset ring-accent/30' : ''].join(' ')}>
+        <p className="ui-section-label flex-1">Knowledge Base</p>
+        <button
+          type="button"
+          className="ui-icon-button ui-icon-button-compact"
+          title="Open file palette"
+          onClick={() => openCommandPalette({ scope: 'files' })}
+        >
+          <Ico d={ICON.search} size={12} />
+        </button>
+        <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
+          onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
+          <Ico d={ICON.plus} size={12} />
+        </button>
+        <button type="button" className="ui-icon-button ui-icon-button-compact" title="New folder"
+          onClick={() => setEditState({ type: 'new-folder', parentDir: '', value: 'New Folder' })}>
+          <Ico d={ICON.folderPlus} size={12} />
+        </button>
       </div>
 
-      {/* Header (hidden while searching) */}
-      {!inSearch && (
-        <div className={['flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md', dropTargetDir === '' ? 'bg-accent/8 ring-1 ring-inset ring-accent/30' : ''].join(' ')}>
-          <p className="ui-section-label flex-1">Knowledge Base</p>
-          <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
-            onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
-            <Ico d={ICON.plus} size={12} />
-          </button>
-          <button type="button" className="ui-icon-button ui-icon-button-compact" title="New folder"
-            onClick={() => setEditState({ type: 'new-folder', parentDir: '', value: 'New Folder' })}>
-            <Ico d={ICON.folderPlus} size={12} />
-          </button>
-        </div>
-      )}
-
-      {/* Content */}
       <div
         className={['flex-1 overflow-y-auto min-h-0 px-1 pb-3', dropTargetDir === '' ? 'bg-accent/4' : ''].join(' ')}
-        onDragOver={!inSearch ? handleRootDragOver : undefined}
-        onDrop={!inSearch ? (e) => handleDropToDir(e, '') : undefined}
+        onDragOver={handleRootDragOver}
+        onDrop={(e) => handleDropToDir(e, '')}
       >
-        {inSearch ? (
-          searching
-            ? <p className="px-3 py-4 text-[12px] text-dim text-center animate-pulse">Searching…</p>
-            : <SearchResults results={searchResults} activeId={activeFileId} onSelect={(id) => { onFileSelect(id); setSearchQuery(''); }} />
-        ) : loading ? (
+        {loading ? (
           <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
         ) : (
           <div className="space-y-px">

@@ -1,7 +1,7 @@
 import { fuzzyScore } from './slashMenu';
 
-export type CommandPaletteSection = 'nav' | 'open' | 'archived' | 'tasks';
-export type CommandPaletteScope = 'commands' | 'threads';
+export type CommandPaletteSection = 'open' | 'archived' | 'files';
+export type CommandPaletteScope = 'threads' | 'files' | 'search';
 
 export interface CommandPaletteItem<TAction = unknown> {
   id: string;
@@ -27,27 +27,27 @@ interface CommandPaletteSectionResult<TAction = unknown> {
 }
 
 export const COMMAND_PALETTE_SCOPE_SECTIONS: Record<CommandPaletteScope, CommandPaletteSection[]> = {
-  commands: ['nav', 'open', 'tasks'],
-  threads: ['archived'],
+  threads: ['open', 'archived'],
+  files: ['files'],
+  search: ['open', 'archived', 'files'],
 };
 
 export const COMMAND_PALETTE_SECTION_LABELS: Record<CommandPaletteSection, string> = {
-  nav: 'Navigation',
-  open: 'Open conversations',
-  archived: 'Threads',
-  tasks: 'Automations',
+  open: 'Open threads',
+  archived: 'Archived threads',
+  files: 'Files',
 };
 
 export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; label: string }> = [
   { value: 'threads', label: 'Threads' },
-  { value: 'commands', label: 'Commands' },
+  { value: 'files', label: 'Files' },
+  { value: 'search', label: 'Search all' },
 ];
 
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
-  nav: 12,
   open: 12,
   archived: 8,
-  tasks: 8,
+  files: 30,
 };
 
 function tokenizeQuery(query: string): string[] {

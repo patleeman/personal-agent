@@ -6,3 +6,7 @@ export interface OpenCommandPaletteDetail {
   scope?: CommandPaletteScope;
   query?: string;
 }
+
+export function openCommandPalette(detail: OpenCommandPaletteDetail = {}): void {
+  window.dispatchEvent(new CustomEvent<OpenCommandPaletteDetail>(OPEN_COMMAND_PALETTE_EVENT, { detail }));
+}

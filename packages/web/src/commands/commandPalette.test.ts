@@ -7,20 +7,11 @@ interface TestAction {
 
 const ITEMS: CommandPaletteItem<TestAction>[] = [
   {
-    id: 'nav:workspace',
-    section: 'nav',
-    title: 'Workspace Files',
-    subtitle: 'Browse workspace files',
-    keywords: ['workspaces'],
-    order: 1,
-    action: { kind: 'navigate' },
-  },
-  {
     id: 'open:alpha',
     section: 'open',
     title: 'Alpha issue triage',
     subtitle: '/tmp/alpha',
-    keywords: ['conv-open-1'],
+    keywords: ['conv-open-1', 'alpha body text'],
     order: 1,
     action: { kind: 'open' },
   },
@@ -29,61 +20,59 @@ const ITEMS: CommandPaletteItem<TestAction>[] = [
     section: 'archived',
     title: 'Beta cleanup',
     subtitle: '/tmp/archive',
-    keywords: ['conv-archive-1'],
+    keywords: ['conv-archive-1', 'beta body text'],
     order: 1,
     action: { kind: 'restore' },
   },
   {
-    id: 'task:nightly',
-    section: 'tasks',
-    title: 'nightly-review',
-    subtitle: 'Summarize unresolved tickets',
-    keywords: ['0 8 * * *', 'gpt-5'],
+    id: 'file:guide',
+    section: 'files',
+    title: 'Workspace Files',
+    subtitle: 'notes/workspace-files.md',
+    keywords: ['workspaces', 'workspace layout guide'],
     order: 1,
-    action: { kind: 'task' },
+    action: { kind: 'file' },
   },
 ];
 
 describe('command palette search', () => {
-  it('filters title matches ahead of unrelated items', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly', scope: 'commands' });
+  it('filters file matches ahead of unrelated items in the files scope', () => {
+    const results = searchCommandPaletteItems(ITEMS, { query: 'workspace', scope: 'files' });
 
     expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('tasks');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['task:nightly']);
+    expect(results[0]?.section).toBe('files');
+    expect(results[0]?.items.map((item) => item.id)).toEqual(['file:guide']);
   });
 
   it('matches across multiple tokens and keywords', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: 'nightly summarize', scope: 'commands' });
-
-    expect(results).toHaveLength(1);
-    expect(results[0]?.section).toBe('tasks');
-    expect(results[0]?.items[0]?.id).toBe('task:nightly');
-  });
-
-  it('filters to the requested scope', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'threads' });
+    const results = searchCommandPaletteItems(ITEMS, { query: 'beta body', scope: 'threads' });
 
     expect(results).toHaveLength(1);
     expect(results[0]?.section).toBe('archived');
-    expect(results[0]?.items.map((item) => item.id)).toEqual(['archived:beta']);
+    expect(results[0]?.items[0]?.id).toBe('archived:beta');
   });
 
-  it('keeps section order when query is empty', () => {
-    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'commands' });
+  it('filters to the requested thread scope', () => {
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'threads' });
+
+    expect(results.map((group) => group.section)).toEqual(['open', 'archived']);
+  });
+
+  it('includes files in the search-all scope', () => {
+    const results = searchCommandPaletteItems(ITEMS, { query: '', scope: 'search' });
 
     expect(results.map((group) => group.section)).toEqual([
-      'nav',
       'open',
-      'tasks',
+      'archived',
+      'files',
     ]);
   });
 
   it('supports overriding empty-query limits for lazy-loaded thread history', () => {
     const results = searchCommandPaletteItems([
-      ITEMS[2]!,
+      ITEMS[1]!,
       {
-        ...ITEMS[2]!,
+        ...ITEMS[1]!,
         id: 'archived:gamma',
         title: 'Gamma cleanup',
         order: 2,
