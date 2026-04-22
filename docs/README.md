@@ -17,7 +17,7 @@ Use these other places for adjacent concerns:
 
 - repo `AGENTS.md` — repo-specific harness instructions and engineering rules
 - selected instruction files — machine-local behavior selection for the active runtime
-- `../internal-skills/` — built-in runtime feature guides for computer use, runs, tasks, artifacts, reminders, async attention, and inbox removal
+- `../internal-skills/` — built-in runtime feature guides for runs, tasks, artifacts, reminders, async attention, and inbox removal
 - `~/Documents/personal-agent/skills/<skill>/SKILL.md` — reusable workflow skills
 - vault docs/packages — durable knowledge anywhere under the configured vault root
 - tool schemas / runtime prompt material — exact live tool contracts
