@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
 
@@ -65,6 +66,16 @@ function loadSqliteDatabaseCtor(): SqliteDatabaseCtor {
   const nodeSqliteCtor = loadNodeSqliteDatabaseCtor();
   if (nodeSqliteCtor) {
     return nodeSqliteCtor;
+  }
+
+  const desktopNativeModulesDir = process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR?.trim();
+  if (desktopNativeModulesDir) {
+    try {
+      const desktopRequire = createRequire(resolve(desktopNativeModulesDir, 'package.json'));
+      return desktopRequire('better-sqlite3') as SqliteDatabaseCtor;
+    } catch {
+      // Fall through to the normal resolution path.
+    }
   }
 
   return require('better-sqlite3') as SqliteDatabaseCtor;

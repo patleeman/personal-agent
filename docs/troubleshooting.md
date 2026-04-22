@@ -108,6 +108,16 @@ Also check whether another process already owns the local web or daemon resource
 
 The desktop shell may own the daemon directly; a separately managed daemon can still interfere depending on startup state.
 
+If the logs mention `better-sqlite3` and `NODE_MODULE_VERSION` mismatch, the Electron dev shell was trying to load a native SQLite binary built for a different runtime.
+
+`packages/desktop/scripts/launch-dev-app.mjs` now prepares an Electron-specific native module cache under:
+
+```text
+<repo-root>/dist/dev-desktop/native-modules/
+```
+
+If it still gets wedged, remove that folder and relaunch `npm run desktop:dev` so the Electron-native copy gets rebuilt cleanly.
+
 ## MCP auth problems
 
 Run:

@@ -4,6 +4,7 @@ describe('openSqliteDatabase', () => {
   afterEach(() => {
     vi.resetModules();
     vi.doUnmock('node:module');
+    delete process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR;
   });
 
   async function importWithRequire(fakeRequire: (id: string) => unknown) {
@@ -133,5 +134,60 @@ describe('openSqliteDatabase', () => {
 
     expect(() => tx()).toThrow('boom');
     expect(calls).toEqual(['BEGIN', 'ROLLBACK']);
+  });
+
+  it('loads better-sqlite3 from the desktop native modules dir when provided', async () => {
+    const rootRequire = vi.fn((id: string) => {
+      if (id === 'node:sqlite') {
+        throw new Error('missing');
+      }
+
+      throw new Error(`Unexpected root require: ${id}`);
+    });
+
+    const calls: string[] = [];
+
+    class FakeDatabase {
+      constructor(_path: string) {}
+      exec(sql: string) {
+        calls.push(sql);
+      }
+      prepare() {
+        return { run: vi.fn(), get: vi.fn(), all: vi.fn() };
+      }
+      close() {
+        calls.push('close');
+      }
+    }
+
+    const externalRequire = vi.fn((id: string) => {
+      if (id === 'better-sqlite3') {
+        return FakeDatabase;
+      }
+
+      throw new Error(`Unexpected external require: ${id}`);
+    });
+
+    const createRequireMock = vi.fn((value: string) => {
+      if (value === '/tmp/electron-native/package.json') {
+        return externalRequire;
+      }
+
+      return rootRequire;
+    });
+
+    vi.resetModules();
+    process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR = '/tmp/electron-native';
+    vi.doMock('node:module', () => ({
+      createRequire: createRequireMock,
+    }));
+
+    const { openSqliteDatabase } = await import('./sqlite.js');
+    const db = openSqliteDatabase('/tmp/external.db');
+    db.pragma('journal_mode = WAL');
+    db.close();
+
+    expect(externalRequire).toHaveBeenCalledWith('better-sqlite3');
+    expect(calls).toEqual(['PRAGMA journal_mode = WAL', 'close']);
   });
 });

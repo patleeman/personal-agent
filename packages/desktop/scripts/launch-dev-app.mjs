@@ -13,6 +13,7 @@ import {
 import { spawn, spawnSync } from 'node:child_process';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ensureElectronNativeModules, readElectronNativeModulesDir } from './ensure-electron-native-modules.mjs';
 
 const currentDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = resolve(currentDir, '..');
@@ -35,6 +36,7 @@ function buildDesktopLaunchEnv(baseEnv = process.env, args = []) {
   return {
     ...baseEnv,
     PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
+    PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR: readElectronNativeModulesDir(),
     ...(baseEnv.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim() || !shouldSkipQuitConfirmationForLaunch(args)
       ? {}
       : { PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' }),
@@ -45,6 +47,8 @@ if (!existsSync(desktopMainFile)) {
   console.error(`Missing desktop entrypoint: ${desktopMainFile}`);
   process.exit(1);
 }
+
+ensureElectronNativeModules();
 
 function readJson(path) {
   return JSON.parse(readFileSync(path, 'utf-8'));
