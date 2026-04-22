@@ -1,6 +1,7 @@
 import { Suspense, lazy, useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
+import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
@@ -1430,25 +1431,6 @@ function MentionMenu({
   );
 }
 
-// ── File attachment pill ──────────────────────────────────────────────────────
-
-function formatBytes(b: number) {
-  if (b < 1024) return `${b}B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)}KB`;
-  return `${(b / 1024 / 1024).toFixed(1)}MB`;
-}
-
-const FILE_ICONS: Record<string, string> = {
-  'image/':       '🖼',
-  'text/':        '📄',
-  'application/json': '{ }',
-  'application/pdf':  '📕',
-  'video/':       '🎬',
-};
-function fileIcon(type: string) {
-  return Object.entries(FILE_ICONS).find(([k]) => type.startsWith(k))?.[1] ?? '📎';
-}
-
 const MAX_PROMPT_IMAGE_DIMENSION = 2000;
 
 function readBlobAsDataUrl(blob: Blob, label: string): Promise<string> {
@@ -1672,11 +1654,6 @@ function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachment): Pr
     attachmentId,
     ...(attachment.revision ? { revision: attachment.revision } : {}),
   };
-}
-
-function buildComposerDrawingPreviewTitle(attachment: ComposerDrawingAttachment): string {
-  const revisionText = attachment.revision ? ` (rev ${attachment.revision})` : '';
-  return `${attachment.title}${revisionText}`;
 }
 
 async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawingAttachment> {
@@ -7403,62 +7380,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
           {hasComposerAttachmentShelfContent && (
             <div className="mb-2 max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 px-1 py-2">
-                  {attachments.map((f, i) => (
-                    <div key={i} className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-elevated border border-border-subtle text-[11px] max-w-[220px]">
-                      <span className="shrink-0">{fileIcon(f.type)}</span>
-                      <span className="text-secondary truncate">{f.name}</span>
-                      <span className="text-dim shrink-0">{formatBytes(f.size)}</span>
-                      <button onClick={() => removeAttachment(i)} className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none" title={`Remove ${f.name}`}>
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {drawingAttachments.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 px-1 pt-1 pb-2">
-                  {drawingAttachments.map((attachment) => (
-                    <div key={attachment.localId} className="flex items-center gap-1.5 rounded-lg border border-border-subtle bg-elevated px-2 py-1 text-[11px] max-w-[270px]">
-                      <img
-                        src={attachment.previewUrl}
-                        alt={buildComposerDrawingPreviewTitle(attachment)}
-                        className="h-7 w-9 rounded object-cover"
-                      />
-                      <div className="min-w-0">
-                        <p className="truncate text-secondary">{buildComposerDrawingPreviewTitle(attachment)}</p>
-                        <p className="text-[10px] text-dim">{attachment.attachmentId ? `#${attachment.attachmentId}` : 'new drawing'}{attachment.dirty ? ' · unsaved' : ''}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => editDrawing(attachment.localId)}
-                        className="text-[11px] text-accent transition-colors hover:text-accent/80"
-                        title={`Edit ${attachment.title}`}
-                      >
-                        edit
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => removeDrawingAttachment(attachment.localId)}
-                        className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none"
-                        title={`Remove ${attachment.title}`}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {drawingsBusy && (
-                <div className="px-1 pt-2 text-[11px] text-dim">Syncing drawings…</div>
-              )}
-
-              {drawingsError && (
-                <div className="px-1 pt-2 text-[11px] text-danger">{drawingsError}</div>
-              )}
+              <ComposerAttachmentShelf
+                attachments={attachments}
+                drawingAttachments={drawingAttachments}
+                drawingsBusy={drawingsBusy}
+                drawingsError={drawingsError}
+                onRemoveAttachment={removeAttachment}
+                onEditDrawing={editDrawing}
+                onRemoveDrawingAttachment={removeDrawingAttachment}
+              />
             </div>
           )}
 

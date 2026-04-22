@@ -72,6 +72,7 @@ Important behaviors:
 - saved conversation headers keep the top bar title-only; working directory still stays attached to the conversation instead of rendering inline there
 - the composer footer keeps execution target + working directory controls on the left and git/context status on the right; saved threads can edit cwd inline and browse for a new folder before switching
 - the desktop composer can capture a macOS screenshot inline via the native screenshot UI and attach the resulting PNG directly to the current prompt
+- image attachments in the composer shelf can be clicked to open a larger preview before sending
 - project-organized thread lists group by execution target first and workspace second, with local groups left implicit and remote targets rendered as their own section headers
 - the Threads filter can switch between all threads, human threads, and automation-owned threads, and automation-owned threads show an inline automation badge in the sidebar
 - working directory and model preferences stay attached to the conversation
