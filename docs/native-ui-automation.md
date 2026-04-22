@@ -1,62 +1,64 @@
 # Native UI Automation
 
-`personal-agent` can validate web UI changes with `agent-browser`, but native macOS apps need a different path.
+`personal-agent` can drive visible native macOS app windows through the built-in `computer_use` tool.
 
-This repo includes a local helper wrapper at:
+This is the right path when shell tools, file edits, and browser automation are not enough because the task depends on a **real visible macOS app window**.
 
-```bash
-./scripts/mac-ax
-```
+For the agent-facing workflow, read the built-in internal skill:
 
-That wrapper runs the Swift-based `mac-ax` helper under `tools/mac-ax`.
-
-Use `mac-ax` when you need to inspect or drive a native macOS app through the Accessibility system rather than through a browser DOM.
+- [Computer Use](../internal-skills/computer-use/INDEX.md)
 
 ## When to use it
 
-Use `mac-ax` for:
+Use native UI automation for:
 
-- SwiftUI or AppKit apps
-- native macOS dialogs and sheets
-- quick live smoke interaction while debugging a desktop UI change
+- TextEdit, Finder, Safari, Mail, and other native macOS apps
+- macOS dialogs, sheets, and menus that are not exposed through a browser DOM
+- visual inspection of a native app window before deciding what to do next
+- lightweight manual smoke interaction against a visible app surface
 
 Prefer other paths when possible:
 
-- use `agent-browser` for web apps and Electron apps with CDP
-- use XCUITest for repeatable native-app smoke coverage
+- use `agent-browser` for web apps and Electron apps with browser-accessible DOM/CDP state
+- use shell or file tools when the task does not actually need a visible app window
+- use dedicated automated tests when you need repeatable CI coverage rather than ad hoc interaction
+
+## Runtime surface
+
+The built-in tool is:
+
+- `computer_use`
+
+Use it as a screenshot-and-action loop:
+
+1. `action: "observe"` to capture or retarget a window
+2. use coordinates from that screenshot for click, move, drag, or scroll actions
+3. use `type` or `keypress` when the correct control already has focus
+4. use `wait` when the app needs time before the next refresh
+
+Successful actions return an updated screenshot and capture metadata for the next step.
+
+## Current scope
+
+The current implementation targets:
+
+- macOS
+- visible windows
+- direct interaction in the current user session
+
+It is meant for practical interactive control, not invisible background desktop automation.
 
 ## Required permissions
 
-The helper needs:
+Native UI automation needs:
 
 - Accessibility permission
-- Screen Recording permission for screenshots
+- Screen Recording permission
 
-If those permissions are missing, clicks, snapshots, or screenshots may fail.
-
-## Core commands
-
-```bash
-./scripts/mac-ax list-apps
-./scripts/mac-ax windows "Personal Agent"
-./scripts/mac-ax snapshot "Personal Agent"
-./scripts/mac-ax snapshot "Personal Agent" --json
-./scripts/mac-ax click --app "Personal Agent" --label "Connect"
-./scripts/mac-ax focus --app "Personal Agent" --identifier some-id
-./scripts/mac-ax set-value --app "Personal Agent" --label "Search" "new value"
-./scripts/mac-ax type --app "Personal Agent" "hello world"
-./scripts/mac-ax press --app "Personal Agent" return
-./scripts/mac-ax screenshot --app "Personal Agent" /tmp/personal-agent.png
-```
-
-## Practical flow
-
-1. `list-apps` to find the app name
-2. `snapshot <app>` to inspect the current accessibility tree
-3. target controls by cached ref, label, or identifier
-4. use `click`, `focus`, `set-value`, `type`, or `press`
+Grant them to the app or terminal process that is running `personal-agent`.
 
 ## Related docs
 
+- [Computer Use](../internal-skills/computer-use/INDEX.md)
 - [Web UI Guide](./web-ui.md)
 - [Electron desktop app](./electron-desktop-app-plan.md)
