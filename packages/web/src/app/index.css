@@ -208,6 +208,15 @@
     @apply rounded-xl border border-border-subtle bg-elevated transition-[border-color,background-color,box-shadow];
   }
 
+  .ui-truncate-start {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+    unicode-bidi: plaintext;
+  }
+
   .ui-input-shell-auto-mode {
     box-shadow:
       0 0 0 1px rgb(var(--color-auto-mode-glow) / 0.06),

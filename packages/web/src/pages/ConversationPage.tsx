@@ -29,6 +29,7 @@ import {
   getConversationTailBlockKey,
   shouldShowScrollToBottomControl,
 } from '../conversation/conversationScroll';
+import { truncateConversationCwdFromFront } from '../conversation/conversationCwdHistory';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from '../conversation/conversationTitle';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
@@ -3638,6 +3639,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       ? (draftCwdValue || null)
       : (liveSessionContext?.cwd ?? currentSessionMeta?.cwd ?? null),
     [draft, draftCwdValue, liveSessionContext?.cwd, currentSessionMeta?.cwd],
+  );
+  const currentCwdLabel = useMemo(
+    () => (currentCwd ? truncateConversationCwdFromFront(currentCwd) : ''),
+    [currentCwd],
   );
   const hasDraftCwd = draftCwdValue.length > 0;
   const availableDraftWorkspacePaths = useMemo(
@@ -8187,11 +8192,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   <button
                     type="button"
                     onClick={beginConversationCwdEdit}
-                    className="flex min-w-0 flex-1 max-w-full items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary xl:max-w-[26rem] xl:flex-none"
+                    className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary xl:w-[26rem] xl:flex-none"
                     title={currentCwd ? `Working directory: ${currentCwd}` : 'Set working directory'}
                   >
                     <FolderIcon className="shrink-0 text-dim/70" />
-                    <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{currentCwd || 'Set working directory'}</span>
+                    <span className="ui-truncate-start min-w-0 flex-1 font-mono text-[11px]">{currentCwdLabel || 'Set working directory'}</span>
                   </button>
                 )}
 
