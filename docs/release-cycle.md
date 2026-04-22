@@ -31,6 +31,8 @@ If the version bump already happened and you just need to retry the signed publi
 npm run release:publish
 ```
 
+`npm run release:publish` now builds from a clean temporary snapshot of `HEAD` instead of trusting the live checkout's `node_modules/`. It runs `npm ci --ignore-scripts` in that snapshot before packaging so stale local installs cannot silently ship missing runtime dependencies.
+
 ## Local signing and notarization inputs
 
 `npm run release:publish` expects a local `Developer ID Application` certificate in Keychain.
@@ -51,13 +53,14 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 `npm run desktop:dist` does the signed desktop build locally. `npm run extension:dist` builds the browser-extension bundles. The publish flow runs both. The desktop build:
 
 - cleans `packages/desktop/dist/`, rebuilds the desktop package, and rebuilds its dependencies
-- packages the Electron desktop app with `electron-builder`
+- packages the Electron desktop app with `electron-builder` from a clean temporary snapshot of the repo
 - excludes stale nested app bundles and workspace package-local `node_modules/` directories from the shipped app
 - signs it with the local `Developer ID Application` certificate
 - notarizes the shipped `.zip` and `.dmg` containers after packaging
 - staples the shipped `.dmg` so the downloadable installer is accepted by Gatekeeper
 - writes release artifacts to `dist/release/`
 - emits Electron updater metadata including `latest-mac.yml`
+- validates the packaged updater feed and recursively checks that the bundled app still contains its runtime dependency tree before notarization/upload
 
 GitHub Actions no longer publishes shipped release artifacts automatically. `.github/workflows/release.yml` is now only a manual smoke-build workflow for unsigned CI packaging checks.
 

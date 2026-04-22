@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { homedir, tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 
+const require = createRequire(import.meta.url);
 const repoRoot = process.cwd();
 const packageJsonPath = resolve(repoRoot, 'package.json');
-const releaseDir = resolve(repoRoot, 'dist', 'release');
-const browserExtensionReleaseDir = resolve(repoRoot, 'apps', 'browser-extension', 'dist', 'release');
 const repoEnvPath = resolve(repoRoot, '.env');
 const defaultEnvPath = resolve(homedir(), 'workingdir', 'familiar', '.env');
 const defaultReleaseRepo = 'patleeman/personal-agent-releases';
@@ -72,6 +72,10 @@ function tryCapture(command, args, options = {}) {
     stdout: result.stdout ?? '',
     stderr: result.stderr ?? '',
   };
+}
+
+function readJsonFile(pathname) {
+  return JSON.parse(readFileSync(pathname, 'utf8'));
 }
 
 function parseEnvFile(content) {
@@ -253,7 +257,30 @@ function pushReleaseRef(tag) {
   run('git', ['push', 'origin', tag]);
 }
 
-function collectReleaseFiles(version) {
+function createCleanReleaseSnapshot(env) {
+  const buildRoot = mkdtempSync(join(tmpdir(), 'personal-agent-release-'));
+  process.on('exit', () => {
+    rmSync(buildRoot, { recursive: true, force: true });
+  });
+  console.log(`Creating clean release snapshot in ${buildRoot}...`);
+  run('bash', ['-lc', 'git archive --format=tar HEAD | tar -xf - -C "$PERSONAL_AGENT_RELEASE_BUILD_ROOT"'], {
+    cwd: repoRoot,
+    env: {
+      ...env,
+      PERSONAL_AGENT_RELEASE_BUILD_ROOT: buildRoot,
+    },
+  });
+
+  console.log('Installing clean release snapshot dependencies with npm ci...');
+  run('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund'], {
+    cwd: buildRoot,
+    env,
+  });
+
+  return buildRoot;
+}
+
+function collectReleaseFiles(releaseDir, version) {
   if (!existsSync(releaseDir)) {
     fail(`Release output directory not found: ${releaseDir}`);
   }
@@ -279,7 +306,7 @@ function collectReleaseFiles(version) {
   return files;
 }
 
-function collectBrowserExtensionReleaseFiles(version) {
+function collectBrowserExtensionReleaseFiles(browserExtensionReleaseDir, version) {
   if (!existsSync(browserExtensionReleaseDir)) {
     fail(`Browser extension release output directory not found: ${browserExtensionReleaseDir}`);
   }
@@ -296,7 +323,7 @@ function collectBrowserExtensionReleaseFiles(version) {
   return files;
 }
 
-function collectPackagedAppPath() {
+function collectPackagedAppPath(releaseDir) {
   const macOutputDir = resolve(releaseDir, 'mac-arm64');
   if (!existsSync(macOutputDir)) {
     return null;
@@ -308,8 +335,8 @@ function collectPackagedAppPath() {
   return appName ? resolve(macOutputDir, appName) : null;
 }
 
-function validatePackagedAutoUpdateConfig(releaseRepo) {
-  const appPath = collectPackagedAppPath();
+function validatePackagedAutoUpdateConfig(releaseDir, releaseRepo) {
+  const appPath = collectPackagedAppPath(releaseDir);
   if (!appPath) {
     fail(`Packaged desktop app not found under ${releaseDir}; cannot validate auto-update feed config.`);
   }
@@ -330,6 +357,152 @@ function validatePackagedAutoUpdateConfig(releaseRepo) {
       `Expected: ${releaseRepo}`,
       `Actual: ${owner}/${repo}`,
       `Path: ${appUpdatePath}`,
+    ].join('\n'));
+  }
+}
+
+function listWorkspacePackageDirs(buildRoot) {
+  const packagesDir = resolve(buildRoot, 'packages');
+  const workspaceDirs = new Map();
+
+  if (!existsSync(packagesDir)) {
+    fail(`Workspace packages directory not found: ${packagesDir}`);
+  }
+
+  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    const packageDir = resolve(packagesDir, entry.name);
+    const packageJsonPath = resolve(packageDir, 'package.json');
+    if (!existsSync(packageJsonPath)) {
+      continue;
+    }
+
+    const packageJson = readJsonFile(packageJsonPath);
+    if (typeof packageJson.name === 'string' && packageJson.name.trim().length > 0) {
+      workspaceDirs.set(packageJson.name.trim(), packageDir);
+    }
+  }
+
+  return workspaceDirs;
+}
+
+function resolveInstalledPackageDir(buildRoot, startDir, packageName) {
+  const segments = packageName.split('/');
+  let currentDir = resolve(startDir);
+  const normalizedBuildRoot = resolve(buildRoot);
+
+  while (true) {
+    const candidate = resolve(currentDir, 'node_modules', ...segments);
+    if (existsSync(resolve(candidate, 'package.json'))) {
+      return candidate;
+    }
+
+    if (currentDir === normalizedBuildRoot) {
+      break;
+    }
+
+    const parentDir = dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  return null;
+}
+
+function collectExpectedRuntimePackages(buildRoot) {
+  const workspaceDirs = listWorkspacePackageDirs(buildRoot);
+  const visitedWorkspacePackages = new Set();
+  const visitedExternalPackages = new Set();
+
+  function visitWorkspacePackage(packageName) {
+    if (visitedWorkspacePackages.has(packageName)) {
+      return;
+    }
+
+    const packageDir = workspaceDirs.get(packageName);
+    if (!packageDir) {
+      fail(`Workspace package ${packageName} was not found under ${resolve(buildRoot, 'packages')}.`);
+    }
+
+    visitedWorkspacePackages.add(packageName);
+    const packageJson = readJsonFile(resolve(packageDir, 'package.json'));
+    for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
+      if (workspaceDirs.has(dependencyName)) {
+        visitWorkspacePackage(dependencyName);
+      } else {
+        visitExternalPackage(dependencyName, packageDir);
+      }
+    }
+  }
+
+  function visitExternalPackage(packageName, requesterDir) {
+    if (visitedExternalPackages.has(packageName)) {
+      return;
+    }
+
+    const packageDir = resolveInstalledPackageDir(buildRoot, requesterDir, packageName);
+    if (!packageDir) {
+      fail(`Could not resolve installed runtime dependency ${packageName} from ${requesterDir}.`);
+    }
+
+    visitedExternalPackages.add(packageName);
+    const packageJson = readJsonFile(resolve(packageDir, 'package.json'));
+    for (const dependencyName of Object.keys(packageJson.dependencies ?? {})) {
+      if (workspaceDirs.has(dependencyName)) {
+        visitWorkspacePackage(dependencyName);
+      } else {
+        visitExternalPackage(dependencyName, packageDir);
+      }
+    }
+  }
+
+  visitWorkspacePackage('@personal-agent/desktop');
+
+  return [
+    ...[...visitedWorkspacePackages].filter((packageName) => packageName !== '@personal-agent/desktop').sort(),
+    ...[...visitedExternalPackages].sort(),
+  ];
+}
+
+function hasPackagedNodeModule(packageName, packageEntries, resourcesDir) {
+  const packageEntryPrefix = `/node_modules/${packageName}`;
+  if (packageEntries.some((entry) => entry === packageEntryPrefix || entry.startsWith(`${packageEntryPrefix}/`))) {
+    return true;
+  }
+
+  const packagePathSegments = packageName.split('/');
+  return existsSync(resolve(resourcesDir, 'node_modules', ...packagePathSegments, 'package.json'))
+    || existsSync(resolve(resourcesDir, 'app.asar.unpacked', 'node_modules', ...packagePathSegments, 'package.json'));
+}
+
+function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
+  const appPath = collectPackagedAppPath(releaseDir);
+  if (!appPath) {
+    fail(`Packaged desktop app not found under ${releaseDir}; cannot validate packaged runtime dependencies.`);
+  }
+
+  const resourcesDir = resolve(appPath, 'Contents', 'Resources');
+  const appAsarPath = resolve(resourcesDir, 'app.asar');
+  if (!existsSync(appAsarPath)) {
+    fail(`Packaged desktop app archive not found: ${appAsarPath}`);
+  }
+
+  const { listPackage } = require('@electron/asar');
+  const packageEntries = listPackage(appAsarPath);
+  const expectedPackages = collectExpectedRuntimePackages(buildRoot);
+  const missingPackages = expectedPackages.filter((packageName) => !hasPackagedNodeModule(packageName, packageEntries, resourcesDir));
+
+  if (missingPackages.length > 0) {
+    fail([
+      'Packaged desktop app is missing runtime dependencies.',
+      `App: ${appAsarPath}`,
+      'Missing packages:',
+      ...missingPackages.map((packageName) => `- ${packageName}`),
     ].join('\n'));
   }
 }
@@ -381,13 +554,11 @@ function notarizeDistributionContainers(env, files) {
   }
 }
 
-const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+const packageJson = readJsonFile(packageJsonPath);
 const version = packageJson.version;
 const tag = `v${version}`;
 const env = loadReleaseEnv();
 const releaseRepo = env.PERSONAL_AGENT_RELEASE_REPO;
-
-rmSync(releaseDir, { recursive: true, force: true });
 
 ensureCleanRepo();
 ensureTagAtHead(tag);
@@ -396,16 +567,24 @@ ensureNotarizationCredentials(env);
 ensureGhAuth();
 ensureReleaseRepoExists(releaseRepo);
 
-console.log(`Building signed desktop artifacts for ${tag}...`);
-run('npm', ['run', 'desktop:dist'], { env });
-validatePackagedAutoUpdateConfig(releaseRepo);
+const buildRoot = createCleanReleaseSnapshot(env);
+const releaseDir = resolve(buildRoot, 'dist', 'release');
+const browserExtensionReleaseDir = resolve(buildRoot, 'apps', 'browser-extension', 'dist', 'release');
 
-const files = collectReleaseFiles(version);
+rmSync(releaseDir, { recursive: true, force: true });
+rmSync(browserExtensionReleaseDir, { recursive: true, force: true });
+
+console.log(`Building signed desktop artifacts for ${tag} from the clean snapshot...`);
+run('npm', ['run', 'desktop:dist'], { cwd: buildRoot, env });
+validatePackagedAutoUpdateConfig(releaseDir, releaseRepo);
+validatePackagedRuntimeDependencies(buildRoot, releaseDir);
+
+const files = collectReleaseFiles(releaseDir, version);
 notarizeDistributionContainers(env, files);
 
-console.log(`Building browser extension bundles for ${tag}...`);
-run('npm', ['run', 'extension:dist'], { env });
-const browserExtensionFiles = collectBrowserExtensionReleaseFiles(version);
+console.log(`Building browser extension bundles for ${tag} from the clean snapshot...`);
+run('npm', ['run', 'extension:dist'], { cwd: buildRoot, env });
+const browserExtensionFiles = collectBrowserExtensionReleaseFiles(browserExtensionReleaseDir, version);
 const releaseAssets = [...files, ...browserExtensionFiles];
 
 console.log(`Pushing ${tag} to GitHub...`);
@@ -438,3 +617,4 @@ if (releaseView.status === 0) {
 
 const releaseUrl = capture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url', '--jq', '.url']);
 console.log(`Published ${tag} to ${releaseRepo}: ${releaseUrl}`);
+rmSync(buildRoot, { recursive: true, force: true });
