@@ -320,8 +320,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileId]);
+  }, [fileId, editor]);
 
   // Build full file content (frontmatter + body) for saving
   const getContent = useCallback(() => {
