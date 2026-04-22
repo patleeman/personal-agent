@@ -1,5 +1,8 @@
 import CoreImage.CIFilterBuiltins
+import PhotosUI
 import SwiftUI
+import UIKit
+import UniformTypeIdentifiers
 import VisionKit
 
 struct RootView: View {
@@ -753,45 +756,173 @@ private struct KnowledgeRenameSheet: View {
 
 private struct KnowledgeNoteScreen: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.scenePhase) private var scenePhase
 
     let fileId: String
 
     @StateObject private var viewModel: KnowledgeNoteViewModel
     @State private var showingRenameSheet = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingFindBar = false
+    @State private var showingOutlineSheet = false
+    @State private var showingLinkComposer = false
+    @State private var showingLinkPicker = false
+    @State private var showingCamera = false
+    @State private var showingPhotoPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var editorSelection = NSRange(location: 0, length: 0)
+    @State private var pendingEditorCommand: KnowledgeEditorCommand?
+    @State private var findQuery = ""
+    @State private var findMatches: [NSRange] = []
+    @State private var currentFindMatchIndex = 0
+    @State private var linkDraft = KnowledgeLinkComposerDraft()
 
     init(appModel _: CompanionAppModel, session: HostSessionModel, fileId: String) {
         self.fileId = fileId
         _viewModel = StateObject(wrappedValue: session.makeKnowledgeNoteModel(fileId: fileId))
     }
 
+    private var conflictBinding: Binding<KnowledgeNoteConflict?> {
+        Binding(
+            get: { viewModel.conflict },
+            set: { nextValue in
+                if nextValue == nil {
+                    viewModel.conflict = nil
+                }
+            }
+        )
+    }
+
+    private var statsText: String {
+        let totalWords = knowledgeWordCount(in: viewModel.draft)
+        let selectedWords = knowledgeSelectionWordCount(in: viewModel.draft, selectedRange: editorSelection)
+        let selectedCharacters = editorSelection.length
+        if selectedCharacters > 0 {
+            return "\(totalWords) words · \(selectedWords) selected · \(selectedCharacters) chars"
+        }
+        return "\(totalWords) words"
+    }
+
+    private var selectedText: String {
+        let nsText = viewModel.draft as NSString
+        guard editorSelection.location != NSNotFound,
+              editorSelection.location <= nsText.length,
+              editorSelection.length > 0 else {
+            return ""
+        }
+        let safeRange = NSRange(location: editorSelection.location, length: min(editorSelection.length, nsText.length - editorSelection.location))
+        return nsText.substring(with: safeRange)
+    }
+
     var body: some View {
-        Group {
+        VStack(spacing: 0) {
+            if showingFindBar {
+                KnowledgeFindBar(
+                    query: $findQuery,
+                    matchCount: findMatches.count,
+                    currentMatchIndex: findMatches.isEmpty ? 0 : currentFindMatchIndex + 1,
+                    onPrevious: navigateFindMatchBackward,
+                    onNext: navigateFindMatchForward,
+                    onClose: {
+                        showingFindBar = false
+                        findQuery = ""
+                    }
+                )
+            }
+
             if viewModel.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(CompanionTheme.canvas)
             } else {
-                TextEditor(text: $viewModel.draft)
-                    .font(.system(.body, design: .monospaced))
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(CompanionTheme.canvas)
+                KnowledgeMarkdownTextEditor(
+                    text: $viewModel.draft,
+                    selectedRange: $editorSelection,
+                    command: pendingEditorCommand,
+                    onCommandHandled: { handled in
+                        if pendingEditorCommand?.id == handled.id {
+                            pendingEditorCommand = nil
+                        }
+                    },
+                    onPasteImage: { data, mimeType, fileName in
+                        Task {
+                            await insertImage(data: data, mimeType: mimeType, fileName: fileName)
+                        }
+                    }
+                )
+                .background(CompanionTheme.canvas)
             }
         }
         .background(CompanionTheme.canvas)
         .navigationTitle(viewModel.title)
+        .navigationBarTitleDisplayMode(.large)
         .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
+                    if let suggestedFileName = viewModel.suggestedFileName {
+                        Button {
+                            Task { _ = await viewModel.renameFileToMatchTitle() }
+                        } label: {
+                            Label("Rename file to \(suggestedFileName)", systemImage: "text.document")
+                        }
+                    }
+
+                    Button {
+                        showingFindBar = true
+                    } label: {
+                        Label("Find in note", systemImage: "magnifyingglass")
+                    }
+
+                    if !viewModel.outline.isEmpty {
+                        Button {
+                            showingOutlineSheet = true
+                        } label: {
+                            Label("Heading outline", systemImage: "list.bullet.indent")
+                        }
+                    }
+
+                    Button {
+                        prepareLinkComposer()
+                    } label: {
+                        Label("Insert link", systemImage: "link")
+                    }
+
+                    Button {
+                        showingLinkPicker = true
+                    } label: {
+                        Label("Link to note", systemImage: "book")
+                    }
+
+                    Menu("Insert image") {
+                        Button {
+                            showingPhotoPicker = true
+                        } label: {
+                            Label("Photos", systemImage: "photo.on.rectangle")
+                        }
+                        if UIImagePickerController.isSourceTypeAvailable(.camera) {
+                            Button {
+                                showingCamera = true
+                            } label: {
+                                Label("Camera", systemImage: "camera")
+                            }
+                        }
+                        if UIPasteboard.general.image != nil {
+                            Button {
+                                pasteClipboardImage()
+                            } label: {
+                                Label("Paste image", systemImage: "doc.on.clipboard")
+                            }
+                        }
+                    }
+
                     Button {
                         showingRenameSheet = true
                     } label: {
                         Label("Rename", systemImage: "pencil")
                     }
+
                     Button(role: .destructive) {
                         showingDeleteConfirmation = true
                     } label: {
@@ -822,16 +953,162 @@ private struct KnowledgeNoteScreen: View {
                         _ = await viewModel.save()
                     }
                 }
-                .disabled(viewModel.isSaving || !viewModel.isDirty)
+                .disabled(viewModel.isSaving || !viewModel.isDirty || viewModel.hasConflict)
             }
+
+            ToolbarItem(placement: .keyboard) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        Button("#") {
+                            pendingEditorCommand = .init(kind: .prefixCurrentLine("# "))
+                        }
+                        Button("-") {
+                            pendingEditorCommand = .init(kind: .prefixSelectedLines("- "))
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .toggleChecklist)
+                        } label: {
+                            Image(systemName: "checklist")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .prefixSelectedLines("> "))
+                        } label: {
+                            Image(systemName: "text.quote")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .wrapSelection(prefix: "`", suffix: "`", placeholder: "code"))
+                        } label: {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                        }
+                        Button("[[") {
+                            showingLinkPicker = true
+                        }
+                        Button {
+                            prepareLinkComposer()
+                        } label: {
+                            Image(systemName: "link")
+                        }
+                        Button {
+                            showingPhotoPicker = true
+                        } label: {
+                            Image(systemName: "photo")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .indentSelection)
+                        } label: {
+                            Image(systemName: "increase.indent")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .outdentSelection)
+                        } label: {
+                            Image(systemName: "decrease.indent")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .undo)
+                        } label: {
+                            Image(systemName: "arrow.uturn.backward")
+                        }
+                        Button {
+                            pendingEditorCommand = .init(kind: .redo)
+                        } label: {
+                            Image(systemName: "arrow.uturn.forward")
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            VStack(alignment: .leading, spacing: 10) {
+                if let context = viewModel.currentWikiLinkContext,
+                   !viewModel.linkSuggestions.isEmpty {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(viewModel.linkSuggestions) { result in
+                            Button {
+                                pendingEditorCommand = .init(kind: .insertWikiLink(title: result.title, replaceRange: context.replaceRange))
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(result.title)
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(CompanionTheme.textPrimary)
+                                    Text(result.excerpt)
+                                        .font(.caption)
+                                        .foregroundStyle(CompanionTheme.textSecondary)
+                                        .lineLimit(2)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 10)
+                                .padding(.horizontal, 12)
+                            }
+                            .buttonStyle(.plain)
+                            if result.id != viewModel.linkSuggestions.last?.id {
+                                Divider()
+                            }
+                        }
+                    }
+                    .background(CompanionTheme.panel)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                }
+
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(viewModel.statusMessage ?? "")
+                        .font(.caption)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .lineLimit(2)
+                    Spacer(minLength: 12)
+                    Text(statsText)
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(.ultraThinMaterial)
         }
         .sheet(isPresented: $showingRenameSheet) {
             KnowledgeRenameSheet(
                 title: "Rename note",
                 placeholder: "Note name",
-                initialName: viewModel.title
+                initialName: viewModel.fileNameTitle
             ) { name in
                 await viewModel.rename(to: name)
+            }
+        }
+        .sheet(isPresented: $showingOutlineSheet) {
+            KnowledgeOutlineSheet(headings: viewModel.outline) { heading in
+                pendingEditorCommand = .init(kind: .select(heading.range))
+                showingOutlineSheet = false
+            }
+        }
+        .sheet(isPresented: $showingLinkComposer) {
+            KnowledgeLinkComposerSheet(draft: $linkDraft) { label, destination in
+                pendingEditorCommand = .init(kind: .insertMarkdownLink(label: label, url: destination))
+            }
+        }
+        .sheet(isPresented: $showingLinkPicker) {
+            KnowledgeNoteLinkPickerSheet { query in
+                await viewModel.searchKnowledge(query: query)
+            } onPick: { result in
+                pendingEditorCommand = .init(kind: .insertWikiLink(title: result.title, replaceRange: viewModel.currentWikiLinkContext?.replaceRange))
+                showingLinkPicker = false
+            }
+        }
+        .sheet(item: conflictBinding) { conflict in
+            KnowledgeConflictSheet(conflict: conflict) {
+                viewModel.acceptRemoteConflictVersion()
+            } onKeepLocal: {
+                viewModel.keepLocalConflictDraft()
+            }
+        }
+        .photosPicker(isPresented: $showingPhotoPicker, selection: $selectedPhotoItem, matching: .images)
+        .sheet(isPresented: $showingCamera) {
+            KnowledgeCameraImagePicker { image in
+                Task {
+                    if let data = image.jpegData(compressionQuality: 0.92) {
+                        await insertImage(data: data, mimeType: "image/jpeg", fileName: "photo-\(Int(Date().timeIntervalSince1970)).jpg")
+                    }
+                }
             }
         }
         .alert("Delete note?", isPresented: $showingDeleteConfirmation) {
@@ -852,12 +1129,819 @@ private struct KnowledgeNoteScreen: View {
                     .padding()
             }
         }
+        .onChange(of: editorSelection) { _, newValue in
+            viewModel.updateSelection(newValue)
+        }
+        .onChange(of: viewModel.draft) { _, _ in
+            refreshFindMatches(selectFirst: false)
+        }
+        .onChange(of: findQuery) { _, _ in
+            refreshFindMatches(selectFirst: true)
+        }
+        .onChange(of: selectedPhotoItem) { _, item in
+            guard let item else {
+                return
+            }
+            Task {
+                defer { selectedPhotoItem = nil }
+                guard let data = try? await item.loadTransferable(type: Data.self) else {
+                    return
+                }
+                let mimeType = item.supportedContentTypes.first?.preferredMIMEType ?? "image/jpeg"
+                let ext = item.supportedContentTypes.first?.preferredFilenameExtension ?? "jpg"
+                await insertImage(data: data, mimeType: mimeType, fileName: "photo-\(Int(Date().timeIntervalSince1970)).\(ext)")
+            }
+        }
+        .onChange(of: scenePhase) { _, newValue in
+            if newValue == .inactive || newValue == .background {
+                Task {
+                    _ = await viewModel.flushAutosaveIfNeeded()
+                }
+            }
+        }
         .task(id: viewModel.fileId) {
             if viewModel.content.isEmpty && viewModel.draft.isEmpty {
                 viewModel.load()
             }
         }
     }
+
+    private func refreshFindMatches(selectFirst: Bool) {
+        findMatches = knowledgeFindRanges(of: findQuery, in: viewModel.draft)
+        if findMatches.isEmpty {
+            currentFindMatchIndex = 0
+            return
+        }
+        currentFindMatchIndex = min(currentFindMatchIndex, max(0, findMatches.count - 1))
+        if selectFirst {
+            currentFindMatchIndex = 0
+            pendingEditorCommand = .init(kind: .select(findMatches[currentFindMatchIndex]))
+        }
+    }
+
+    private func navigateFindMatchForward() {
+        guard !findMatches.isEmpty else {
+            return
+        }
+        currentFindMatchIndex = (currentFindMatchIndex + 1) % findMatches.count
+        pendingEditorCommand = .init(kind: .select(findMatches[currentFindMatchIndex]))
+    }
+
+    private func navigateFindMatchBackward() {
+        guard !findMatches.isEmpty else {
+            return
+        }
+        currentFindMatchIndex = (currentFindMatchIndex - 1 + findMatches.count) % findMatches.count
+        pendingEditorCommand = .init(kind: .select(findMatches[currentFindMatchIndex]))
+    }
+
+    private func prepareLinkComposer() {
+        linkDraft = KnowledgeLinkComposerDraft(
+            label: selectedText.nilIfBlank ?? viewModel.title,
+            destination: UIPasteboard.general.url?.absoluteString ?? ""
+        )
+        showingLinkComposer = true
+    }
+
+    private func pasteClipboardImage() {
+        guard let image = UIPasteboard.general.image,
+              let data = image.pngData() else {
+            return
+        }
+        Task {
+            await insertImage(data: data, mimeType: "image/png", fileName: "clipboard-image.png")
+        }
+    }
+
+    private func insertImage(data: Data, mimeType: String?, fileName: String?) async {
+        guard let markdown = await viewModel.createImageMarkdown(data: data, mimeType: mimeType, fileName: fileName) else {
+            return
+        }
+        let insertion = editorSelection.location > 0 ? "\n\n\(markdown)\n" : "\(markdown)\n"
+        pendingEditorCommand = .init(kind: .insertText(insertion))
+    }
+}
+
+private struct KnowledgeFindBar: View {
+    @Binding var query: String
+    let matchCount: Int
+    let currentMatchIndex: Int
+    let onPrevious: () -> Void
+    let onNext: () -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(CompanionTheme.textSecondary)
+            TextField("Find in note", text: $query)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+            if !query.trimmed.isEmpty {
+                Text(matchCount == 0 ? "No matches" : "\(currentMatchIndex)/\(matchCount)")
+                    .font(.caption)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+            Button(action: onPrevious) {
+                Image(systemName: "chevron.up")
+            }
+            .disabled(matchCount == 0)
+            Button(action: onNext) {
+                Image(systemName: "chevron.down")
+            }
+            .disabled(matchCount == 0)
+            Button(action: onClose) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundStyle(CompanionTheme.textSecondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(CompanionTheme.panel)
+    }
+}
+
+private struct KnowledgeLinkComposerDraft {
+    var label: String = ""
+    var destination: String = ""
+}
+
+private struct KnowledgeLinkComposerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var draft: KnowledgeLinkComposerDraft
+    let onSave: (String, String) -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Link") {
+                    TextField("Label", text: $draft.label)
+                    TextField("https://example.com", text: $draft.destination)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                }
+            }
+            .navigationTitle("Insert link")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Insert") {
+                        onSave(draft.label, draft.destination)
+                        dismiss()
+                    }
+                    .disabled(draft.destination.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeOutlineSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let headings: [KnowledgeHeadingItem]
+    let onPick: (KnowledgeHeadingItem) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List(headings) { heading in
+                Button {
+                    onPick(heading)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(String(repeating: "#", count: heading.level))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(CompanionTheme.textDim)
+                        Text(heading.title)
+                            .foregroundStyle(CompanionTheme.textPrimary)
+                        Spacer()
+                    }
+                }
+                .buttonStyle(.plain)
+                .listRowBackground(CompanionTheme.panel)
+            }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .navigationTitle("Outline")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeConflictSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let conflict: KnowledgeNoteConflict
+    let onUseRemote: () -> Void
+    let onKeepLocal: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    Text(conflict.reason)
+                        .font(.body)
+                    Group {
+                        Text("Host version")
+                            .font(.headline)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            Text(conflict.remoteContent)
+                                .font(.system(.footnote, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(CompanionTheme.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                    }
+                    Group {
+                        Text("Local draft")
+                            .font(.headline)
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            Text(conflict.localDraft)
+                                .font(.system(.footnote, design: .monospaced))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(CompanionTheme.panel)
+                                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .background(CompanionTheme.canvas)
+            .navigationTitle("Resolve conflict")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Use host") {
+                        onUseRemote()
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Keep local") {
+                        onKeepLocal()
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeNoteLinkPickerSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let search: (String) async -> [CompanionKnowledgeSearchResult]
+    let onPick: (CompanionKnowledgeSearchResult) -> Void
+
+    @State private var query = ""
+    @State private var results: [CompanionKnowledgeSearchResult] = []
+    @State private var isLoading = false
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if results.isEmpty && !isLoading {
+                    ContentUnavailableView(
+                        query.trimmed.isEmpty ? "No notes yet" : "No matching notes",
+                        systemImage: "book.closed",
+                        description: Text(query.trimmed.isEmpty ? "Create a note first, then link it here." : "Try a different note title or keyword.")
+                    )
+                    .listRowBackground(Color.clear)
+                } else {
+                    ForEach(results) { result in
+                        Button {
+                            onPick(result)
+                            dismiss()
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(result.title)
+                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                Text(result.excerpt)
+                                    .font(.caption)
+                                    .foregroundStyle(CompanionTheme.textSecondary)
+                                    .lineLimit(2)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .listRowBackground(CompanionTheme.panel)
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .background(CompanionTheme.canvas)
+            .navigationTitle("Link to note")
+            .searchable(text: $query, prompt: "Search notes")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .task(id: query) {
+                isLoading = true
+                results = await search(query)
+                isLoading = false
+            }
+        }
+    }
+}
+
+private struct KnowledgeCameraImagePicker: UIViewControllerRepresentable {
+    let onCapture: (UIImage) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onCapture: onCapture)
+    }
+
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+
+    final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+        let onCapture: (UIImage) -> Void
+
+        init(onCapture: @escaping (UIImage) -> Void) {
+            self.onCapture = onCapture
+        }
+
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            picker.dismiss(animated: true)
+        }
+
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage {
+                onCapture(image)
+            }
+            picker.dismiss(animated: true)
+        }
+    }
+}
+
+private struct KnowledgeEditorCommand: Identifiable, Equatable {
+    enum Kind: Equatable {
+        case insertText(String)
+        case replace(range: NSRange, text: String, selection: NSRange)
+        case select(NSRange)
+        case prefixCurrentLine(String)
+        case prefixSelectedLines(String)
+        case toggleChecklist
+        case wrapSelection(prefix: String, suffix: String, placeholder: String)
+        case insertMarkdownLink(label: String, url: String)
+        case insertWikiLink(title: String, replaceRange: NSRange?)
+        case indentSelection
+        case outdentSelection
+        case undo
+        case redo
+    }
+
+    let id = UUID()
+    let kind: Kind
+}
+
+struct KnowledgeTextMutation: Equatable {
+    let text: String
+    let selection: NSRange
+}
+
+private final class KnowledgeEditorTextView: UITextView {
+    var onPasteImage: ((Data, String?, String?) -> Void)?
+
+    override func paste(_ sender: Any?) {
+        if let image = UIPasteboard.general.image,
+           let data = image.pngData() {
+            onPasteImage?(data, "image/png", "clipboard-image.png")
+            return
+        }
+        super.paste(sender)
+    }
+}
+
+private struct KnowledgeMarkdownTextEditor: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var selectedRange: NSRange
+    let command: KnowledgeEditorCommand?
+    let onCommandHandled: (KnowledgeEditorCommand) -> Void
+    let onPasteImage: (Data, String?, String?) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> KnowledgeEditorTextView {
+        let view = KnowledgeEditorTextView(frame: .zero)
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.autocorrectionType = .default
+        view.smartDashesType = .no
+        view.smartQuotesType = .no
+        view.smartInsertDeleteType = .no
+        view.adjustsFontForContentSizeCategory = true
+        view.alwaysBounceVertical = true
+        view.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 16, right: 12)
+        view.keyboardDismissMode = .interactive
+        view.onPasteImage = onPasteImage
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleCheckboxTap(_:)))
+        tap.cancelsTouchesInView = false
+        view.addGestureRecognizer(tap)
+        context.coordinator.apply(text: text, selection: selectedRange, to: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: KnowledgeEditorTextView, context: Context) {
+        context.coordinator.parent = self
+        uiView.onPasteImage = onPasteImage
+        if !context.coordinator.isApplyingProgrammaticChange,
+           (uiView.text != text || uiView.selectedRange != selectedRange) {
+            context.coordinator.apply(text: text, selection: selectedRange, to: uiView)
+        }
+        if let command, command.id != context.coordinator.lastHandledCommandId {
+            context.coordinator.handle(command: command, in: uiView)
+            onCommandHandled(command)
+        }
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: KnowledgeMarkdownTextEditor
+        var isApplyingProgrammaticChange = false
+        var lastHandledCommandId: UUID?
+
+        init(parent: KnowledgeMarkdownTextEditor) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            guard !isApplyingProgrammaticChange else {
+                return
+            }
+            parent.text = textView.text
+            parent.selectedRange = textView.selectedRange
+            restyle(textView)
+        }
+
+        func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isApplyingProgrammaticChange else {
+                return
+            }
+            parent.selectedRange = textView.selectedRange
+        }
+
+        func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText replacement: String) -> Bool {
+            if replacement == "\n", let mutation = knowledgeSmartReturnMutation(text: textView.text, selectedRange: textView.selectedRange) {
+                apply(mutation: mutation, to: textView)
+                return false
+            }
+            if let mutation = knowledgeAutoPairMutation(text: textView.text, selectedRange: range, replacement: replacement) {
+                apply(mutation: mutation, to: textView)
+                return false
+            }
+            return true
+        }
+
+        @objc func handleCheckboxTap(_ recognizer: UITapGestureRecognizer) {
+            guard let textView = recognizer.view as? UITextView else {
+                return
+            }
+            let point = recognizer.location(in: textView)
+            guard point.x <= 72 else {
+                return
+            }
+            let adjustedPoint = CGPoint(x: point.x - textView.textContainerInset.left, y: point.y - textView.textContainerInset.top)
+            let index = textView.layoutManager.characterIndex(for: adjustedPoint, in: textView.textContainer, fractionOfDistanceBetweenInsertionPoints: nil)
+            if let mutation = knowledgeToggleChecklistMutation(text: textView.text, selectedRange: NSRange(location: index, length: 0)) {
+                apply(mutation: mutation, to: textView)
+            }
+        }
+
+        func handle(command: KnowledgeEditorCommand, in textView: UITextView) {
+            lastHandledCommandId = command.id
+            switch command.kind {
+            case .undo:
+                textView.undoManager?.undo()
+                parent.text = textView.text
+                parent.selectedRange = textView.selectedRange
+                restyle(textView)
+            case .redo:
+                textView.undoManager?.redo()
+                parent.text = textView.text
+                parent.selectedRange = textView.selectedRange
+                restyle(textView)
+            default:
+                guard let mutation = knowledgeApplyEditorCommand(command.kind, text: textView.text, selectedRange: textView.selectedRange) else {
+                    return
+                }
+                apply(mutation: mutation, to: textView)
+            }
+        }
+
+        func apply(text: String, selection: NSRange, to textView: UITextView) {
+            isApplyingProgrammaticChange = true
+            textView.attributedText = knowledgeHighlightedAttributedText(text: text)
+            textView.selectedRange = selection
+            textView.typingAttributes = knowledgeTypingAttributes()
+            isApplyingProgrammaticChange = false
+        }
+
+        func apply(mutation: KnowledgeTextMutation, to textView: UITextView) {
+            isApplyingProgrammaticChange = true
+            textView.attributedText = knowledgeHighlightedAttributedText(text: mutation.text)
+            textView.selectedRange = mutation.selection
+            textView.typingAttributes = knowledgeTypingAttributes()
+            isApplyingProgrammaticChange = false
+            parent.text = mutation.text
+            parent.selectedRange = mutation.selection
+            textView.scrollRangeToVisible(mutation.selection)
+        }
+
+        private func restyle(_ textView: UITextView) {
+            let selection = textView.selectedRange
+            isApplyingProgrammaticChange = true
+            textView.attributedText = knowledgeHighlightedAttributedText(text: textView.text)
+            textView.selectedRange = selection
+            textView.typingAttributes = knowledgeTypingAttributes()
+            isApplyingProgrammaticChange = false
+        }
+    }
+}
+
+private func knowledgeTypingAttributes() -> [NSAttributedString.Key: Any] {
+    [
+        .font: UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular),
+        .foregroundColor: UIColor.label,
+    ]
+}
+
+private func knowledgeHighlightedAttributedText(text: String) -> NSAttributedString {
+    let baseFont = UIFont.monospacedSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .body).pointSize, weight: .regular)
+    let attributed = NSMutableAttributedString(string: text, attributes: [
+        .font: baseFont,
+        .foregroundColor: UIColor.label,
+    ])
+    let fullRange = NSRange(location: 0, length: (text as NSString).length)
+
+    if text.hasPrefix("---\n"), let endRange = text.range(of: "\n---", range: text.index(text.startIndex, offsetBy: 4)..<text.endIndex) {
+        let nsRange = NSRange(text.startIndex..<endRange.upperBound, in: text)
+        attributed.addAttributes([
+            .foregroundColor: UIColor.secondaryLabel,
+        ], range: nsRange)
+    }
+
+    let headingRegex = try? NSRegularExpression(pattern: #"^(#{1,6})\s+(.+)$"#, options: [.anchorsMatchLines])
+    headingRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match, match.numberOfRanges >= 3 else { return }
+        let level = max(1, min(6, match.range(at: 1).length))
+        let size = max(baseFont.pointSize + CGFloat(8 - level), baseFont.pointSize)
+        attributed.addAttributes([
+            .font: UIFont.monospacedSystemFont(ofSize: size, weight: .semibold),
+            .foregroundColor: UIColor.label,
+        ], range: match.range)
+    }
+
+    let codeFenceRegex = try? NSRegularExpression(pattern: #"```[\s\S]*?```"#, options: [])
+    codeFenceRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match else { return }
+        attributed.addAttributes([
+            .foregroundColor: UIColor.systemIndigo,
+            .backgroundColor: UIColor.secondarySystemBackground,
+        ], range: match.range)
+    }
+
+    let inlineCodeRegex = try? NSRegularExpression(pattern: #"`[^`\n]+`"#, options: [])
+    inlineCodeRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match else { return }
+        attributed.addAttributes([
+            .foregroundColor: UIColor.systemIndigo,
+            .backgroundColor: UIColor.tertiarySystemFill,
+        ], range: match.range)
+    }
+
+    let linkRegex = try? NSRegularExpression(pattern: #"(\[\[[^\]]+\]\])|(\[[^\]]+\]\([^\)]+\))"#, options: [])
+    linkRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match else { return }
+        attributed.addAttribute(.foregroundColor, value: UIColor.systemPurple, range: match.range)
+    }
+
+    let checklistRegex = try? NSRegularExpression(pattern: #"^\s*[-*+] \[( |x|X)\]"#, options: [.anchorsMatchLines])
+    checklistRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match else { return }
+        let checked = ((text as NSString).substring(with: match.range)).lowercased().contains("[x]")
+        attributed.addAttribute(.foregroundColor, value: checked ? UIColor.systemGreen : UIColor.systemOrange, range: match.range)
+    }
+
+    let quoteRegex = try? NSRegularExpression(pattern: #"^>.*$"#, options: [.anchorsMatchLines])
+    quoteRegex?.enumerateMatches(in: text, options: [], range: fullRange) { match, _, _ in
+        guard let match else { return }
+        attributed.addAttribute(.foregroundColor, value: UIColor.secondaryLabel, range: match.range)
+    }
+
+    return attributed
+}
+
+private func knowledgeApplyEditorCommand(_ kind: KnowledgeEditorCommand.Kind, text: String, selectedRange: NSRange) -> KnowledgeTextMutation? {
+    switch kind {
+    case .insertText(let insertion):
+        return knowledgeReplaceText(in: text, range: selectedRange, with: insertion, selectionAfterInsert: NSRange(location: selectedRange.location + insertion.utf16.count, length: 0))
+    case .replace(let range, let replacement, let selection):
+        return knowledgeReplaceText(in: text, range: range, with: replacement, selectionAfterInsert: selection)
+    case .select(let range):
+        return KnowledgeTextMutation(text: text, selection: range)
+    case .prefixCurrentLine(let prefix):
+        return knowledgePrefixLines(text: text, selectedRange: selectedRange, prefix: prefix, currentLineOnly: true)
+    case .prefixSelectedLines(let prefix):
+        return knowledgePrefixLines(text: text, selectedRange: selectedRange, prefix: prefix, currentLineOnly: false)
+    case .toggleChecklist:
+        return knowledgeToggleChecklistMutation(text: text, selectedRange: selectedRange)
+    case .wrapSelection(let prefix, let suffix, let placeholder):
+        return knowledgeWrapSelection(text: text, selectedRange: selectedRange, prefix: prefix, suffix: suffix, placeholder: placeholder)
+    case .insertMarkdownLink(let label, let url):
+        let effectiveLabel = label.trimmed.nilIfBlank ?? url
+        return knowledgeWrapSelection(text: text, selectedRange: selectedRange, prefix: "[", suffix: "](\(url))", placeholder: effectiveLabel)
+    case .insertWikiLink(let title, let replaceRange):
+        let range = replaceRange ?? selectedRange
+        let markup = "[[\(title)]]"
+        let selection = NSRange(location: range.location + markup.utf16.count, length: 0)
+        return knowledgeReplaceText(in: text, range: range, with: markup, selectionAfterInsert: selection)
+    case .indentSelection:
+        return knowledgeIndentLines(text: text, selectedRange: selectedRange, amount: 2)
+    case .outdentSelection:
+        return knowledgeOutdentLines(text: text, selectedRange: selectedRange, amount: 2)
+    case .undo, .redo:
+        return nil
+    }
+}
+
+private func knowledgeReplaceText(in text: String, range: NSRange, with replacement: String, selectionAfterInsert: NSRange) -> KnowledgeTextMutation {
+    let nsText = text as NSString
+    let safeRange = knowledgeSafeRange(range, length: nsText.length)
+    let updated = nsText.replacingCharacters(in: safeRange, with: replacement)
+    let maxLocation = (updated as NSString).length
+    let safeSelection = knowledgeSafeRange(selectionAfterInsert, length: maxLocation)
+    return KnowledgeTextMutation(text: updated, selection: safeSelection)
+}
+
+private func knowledgeSafeRange(_ range: NSRange, length: Int) -> NSRange {
+    let location = min(max(0, range.location), length)
+    let safeLength = min(max(0, range.length), length - location)
+    return NSRange(location: location, length: safeLength)
+}
+
+private func knowledgeCurrentLineContentRange(in nsText: NSString, selectedRange: NSRange) -> NSRange {
+    let rawRange = nsText.lineRange(for: selectedRange)
+    let rawLine = nsText.substring(with: rawRange)
+    if rawLine.hasSuffix("\r\n") {
+        return NSRange(location: rawRange.location, length: max(0, rawRange.length - 2))
+    }
+    if rawLine.hasSuffix("\n") || rawLine.hasSuffix("\r") {
+        return NSRange(location: rawRange.location, length: max(0, rawRange.length - 1))
+    }
+    return rawRange
+}
+
+private func knowledgeWrapSelection(text: String, selectedRange: NSRange, prefix: String, suffix: String, placeholder: String) -> KnowledgeTextMutation {
+    let nsText = text as NSString
+    let safeRange = knowledgeSafeRange(selectedRange, length: nsText.length)
+    let selected = safeRange.length > 0 ? nsText.substring(with: safeRange) : placeholder
+    let replacement = "\(prefix)\(selected)\(suffix)"
+    let selection: NSRange
+    if safeRange.length > 0 {
+        selection = NSRange(location: safeRange.location + prefix.utf16.count, length: selected.utf16.count)
+    } else {
+        selection = NSRange(location: safeRange.location + prefix.utf16.count, length: selected.utf16.count)
+    }
+    return knowledgeReplaceText(in: text, range: safeRange, with: replacement, selectionAfterInsert: selection)
+}
+
+private func knowledgePrefixLines(text: String, selectedRange: NSRange, prefix: String, currentLineOnly: Bool) -> KnowledgeTextMutation {
+    let nsText = text as NSString
+    let baseRange = knowledgeSafeRange(selectedRange, length: nsText.length)
+    let anchorRange = currentLineOnly
+        ? NSRange(location: baseRange.location, length: 0)
+        : baseRange
+    let lineRange = knowledgeCurrentLineContentRange(in: nsText, selectedRange: anchorRange)
+    let lineText = nsText.substring(with: lineRange)
+    let lines = lineText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let replacement = lines.map { "\(prefix)\($0)" }.joined(separator: "\n")
+    let selection = NSRange(location: lineRange.location, length: min((replacement as NSString).length, max((replacement as NSString).length, baseRange.length + prefix.utf16.count)))
+    return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: selection)
+}
+
+private func knowledgeIndentLines(text: String, selectedRange: NSRange, amount: Int) -> KnowledgeTextMutation {
+    knowledgePrefixLines(text: text, selectedRange: selectedRange, prefix: String(repeating: " ", count: amount), currentLineOnly: false)
+}
+
+private func knowledgeOutdentLines(text: String, selectedRange: NSRange, amount: Int) -> KnowledgeTextMutation {
+    let nsText = text as NSString
+    let safeRange = knowledgeSafeRange(selectedRange, length: nsText.length)
+    let lineRange = knowledgeCurrentLineContentRange(in: nsText, selectedRange: safeRange)
+    let lineText = nsText.substring(with: lineRange)
+    let lines = lineText.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+    let transformed = lines.map { line -> String in
+        if line.hasPrefix(String(repeating: " ", count: amount)) {
+            return String(line.dropFirst(amount))
+        }
+        if line.hasPrefix("\t") {
+            return String(line.dropFirst())
+        }
+        return line
+    }
+    let replacement = transformed.joined(separator: "\n")
+    return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: NSRange(location: lineRange.location, length: min((replacement as NSString).length, safeRange.length)))
+}
+
+private func knowledgeToggleChecklistMutation(text: String, selectedRange: NSRange) -> KnowledgeTextMutation? {
+    let nsText = text as NSString
+    let safeRange = knowledgeSafeRange(selectedRange, length: nsText.length)
+    let lineRange = knowledgeCurrentLineContentRange(in: nsText, selectedRange: safeRange)
+    let line = nsText.substring(with: lineRange)
+    if let range = line.range(of: #"^(\s*[-*+] )\[( |x|X)\]"#, options: .regularExpression) {
+        let prefix = String(line[..<range.lowerBound])
+        let marker = String(line[range])
+        let toggled = marker.lowercased().contains("[x]") ? marker.replacingOccurrences(of: "x", with: " ") : marker.replacingOccurrences(of: "[ ]", with: "[x]")
+        let suffix = String(line[range.upperBound...])
+        let replacement = "\(prefix)\(toggled)\(suffix)"
+        return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: NSRange(location: lineRange.location, length: replacement.utf16.count))
+    }
+    let replacement = line.isEmpty ? "- [ ] " : "- [ ] \(line)"
+    return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: NSRange(location: lineRange.location + replacement.utf16.count, length: 0))
+}
+
+private func knowledgeAutoPairMutation(text: String, selectedRange: NSRange, replacement: String) -> KnowledgeTextMutation? {
+    let pairs = ["[": "]", "(": ")", "{": "}", "\"": "\""]
+    guard let closing = pairs[replacement] else {
+        return nil
+    }
+    return knowledgeWrapSelection(text: text, selectedRange: selectedRange, prefix: replacement, suffix: closing, placeholder: "")
+}
+
+func knowledgeSmartReturnMutation(text: String, selectedRange: NSRange) -> KnowledgeTextMutation? {
+    guard selectedRange.length == 0 else {
+        return nil
+    }
+    let nsText = text as NSString
+    let safeRange = knowledgeSafeRange(selectedRange, length: nsText.length)
+    let rawLineRange = nsText.lineRange(for: safeRange)
+    let lineRange = knowledgeCurrentLineContentRange(in: nsText, selectedRange: safeRange)
+    let line = nsText.substring(with: lineRange)
+    let linePrefixRange = NSRange(location: lineRange.location, length: max(0, safeRange.location - lineRange.location))
+    let prefixText = nsText.substring(with: knowledgeSafeRange(linePrefixRange, length: nsText.length))
+    let fencePrefix = text.prefix(safeRange.location)
+    let codeFenceCount = fencePrefix.components(separatedBy: "```").count - 1
+    if codeFenceCount % 2 == 1 {
+        let indentation = prefixText.prefix { $0 == " " || $0 == "\t" }
+        let insertion = "\n\(indentation)"
+        return knowledgeReplaceText(in: text, range: safeRange, with: insertion, selectionAfterInsert: NSRange(location: safeRange.location + insertion.utf16.count, length: 0))
+    }
+    if let match = line.firstMatch(of: /^(\s*[-*+] )\[( |x|X)\](\s*)(.*)$/) {
+        let indent = String(match.output.1)
+        let spacer = String(match.output.3)
+        let remainder = String(match.output.4).trimmed
+        if remainder.isEmpty {
+            return knowledgeReplaceText(in: text, range: rawLineRange, with: "\n", selectionAfterInsert: NSRange(location: rawLineRange.location + 1, length: 0))
+        }
+        let insertion = "\n\(indent)[ ]\(spacer)"
+        return knowledgeReplaceText(in: text, range: safeRange, with: insertion, selectionAfterInsert: NSRange(location: safeRange.location + insertion.utf16.count, length: 0))
+    }
+    if let match = line.firstMatch(of: /^(\s*)([-*+])\s+(.*)$/) {
+        let indent = String(match.output.1)
+        let bullet = String(match.output.2)
+        let remainder = String(match.output.3).trimmed
+        if remainder.isEmpty {
+            return knowledgeReplaceText(in: text, range: rawLineRange, with: "\n", selectionAfterInsert: NSRange(location: rawLineRange.location + 1, length: 0))
+        }
+        let insertion = "\n\(indent)\(bullet) "
+        return knowledgeReplaceText(in: text, range: safeRange, with: insertion, selectionAfterInsert: NSRange(location: safeRange.location + insertion.utf16.count, length: 0))
+    }
+    if let match = line.firstMatch(of: /^(\s*)(\d+)\.\s+(.*)$/) {
+        let indent = String(match.output.1)
+        let number = (Int(match.output.2) ?? 0) + 1
+        let remainder = String(match.output.3).trimmed
+        if remainder.isEmpty {
+            return knowledgeReplaceText(in: text, range: rawLineRange, with: "\n", selectionAfterInsert: NSRange(location: rawLineRange.location + 1, length: 0))
+        }
+        let insertion = "\n\(indent)\(number). "
+        return knowledgeReplaceText(in: text, range: safeRange, with: insertion, selectionAfterInsert: NSRange(location: safeRange.location + insertion.utf16.count, length: 0))
+    }
+    if let match = line.firstMatch(of: /^(\s*(?:>\s*)+)(.*)$/) {
+        let quotePrefix = String(match.output.1)
+        let remainder = String(match.output.2).trimmed
+        if remainder.isEmpty {
+            return knowledgeReplaceText(in: text, range: rawLineRange, with: "\n", selectionAfterInsert: NSRange(location: rawLineRange.location + 1, length: 0))
+        }
+        let insertion = "\n\(quotePrefix)"
+        return knowledgeReplaceText(in: text, range: safeRange, with: insertion, selectionAfterInsert: NSRange(location: safeRange.location + insertion.utf16.count, length: 0))
+    }
+    return nil
 }
 
 private struct ConversationRow: View {

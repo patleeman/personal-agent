@@ -44,11 +44,13 @@ protocol CompanionClientProtocol: AnyObject {
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse
+    func searchKnowledge(query: String, limit: Int) async throws -> CompanionKnowledgeSearchResponse
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry
     func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry
     func deleteKnowledgeEntry(id: String) async throws
+    func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse
     func listTasks() async throws -> [ScheduledTaskSummary]
     func readTask(taskId: String) async throws -> ScheduledTaskDetail
@@ -568,6 +570,18 @@ final class LiveCompanionClient: CompanionClientProtocol {
         return try await authorizedJSON(path: path, method: "GET", body: nil, decode: CompanionKnowledgeTreeResponse.self)
     }
 
+    func searchKnowledge(query: String, limit: Int) async throws -> CompanionKnowledgeSearchResponse {
+        var components = URLComponents()
+        components.queryItems = [
+            URLQueryItem(name: "limit", value: String(max(1, min(limit, 50)))),
+        ]
+        if let trimmed = query.trimmed.nilIfBlank {
+            components.queryItems?.append(URLQueryItem(name: "q", value: trimmed))
+        }
+        let suffix = components.percentEncodedQuery.map { "?\($0)" } ?? ""
+        return try await authorizedJSON(path: "/companion/v1/knowledge/search\(suffix)", method: "GET", body: nil, decode: CompanionKnowledgeSearchResponse.self)
+    }
+
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
         guard let encoded = fileId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             throw CompanionClientError.requestFailed("The knowledge file id is invalid.")
@@ -593,6 +607,19 @@ final class LiveCompanionClient: CompanionClientProtocol {
             throw CompanionClientError.requestFailed("The knowledge entry id is invalid.")
         }
         _ = try await authorizedJSON(path: "/companion/v1/knowledge/entry?id=\(encoded)", method: "DELETE", body: nil, decode: DeleteResponse.self)
+    }
+
+    func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse {
+        var body: [String: Any] = [
+            "dataBase64": dataBase64,
+        ]
+        if let fileName = fileName?.nilIfBlank {
+            body["fileName"] = fileName
+        }
+        if let mimeType = mimeType?.nilIfBlank {
+            body["mimeType"] = mimeType
+        }
+        return try await authorizedJSON(path: "/companion/v1/knowledge/image", method: "POST", body: body, decode: CompanionKnowledgeImageAssetResponse.self)
     }
 
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {
@@ -2690,6 +2717,39 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
     }
 
+    func searchKnowledge(query: String, limit: Int) async throws -> CompanionKnowledgeSearchResponse {
+        let normalized = query.trimmed.lowercased()
+        let results = knowledgeFiles.keys
+            .filter { $0.lowercased().hasSuffix(".md") }
+            .compactMap { fileId -> CompanionKnowledgeSearchResult? in
+                let name = knowledgeDisplayName(for: fileId)
+                let title = name.replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression)
+                let content = knowledgeFiles[fileId] ?? ""
+                if normalized.isEmpty {
+                    return CompanionKnowledgeSearchResult(id: fileId, name: name, title: title, excerpt: fileId)
+                }
+                let haystacks = [title.lowercased(), fileId.lowercased(), content.lowercased()]
+                guard haystacks.contains(where: { $0.contains(normalized) }) else {
+                    return nil
+                }
+                let excerpt: String
+                if let range = content.lowercased().range(of: normalized) {
+                    let start = content.distance(from: content.startIndex, to: range.lowerBound)
+                    let nsContent = content as NSString
+                    let windowStart = max(0, start - 40)
+                    let windowLength = min(nsContent.length - windowStart, normalized.count + 80)
+                    excerpt = nsContent.substring(with: NSRange(location: windowStart, length: windowLength)).replacingOccurrences(of: "\n", with: " ")
+                } else {
+                    excerpt = fileId
+                }
+                return CompanionKnowledgeSearchResult(id: fileId, name: name, title: title, excerpt: excerpt)
+            }
+            .sorted { lhs, rhs in
+                lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+            }
+        return CompanionKnowledgeSearchResponse(results: Array(results.prefix(max(1, min(limit, 50)))))
+    }
+
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
         guard let normalizedFileId = normalizeKnowledgeId(fileId), let content = knowledgeFiles[normalizedFileId] else {
             throw CompanionClientError.requestFailed("Knowledge file not found.")
@@ -2764,6 +2824,13 @@ final class MockCompanionClient: CompanionClientProtocol {
             throw CompanionClientError.requestFailed("Knowledge entry not found.")
         }
         deleteKnowledgeNode(normalizedId, isDirectory: isDirectory)
+    }
+
+    func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse {
+        let baseName = fileName?.trimmed.nilIfBlank ?? "image.png"
+        let safeName = baseName.replacingOccurrences(of: #"[^a-zA-Z0-9._-]"#, with: "-", options: .regularExpression)
+        let assetId = "_attachments/\(safeName)"
+        return CompanionKnowledgeImageAssetResponse(id: assetId, url: "shared-image://\(safeName)?mime=\(mimeType?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "image/png")&data=\(dataBase64)")
     }
 
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {

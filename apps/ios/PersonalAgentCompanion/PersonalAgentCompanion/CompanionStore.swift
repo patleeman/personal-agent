@@ -122,6 +122,7 @@ final class CompanionAppModel: ObservableObject {
             let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: installationSurfaceId)
             activeSession = session
             session.start()
+            applyDebugKnowledgeNavigationIfNeeded()
             if processPendingShares {
                 await processPendingKnowledgeSharesIfPossible()
             }
@@ -138,6 +139,7 @@ final class CompanionAppModel: ObservableObject {
         let session = HostSessionModel(client: client, installationSurfaceId: installationSurfaceId)
         activeSession = session
         session.start()
+        applyDebugKnowledgeNavigationIfNeeded()
         if processPendingShares {
             await processPendingKnowledgeSharesIfPossible()
         }
@@ -303,6 +305,16 @@ final class CompanionAppModel: ObservableObject {
         }
         Task {
             await selectHost(activeHostId)
+        }
+    }
+
+    private func applyDebugKnowledgeNavigationIfNeeded() {
+        if environment["PA_IOS_AUTO_SELECT_KNOWLEDGE_TAB"] == "1" {
+            selectedDashboardTab = .knowledge
+        }
+        if let fileId = environment["PA_IOS_AUTO_OPEN_KNOWLEDGE_NOTE"]?.nilIfBlank {
+            selectedDashboardTab = .knowledge
+            knowledgeNavigationRequest = KnowledgeNavigationRequest(fileId: fileId)
         }
     }
 
@@ -1031,6 +1043,86 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     }
 }
 
+struct KnowledgeHeadingItem: Equatable, Identifiable {
+    var id: Int { range.location }
+
+    let level: Int
+    let title: String
+    let range: NSRange
+}
+
+struct KnowledgeWikiLinkContext: Equatable {
+    let replaceRange: NSRange
+    let query: String
+}
+
+struct KnowledgeNoteConflict: Equatable, Identifiable {
+    let id = UUID()
+    let reason: String
+    let remoteContent: String
+    let remoteUpdatedAt: String?
+    let localDraft: String
+}
+
+struct KnowledgeDraftRecord: Codable, Equatable {
+    let fileId: String
+    var draft: String
+    var baseUpdatedAt: String?
+    var savedAt: String
+}
+
+final class KnowledgeDraftStore {
+    static let shared = KnowledgeDraftStore()
+
+    private let fileManager: FileManager
+    private let directoryURL: URL
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(fileManager: FileManager = .default, baseURL: URL? = nil) {
+        self.fileManager = fileManager
+        let root = baseURL
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        self.directoryURL = root.appendingPathComponent("KnowledgeDrafts", isDirectory: true)
+    }
+
+    func load(fileId: String) -> KnowledgeDraftRecord? {
+        let url = fileURL(for: fileId)
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? decoder.decode(KnowledgeDraftRecord.self, from: data)
+    }
+
+    func save(_ record: KnowledgeDraftRecord) {
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let data = try encoder.encode(record)
+            try data.write(to: fileURL(for: record.fileId), options: [.atomic])
+        } catch {
+            // Keep draft storage best-effort so editing continues even if persistence fails.
+        }
+    }
+
+    func remove(fileId: String) {
+        try? fileManager.removeItem(at: fileURL(for: fileId))
+    }
+
+    func rename(from oldFileId: String, to newFileId: String) {
+        guard oldFileId != newFileId, let record = load(fileId: oldFileId) else {
+            return
+        }
+        remove(fileId: oldFileId)
+        save(KnowledgeDraftRecord(fileId: newFileId, draft: record.draft, baseUpdatedAt: record.baseUpdatedAt, savedAt: record.savedAt))
+    }
+
+    private func fileURL(for fileId: String) -> URL {
+        let safeName = fileId.replacingOccurrences(of: #"[^a-zA-Z0-9._-]"#, with: "_", options: .regularExpression)
+        return directoryURL.appendingPathComponent("\(safeName).json")
+    }
+}
+
 @MainActor
 final class KnowledgeNoteViewModel: ObservableObject {
     @Published private(set) var content: String = ""
@@ -1038,27 +1130,65 @@ final class KnowledgeNoteViewModel: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false
     @Published private(set) var fileId: String
-    @Published var draft: String = ""
+    @Published private(set) var statusMessage: String?
+    @Published private(set) var currentWikiLinkContext: KnowledgeWikiLinkContext?
+    @Published private(set) var linkSuggestions: [CompanionKnowledgeSearchResult] = []
+    @Published var draft: String = "" {
+        didSet {
+            guard draft != oldValue else {
+                return
+            }
+            handleDraftDidChange()
+        }
+    }
+    @Published var conflict: KnowledgeNoteConflict?
     @Published var errorMessage: String?
 
     private let client: CompanionClientProtocol
+    private let draftStore: KnowledgeDraftStore
+    private var baseUpdatedAt: String?
+    private var autosaveTask: Task<Void, Never>?
+    private var linkSearchTask: Task<Void, Never>?
+    private var currentSelectionRange = NSRange(location: 0, length: 0)
+    private var isApplyingRemoteState = false
 
-    init(client: CompanionClientProtocol, fileId: String) {
+    init(client: CompanionClientProtocol, fileId: String, draftStore: KnowledgeDraftStore = .shared) {
         self.client = client
         self.fileId = fileId
+        self.draftStore = draftStore
+    }
+
+    deinit {
+        autosaveTask?.cancel()
+        linkSearchTask?.cancel()
+    }
+
+    var fileNameTitle: String {
+        knowledgeDisplayName(for: fileId)
     }
 
     var title: String {
-        fileId
-            .split(separator: "/")
-            .last
-            .map(String.init)?
-            .replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression)
-            ?? "Note"
+        knowledgePrimaryHeading(in: draft).nilIfBlank ?? fileNameTitle
     }
 
     var isDirty: Bool {
         draft != content
+    }
+
+    var outline: [KnowledgeHeadingItem] {
+        knowledgeOutlineHeadings(in: draft)
+    }
+
+    var suggestedFileName: String? {
+        guard let heading = knowledgePrimaryHeading(in: draft)?.nilIfBlank else {
+            return nil
+        }
+        let suggested = knowledgeSuggestedFileName(from: heading)
+        return suggested.caseInsensitiveCompare(knowledgeMarkdownFileName(for: fileId)) == .orderedSame ? nil : suggested
+    }
+
+    var hasConflict: Bool {
+        conflict != nil
     }
 
     func load() {
@@ -1067,9 +1197,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
             defer { isLoading = false }
             do {
                 let result = try await client.readKnowledgeFile(fileId: fileId)
-                content = result.content
-                draft = result.content
-                updatedAt = result.updatedAt
+                applyRemoteFile(result)
                 errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
@@ -1081,8 +1209,23 @@ final class KnowledgeNoteViewModel: ObservableObject {
         load()
     }
 
+    func updateSelection(_ selectedRange: NSRange) {
+        currentSelectionRange = selectedRange
+        refreshWikiLinkAutocomplete()
+    }
+
     func discardChanges() {
+        autosaveTask?.cancel()
+        linkSearchTask?.cancel()
+        isApplyingRemoteState = true
         draft = content
+        isApplyingRemoteState = false
+        draftStore.remove(fileId: fileId)
+        currentWikiLinkContext = nil
+        linkSuggestions = []
+        conflict = nil
+        statusMessage = "Reverted to the last synced version."
+        errorMessage = nil
     }
 
     @discardableResult
@@ -1094,10 +1237,14 @@ final class KnowledgeNoteViewModel: ObservableObject {
         }
         let finalName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
         do {
+            let oldFileId = fileId
             let renamed = try await client.renameKnowledgeEntry(id: fileId, newName: finalName)
             fileId = renamed.id
             updatedAt = renamed.updatedAt
+            baseUpdatedAt = renamed.updatedAt
+            draftStore.rename(from: oldFileId, to: renamed.id)
             errorMessage = nil
+            statusMessage = "Renamed note."
             return true
         } catch {
             errorMessage = error.localizedDescription
@@ -1106,9 +1253,19 @@ final class KnowledgeNoteViewModel: ObservableObject {
     }
 
     @discardableResult
+    func renameFileToMatchTitle() async -> Bool {
+        guard let suggestedFileName else {
+            return false
+        }
+        return await rename(to: suggestedFileName)
+    }
+
+    @discardableResult
     func delete() async -> Bool {
         do {
             try await client.deleteKnowledgeEntry(id: fileId)
+            autosaveTask?.cancel()
+            draftStore.remove(fileId: fileId)
             errorMessage = nil
             return true
         } catch {
@@ -1119,22 +1276,355 @@ final class KnowledgeNoteViewModel: ObservableObject {
 
     @discardableResult
     func save() async -> Bool {
+        await save(trigger: .manual)
+    }
+
+    @discardableResult
+    func flushAutosaveIfNeeded() async -> Bool {
+        guard isDirty else {
+            return true
+        }
+        return await save(trigger: .background)
+    }
+
+    func acceptRemoteConflictVersion() {
+        guard let conflict else {
+            return
+        }
+        baseUpdatedAt = conflict.remoteUpdatedAt
+        updatedAt = conflict.remoteUpdatedAt
+        content = conflict.remoteContent
+        isApplyingRemoteState = true
+        draft = conflict.remoteContent
+        isApplyingRemoteState = false
+        draftStore.remove(fileId: fileId)
+        self.conflict = nil
+        errorMessage = nil
+        statusMessage = "Loaded the newer host version."
+    }
+
+    func keepLocalConflictDraft() {
+        guard let conflict else {
+            return
+        }
+        baseUpdatedAt = conflict.remoteUpdatedAt
+        updatedAt = conflict.remoteUpdatedAt
+        content = conflict.remoteContent
+        isApplyingRemoteState = true
+        draft = conflict.localDraft
+        isApplyingRemoteState = false
+        persistDraftLocally()
+        self.conflict = nil
+        errorMessage = nil
+        statusMessage = "Kept the local draft. Saving again will replace the host version."
+    }
+
+    func insertWikiLink(_ result: CompanionKnowledgeSearchResult) -> String {
+        "[[\(result.title)]]"
+    }
+
+    func buildMarkdownLink(label: String, destination: String) -> String {
+        let trimmedLabel = label.trimmed.nilIfBlank ?? destination
+        return "[\(trimmedLabel)](\(destination))"
+    }
+
+    func searchKnowledge(query: String, limit: Int = 20) async -> [CompanionKnowledgeSearchResult] {
+        do {
+            let response = try await client.searchKnowledge(query: query, limit: limit)
+            return response.results.filter { $0.id != fileId }
+        } catch {
+            return []
+        }
+    }
+
+    func createImageMarkdown(data: Data, mimeType: String?, fileName: String?) async -> String? {
+        do {
+            let response = try await client.createKnowledgeImageAsset(
+                fileName: fileName,
+                mimeType: mimeType,
+                dataBase64: data.base64EncodedString()
+            )
+            let relativePath = knowledgeRelativePath(from: fileId, to: response.id)
+            let alt = (fileName ?? response.id)
+                .replacingOccurrences(of: #"\.[^.]+$"#, with: "", options: .regularExpression)
+                .replacingOccurrences(of: "-", with: " ")
+            errorMessage = nil
+            return "![\(alt)](\(relativePath))"
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    private enum SaveTrigger {
+        case manual
+        case autosave
+        case background
+    }
+
+    @discardableResult
+    private func save(trigger: SaveTrigger) async -> Bool {
+        autosaveTask?.cancel()
         guard !isSaving else {
             return false
+        }
+        guard !hasConflict else {
+            return false
+        }
+        guard isDirty else {
+            return true
         }
         isSaving = true
         defer { isSaving = false }
         do {
+            let latest = try await client.readKnowledgeFile(fileId: fileId)
+            if latest.updatedAt != baseUpdatedAt && latest.content != content {
+                if latest.content == draft {
+                    applyRemoteFile(latest)
+                    statusMessage = trigger == .autosave ? "Already up to date." : "Loaded latest host version."
+                    return true
+                }
+                conflict = KnowledgeNoteConflict(
+                    reason: "This note changed on the host while you were editing it.",
+                    remoteContent: latest.content,
+                    remoteUpdatedAt: latest.updatedAt,
+                    localDraft: draft
+                )
+                errorMessage = "This note changed on the host. Choose which version to keep."
+                return false
+            }
+
             let updated = try await client.writeKnowledgeFile(fileId: fileId, content: draft)
             content = draft
             updatedAt = updated.updatedAt
+            baseUpdatedAt = updated.updatedAt
+            draftStore.remove(fileId: fileId)
             errorMessage = nil
+            statusMessage = switch trigger {
+            case .manual: "Saved to the host."
+            case .autosave: "Autosaved."
+            case .background: "Saved before leaving the editor."
+            }
             return true
         } catch {
             errorMessage = error.localizedDescription
             return false
         }
     }
+
+    private func applyRemoteFile(_ result: CompanionKnowledgeFileResponse) {
+        let recoveredDraft = draftStore.load(fileId: fileId)
+        content = result.content
+        updatedAt = result.updatedAt
+        baseUpdatedAt = result.updatedAt
+        conflict = nil
+        isApplyingRemoteState = true
+        if let recoveredDraft, recoveredDraft.draft != result.content {
+            if recoveredDraft.baseUpdatedAt != nil,
+               recoveredDraft.baseUpdatedAt != result.updatedAt,
+               result.content != recoveredDraft.draft {
+                draft = recoveredDraft.draft
+                conflict = KnowledgeNoteConflict(
+                    reason: "Recovered an unsaved local draft, but the host note changed too.",
+                    remoteContent: result.content,
+                    remoteUpdatedAt: result.updatedAt,
+                    localDraft: recoveredDraft.draft
+                )
+                statusMessage = "Recovered an unsaved local draft."
+            } else {
+                draft = recoveredDraft.draft
+                statusMessage = "Recovered an unsaved local draft."
+            }
+        } else {
+            draft = result.content
+            draftStore.remove(fileId: fileId)
+        }
+        isApplyingRemoteState = false
+        refreshWikiLinkAutocomplete()
+    }
+
+    private func handleDraftDidChange() {
+        guard !isApplyingRemoteState else {
+            return
+        }
+        conflict = nil
+        if draft == content {
+            autosaveTask?.cancel()
+            draftStore.remove(fileId: fileId)
+            statusMessage = nil
+        } else {
+            persistDraftLocally()
+            scheduleAutosave()
+            statusMessage = "Editing…"
+        }
+        refreshWikiLinkAutocomplete()
+    }
+
+    private func persistDraftLocally() {
+        draftStore.save(KnowledgeDraftRecord(
+            fileId: fileId,
+            draft: draft,
+            baseUpdatedAt: baseUpdatedAt,
+            savedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        ))
+    }
+
+    private func scheduleAutosave() {
+        autosaveTask?.cancel()
+        guard isDirty else {
+            return
+        }
+        autosaveTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.5))
+            guard !Task.isCancelled else {
+                return
+            }
+            await self?.save(trigger: .autosave)
+        }
+    }
+
+    private func refreshWikiLinkAutocomplete() {
+        linkSearchTask?.cancel()
+        guard let context = knowledgeCurrentWikiLinkContext(in: draft, selectedRange: currentSelectionRange) else {
+            currentWikiLinkContext = nil
+            linkSuggestions = []
+            return
+        }
+        currentWikiLinkContext = context
+        let query = context.query
+        linkSearchTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+            let results = await self.searchKnowledge(query: query, limit: 8)
+            guard !Task.isCancelled else {
+                return
+            }
+            if self.currentWikiLinkContext == context {
+                self.linkSuggestions = results
+            }
+        }
+    }
+}
+
+func knowledgeDisplayName(for fileId: String) -> String {
+    fileId
+        .split(separator: "/")
+        .last
+        .map(String.init)?
+        .replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression)
+        ?? "Note"
+}
+
+func knowledgeMarkdownFileName(for fileId: String) -> String {
+    fileId
+        .split(separator: "/")
+        .last
+        .map(String.init)
+        ?? "note.md"
+}
+
+func knowledgeSuggestedFileName(from title: String) -> String {
+    let slug = title
+        .lowercased()
+        .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "-", options: .regularExpression)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+        .nilIfBlank ?? "note"
+    return "\(slug).md"
+}
+
+func knowledgeOutlineHeadings(in text: String) -> [KnowledgeHeadingItem] {
+    let nsText = text as NSString
+    let fullRange = NSRange(location: 0, length: nsText.length)
+    let regex = try? NSRegularExpression(pattern: #"^(#{1,6})\s+(.+?)\s*$"#, options: [.anchorsMatchLines])
+    let matches = regex?.matches(in: text, options: [], range: fullRange) ?? []
+    return matches.compactMap { match in
+        guard match.numberOfRanges >= 3 else {
+            return nil
+        }
+        let hashes = nsText.substring(with: match.range(at: 1))
+        let title = nsText.substring(with: match.range(at: 2)).trimmed
+        return KnowledgeHeadingItem(level: hashes.count, title: title, range: match.range)
+    }
+}
+
+func knowledgePrimaryHeading(in text: String) -> String? {
+    knowledgeOutlineHeadings(in: text).first(where: { $0.level == 1 })?.title
+}
+
+func knowledgeSelectionWordCount(in text: String, selectedRange: NSRange) -> Int {
+    guard selectedRange.location != NSNotFound,
+          selectedRange.location <= (text as NSString).length,
+          selectedRange.length > 0 else {
+        return 0
+    }
+    let safeRange = NSRange(location: selectedRange.location, length: min(selectedRange.length, (text as NSString).length - selectedRange.location))
+    let substring = (text as NSString).substring(with: safeRange)
+    return knowledgeWordCount(in: substring)
+}
+
+func knowledgeWordCount(in text: String) -> Int {
+    text.components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }.count
+}
+
+func knowledgeFindRanges(of query: String, in text: String) -> [NSRange] {
+    let trimmed = query.trimmed
+    guard !trimmed.isEmpty else {
+        return []
+    }
+    let nsText = text as NSString
+    let lowerText = text.lowercased() as NSString
+    let lowerQuery = trimmed.lowercased()
+    var searchRange = NSRange(location: 0, length: nsText.length)
+    var matches: [NSRange] = []
+    while true {
+        let found = lowerText.range(of: lowerQuery, options: [], range: searchRange)
+        if found.location == NSNotFound {
+            break
+        }
+        matches.append(found)
+        let nextLocation = found.location + max(found.length, 1)
+        guard nextLocation < nsText.length else {
+            break
+        }
+        searchRange = NSRange(location: nextLocation, length: nsText.length - nextLocation)
+    }
+    return matches
+}
+
+func knowledgeCurrentWikiLinkContext(in text: String, selectedRange: NSRange) -> KnowledgeWikiLinkContext? {
+    guard selectedRange.length == 0, selectedRange.location != NSNotFound else {
+        return nil
+    }
+    let nsText = text as NSString
+    guard selectedRange.location <= nsText.length else {
+        return nil
+    }
+    let prefix = nsText.substring(to: selectedRange.location)
+    guard let openRange = prefix.range(of: "[[", options: .backwards) else {
+        return nil
+    }
+    let query = String(prefix[openRange.upperBound...])
+    guard !query.contains("]"), !query.contains("\n"), !query.contains("|") else {
+        return nil
+    }
+    let location = NSRange(openRange, in: prefix).location
+    return KnowledgeWikiLinkContext(replaceRange: NSRange(location: location, length: selectedRange.location - location), query: query)
+}
+
+func knowledgeRelativePath(from sourceFileId: String, to targetId: String) -> String {
+    let sourceComponents = sourceFileId.split(separator: "/").dropLast().map(String.init)
+    let targetComponents = targetId.split(separator: "/").map(String.init)
+    var commonPrefix = 0
+    while commonPrefix < sourceComponents.count,
+          commonPrefix < targetComponents.count,
+          sourceComponents[commonPrefix] == targetComponents[commonPrefix] {
+        commonPrefix += 1
+    }
+    let parentTraversal = Array(repeating: "..", count: sourceComponents.count - commonPrefix)
+    let remainingTarget = Array(targetComponents.dropFirst(commonPrefix))
+    let pathComponents = parentTraversal + remainingTarget
+    return pathComponents.isEmpty ? "." : pathComponents.joined(separator: "/")
 }
 
 @MainActor

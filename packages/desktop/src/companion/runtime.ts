@@ -571,6 +571,19 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async searchKnowledge(input: { query?: string | null; limit?: number | null }) {
+      const query = input.query?.trim() ?? '';
+      const limit = Math.min(50, Math.max(1, Number(input.limit ?? 20) || 20));
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (query) {
+        params.set('q', query);
+      }
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/vault/note-search?${params.toString()}`,
+      });
+    },
+
     async readKnowledgeFile(fileId: string) {
       return invokeDesktopApi(hostManager, {
         method: 'GET',
@@ -611,6 +624,19 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       return invokeDesktopApi(hostManager, {
         method: 'DELETE',
         path: `/api/vault/file?id=${encodeURIComponent(id)}`,
+      });
+    },
+
+    async createKnowledgeImageAsset(input: { fileName?: string | null; mimeType?: string | null; dataBase64: string }) {
+      const safeFileName = input.fileName?.trim() || 'image.png';
+      const mimeType = input.mimeType?.trim() || 'image/png';
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: '/api/vault/image',
+        body: {
+          filename: safeFileName,
+          dataUrl: `data:${mimeType};base64,${input.dataBase64.trim()}`,
+        },
       });
     },
 

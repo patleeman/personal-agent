@@ -539,10 +539,26 @@ struct CompanionKnowledgeTreeResponse: Codable, Equatable {
     let entries: [CompanionKnowledgeEntry]
 }
 
+struct CompanionKnowledgeSearchResult: Codable, Equatable, Identifiable {
+    let id: String
+    let name: String
+    let title: String
+    let excerpt: String
+}
+
+struct CompanionKnowledgeSearchResponse: Codable, Equatable {
+    let results: [CompanionKnowledgeSearchResult]
+}
+
 struct CompanionKnowledgeFileResponse: Codable, Equatable {
     let id: String
     let content: String
     let updatedAt: String
+}
+
+struct CompanionKnowledgeImageAssetResponse: Codable, Equatable {
+    let id: String
+    let url: String
 }
 
 struct CompanionKnowledgeImportRequest: Equatable {

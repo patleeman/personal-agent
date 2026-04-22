@@ -278,6 +278,17 @@ export interface CompanionKnowledgeRenameInput {
   newName: string;
 }
 
+export interface CompanionKnowledgeSearchInput {
+  query?: string | null;
+  limit?: number | null;
+}
+
+export interface CompanionKnowledgeImageAssetInput {
+  fileName?: string | null;
+  mimeType?: string | null;
+  dataBase64: string;
+}
+
 export interface CompanionRuntime {
   listConversations(): Promise<unknown>;
   updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
@@ -314,11 +325,13 @@ export interface CompanionRuntime {
   updateConversationAttachment(input: CompanionAttachmentUpdateInput): Promise<unknown>;
   readConversationAttachmentAsset(input: CompanionAttachmentAssetInput): Promise<CompanionBinaryAsset>;
   listKnowledgeEntries(directoryId?: string | null): Promise<unknown>;
+  searchKnowledge(input: CompanionKnowledgeSearchInput): Promise<unknown>;
   readKnowledgeFile(fileId: string): Promise<unknown>;
   writeKnowledgeFile(input: { fileId: string; content: string }): Promise<unknown>;
   createKnowledgeFolder(folderId: string): Promise<unknown>;
   renameKnowledgeEntry(input: CompanionKnowledgeRenameInput): Promise<unknown>;
   deleteKnowledgeEntry(id: string): Promise<unknown>;
+  createKnowledgeImageAsset(input: CompanionKnowledgeImageAssetInput): Promise<unknown>;
   importKnowledge(input: CompanionKnowledgeImportInput): Promise<unknown>;
   listScheduledTasks(): Promise<unknown>;
   readScheduledTask(taskId: string): Promise<unknown>;

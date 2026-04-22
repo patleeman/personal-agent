@@ -19,7 +19,7 @@ apps/ios/PersonalAgentCompanion
 - restore queued steer/follow-up prompts, manage parallel jobs, and see live control/presence state from iPhone
 - take over control, abort a turn, rename a conversation, browse local/remote directories for cwd changes, adjust model preferences from the live host catalog, and switch execution target
 - browse conversation artifacts and commit checkpoints, and create new checkpoints from iOS
-- browse and edit markdown notes in the host knowledge base, including folder navigation, note/folder creation, and rename/delete actions for knowledge entries
+- browse and edit markdown notes in the host knowledge base, including folder navigation, note/folder creation, rename/delete actions, autosave + local draft recovery, single-surface markdown editing, note-link search/insert, inline image insertion, conflict handling, and mobile markdown editing tools like smart list continuation plus a keyboard toolbar
 - save shared text, URLs, and images from iOS into the host knowledge base through the companion share extension; URL shares are imported as markdown notes with extracted readable content + frontmatter metadata, and image shares become markdown notes backed by vault assets
 - browse saved drawing attachments, inspect revisions, and create/update drawing assets with a native PencilKit editor that exports Excalidraw-compatible source + preview assets
 - manage automations from the phone, including background-agent callback delivery controls, with durable-run details still reachable from the companion surfaces
@@ -91,6 +91,16 @@ SIMCTL_CHILD_PA_IOS_USE_DEVICE_DEMO_DATA=1 \
 SIMCTL_CHILD_PA_IOS_AUTO_CONNECT_MOCK_HOST=1 \
 SIMCTL_CHILD_PA_IOS_AUTO_OPEN_FIRST_MOCK_CONVERSATION=1 \
 SIMCTL_CHILD_PA_IOS_DEMO_SNAPSHOT_FILE="$PWD/demo-data/local-transcripts.json" \
+  xcrun simctl launch booted com.personalagent.ios.companion
+```
+
+If you want a fast Knowledge-editor smoke test instead of the conversation list, launch with:
+
+```bash
+SIMCTL_CHILD_PA_IOS_MOCK_MODE=1 \
+SIMCTL_CHILD_PA_IOS_AUTO_CONNECT_MOCK_HOST=1 \
+SIMCTL_CHILD_PA_IOS_AUTO_SELECT_KNOWLEDGE_TAB=1 \
+SIMCTL_CHILD_PA_IOS_AUTO_OPEN_KNOWLEDGE_NOTE=notes/ios-companion.md \
   xcrun simctl launch booted com.personalagent.ios.companion
 ```
 

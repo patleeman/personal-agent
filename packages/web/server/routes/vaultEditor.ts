@@ -108,6 +108,14 @@ interface BacklinkResult {
   excerpt: string;
 }
 
+interface VaultNoteSearchResult {
+  id: string;
+  name: string;
+  title: string;
+  excerpt: string;
+  score: number;
+}
+
 function collectAllMarkdownFiles(root: string): string[] {
   const results: string[] = [];
   const stack = [root];
@@ -126,6 +134,60 @@ function collectAllMarkdownFiles(root: string): string[] {
     }
   }
   return results;
+}
+
+function buildSearchExcerpt(content: string, index: number, matchLength: number): string {
+  const start = Math.max(0, index - 60);
+  const end = Math.min(content.length, index + matchLength + 80);
+  let excerpt = content.slice(start, end).replace(/\n+/g, ' ').trim();
+  if (start > 0) excerpt = `…${excerpt}`;
+  if (end < content.length) excerpt = `${excerpt}…`;
+  return excerpt;
+}
+
+function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
+  const normalized = query.trim().toLowerCase();
+  const results: VaultNoteSearchResult[] = [];
+
+  for (const filePath of collectAllMarkdownFiles(root)) {
+    const id = relative(root, filePath).replace(/\\/g, '/');
+    const name = basename(filePath);
+    const title = name.replace(/\.md$/i, '');
+    let content = '';
+    try { content = readFileSync(filePath, 'utf-8'); } catch { continue; }
+
+    if (!normalized) {
+      results.push({ id, name, title, excerpt: id, score: 1_000 });
+      continue;
+    }
+
+    const pathLower = id.toLowerCase();
+    const titleLower = title.toLowerCase();
+    const contentLower = content.toLowerCase();
+    const titleIndex = titleLower.indexOf(normalized);
+    const pathIndex = pathLower.indexOf(normalized);
+    const contentIndex = contentLower.indexOf(normalized);
+    if (titleIndex === -1 && pathIndex === -1 && contentIndex === -1) {
+      continue;
+    }
+
+    let score = 0;
+    if (titleIndex === 0) score += 500;
+    else if (titleIndex > 0) score += 350;
+    if (pathIndex >= 0) score += 200;
+    if (contentIndex >= 0) score += 100;
+    const excerpt = contentIndex >= 0
+      ? buildSearchExcerpt(content, contentIndex, normalized.length)
+      : pathIndex >= 0
+        ? id
+        : title;
+    results.push({ id, name, title, excerpt, score });
+  }
+
+  return results
+    .sort((a, b) => b.score - a.score || a.title.localeCompare(b.title))
+    .slice(0, limit)
+    .map(({ score: _score, ...result }) => result);
 }
 
 function findBacklinks(targetId: string, root: string): BacklinkResult[] {
@@ -338,6 +400,19 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       res.json({ id, targetName, backlinks: findBacklinks(id, root) });
     } catch (err) {
       logError('vault/backlinks', { message: String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  // GET /api/vault/note-search?q=...&limit=... — note title/path search for mobile linking
+  router.get('/api/vault/note-search', (req, res) => {
+    try {
+      const q = typeof req.query.q === 'string' ? req.query.q : '';
+      const limit = Math.min(50, parseInt(String(req.query.limit ?? '20'), 10) || 20);
+      const root = getRoot();
+      res.json({ results: searchVaultNotes(root, q, limit) });
+    } catch (err) {
+      logError('vault/note-search', { message: String(err) });
       res.status(500).json({ error: String(err) });
     }
   });

@@ -123,11 +123,13 @@ describe('daemon companion server', () => {
         disposition: 'inline',
       }),
       listKnowledgeEntries: async (directoryId) => ({ root: '/vault', entries: directoryId ? [{ id: 'notes/daily.md', kind: 'file', name: 'daily.md' }] : [{ id: 'notes/', kind: 'folder', name: 'notes' }] }),
+      searchKnowledge: async ({ query, limit }) => ({ results: [{ id: 'notes/release-checklist.md', name: 'release-checklist.md', title: query?.trim() || 'release-checklist', excerpt: 'Release checklist', limit }] }),
       readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
       writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
       createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
       renameKnowledgeEntry: async ({ id, newName }) => ({ id: `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`, kind: id.endsWith('/') ? 'folder' : 'file', name: newName, sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
       deleteKnowledgeEntry: async () => ({ ok: true }),
+      createKnowledgeImageAsset: async ({ fileName }) => ({ id: `_attachments/${fileName ?? 'image.png'}`, url: '/api/vault/asset?id=_attachments%2Fimage.png' }),
       importKnowledge: async (input) => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: JSON.stringify(input).length, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: input.kind, title: input.title ?? 'Shared link' }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
@@ -245,6 +247,22 @@ describe('daemon companion server', () => {
       updatedAt: '2026-04-19T00:00:00.000Z',
     });
 
+    const knowledgeSearchResponse = await fetch(`${baseUrl}/companion/v1/knowledge/search?q=release&limit=5`, {
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+      },
+    });
+    expect(knowledgeSearchResponse.status).toBe(200);
+    expect(await readJson(knowledgeSearchResponse)).toEqual({
+      results: [{
+        id: 'notes/release-checklist.md',
+        name: 'release-checklist.md',
+        title: 'release',
+        excerpt: 'Release checklist',
+        limit: 5,
+      }],
+    });
+
     const knowledgeWriteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/file`, {
       method: 'PUT',
       headers: {
@@ -304,6 +322,20 @@ describe('daemon companion server', () => {
     });
     expect(knowledgeDeleteResponse.status).toBe(200);
     expect(await readJson(knowledgeDeleteResponse)).toEqual({ ok: true });
+
+    const knowledgeImageResponse = await fetch(`${baseUrl}/companion/v1/knowledge/image`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fileName: 'capture.png', mimeType: 'image/png', dataBase64: Buffer.from('png-bytes', 'utf-8').toString('base64') }),
+    });
+    expect(knowledgeImageResponse.status).toBe(201);
+    expect(await readJson(knowledgeImageResponse)).toEqual({
+      id: '_attachments/capture.png',
+      url: '/api/vault/asset?id=_attachments%2Fimage.png',
+    });
 
     const knowledgeImportResponse = await fetch(`${baseUrl}/companion/v1/knowledge/import`, {
       method: 'POST',

@@ -84,12 +84,14 @@ describe('desktop companion runtime', () => {
     });
   });
 
-  it('routes knowledge rename, delete, and import calls to vault endpoints', async () => {
+  it('routes knowledge search, rename, delete, image upload, and import calls to vault endpoints', async () => {
     const localController = {
       dispatchApiRequest: vi
         .fn()
+        .mockResolvedValueOnce(jsonResponse({ results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }] }))
         .mockResolvedValueOnce(jsonResponse({ id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md' }))
         .mockResolvedValueOnce(jsonResponse({ ok: true }))
+        .mockResolvedValueOnce(jsonResponse({ id: '_attachments/photo.png', url: '/api/vault/asset?id=_attachments%2Fphoto.png' }))
         .mockResolvedValueOnce(jsonResponse({
           note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
           sourceKind: 'url',
@@ -103,10 +105,15 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.searchKnowledge({ query: 'release', limit: 7 })).resolves.toEqual({ results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }] });
     await expect(runtime.renameKnowledgeEntry({ id: 'Inbox/original.md', newName: 'renamed.md' })).resolves.toEqual({
       id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md',
     });
     await expect(runtime.deleteKnowledgeEntry('Inbox/renamed.md')).resolves.toEqual({ ok: true });
+    await expect(runtime.createKnowledgeImageAsset({ fileName: 'photo.png', mimeType: 'image/png', dataBase64: 'Zm9v' })).resolves.toEqual({
+      id: '_attachments/photo.png',
+      url: '/api/vault/asset?id=_attachments%2Fphoto.png',
+    });
     await expect(runtime.importKnowledge({
       kind: 'url',
       directoryId: 'Inbox',
@@ -119,15 +126,27 @@ describe('desktop companion runtime', () => {
     });
 
     expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(1, {
+      method: 'GET',
+      path: '/api/vault/note-search?limit=7&q=release',
+    });
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(2, {
       method: 'POST',
       path: '/api/vault/rename',
       body: { id: 'Inbox/original.md', newName: 'renamed.md' },
     });
-    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(2, {
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(3, {
       method: 'DELETE',
       path: '/api/vault/file?id=Inbox%2Frenamed.md',
     });
-    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(3, {
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(4, {
+      method: 'POST',
+      path: '/api/vault/image',
+      body: {
+        filename: 'photo.png',
+        dataUrl: 'data:image/png;base64,Zm9v',
+      },
+    });
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(5, {
       method: 'POST',
       path: '/api/vault/share-import',
       body: {

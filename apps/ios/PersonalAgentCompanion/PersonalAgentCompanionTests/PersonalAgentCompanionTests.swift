@@ -308,6 +308,79 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertFalse(root.entries.contains(where: { $0.id == "notes/history/" }))
     }
 
+    func testMockKnowledgeSearchAndImageAssetUpload() async throws {
+        let client = MockCompanionClient()
+
+        let search = try await client.searchKnowledge(query: "ios", limit: 5)
+        XCTAssertTrue(search.results.contains(where: { $0.id == "notes/ios-companion.md" }))
+
+        let asset = try await client.createKnowledgeImageAsset(fileName: "snapshot.png", mimeType: "image/png", dataBase64: Data("png-data".utf8).base64EncodedString())
+        XCTAssertEqual(asset.id, "_attachments/snapshot.png")
+    }
+
+    func testKnowledgeHelpersParseHeadingsLinksAndRelativePaths() {
+        let text = """
+        ---
+        title: Release note
+        ---
+
+        # Release checklist
+        
+        Some prose with a [[ios companion]] link.
+
+        ## Ship it
+        """
+
+        XCTAssertEqual(knowledgePrimaryHeading(in: text), "Release checklist")
+        XCTAssertEqual(knowledgeOutlineHeadings(in: text).map(\.title), ["Release checklist", "Ship it"])
+        XCTAssertEqual(knowledgeFindRanges(of: "ship", in: text).count, 1)
+
+        let wikiContext = knowledgeCurrentWikiLinkContext(in: "Start [[ios com", selectedRange: NSRange(location: 15, length: 0))
+        XCTAssertEqual(wikiContext?.query, "ios com")
+        XCTAssertEqual(knowledgeRelativePath(from: "notes/mobile/ios.md", to: "_attachments/snapshot.png"), "../../_attachments/snapshot.png")
+    }
+
+    func testKnowledgeSmartReturnContinuesMarkdownLists() {
+        let checklistMutation = knowledgeSmartReturnMutation(text: "- [ ] Ship it", selectedRange: NSRange(location: 13, length: 0))
+        XCTAssertEqual(checklistMutation?.text, "- [ ] Ship it\n- [ ] ")
+
+        let orderedMutation = knowledgeSmartReturnMutation(text: "1. First", selectedRange: NSRange(location: 8, length: 0))
+        XCTAssertEqual(orderedMutation?.text, "1. First\n2. ")
+    }
+
+    func testKnowledgeNoteAutosavesAfterIdle() async throws {
+        let client = MockCompanionClient()
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let draftStore = KnowledgeDraftStore(baseURL: tempDraftRoot)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: draftStore)
+
+        model.load()
+        try await Task.sleep(for: .milliseconds(100))
+
+        model.draft = "# Autosaved\n"
+        try await Task.sleep(for: .milliseconds(1800))
+
+        let saved = try await client.readKnowledgeFile(fileId: "notes/ios-companion.md")
+        XCTAssertEqual(saved.content, "# Autosaved\n")
+        XCTAssertNil(draftStore.load(fileId: "notes/ios-companion.md"))
+    }
+
+    func testKnowledgeNoteDetectsHostConflictsBeforeOverwrite() async throws {
+        let client = MockCompanionClient()
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        model.load()
+        try await Task.sleep(for: .milliseconds(100))
+
+        model.draft = "# Local edit\n"
+        _ = try await client.writeKnowledgeFile(fileId: "notes/ios-companion.md", content: "# Remote edit\n")
+
+        let saved = await model.save()
+        XCTAssertFalse(saved)
+        XCTAssertEqual(model.conflict?.remoteContent, "# Remote edit\n")
+    }
+
     func testMockSimulationStartsRunningConversationAndStopsOnAbort() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")

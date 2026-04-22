@@ -649,6 +649,19 @@ export class DaemonCompanionServer {
       return;
     }
 
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/knowledge/search`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.searchKnowledge({
+        query: requestUrl.searchParams.get('q'),
+        limit: requestUrl.searchParams.get('limit') ? Number.parseInt(requestUrl.searchParams.get('limit') || '', 10) : undefined,
+      }));
+      return;
+    }
+
     if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/knowledge/file`) {
       if (!await this.requireBearer(request, response)) {
         return;
@@ -713,6 +726,22 @@ export class DaemonCompanionServer {
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
       await runtime.deleteKnowledgeEntry(readRequiredString(requestUrl.searchParams.get('id'), 'id'));
       sendJson(response, 200, { ok: true });
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/knowledge/image`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      sendJson(response, 201, await runtime.createKnowledgeImageAsset({
+        ...(payload.fileName !== undefined ? { fileName: payload.fileName === null ? null : readOptionalString(payload.fileName) } : {}),
+        ...(payload.mimeType !== undefined ? { mimeType: payload.mimeType === null ? null : readOptionalString(payload.mimeType) } : {}),
+        dataBase64: readRequiredString(payload.dataBase64, 'dataBase64'),
+      }));
       return;
     }
 
