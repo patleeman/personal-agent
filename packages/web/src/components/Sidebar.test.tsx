@@ -740,6 +740,14 @@ describe('Sidebar', () => {
     expect(html).not.toContain('ui-sidebar-session-row-active');
   });
 
+  it('renders an open-files section on knowledge routes', () => {
+    const html = renderSidebar('/knowledge?file=AGENTS.md');
+
+    expect(html).toContain('Open Files');
+    expect(html).toContain('aria-label="Open file AGENTS.md"');
+    expect(html).toContain('aria-label="Close file AGENTS.md"');
+  });
+
   it('keeps Chat neutral on conversation routes while the selected thread owns the active chrome', () => {
     const html = renderSidebar('/conversations/conv-123');
 
