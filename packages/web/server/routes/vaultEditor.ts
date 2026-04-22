@@ -4,7 +4,6 @@
 
 import type { Express, Response } from 'express';
 import {
-  createReadStream,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -20,6 +19,7 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { lookup as mimeLookup } from 'mime-types';
 import { getVaultRoot } from '@personal-agent/core';
 import { logError } from '../middleware/index.js';
+import { importVaultSharedItem } from './vaultShareImport.js';
 
 // ── Path safety ───────────────────────────────────────────────────────────────
 
@@ -418,6 +418,64 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
     }
   });
 
+  // POST /api/vault/share-import — import shared text, URLs, or images into the vault
+  router.post('/api/vault/share-import', async (req, res) => {
+    try {
+      const payload = (req.body ?? {}) as {
+        kind?: unknown;
+        directoryId?: unknown;
+        title?: unknown;
+        text?: unknown;
+        url?: unknown;
+        mimeType?: unknown;
+        fileName?: unknown;
+        dataBase64?: unknown;
+        sourceApp?: unknown;
+        createdAt?: unknown;
+      };
+      const kind = typeof payload.kind === 'string' ? payload.kind.trim() : '';
+      if (kind !== 'text' && kind !== 'url' && kind !== 'image') {
+        res.status(400).json({ error: 'kind must be text, url, or image' });
+        return;
+      }
+
+      const root = getRoot();
+      const directoryId = typeof payload.directoryId === 'string'
+        ? payload.directoryId.trim().replace(/^\/+|\/+$/g, '')
+        : '';
+      const targetDirAbs = directoryId ? safePath(directoryId) : root;
+      if (!targetDirAbs) {
+        res.status(400).json({ error: 'Invalid target directory' });
+        return;
+      }
+
+      const imported = await importVaultSharedItem({
+        kind,
+        root,
+        targetDirAbs,
+        ...(typeof payload.title === 'string' ? { title: payload.title } : {}),
+        ...(typeof payload.text === 'string' ? { text: payload.text } : {}),
+        ...(typeof payload.url === 'string' ? { url: payload.url } : {}),
+        ...(typeof payload.mimeType === 'string' ? { mimeType: payload.mimeType } : {}),
+        ...(typeof payload.fileName === 'string' ? { fileName: payload.fileName } : {}),
+        ...(typeof payload.dataBase64 === 'string' ? { dataBase64: payload.dataBase64 } : {}),
+        ...(typeof payload.sourceApp === 'string' ? { sourceApp: payload.sourceApp } : {}),
+        ...(typeof payload.createdAt === 'string' ? { createdAt: payload.createdAt } : {}),
+      });
+
+      const noteStats = statSync(imported.notePath);
+      res.status(201).json({
+        note: entryFromStat(root, imported.notePath, noteStats),
+        sourceKind: imported.sourceKind,
+        title: imported.title,
+        ...(imported.asset ? { asset: imported.asset } : {}),
+      });
+    } catch (err) {
+      logError('vault/share-import', { message: String(err) });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
   // POST /api/vault/image  — save a base64-encoded image to _attachments/
   // body: { filename: string, dataUrl: string }
   router.post('/api/vault/image', (req, res) => {
@@ -454,7 +512,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       const mime = mimeLookup(abs) || 'application/octet-stream';
       res.setHeader('Content-Type', mime);
       res.setHeader('Cache-Control', 'public, max-age=3600');
-      createReadStream(abs).pipe(res);
+      res.send(readFileSync(abs));
     } catch (err) {
       logError('vault/asset', { message: String(err) });
       res.status(500).end();

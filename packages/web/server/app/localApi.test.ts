@@ -41,7 +41,9 @@ describe('desktop local API vault routes', () => {
   it('registers vault routes and handles GET + PUT requests for the knowledge workspace', async () => {
     process.env.PERSONAL_AGENT_VAULT_ROOT = tempRoot;
     mkdirSync(join(tempRoot, 'notes'), { recursive: true });
+    mkdirSync(join(tempRoot, '_attachments'), { recursive: true });
     writeFileSync(join(tempRoot, 'notes', 'existing.md'), '# Existing\n', 'utf-8');
+    writeFileSync(join(tempRoot, '_attachments', 'demo.svg'), '<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'utf-8');
 
     const treeResponse = await dispatchDesktopLocalApiRequest({
       method: 'GET',
@@ -72,5 +74,14 @@ describe('desktop local API vault routes', () => {
       name: 'new-note.md',
     }));
     expect(readFileSync(join(tempRoot, 'notes', 'new-note.md'), 'utf-8')).toBe('# New note\n');
+
+    const assetResponse = await dispatchDesktopLocalApiRequest({
+      method: 'GET',
+      path: '/api/vault/asset?id=_attachments%2Fdemo.svg',
+    });
+
+    expect(assetResponse.statusCode).toBe(200);
+    expect(assetResponse.headers['content-type']).toContain('image/svg+xml');
+    expect(Buffer.from(assetResponse.body).toString('utf-8')).toContain('<svg');
   });
 });
