@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { VaultFileTree } from './VaultFileTree';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
+import { KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY } from '../../local/knowledgeOpenFilesSectionHeight';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
 import type { VaultEntry, VaultFileListResult } from '../../shared/types';
 
@@ -152,6 +153,14 @@ function click(target: HTMLElement) {
   });
 }
 
+function drag(target: HTMLElement, startY: number, endY: number) {
+  act(() => {
+    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientY: startY }));
+    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientY: endY }));
+    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientY: endY }));
+  });
+}
+
 async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
@@ -254,5 +263,31 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(getButton(remounted.container, 'Open file README.md')).toBeTruthy();
+  });
+
+  it('lets the open files section resize taller and persists the new height', async () => {
+    const { container } = renderManagedTree();
+    await flushAsyncWork();
+
+    click(getButton(container, 'README.md'));
+    await flushAsyncWork();
+
+    const separator = container.querySelector<HTMLElement>('[aria-label="Resize open files section"]');
+    expect(separator).toBeTruthy();
+
+    const startHeight = Number(separator?.getAttribute('aria-valuenow'));
+    expect(Number.isFinite(startHeight)).toBe(true);
+
+    if (!separator) {
+      throw new Error('Expected open files resize separator');
+    }
+
+    drag(separator, 160, 120);
+    await flushAsyncWork();
+
+    const resizedSeparator = container.querySelector<HTMLElement>('[aria-label="Resize open files section"]');
+    const nextHeight = Number(resizedSeparator?.getAttribute('aria-valuenow'));
+    expect(nextHeight).toBeGreaterThan(startHeight);
+    expect(localStorage.getItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY)).toBe(String(nextHeight));
   });
 });

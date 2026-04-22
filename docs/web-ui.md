@@ -50,6 +50,7 @@ Use it for:
 - file tree navigation
 - persisted folder expansion state
 - open files in the knowledge sidebar for quick switching between active docs
+- resize the open-files shelf to show more or fewer active docs
 - markdown editing
 - frontmatter disclosure and tag editing
 - full-text search

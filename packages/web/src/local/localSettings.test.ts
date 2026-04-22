@@ -8,6 +8,7 @@ import {
   SIDEBAR_WIDTH_STORAGE_KEY,
 } from './localSettings';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from './knowledgeOpenFiles';
+import { KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY } from './knowledgeOpenFilesSectionHeight';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
 
 function createStorage(): Storage {
@@ -65,6 +66,7 @@ describe('localSettings', () => {
     const conversationsSectionKey = buildSidebarNavSectionStorageKey('conversations');
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, '224');
     localStorage.setItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY, JSON.stringify(['README.md']));
+    localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, '224');
     localStorage.setItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY, JSON.stringify(['notes/']));
     localStorage.setItem(conversationsSectionKey, JSON.stringify(false));
     localStorage.setItem('pa:rail-width:skills', '460');
@@ -76,6 +78,7 @@ describe('localSettings', () => {
 
     expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(conversationsSectionKey)).toBeNull();
     expect(localStorage.getItem('pa:rail-width:skills')).toBeNull();

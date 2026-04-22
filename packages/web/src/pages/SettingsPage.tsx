@@ -4036,7 +4036,7 @@ export function SettingsPage() {
                 <div className="space-y-2 min-w-0">
                   <h3 className="text-[13px] font-medium text-primary">Layout widths</h3>
                   <p className="ui-card-meta">
-                    Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files), and per-doc context rail widths, then reloads the page.
+                    Clears the stored sidebar width, knowledge sidebar state (expanded folders + open files + open-files shelf height), and per-doc context rail widths, then reloads the page.
                   </p>
                   <button
                     type="button"

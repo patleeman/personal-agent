@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import {
   FileTree as TreesModel,
@@ -22,6 +24,14 @@ import {
   renameOpenFileIds,
   writeStoredOpenFileIds,
 } from '../../local/knowledgeOpenFiles';
+import {
+  DEFAULT_OPEN_FILES_SECTION_HEIGHT,
+  MAX_OPEN_FILES_SECTION_HEIGHT,
+  MIN_OPEN_FILES_SECTION_HEIGHT,
+  clampOpenFilesSectionHeight,
+  readStoredOpenFilesSectionHeight,
+  writeStoredOpenFilesSectionHeight,
+} from '../../local/knowledgeOpenFilesSectionHeight';
 import {
   collapseExpandedFolderIds,
   readStoredExpandedFolderIds,
@@ -79,6 +89,10 @@ const TREE_HOST_STYLE = {
   '--trees-selected-bg-override': 'rgb(var(--color-accent) / 0.14)',
   '--trees-selected-fg-override': 'rgb(var(--color-primary))',
 } satisfies CSSProperties & Record<string, string | number>;
+
+const MIN_TREE_HOST_HEIGHT = 120;
+const OPEN_FILES_SECTION_RESIZE_STEP = 24;
+const OPEN_FILES_SECTION_RESIZER_HEIGHT = 8;
 
 export interface FileTreeProps {
   activeFileId: string | null;
@@ -482,21 +496,29 @@ function OpenFilesSection({
   activeFileId,
   onSelect,
   onClose,
+  bordered = true,
+  className = '',
 }: {
   openFileIds: readonly string[];
   activeFileId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
+  bordered?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="shrink-0 border-t border-border-subtle px-2 pb-2 pt-1.5">
-      <div className="flex items-center px-1 pb-1">
+    <div className={[
+      'flex flex-col px-2 pb-2 pt-1.5',
+      bordered ? 'border-t border-border-subtle' : '',
+      className,
+    ].filter(Boolean).join(' ')}>
+      <div className="flex shrink-0 items-center px-1 pb-1">
         <p className="ui-section-label">Open Files</p>
       </div>
       {openFileIds.length === 0 ? (
         <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
       ) : (
-        <div className="max-h-44 space-y-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
           {openFileIds.map((fileId) => {
             const isActive = activeFileId === fileId;
             const fileName = formatOpenFileName(fileId);
@@ -561,6 +583,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const dropCompleteRef = useRef<(event: FileTreeDropResult) => void>(() => {});
   const reconcilingExpansionRef = useRef(false);
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
+  const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
+  const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
 
   const model = useMemo(() => new TreesModel({
     paths: [],
@@ -605,6 +632,67 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     visibleExpandedFolderIdsRef.current = normalized;
     writeStoredExpandedFolderIds(normalized);
   }, []);
+
+  const persistOpenFilesSectionHeight = useCallback((nextHeight: number) => {
+    const normalized = clampOpenFilesSectionHeight(nextHeight);
+    setDesiredOpenFilesSectionHeight(normalized);
+    writeStoredOpenFilesSectionHeight(normalized);
+  }, []);
+
+  const handleOpenFilesSectionResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+
+    const startY = event.clientY;
+    const startHeight = openFilesSectionHeight;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+
+    function handleMouseMove(moveEvent: MouseEvent) {
+      const delta = startY - moveEvent.clientY;
+      const nextHeight = Math.min(
+        maxOpenFilesSectionHeight,
+        clampOpenFilesSectionHeight(startHeight + delta),
+      );
+      persistOpenFilesSectionHeight(nextHeight);
+    }
+
+    function handleMouseUp() {
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    }
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [maxOpenFilesSectionHeight, openFilesSectionHeight, persistOpenFilesSectionHeight]);
+
+  const handleOpenFilesSectionResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+    switch (event.key) {
+      case 'ArrowUp':
+        event.preventDefault();
+        persistOpenFilesSectionHeight(Math.min(maxOpenFilesSectionHeight, openFilesSectionHeight + OPEN_FILES_SECTION_RESIZE_STEP));
+        break;
+      case 'ArrowDown':
+        event.preventDefault();
+        persistOpenFilesSectionHeight(openFilesSectionHeight - OPEN_FILES_SECTION_RESIZE_STEP);
+        break;
+      case 'Home':
+        event.preventDefault();
+        persistOpenFilesSectionHeight(MIN_OPEN_FILES_SECTION_HEIGHT);
+        break;
+      case 'End':
+        event.preventDefault();
+        persistOpenFilesSectionHeight(maxOpenFilesSectionHeight);
+        break;
+      default:
+        break;
+    }
+  }, [maxOpenFilesSectionHeight, openFilesSectionHeight, persistOpenFilesSectionHeight]);
+
+  const handleOpenFilesSectionResizeReset = useCallback(() => {
+    persistOpenFilesSectionHeight(Math.min(DEFAULT_OPEN_FILES_SECTION_HEIGHT, maxOpenFilesSectionHeight));
+  }, [maxOpenFilesSectionHeight, persistOpenFilesSectionHeight]);
 
   const applyRenameEffects = useCallback((oldId: string, newId: string) => {
     persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
@@ -832,6 +920,35 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, [loadSnapshot]);
 
   useEffect(() => {
+    const root = rootRef.current;
+    const header = headerRef.current;
+    if (!root || !header || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const updateMaxOpenFilesSectionHeight = () => {
+      const availableHeight = root.getBoundingClientRect().height
+        - header.getBoundingClientRect().height
+        - OPEN_FILES_SECTION_RESIZER_HEIGHT
+        - MIN_TREE_HOST_HEIGHT;
+      setMaxOpenFilesSectionHeight(Math.max(
+        MIN_OPEN_FILES_SECTION_HEIGHT,
+        Math.min(MAX_OPEN_FILES_SECTION_HEIGHT, Math.round(availableHeight)),
+      ));
+    };
+
+    updateMaxOpenFilesSectionHeight();
+    const observer = new ResizeObserver(() => {
+      updateMaxOpenFilesSectionHeight();
+    });
+    observer.observe(root);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!activeFileId) {
       for (const selectedPath of model.getSelectedPaths()) {
         model.getItem(selectedPath)?.deselect();
@@ -965,8 +1082,8 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, [entries, loading]);
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
+    <div ref={rootRef} className="flex h-full flex-col">
+      <div ref={headerRef} className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
         <p className="ui-section-label flex-1">Knowledge Base</p>
         <button
           type="button"
@@ -1032,12 +1149,44 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         )}
       </div>
 
-      <OpenFilesSection
-        openFileIds={openFileIds}
-        activeFileId={activeFileId}
-        onSelect={onFileSelect}
-        onClose={handleOpenFileClose}
-      />
+      {openFileIds.length > 0 ? (
+        <>
+          <div
+            role="separator"
+            aria-label="Resize open files section"
+            aria-orientation="horizontal"
+            aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
+            aria-valuemax={maxOpenFilesSectionHeight}
+            aria-valuenow={openFilesSectionHeight}
+            tabIndex={0}
+            className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
+            onMouseDown={handleOpenFilesSectionResizeMouseDown}
+            onKeyDown={handleOpenFilesSectionResizeKeyDown}
+            onDoubleClick={handleOpenFilesSectionResizeReset}
+          >
+            <div className="flex h-2 items-center">
+              <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
+            </div>
+          </div>
+          <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
+            <OpenFilesSection
+              openFileIds={openFileIds}
+              activeFileId={activeFileId}
+              onSelect={onFileSelect}
+              onClose={handleOpenFileClose}
+              bordered={false}
+              className="h-full"
+            />
+          </div>
+        </>
+      ) : (
+        <OpenFilesSection
+          openFileIds={openFileIds}
+          activeFileId={activeFileId}
+          onSelect={onFileSelect}
+          onClose={handleOpenFileClose}
+        />
+      )}
 
       {moveEntry ? (
         <MoveModal
