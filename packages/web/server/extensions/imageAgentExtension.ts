@@ -1,18 +1,34 @@
 import { arch, platform } from 'node:os';
+import { buildSessionContext, type ExtensionAPI, type SessionEntry } from '@mariozechner/pi-coding-agent';
+import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { Type } from '@sinclair/typebox';
-import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
-import type { Api, Model } from '@mariozechner/pi-ai';
+import type { Api, ImageContent, Model } from '@mariozechner/pi-ai';
 
 const IMAGE_QUALITY_VALUES = ['auto', 'low', 'medium', 'high'] as const;
 const IMAGE_BACKGROUND_VALUES = ['auto', 'opaque', 'transparent'] as const;
+const IMAGE_ACTION_VALUES = ['auto', 'generate', 'edit'] as const;
+const IMAGE_SOURCE_VALUES = ['none', 'latest', 'latest-user', 'latest-generated', 'recent'] as const;
+const MAX_SOURCE_IMAGE_COUNT = 4;
 
 type ImageQuality = (typeof IMAGE_QUALITY_VALUES)[number];
 type ImageBackground = (typeof IMAGE_BACKGROUND_VALUES)[number];
+type ImageAction = (typeof IMAGE_ACTION_VALUES)[number];
+type ImageSource = (typeof IMAGE_SOURCE_VALUES)[number];
 
 type ImageGenerationTarget = {
   model: Model<Api>;
   endpoint: string;
   headers: Record<string, string>;
+};
+
+type ImageReferenceGroup = {
+  kind: 'user' | 'generated';
+  images: ImageContent[];
+};
+
+type ResolvedSourceImages = {
+  images: ImageContent[];
+  label: string;
 };
 
 export interface ParsedImageGenerationSse {
@@ -29,6 +45,9 @@ const ImageToolParams = Type.Object({
   size: Type.Optional(Type.String({ description: 'Optional size hint such as auto, 1024x1024, 1024x1536, or 1536x1024.' })),
   quality: Type.Optional(Type.Union(IMAGE_QUALITY_VALUES.map((value) => Type.Literal(value)))),
   background: Type.Optional(Type.Union(IMAGE_BACKGROUND_VALUES.map((value) => Type.Literal(value)))),
+  action: Type.Optional(Type.Union(IMAGE_ACTION_VALUES.map((value) => Type.Literal(value)))),
+  source: Type.Optional(Type.Union(IMAGE_SOURCE_VALUES.map((value) => Type.Literal(value)))),
+  sourceCount: Type.Optional(Type.Number({ minimum: 1, maximum: MAX_SOURCE_IMAGE_COUNT, description: 'How many recent source images to include when source=recent. Max 4.' })),
 });
 
 function readRequiredString(value: string | undefined, label: string): string {
@@ -173,13 +192,211 @@ async function resolveImageGenerationTarget(ctx: {
   throw new Error('Image generation requires configured openai-codex or openai auth with a GPT-5 model.');
 }
 
+function readImageBlocks(content: unknown): ImageContent[] {
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  return content.flatMap((block) => {
+    if (!block || typeof block !== 'object') {
+      return [];
+    }
+
+    const candidate = block as Partial<ImageContent> & { type?: unknown };
+    if (candidate.type !== 'image' || typeof candidate.data !== 'string' || typeof candidate.mimeType !== 'string') {
+      return [];
+    }
+
+    return [{
+      type: 'image' as const,
+      data: candidate.data,
+      mimeType: candidate.mimeType,
+    } satisfies ImageContent];
+  });
+}
+
+function collectImageReferenceGroups(messages: AgentMessage[]): ImageReferenceGroup[] {
+  const groups: ImageReferenceGroup[] = [];
+
+  for (const message of messages) {
+    if (!message || typeof message !== 'object' || !('role' in message)) {
+      continue;
+    }
+
+    const role = (message as { role?: unknown }).role;
+    if (role === 'user') {
+      const images = readImageBlocks((message as { content?: unknown }).content);
+      if (images.length > 0) {
+        groups.push({ kind: 'user', images });
+      }
+      continue;
+    }
+
+    if (role === 'toolResult') {
+      const toolName = typeof (message as { toolName?: unknown }).toolName === 'string'
+        ? (message as { toolName: string }).toolName.trim()
+        : '';
+      if (toolName !== 'image') {
+        continue;
+      }
+
+      const images = readImageBlocks((message as { content?: unknown }).content);
+      if (images.length > 0) {
+        groups.push({ kind: 'generated', images });
+      }
+    }
+  }
+
+  return groups;
+}
+
+function readSessionContextMessages(sessionManager: {
+  getEntries(): SessionEntry[];
+  getLeafId(): string | null;
+}): AgentMessage[] {
+  return buildSessionContext(sessionManager.getEntries(), sessionManager.getLeafId()).messages;
+}
+
+function findLastGroup(groups: ImageReferenceGroup[], kind?: ImageReferenceGroup['kind']): ImageReferenceGroup | undefined {
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index];
+    if (!group) {
+      continue;
+    }
+
+    if (!kind || group.kind === kind) {
+      return group;
+    }
+  }
+
+  return undefined;
+}
+
+function inferSourceFromPrompt(prompt: string, groups: ImageReferenceGroup[]): ImageSource {
+  const normalized = prompt.toLowerCase();
+  const hasGenerated = Boolean(findLastGroup(groups, 'generated'));
+  const hasUser = Boolean(findLastGroup(groups, 'user'));
+
+  if (hasGenerated && /(last generated|previously generated|variant of the last|last image you made|last icon you made|previous icon|previous image)/.test(normalized)) {
+    return 'latest-generated';
+  }
+
+  if (hasUser && /(attached image|attached photo|uploaded image|uploaded photo|this attached|this image|this photo|this screenshot)/.test(normalized)) {
+    return 'latest-user';
+  }
+
+  if (/(variant|variation|edit|modify|darker|lighter|same composition|same icon|same image|based on the image|based on the photo)/.test(normalized)) {
+    if (hasGenerated && !hasUser) {
+      return 'latest-generated';
+    }
+    if (hasUser && !hasGenerated) {
+      return 'latest-user';
+    }
+  }
+
+  return 'none';
+}
+
+function inferActionFromPrompt(prompt: string, hasSourceImages: boolean): ImageAction | undefined {
+  if (!hasSourceImages) {
+    return undefined;
+  }
+
+  const normalized = prompt.toLowerCase();
+  return /(variant|variation|edit|modify|darker|lighter|change|adjust|same composition|same icon|same image|turn this)/.test(normalized)
+    ? 'edit'
+    : undefined;
+}
+
+function resolveSourceImages(input: {
+  prompt: string;
+  messages: AgentMessage[];
+  source?: ImageSource;
+  sourceCount?: number;
+}): ResolvedSourceImages {
+  const groups = collectImageReferenceGroups(input.messages);
+  const source = input.source ?? inferSourceFromPrompt(input.prompt, groups);
+
+  switch (source) {
+    case 'none':
+      return { images: [], label: 'none' };
+
+    case 'latest': {
+      const group = findLastGroup(groups);
+      if (!group) {
+        throw new Error('No prior or attached images are available in the current conversation context.');
+      }
+
+      return {
+        images: group.images,
+        label: group.kind === 'generated' ? 'latest-generated' : 'latest-user',
+      };
+    }
+
+    case 'latest-user': {
+      const group = findLastGroup(groups, 'user');
+      if (!group) {
+        throw new Error('No attached user images are available in the current conversation context.');
+      }
+
+      return {
+        images: group.images,
+        label: 'latest-user',
+      };
+    }
+
+    case 'latest-generated': {
+      const group = findLastGroup(groups, 'generated');
+      if (!group) {
+        throw new Error('No previously generated images are available in the current conversation context.');
+      }
+
+      return {
+        images: group.images,
+        label: 'latest-generated',
+      };
+    }
+
+    case 'recent': {
+      const images = groups.flatMap((group) => group.images);
+      if (images.length === 0) {
+        throw new Error('No prior or attached images are available in the current conversation context.');
+      }
+
+      const sourceCount = Math.max(1, Math.min(MAX_SOURCE_IMAGE_COUNT, Math.floor(input.sourceCount ?? 1)));
+      return {
+        images: images.slice(-sourceCount),
+        label: `recent:${sourceCount}`,
+      };
+    }
+
+    default:
+      return { images: [], label: 'none' };
+  }
+}
+
 function buildImageGenerationPayload(input: {
   model: Model<Api>;
   prompt: string;
+  sourceImages: ImageContent[];
   size?: string;
   quality?: ImageQuality;
   background?: ImageBackground;
+  action?: ImageAction;
 }) {
+  const content: Array<
+    { type: 'input_image'; detail: 'auto'; image_url: string }
+    | { type: 'input_text'; text: string }
+  > = input.sourceImages.map((image) => ({
+    type: 'input_image' as const,
+    detail: 'auto' as const,
+    image_url: `data:${image.mimeType};base64,${image.data}`,
+  }));
+  content.push({
+    type: 'input_text' as const,
+    text: input.prompt,
+  });
+
   return {
     model: input.model.id,
     store: false,
@@ -187,10 +404,7 @@ function buildImageGenerationPayload(input: {
     instructions: 'Use the image generation tool to create exactly one image that satisfies the user request. Keep any text response very short and only use it for refusals or notable limitations.',
     input: [{
       role: 'user',
-      content: [{
-        type: 'input_text',
-        text: input.prompt,
-      }],
+      content,
     }],
     text: {
       verbosity: 'low',
@@ -202,6 +416,7 @@ function buildImageGenerationPayload(input: {
       ...(input.size ? { size: input.size } : {}),
       ...(input.quality ? { quality: input.quality } : {}),
       ...(input.background ? { background: input.background } : {}),
+      ...(input.action ? { action: input.action } : {}),
     }],
   };
 }
@@ -289,9 +504,8 @@ export function parseImageGenerationSse(raw: string): ParsedImageGenerationSse {
     }
 
     const record = payload as {
-      error?: { message?: string };
-      message?: string;
       response?: { id?: string; error?: { message?: string } };
+      message?: string;
       text?: string;
       item?: {
         type?: string;
@@ -362,12 +576,19 @@ async function generateImage(input: {
   size?: string;
   quality?: ImageQuality;
   background?: ImageBackground;
+  action?: ImageAction;
+  source?: ImageSource;
+  sourceCount?: number;
   signal?: AbortSignal;
   ctx: {
     model?: Model<Api>;
     modelRegistry: {
       find(provider: string, modelId: string): Model<Api> | undefined;
       getApiKeyAndHeaders(model: Model<Api>): Promise<{ ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string }>;
+    };
+    sessionManager: {
+      getEntries(): SessionEntry[];
+      getLeafId(): string | null;
     };
   };
 }): Promise<{
@@ -379,14 +600,27 @@ async function generateImage(input: {
   outputFormat: string;
   quality?: string;
   background?: string;
+  sourceLabel: string;
+  sourceImageCount: number;
+  action?: ImageAction;
 }> {
+  const sessionMessages = readSessionContextMessages(input.ctx.sessionManager);
+  const sourceSelection = resolveSourceImages({
+    prompt: input.prompt,
+    messages: sessionMessages,
+    source: input.source,
+    sourceCount: input.sourceCount,
+  });
+  const action = input.action ?? inferActionFromPrompt(input.prompt, sourceSelection.images.length > 0);
   const target = await resolveImageGenerationTarget(input.ctx);
   const payload = buildImageGenerationPayload({
     model: target.model,
     prompt: input.prompt,
+    sourceImages: sourceSelection.images,
     ...(input.size ? { size: input.size } : {}),
     ...(input.quality ? { quality: input.quality } : {}),
     ...(input.background ? { background: input.background } : {}),
+    ...(action ? { action } : {}),
   });
 
   const response = await fetch(target.endpoint, {
@@ -411,6 +645,9 @@ async function generateImage(input: {
     outputFormat: parsed.outputFormat,
     ...(parsed.quality ? { quality: parsed.quality } : {}),
     ...(parsed.background ? { background: parsed.background } : {}),
+    sourceLabel: sourceSelection.label,
+    sourceImageCount: sourceSelection.images.length,
+    ...(action ? { action } : {}),
   };
 }
 
@@ -419,14 +656,15 @@ export function createImageAgentExtension(): (pi: ExtensionAPI) => void {
     pi.registerTool({
       name: 'image',
       label: 'Image',
-      description: 'Generate a single image from a prompt and return it inline in the conversation.',
-      promptSnippet: 'Generate a single image from a prompt and return it inline in the conversation.',
+      description: 'Generate or edit a single image from a prompt, optionally using recent attached or previously generated conversation images as references.',
+      promptSnippet: 'Generate or edit a single image from a prompt, optionally using recent attached or previously generated conversation images as references.',
       promptGuidelines: [
-        'Use this tool when the user explicitly asks for an image, icon, illustration, mockup, or other visual output.',
+        'Use this tool when the user explicitly asks for an image, icon, illustration, mockup, variation, or other visual output.',
         'Keep prompts concrete and self-contained: subject, framing, style, palette, and any required text should be spelled out.',
+        'For edits or variations of attached images, set source=latest-user. For edits or variations of a previously generated image, set source=latest-generated. Use source=latest when “the last image” is enough, and source=recent when multiple recent images should be considered together.',
+        'Use action=edit for direct edits/variations and action=generate when a reference image should only guide a fresh output. Leave action unset or auto when the choice is obvious from the prompt.',
+        'This tool currently returns one image per call. If the user wants several options, call it multiple times with distinct prompts.',
         'Prefer artifact/diagram tools for structured documents, diagrams, or UI reports; use image when the user wants pixels.',
-        'This tool currently generates one image per call. If the user wants several options, call it multiple times with distinct prompts.',
-        'This tool is generation-first. Do not assume it can faithfully edit an attached image unless the user only needs a fresh variant described in text.',
       ],
       parameters: ImageToolParams,
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
@@ -437,12 +675,17 @@ export function createImageAgentExtension(): (pi: ExtensionAPI) => void {
           ...(size ? { size } : {}),
           ...(params.quality ? { quality: params.quality as ImageQuality } : {}),
           ...(params.background ? { background: params.background as ImageBackground } : {}),
+          ...(params.action ? { action: params.action as ImageAction } : {}),
+          ...(params.source ? { source: params.source as ImageSource } : {}),
+          ...(typeof params.sourceCount === 'number' ? { sourceCount: params.sourceCount } : {}),
           signal,
           ctx,
         });
 
         const summary = result.assistantText
-          || `Generated image with ${result.model.provider}/${result.model.id}.`;
+          || (result.sourceImageCount > 0
+            ? `Generated image with ${result.model.provider}/${result.model.id} using ${result.sourceImageCount} reference image${result.sourceImageCount === 1 ? '' : 's'}.`
+            : `Generated image with ${result.model.provider}/${result.model.id}.`);
 
         return {
           content: [
@@ -457,6 +700,9 @@ export function createImageAgentExtension(): (pi: ExtensionAPI) => void {
             quality: result.quality ?? params.quality ?? 'auto',
             background: result.background ?? params.background ?? 'auto',
             size: size ?? 'auto',
+            action: result.action ?? params.action ?? 'auto',
+            source: result.sourceLabel,
+            sourceImageCount: result.sourceImageCount,
           },
         };
       },

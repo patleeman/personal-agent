@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { SessionEntry } from '@mariozechner/pi-coding-agent';
+import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import { createImageAgentExtension, parseImageGenerationSse } from './imageAgentExtension.js';
 
@@ -53,13 +55,25 @@ function registerImageTool() {
   return registeredTool;
 }
 
+function buildSessionEntries(messages: AgentMessage[]): SessionEntry[] {
+  return messages.map((message, index) => ({
+    type: 'message' as const,
+    id: `msg-${index + 1}`,
+    parentId: index === 0 ? null : `msg-${index}`,
+    timestamp: new Date(Date.UTC(2026, 3, 22, 12, 0, index)).toISOString(),
+    message,
+  }));
+}
+
 function createToolContext(options: {
   currentModel?: Model<Api>;
   models?: Model<Api>[];
   authByProvider?: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
+  sessionMessages?: AgentMessage[];
 } = {}) {
   const models = options.models ?? [];
   const authByProvider = options.authByProvider ?? {};
+  const sessionEntries = buildSessionEntries(options.sessionMessages ?? []);
 
   return {
     cwd: '/tmp/workspace',
@@ -89,9 +103,42 @@ function createToolContext(options: {
     },
     sessionManager: {
       getSessionId: () => 'conv-123',
+      getEntries: () => sessionEntries,
+      getLeafId: () => sessionEntries.at(-1)?.id ?? null,
     },
     ui: {},
   };
+}
+
+function createSuccessfulImageResponse(options: {
+  text?: string;
+  outputFormat?: string;
+  quality?: string;
+  background?: string;
+  responseId?: string;
+} = {}) {
+  return new Response([
+    'event: response.output_item.done',
+    `data: ${JSON.stringify({
+      item: {
+        type: 'image_generation_call',
+        result: 'ZmFrZS1pbWFnZQ==',
+        output_format: options.outputFormat ?? 'png',
+        quality: options.quality ?? 'low',
+        background: options.background ?? 'opaque',
+      },
+    })}`,
+    '',
+    'event: response.output_text.done',
+    `data: ${JSON.stringify({ text: options.text ?? 'Generated image.' })}`,
+    '',
+    'event: response.completed',
+    `data: ${JSON.stringify({ response: { id: options.responseId ?? 'resp_image' } })}`,
+    '',
+  ].join('\n'), {
+    status: 200,
+    headers: { 'content-type': 'text/event-stream' },
+  });
 }
 
 afterEach(() => {
@@ -132,20 +179,7 @@ describe('image agent extension', () => {
       baseUrl: 'https://chatgpt.com/backend-api',
     });
     const token = createJwtWithAccountId('acct-123');
-    const fetchMock = vi.fn().mockResolvedValue(new Response([
-      'event: response.output_item.done',
-      'data: {"item":{"type":"image_generation_call","result":"ZmFrZS1pbWFnZQ==","output_format":"png","quality":"low","background":"opaque"}}',
-      '',
-      'event: response.output_text.done',
-      'data: {"text":"Generated image."}',
-      '',
-      'event: response.completed',
-      'data: {"response":{"id":"resp_image"}}',
-      '',
-    ].join('\n'), {
-      status: 200,
-      headers: { 'content-type': 'text/event-stream' },
-    }));
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse());
     vi.stubGlobal('fetch', fetchMock);
 
     const result = await imageTool.execute(
@@ -176,11 +210,13 @@ describe('image agent extension', () => {
     const body = JSON.parse(String(request.body)) as {
       model: string;
       tools: Array<{ type: string }>;
-      input: Array<{ content: Array<{ text?: string }> }>;
+      input: Array<{ content: Array<{ type: string; text?: string }> }>;
     };
     expect(body.model).toBe('gpt-5.4');
     expect(body.tools).toEqual([{ type: 'image_generation' }]);
-    expect(body.input[0]?.content[0]?.text).toBe('A tiny orange robot waving.');
+    expect(body.input[0]?.content).toEqual([
+      { type: 'input_text', text: 'A tiny orange robot waving.' },
+    ]);
 
     expect(result.content).toEqual([
       { type: 'text', text: 'Generated image.' },
@@ -194,6 +230,117 @@ describe('image agent extension', () => {
       quality: 'low',
       background: 'opaque',
       size: 'auto',
+      action: 'auto',
+      source: 'none',
+      sourceImageCount: 0,
+    });
+  });
+
+  it('infers latest-user edit mode from an attached-image prompt', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse({ text: 'Edited image.' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await imageTool.execute(
+      'tool-1',
+      {
+        prompt: 'Turn this attached photo into a flat sticker illustration.',
+      },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: codexModel,
+        models: [codexModel],
+        authByProvider: {
+          'openai-codex': { apiKey: token },
+        },
+        sessionMessages: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Please edit this image.' },
+            { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
+          ],
+          timestamp: Date.now(),
+        }],
+      }),
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      tools: Array<{ type: string; action?: string }>;
+      input: Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>;
+    };
+
+    expect(body.tools).toEqual([{ type: 'image_generation', action: 'edit' }]);
+    expect(body.input[0]?.content[0]).toMatchObject({
+      type: 'input_image',
+      image_url: 'data:image/png;base64,dXNlci1pbWFnZQ==',
+    });
+    expect(body.input[0]?.content[1]).toEqual({
+      type: 'input_text',
+      text: 'Turn this attached photo into a flat sticker illustration.',
+    });
+  });
+
+  it('infers latest-generated edit mode from a last-generated variant prompt', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse({ text: 'Generated variant.' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await imageTool.execute(
+      'tool-1',
+      {
+        prompt: 'Make a darker variant of the last generated icon.',
+      },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: codexModel,
+        models: [codexModel],
+        authByProvider: {
+          'openai-codex': { apiKey: token },
+        },
+        sessionMessages: [{
+          role: 'toolResult',
+          toolCallId: 'call-1',
+          toolName: 'image',
+          content: [
+            { type: 'text', text: 'Generated image.' },
+            { type: 'image', data: 'Z2VuZXJhdGVkLWltYWdl', mimeType: 'image/png' },
+          ],
+          details: { provider: 'openai-codex' },
+          isError: false,
+          timestamp: Date.now(),
+        }],
+      }),
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      input: Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>;
+    };
+
+    expect(body.input[0]?.content[0]).toMatchObject({
+      type: 'input_image',
+      image_url: 'data:image/png;base64,Z2VuZXJhdGVkLWltYWdl',
+    });
+    expect(body.input[0]?.content[1]).toEqual({
+      type: 'input_text',
+      text: 'Make a darker variant of the last generated icon.',
     });
   });
 
