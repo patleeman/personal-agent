@@ -7,6 +7,7 @@ import {
   resetStoredLayoutPreferences,
   SIDEBAR_WIDTH_STORAGE_KEY,
 } from './localSettings';
+import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
 
 function createStorage(): Storage {
   const map = new Map<string, string>();
@@ -62,6 +63,7 @@ describe('localSettings', () => {
   it('clears the saved sidebar width, nav sections, and all per-page rail widths', () => {
     const conversationsSectionKey = buildSidebarNavSectionStorageKey('conversations');
     localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, '224');
+    localStorage.setItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY, JSON.stringify(['notes/']));
     localStorage.setItem(conversationsSectionKey, JSON.stringify(false));
     localStorage.setItem('pa:rail-width:skills', '460');
     localStorage.setItem('pa:rail-width:instructions', '520');
@@ -71,6 +73,7 @@ describe('localSettings', () => {
     resetStoredLayoutPreferences();
 
     expect(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY)).toBeNull();
+    expect(localStorage.getItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY)).toBeNull();
     expect(localStorage.getItem(conversationsSectionKey)).toBeNull();
     expect(localStorage.getItem('pa:rail-width:skills')).toBeNull();
     expect(localStorage.getItem('pa:rail-width:instructions')).toBeNull();

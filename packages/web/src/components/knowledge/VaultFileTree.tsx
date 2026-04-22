@@ -5,6 +5,13 @@ import {
   useState,
 } from 'react';
 import { vaultApi } from '../../client/api';
+import {
+  addExpandedFolderId,
+  collapseExpandedFolderIds,
+  readStoredExpandedFolderIds,
+  renameExpandedFolderIds,
+  writeStoredExpandedFolderIds,
+} from '../../local/knowledgeTreeState';
 import type { VaultEntry } from '../../shared/types';
 import { openCommandPalette } from '../../commands/commandPaletteEvents';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
@@ -289,6 +296,25 @@ function buildNode(entry: VaultEntry): TreeNode {
   return { entry, children: null, expanded: false };
 }
 
+async function hydrateExpandedTreeNodes(entries: VaultEntry[], expandedFolderIds: ReadonlySet<string>): Promise<TreeNode[]> {
+  return Promise.all(entries.map(async (entry) => {
+    if (entry.kind !== 'folder' || !expandedFolderIds.has(entry.id)) {
+      return buildNode(entry);
+    }
+
+    try {
+      const result = await vaultApi.tree(entry.id);
+      return {
+        entry,
+        children: await hydrateExpandedTreeNodes(result.entries, expandedFolderIds),
+        expanded: true,
+      } satisfies TreeNode;
+    } catch {
+      return buildNode(entry);
+    }
+  }));
+}
+
 function applyChildren(nodes: TreeNode[], targetId: string, children: VaultEntry[]): TreeNode[] {
   return nodes.map((n) => {
     if (n.entry.id === targetId) return { ...n, children: children.map(buildNode), expanded: true };
@@ -297,9 +323,17 @@ function applyChildren(nodes: TreeNode[], targetId: string, children: VaultEntry
   });
 }
 
+function collapseNode(node: TreeNode): TreeNode {
+  return {
+    ...node,
+    expanded: false,
+    children: node.children?.map(collapseNode) ?? node.children,
+  };
+}
+
 function toggleNode(nodes: TreeNode[], id: string): TreeNode[] {
   return nodes.map((n) => {
-    if (n.entry.id === id) return { ...n, expanded: !n.expanded };
+    if (n.entry.id === id) return n.expanded ? collapseNode(n) : { ...n, expanded: true };
     if (n.children) return { ...n, children: toggleNode(n.children, id) };
     return n;
   });
@@ -338,6 +372,13 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
   const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
+  const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
+
+  const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
+    const normalized = new Set(nextExpandedFolderIds);
+    expandedFolderIdsRef.current = normalized;
+    writeStoredExpandedFolderIds(normalized);
+  }, []);
 
   // ── Load root ───────────────────────────────────────────────────────────────
 
@@ -345,7 +386,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     setLoading(true);
     try {
       const result = await vaultApi.tree();
-      setRoots(result.entries.map(buildNode));
+      const nextRoots = await hydrateExpandedTreeNodes(result.entries, expandedFolderIdsRef.current);
+      setRoots(nextRoots);
+    } catch (error) {
+      console.error('failed to load knowledge base tree', error);
+      setRoots([]);
     } finally { setLoading(false); }
   }, []);
 
@@ -356,6 +401,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     const offs = [
       onKBEvent('kb:entries-changed', () => void loadRoot()),
       onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
+        if (oldId.endsWith('/') || newId.endsWith('/')) {
+          persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
+          void loadRoot();
+          return;
+        }
+
         // Try to update in-tree without full reload
         vaultApi.tree(idToDir(newId)).then((r) => {
           const found = r.entries.find((e) => e.id === newId);
@@ -365,20 +416,36 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       }),
       onKBEvent<{ id: string }>('kb:file-created', () => void loadRoot()),
       onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
+        if (id.endsWith('/')) {
+          persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
+        }
         setRoots((prev) => removeEntry(prev, id));
       }),
     ];
     return () => offs.forEach((off) => off());
-  }, [loadRoot]);
+  }, [loadRoot, persistExpandedFolderIds]);
 
   // ── Tree expansion ──────────────────────────────────────────────────────────
 
   const handleToggle = useCallback(async (node: TreeNode) => {
-    if (node.children !== null) { setRoots((prev) => toggleNode(prev, node.entry.id)); return; }
+    if (node.children !== null) {
+      setRoots((prev) => toggleNode(prev, node.entry.id));
+      persistExpandedFolderIds(
+        node.expanded
+          ? collapseExpandedFolderIds(expandedFolderIdsRef.current, node.entry.id)
+          : addExpandedFolderId(expandedFolderIdsRef.current, node.entry.id),
+      );
+      return;
+    }
     const dir = node.entry.kind === 'folder' ? node.entry.id : idToDir(node.entry.id);
-    const result = await vaultApi.tree(dir);
-    setRoots((prev) => applyChildren(prev, node.entry.id, result.entries));
-  }, []);
+    try {
+      const result = await vaultApi.tree(dir);
+      persistExpandedFolderIds(addExpandedFolderId(expandedFolderIdsRef.current, node.entry.id));
+      setRoots((prev) => applyChildren(prev, node.entry.id, result.entries));
+    } catch (error) {
+      console.error('failed to expand knowledge tree folder', error);
+    }
+  }, [persistExpandedFolderIds]);
 
   const openImportUrlModal = useCallback((directoryId?: string) => {
     setImportDirectoryId(normalizeDirectoryId(directoryId ?? (activeFileId ? idToDir(activeFileId) : '')));
@@ -411,7 +478,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     if (!newName || newName === oldBasename) { setEditState(null); return; }
     try {
       const updated = await vaultApi.rename(editState.id, newName);
-      setRoots((prev) => updateEntry(prev, editState.id, updated));
+      if (updated.kind !== 'folder') {
+        setRoots((prev) => updateEntry(prev, editState.id, updated));
+      }
       emitKBEvent('kb:file-renamed', { oldId: editState.id, newId: updated.id });
       if (activeFileId === editState.id) onFileSelect(updated.id);
     } catch (err) { console.error('rename failed', err); }
@@ -435,11 +504,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const handleMove = useCallback(async (entry: VaultEntry, targetDir: string) => {
     try {
       const updated = await vaultApi.move(entry.id, targetDir);
+      if (entry.kind === 'folder') {
+        persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, entry.id, updated.id));
+      }
       setRoots((prev) => removeEntry(prev, entry.id));
       emitKBEvent('kb:entries-changed');
       if (activeFileId === entry.id) onFileSelect(updated.id);
     } catch (err) { console.error('move failed', err); }
-  }, [activeFileId, onFileSelect]);
+  }, [activeFileId, onFileSelect, persistExpandedFolderIds]);
 
   const clearDragState = useCallback(() => {
     setDraggingEntry(null);

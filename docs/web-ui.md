@@ -48,6 +48,7 @@ Vault editor for files under `<vault-root>`.
 Use it for:
 
 - file tree navigation
+- persisted folder expansion state
 - markdown editing
 - full-text search
 - quick-open
