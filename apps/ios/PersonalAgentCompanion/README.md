@@ -12,13 +12,14 @@ apps/ios/PersonalAgentCompanion
 
 - pair to a companion host with manual pairing code entry or setup QR + bearer token
 - persist paired hosts locally and keep the token in Keychain
-- choose a host first, then work in a per-host Chat / Archived / Automations / Settings shell
+- choose a host first, then work in a per-host Chat / Knowledge / Archived / Automations / Settings shell
 - mirror host conversation ordering with pinned/open lists plus a dedicated Archived tab for archived and older hidden threads, and native pin/archive/unarchive/duplicate controls
 - open a conversation and stream transcript updates over the multiplexed companion socket
 - send prompts with text, prompt images, and saved drawing attachment refs
 - restore queued steer/follow-up prompts, manage parallel jobs, and see live control/presence state from iPhone
 - take over control, abort a turn, rename a conversation, browse local/remote directories for cwd changes, adjust model preferences from the live host catalog, and switch execution target
 - browse conversation artifacts and commit checkpoints, and create new checkpoints from iOS
+- browse and edit markdown notes in the host knowledge base, including folder navigation and note/folder creation
 - browse saved drawing attachments, inspect revisions, and create/update drawing assets with a native PencilKit editor that exports Excalidraw-compatible source + preview assets
 - manage automations from the phone, including background-agent callback delivery controls, with durable-run details still reachable from the companion surfaces
 - manage paired devices, setup state, and SSH targets from iOS

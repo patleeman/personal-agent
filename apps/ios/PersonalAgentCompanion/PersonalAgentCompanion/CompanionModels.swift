@@ -123,6 +123,8 @@ struct CompanionHello: Codable, Equatable {
         let executionTargetSwitching: Bool
         let attachments: Bool
         let attachmentWrite: Bool
+        let knowledge: Bool?
+        let knowledgeWrite: Bool?
         let deviceAdmin: Bool
     }
 
@@ -513,6 +515,33 @@ struct ConversationAttachmentMutationResponse: Codable, Equatable {
     let conversationId: String
     let attachment: ConversationAttachmentRecord
     let attachments: [ConversationAttachmentSummary]
+}
+
+struct CompanionKnowledgeEntry: Codable, Equatable, Identifiable {
+    let id: String
+    let kind: String
+    let name: String
+    let sizeBytes: Int
+    let updatedAt: String
+
+    var isDirectory: Bool {
+        kind == "folder"
+    }
+
+    var isMarkdownFile: Bool {
+        kind == "file" && name.lowercased().hasSuffix(".md")
+    }
+}
+
+struct CompanionKnowledgeTreeResponse: Codable, Equatable {
+    let root: String
+    let entries: [CompanionKnowledgeEntry]
+}
+
+struct CompanionKnowledgeFileResponse: Codable, Equatable {
+    let id: String
+    let content: String
+    let updatedAt: String
 }
 
 struct PromptAttachmentReference: Codable, Equatable, Identifiable {

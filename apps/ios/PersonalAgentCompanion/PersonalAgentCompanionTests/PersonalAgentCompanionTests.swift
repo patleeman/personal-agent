@@ -231,6 +231,38 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.blocks.contains(where: { $0.type == "user" && $0.text == "Ship the iOS host client" }))
     }
 
+    func testMockKnowledgeListsFoldersAndNotes() async throws {
+        let client = MockCompanionClient()
+
+        let root = try await client.listKnowledgeEntries(directoryId: nil)
+        let notesFolder = try XCTUnwrap(root.entries.first(where: { $0.kind == "folder" && $0.name == "notes" }))
+        XCTAssertEqual(root.root, "/Users/patrick/Documents/personal-agent")
+        XCTAssertTrue(root.entries.contains(where: { $0.kind == "folder" && $0.name == "systems" }))
+
+        let nested = try await client.listKnowledgeEntries(directoryId: notesFolder.id)
+        XCTAssertTrue(nested.entries.contains(where: { $0.kind == "file" && $0.name == "ios-companion.md" }))
+
+        let note = try await client.readKnowledgeFile(fileId: "notes/ios-companion.md")
+        XCTAssertTrue(note.content.contains("# iOS companion"))
+    }
+
+    func testMockKnowledgeWritesFilesAndCreatesFolders() async throws {
+        let client = MockCompanionClient()
+
+        let folder = try await client.createKnowledgeFolder(folderId: "notes/archive")
+        XCTAssertEqual(folder.id, "notes/archive/")
+
+        let file = try await client.writeKnowledgeFile(fileId: "notes/archive/mobile-kb.md", content: "# Mobile KB\n")
+        XCTAssertEqual(file.id, "notes/archive/mobile-kb.md")
+        XCTAssertEqual(file.name, "mobile-kb.md")
+
+        let nested = try await client.listKnowledgeEntries(directoryId: "notes/archive")
+        XCTAssertTrue(nested.entries.contains(where: { $0.id == "notes/archive/mobile-kb.md" }))
+
+        let saved = try await client.readKnowledgeFile(fileId: "notes/archive/mobile-kb.md")
+        XCTAssertEqual(saved.content, "# Mobile KB\n")
+    }
+
     func testMockSimulationStartsRunningConversationAndStopsOnAbort() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")

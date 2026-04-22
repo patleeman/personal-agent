@@ -563,6 +563,41 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       return parseDataUrlAsset(await localController.readConversationAttachmentAsset(input));
     },
 
+    async listKnowledgeEntries(directoryId?: string | null) {
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/vault/tree${directoryId ? `?dir=${encodeURIComponent(directoryId)}` : ''}`,
+      });
+    },
+
+    async readKnowledgeFile(fileId: string) {
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/vault/file?id=${encodeURIComponent(fileId)}`,
+      });
+    },
+
+    async writeKnowledgeFile(input: { fileId: string; content: string }) {
+      return invokeDesktopApi(hostManager, {
+        method: 'PUT',
+        path: '/api/vault/file',
+        body: {
+          id: input.fileId,
+          content: input.content,
+        },
+      });
+    },
+
+    async createKnowledgeFolder(folderId: string) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: '/api/vault/folder',
+        body: {
+          id: folderId,
+        },
+      });
+    },
+
     async listScheduledTasks() {
       const localController = hostManager.getHostController('local');
       if (!localController.readScheduledTasks) {

@@ -122,6 +122,10 @@ describe('daemon companion server', () => {
         fileName: 'preview.png',
         disposition: 'inline',
       }),
+      listKnowledgeEntries: async (directoryId) => ({ root: '/vault', entries: directoryId ? [{ id: 'notes/daily.md', kind: 'file', name: 'daily.md' }] : [{ id: 'notes/', kind: 'folder', name: 'notes' }] }),
+      readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
+      writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
       readScheduledTaskLog: async (taskId) => ({ path: `/tmp/${taskId}.log`, log: '' }),
@@ -218,6 +222,59 @@ describe('daemon companion server', () => {
     expect(assetResponse.status).toBe(200);
     expect(assetResponse.headers.get('content-type')).toBe('image/png');
     expect(await assetResponse.text()).toBe('preview-bytes');
+
+    const knowledgeTreeResponse = await fetch(`${baseUrl}/companion/v1/knowledge/tree`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(knowledgeTreeResponse.status).toBe(200);
+    expect(await readJson(knowledgeTreeResponse)).toEqual({
+      root: '/vault',
+      entries: [{ id: 'notes/', kind: 'folder', name: 'notes' }],
+    });
+
+    const knowledgeFileResponse = await fetch(`${baseUrl}/companion/v1/knowledge/file?id=${encodeURIComponent('notes/daily.md')}`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(knowledgeFileResponse.status).toBe(200);
+    expect(await readJson(knowledgeFileResponse)).toEqual({
+      id: 'notes/daily.md',
+      content: '# Demo',
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const knowledgeWriteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/file`, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'notes/new-note.md', content: '# New note' }),
+    });
+    expect(knowledgeWriteResponse.status).toBe(200);
+    expect(await readJson(knowledgeWriteResponse)).toEqual({
+      id: 'notes/new-note.md',
+      kind: 'file',
+      name: 'new-note.md',
+      sizeBytes: '# New note'.length,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const knowledgeFolderResponse = await fetch(`${baseUrl}/companion/v1/knowledge/folder`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'notes/archive' }),
+    });
+    expect(knowledgeFolderResponse.status).toBe(201);
+    expect(await readJson(knowledgeFolderResponse)).toEqual({
+      id: 'notes/archive/',
+      kind: 'folder',
+      name: 'archive',
+      sizeBytes: 0,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
 
     const { socket, firstMessage } = await openSocket(`${baseUrl!.replace('http://', 'ws://')}/v1/socket`, paired.bearerToken);
     const ready = firstMessage as { type: string; device: { deviceLabel: string } };

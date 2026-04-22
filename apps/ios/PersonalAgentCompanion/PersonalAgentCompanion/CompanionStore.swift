@@ -409,6 +409,14 @@ final class HostSessionModel: ObservableObject {
         )
     }
 
+    func makeKnowledgeDirectoryModel(directoryId: String?) -> KnowledgeDirectoryViewModel {
+        KnowledgeDirectoryViewModel(client: client, directoryId: directoryId)
+    }
+
+    func makeKnowledgeNoteModel(fileId: String) -> KnowledgeNoteViewModel {
+        KnowledgeNoteViewModel(client: client, fileId: fileId)
+    }
+
     func createConversation(_ request: NewConversationRequest) async -> String? {
         do {
             let envelope = try await client.createConversation(request, surfaceId: installationSurfaceId)
@@ -750,6 +758,185 @@ final class HostSessionModel: ObservableObject {
             refresh()
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+}
+
+@MainActor
+final class KnowledgeDirectoryViewModel: ObservableObject {
+    @Published private(set) var entries: [CompanionKnowledgeEntry] = []
+    @Published private(set) var rootPath: String = ""
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    let directoryId: String?
+
+    private let client: CompanionClientProtocol
+
+    init(client: CompanionClientProtocol, directoryId: String?) {
+        self.client = client
+        self.directoryId = directoryId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+    }
+
+    var title: String {
+        guard let directoryId, !directoryId.isEmpty else {
+            return "Knowledge"
+        }
+        return directoryId
+            .replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+            .split(separator: "/")
+            .last
+            .map(String.init)
+            ?? "Knowledge"
+    }
+
+    func load() {
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let result = try await client.listKnowledgeEntries(directoryId: directoryId)
+                rootPath = result.root
+                entries = result.entries
+                    .filter { $0.isDirectory || $0.isMarkdownFile }
+                    .sorted { lhs, rhs in
+                        if lhs.kind != rhs.kind {
+                            return lhs.isDirectory
+                        }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                    }
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func createNote(named rawName: String) async -> CompanionKnowledgeEntry? {
+        let trimmed = rawName.trimmed
+        guard !trimmed.isEmpty else {
+            errorMessage = "Note name is required."
+            return nil
+        }
+        let fileName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
+        guard !entries.contains(where: { $0.name.compare(fileName, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) else {
+            errorMessage = "A note with that name already exists here."
+            return nil
+        }
+        let fileId = if let directoryId, !directoryId.isEmpty {
+            "\(directoryId)/\(fileName)"
+        } else {
+            fileName
+        }
+        do {
+            let created = try await client.writeKnowledgeFile(fileId: fileId, content: "")
+            errorMessage = nil
+            load()
+            return created
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func createFolder(named rawName: String) async -> CompanionKnowledgeEntry? {
+        let trimmed = rawName.trimmed
+        guard !trimmed.isEmpty else {
+            errorMessage = "Folder name is required."
+            return nil
+        }
+        guard !entries.contains(where: { $0.name.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) else {
+            errorMessage = "A folder with that name already exists here."
+            return nil
+        }
+        let folderId = if let directoryId, !directoryId.isEmpty {
+            "\(directoryId)/\(trimmed)"
+        } else {
+            trimmed
+        }
+        do {
+            let created = try await client.createKnowledgeFolder(folderId: folderId)
+            errorMessage = nil
+            load()
+            return created
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+}
+
+@MainActor
+final class KnowledgeNoteViewModel: ObservableObject {
+    @Published private(set) var content: String = ""
+    @Published private(set) var updatedAt: String?
+    @Published private(set) var isLoading = false
+    @Published private(set) var isSaving = false
+    @Published var draft: String = ""
+    @Published var errorMessage: String?
+
+    let fileId: String
+
+    private let client: CompanionClientProtocol
+
+    init(client: CompanionClientProtocol, fileId: String) {
+        self.client = client
+        self.fileId = fileId
+    }
+
+    var title: String {
+        fileId
+            .split(separator: "/")
+            .last
+            .map(String.init)?
+            .replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression)
+            ?? "Note"
+    }
+
+    var isDirty: Bool {
+        draft != content
+    }
+
+    func load() {
+        Task {
+            isLoading = true
+            defer { isLoading = false }
+            do {
+                let result = try await client.readKnowledgeFile(fileId: fileId)
+                content = result.content
+                draft = result.content
+                updatedAt = result.updatedAt
+                errorMessage = nil
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func reload() {
+        load()
+    }
+
+    func discardChanges() {
+        draft = content
+    }
+
+    @discardableResult
+    func save() async -> Bool {
+        guard !isSaving else {
+            return false
+        }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            let updated = try await client.writeKnowledgeFile(fileId: fileId, content: draft)
+            content = draft
+            updatedAt = updated.updatedAt
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
         }
     }
 }

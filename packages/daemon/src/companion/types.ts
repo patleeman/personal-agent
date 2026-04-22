@@ -26,6 +26,8 @@ export interface CompanionHostHello {
     executionTargetSwitching: boolean;
     attachments: boolean;
     attachmentWrite: boolean;
+    knowledge: boolean;
+    knowledgeWrite: boolean;
     deviceAdmin: boolean;
   };
 }
@@ -292,6 +294,10 @@ export interface CompanionRuntime {
   createConversationAttachment(input: CompanionAttachmentCreateInput): Promise<unknown>;
   updateConversationAttachment(input: CompanionAttachmentUpdateInput): Promise<unknown>;
   readConversationAttachmentAsset(input: CompanionAttachmentAssetInput): Promise<CompanionBinaryAsset>;
+  listKnowledgeEntries(directoryId?: string | null): Promise<unknown>;
+  readKnowledgeFile(fileId: string): Promise<unknown>;
+  writeKnowledgeFile(input: { fileId: string; content: string }): Promise<unknown>;
+  createKnowledgeFolder(folderId: string): Promise<unknown>;
   listScheduledTasks(): Promise<unknown>;
   readScheduledTask(taskId: string): Promise<unknown>;
   readScheduledTaskLog(taskId: string): Promise<unknown>;

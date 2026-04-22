@@ -43,6 +43,10 @@ protocol CompanionClientProtocol: AnyObject {
     func downloadAttachmentAsset(conversationId: String, attachmentId: String, asset: String, revision: Int?) async throws -> AttachmentAssetDownload
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
+    func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse
+    func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse
+    func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry
+    func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry
     func listTasks() async throws -> [ScheduledTaskSummary]
     func readTask(taskId: String) async throws -> ScheduledTaskDetail
     func readTaskLog(taskId: String) async throws -> DurableRunLogResponse
@@ -548,6 +552,32 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
         try await saveAttachment(path: "/companion/v1/conversations/\(conversationId)/attachments/\(attachmentId)", method: "PATCH", draft: draft)
+    }
+
+    func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse {
+        let path: String
+        if let directoryId = directoryId?.nilIfBlank,
+           let encoded = directoryId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+            path = "/companion/v1/knowledge/tree?dir=\(encoded)"
+        } else {
+            path = "/companion/v1/knowledge/tree"
+        }
+        return try await authorizedJSON(path: path, method: "GET", body: nil, decode: CompanionKnowledgeTreeResponse.self)
+    }
+
+    func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
+        guard let encoded = fileId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw CompanionClientError.requestFailed("The knowledge file id is invalid.")
+        }
+        return try await authorizedJSON(path: "/companion/v1/knowledge/file?id=\(encoded)", method: "GET", body: nil, decode: CompanionKnowledgeFileResponse.self)
+    }
+
+    func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry {
+        try await authorizedJSON(path: "/companion/v1/knowledge/file", method: "PUT", body: ["id": fileId, "content": content], decode: CompanionKnowledgeEntry.self)
+    }
+
+    func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry {
+        try await authorizedJSON(path: "/companion/v1/knowledge/folder", method: "POST", body: ["id": folderId], decode: CompanionKnowledgeEntry.self)
     }
 
     func listTasks() async throws -> [ScheduledTaskSummary] {
@@ -1090,11 +1120,29 @@ final class LiveCompanionClient: CompanionClientProtocol {
         }
     }
 
-    private func authorizedJSON<T: Decodable>(path: String, method: String, body: [String: Any]?, decode type: T.Type) async throws -> T {
-        guard let baseURL = host.normalizedBaseURL else {
+    private func authorizedURL(path: String) throws -> URL {
+        guard let baseURL = host.normalizedBaseURL,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
             throw CompanionClientError.invalidHostURL
         }
-        let url = baseURL.appending(path: path)
+
+        let trimmedPath = path.trimmed
+        if let querySeparator = trimmedPath.firstIndex(of: "?") {
+            components.path = String(trimmedPath[..<querySeparator])
+            components.percentEncodedQuery = String(trimmedPath[trimmedPath.index(after: querySeparator)...])
+        } else {
+            components.path = trimmedPath
+            components.query = nil
+        }
+
+        guard let url = components.url else {
+            throw CompanionClientError.invalidHostURL
+        }
+        return url
+    }
+
+    private func authorizedJSON<T: Decodable>(path: String, method: String, body: [String: Any]?, decode type: T.Type) async throws -> T {
+        let url = try authorizedURL(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -1163,6 +1211,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     private var attachmentsByConversation: [String: [ConversationAttachmentRecord]]
     private var artifactsByConversation: [String: [ConversationArtifactRecord]]
     private var checkpointsByConversation: [String: [ConversationCommitCheckpointRecord]]
+    private var knowledgeFiles: [String: String]
+    private var knowledgeFolders: Set<String>
+    private var knowledgeRootPath: String
     private var tasks: [ScheduledTaskDetail]
     private var runs: [DurableRunSummary]
     private var runLogs: [String: String]
@@ -1416,6 +1467,9 @@ final class MockCompanionClient: CompanionClientProtocol {
             "conv-2": []
         ]
         }
+        self.knowledgeRootPath = "/Users/patrick/Documents/personal-agent"
+        self.knowledgeFiles = Self.defaultKnowledgeFiles()
+        self.knowledgeFolders = Self.buildKnowledgeFolderSet(from: self.knowledgeFiles.keys)
         self.tasks = [
             ScheduledTaskDetail(
                 id: "task-1",
@@ -1611,6 +1665,108 @@ final class MockCompanionClient: CompanionClientProtocol {
             .path
     }
 
+    private static func defaultKnowledgeFiles() -> [String: String] {
+        [
+            "notes/ios-companion.md": "# iOS companion\n\n- Pair to the daemon-backed host\n- Browse chats, automations, and settings\n- Mobile KB browsing now lives in the companion app\n",
+            "systems/runtime-model.md": "# Runtime model\n\nThe daemon owns the companion API and shared conversation state.\n",
+            "references/release-checklist.md": "# Release checklist\n\n- Build the desktop app\n- Notarize and staple assets\n- Publish the release metadata\n",
+        ]
+    }
+
+    private static func buildKnowledgeFolderSet(from fileIds: Dictionary<String, String>.Keys) -> Set<String> {
+        var folders: Set<String> = []
+        for fileId in fileIds {
+            let components = fileId.split(separator: "/").map(String.init)
+            guard components.count > 1 else {
+                continue
+            }
+            for index in 1..<components.count {
+                folders.insert(components.prefix(index).joined(separator: "/"))
+            }
+        }
+        return folders
+    }
+
+    private func normalizeKnowledgeId(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmed.nilIfBlank else {
+            return nil
+        }
+        return trimmed.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+    }
+
+    private func knowledgeDisplayName(for id: String) -> String {
+        let normalized = id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+        return normalized.split(separator: "/").last.map(String.init) ?? normalized
+    }
+
+    private func knowledgeParentDirectory(for id: String) -> String? {
+        let normalized = id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+        guard let slashIndex = normalized.lastIndex(of: "/") else {
+            return nil
+        }
+        return String(normalized[..<slashIndex])
+    }
+
+    private func ensureKnowledgeParentFolders(for id: String) {
+        let normalized = normalizeKnowledgeId(id) ?? id
+        let components = normalized.split(separator: "/").map(String.init)
+        guard components.count > 1 else {
+            return
+        }
+        for index in 1..<components.count {
+            knowledgeFolders.insert(components.prefix(index).joined(separator: "/"))
+        }
+    }
+
+    private func knowledgeEntries(in directoryId: String?) -> [CompanionKnowledgeEntry] {
+        let normalizedDirectory = normalizeKnowledgeId(directoryId)
+        var nextEntries: [CompanionKnowledgeEntry] = []
+        var seenIds = Set<String>()
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+
+        for folderId in knowledgeFolders {
+            let parentDirectory = knowledgeParentDirectory(for: folderId)
+            guard parentDirectory == normalizedDirectory else {
+                continue
+            }
+            let entryId = folderId.hasSuffix("/") ? folderId : "\(folderId)/"
+            guard seenIds.insert(entryId).inserted else {
+                continue
+            }
+            nextEntries.append(CompanionKnowledgeEntry(
+                id: entryId,
+                kind: "folder",
+                name: knowledgeDisplayName(for: folderId),
+                sizeBytes: 0,
+                updatedAt: now
+            ))
+        }
+
+        for (fileId, content) in knowledgeFiles {
+            let parentDirectory = knowledgeParentDirectory(for: fileId)
+            guard parentDirectory == normalizedDirectory else {
+                continue
+            }
+            guard seenIds.insert(fileId).inserted else {
+                continue
+            }
+            nextEntries.append(CompanionKnowledgeEntry(
+                id: fileId,
+                kind: "file",
+                name: knowledgeDisplayName(for: fileId),
+                sizeBytes: content.utf8.count,
+                updatedAt: now
+            ))
+        }
+
+        return nextEntries.sorted { lhs, rhs in
+            if lhs.kind != rhs.kind {
+                return lhs.kind == "folder"
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+    }
+
     func hello() async throws -> CompanionHello {
         CompanionHello(
             hostInstanceId: host.hostInstanceId,
@@ -1619,7 +1775,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             protocolVersion: "v1",
             transport: .init(websocket: true, singleSocket: true, httpAvailable: true),
             auth: .init(pairingRequired: true, bearerTokens: true),
-            capabilities: .init(fullConversationLifecycle: true, executionTargets: true, executionTargetSwitching: true, attachments: true, attachmentWrite: true, deviceAdmin: true)
+            capabilities: .init(fullConversationLifecycle: true, executionTargets: true, executionTargetSwitching: true, attachments: true, attachmentWrite: true, knowledge: true, knowledgeWrite: true, deviceAdmin: true)
         )
     }
 
@@ -2425,6 +2581,54 @@ final class MockCompanionClient: CompanionClientProtocol {
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
         let created = try await createAttachment(conversationId: conversationId, draft: draft)
         return ConversationAttachmentMutationResponse(conversationId: conversationId, attachment: created.attachment, attachments: created.attachments)
+    }
+
+    func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse {
+        CompanionKnowledgeTreeResponse(
+            root: knowledgeRootPath,
+            entries: knowledgeEntries(in: directoryId)
+        )
+    }
+
+    func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
+        guard let normalizedFileId = normalizeKnowledgeId(fileId), let content = knowledgeFiles[normalizedFileId] else {
+            throw CompanionClientError.requestFailed("Knowledge file not found.")
+        }
+        return CompanionKnowledgeFileResponse(
+            id: normalizedFileId,
+            content: content,
+            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        )
+    }
+
+    func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry {
+        guard let normalizedFileId = normalizeKnowledgeId(fileId) else {
+            throw CompanionClientError.requestFailed("Knowledge file id is required.")
+        }
+        ensureKnowledgeParentFolders(for: normalizedFileId)
+        knowledgeFiles[normalizedFileId] = content
+        return CompanionKnowledgeEntry(
+            id: normalizedFileId,
+            kind: "file",
+            name: knowledgeDisplayName(for: normalizedFileId),
+            sizeBytes: content.utf8.count,
+            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        )
+    }
+
+    func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry {
+        guard let normalizedFolderId = normalizeKnowledgeId(folderId) else {
+            throw CompanionClientError.requestFailed("Knowledge folder id is required.")
+        }
+        ensureKnowledgeParentFolders(for: normalizedFolderId)
+        knowledgeFolders.insert(normalizedFolderId)
+        return CompanionKnowledgeEntry(
+            id: "\(normalizedFolderId)/",
+            kind: "folder",
+            name: knowledgeDisplayName(for: normalizedFolderId),
+            sizeBytes: 0,
+            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        )
     }
 
     func listTasks() async throws -> [ScheduledTaskSummary] {

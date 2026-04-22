@@ -223,6 +223,8 @@ function buildHello(stateRoot: string): CompanionHostHello {
       executionTargetSwitching: true,
       attachments: true,
       attachmentWrite: true,
+      knowledge: true,
+      knowledgeWrite: true,
       deviceAdmin: true,
     },
   };
@@ -631,6 +633,56 @@ export class DaemonCompanionServer {
         sshTarget: readRequiredString(payload.sshTarget, 'sshTarget'),
       };
       sendJson(response, 200, await runtime.testSshTarget(input));
+      return;
+    }
+
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/knowledge/tree`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.listKnowledgeEntries(requestUrl.searchParams.get('dir')));
+      return;
+    }
+
+    if (request.method === 'GET' && pathname === `${COMPANION_API_ROOT}/knowledge/file`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readKnowledgeFile(readRequiredString(requestUrl.searchParams.get('id'), 'id')));
+      return;
+    }
+
+    if (request.method === 'PUT' && pathname === `${COMPANION_API_ROOT}/knowledge/file`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      if (typeof payload.content !== 'string') {
+        throw new Error('content must be a string.');
+      }
+      sendJson(response, 200, await runtime.writeKnowledgeFile({
+        fileId: readRequiredString(payload.id, 'id'),
+        content: payload.content,
+      }));
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/knowledge/folder`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      sendJson(response, 201, await runtime.createKnowledgeFolder(readRequiredString(payload.id, 'id')));
       return;
     }
 

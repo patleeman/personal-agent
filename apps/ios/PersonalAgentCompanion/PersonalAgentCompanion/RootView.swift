@@ -133,6 +133,11 @@ struct HostDashboardView: View {
                     Label("Chat", systemImage: "message")
                 }
 
+            KnowledgeRootView(appModel: appModel, session: session)
+                .tabItem {
+                    Label("Knowledge", systemImage: "book.closed")
+                }
+
             ArchivedConversationListView(session: session)
                 .tabItem {
                     Label("Archived", systemImage: "archivebox")
@@ -375,6 +380,340 @@ struct ArchivedConversationListView: View {
             }
             .refreshable {
                 session.refresh()
+            }
+        }
+    }
+}
+
+private enum KnowledgeRoute: Hashable {
+    case directory(String)
+    case note(String)
+}
+
+private enum KnowledgeCreationKind: String, Identifiable {
+    case note
+    case folder
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .note:
+            return "New note"
+        case .folder:
+            return "New folder"
+        }
+    }
+
+    var placeholder: String {
+        switch self {
+        case .note:
+            return "daily.md"
+        case .folder:
+            return "research"
+        }
+    }
+}
+
+struct KnowledgeRootView: View {
+    @ObservedObject var appModel: CompanionAppModel
+    @ObservedObject var session: HostSessionModel
+    @State private var path: [KnowledgeRoute] = []
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            KnowledgeDirectoryScreen(appModel: appModel, session: session, directoryId: nil) { route in
+                path.append(route)
+            }
+            .navigationDestination(for: KnowledgeRoute.self) { route in
+                switch route {
+                case .directory(let directoryId):
+                    KnowledgeDirectoryScreen(appModel: appModel, session: session, directoryId: directoryId) { nextRoute in
+                        path.append(nextRoute)
+                    }
+                case .note(let fileId):
+                    KnowledgeNoteScreen(appModel: appModel, session: session, fileId: fileId)
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeDirectoryScreen: View {
+    @ObservedObject var appModel: CompanionAppModel
+    @ObservedObject var session: HostSessionModel
+    let directoryId: String?
+    let onOpenRoute: (KnowledgeRoute) -> Void
+
+    @StateObject private var viewModel: KnowledgeDirectoryViewModel
+    @State private var creationKind: KnowledgeCreationKind?
+
+    init(appModel: CompanionAppModel, session: HostSessionModel, directoryId: String?, onOpenRoute: @escaping (KnowledgeRoute) -> Void) {
+        self.appModel = appModel
+        self.session = session
+        self.directoryId = directoryId
+        self.onOpenRoute = onOpenRoute
+        _viewModel = StateObject(wrappedValue: session.makeKnowledgeDirectoryModel(directoryId: directoryId))
+    }
+
+    var body: some View {
+        List {
+            if viewModel.entries.isEmpty && !viewModel.isLoading {
+                ContentUnavailableView(
+                    directoryId == nil ? "No notes yet" : "This folder is empty",
+                    systemImage: "book.closed",
+                    description: Text(directoryId == nil
+                        ? "Create a note or folder to start building your knowledge base on this host."
+                        : "Create a note or folder here, or go back to another directory.")
+                )
+                .listRowBackground(Color.clear)
+            } else {
+                if let directoryId {
+                    Section {
+                        Text(directoryId)
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                    }
+                }
+                ForEach(viewModel.entries) { entry in
+                    Button {
+                        if entry.isDirectory {
+                            onOpenRoute(.directory(entry.id))
+                        } else {
+                            onOpenRoute(.note(entry.id))
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: entry.isDirectory ? "folder" : "doc.text")
+                                .foregroundStyle(entry.isDirectory ? .accentColor : CompanionTheme.textSecondary)
+                                .frame(width: 20)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(entry.name.replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression))
+                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                Text(entry.isDirectory
+                                     ? "Folder"
+                                     : "Updated \(formatRelativeCompanionDate(entry.updatedAt))")
+                                    .font(.caption)
+                                    .foregroundStyle(CompanionTheme.textSecondary)
+                            }
+                            Spacer()
+                            if entry.isDirectory {
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(CompanionTheme.textDim)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(CompanionTheme.panel)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .background(CompanionTheme.canvas)
+        .listStyle(.insetGrouped)
+        .navigationTitle(viewModel.title)
+        .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            if directoryId == nil {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        appModel.hostSelectionPresented = true
+                    } label: {
+                        Label("Hosts", systemImage: "server.rack")
+                    }
+                }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        creationKind = .note
+                    } label: {
+                        Label("New note", systemImage: "square.and.pencil")
+                    }
+                    Button {
+                        creationKind = .folder
+                    } label: {
+                        Label("New folder", systemImage: "folder.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel("Create knowledge item")
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = viewModel.errorMessage {
+                ErrorBanner(message: message)
+                    .padding()
+            }
+        }
+        .sheet(item: $creationKind) { kind in
+            KnowledgeCreateSheet(kind: kind) { name in
+                switch kind {
+                case .note:
+                    if let created = await viewModel.createNote(named: name) {
+                        onOpenRoute(.note(created.id))
+                        return true
+                    }
+                    return false
+                case .folder:
+                    if let created = await viewModel.createFolder(named: name) {
+                        onOpenRoute(.directory(created.id))
+                        return true
+                    }
+                    return false
+                }
+            }
+        }
+        .task {
+            if viewModel.entries.isEmpty {
+                viewModel.load()
+            }
+        }
+    }
+}
+
+private struct KnowledgeCreateSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let kind: KnowledgeCreationKind
+    let onCreate: (String) async -> Bool
+
+    @State private var name: String
+    @State private var isSaving = false
+
+    init(kind: KnowledgeCreationKind, onCreate: @escaping (String) async -> Bool) {
+        self.kind = kind
+        self.onCreate = onCreate
+        _name = State(initialValue: kind.placeholder)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(kind.title) {
+                    TextField(kind.placeholder, text: $name)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                Section {
+                    Text(kind == .note
+                         ? "Notes are plain markdown files in the host knowledge vault."
+                         : "Folders help organize related notes inside the knowledge vault.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle(kind.title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Create") {
+                        Task {
+                            isSaving = true
+                            let created = await onCreate(name)
+                            isSaving = false
+                            if created {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(isSaving || name.trimmed.isEmpty)
+                }
+            }
+        }
+    }
+}
+
+private struct KnowledgeNoteScreen: View {
+    let fileId: String
+
+    @StateObject private var viewModel: KnowledgeNoteViewModel
+
+    init(appModel _: CompanionAppModel, session: HostSessionModel, fileId: String) {
+        self.fileId = fileId
+        _viewModel = StateObject(wrappedValue: session.makeKnowledgeNoteModel(fileId: fileId))
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 8) {
+                    Text(fileId)
+                        .font(.footnote.monospaced())
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .lineLimit(2)
+                        .textSelection(.enabled)
+                    Spacer()
+                    if let updatedAt = viewModel.updatedAt {
+                        Text("Updated \(formatRelativeCompanionDate(updatedAt))")
+                            .font(.caption)
+                            .foregroundStyle(CompanionTheme.textDim)
+                    }
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(CompanionTheme.panelRaised)
+
+            Divider()
+
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(CompanionTheme.canvas)
+            } else {
+                TextEditor(text: $viewModel.draft)
+                    .font(.system(.body, design: .monospaced))
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(CompanionTheme.canvas)
+            }
+        }
+        .background(CompanionTheme.canvas)
+        .navigationTitle(viewModel.title)
+        .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Button {
+                    viewModel.reload()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .accessibilityLabel("Reload note")
+                .disabled(viewModel.isSaving)
+
+                if viewModel.isDirty {
+                    Button("Discard") {
+                        viewModel.discardChanges()
+                    }
+                    .disabled(viewModel.isSaving)
+                }
+
+                Button(viewModel.isSaving ? "Saving…" : "Save") {
+                    Task {
+                        _ = await viewModel.save()
+                    }
+                }
+                .disabled(viewModel.isSaving || !viewModel.isDirty)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let message = viewModel.errorMessage {
+                ErrorBanner(message: message)
+                    .padding()
+            }
+        }
+        .task {
+            if viewModel.content.isEmpty && viewModel.draft.isEmpty {
+                viewModel.load()
             }
         }
     }

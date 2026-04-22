@@ -41,7 +41,7 @@ Current repo implementation:
 The shipping iOS client currently covers:
 
 - host pairing + local host persistence
-- a host-first shell: select one host, then work inside Chat / Automations / Settings for that host
+- a host-first shell: select one host, then work inside Chat / Knowledge / Automations / Settings for that host
 - setup QR onboarding via desktop-generated QR codes, custom `pa-companion://` setup links, and in-app QR scanning
 - conversation list mirroring pinned/open/archived ordering, plus native pin/archive/duplicate controls
 - live conversation transcript + prompt composer
@@ -52,6 +52,7 @@ The shipping iOS client currently covers:
 - queued steer/follow-up restore, parallel-job management, and live presence/control-state display
 - native `ask_user_question` rendering and answer submission inside the conversation surface
 - conversation artifact browsing plus commit-checkpoint browsing and checkpoint creation
+- knowledge-base folder browsing plus markdown note read/edit/create flows against the host vault
 - saved attachment browse/read/create/update flows for drawing attachments, including a native PencilKit-based drawing editor that exports Excalidraw-compatible source assets
 - automation list/detail/create/edit/delete/run flows, including callback delivery controls for background-agent automations
 - durable run detail/log/cancel flows, without a dedicated top-level Runs tab in the iOS shell
