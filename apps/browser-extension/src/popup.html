@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Save to Personal Agent</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body class="pa-extension-page pa-extension-popup">
+    <main class="pa-extension-shell">
+      <header class="pa-extension-header">
+        <h1>Save URL</h1>
+        <p id="popup-host-status" class="pa-extension-meta">Checking connection…</p>
+      </header>
+
+      <div id="popup-warning" class="pa-extension-callout pa-extension-callout-warning" hidden></div>
+      <div id="popup-success" class="pa-extension-callout pa-extension-callout-success" hidden></div>
+
+      <form id="popup-form" class="pa-extension-form">
+        <label class="pa-extension-field">
+          <span>Title</span>
+          <input id="popup-title" name="title" type="text" autocomplete="off" placeholder="Page title">
+        </label>
+
+        <label class="pa-extension-field">
+          <span>URL</span>
+          <textarea id="popup-url" name="url" rows="3" spellcheck="false" placeholder="https://example.com/article"></textarea>
+        </label>
+
+        <label class="pa-extension-field">
+          <span>Folder</span>
+          <input id="popup-directory" name="directory" type="text" autocomplete="off" placeholder="Inbox">
+          <small>Optional vault folder. Blank uses the default from Options.</small>
+        </label>
+
+        <div class="pa-extension-actions">
+          <button id="popup-save" type="submit">Save to vault</button>
+          <button id="popup-options" type="button" class="secondary">Options</button>
+        </div>
+      </form>
+    </main>
+
+    <script src="shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

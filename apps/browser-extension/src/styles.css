@@ -1,0 +1,191 @@
+:root {
+  color-scheme: light dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #111318;
+  color: #e8ecf5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 360px;
+  background: #111318;
+  color: #e8ecf5;
+}
+
+body.pa-extension-popup {
+  min-width: 360px;
+}
+
+.pa-extension-page {
+  min-height: 100vh;
+}
+
+.pa-extension-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+}
+
+.pa-extension-shell-wide {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 28px 20px 36px;
+}
+
+.pa-extension-header h1,
+.pa-extension-section h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.pa-extension-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pa-extension-meta {
+  margin: 0;
+  color: #9aa7bc;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.pa-extension-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pa-extension-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pa-extension-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pa-extension-field > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pa-extension-field small,
+.pa-extension-field code {
+  color: #9aa7bc;
+  font-size: 12px;
+}
+
+input,
+textarea,
+button {
+  font: inherit;
+}
+
+input,
+textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #191d25;
+  color: #edf2ff;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus,
+button:focus {
+  outline: 2px solid rgba(112, 161, 255, 0.7);
+  outline-offset: 2px;
+}
+
+.pa-extension-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+button {
+  appearance: none;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #7aa2ff;
+  color: #0f1625;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #252b36;
+  color: #edf2ff;
+}
+
+button:disabled {
+  opacity: 0.65;
+  cursor: default;
+}
+
+.pa-extension-callout {
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  background: #1b2230;
+  color: #dbe6ff;
+}
+
+.pa-extension-callout-warning {
+  background: #342314;
+  color: #ffd8b0;
+}
+
+.pa-extension-callout-success {
+  background: #173120;
+  color: #b8f2c8;
+}
+
+.pa-extension-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.pa-extension-definition-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+}
+
+.pa-extension-definition-list div {
+  display: grid;
+  gap: 4px;
+}
+
+.pa-extension-definition-list dt {
+  color: #9aa7bc;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pa-extension-definition-list dd {
+  margin: 0;
+  word-break: break-word;
+}
