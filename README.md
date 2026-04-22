@@ -136,6 +136,7 @@ The repo currently ships these built-in Pi extensions:
 - `web-tools` — `web_search` and `web_fetch`
 - `daemon-run-orchestration-prompt` — extra system-prompt guidance for durable background orchestration
 - `openai-native-compaction` — uses Codex/OpenAI compaction replay for direct Responses API sessions while preserving Pi's normal portable text summary
+- `gpt-apply-patch` — registers an `apply_patch` tool and swaps it in for `edit` when the active model is GPT-family
 
 ## Release flow
 
