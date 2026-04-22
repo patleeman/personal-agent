@@ -42,8 +42,10 @@
     "validate:projects": "node scripts/validate-projects.mjs"
   },
   "devDependencies": {
+    "@types/jsdom": "^28.0.1",
     "@types/node": "^20.0.0",
     "@types/nunjucks": "^3.2.6",
+    "@types/turndown": "^5.0.6",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^7.0.0",
     "@typescript-eslint/parser": "^7.0.0",
