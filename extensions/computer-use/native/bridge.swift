@@ -440,11 +440,24 @@ final class Bridge {
 		event.postToPid(pid)
 	}
 
+	private func postMouseEvent(_ event: CGEvent) {
+		event.post(tap: .cghidEventTap)
+	}
+
+	private func activateApp(pid: Int32) {
+		guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
+			return
+		}
+		app.activate(options: [.activateIgnoringOtherApps])
+		usleep(80_000)
+	}
+
 	private func postMouseMove(to point: CGPoint, pid: Int32) throws {
+		activateApp(pid: pid)
 		guard let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) else {
 			throw BridgeFailure(message: "Failed to create mouse move event", code: "input_failed")
 		}
-		postEvent(move, pid: pid)
+		postMouseEvent(move)
 	}
 
 	private func postMouseClick(at point: CGPoint, buttonName: String, clickCount: Int, pid: Int32) throws {
@@ -461,9 +474,9 @@ final class Bridge {
 			up.setIntegerValueField(.mouseEventClickState, value: Int64(clickCount))
 			down.setIntegerValueField(.mouseEventButtonNumber, value: mapping.buttonNumber)
 			up.setIntegerValueField(.mouseEventButtonNumber, value: mapping.buttonNumber)
-			postEvent(down, pid: pid)
+			postMouseEvent(down)
 			usleep(12_000)
-			postEvent(up, pid: pid)
+			postMouseEvent(up)
 			usleep(45_000)
 		}
 	}
@@ -475,28 +488,30 @@ final class Bridge {
 		guard let down = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: first, mouseButton: .left) else {
 			throw BridgeFailure(message: "Failed to start drag", code: "input_failed")
 		}
-		postEvent(down, pid: pid)
+		activateApp(pid: pid)
+		postMouseEvent(down)
 		usleep(12_000)
 		for point in points.dropFirst() {
 			guard let drag = CGEvent(mouseEventSource: nil, mouseType: .leftMouseDragged, mouseCursorPosition: point, mouseButton: .left) else {
 				throw BridgeFailure(message: "Failed during drag", code: "input_failed")
 			}
-			postEvent(drag, pid: pid)
+			postMouseEvent(drag)
 			usleep(8_000)
 		}
 		guard let up = CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: last, mouseButton: .left) else {
 			throw BridgeFailure(message: "Failed to finish drag", code: "input_failed")
 		}
-		postEvent(up, pid: pid)
+		postMouseEvent(up)
 	}
 
 	private func postMouseScroll(scrollX: Int32, scrollY: Int32, pid: Int32) throws {
+		activateApp(pid: pid)
 		if let event = CGEvent(scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 2, wheel1: scrollY, wheel2: scrollX, wheel3: 0) {
-			postEvent(event, pid: pid)
+			postMouseEvent(event)
 			return
 		}
 		if let fallback = CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1, wheel1: scrollY, wheel2: 0, wheel3: 0) {
-			postEvent(fallback, pid: pid)
+			postMouseEvent(fallback)
 			return
 		}
 		throw BridgeFailure(message: "Failed to create scroll event", code: "input_failed")
