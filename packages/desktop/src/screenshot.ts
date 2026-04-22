@@ -98,7 +98,10 @@ export async function captureDesktopScreenshot(
 
 async function runInteractiveScreencapture(outputPath: string): Promise<ScreenshotCommandResult> {
   return new Promise((resolve, reject) => {
-    const child = spawn('screencapture', ['-i', '-U', '-x', outputPath], {
+    // Keep the interaction to the single-shot legacy crosshair/window picker.
+    // The newer toolbar mode (`-U`) can leave screencapture running after the
+    // user takes a shot, which leaves the composer spinner stuck.
+    const child = spawn('screencapture', ['-i', '-x', outputPath], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
 
