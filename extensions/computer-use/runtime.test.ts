@@ -13,6 +13,8 @@ describe('computer-use runtime helpers', () => {
     expect(normalizeComputerUseAction('screenshot')).toBe('observe');
     expect(normalizeComputerUseAction('move_mouse')).toBe('move');
     expect(normalizeComputerUseAction('type_text')).toBe('type');
+    expect(normalizeComputerUseAction('set-value')).toBe('set_value');
+    expect(normalizeComputerUseAction('perform_accessibility_action')).toBe('secondary_action');
   });
 
   it('normalizes key shortcuts from arrays and strings', () => {
@@ -30,6 +32,20 @@ describe('computer-use runtime helpers', () => {
       action: 'observe',
       app: 'Safari',
       keys: ['CMD', 'L'],
+    });
+  });
+
+  it('preserves element-targeted arguments for accessibility actions', () => {
+    expect(prepareComputerUseArguments({
+      action: 'set-value',
+      elementId: 'e12',
+      text: 'hello',
+      accessibilityAction: 'AXShowMenu',
+    })).toEqual({
+      action: 'set_value',
+      elementId: 'e12',
+      text: 'hello',
+      accessibilityAction: 'AXShowMenu',
     });
   });
 

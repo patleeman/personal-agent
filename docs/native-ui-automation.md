@@ -29,14 +29,14 @@ The built-in tool is:
 
 - `computer_use`
 
-Use it as a screenshot-and-action loop:
+Use it as an observe/action loop:
 
-1. `action: "observe"` to capture or retarget a window
-2. use coordinates from that screenshot for click, move, drag, or scroll actions
-3. use `type` or `keypress` when the correct control already has focus
-4. use `wait` when the app needs time before the next refresh
+1. `action: "observe"` to capture or retarget a window and get accessibility `elementId`s
+2. prefer `elementId`-targeted `click`, `type`, `set_value`, or `secondary_action`
+3. fall back to coordinates only when accessibility targeting is not good enough
+4. use `keypress`, `drag`, `scroll`, and `wait` when the workflow really needs them
 
-Successful actions return an updated screenshot and capture metadata for the next step.
+`observe` is the expensive, state-inspection step. Other actions return a fresh screenshot, but run `observe` again when you need fresh element IDs for the new UI state.
 
 ## Current scope
 
@@ -45,6 +45,7 @@ The current implementation targets:
 - macOS
 - visible windows
 - direct interaction in the current user session
+- accessibility-first interaction with coordinate fallback
 
 It is meant for practical interactive control, not invisible background desktop automation.
 

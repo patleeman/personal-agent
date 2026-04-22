@@ -2,6 +2,8 @@ import Foundation
 import AppKit
 import ApplicationServices
 import ImageIO
+import ScreenCaptureKit
+import UniformTypeIdentifiers
 
 struct BridgeFailure: Error {
 	let message: String
@@ -15,8 +17,16 @@ struct MouseMapping {
 	let buttonNumber: Int64
 }
 
+struct ElementObservationSnapshot {
+	let pid: Int32
+	let windowId: UInt32
+	let elementsById: [String: AXUIElement]
+}
+
 final class Bridge {
 	private var stdinBuffer = Data()
+	private var observations: [String: ElementObservationSnapshot] = [:]
+	private var observationOrder: [String] = []
 
 	private let keyCodeMap: [String: CGKeyCode] = [
 		"A": 0, "S": 1, "D": 2, "F": 3, "H": 4, "G": 5,
@@ -165,12 +175,16 @@ final class Bridge {
 			return try listWindows(pid: Int32(try intArg(request, "pid")))
 		case "get_frontmost":
 			return try getFrontmost()
-		case "capture_window":
-			return try captureWindow(windowId: UInt32(try intArg(request, "windowId")))
+		case "capture_window_state":
+			return try captureWindowState(request)
 		case "move_window_mouse":
 			return try moveWindowMouse(request)
 		case "click_window":
 			return try clickWindow(request)
+		case "click_element":
+			return try clickElement(request)
+		case "perform_element_action":
+			return try performElementAction(request)
 		case "drag_window_mouse":
 			return try dragWindowMouse(request)
 		case "scroll_window_mouse":
@@ -179,6 +193,8 @@ final class Bridge {
 			return try keypress(request)
 		case "type_text":
 			return try typeText(request)
+		case "set_element_value":
+			return try setElementValue(request)
 		default:
 			throw BridgeFailure(message: "Unknown command '\(cmd)'", code: "unknown_command")
 		}
@@ -189,6 +205,20 @@ final class Bridge {
 			return value
 		}
 		throw BridgeFailure(message: "Missing string argument '\(key)'", code: "invalid_args")
+	}
+
+	private func optionalStringArg(_ request: [String: Any], _ key: String) -> String? {
+		request[key] as? String
+	}
+
+	private func boolArg(_ request: [String: Any], _ key: String, default defaultValue: Bool) -> Bool {
+		if let value = request[key] as? Bool {
+			return value
+		}
+		if let value = request[key] as? NSNumber {
+			return value.boolValue
+		}
+		return defaultValue
 	}
 
 	private func intArg(_ request: [String: Any], _ key: String) throws -> Int {
@@ -321,7 +351,92 @@ final class Bridge {
 		return windows
 	}
 
-	private func captureWindow(windowId: UInt32) throws -> [String: Any] {
+	private func captureWindowState(_ request: [String: Any]) throws -> [String: Any] {
+		let pid = Int32(try intArg(request, "pid"))
+		let windowId = UInt32(try intArg(request, "windowId"))
+		let includeAccessibility = boolArg(request, "includeAccessibility", default: false)
+		let cgImage = try captureWindowImage(windowId: windowId)
+		let pngData = try pngData(for: cgImage)
+
+		var result: [String: Any] = [
+			"pngBase64": pngData.base64EncodedString(),
+			"width": cgImage.width,
+			"height": cgImage.height,
+		]
+
+		if includeAccessibility {
+			let observation = try buildObservation(pid: pid, windowId: windowId, captureWidth: cgImage.width, captureHeight: cgImage.height)
+			result["snapshotId"] = observation.snapshotId
+			result["elements"] = observation.elements
+			if let focusedElementId = observation.focusedElementId {
+				result["focusedElementId"] = focusedElementId
+			}
+		}
+
+		return result
+	}
+
+	private func captureWindowImage(windowId: UInt32) throws -> CGImage {
+		if #available(macOS 14.0, *) {
+			if let image = try? captureWindowImageWithScreenCaptureKit(windowId: windowId) {
+				return image
+			}
+		}
+
+		return try captureWindowImageWithScreencapture(windowId: windowId)
+	}
+
+	@available(macOS 14.0, *)
+	private func captureWindowImageWithScreenCaptureKit(windowId: UInt32) throws -> CGImage {
+		let semaphore = DispatchSemaphore(value: 0)
+		var result: Result<CGImage, Error>?
+
+		Task {
+			do {
+				let shareableContent = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+				guard let window = shareableContent.windows.first(where: { $0.windowID == windowId }) else {
+					throw BridgeFailure(message: "Target window is no longer available", code: "window_not_found")
+				}
+
+				let filter = SCContentFilter(desktopIndependentWindow: window)
+				let configuration = SCStreamConfiguration()
+				configuration.showsCursor = false
+				configuration.captureResolution = .automatic
+				let scale = backingScaleFactor(for: window.frame)
+				configuration.width = max(1, Int(window.frame.width * scale))
+				configuration.height = max(1, Int(window.frame.height * scale))
+
+				let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration)
+				result = .success(image)
+			} catch {
+				result = .failure(error)
+			}
+			semaphore.signal()
+		}
+
+		semaphore.wait()
+		switch result {
+		case .success(let image):
+			return image
+		case .failure(let error):
+			if let failure = error as? BridgeFailure {
+				throw failure
+			}
+			throw BridgeFailure(message: error.localizedDescription, code: "capture_failed")
+		case .none:
+			throw BridgeFailure(message: "The screen capture failed.", code: "capture_failed")
+		}
+	}
+
+	@available(macOS 14.0, *)
+	private func backingScaleFactor(for frame: CGRect) -> Double {
+		if let screen = NSScreen.screens.first(where: { $0.frame.intersects(frame) }) {
+			return screen.backingScaleFactor
+		}
+		return Double(NSScreen.main?.backingScaleFactor ?? 2.0)
+	}
+
+	private func captureWindowImageWithScreencapture(windowId: UInt32) throws -> CGImage {
 		let tempURL = URL(fileURLWithPath: NSTemporaryDirectory())
 			.appendingPathComponent("computer-use-\(UUID().uuidString).png")
 		defer {
@@ -352,26 +467,26 @@ final class Bridge {
 			throw BridgeFailure(message: "screencapture failed for window \(windowId)", code: "capture_failed")
 		}
 
-		guard let data = try? Data(contentsOf: tempURL), !data.isEmpty else {
-			if let stderrText, !stderrText.isEmpty {
-				throw BridgeFailure(message: stderrText, code: "capture_failed")
-			}
+		guard let data = try? Data(contentsOf: tempURL),
+			let source = CGImageSourceCreateWithData(data as CFData, nil),
+			let image = CGImageSourceCreateImageAtIndex(source, 0, nil)
+		else {
 			throw BridgeFailure(message: "No screenshot was produced for window \(windowId)", code: "capture_failed")
 		}
 
-		guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-			let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
-			let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
-			let height = properties[kCGImagePropertyPixelHeight] as? NSNumber
-		else {
-			throw BridgeFailure(message: "Failed to read screenshot dimensions", code: "capture_failed")
-		}
+		return image
+	}
 
-		return [
-			"pngBase64": data.base64EncodedString(),
-			"width": width.intValue,
-			"height": height.intValue,
-		]
+	private func pngData(for image: CGImage) throws -> Data {
+		let mutable = NSMutableData()
+		guard let destination = CGImageDestinationCreateWithData(mutable, UTType.png.identifier as CFString, 1, nil) else {
+			throw BridgeFailure(message: "Failed to encode screenshot", code: "capture_failed")
+		}
+		CGImageDestinationAddImage(destination, image, nil)
+		guard CGImageDestinationFinalize(destination) else {
+			throw BridgeFailure(message: "Failed to encode screenshot", code: "capture_failed")
+		}
+		return mutable as Data
 	}
 
 	private func currentWindowBounds(windowId: UInt32) -> CGRect? {
@@ -401,6 +516,23 @@ final class Bridge {
 		return nil
 	}
 
+	private func currentWindowTitle(windowId: UInt32) -> String? {
+		guard let entries = CGWindowListCopyWindowInfo([.optionAll], kCGNullWindowID) as? [[String: Any]] else {
+			return nil
+		}
+
+		for entry in entries {
+			guard let number = entry[kCGWindowNumber as String] as? NSNumber,
+				number.uint32Value == windowId
+			else {
+				continue
+			}
+			return entry[kCGWindowName as String] as? String
+		}
+
+		return nil
+	}
+
 	private func mapWindowPoint(
 		windowId: UInt32,
 		x: Double,
@@ -417,6 +549,409 @@ final class Bridge {
 			x: bounds.origin.x + bounds.size.width * relX,
 			y: bounds.origin.y + bounds.size.height * relY
 		)
+	}
+
+	private func buildObservation(pid: Int32, windowId: UInt32, captureWidth: Int, captureHeight: Int) throws -> (snapshotId: String, elements: [[String: Any]], focusedElementId: String?) {
+		guard let windowBounds = currentWindowBounds(windowId: windowId) else {
+			throw BridgeFailure(message: "Target window is no longer available", code: "window_not_found")
+		}
+		let appElement = AXUIElementCreateApplication(pid)
+		let axWindow = try resolveAXWindow(appElement: appElement, pid: pid, windowId: windowId, cgWindowBounds: windowBounds)
+		let focusedElement = focusedUIElement(appElement: appElement)
+
+		var visited: Set<String> = []
+		var flatElements: [[String: Any]] = []
+		var elementsById: [String: AXUIElement] = [:]
+		var nextIndex = 1
+		var focusedElementId: String?
+
+		func visit(_ element: AXUIElement, depth: Int) {
+			if depth > 12 || flatElements.count >= 200 {
+				return
+			}
+
+			let identity = elementIdentity(element)
+			if visited.contains(identity) {
+				return
+			}
+			visited.insert(identity)
+
+			let actions = actionNames(for: element)
+			let role = stringAttribute(element, kAXRoleAttribute as CFString)
+			let subrole = stringAttribute(element, kAXSubroleAttribute as CFString)
+			let title = stringAttribute(element, kAXTitleAttribute as CFString)
+			let help = stringAttribute(element, kAXDescriptionAttribute as CFString)
+			let value = summarizedValue(for: element)
+			let enabled = boolAttribute(element, kAXEnabledAttribute as CFString)
+			let settable = isAttributeSettable(element, kAXValueAttribute as CFString)
+			let frame = relativeFrame(for: element, within: windowBounds, captureWidth: captureWidth, captureHeight: captureHeight)
+			let focused = isSameElement(element, focusedElement)
+
+			if shouldIncludeElement(role: role, title: title, help: help, value: value, actions: actions, settable: settable, frame: frame, focused: focused) {
+				let elementId = "e\(nextIndex)"
+				nextIndex += 1
+				elementsById[elementId] = element
+
+				var item: [String: Any] = [
+					"elementId": elementId,
+					"depth": depth,
+					"actions": actions,
+					"settable": settable,
+				]
+				if let role {
+					item["role"] = role
+				}
+				if let subrole, !subrole.isEmpty {
+					item["subrole"] = subrole
+				}
+				if let title, !title.isEmpty {
+					item["title"] = title
+				}
+				if let help, !help.isEmpty {
+					item["description"] = help
+				}
+				if let value, !value.isEmpty {
+					item["value"] = value
+				}
+				if let enabled {
+					item["enabled"] = enabled
+				}
+				if focused {
+					item["focused"] = true
+					focusedElementId = elementId
+				}
+				if let frame {
+					item["frame"] = [
+						"x": frame.origin.x,
+						"y": frame.origin.y,
+						"width": frame.size.width,
+						"height": frame.size.height,
+					]
+				}
+
+				flatElements.append(item)
+			}
+
+			for child in childElements(for: element) {
+				visit(child, depth: depth + 1)
+			}
+		}
+
+		visit(axWindow, depth: 0)
+
+		let snapshotId = UUID().uuidString
+		observations[snapshotId] = ElementObservationSnapshot(pid: pid, windowId: windowId, elementsById: elementsById)
+		observationOrder.append(snapshotId)
+		trimObservations()
+
+		return (snapshotId, flatElements, focusedElementId)
+	}
+
+	private func resolveAXWindow(appElement: AXUIElement, pid: Int32, windowId: UInt32, cgWindowBounds: CGRect) throws -> AXUIElement {
+		let title = currentWindowTitle(windowId: windowId)?.trimmingCharacters(in: .whitespacesAndNewlines)
+		let windows = childElements(attribute: kAXWindowsAttribute as CFString, from: appElement)
+		if windows.isEmpty {
+			throw BridgeFailure(message: "No accessibility window was found for app pid \(pid)", code: "window_not_found")
+		}
+		if windows.count == 1 {
+			return windows[0]
+		}
+
+		let sorted = windows.sorted { left, right in
+			scoreAXWindow(left, targetBounds: cgWindowBounds, targetTitle: title) > scoreAXWindow(right, targetBounds: cgWindowBounds, targetTitle: title)
+		}
+		guard let chosen = sorted.first else {
+			throw BridgeFailure(message: "No accessibility window was found for app pid \(pid)", code: "window_not_found")
+		}
+		return chosen
+	}
+
+	private func scoreAXWindow(_ element: AXUIElement, targetBounds: CGRect, targetTitle: String?) -> Double {
+		var score = 0.0
+		if let frame = absoluteFrame(for: element) {
+			let intersection = frame.intersection(targetBounds)
+			if !intersection.isNull && !intersection.isEmpty {
+				score += Double(intersection.width * intersection.height)
+			}
+		}
+		if let title = targetTitle,
+			let axTitle = stringAttribute(element, kAXTitleAttribute as CFString)?.trimmingCharacters(in: .whitespacesAndNewlines),
+			!title.isEmpty,
+			!axTitle.isEmpty,
+			title.caseInsensitiveCompare(axTitle) == .orderedSame
+		{
+			score += 1_000_000
+		}
+		return score
+	}
+
+	private func childElements(for element: AXUIElement) -> [AXUIElement] {
+		let attributes: [CFString] = [
+			kAXChildrenAttribute as CFString,
+			kAXVisibleChildrenAttribute as CFString,
+			kAXRowsAttribute as CFString,
+			kAXTabsAttribute as CFString,
+			kAXContentsAttribute as CFString,
+		]
+		var result: [AXUIElement] = []
+		var seen: Set<String> = []
+		for attribute in attributes {
+			for child in childElements(attribute: attribute, from: element) {
+				let identity = elementIdentity(child)
+				if seen.contains(identity) {
+					continue
+				}
+				seen.insert(identity)
+				result.append(child)
+			}
+		}
+		return result
+	}
+
+	private func childElements(attribute: CFString, from element: AXUIElement) -> [AXUIElement] {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, attribute, &value)
+		guard error == .success else {
+			return []
+		}
+		if let array = value as? [AXUIElement] {
+			return array
+		}
+		if let single = value, CFGetTypeID(single) == AXUIElementGetTypeID() {
+			return [unsafeBitCast(single, to: AXUIElement.self)]
+		}
+		return []
+	}
+
+	private func stringAttribute(_ element: AXUIElement, _ attribute: CFString) -> String? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, attribute, &value)
+		guard error == .success else {
+			return nil
+		}
+		return value as? String
+	}
+
+	private func boolAttribute(_ element: AXUIElement, _ attribute: CFString) -> Bool? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, attribute, &value)
+		guard error == .success else {
+			return nil
+		}
+		if let number = value as? NSNumber {
+			return number.boolValue
+		}
+		return nil
+	}
+
+	private func summarizedValue(for element: AXUIElement) -> String? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value)
+		guard error == .success, let unwrapped = value else {
+			return nil
+		}
+		if let string = unwrapped as? String {
+			return trimmedSummary(string)
+		}
+		if let number = unwrapped as? NSNumber {
+			return number.stringValue
+		}
+		if CFGetTypeID(unwrapped) == AXValueGetTypeID() {
+			return nil
+		}
+		return trimmedSummary(CFCopyDescription(unwrapped) as String)
+	}
+
+	private func trimmedSummary(_ value: String) -> String {
+		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+		if trimmed.count <= 120 {
+			return trimmed
+		}
+		let end = trimmed.index(trimmed.startIndex, offsetBy: 117)
+		return String(trimmed[..<end]) + "..."
+	}
+
+	private func isAttributeSettable(_ element: AXUIElement, _ attribute: CFString) -> Bool {
+		var settable = DarwinBoolean(false)
+		let error = AXUIElementIsAttributeSettable(element, attribute, &settable)
+		return error == .success && settable.boolValue
+	}
+
+	private func actionNames(for element: AXUIElement) -> [String] {
+		var value: CFArray?
+		let error = AXUIElementCopyActionNames(element, &value)
+		guard error == .success, let array = value as? [String] else {
+			return []
+		}
+		return array
+	}
+
+	private func focusedUIElement(appElement: AXUIElement) -> AXUIElement? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(appElement, kAXFocusedUIElementAttribute as CFString, &value)
+		guard error == .success else {
+			return nil
+		}
+		return value as! AXUIElement?
+	}
+
+	private func elementIdentity(_ element: AXUIElement) -> String {
+		String(UInt(bitPattern: Unmanaged.passUnretained(element).toOpaque()))
+	}
+
+	private func isSameElement(_ left: AXUIElement, _ right: AXUIElement?) -> Bool {
+		guard let right else {
+			return false
+		}
+		return elementIdentity(left) == elementIdentity(right)
+	}
+
+	private func absoluteFrame(for element: AXUIElement) -> CGRect? {
+		guard let position = pointAttribute(element, kAXPositionAttribute as CFString),
+			let size = sizeAttribute(element, kAXSizeAttribute as CFString)
+		else {
+			return nil
+		}
+		return CGRect(origin: position, size: size)
+	}
+
+	private func relativeFrame(for element: AXUIElement, within windowBounds: CGRect, captureWidth: Int, captureHeight: Int) -> CGRect? {
+		guard let absoluteFrame = absoluteFrame(for: element) else {
+			return nil
+		}
+		let intersection = absoluteFrame.intersection(windowBounds)
+		if intersection.isNull || intersection.isEmpty || intersection.width < 1 || intersection.height < 1 {
+			return nil
+		}
+		let scaleX = Double(captureWidth) / Double(max(windowBounds.width, 1))
+		let scaleY = Double(captureHeight) / Double(max(windowBounds.height, 1))
+		return CGRect(
+			x: (intersection.origin.x - windowBounds.origin.x) * scaleX,
+			y: (intersection.origin.y - windowBounds.origin.y) * scaleY,
+			width: intersection.size.width * scaleX,
+			height: intersection.size.height * scaleY
+		)
+	}
+
+	private func pointAttribute(_ element: AXUIElement, _ attribute: CFString) -> CGPoint? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, attribute, &value)
+		guard error == .success,
+			let axValue = value,
+			CFGetTypeID(axValue) == AXValueGetTypeID()
+		else {
+			return nil
+		}
+		let casted = unsafeBitCast(axValue, to: AXValue.self)
+		if AXValueGetType(casted) != .cgPoint {
+			return nil
+		}
+		var point = CGPoint.zero
+		guard AXValueGetValue(casted, .cgPoint, &point) else {
+			return nil
+		}
+		return point
+	}
+
+	private func sizeAttribute(_ element: AXUIElement, _ attribute: CFString) -> CGSize? {
+		var value: CFTypeRef?
+		let error = AXUIElementCopyAttributeValue(element, attribute, &value)
+		guard error == .success,
+			let axValue = value,
+			CFGetTypeID(axValue) == AXValueGetTypeID()
+		else {
+			return nil
+		}
+		let casted = unsafeBitCast(axValue, to: AXValue.self)
+		if AXValueGetType(casted) != .cgSize {
+			return nil
+		}
+		var size = CGSize.zero
+		guard AXValueGetValue(casted, .cgSize, &size) else {
+			return nil
+		}
+		return size
+	}
+
+	private func shouldIncludeElement(role: String?, title: String?, help: String?, value: String?, actions: [String], settable: Bool, frame: CGRect?, focused: Bool) -> Bool {
+		if focused {
+			return true
+		}
+		guard frame != nil else {
+			return false
+		}
+		if let role, excludedRoles.contains(role) {
+			return false
+		}
+		if settable || !actions.isEmpty {
+			return true
+		}
+		guard let role else {
+			return false
+		}
+		if interestingRoles.contains(role) {
+			let hasLabel = !(title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+				|| !(help?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+				|| !(value?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+			return hasLabel || structuralRoles.contains(role)
+		}
+		return false
+	}
+
+	private let interestingRoles: Set<String> = [
+		kAXButtonRole as String,
+		kAXCheckBoxRole as String,
+		kAXComboBoxRole as String,
+		"AXLink",
+		kAXMenuButtonRole as String,
+		kAXMenuItemRole as String,
+		kAXPopUpButtonRole as String,
+		kAXRadioButtonRole as String,
+		kAXRowRole as String,
+		kAXStaticTextRole as String,
+		"AXTabButton",
+		kAXTextAreaRole as String,
+		kAXTextFieldRole as String,
+		"AXCell",
+		"AXDisclosureTriangle",
+		"AXOutlineRow",
+	]
+
+	private let structuralRoles: Set<String> = [
+		kAXRowRole as String,
+		"AXCell",
+		"AXOutlineRow",
+	]
+
+	private let excludedRoles: Set<String> = [
+		kAXWindowRole as String,
+		kAXScrollAreaRole as String,
+		kAXScrollBarRole as String,
+		"AXRuler",
+		"AXRulerMarker",
+		"AXValueIndicator",
+	]
+
+	private func trimObservations(maxCount: Int = 6) {
+		while observationOrder.count > maxCount {
+			let removed = observationOrder.removeFirst()
+			observations.removeValue(forKey: removed)
+		}
+	}
+
+	private func observation(snapshotId: String) throws -> ElementObservationSnapshot {
+		guard let observation = observations[snapshotId] else {
+			throw BridgeFailure(message: "The requested accessibility snapshot is no longer available. Use observe again to refresh the current app state.", code: "invalid_snapshot")
+		}
+		return observation
+	}
+
+	private func observedElement(snapshotId: String, elementId: String) throws -> (snapshot: ElementObservationSnapshot, element: AXUIElement) {
+		let snapshot = try observation(snapshotId: snapshotId)
+		guard let element = snapshot.elementsById[elementId] else {
+			throw BridgeFailure(message: "Element ID '\(elementId)' is no longer valid. Use observe again to refresh the current app state.", code: "invalid_element_id")
+		}
+		return (snapshot, element)
 	}
 
 	private func mouseMapping(for buttonName: String) throws -> MouseMapping {
@@ -448,7 +983,11 @@ final class Bridge {
 		guard let app = NSRunningApplication(processIdentifier: pid_t(pid)) else {
 			return
 		}
-		app.activate(options: [.activateIgnoringOtherApps])
+		if #available(macOS 14.0, *) {
+			_ = app.activate()
+		} else {
+			app.activate(options: [.activateIgnoringOtherApps])
+		}
 		usleep(80_000)
 	}
 
@@ -535,6 +1074,7 @@ final class Bridge {
 	}
 
 	private func postKeyEvent(keyCode: CGKeyCode, flags: CGEventFlags, pid: Int32) throws {
+		activateApp(pid: pid)
 		guard let down = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: true),
 			let up = CGEvent(keyboardEventSource: nil, virtualKey: keyCode, keyDown: false)
 		else {
@@ -556,6 +1096,7 @@ final class Bridge {
 	}
 
 	private func postUnicodeText(_ text: String, pid: Int32) throws {
+		activateApp(pid: pid)
 		for scalar in text.unicodeScalars {
 			let character = String(scalar)
 			guard let down = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: true),
@@ -594,7 +1135,64 @@ final class Bridge {
 		let clickCount = max(1, optionalIntArg(request, "clicks") ?? 1)
 		let point = try mapWindowPoint(windowId: windowId, x: x, y: y, captureWidth: captureWidth, captureHeight: captureHeight)
 		try postMouseClick(at: point, buttonName: buttonName, clickCount: clickCount, pid: pid)
-		return ["clicked": true]
+		return ["clicked": true, "via": "mouse"]
+	}
+
+	private func clickElement(_ request: [String: Any]) throws -> [String: Any] {
+		let snapshotId = try stringArg(request, "snapshotId")
+		let elementId = try stringArg(request, "elementId")
+		let buttonName = (try? stringArg(request, "button")) ?? "left"
+		let clickCount = max(1, optionalIntArg(request, "clicks") ?? 1)
+		let resolved = try observedElement(snapshotId: snapshotId, elementId: elementId)
+
+		if buttonName.lowercased() == "left" && clickCount == 1 {
+			let actions = actionNames(for: resolved.element)
+			if actions.contains(kAXPressAction as String) {
+				activateApp(pid: resolved.snapshot.pid)
+				let error = AXUIElementPerformAction(resolved.element, kAXPressAction as CFString)
+				if error == .success {
+					return ["clicked": true, "via": "ax_press"]
+				}
+			}
+		}
+
+		guard let frame = absoluteFrame(for: resolved.element) else {
+			throw BridgeFailure(message: "Element '\(elementId)' does not have a clickable frame. Use observe again or fall back to coordinates.", code: "element_not_interactable")
+		}
+		let point = CGPoint(x: frame.midX, y: frame.midY)
+		try postMouseClick(at: point, buttonName: buttonName, clickCount: clickCount, pid: resolved.snapshot.pid)
+		return ["clicked": true, "via": "mouse"]
+	}
+
+	private func performElementAction(_ request: [String: Any]) throws -> [String: Any] {
+		let snapshotId = try stringArg(request, "snapshotId")
+		let elementId = try stringArg(request, "elementId")
+		let requestedAction = optionalStringArg(request, "accessibilityAction")
+		let resolved = try observedElement(snapshotId: snapshotId, elementId: elementId)
+		let actions = actionNames(for: resolved.element)
+		guard !actions.isEmpty else {
+			throw BridgeFailure(message: "Element '\(elementId)' does not expose any accessibility actions.", code: "element_not_interactable")
+		}
+
+		let chosenAction: String
+		if let requestedAction, actions.contains(requestedAction) {
+			chosenAction = requestedAction
+		} else if let requestedAction {
+			throw BridgeFailure(message: "Element '\(elementId)' does not expose accessibility action '\(requestedAction)'.", code: "invalid_args")
+		} else if let secondary = actions.first(where: { $0 != (kAXPressAction as String) }) {
+			chosenAction = secondary
+		} else if let primary = actions.first {
+			chosenAction = primary
+		} else {
+			throw BridgeFailure(message: "Element '\(elementId)' does not expose any accessibility actions.", code: "element_not_interactable")
+		}
+
+		activateApp(pid: resolved.snapshot.pid)
+		let error = AXUIElementPerformAction(resolved.element, chosenAction as CFString)
+		guard error == .success else {
+			throw BridgeFailure(message: "Failed to perform accessibility action '\(chosenAction)' on element '\(elementId)'.", code: "input_failed")
+		}
+		return ["performed": chosenAction]
 	}
 
 	private func dragWindowMouse(_ request: [String: Any]) throws -> [String: Any] {
@@ -660,6 +1258,23 @@ final class Bridge {
 		let text = try stringArg(request, "text")
 		try postUnicodeText(text, pid: pid)
 		return ["typed": true]
+	}
+
+	private func setElementValue(_ request: [String: Any]) throws -> [String: Any] {
+		let snapshotId = try stringArg(request, "snapshotId")
+		let elementId = try stringArg(request, "elementId")
+		let text = try stringArg(request, "text")
+		let resolved = try observedElement(snapshotId: snapshotId, elementId: elementId)
+		if !isAttributeSettable(resolved.element, kAXValueAttribute as CFString) {
+			throw BridgeFailure(message: "Element '\(elementId)' does not allow setting its value. Use click/type instead.", code: "value_not_settable")
+		}
+
+		activateApp(pid: resolved.snapshot.pid)
+		let error = AXUIElementSetAttributeValue(resolved.element, kAXValueAttribute as CFString, text as CFTypeRef)
+		guard error == .success else {
+			throw BridgeFailure(message: "Failed to set the value of element '\(elementId)'.", code: "input_failed")
+		}
+		return ["set": true]
 	}
 }
 

@@ -21,7 +21,29 @@ export type ComputerUseAction =
   | 'scroll'
   | 'type'
   | 'keypress'
-  | 'wait';
+  | 'wait'
+  | 'set_value'
+  | 'secondary_action';
+
+export interface ComputerUseElement {
+  elementId: string;
+  depth?: number;
+  role?: string;
+  subrole?: string;
+  title?: string;
+  description?: string;
+  value?: string;
+  enabled?: boolean;
+  focused?: boolean;
+  settable?: boolean;
+  actions?: string[];
+  frame?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+}
 
 export interface ComputerUseInput {
   action: ComputerUseAction;
@@ -29,11 +51,13 @@ export interface ComputerUseInput {
   windowTitle?: string;
   x?: number;
   y?: number;
+  elementId?: string;
   button?: 'left' | 'right' | 'wheel' | 'back' | 'forward';
   path?: Array<{ x: number; y: number }>;
   scrollX?: number;
   scrollY?: number;
   text?: string;
+  accessibilityAction?: string;
   keys?: string[];
   ms?: number;
   captureId?: string;
@@ -56,6 +80,10 @@ export interface ComputerUseDetails {
     timestamp: number;
     coordinateSpace: 'window-relative-screenshot-pixels';
   };
+  ui?: {
+    focusedElementId?: string;
+    elements: ComputerUseElement[];
+  };
 }
 
 interface PermissionStatus {
@@ -76,6 +104,9 @@ interface CurrentCapture {
   width: number;
   height: number;
   timestamp: number;
+  snapshotId?: string;
+  focusedElementId?: string;
+  elements?: ComputerUseElement[];
 }
 
 interface HelperApp {
@@ -95,10 +126,13 @@ interface HelperWindow {
   isOnscreen: boolean;
 }
 
-interface HelperCapture {
+interface HelperCaptureState {
   pngBase64: string;
   width: number;
   height: number;
+  snapshotId?: string;
+  focusedElementId?: string;
+  elements?: ComputerUseElement[];
 }
 
 interface FrontmostResult {
@@ -125,20 +159,26 @@ interface RuntimeState {
   pending: Map<string, PendingRequest>;
   requestSequence: number;
   queueTail: Promise<void>;
+  helperBuilt: boolean;
+  permissionStatus?: PermissionStatus;
+  permissionCheckedAt?: number;
 }
 
 const TOOL_NAME = 'computer_use';
 const DEFAULT_WAIT_MS = 1000;
-const ACTION_SETTLE_MS = 250;
+const ACTION_SETTLE_MS = 120;
 const COMMAND_TIMEOUT_MS = 15_000;
 const CAPTURE_TIMEOUT_MS = 20_000;
 const BUILD_TIMEOUT_MS = 120_000;
+const PERMISSION_CACHE_MS = 15_000;
 const HELPER_PATH = join(getPiAgentRuntimeDir(), 'helpers', 'computer-use', 'bridge');
 const HELPER_SOURCE_PATH = join(dirname(fileURLToPath(import.meta.url)), 'native', 'bridge.swift');
 
 const MISSING_TARGET_ERROR = "No current controlled window. Use computer_use with action='observe' first.";
 const STALE_CAPTURE_ERROR = "The requested action used an older screenshot. Use computer_use with action='observe' to refresh the current window state.";
 const TARGET_GONE_ERROR = "The current controlled window is no longer available. Use computer_use with action='observe' to choose a new target window.";
+const MISSING_ELEMENTS_ERROR = "No current accessibility element map. Use computer_use with action='observe' to refresh element IDs before targeting elements.";
+const STALE_ELEMENT_ERROR = "The requested accessibility element is stale. Use computer_use with action='observe' to refresh element IDs before targeting elements.";
 const ACCESSIBILITY_ERROR = 'computer_use needs Accessibility. Grant it to the app or terminal running personal-agent, then retry.';
 const SCREEN_RECORDING_ERROR = 'computer_use needs Screen Recording. Grant it to Personal Agent or the terminal running personal-agent, then retry.';
 
@@ -147,6 +187,7 @@ const runtimeState: RuntimeState = {
   pending: new Map(),
   requestSequence: 0,
   queueTail: Promise.resolve(),
+  helperBuilt: false,
 };
 
 class HelperTransportError extends Error {
@@ -280,6 +321,16 @@ export function normalizeComputerUseAction(rawAction: string): ComputerUseAction
       return 'keypress';
     case 'wait':
       return 'wait';
+    case 'set_value':
+    case 'set-value':
+    case 'setvalue':
+      return 'set_value';
+    case 'secondary_action':
+    case 'secondary-action':
+    case 'secondaryaction':
+    case 'perform_accessibility_action':
+    case 'perform-accessibility-action':
+      return 'secondary_action';
     default:
       throw new Error(`Unsupported computer_use action '${rawAction}'.`);
   }
@@ -373,6 +424,9 @@ export function prepareComputerUseArguments(args: unknown): ComputerUseInput {
   if (typeof input.y === 'number') {
     prepared.y = input.y;
   }
+  if (typeof input.elementId === 'string') {
+    prepared.elementId = input.elementId;
+  }
   if (typeof input.button === 'string') {
     prepared.button = input.button as ComputerUseInput['button'];
   }
@@ -384,6 +438,9 @@ export function prepareComputerUseArguments(args: unknown): ComputerUseInput {
   }
   if (typeof input.text === 'string') {
     prepared.text = input.text;
+  }
+  if (typeof input.accessibilityAction === 'string') {
+    prepared.accessibilityAction = input.accessibilityAction;
   }
   if (typeof input.ms === 'number') {
     prepared.ms = input.ms;
@@ -479,6 +536,95 @@ function choosePreferredWindow(windows: HelperWindow[], appName: string): Helper
   }
 
   return [...candidates].sort((left, right) => scoreWindow(right) - scoreWindow(left))[0]!;
+}
+
+function currentTargetOrThrow(): CurrentTarget {
+  const current = runtimeState.currentTarget;
+  if (!current) {
+    throw new Error(MISSING_TARGET_ERROR);
+  }
+  return current;
+}
+
+function normalizeHelperActionError(error: unknown): Error {
+  if (error instanceof HelperCommandError) {
+    switch (error.code) {
+      case 'window_not_found':
+        return new Error(TARGET_GONE_ERROR);
+      case 'invalid_snapshot':
+        return new Error(MISSING_ELEMENTS_ERROR);
+      case 'invalid_element_id':
+        return new Error(STALE_ELEMENT_ERROR);
+      default:
+        return error;
+    }
+  }
+
+  return normalizeError(error);
+}
+
+function sanitizeSummaryText(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.replace(/\s+/g, ' ').trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  if (trimmed.length <= 80) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, 77)}...`;
+}
+
+function formatElementSummary(element: ComputerUseElement): string {
+  const role = element.role ?? 'AXElement';
+  const parts = [`- ${element.elementId} ${role}`];
+  if (element.subrole) {
+    parts.push(`/${element.subrole}`);
+  }
+
+  const labels = [
+    sanitizeSummaryText(element.title),
+    sanitizeSummaryText(element.description),
+    sanitizeSummaryText(element.value),
+  ].filter((value): value is string => Boolean(value));
+
+  if (labels.length > 0) {
+    parts.push(` ${JSON.stringify(labels.join(' — '))}`);
+  }
+  if (element.focused) {
+    parts.push(' [focused]');
+  }
+  if (element.settable) {
+    parts.push(' [settable]');
+  }
+  if (element.frame) {
+    parts.push(` @ (${Math.round(element.frame.x)},${Math.round(element.frame.y)}) ${Math.round(element.frame.width)}x${Math.round(element.frame.height)}`);
+  }
+  if (Array.isArray(element.actions) && element.actions.length > 0) {
+    parts.push(` actions=${element.actions.slice(0, 3).join(',')}`);
+  }
+
+  return parts.join('');
+}
+
+function buildObserveText(target: CurrentTarget, elements: ComputerUseElement[], focusedElementId?: string): string {
+  const header = `Captured ${target.appName} — ${target.windowTitle}. Coordinates are window-relative screenshot pixels.`;
+  if (elements.length === 0) {
+    return `${header}\nNo accessibility elements were found. Fall back to coordinates in this screenshot if needed.`;
+  }
+
+  const visibleLimit = 40;
+  const shown = elements.slice(0, visibleLimit).map(formatElementSummary).join('\n');
+  const focusedLine = focusedElementId ? `Focused element: ${focusedElementId}.\n` : '';
+  const moreLine = elements.length > visibleLimit
+    ? `\n… ${elements.length - visibleLimit} more accessibility elements not shown.`
+    : '';
+
+  return `${header}\n${focusedLine}Accessibility elements (${Math.min(elements.length, visibleLimit)} shown of ${elements.length}):\n${shown}${moreLine}`;
 }
 
 function rejectAllPending(error: Error): void {
@@ -600,6 +746,10 @@ async function runProcess(command: string, args: string[], timeoutMs: number, si
 }
 
 async function ensureHelperBuilt(signal?: AbortSignal): Promise<void> {
+  if (runtimeState.helperBuilt) {
+    return;
+  }
+
   const helperExists = await isExecutable(HELPER_PATH);
   let needsBuild = !helperExists;
 
@@ -612,30 +762,32 @@ async function ensureHelperBuilt(signal?: AbortSignal): Promise<void> {
     }
   }
 
-  if (!needsBuild) {
-    return;
+  if (needsBuild) {
+    await mkdir(dirname(HELPER_PATH), { recursive: true });
+    await runProcess('xcrun', [
+      'swiftc',
+      '-O',
+      '-framework',
+      'Foundation',
+      '-framework',
+      'AppKit',
+      '-framework',
+      'ApplicationServices',
+      '-framework',
+      'ImageIO',
+      '-framework',
+      'ScreenCaptureKit',
+      HELPER_SOURCE_PATH,
+      '-o',
+      HELPER_PATH,
+    ], BUILD_TIMEOUT_MS, signal);
+
+    if (!(await isExecutable(HELPER_PATH))) {
+      throw new Error(`Failed to build computer_use helper at ${HELPER_PATH}.`);
+    }
   }
 
-  await mkdir(dirname(HELPER_PATH), { recursive: true });
-  await runProcess('xcrun', [
-    'swiftc',
-    '-O',
-    '-framework',
-    'Foundation',
-    '-framework',
-    'AppKit',
-    '-framework',
-    'ApplicationServices',
-    '-framework',
-    'ImageIO',
-    HELPER_SOURCE_PATH,
-    '-o',
-    HELPER_PATH,
-  ], BUILD_TIMEOUT_MS, signal);
-
-  if (!(await isExecutable(HELPER_PATH))) {
-    throw new Error(`Failed to build computer_use helper at ${HELPER_PATH}.`);
-  }
+  runtimeState.helperBuilt = true;
 }
 
 async function startHelper(): Promise<ChildProcessWithoutNullStreams> {
@@ -766,8 +918,14 @@ async function ensureReady(signal?: AbortSignal): Promise<void> {
   throwIfAborted(signal);
   await ensureHelperBuilt(signal);
   await ensureHelperProcess();
-  const permissions = await checkPermissions(signal);
-  if (!permissions.accessibility) {
+
+  const now = Date.now();
+  if (!runtimeState.permissionStatus || !runtimeState.permissionCheckedAt || now - runtimeState.permissionCheckedAt > PERMISSION_CACHE_MS) {
+    runtimeState.permissionStatus = await checkPermissions(signal);
+    runtimeState.permissionCheckedAt = now;
+  }
+
+  if (!runtimeState.permissionStatus.accessibility) {
     throw new Error(ACCESSIBILITY_ERROR);
   }
 }
@@ -819,11 +977,99 @@ async function getFrontmost(signal?: AbortSignal): Promise<FrontmostResult> {
   return await helperCommand<FrontmostResult>('get_frontmost', {}, { signal });
 }
 
-async function captureWindow(windowId: number, signal?: AbortSignal): Promise<HelperCapture> {
-  return await helperCommand<HelperCapture>('capture_window', { windowId }, {
+function normalizeHelperElement(value: unknown): ComputerUseElement | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  const elementId = typeof record.elementId === 'string' ? record.elementId : undefined;
+  if (!elementId) {
+    return undefined;
+  }
+
+  const normalized: ComputerUseElement = {
+    elementId,
+  };
+
+  if (typeof record.depth === 'number' && Number.isFinite(record.depth)) {
+    normalized.depth = Math.max(0, Math.trunc(record.depth));
+  }
+  if (typeof record.role === 'string') {
+    normalized.role = record.role;
+  }
+  if (typeof record.subrole === 'string') {
+    normalized.subrole = record.subrole;
+  }
+  if (typeof record.title === 'string') {
+    normalized.title = record.title;
+  }
+  if (typeof record.description === 'string') {
+    normalized.description = record.description;
+  }
+  if (typeof record.value === 'string') {
+    normalized.value = record.value;
+  }
+  if (typeof record.enabled === 'boolean') {
+    normalized.enabled = record.enabled;
+  }
+  if (record.focused === true) {
+    normalized.focused = true;
+  }
+  if (typeof record.settable === 'boolean') {
+    normalized.settable = record.settable;
+  }
+  if (Array.isArray(record.actions)) {
+    normalized.actions = record.actions
+      .filter((item): item is string => typeof item === 'string')
+      .map((item) => sanitizeSummaryText(item) ?? item);
+  }
+  if (record.frame && typeof record.frame === 'object' && !Array.isArray(record.frame)) {
+    const frame = record.frame as Record<string, unknown>;
+    if (typeof frame.x === 'number' && typeof frame.y === 'number' && typeof frame.width === 'number' && typeof frame.height === 'number') {
+      normalized.frame = {
+        x: frame.x,
+        y: frame.y,
+        width: frame.width,
+        height: frame.height,
+      };
+    }
+  }
+
+  return normalized;
+}
+
+async function captureWindowState(target: CurrentTarget, includeAccessibility: boolean, signal?: AbortSignal): Promise<HelperCaptureState> {
+  const result = await helperCommand<unknown>('capture_window_state', {
+    pid: target.pid,
+    windowId: target.windowId,
+    includeAccessibility,
+  }, {
     signal,
     timeoutMs: CAPTURE_TIMEOUT_MS,
   });
+
+  const record = result && typeof result === 'object' && !Array.isArray(result)
+    ? result as Record<string, unknown>
+    : {};
+
+  const pngBase64 = typeof record.pngBase64 === 'string' ? record.pngBase64 : undefined;
+  const width = Math.max(1, Math.trunc(toFiniteNumber(record.width, 1)));
+  const height = Math.max(1, Math.trunc(toFiniteNumber(record.height, 1)));
+  if (!pngBase64) {
+    throw new Error('computer_use helper returned an invalid screenshot payload.');
+  }
+
+  return {
+    pngBase64,
+    width,
+    height,
+    snapshotId: typeof record.snapshotId === 'string' ? record.snapshotId : undefined,
+    focusedElementId: typeof record.focusedElementId === 'string' ? record.focusedElementId : undefined,
+    elements: Array.isArray(record.elements)
+      ? record.elements.map(normalizeHelperElement).filter((item): item is ComputerUseElement => Boolean(item))
+      : undefined,
+  };
 }
 
 function updateCurrentState(target: CurrentTarget, capture: CurrentCapture): void {
@@ -968,20 +1214,27 @@ function randomCaptureId(): string {
   }
 }
 
-async function captureTarget(target: CurrentTarget, action: ComputerUseAction, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
-  let image: HelperCapture;
+async function captureTarget(
+  target: CurrentTarget,
+  action: ComputerUseAction,
+  signal: AbortSignal | undefined,
+  options?: { includeAccessibility?: boolean },
+): Promise<AgentToolResult<ComputerUseDetails>> {
+  let image: HelperCaptureState;
 
   try {
-    image = await captureWindow(target.windowId, signal);
+    image = await captureWindowState(target, options?.includeAccessibility === true, signal);
   } catch (error) {
     if (error instanceof HelperCommandError && error.code === 'capture_failed') {
       const permissions = await checkPermissions(signal).catch(() => undefined);
+      runtimeState.permissionStatus = permissions;
+      runtimeState.permissionCheckedAt = Date.now();
       if (permissions?.screenRecording === false) {
         throw new Error(SCREEN_RECORDING_ERROR);
       }
     }
 
-    throw error;
+    throw normalizeHelperActionError(error);
   }
 
   const capture: CurrentCapture = {
@@ -989,6 +1242,9 @@ async function captureTarget(target: CurrentTarget, action: ComputerUseAction, s
     width: image.width,
     height: image.height,
     timestamp: Date.now(),
+    snapshotId: image.snapshotId,
+    focusedElementId: image.focusedElementId,
+    elements: image.elements,
   };
   updateCurrentState(target, capture);
 
@@ -1011,9 +1267,20 @@ async function captureTarget(target: CurrentTarget, action: ComputerUseAction, s
     },
   };
 
+  const text = options?.includeAccessibility === true
+    ? buildObserveText(target, capture.elements ?? [], capture.focusedElementId)
+    : `Updated ${target.appName} — ${target.windowTitle}. Coordinates are window-relative screenshot pixels. Use action='observe' for fresh accessibility element IDs.`;
+
+  if (options?.includeAccessibility === true) {
+    details.ui = {
+      focusedElementId: capture.focusedElementId,
+      elements: capture.elements ?? [],
+    };
+  }
+
   return {
     content: [
-      { type: 'text', text: `${action === 'observe' ? 'Captured' : 'Updated'} ${target.appName} — ${target.windowTitle}. Coordinates are window-relative screenshot pixels.` },
+      { type: 'text', text },
       { type: 'image', data: image.pngBase64, mimeType: 'image/png' },
     ],
     details,
@@ -1033,6 +1300,24 @@ function validateCapture(captureId?: string): CurrentCapture {
   return capture;
 }
 
+function validateElementTarget(input: ComputerUseInput): { capture: CurrentCapture; snapshotId: string; elementId: string } {
+  const capture = validateCapture(input.captureId);
+  const elementId = typeof input.elementId === 'string' ? input.elementId.trim() : '';
+  if (elementId.length === 0) {
+    throw new Error('computer_use element-targeted actions require a non-empty elementId from the latest observe result.');
+  }
+
+  if (!capture.snapshotId) {
+    throw new Error(MISSING_ELEMENTS_ERROR);
+  }
+
+  return {
+    capture,
+    snapshotId: capture.snapshotId,
+    elementId,
+  };
+}
+
 function ensurePointInCapture(x: number, y: number, capture: CurrentCapture, prefix = 'Coordinates'): void {
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     throw new Error(`${prefix} must be finite numbers.`);
@@ -1048,7 +1333,7 @@ async function runCoordinateAction(
   signal: AbortSignal | undefined,
   dispatch: (target: CurrentTarget) => Promise<void>,
 ): Promise<AgentToolResult<ComputerUseDetails>> {
-  const target = await resolveCurrentTarget(signal);
+  const target = currentTargetOrThrow();
   await dispatch(target);
   await sleep(ACTION_SETTLE_MS, signal);
   return await captureTarget(target, action, signal);
@@ -1056,13 +1341,31 @@ async function runCoordinateAction(
 
 async function performObserve(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
   const target = await resolveObserveTarget(input, signal);
-  return await captureTarget(target, 'observe', signal);
+  return await captureTarget(target, 'observe', signal, { includeAccessibility: true });
 }
 
 async function performClick(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
   const capture = validateCapture(input.captureId);
+
+  if (input.elementId) {
+    const { snapshotId, elementId } = validateElementTarget(input);
+    const target = currentTargetOrThrow();
+    try {
+      await helperCommand('click_element', {
+        snapshotId,
+        elementId,
+        button: input.button ?? 'left',
+        clicks: 1,
+      }, { signal });
+    } catch (error) {
+      throw normalizeHelperActionError(error);
+    }
+    await sleep(ACTION_SETTLE_MS, signal);
+    return await captureTarget(target, 'click', signal);
+  }
+
   if (typeof input.x !== 'number' || typeof input.y !== 'number') {
-    throw new Error('computer_use click actions require numeric x and y.');
+    throw new Error('computer_use click actions require either elementId or numeric x and y.');
   }
   ensurePointInCapture(input.x, input.y, capture);
 
@@ -1082,8 +1385,26 @@ async function performClick(input: ComputerUseInput, signal?: AbortSignal): Prom
 
 async function performDoubleClick(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
   const capture = validateCapture(input.captureId);
+
+  if (input.elementId) {
+    const { snapshotId, elementId } = validateElementTarget(input);
+    const target = currentTargetOrThrow();
+    try {
+      await helperCommand('click_element', {
+        snapshotId,
+        elementId,
+        button: 'left',
+        clicks: 2,
+      }, { signal });
+    } catch (error) {
+      throw normalizeHelperActionError(error);
+    }
+    await sleep(ACTION_SETTLE_MS, signal);
+    return await captureTarget(target, 'double_click', signal);
+  }
+
   if (typeof input.x !== 'number' || typeof input.y !== 'number') {
-    throw new Error('computer_use double_click actions require numeric x and y.');
+    throw new Error('computer_use double_click actions require either elementId or numeric x and y.');
   }
   ensurePointInCapture(input.x, input.y, capture);
 
@@ -1171,14 +1492,83 @@ async function performType(input: ComputerUseInput, signal?: AbortSignal): Promi
     throw new Error('computer_use type actions require a non-empty text string.');
   }
 
-  const target = await resolveCurrentTarget(signal);
-  await helperCommand('type_text', {
-    pid: target.pid,
-    text,
-  }, { signal, timeoutMs: Math.max(COMMAND_TIMEOUT_MS, text.length * 40 + 3_000) });
+  const target = currentTargetOrThrow();
+  if (input.elementId) {
+    const { snapshotId, elementId } = validateElementTarget(input);
+    try {
+      await helperCommand('set_element_value', {
+        snapshotId,
+        elementId,
+        text,
+      }, { signal });
+    } catch (error) {
+      if (!(error instanceof HelperCommandError) || error.code !== 'value_not_settable') {
+        throw normalizeHelperActionError(error);
+      }
+
+      try {
+        await helperCommand('click_element', {
+          snapshotId,
+          elementId,
+          button: 'left',
+          clicks: 1,
+        }, { signal });
+        await helperCommand('type_text', {
+          pid: target.pid,
+          text,
+        }, { signal, timeoutMs: Math.max(COMMAND_TIMEOUT_MS, text.length * 30 + 2_000) });
+      } catch (fallbackError) {
+        throw normalizeHelperActionError(fallbackError);
+      }
+    }
+  } else {
+    await helperCommand('type_text', {
+      pid: target.pid,
+      text,
+    }, { signal, timeoutMs: Math.max(COMMAND_TIMEOUT_MS, text.length * 30 + 2_000) });
+  }
 
   await sleep(ACTION_SETTLE_MS, signal);
   return await captureTarget(target, 'type', signal);
+}
+
+async function performSetValue(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
+  const text = typeof input.text === 'string' ? input.text : '';
+  if (text.length === 0) {
+    throw new Error('computer_use set_value actions require a non-empty text string.');
+  }
+
+  const { snapshotId, elementId } = validateElementTarget(input);
+  const target = currentTargetOrThrow();
+  try {
+    await helperCommand('set_element_value', {
+      snapshotId,
+      elementId,
+      text,
+    }, { signal });
+  } catch (error) {
+    throw normalizeHelperActionError(error);
+  }
+
+  await sleep(ACTION_SETTLE_MS, signal);
+  return await captureTarget(target, 'set_value', signal);
+}
+
+async function performSecondaryAction(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
+  const { snapshotId, elementId } = validateElementTarget(input);
+  const target = currentTargetOrThrow();
+  try {
+    await helperCommand('perform_element_action', {
+      snapshotId,
+      elementId,
+      accessibilityAction: input.accessibilityAction,
+    }, { signal });
+  } catch (error) {
+    throw normalizeHelperActionError(error);
+  }
+
+  await sleep(ACTION_SETTLE_MS, signal);
+  return await captureTarget(target, 'secondary_action', signal);
 }
 
 async function performKeypress(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
@@ -1187,7 +1577,7 @@ async function performKeypress(input: ComputerUseInput, signal?: AbortSignal): P
     throw new Error('computer_use keypress actions require a non-empty keys array.');
   }
 
-  const target = await resolveCurrentTarget(signal);
+  const target = currentTargetOrThrow();
   await helperCommand('keypress', {
     pid: target.pid,
     keys,
@@ -1198,16 +1588,14 @@ async function performKeypress(input: ComputerUseInput, signal?: AbortSignal): P
 }
 
 async function performWait(input: ComputerUseInput, signal?: AbortSignal): Promise<AgentToolResult<ComputerUseDetails>> {
-  if (!runtimeState.currentTarget) {
-    throw new Error(MISSING_TARGET_ERROR);
-  }
+  currentTargetOrThrow();
 
   const ms = typeof input.ms === 'number' && Number.isFinite(input.ms)
     ? Math.max(0, Math.min(60_000, Math.round(input.ms)))
     : DEFAULT_WAIT_MS;
 
   await sleep(ms, signal);
-  const target = await resolveCurrentTarget(signal);
+  const target = currentTargetOrThrow();
   return await captureTarget(target, 'wait', signal);
 }
 
@@ -1231,6 +1619,10 @@ async function performAction(input: ComputerUseInput, signal?: AbortSignal): Pro
       return await performKeypress(input, signal);
     case 'wait':
       return await performWait(input, signal);
+    case 'set_value':
+      return await performSetValue(input, signal);
+    case 'secondary_action':
+      return await performSecondaryAction(input, signal);
     default:
       throw new Error(`Unsupported computer_use action '${input.action satisfies never}'.`);
   }
@@ -1322,6 +1714,8 @@ export function stopComputerUseHelper(): void {
   const helper = runtimeState.helper;
   runtimeState.helper = undefined;
   runtimeState.stdoutBuffer = '';
+  runtimeState.permissionStatus = undefined;
+  runtimeState.permissionCheckedAt = undefined;
 
   if (helper && helper.exitCode === null && !helper.killed) {
     helper.kill('SIGTERM');
