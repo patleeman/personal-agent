@@ -26,6 +26,16 @@ const macDevAppDir = resolve(repoRoot, 'dist', 'dev-desktop');
 const desktopVariant = 'testing';
 const testingProductSuffix = ' Testing';
 
+function buildDesktopLaunchEnv(baseEnv = process.env) {
+  return {
+    ...baseEnv,
+    PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
+    ...(baseEnv.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim()
+      ? {}
+      : { PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' }),
+  };
+}
+
 if (!existsSync(desktopMainFile)) {
   console.error(`Missing desktop entrypoint: ${desktopMainFile}`);
   process.exit(1);
@@ -173,9 +183,8 @@ async function launchMacDevApp() {
     stdio: 'ignore',
     cwd: packageDir,
     env: {
-      ...process.env,
+      ...buildDesktopLaunchEnv(process.env),
       PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
-      PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
     },
     detached: true,
   });
@@ -190,10 +199,7 @@ if (process.platform === 'darwin') {
 const result = spawnSync(electronBinary, [desktopMainFile], {
   stdio: 'inherit',
   cwd: packageDir,
-  env: {
-    ...process.env,
-    PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
-  },
+  env: buildDesktopLaunchEnv(process.env),
 });
 
 process.exit(result.status ?? 1);

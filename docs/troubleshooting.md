@@ -169,6 +169,8 @@ pa daemon service uninstall
 
 Quitting the desktop app does **not** stop that external daemon. Stop or uninstall it explicitly if you want the whole local stack off.
 
+For fast restart loops while testing, launch with `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1`. The desktop dev launch script now sets that by default unless you already overrode the variable.
+
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 
 Recent desktop builds also try to surface the failure inside the main window:

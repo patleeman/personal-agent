@@ -8,6 +8,11 @@ export interface DesktopQuitConfirmationBehavior {
   keepsExternalDaemonRunning?: boolean;
 }
 
+export function shouldSkipDesktopQuitConfirmation(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw = env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim().toLowerCase();
+  return raw === '1' || raw === 'true' || raw === 'yes';
+}
+
 function buildDesktopQuitDetail(behavior: DesktopQuitConfirmationBehavior): string {
   if (behavior.keepsExternalDaemonRunning) {
     return 'Closing the window only hides it. Quitting closes the menu bar app, but an external daemon will keep running for automations until you stop it separately.';
@@ -39,6 +44,10 @@ export async function confirmDesktopQuit(
   icon?: string,
   behavior: DesktopQuitConfirmationBehavior = {},
 ): Promise<boolean> {
+  if (shouldSkipDesktopQuitConfirmation()) {
+    return true;
+  }
+
   const response = await dialogLike.showMessageBox(buildDesktopQuitConfirmationOptions(appName, icon, behavior));
   return response.response === 1;
 }

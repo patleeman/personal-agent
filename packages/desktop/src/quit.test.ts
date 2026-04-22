@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildDesktopQuitConfirmationOptions, confirmDesktopQuit } from './quit.js';
+import { buildDesktopQuitConfirmationOptions, confirmDesktopQuit, shouldSkipDesktopQuitConfirmation } from './quit.js';
 
 describe('buildDesktopQuitConfirmationOptions', () => {
   it('builds a conservative quit confirmation for the menu bar app', () => {
@@ -42,6 +42,15 @@ describe('buildDesktopQuitConfirmationOptions', () => {
   });
 });
 
+describe('shouldSkipDesktopQuitConfirmation', () => {
+  it('recognizes explicit opt-out environment flags', () => {
+    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' })).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: ' true ' })).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: 'yes' })).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '0' })).toBe(false);
+  });
+});
+
 describe('confirmDesktopQuit', () => {
   it('returns true when the user confirms the quit action', async () => {
     const dialogLike = {
@@ -71,5 +80,25 @@ describe('confirmDesktopQuit', () => {
     expect(dialogLike.showMessageBox).toHaveBeenCalledWith(buildDesktopQuitConfirmationOptions('Personal Agent', undefined, {
       keepsExternalDaemonRunning: true,
     }));
+  });
+
+  it('skips the dialog entirely when the launch disables quit confirmation', async () => {
+    const previous = process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION;
+    process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION = '1';
+
+    try {
+      const dialogLike = {
+        showMessageBox: vi.fn(),
+      };
+
+      await expect(confirmDesktopQuit(dialogLike, 'Personal Agent')).resolves.toBe(true);
+      expect(dialogLike.showMessageBox).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined) {
+        delete process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION;
+      } else {
+        process.env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION = previous;
+      }
+    }
   });
 });
