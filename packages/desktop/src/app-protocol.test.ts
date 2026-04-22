@@ -233,6 +233,39 @@ describe('createDesktopProtocolHandler', () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
+  it('allows PUT requests for local knowledge workspace writes', async () => {
+    const dispatchDesktopLocalApiRequest = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+      },
+      body: Buffer.from(JSON.stringify({ ok: true }), 'utf-8'),
+    });
+    const handler = createDesktopProtocolHandler({
+      loadLocalApiModule: vi.fn().mockResolvedValue(createLocalApiModuleMock({
+        dispatchDesktopLocalApiRequest,
+      })),
+    });
+
+    const response = await handler(new Request('personal-agent://app/api/vault/file', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'notes/test.md', content: '# test' }),
+    }));
+
+    expect(dispatchDesktopLocalApiRequest).toHaveBeenCalledWith({
+      method: 'PUT',
+      path: '/api/vault/file',
+      body: { id: 'notes/test.md', content: '# test' },
+      headers: {
+        'content-type': 'application/json',
+      },
+    });
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
   it('proxies companion requests through loopback when the daemon listens on a wildcard host', async () => {
     daemonMocks.loadDaemonConfig.mockReturnValue({
       companion: {

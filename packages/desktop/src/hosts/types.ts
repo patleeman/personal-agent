@@ -343,12 +343,12 @@ export interface HostController {
   getStatus(): Promise<HostStatus>;
   openNewConversation(): Promise<string>;
   dispatchApiRequest(input: {
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     path: string;
     body?: unknown;
     headers?: Record<string, string>;
   }): Promise<HostApiDispatchResult>;
-  invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
+  invokeLocalApi(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown>;
   readAppStatus?(): Promise<unknown>;
   readDaemonState?(): Promise<unknown>;
   readSessions?(): Promise<unknown>;

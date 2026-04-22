@@ -40,7 +40,7 @@ async function fetchWithRetry(input: RequestInfo | URL, init?: RequestInit): Pro
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 
-async function requestJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
+async function requestJson<T>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<T> {
   const requestPath = buildApiPath(path);
   const res = await fetchWithRetry(requestPath, {
     method,
@@ -62,6 +62,10 @@ async function get<T>(path: string): Promise<T> {
 
 async function post<T>(path: string, body?: unknown): Promise<T> {
   return requestJson<T>('POST', path, body);
+}
+
+async function put<T>(path: string, body?: unknown): Promise<T> {
+  return requestJson<T>('PUT', path, body);
 }
 
 async function patch<T>(path: string, body?: unknown): Promise<T> {
@@ -1295,7 +1299,7 @@ export const vaultApi = {
     get<VaultFileContent>(`/vault/file?id=${encodeURIComponent(id)}`),
 
   writeFile: (id: string, content: string) =>
-    requestJson<VaultEntry>('PUT', '/vault/file', { id, content }),
+    put<VaultEntry>('/vault/file', { id, content }),
 
   deleteFile: (id: string) =>
     del<{ ok: boolean }>(`/vault/file?id=${encodeURIComponent(id)}`),

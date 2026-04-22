@@ -180,7 +180,7 @@ import { createServerRouteContext } from './routeContext.js';
 type RouteHandler = (req: LocalApiRequest, res: LocalApiResponse) => unknown;
 
 interface RegisteredRoute {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   pattern: RegExp;
   keys: string[];
@@ -410,7 +410,7 @@ function createLocalApiRequest(input: {
   return request;
 }
 
-function createRouteCollector(routes: RegisteredRoute[]): Pick<{ get: unknown; post: unknown; patch: unknown; delete: unknown; use: unknown }, 'get' | 'post' | 'patch' | 'delete' | 'use'> {
+function createRouteCollector(routes: RegisteredRoute[]): Pick<{ get: unknown; put: unknown; post: unknown; patch: unknown; delete: unknown; use: unknown }, 'get' | 'put' | 'post' | 'patch' | 'delete' | 'use'> {
   const register = (method: RegisteredRoute['method']) => (path: string, ...handlers: RouteHandler[]) => {
     const handler = handlers[handlers.length - 1];
     if (!handler) {
@@ -423,6 +423,7 @@ function createRouteCollector(routes: RegisteredRoute[]): Pick<{ get: unknown; p
 
   return {
     get: register('GET'),
+    put: register('PUT'),
     post: register('POST'),
     patch: register('PATCH'),
     delete: register('DELETE'),
@@ -664,7 +665,7 @@ function readLocalApiError(response: DesktopLocalApiDispatchResult): string {
 
 function findMatchingRoute(
   routes: RegisteredRoute[],
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE',
   pathname: string,
 ): RegisteredRoute | undefined {
   return routes.find((candidate) => candidate.method === method && candidate.pattern.test(pathname));
@@ -1315,7 +1316,7 @@ export async function subscribeDesktopLocalApiStream(
 }
 
 export async function dispatchDesktopLocalApiRequest(input: {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   body?: unknown;
   headers?: Record<string, string>;
@@ -1358,7 +1359,7 @@ export async function dispatchDesktopLocalApiRequest(input: {
 }
 
 export async function invokeDesktopLocalApi<T = unknown>(input: {
-  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   path: string;
   body?: unknown;
   headers?: Record<string, string>;

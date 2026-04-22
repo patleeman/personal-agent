@@ -245,7 +245,7 @@ export function createDesktopProtocolHandler(options?: {
     }
 
     if (url.pathname.startsWith('/api/')) {
-      if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'PATCH' && request.method !== 'DELETE') {
+      if (request.method !== 'GET' && request.method !== 'POST' && request.method !== 'PUT' && request.method !== 'PATCH' && request.method !== 'DELETE') {
         return new Response('Method not allowed', { status: 405 });
       }
 

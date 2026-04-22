@@ -85,7 +85,7 @@ export class LocalHostController implements HostController {
   }
 
   async dispatchApiRequest(input: {
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     path: string;
     body?: unknown;
     headers?: Record<string, string>;
@@ -94,7 +94,7 @@ export class LocalHostController implements HostController {
     return module.dispatchDesktopLocalApiRequest(input);
   }
 
-  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+  async invokeLocalApi(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.invokeDesktopLocalApi({ method, path, body });
   }

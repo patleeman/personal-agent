@@ -155,7 +155,7 @@ export class SshHostController implements HostController {
   }
 
   async dispatchApiRequest(input: {
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     path: string;
     body?: unknown;
     headers?: Record<string, string>;
@@ -430,7 +430,7 @@ export class SshHostController implements HostController {
     return jsonResult(501, { error: `SSH remote route not supported: ${pathname}` });
   }
 
-  async invokeLocalApi(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
+  async invokeLocalApi(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: unknown): Promise<unknown> {
     const response = await this.dispatchApiRequest({ method, path, body });
     return parseApiDispatchResult(response);
   }

@@ -491,7 +491,7 @@ export async function continueConversationInHost(
 export async function dispatchConversationExecutionRequest(
   hostManager: HostManager,
   input: {
-    method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+    method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
     path: string;
     body?: unknown;
     headers?: Record<string, string>;
