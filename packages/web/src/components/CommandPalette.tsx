@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAppData } from '../app/contexts';
 import { api, vaultApi } from '../client/api';
 import {
   COMMAND_PALETTE_SCOPE_OPTIONS,
   COMMAND_PALETTE_SCOPE_SECTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
+  isCommandPaletteThreadDataLoading,
   searchCommandPaletteItems,
+  shouldBootstrapCommandPaletteThreads,
   type CommandPaletteItem,
   type CommandPaletteScope,
   type CommandPaletteSection,
@@ -185,13 +188,16 @@ export function CommandPalette() {
   const location = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const requestedThreadBootstrapRef = useRef(false);
   const macPlatform = useMemo(() => isMacPlatform(), []);
+  const { sessions } = useAppData();
   const {
     pinnedSessions,
     tabs,
     archivedSessions,
     openSession,
     loading: sessionsLoading,
+    refetch,
   } = useConversations();
   const [open, setOpen] = useState(false);
   const [scope, setScope] = useState<CommandPaletteScope>('threads');
@@ -293,6 +299,26 @@ export function CommandPalette() {
     window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
     return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, handleOpenPalette);
   }, [openPalette]);
+
+  useEffect(() => {
+    if (sessions !== null || !open) {
+      requestedThreadBootstrapRef.current = false;
+    }
+
+    if (!shouldBootstrapCommandPaletteThreads({
+      open,
+      scope,
+      sessions,
+      alreadyRequested: requestedThreadBootstrapRef.current,
+    })) {
+      return;
+    }
+
+    requestedThreadBootstrapRef.current = true;
+    void refetch().catch(() => {
+      // Keep the palette usable even if the eager thread bootstrap fails.
+    });
+  }, [open, refetch, scope, sessions]);
 
   useEffect(() => {
     if (!open) {
@@ -648,8 +674,9 @@ export function CommandPalette() {
   const visibleCount = visibleItems.length;
   const loadingSections = useMemo(() => {
     const sections = new Set<CommandPaletteSection>();
+    const threadSessionsLoading = isCommandPaletteThreadDataLoading({ sessions, sessionsLoading });
 
-    if (sessionsLoading) {
+    if (threadSessionsLoading) {
       for (const section of COMMAND_PALETTE_SCOPE_SECTIONS[scope]) {
         if (section === 'open' || section === 'archived') {
           sections.add(section);
@@ -671,7 +698,7 @@ export function CommandPalette() {
     }
 
     return [...sections];
-  }, [conversationSearchLoading, fileItems.length, scope, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
+  }, [conversationSearchLoading, fileItems.length, scope, sessions, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
   const showSectionHeaders = groups.length > 1;
   const searchPlaceholder = scope === 'threads'
     ? 'Search threads…'

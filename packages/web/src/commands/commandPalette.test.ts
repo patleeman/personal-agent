@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { searchCommandPaletteItems, type CommandPaletteItem } from './commandPalette';
+import {
+  isCommandPaletteThreadDataLoading,
+  searchCommandPaletteItems,
+  shouldBootstrapCommandPaletteThreads,
+  type CommandPaletteItem,
+} from './commandPalette';
 
 interface TestAction {
   kind: string;
@@ -86,5 +91,57 @@ describe('command palette search', () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.total).toBe(2);
     expect(results[0]?.items.map((item) => item.id)).toEqual(['archived:beta']);
+  });
+
+  it('bootstraps thread results when the palette opens before sessions load', () => {
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: true,
+      scope: 'threads',
+      sessions: null,
+      alreadyRequested: false,
+    })).toBe(true);
+
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: true,
+      scope: 'search',
+      sessions: null,
+      alreadyRequested: false,
+    })).toBe(true);
+
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: true,
+      scope: 'files',
+      sessions: null,
+      alreadyRequested: false,
+    })).toBe(false);
+  });
+
+  it('does not re-bootstrap thread results after the first request or once sessions are loaded', () => {
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: true,
+      scope: 'threads',
+      sessions: null,
+      alreadyRequested: true,
+    })).toBe(false);
+
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: true,
+      scope: 'threads',
+      sessions: [],
+      alreadyRequested: false,
+    })).toBe(false);
+
+    expect(shouldBootstrapCommandPaletteThreads({
+      open: false,
+      scope: 'threads',
+      sessions: null,
+      alreadyRequested: false,
+    })).toBe(false);
+  });
+
+  it('treats unknown sessions as a loading state for thread sections', () => {
+    expect(isCommandPaletteThreadDataLoading({ sessions: null, sessionsLoading: false })).toBe(true);
+    expect(isCommandPaletteThreadDataLoading({ sessions: [], sessionsLoading: true })).toBe(true);
+    expect(isCommandPaletteThreadDataLoading({ sessions: [], sessionsLoading: false })).toBe(false);
   });
 });

@@ -44,6 +44,26 @@ export const COMMAND_PALETTE_SCOPE_OPTIONS: Array<{ value: CommandPaletteScope; 
   { value: 'search', label: 'Search all' },
 ];
 
+export function shouldBootstrapCommandPaletteThreads(options: {
+  open: boolean;
+  scope: CommandPaletteScope;
+  sessions: unknown[] | null;
+  alreadyRequested: boolean;
+}): boolean {
+  if (!options.open || options.sessions !== null || options.alreadyRequested) {
+    return false;
+  }
+
+  return options.scope === 'threads' || options.scope === 'search';
+}
+
+export function isCommandPaletteThreadDataLoading(options: {
+  sessions: unknown[] | null;
+  sessionsLoading: boolean;
+}): boolean {
+  return options.sessions === null || options.sessionsLoading;
+}
+
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   open: 12,
   archived: 8,

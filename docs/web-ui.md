@@ -63,7 +63,7 @@ Important behaviors:
 - selected transcript text now uses a context menu for reply and copy actions instead of inline buttons, and replying with a selection appends the quoted text to the current composer draft
 - the composer understands Pi-style whole-line bash shortcuts: `!command` runs bash and keeps the output in conversation context, while `!!command` runs bash without adding the output to LLM context
 - the desktop shell keeps open conversation tabs warm by prefetching transcript bootstrap state and keeping background live threads subscribed, so switching tabs can reuse hot cache instead of cold-loading the thread again
-- the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar
+- the Threads command palette keeps loading older saved conversations as you scroll, so history stays out of the main sidebar, and it now eagerly bootstraps thread/session data on first open so archived history is available even if the initial session snapshot has not landed yet
 - live threads update over SSE in browser mode and over the desktop event transport in local Electron mode
 - `Cmd/Ctrl+F` opens an in-app page search bar for the current surface, with `Enter` / `Shift+Enter` and `Cmd/Ctrl+G` / `Cmd/Ctrl+Shift+G` stepping through matches
 - conversation artifacts open inline in the thread workspace
