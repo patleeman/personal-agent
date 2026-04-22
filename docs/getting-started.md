@@ -99,6 +99,7 @@ pa ui install
 
 ```bash
 npm run desktop:start
+npm run desktop:start -- --no-quit-confirmation
 ```
 
 The desktop shell owns its own local backend while it is running. If a separate daemon is already healthy on the same machine, the desktop shell reuses it instead of failing startup. A separately managed web UI still is not reused.

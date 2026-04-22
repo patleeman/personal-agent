@@ -25,12 +25,17 @@ const sourceMacAppBundle = resolve(repoRoot, 'node_modules', 'electron', 'dist',
 const macDevAppDir = resolve(repoRoot, 'dist', 'dev-desktop');
 const desktopVariant = 'testing';
 const testingProductSuffix = ' Testing';
+const desktopLaunchArgs = process.argv.slice(2);
 
-function buildDesktopLaunchEnv(baseEnv = process.env) {
+function shouldSkipQuitConfirmationForLaunch(args = []) {
+  return args.includes('--no-quit-confirmation') || args.includes('--skip-quit-confirmation');
+}
+
+function buildDesktopLaunchEnv(baseEnv = process.env, args = []) {
   return {
     ...baseEnv,
     PERSONAL_AGENT_DESKTOP_VARIANT: desktopVariant,
-    ...(baseEnv.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim()
+    ...(baseEnv.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim() || !shouldSkipQuitConfirmationForLaunch(args)
       ? {}
       : { PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' }),
   };
@@ -179,11 +184,11 @@ async function waitForDetachedLaunch(child) {
 
 async function launchMacDevApp() {
   const { appBundlePath } = ensureMacDevAppBundle();
-  const child = spawn('open', ['-n', appBundlePath, '--args', desktopMainFile], {
+  const child = spawn('open', ['-n', appBundlePath, '--args', desktopMainFile, ...desktopLaunchArgs], {
     stdio: 'ignore',
     cwd: packageDir,
     env: {
-      ...buildDesktopLaunchEnv(process.env),
+      ...buildDesktopLaunchEnv(process.env, desktopLaunchArgs),
       PERSONAL_AGENT_DESKTOP_DEV_BUNDLE: '1',
     },
     detached: true,
@@ -196,10 +201,10 @@ if (process.platform === 'darwin') {
   await launchMacDevApp();
 }
 
-const result = spawnSync(electronBinary, [desktopMainFile], {
+const result = spawnSync(electronBinary, [desktopMainFile, ...desktopLaunchArgs], {
   stdio: 'inherit',
   cwd: packageDir,
-  env: buildDesktopLaunchEnv(process.env),
+  env: buildDesktopLaunchEnv(process.env, desktopLaunchArgs),
 });
 
 process.exit(result.status ?? 1);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildDesktopQuitConfirmationOptions, confirmDesktopQuit, shouldSkipDesktopQuitConfirmation } from './quit.js';
+import { buildDesktopQuitConfirmationOptions, confirmDesktopQuit, hasDesktopQuitConfirmationBypassArg, shouldSkipDesktopQuitConfirmation } from './quit.js';
 
 describe('buildDesktopQuitConfirmationOptions', () => {
   it('builds a conservative quit confirmation for the menu bar app', () => {
@@ -42,12 +42,25 @@ describe('buildDesktopQuitConfirmationOptions', () => {
   });
 });
 
+describe('hasDesktopQuitConfirmationBypassArg', () => {
+  it('recognizes explicit launch flags', () => {
+    expect(hasDesktopQuitConfirmationBypassArg(['node', 'main.js', '--no-quit-confirmation'])).toBe(true);
+    expect(hasDesktopQuitConfirmationBypassArg(['node', 'main.js', '--skip-quit-confirmation'])).toBe(true);
+    expect(hasDesktopQuitConfirmationBypassArg(['node', 'main.js'])).toBe(false);
+  });
+});
+
 describe('shouldSkipDesktopQuitConfirmation', () => {
   it('recognizes explicit opt-out environment flags', () => {
     expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '1' })).toBe(true);
     expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: ' true ' })).toBe(true);
     expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: 'yes' })).toBe(true);
     expect(shouldSkipDesktopQuitConfirmation({ PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION: '0' })).toBe(false);
+  });
+
+  it('recognizes launch arguments too', () => {
+    expect(shouldSkipDesktopQuitConfirmation({}, ['node', 'main.js', '--no-quit-confirmation'])).toBe(true);
+    expect(shouldSkipDesktopQuitConfirmation({}, ['node', 'main.js', '--skip-quit-confirmation'])).toBe(true);
   });
 });
 

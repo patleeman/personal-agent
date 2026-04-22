@@ -25,6 +25,7 @@ From the repo root:
 
 ```bash
 npm run desktop:start
+npm run desktop:start -- --no-quit-confirmation
 ```
 
 Useful build commands:
@@ -44,7 +45,7 @@ Behavior to expect:
 - hiding every window drops the app back to a menubar-only background mode
 - the native macOS About panel shows the Personal Agent icon plus the current Personal Agent and pinned Pi versions
 - quitting from the tray or app menu asks for confirmation, then shuts down the desktop-owned local backend; if an external daemon is already running outside the app, the quit dialog makes it clear the desktop app does not own or stop it
-- testing/dev launches can skip that quit confirmation with `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1`; the dev launch script now enables that by default unless you override it explicitly
+- testing/dev launches can skip that quit confirmation with `--no-quit-confirmation`; the desktop runtime also still honors `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1` when you need an environment override
 - the desktop shell uses the same web UI, not a separate native renderer
 - if desktop startup fails before the packaged web UI comes up, Electron opens a dedicated startup-error page with the failure message and the desktop logs path
 - if the renderer recovers from a route-level crash inside the normal shell, the fallback card shows the thrown error message under **Error details**

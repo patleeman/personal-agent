@@ -82,6 +82,7 @@ Other useful entry points:
 pa ui foreground --open      # desktop web UI
 pa ui install                # managed web UI service
 npm run desktop:start        # Electron desktop shell
+npm run desktop:start -- --no-quit-confirmation
 ```
 
 ## Common commands

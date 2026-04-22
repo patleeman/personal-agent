@@ -169,7 +169,7 @@ pa daemon service uninstall
 
 Quitting the desktop app does **not** stop that external daemon. Stop or uninstall it explicitly if you want the whole local stack off.
 
-For fast restart loops while testing, launch with `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1`. The desktop dev launch script now sets that by default unless you already overrode the variable.
+For fast restart loops while testing, launch with `npm run desktop:start -- --no-quit-confirmation`. The desktop runtime also honors `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1` if you need an environment override.
 
 If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
 

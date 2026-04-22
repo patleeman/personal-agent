@@ -8,9 +8,13 @@ export interface DesktopQuitConfirmationBehavior {
   keepsExternalDaemonRunning?: boolean;
 }
 
-export function shouldSkipDesktopQuitConfirmation(env: NodeJS.ProcessEnv = process.env): boolean {
+export function hasDesktopQuitConfirmationBypassArg(argv: string[] = process.argv): boolean {
+  return argv.includes('--no-quit-confirmation') || argv.includes('--skip-quit-confirmation');
+}
+
+export function shouldSkipDesktopQuitConfirmation(env: NodeJS.ProcessEnv = process.env, argv: string[] = process.argv): boolean {
   const raw = env.PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION?.trim().toLowerCase();
-  return raw === '1' || raw === 'true' || raw === 'yes';
+  return raw === '1' || raw === 'true' || raw === 'yes' || hasDesktopQuitConfirmationBypassArg(argv);
 }
 
 function buildDesktopQuitDetail(behavior: DesktopQuitConfirmationBehavior): string {
