@@ -599,6 +599,21 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async renameKnowledgeEntry(input: { id: string; newName: string }) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: '/api/vault/rename',
+        body: input,
+      });
+    },
+
+    async deleteKnowledgeEntry(id: string) {
+      return invokeDesktopApi(hostManager, {
+        method: 'DELETE',
+        path: `/api/vault/file?id=${encodeURIComponent(id)}`,
+      });
+    },
+
     async importKnowledge(input: CompanionKnowledgeImportInput) {
       return invokeDesktopApi(hostManager, {
         method: 'POST',

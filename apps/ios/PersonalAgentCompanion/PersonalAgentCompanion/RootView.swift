@@ -457,6 +457,13 @@ struct KnowledgeRootView: View {
     }
 }
 
+private func editableKnowledgeName(for entry: CompanionKnowledgeEntry) -> String {
+    if entry.isDirectory {
+        return entry.name
+    }
+    return entry.name.replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression)
+}
+
 private struct KnowledgeDirectoryScreen: View {
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
@@ -465,6 +472,8 @@ private struct KnowledgeDirectoryScreen: View {
 
     @StateObject private var viewModel: KnowledgeDirectoryViewModel
     @State private var creationKind: KnowledgeCreationKind?
+    @State private var renameEntry: CompanionKnowledgeEntry?
+    @State private var deleteEntry: CompanionKnowledgeEntry?
 
     init(appModel: CompanionAppModel, session: HostSessionModel, directoryId: String?, onOpenRoute: @escaping (KnowledgeRoute) -> Void) {
         self.appModel = appModel
@@ -486,14 +495,6 @@ private struct KnowledgeDirectoryScreen: View {
                 )
                 .listRowBackground(Color.clear)
             } else {
-                if let directoryId {
-                    Section {
-                        Text(directoryId)
-                            .font(.footnote.monospaced())
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                    }
-                }
                 ForEach(viewModel.entries) { entry in
                     Button {
                         if entry.isDirectory {
@@ -507,7 +508,7 @@ private struct KnowledgeDirectoryScreen: View {
                                 .foregroundStyle(entry.isDirectory ? .accentColor : CompanionTheme.textSecondary)
                                 .frame(width: 20)
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(entry.name.replacingOccurrences(of: #"\.md$"#, with: "", options: .regularExpression))
+                                Text(editableKnowledgeName(for: entry))
                                     .foregroundStyle(CompanionTheme.textPrimary)
                                 Text(entry.isDirectory
                                      ? "Folder"
@@ -526,6 +527,32 @@ private struct KnowledgeDirectoryScreen: View {
                     }
                     .buttonStyle(.plain)
                     .listRowBackground(CompanionTheme.panel)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button {
+                            renameEntry = entry
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        .tint(.accentColor)
+
+                        Button(role: .destructive) {
+                            deleteEntry = entry
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                    .contextMenu {
+                        Button {
+                            renameEntry = entry
+                        } label: {
+                            Label("Rename", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            deleteEntry = entry
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
                 }
             }
         }
@@ -587,10 +614,36 @@ private struct KnowledgeDirectoryScreen: View {
                 }
             }
         }
-        .task {
-            if viewModel.entries.isEmpty {
-                viewModel.load()
+        .sheet(item: $renameEntry) { entry in
+            KnowledgeRenameSheet(
+                title: entry.isDirectory ? "Rename folder" : "Rename note",
+                placeholder: entry.isDirectory ? "Folder name" : "Note name",
+                initialName: editableKnowledgeName(for: entry)
+            ) { name in
+                await viewModel.rename(entry: entry, to: name) != nil
             }
+        }
+        .alert(
+            deleteEntry?.isDirectory == true ? "Delete folder?" : "Delete note?",
+            isPresented: Binding(get: { deleteEntry != nil }, set: { if !$0 { deleteEntry = nil } })
+        ) {
+            Button("Cancel", role: .cancel) {
+                deleteEntry = nil
+            }
+            Button("Delete", role: .destructive) {
+                guard let entry = deleteEntry else { return }
+                deleteEntry = nil
+                Task {
+                    _ = await viewModel.delete(entry: entry)
+                }
+            }
+        } message: {
+            if let entry = deleteEntry {
+                Text(entry.isDirectory ? "Delete \(entry.name) and everything inside it?" : "Delete \(editableKnowledgeName(for: entry))?")
+            }
+        }
+        .onAppear {
+            viewModel.load()
         }
     }
 }
@@ -648,10 +701,64 @@ private struct KnowledgeCreateSheet: View {
     }
 }
 
+private struct KnowledgeRenameSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let title: String
+    let placeholder: String
+    let initialName: String
+    let onSave: (String) async -> Bool
+
+    @State private var name: String
+    @State private var isSaving = false
+
+    init(title: String, placeholder: String, initialName: String, onSave: @escaping (String) async -> Bool) {
+        self.title = title
+        self.placeholder = placeholder
+        self.initialName = initialName
+        self.onSave = onSave
+        _name = State(initialValue: initialName)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section(title) {
+                    TextField(placeholder, text: $name)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+            }
+            .navigationTitle(title)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task {
+                            isSaving = true
+                            let saved = await onSave(name)
+                            isSaving = false
+                            if saved {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(isSaving || name.trimmed.isEmpty || name.trimmed == initialName.trimmed)
+                }
+            }
+        }
+    }
+}
+
 private struct KnowledgeNoteScreen: View {
+    @Environment(\.dismiss) private var dismiss
+
     let fileId: String
 
     @StateObject private var viewModel: KnowledgeNoteViewModel
+    @State private var showingRenameSheet = false
+    @State private var showingDeleteConfirmation = false
 
     init(appModel _: CompanionAppModel, session: HostSessionModel, fileId: String) {
         self.fileId = fileId
@@ -659,28 +766,7 @@ private struct KnowledgeNoteScreen: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Text(fileId)
-                        .font(.footnote.monospaced())
-                        .foregroundStyle(CompanionTheme.textSecondary)
-                        .lineLimit(2)
-                        .textSelection(.enabled)
-                    Spacer()
-                    if let updatedAt = viewModel.updatedAt {
-                        Text("Updated \(formatRelativeCompanionDate(updatedAt))")
-                            .font(.caption)
-                            .foregroundStyle(CompanionTheme.textDim)
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(CompanionTheme.panelRaised)
-
-            Divider()
-
+        Group {
             if viewModel.isLoading {
                 ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -700,6 +786,22 @@ private struct KnowledgeNoteScreen: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        showingRenameSheet = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    Button(role: .destructive) {
+                        showingDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .disabled(viewModel.isSaving)
+
                 Button {
                     viewModel.reload()
                 } label: {
@@ -723,13 +825,34 @@ private struct KnowledgeNoteScreen: View {
                 .disabled(viewModel.isSaving || !viewModel.isDirty)
             }
         }
+        .sheet(isPresented: $showingRenameSheet) {
+            KnowledgeRenameSheet(
+                title: "Rename note",
+                placeholder: "Note name",
+                initialName: viewModel.title
+            ) { name in
+                await viewModel.rename(to: name)
+            }
+        }
+        .alert("Delete note?", isPresented: $showingDeleteConfirmation) {
+            Button("Cancel", role: .cancel) {}
+            Button("Delete", role: .destructive) {
+                Task {
+                    if await viewModel.delete() {
+                        dismiss()
+                    }
+                }
+            }
+        } message: {
+            Text("Delete \(viewModel.title)?")
+        }
         .overlay(alignment: .bottom) {
             if let message = viewModel.errorMessage {
                 ErrorBanner(message: message)
                     .padding()
             }
         }
-        .task {
+        .task(id: viewModel.fileId) {
             if viewModel.content.isEmpty && viewModel.draft.isEmpty {
                 viewModel.load()
             }

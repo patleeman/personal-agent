@@ -288,6 +288,26 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(saved.content, "# Mobile KB\n")
     }
 
+    func testMockKnowledgeCanRenameAndDeleteEntries() async throws {
+        let client = MockCompanionClient()
+
+        _ = try await client.createKnowledgeFolder(folderId: "notes/archive")
+        _ = try await client.writeKnowledgeFile(fileId: "notes/archive/mobile-kb.md", content: "# Mobile KB\n")
+
+        let renamedFile = try await client.renameKnowledgeEntry(id: "notes/archive/mobile-kb.md", newName: "kb-v2.md")
+        XCTAssertEqual(renamedFile.id, "notes/archive/kb-v2.md")
+
+        let renamedFolder = try await client.renameKnowledgeEntry(id: "notes/archive/", newName: "history")
+        XCTAssertEqual(renamedFolder.id, "notes/history/")
+
+        let nested = try await client.listKnowledgeEntries(directoryId: "notes/history")
+        XCTAssertTrue(nested.entries.contains(where: { $0.id == "notes/history/kb-v2.md" }))
+
+        try await client.deleteKnowledgeEntry(id: "notes/history/")
+        let root = try await client.listKnowledgeEntries(directoryId: "notes")
+        XCTAssertFalse(root.entries.contains(where: { $0.id == "notes/history/" }))
+    }
+
     func testMockSimulationStartsRunningConversationAndStopsOnAbort() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")

@@ -19,7 +19,7 @@ apps/ios/PersonalAgentCompanion
 - restore queued steer/follow-up prompts, manage parallel jobs, and see live control/presence state from iPhone
 - take over control, abort a turn, rename a conversation, browse local/remote directories for cwd changes, adjust model preferences from the live host catalog, and switch execution target
 - browse conversation artifacts and commit checkpoints, and create new checkpoints from iOS
-- browse and edit markdown notes in the host knowledge base, including folder navigation and note/folder creation
+- browse and edit markdown notes in the host knowledge base, including folder navigation, note/folder creation, and rename/delete actions for knowledge entries
 - save shared text, URLs, and images from iOS into the host knowledge base through the companion share extension; URL shares are imported as markdown notes with extracted readable content + frontmatter metadata, and image shares become markdown notes backed by vault assets
 - browse saved drawing attachments, inspect revisions, and create/update drawing assets with a native PencilKit editor that exports Excalidraw-compatible source + preview assets
 - manage automations from the phone, including background-agent callback delivery controls, with durable-run details still reachable from the companion surfaces

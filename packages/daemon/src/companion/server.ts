@@ -37,6 +37,7 @@ import {
   type CompanionRemoteDirectoryInput,
   type CompanionHostHello,
   type CompanionKnowledgeImportInput,
+  type CompanionKnowledgeRenameInput,
   type CompanionPairedDeviceSummary,
   type CompanionRuntime,
   type CompanionRuntimeProvider,
@@ -685,6 +686,33 @@ export class DaemonCompanionServer {
       const body = await parseJsonBody(request);
       const payload = isRecord(body) ? body : {};
       sendJson(response, 201, await runtime.createKnowledgeFolder(readRequiredString(payload.id, 'id')));
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/knowledge/rename`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const input: CompanionKnowledgeRenameInput = {
+        id: readRequiredString(payload.id, 'id'),
+        newName: readRequiredString(payload.newName, 'newName'),
+      };
+      sendJson(response, 200, await runtime.renameKnowledgeEntry(input));
+      return;
+    }
+
+    if (request.method === 'DELETE' && pathname === `${COMPANION_API_ROOT}/knowledge/entry`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      await runtime.deleteKnowledgeEntry(readRequiredString(requestUrl.searchParams.get('id'), 'id'));
+      sendJson(response, 200, { ok: true });
       return;
     }
 

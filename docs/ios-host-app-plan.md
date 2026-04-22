@@ -52,7 +52,7 @@ The shipping iOS client currently covers:
 - queued steer/follow-up restore, parallel-job management, and live presence/control-state display
 - native `ask_user_question` rendering and answer submission inside the conversation surface
 - conversation artifact browsing plus commit-checkpoint browsing and checkpoint creation
-- knowledge-base folder browsing plus markdown note read/edit/create flows against the host vault
+- knowledge-base folder browsing plus markdown note read/edit/create flows against the host vault, including rename/delete entry actions from iOS
 - a native iOS share extension for knowledge capture; shared text, URLs, and images are handed off into the main app and imported into the host vault, with URL shares fetching readable page content and storing capture metadata in note frontmatter
 - saved attachment browse/read/create/update flows for drawing attachments, including a native PencilKit-based drawing editor that exports Excalidraw-compatible source assets
 - automation list/detail/create/edit/delete/run flows, including callback delivery controls for background-agent automations

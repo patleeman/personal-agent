@@ -47,6 +47,8 @@ protocol CompanionClientProtocol: AnyObject {
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry
+    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry
+    func deleteKnowledgeEntry(id: String) async throws
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse
     func listTasks() async throws -> [ScheduledTaskSummary]
     func readTask(taskId: String) async throws -> ScheduledTaskDetail
@@ -579,6 +581,18 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry {
         try await authorizedJSON(path: "/companion/v1/knowledge/folder", method: "POST", body: ["id": folderId], decode: CompanionKnowledgeEntry.self)
+    }
+
+    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry {
+        try await authorizedJSON(path: "/companion/v1/knowledge/rename", method: "POST", body: ["id": id, "newName": newName], decode: CompanionKnowledgeEntry.self)
+    }
+
+    func deleteKnowledgeEntry(id: String) async throws {
+        struct DeleteResponse: Decodable { let ok: Bool }
+        guard let encoded = id.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw CompanionClientError.requestFailed("The knowledge entry id is invalid.")
+        }
+        _ = try await authorizedJSON(path: "/companion/v1/knowledge/entry?id=\(encoded)", method: "DELETE", body: nil, decode: DeleteResponse.self)
     }
 
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {
@@ -1753,6 +1767,57 @@ final class MockCompanionClient: CompanionClientProtocol {
         }
     }
 
+    private func makeKnowledgeEntry(id: String, kind: String, sizeBytes: Int) -> CompanionKnowledgeEntry {
+        CompanionKnowledgeEntry(
+            id: kind == "folder" ? "\(id)/" : id,
+            kind: kind,
+            name: knowledgeDisplayName(for: id),
+            sizeBytes: kind == "folder" ? 0 : sizeBytes,
+            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        )
+    }
+
+    private func renameKnowledgeNode(from sourceId: String, to destinationId: String, isDirectory: Bool) {
+        if isDirectory {
+            let sourcePrefix = "\(sourceId)/"
+            let destinationPrefix = "\(destinationId)/"
+            var nextFolders: Set<String> = []
+            for folderId in knowledgeFolders {
+                if folderId == sourceId {
+                    nextFolders.insert(destinationId)
+                } else if folderId.hasPrefix(sourcePrefix) {
+                    nextFolders.insert(destinationPrefix + folderId.dropFirst(sourcePrefix.count))
+                } else {
+                    nextFolders.insert(folderId)
+                }
+            }
+            knowledgeFolders = nextFolders
+
+            var nextFiles: [String: String] = [:]
+            for (fileId, content) in knowledgeFiles {
+                if fileId.hasPrefix(sourcePrefix) {
+                    nextFiles[destinationPrefix + fileId.dropFirst(sourcePrefix.count)] = content
+                } else {
+                    nextFiles[fileId] = content
+                }
+            }
+            knowledgeFiles = nextFiles
+        } else if let content = knowledgeFiles.removeValue(forKey: sourceId) {
+            knowledgeFiles[destinationId] = content
+        }
+        ensureKnowledgeParentFolders(for: destinationId)
+    }
+
+    private func deleteKnowledgeNode(_ id: String, isDirectory: Bool) {
+        if isDirectory {
+            let prefix = "\(id)/"
+            knowledgeFolders = knowledgeFolders.filter { $0 != id && !$0.hasPrefix(prefix) }
+            knowledgeFiles = knowledgeFiles.filter { key, _ in !key.hasPrefix(prefix) }
+        } else {
+            knowledgeFiles.removeValue(forKey: id)
+        }
+    }
+
     private func knowledgeEntries(in directoryId: String?) -> [CompanionKnowledgeEntry] {
         let normalizedDirectory = normalizeKnowledgeId(directoryId)
         var nextEntries: [CompanionKnowledgeEntry] = []
@@ -2657,13 +2722,48 @@ final class MockCompanionClient: CompanionClientProtocol {
         }
         ensureKnowledgeParentFolders(for: normalizedFolderId)
         knowledgeFolders.insert(normalizedFolderId)
-        return CompanionKnowledgeEntry(
-            id: "\(normalizedFolderId)/",
-            kind: "folder",
-            name: knowledgeDisplayName(for: normalizedFolderId),
-            sizeBytes: 0,
-            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
-        )
+        return makeKnowledgeEntry(id: normalizedFolderId, kind: "folder", sizeBytes: 0)
+    }
+
+    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry {
+        guard let normalizedId = normalizeKnowledgeId(id) else {
+            throw CompanionClientError.requestFailed("Knowledge entry id is required.")
+        }
+        let trimmedName = newName.trimmed
+        guard !trimmedName.isEmpty, !trimmedName.contains("/"), !trimmedName.contains("\\") else {
+            throw CompanionClientError.requestFailed("Knowledge entry names cannot contain path separators.")
+        }
+        let parentDirectory = knowledgeParentDirectory(for: normalizedId)
+        let destinationId = [parentDirectory, trimmedName].compactMap { $0 }.joined(separator: "/")
+        guard destinationId != normalizedId else {
+            if knowledgeFiles[normalizedId] != nil {
+                return makeKnowledgeEntry(id: normalizedId, kind: "file", sizeBytes: knowledgeFiles[normalizedId]?.utf8.count ?? 0)
+            }
+            return makeKnowledgeEntry(id: normalizedId, kind: "folder", sizeBytes: 0)
+        }
+        let isDirectory = knowledgeFolders.contains(normalizedId)
+        if knowledgeFiles[destinationId] != nil || knowledgeFolders.contains(destinationId) {
+            throw CompanionClientError.requestFailed("A file or folder with that name already exists.")
+        }
+        guard isDirectory || knowledgeFiles[normalizedId] != nil else {
+            throw CompanionClientError.requestFailed("Knowledge entry not found.")
+        }
+        renameKnowledgeNode(from: normalizedId, to: destinationId, isDirectory: isDirectory)
+        if isDirectory {
+            return makeKnowledgeEntry(id: destinationId, kind: "folder", sizeBytes: 0)
+        }
+        return makeKnowledgeEntry(id: destinationId, kind: "file", sizeBytes: knowledgeFiles[destinationId]?.utf8.count ?? 0)
+    }
+
+    func deleteKnowledgeEntry(id: String) async throws {
+        guard let normalizedId = normalizeKnowledgeId(id) else {
+            throw CompanionClientError.requestFailed("Knowledge entry id is required.")
+        }
+        let isDirectory = knowledgeFolders.contains(normalizedId)
+        guard isDirectory || knowledgeFiles[normalizedId] != nil else {
+            throw CompanionClientError.requestFailed("Knowledge entry not found.")
+        }
+        deleteKnowledgeNode(normalizedId, isDirectory: isDirectory)
     }
 
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {

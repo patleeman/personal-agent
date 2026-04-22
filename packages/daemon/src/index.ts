@@ -266,6 +266,7 @@ export type {
   CompanionConversationTakeoverInput,
   CompanionDeviceTokenResult,
   CompanionKnowledgeImportInput,
+  CompanionKnowledgeRenameInput,
   CompanionHostHello,
   CompanionPairedDeviceSummary,
   CompanionPairingCode,

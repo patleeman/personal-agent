@@ -273,6 +273,11 @@ export interface CompanionKnowledgeImportInput {
   createdAt?: string | null;
 }
 
+export interface CompanionKnowledgeRenameInput {
+  id: string;
+  newName: string;
+}
+
 export interface CompanionRuntime {
   listConversations(): Promise<unknown>;
   updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
@@ -312,6 +317,8 @@ export interface CompanionRuntime {
   readKnowledgeFile(fileId: string): Promise<unknown>;
   writeKnowledgeFile(input: { fileId: string; content: string }): Promise<unknown>;
   createKnowledgeFolder(folderId: string): Promise<unknown>;
+  renameKnowledgeEntry(input: CompanionKnowledgeRenameInput): Promise<unknown>;
+  deleteKnowledgeEntry(id: string): Promise<unknown>;
   importKnowledge(input: CompanionKnowledgeImportInput): Promise<unknown>;
   listScheduledTasks(): Promise<unknown>;
   readScheduledTask(taskId: string): Promise<unknown>;

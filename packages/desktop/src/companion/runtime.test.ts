@@ -84,13 +84,17 @@ describe('desktop companion runtime', () => {
     });
   });
 
-  it('routes knowledge imports to the vault share-import endpoint', async () => {
+  it('routes knowledge rename, delete, and import calls to vault endpoints', async () => {
     const localController = {
-      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({
-        note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
-        sourceKind: 'url',
-        title: 'Shared link',
-      })),
+      dispatchApiRequest: vi
+        .fn()
+        .mockResolvedValueOnce(jsonResponse({ id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md' }))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }))
+        .mockResolvedValueOnce(jsonResponse({
+          note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
+          sourceKind: 'url',
+          title: 'Shared link',
+        })),
     };
 
     const hostManager = {
@@ -99,6 +103,10 @@ describe('desktop companion runtime', () => {
     } as unknown as HostManager;
 
     const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.renameKnowledgeEntry({ id: 'Inbox/original.md', newName: 'renamed.md' })).resolves.toEqual({
+      id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md',
+    });
+    await expect(runtime.deleteKnowledgeEntry('Inbox/renamed.md')).resolves.toEqual({ ok: true });
     await expect(runtime.importKnowledge({
       kind: 'url',
       directoryId: 'Inbox',
@@ -110,7 +118,16 @@ describe('desktop companion runtime', () => {
       title: 'Shared link',
     });
 
-    expect(localController.dispatchApiRequest).toHaveBeenCalledWith({
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(1, {
+      method: 'POST',
+      path: '/api/vault/rename',
+      body: { id: 'Inbox/original.md', newName: 'renamed.md' },
+    });
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(2, {
+      method: 'DELETE',
+      path: '/api/vault/file?id=Inbox%2Frenamed.md',
+    });
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(3, {
       method: 'POST',
       path: '/api/vault/share-import',
       body: {

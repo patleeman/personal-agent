@@ -126,6 +126,8 @@ describe('daemon companion server', () => {
       readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
       writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
       createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      renameKnowledgeEntry: async ({ id, newName }) => ({ id: `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`, kind: id.endsWith('/') ? 'folder' : 'file', name: newName, sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      deleteKnowledgeEntry: async () => ({ ok: true }),
       importKnowledge: async (input) => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: JSON.stringify(input).length, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: input.kind, title: input.title ?? 'Shared link' }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
@@ -276,6 +278,32 @@ describe('daemon companion server', () => {
       sizeBytes: 0,
       updatedAt: '2026-04-19T00:00:00.000Z',
     });
+
+    const knowledgeRenameResponse = await fetch(`${baseUrl}/companion/v1/knowledge/rename`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'notes/new-note.md', newName: 'renamed-note.md' }),
+    });
+    expect(knowledgeRenameResponse.status).toBe(200);
+    expect(await readJson(knowledgeRenameResponse)).toEqual({
+      id: 'notes/renamed-note.md',
+      kind: 'file',
+      name: 'renamed-note.md',
+      sizeBytes: 0,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const knowledgeDeleteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/entry?id=${encodeURIComponent('notes/renamed-note.md')}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+      },
+    });
+    expect(knowledgeDeleteResponse.status).toBe(200);
+    expect(await readJson(knowledgeDeleteResponse)).toEqual({ ok: true });
 
     const knowledgeImportResponse = await fetch(`${baseUrl}/companion/v1/knowledge/import`, {
       method: 'POST',

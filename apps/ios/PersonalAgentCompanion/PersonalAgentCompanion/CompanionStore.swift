@@ -995,6 +995,40 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             return nil
         }
     }
+
+    func rename(entry: CompanionKnowledgeEntry, to rawName: String) async -> CompanionKnowledgeEntry? {
+        let trimmed = rawName.trimmed
+        guard !trimmed.isEmpty else {
+            errorMessage = entry.isDirectory ? "Folder name is required." : "Note name is required."
+            return nil
+        }
+        let finalName = entry.isDirectory || trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
+        guard !entries.contains(where: { $0.id != entry.id && $0.name.compare(finalName, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) else {
+            errorMessage = "A file or folder with that name already exists here."
+            return nil
+        }
+        do {
+            let renamed = try await client.renameKnowledgeEntry(id: entry.id, newName: finalName)
+            errorMessage = nil
+            load()
+            return renamed
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func delete(entry: CompanionKnowledgeEntry) async -> Bool {
+        do {
+            try await client.deleteKnowledgeEntry(id: entry.id)
+            errorMessage = nil
+            load()
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
 }
 
 @MainActor
@@ -1003,10 +1037,9 @@ final class KnowledgeNoteViewModel: ObservableObject {
     @Published private(set) var updatedAt: String?
     @Published private(set) var isLoading = false
     @Published private(set) var isSaving = false
+    @Published private(set) var fileId: String
     @Published var draft: String = ""
     @Published var errorMessage: String?
-
-    let fileId: String
 
     private let client: CompanionClientProtocol
 
@@ -1050,6 +1083,38 @@ final class KnowledgeNoteViewModel: ObservableObject {
 
     func discardChanges() {
         draft = content
+    }
+
+    @discardableResult
+    func rename(to rawName: String) async -> Bool {
+        let trimmed = rawName.trimmed
+        guard !trimmed.isEmpty else {
+            errorMessage = "Note name is required."
+            return false
+        }
+        let finalName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
+        do {
+            let renamed = try await client.renameKnowledgeEntry(id: fileId, newName: finalName)
+            fileId = renamed.id
+            updatedAt = renamed.updatedAt
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    @discardableResult
+    func delete() async -> Bool {
+        do {
+            try await client.deleteKnowledgeEntry(id: fileId)
+            errorMessage = nil
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
     }
 
     @discardableResult
