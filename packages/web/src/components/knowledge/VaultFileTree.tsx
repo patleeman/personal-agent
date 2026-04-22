@@ -490,9 +490,8 @@ function OpenFilesSection({
 }) {
   return (
     <div className="shrink-0 border-t border-border-subtle px-2 pb-2 pt-1.5">
-      <div className="flex items-center gap-2 px-1 pb-1">
-        <p className="ui-section-label flex-1">Open Files</p>
-        {openFileIds.length > 0 ? <span className="text-[10px] text-dim">{openFileIds.length}</span> : null}
+      <div className="flex items-center px-1 pb-1">
+        <p className="ui-section-label">Open Files</p>
       </div>
       {openFileIds.length === 0 ? (
         <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
