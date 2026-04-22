@@ -492,7 +492,8 @@ function validatePackagedRuntimeDependencies(buildRoot, releaseDir) {
     fail(`Packaged desktop app archive not found: ${appAsarPath}`);
   }
 
-  const { listPackage } = require('@electron/asar');
+  const releaseRequire = createRequire(resolve(buildRoot, 'package.json'));
+  const { listPackage } = releaseRequire('@electron/asar');
   const packageEntries = listPackage(appAsarPath);
   const expectedPackages = collectExpectedRuntimePackages(buildRoot);
   const missingPackages = expectedPackages.filter((packageName) => !hasPackagedNodeModule(packageName, packageEntries, resourcesDir));
