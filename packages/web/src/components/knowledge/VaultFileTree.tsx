@@ -557,6 +557,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const canDropRef = useRef<(event: FileTreeDropContext) => boolean>(() => false);
   const dropCompleteRef = useRef<(event: FileTreeDropResult) => void>(() => {});
   const reconcilingExpansionRef = useRef(false);
+  const treeHostWrapperRef = useRef<HTMLDivElement>(null);
 
   const model = useMemo(() => new TreesModel({
     paths: [],
@@ -881,6 +882,86 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     };
   }, [applyDeleteEffects, applyRenameEffects, loadSnapshot]);
 
+  useEffect(() => {
+    const wrapper = treeHostWrapperRef.current;
+    const host = wrapper?.querySelector('file-tree-container');
+    const shadowRoot = host instanceof HTMLElement ? host.shadowRoot : null;
+    if (!shadowRoot) {
+      return;
+    }
+
+    const syncVisibleLabels = () => {
+      const rows = shadowRoot.querySelectorAll<HTMLElement>('[role="treeitem"]');
+      for (const row of rows) {
+        const content = row.querySelector<HTMLElement>('[data-item-section="content"]');
+        if (!content) {
+          continue;
+        }
+
+        const resetContentPresentation = () => {
+          content.removeAttribute('data-pa-full-label');
+          content.style.display = '';
+          content.style.minWidth = '';
+          content.style.overflow = '';
+          content.style.whiteSpace = '';
+          content.style.textOverflow = '';
+          content.querySelector('[data-pa-full-label-text="true"]')?.remove();
+        };
+
+        if (content.querySelector('[data-item-rename-input]')) {
+          resetContentPresentation();
+          continue;
+        }
+
+        const middleGroup = content.querySelector<HTMLElement>('[data-truncate-group-container="middle"]');
+        if (!middleGroup) {
+          resetContentPresentation();
+          continue;
+        }
+        middleGroup.style.display = '';
+
+        const label = row.getAttribute('aria-label')?.trim();
+        if (label) {
+          content.setAttribute('data-pa-full-label', 'true');
+          content.style.display = 'block';
+          content.style.minWidth = '0';
+          content.style.overflow = 'hidden';
+          content.style.whiteSpace = 'nowrap';
+          content.style.textOverflow = 'ellipsis';
+          middleGroup.style.display = 'none';
+          let labelText = content.querySelector<HTMLElement>('[data-pa-full-label-text="true"]');
+          if (!labelText) {
+            labelText = document.createElement('span');
+            labelText.setAttribute('data-pa-full-label-text', 'true');
+            labelText.style.display = 'block';
+            labelText.style.overflow = 'hidden';
+            labelText.style.whiteSpace = 'nowrap';
+            labelText.style.textOverflow = 'ellipsis';
+            content.append(labelText);
+          }
+          if (labelText.textContent !== label) {
+            labelText.textContent = label;
+          }
+        } else {
+          resetContentPresentation();
+        }
+      }
+    };
+
+    syncVisibleLabels();
+    const observer = new MutationObserver(() => {
+      syncVisibleLabels();
+    });
+    observer.observe(shadowRoot, {
+      childList: true,
+      subtree: true,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [entries, loading]);
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
@@ -923,7 +1004,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
+      <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
         {loading ? (
           <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
         ) : (
