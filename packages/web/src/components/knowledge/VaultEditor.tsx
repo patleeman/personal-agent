@@ -364,19 +364,12 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   }
 
   const titleName = (fileName ?? '').replace(/\.md$/, '');
+  const saveStatus = saveError ? 'Save failed' : dirty ? 'Unsaved' : savedAt ? 'Saved' : '';
 
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
-      {/* Status bar */}
-      <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-1.5">
-        <span className="truncate font-mono text-[11px] text-dim">{fileId}</span>
-        <span className={["ml-auto shrink-0 text-[11px]", saveError ? 'text-danger' : 'text-dim'].join(' ')} title={saveError ?? undefined}>
-          {saveError ? 'Save failed' : dirty ? 'Unsaved' : savedAt ? 'Saved' : ''}
-        </span>
-      </div>
-
       {/* Bubble menu */}
       {editor && (
         <BubbleMenu editor={editor} tippyOptions={{ duration: 100 }}
@@ -408,6 +401,15 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
       <div className="kb-editor-shell">
         <div className="kb-editor-wrapper">
+          <div className="kb-file-meta" aria-label="File path">
+            <span className="kb-file-path" title={fileId}>{fileId}</span>
+            {saveStatus ? (
+              <span className={['kb-file-status', saveError ? 'kb-file-status-error' : null].filter(Boolean).join(' ')} title={saveError ?? undefined}>
+                {saveStatus}
+              </span>
+            ) : null}
+          </div>
+
           <FrontmatterDisclosure
             frontmatter={frontmatter}
             rawFrontmatter={rawFrontmatter}

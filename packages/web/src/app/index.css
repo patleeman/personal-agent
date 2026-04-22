@@ -1268,6 +1268,45 @@ body {
   padding: 1.75rem clamp(1.5rem, 3vw, 3rem) 6rem;
 }
 
+.kb-file-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 0.35rem;
+}
+
+.kb-file-path,
+.kb-file-status {
+  font-size: 11px;
+  line-height: 1.2;
+  color: rgb(var(--color-dim));
+  opacity: 0.72;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  transition: opacity 80ms, color 80ms;
+}
+
+.kb-file-meta:hover .kb-file-path,
+.kb-file-meta:hover .kb-file-status {
+  opacity: 1;
+}
+
+.kb-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kb-file-status {
+  flex-shrink: 0;
+}
+
+.kb-file-status-error {
+  color: rgb(var(--color-danger) / 0.95);
+  opacity: 1;
+}
+
 /* Obsidian-style editable title */
 .kb-title {
   font-size: 2rem;
