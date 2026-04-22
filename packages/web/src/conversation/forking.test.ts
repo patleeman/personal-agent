@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from '../local/reloadState';
 import type { MessageBlock } from '../shared/types';
-import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from './forking';
+import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
   const data = new Map<string, string>();
@@ -103,6 +103,43 @@ describe('resolveBranchEntryIdForMessage', () => {
         ],
       },
     )).toBe('assistant-123');
+  });
+});
+
+describe('resolveRewindTargetForMessage', () => {
+  it('keeps the selected prompt in history when rewinding from an assistant reply', () => {
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-11T18:00:00.000Z', text: 'First prompt' },
+      { type: 'text', ts: '2026-03-11T18:00:01.000Z', text: 'First reply' },
+      { type: 'user', ts: '2026-03-11T18:00:02.000Z', text: 'Second prompt' },
+      { type: 'text', ts: '2026-03-11T18:00:03.000Z', text: 'Second reply' },
+    ];
+
+    expect(resolveRewindTargetForMessage(messages, 3, [
+      { entryId: 'entry-1', text: 'First prompt' },
+      { entryId: 'entry-2', text: 'Second prompt' },
+    ])).toEqual({
+      entryId: 'entry-2',
+      beforeEntry: false,
+      promptDraft: null,
+    });
+  });
+
+  it('rewinds before the selected user prompt and preserves it as a draft', () => {
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-11T18:00:00.000Z', text: 'First prompt' },
+      { type: 'text', ts: '2026-03-11T18:00:01.000Z', text: 'First reply' },
+      { type: 'user', ts: '2026-03-11T18:00:02.000Z', text: 'Second prompt' },
+    ];
+
+    expect(resolveRewindTargetForMessage(messages, 2, [
+      { entryId: 'entry-1', text: 'First prompt' },
+      { entryId: 'entry-2', text: 'Second prompt' },
+    ])).toEqual({
+      entryId: 'entry-2',
+      beforeEntry: true,
+      promptDraft: 'Second prompt',
+    });
   });
 });
 

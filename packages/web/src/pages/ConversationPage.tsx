@@ -51,7 +51,7 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../transcript/askUserQuestions';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveSessionEntryIdFromBlockId } from '../conversation/forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from '../conversation/forking';
 import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
@@ -5050,8 +5050,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     try {
       const liveConversationId = await ensureConversationIsLive('be rewound');
       const entries = await api.forkEntries(liveConversationId);
-      const entry = resolveForkEntryForMessage(realMessages, localMessageIndex, entries);
-      if (!entry) {
+      const target = resolveRewindTargetForMessage(realMessages, localMessageIndex, entries);
+      if (!target) {
         throw new Error('No forkable message found for that point in the conversation.');
       }
 
@@ -5059,13 +5059,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      const { newSessionId } = await api.forkSession(liveConversationId, entry.entryId, {
+      const { newSessionId } = await api.forkSession(liveConversationId, target.entryId, {
         preserveSource: true,
-        beforeEntry: true,
+        beforeEntry: target.beforeEntry,
       }, currentSurfaceId);
-      // Rewind lands before the selected user turn, so prefill that prompt in
-      // the destination composer and let the user edit or resend it manually.
-      persistForkPromptDraft(newSessionId, entry.text);
+      if (target.promptDraft) {
+        persistForkPromptDraft(newSessionId, target.promptDraft);
+      }
       ensureConversationTabOpen(newSessionId);
       navigate(`/conversations/${newSessionId}`);
     } catch (error) {

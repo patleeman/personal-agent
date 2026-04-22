@@ -6,6 +6,12 @@ interface ForkableMessageEntry {
   text: string;
 }
 
+interface RewindTarget {
+  entryId: string;
+  beforeEntry: boolean;
+  promptDraft: string | null;
+}
+
 export function resolveForkEntryForMessage(
   messages: MessageBlock[],
   messageIndex: number,
@@ -99,6 +105,32 @@ export function resolveBranchEntryIdForMessage(
   }
 
   return null;
+}
+
+export function resolveRewindTargetForMessage(
+  messages: MessageBlock[],
+  messageIndex: number,
+  entries: ForkableMessageEntry[],
+): RewindTarget | null {
+  const entry = resolveForkEntryForMessage(messages, messageIndex, entries);
+  if (!entry) {
+    return null;
+  }
+
+  const block = messages[messageIndex];
+  if (block?.type === 'text') {
+    return {
+      entryId: entry.entryId,
+      beforeEntry: false,
+      promptDraft: null,
+    };
+  }
+
+  return {
+    entryId: entry.entryId,
+    beforeEntry: true,
+    promptDraft: entry.text,
+  };
 }
 
 export function buildConversationComposerStorageKey(sessionId: string): string {
