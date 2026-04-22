@@ -54,13 +54,13 @@ export function buildDesktopApplicationMenuTemplate(
         click: actions.onNewConversation,
       },
       {
-        label: 'Close Conversation',
+        label: 'Close Tab',
         accelerator: 'CommandOrControl+W',
         click: actions.onCloseConversation,
       },
       {
-        label: 'Reopen Closed Conversation',
-        accelerator: 'CommandOrControl+Shift+N',
+        label: 'Reopen Closed Tab',
+        accelerator: 'CommandOrControl+Shift+W',
         click: actions.onReopenClosedConversation,
       },
       {
@@ -192,7 +192,6 @@ export function buildDesktopApplicationMenuTemplate(
           { role: 'zoom' },
           {
             label: 'Hide Window',
-            accelerator: 'CommandOrControl+Shift+W',
             click: actions.onHideWindow,
           },
           { type: 'separator' },
@@ -202,7 +201,6 @@ export function buildDesktopApplicationMenuTemplate(
           { role: 'minimize' },
           {
             label: 'Hide Window',
-            accelerator: 'CommandOrControl+Shift+W',
             click: actions.onHideWindow,
           },
           { role: 'close' },

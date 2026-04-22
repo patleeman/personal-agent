@@ -52,8 +52,8 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     const fileMenu = template[1];
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'New Window' }),
-      expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
-      expect.objectContaining({ label: 'Reopen Closed Conversation', accelerator: 'CommandOrControl+Shift+N' }),
+      expect.objectContaining({ label: 'Close Tab', accelerator: 'CommandOrControl+W' }),
+      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'CommandOrControl+Shift+W' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),
@@ -76,7 +76,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
 
     const windowMenu = template[4];
     expect(windowMenu?.submenu).toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: 'Hide Window', accelerator: 'CommandOrControl+Shift+W' }),
+      expect.objectContaining({ label: 'Hide Window' }),
     ]));
   });
 
@@ -98,8 +98,8 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Show Personal Agent', accelerator: 'CommandOrControl+Shift+A' }),
       expect.objectContaining({ label: 'New Window' }),
       expect.objectContaining({ label: 'New Conversation', accelerator: 'CommandOrControl+N' }),
-      expect.objectContaining({ label: 'Close Conversation', accelerator: 'CommandOrControl+W' }),
-      expect.objectContaining({ label: 'Reopen Closed Conversation', accelerator: 'CommandOrControl+Shift+N' }),
+      expect.objectContaining({ label: 'Close Tab', accelerator: 'CommandOrControl+W' }),
+      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'CommandOrControl+Shift+W' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),

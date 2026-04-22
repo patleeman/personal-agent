@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { VaultFileTree } from './VaultFileTree';
+import { emitKBEvent } from './knowledgeEvents';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
 import { KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY } from '../../local/knowledgeOpenFilesSectionHeight';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
@@ -263,6 +264,34 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(getButton(remounted.container, 'Open file README.md')).toBeTruthy();
+  });
+
+  it('reopens the most recently closed file when asked', async () => {
+    const { container } = renderManagedTree();
+    await flushAsyncWork();
+
+    click(getButton(container, 'README.md'));
+    await flushAsyncWork();
+    click(getButton(container, 'notes'));
+    await flushAsyncWork();
+    click(getButton(container, 'today.md'));
+    await flushAsyncWork();
+
+    act(() => {
+      emitKBEvent('kb:close-active-file');
+    });
+    await flushAsyncWork();
+
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY) ?? '[]')).toEqual(['README.md']);
+    expect(getButton(container, 'Open file README.md').getAttribute('aria-current')).toBe('true');
+
+    act(() => {
+      emitKBEvent('kb:reopen-closed-file');
+    });
+    await flushAsyncWork();
+
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY) ?? '[]')).toEqual(['notes/today.md', 'README.md']);
+    expect(getButton(container, 'Open file notes/today.md').getAttribute('aria-current')).toBe('true');
   });
 
   it('lets the open files section resize taller and persists the new height', async () => {

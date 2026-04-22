@@ -1,6 +1,7 @@
 import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { VaultFileTree } from './knowledge/VaultFileTree';
+import { emitKBEvent } from './knowledge/knowledgeEvents';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../client/api';
@@ -2953,12 +2954,24 @@ export function Sidebar() {
         return;
       }
 
+      const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
+
       if (action === 'close-conversation') {
+        if (isKnowledgeRoute) {
+          emitKBEvent('kb:close-active-file');
+          return;
+        }
+
         handleCloseActiveConversation();
         return;
       }
 
       if (action === 'reopen-closed-conversation') {
+        if (isKnowledgeRoute) {
+          emitKBEvent('kb:reopen-closed-file');
+          return;
+        }
+
         handleReopenClosedConversation();
         return;
       }

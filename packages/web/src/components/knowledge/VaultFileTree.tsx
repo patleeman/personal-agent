@@ -19,11 +19,17 @@ import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { api, vaultApi } from '../../client/api';
 import {
   addOpenFileId,
+  normalizeOpenFileIds,
   readStoredOpenFileIds,
   removeOpenFileId,
   renameOpenFileIds,
   writeStoredOpenFileIds,
 } from '../../local/knowledgeOpenFiles';
+import {
+  readStoredRecentlyClosedFileIds,
+  recordRecentlyClosedFileId,
+  writeStoredRecentlyClosedFileIds,
+} from '../../local/knowledgeRecentlyClosedFiles';
 import {
   DEFAULT_OPEN_FILES_SECTION_HEIGHT,
   MAX_OPEN_FILES_SECTION_HEIGHT,
@@ -572,6 +578,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const initialOpenFileIds = useRef(activeFileId ? addOpenFileId(readStoredOpenFileIds(), activeFileId) : readStoredOpenFileIds());
   const [openFileIds, setOpenFileIds] = useState<string[]>(initialOpenFileIds.current);
   const openFileIdsRef = useRef<string[]>(initialOpenFileIds.current);
+  const recentlyClosedFileIdsRef = useRef<string[]>(readStoredRecentlyClosedFileIds());
   const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
   const visibleExpandedFolderIdsRef = useRef<Set<string>>(new Set(expandedFolderIdsRef.current));
   const activeFileIdRef = useRef(activeFileId);
@@ -624,6 +631,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     openFileIdsRef.current = normalized;
     setOpenFileIds(normalized);
     writeStoredOpenFileIds(normalized);
+  }, []);
+
+  const persistRecentlyClosedFileIds = useCallback((nextRecentlyClosedFileIds: readonly string[]) => {
+    const normalized = normalizeOpenFileIds(nextRecentlyClosedFileIds);
+    recentlyClosedFileIdsRef.current = normalized;
+    writeStoredRecentlyClosedFileIds(normalized);
   }, []);
 
   const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
@@ -826,17 +839,71 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, []);
 
   const handleOpenFileClose = useCallback((id: string) => {
-    const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, id);
-    const closedIndex = openFileIdsRef.current.indexOf(id);
+    const normalizedId = id.trim();
+    if (!normalizedId) {
+      return;
+    }
+
+    if (openFileIdsRef.current.includes(normalizedId)) {
+      const nextRecentlyClosed = recordRecentlyClosedFileId(recentlyClosedFileIdsRef.current, normalizedId);
+      persistRecentlyClosedFileIds(nextRecentlyClosed);
+    }
+
+    const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, normalizedId);
+    const closedIndex = openFileIdsRef.current.indexOf(normalizedId);
     persistOpenFileIds(nextOpenFileIds);
 
-    if (activeFileId !== id) {
+    if (activeFileIdRef.current !== normalizedId) {
       return;
     }
 
     const fallbackIndex = Math.min(Math.max(closedIndex, 0), Math.max(nextOpenFileIds.length - 1, 0));
     onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
-  }, [activeFileId, onFileSelect, persistOpenFileIds]);
+  }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
+
+  const handleReopenLastClosedFile = useCallback(() => {
+    let remaining = [...recentlyClosedFileIdsRef.current];
+    while (remaining.length > 0) {
+      const candidate = remaining.shift()?.trim() ?? '';
+      if (!candidate || candidate.endsWith('/')) {
+        continue;
+      }
+
+      if (openFileIdsRef.current.includes(candidate)) {
+        continue;
+      }
+
+      const entry = entryMapRef.current.get(candidate);
+      if (entry && entry.kind !== 'file') {
+        continue;
+      }
+
+      persistRecentlyClosedFileIds(remaining);
+      persistOpenFileIds(addOpenFileId(openFileIdsRef.current, candidate));
+      onFileSelect(candidate);
+      return;
+    }
+
+    persistRecentlyClosedFileIds(remaining);
+  }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
+
+  useEffect(() => {
+    const off = [
+      onKBEvent('kb:close-active-file', () => {
+        const id = activeFileIdRef.current;
+        if (id) {
+          handleOpenFileClose(id);
+        }
+      }),
+      onKBEvent('kb:reopen-closed-file', () => {
+        handleReopenLastClosedFile();
+      }),
+    ];
+
+    return () => {
+      off.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [handleOpenFileClose, handleReopenLastClosedFile]);
 
   useEffect(() => {
     activeFileIdRef.current = activeFileId;

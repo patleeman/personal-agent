@@ -5,7 +5,9 @@ export type KBEventType =
   | 'kb:file-created'
   | 'kb:file-deleted'
   | 'kb:file-renamed'
-  | 'kb:entries-changed'; // catch-all for tree refresh
+  | 'kb:entries-changed' // catch-all for tree refresh
+  | 'kb:close-active-file'
+  | 'kb:reopen-closed-file';
 
 export interface KBFileRenamedDetail { oldId: string; newId: string }
 export interface KBFileCreatedDetail { id: string }
@@ -15,6 +17,8 @@ export function emitKBEvent(type: 'kb:file-renamed', detail: KBFileRenamedDetail
 export function emitKBEvent(type: 'kb:file-created', detail: KBFileCreatedDetail): void;
 export function emitKBEvent(type: 'kb:file-deleted', detail: KBFileDeletedDetail): void;
 export function emitKBEvent(type: 'kb:entries-changed'): void;
+export function emitKBEvent(type: 'kb:close-active-file'): void;
+export function emitKBEvent(type: 'kb:reopen-closed-file'): void;
 export function emitKBEvent(type: KBEventType, detail?: unknown): void {
   window.dispatchEvent(new CustomEvent(type, detail !== undefined ? { detail } : undefined));
 }
