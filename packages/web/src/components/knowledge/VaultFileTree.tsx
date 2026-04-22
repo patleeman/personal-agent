@@ -76,8 +76,6 @@ const TREE_HOST_STYLE = {
   '--trees-item-margin-x-override': '4px',
   '--trees-item-padding-x-override': '8px',
   '--trees-padding-inline-override': '0px',
-  '--trees-search-bg-override': 'rgb(var(--color-surface))',
-  '--trees-search-fg-override': 'rgb(var(--color-primary))',
   '--trees-selected-bg-override': 'rgb(var(--color-accent) / 0.14)',
   '--trees-selected-fg-override': 'rgb(var(--color-primary))',
 } satisfies CSSProperties & Record<string, string | number>;
@@ -567,7 +565,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   const model = useMemo(() => new TreesModel({
     paths: [],
-    search: true,
+    search: false,
     initialExpandedPaths: [...expandedFolderIdsRef.current],
     initialSelectedPaths: activeFileId ? [activeFileId] : [],
     composition: {
@@ -971,15 +969,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
         <p className="ui-section-label flex-1">Knowledge Base</p>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="Search tree"
-          aria-label="Search tree"
-          onClick={() => model.openSearch()}
-        >
-          <Ico d={ICON.search} size={12} />
-        </button>
         <button
           type="button"
           className="ui-icon-button ui-icon-button-compact"
