@@ -135,7 +135,7 @@ export function DesktopTopBar({
     : null;
 
   return (
-    <div className="ui-desktop-top-bar">
+    <div className="ui-desktop-top-bar border-b-0 bg-base/80">
       <div className="ui-desktop-top-bar__drag-region" />
       <div className="ui-desktop-top-bar__leading">
         <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />

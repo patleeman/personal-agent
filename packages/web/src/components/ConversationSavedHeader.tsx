@@ -26,22 +26,22 @@ export function ConversationSavedHeader({
   onSaveCwd,
 }: ConversationSavedHeaderProps) {
   return (
-    <div className="space-y-1">
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+    <div className="space-y-3">
+      <div className="min-w-0 overflow-hidden">
         {onTitleClick ? (
-          <h1 className="min-w-0 truncate">
+          <h1 className="min-w-0">
             <button
               type="button"
               onClick={onTitleClick}
               title="Rename conversation"
               aria-label={`Rename conversation: ${title}`}
-              className="ui-page-title inline-block max-w-full truncate rounded-sm text-left transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/20 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
+              className="max-w-full break-words text-left text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:text-accent sm:text-[34px]"
             >
               {title}
             </button>
           </h1>
         ) : (
-          <h1 className="ui-page-title min-w-0 truncate">{title}</h1>
+          <h1 className="max-w-full break-words text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary sm:text-[34px]">{title}</h1>
         )}
       </div>
       {cwdEditing && (

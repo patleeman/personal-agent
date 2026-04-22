@@ -2621,6 +2621,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [titleSaving, setTitleSaving] = useState(false);
   const [summaryForkBusy, setSummaryForkBusy] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const conversationHeaderRef = useRef<HTMLDivElement>(null);
+  const [conversationHeaderOffset, setConversationHeaderOffset] = useState(96);
 
   useEffect(() => {
     setTitleOverride(null);
@@ -2651,6 +2653,32 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     sessionTitle: id ? sessions?.find((session) => session.id === id)?.title : undefined,
   });
   const model = visibleSessionDetail?.meta.model;
+
+  useLayoutEffect(() => {
+    const element = conversationHeaderRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateHeight = () => {
+      const nextHeight = Math.max(0, Math.ceil(element.getBoundingClientRect().height));
+      setConversationHeaderOffset((current) => current === nextHeight ? current : nextHeight);
+    };
+
+    updateHeight();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => {
+      updateHeight();
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, [draft, isEditingTitle, title, titleSaving]);
 
   useEffect(() => {
     const { normalizedTitle, shouldPushLiveTitle, nextSessions } = resolveConversationStreamTitleSync({
@@ -7042,7 +7070,69 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   const transcriptPane = useMemo(() => (
     <div className="relative flex-1 min-h-0">
-      <div ref={scrollRef} className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden">
+      <div
+        ref={scrollRef}
+        className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden"
+        style={{ scrollPaddingTop: `${conversationHeaderOffset + 16}px` }}
+      >
+        <div ref={conversationHeaderRef} className="sticky top-0 z-30 px-4 pt-3 sm:px-6 sm:pt-4">
+          <div className="mx-auto w-full max-w-6xl bg-gradient-to-b from-base/95 via-base/80 to-base/0 pb-3 pt-1">
+            <div className="max-w-4xl">
+              {isEditingTitle && !draft ? (
+                <form
+                  className="max-w-4xl space-y-3 pr-4"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void saveTitleEdit();
+                  }}
+                >
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(event) => setTitleDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Escape') {
+                        event.preventDefault();
+                        cancelTitleEdit();
+                      }
+                    }}
+                    placeholder="Name this conversation"
+                    className="w-full rounded-2xl border border-transparent bg-transparent -mx-3 px-3 py-2 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary outline-none transition-colors placeholder:text-dim/60 hover:border-border-subtle/70 hover:bg-base/25 focus:border-accent/45 focus:bg-base/35 sm:text-[34px]"
+                    disabled={titleSaving}
+                  />
+                  <div className="flex items-center gap-2 pl-0.5">
+                    <button type="submit" className="ui-toolbar-button text-primary" disabled={titleSaving}>
+                      {titleSaving ? 'Saving…' : 'Save'}
+                    </button>
+                    <button type="button" className="ui-toolbar-button" onClick={cancelTitleEdit} disabled={titleSaving}>
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              ) : draft ? (
+                <h1 className="max-w-4xl break-words pr-4 text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary sm:text-[34px]">{title}</h1>
+              ) : (
+                <ConversationSavedHeader
+                  title={title}
+                  cwd={currentCwd}
+                  onTitleClick={!renameConversationDisabled ? beginTitleEdit : undefined}
+                  cwdEditing={false}
+                  cwdDraft={conversationCwdDraft}
+                  cwdError={null}
+                  cwdSaveBusy={conversationCwdBusy}
+                  onCwdDraftChange={(value) => {
+                    setConversationCwdDraft(value);
+                    if (conversationCwdError) {
+                      setConversationCwdError(null);
+                    }
+                  }}
+                  onCancelEditingCwd={cancelConversationCwdEdit}
+                  onSaveCwd={() => { void submitConversationCwdChange(); }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
         {showBlockingConversationLoadingState ? (
           <LoadingState
             label="Loading messages…"
@@ -7051,7 +7141,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         ) : visibleTranscriptMessages ? (
           <>
             {visibleTranscriptHasOlderBlocks && (
-              <div className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur">
+              <div
+                className="sticky z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur"
+                style={{ top: `${conversationHeaderOffset}px` }}
+              >
                 <div className="min-w-0 text-[11px] text-secondary">
                   Showing the latest <span className="font-medium text-primary">{realMessages?.length ?? visibleTranscriptMessages.length}</span> of{' '}
                   <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
@@ -7090,7 +7183,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
               resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
-              windowingBadgeTopOffset={visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : undefined}
+              windowingBadgeTopOffset={conversationHeaderOffset + (visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : 12)}
             />
           </>
         ) : (
@@ -7103,7 +7196,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </svg>
               </div>
             )}
-            title={draft ? NEW_CONVERSATION_TITLE : title}
+            title={draft ? 'Choose a workspace' : (isLiveSession ? 'No messages yet' : 'This conversation is empty')}
             body={draft
               ? undefined
               : isLiveSession
@@ -7277,7 +7370,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pickDraftConversationCwd,
     savedWorkspacePathsLoading,
     selectDraftConversationWorkspace,
+    beginTitleEdit,
+    cancelConversationCwdEdit,
+    cancelTitleEdit,
+    conversationCwdBusy,
+    conversationCwdDraft,
+    conversationCwdError,
+    conversationHeaderOffset,
+    currentCwd,
+    isEditingTitle,
+    renameConversationDisabled,
+    saveTitleEdit,
+    submitConversationCwdChange,
     title,
+    titleDraft,
+    titleSaving,
     visibleTranscriptHasOlderBlocks,
     visibleTranscriptMessageIndexOffset,
     visibleTranscriptMessages,
@@ -7325,62 +7432,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-          <PageHeader className="min-h-[44px] gap-2 py-2">
-            <div className="flex-1 min-w-0">
-          {isEditingTitle && !draft ? (
-            <form
-              className="flex min-w-0 items-center gap-2"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void saveTitleEdit();
-              }}
-            >
-              <input
-                ref={titleInputRef}
-                value={titleDraft}
-                onChange={(event) => setTitleDraft(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Escape') {
-                    event.preventDefault();
-                    cancelTitleEdit();
-                  }
-                }}
-                placeholder="Name this conversation"
-                className="min-w-0 flex-1 rounded-lg border border-border-default bg-surface px-3 py-1.5 text-[15px] font-medium text-primary outline-none transition-colors focus:border-accent/60"
-                disabled={titleSaving}
-              />
-              <button type="submit" className="ui-toolbar-button text-primary" disabled={titleSaving}>
-                {titleSaving ? 'Saving…' : 'Save'}
-              </button>
-              <button type="button" className="ui-toolbar-button" onClick={cancelTitleEdit} disabled={titleSaving}>
-                Cancel
-              </button>
-            </form>
-          ) : draft ? (
-            <h1 className="ui-page-title truncate">{title}</h1>
-          ) : (
-            <ConversationSavedHeader
-              title={title}
-              cwd={currentCwd}
-              onTitleClick={!renameConversationDisabled ? beginTitleEdit : undefined}
-              cwdEditing={false}
-              cwdDraft={conversationCwdDraft}
-              cwdError={null}
-              cwdSaveBusy={conversationCwdBusy}
-              onCwdDraftChange={(value) => {
-                setConversationCwdDraft(value);
-                if (conversationCwdError) {
-                  setConversationCwdError(null);
-                }
-              }}
-              onCancelEditingCwd={cancelConversationCwdEdit}
-              onSaveCwd={() => { void submitConversationCwdChange(); }}
-            />
-          )}
-            </div>
-          </PageHeader>
-
-      {/* Messages */}
       {transcriptPane}
 
       {/* Input area */}
