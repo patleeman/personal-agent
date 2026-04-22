@@ -351,6 +351,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onBeforeQuitForUpdate: async () => {
       await prepareForQuit();
     },
+    onShowUpdateStatusUi: async () => {
+      await openMainRoute('/settings');
+    },
     shouldAutoInstallUpdates: () => readDesktopAppPreferences(loadDesktopConfig()).autoInstallUpdates,
     checkIdleForAutoInstall: () => inspectDesktopIdleState(),
   });

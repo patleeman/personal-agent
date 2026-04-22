@@ -1,5 +1,5 @@
 import { appendFileSync } from 'node:fs';
-import { app, dialog } from 'electron';
+import { Notification, app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
@@ -71,10 +71,12 @@ export class DesktopUpdateManager {
   private downloadedUpdate: UpdateDownloadedEvent | null = null;
   private promptingForInstall = false;
   private installingDownloadedUpdate = false;
+  private waitingForIdleNoticeVersion: string | null = null;
 
   constructor(
     private readonly options: {
       onBeforeQuitForUpdate?: () => Promise<void> | void;
+      onShowUpdateStatusUi?: () => Promise<void> | void;
       shouldAutoInstallUpdates?: () => boolean;
       checkIdleForAutoInstall?: () => Promise<DesktopUpdateIdleState> | DesktopUpdateIdleState;
     } = {},
@@ -265,6 +267,7 @@ export class DesktopUpdateManager {
 
     this.updater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
       this.downloadedUpdate = info;
+      this.waitingForIdleNoticeVersion = null;
       logUpdateMessage(`update ${info.version} finished downloading`);
       this.setState({
         status: 'ready',
@@ -336,6 +339,33 @@ export class DesktopUpdateManager {
     this.idleWaitIntervalHandle = null;
   }
 
+  private showWaitingForIdleNotification(info: UpdateDownloadedEvent, reason: string): void {
+    if (this.waitingForIdleNoticeVersion === info.version) {
+      return;
+    }
+
+    this.waitingForIdleNoticeVersion = info.version;
+
+    try {
+      if (!Notification.isSupported()) {
+        return;
+      }
+
+      const notification = new Notification({
+        title: `Personal Agent ${info.version} is ready to install`,
+        body: `It will install automatically once the desktop goes idle. ${reason}`,
+        icon: resolveDesktopRuntimePaths().colorIconFile,
+      });
+      notification.on('click', () => {
+        void this.options.onShowUpdateStatusUi?.();
+      });
+      notification.show();
+      logUpdateMessage(`showed waiting-for-idle notification for update ${info.version}`);
+    } catch (error) {
+      logUpdateMessage(`could not show waiting-for-idle notification for update ${info.version}: ${renderUpdateErrorMessage(error)}`);
+    }
+  }
+
   private async maybeAutoInstallDownloadedUpdate(): Promise<void> {
     if (!this.updater || !this.downloadedUpdate || this.promptingForInstall || this.installingDownloadedUpdate) {
       return;
@@ -359,11 +389,13 @@ export class DesktopUpdateManager {
     }
 
     if (!idleState.idle) {
+      const waitingReason = idleState.reason?.trim() || 'Local runs or conversations are still active.';
       this.startIdleWaitLoop();
+      this.showWaitingForIdleNotification(this.downloadedUpdate, waitingReason);
       this.setState({
         status: 'waiting-for-idle',
         downloadedVersion: this.downloadedUpdate.version,
-        waitingForIdleReason: idleState.reason?.trim() || 'Local runs or conversations are still active.',
+        waitingForIdleReason: waitingReason,
         lastError: undefined,
       });
       return;

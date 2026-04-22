@@ -122,6 +122,7 @@ That means:
 
 - the Settings page describes the local runtime instead of exposing launchd/systemd-style service controls
 - Desktop → App behavior owns auto-install-on-idle updates and start-on-sign-in behavior for the local menu bar app
+- when auto-install is enabled and a downloaded update is waiting for the desktop to go idle, the app posts a native notification and can reopen Settings from it
 - quitting the app is the expected way to stop the local Mac runtime because the desktop shell owns the daemon directly
 - if an external daemon is already running outside the app, quitting the desktop app does not stop that daemon; use `pa daemon stop`, `pa daemon restart`, or `pa daemon service uninstall` to manage it explicitly
 - background behavior normally comes from the menubar app staying open, not from separately managed OS services
