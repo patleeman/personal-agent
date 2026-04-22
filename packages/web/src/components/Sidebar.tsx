@@ -1,7 +1,7 @@
 import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { VaultFileTree } from './knowledge/VaultFileTree';
-import { KbQuickOpen } from './knowledge/KbQuickOpen';
+import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../client/api';
 import { useAppData } from '../app/contexts';
@@ -3046,25 +3046,8 @@ export function Sidebar() {
   const [knowledgeSearchParams, setKnowledgeSearchParams] = useSearchParams();
   const knowledgeActiveFileId = isKnowledgeRoute ? (knowledgeSearchParams.get('file') ?? null) : null;
   const handleKnowledgeFileSelect = useCallback((id: string) => {
-    if (!id) {
-      setKnowledgeSearchParams({}, { replace: true });
-    } else {
-      setKnowledgeSearchParams({ file: id }, { replace: true });
-    }
+    navigateKnowledgeFile(setKnowledgeSearchParams, id);
   }, [setKnowledgeSearchParams]);
-  const [kbQuickOpenVisible, setKbQuickOpenVisible] = useState(false);
-  // Cmd+P opens quick-open on knowledge routes
-  useEffect(() => {
-    if (!isKnowledgeRoute) return;
-    function handler(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'p') {
-        e.preventDefault();
-        setKbQuickOpenVisible(true);
-      }
-    }
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [isKnowledgeRoute]);
 
   return (
     <>
@@ -3192,12 +3175,6 @@ export function Sidebar() {
           </div>
         </div>
       </aside>
-      {kbQuickOpenVisible && (
-        <KbQuickOpen
-          onSelect={(id) => { handleKnowledgeFileSelect(id); setKbQuickOpenVisible(false); }}
-          onClose={() => setKbQuickOpenVisible(false)}
-        />
-      )}
       {workspaceQuickSelectOpen ? (
         <WorkspaceQuickSelectModal
           workspacePaths={savedWorkspacePaths}
