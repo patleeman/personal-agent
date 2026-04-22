@@ -16,6 +16,7 @@ import { createChangeWorkingDirectoryAgentExtension } from '../extensions/change
 import { createConversationAutoModeAgentExtension } from '../extensions/conversationAutoModeAgentExtension.js';
 import { createConversationQueueAgentExtension } from '../extensions/conversationQueueAgentExtension.js';
 import { createConversationInspectAgentExtension } from '../extensions/conversationInspectAgentExtension.js';
+import { createImageAgentExtension } from '../extensions/imageAgentExtension.js';
 import { createReminderAgentExtension } from '../extensions/reminderAgentExtension.js';
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
@@ -131,6 +132,7 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
         profilesRoot: getProfilesRoot(),
       }),
       createConversationInspectAgentExtension(),
+      createImageAgentExtension(),
       createArtifactAgentExtension({
         stateRoot: getStateRoot(),
         repoRoot,

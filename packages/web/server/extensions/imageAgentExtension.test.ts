@@ -1,0 +1,221 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { Api, Model } from '@mariozechner/pi-ai';
+import { createImageAgentExtension, parseImageGenerationSse } from './imageAgentExtension.js';
+
+function createJwtWithAccountId(accountId: string): string {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  return [
+    encode({ alg: 'none', typ: 'JWT' }),
+    encode({ 'https://api.openai.com/auth': { chatgpt_account_id: accountId } }),
+    'signature',
+  ].join('.');
+}
+
+function createModel(input: Partial<Model<Api>> & Pick<Model<Api>, 'id' | 'provider' | 'api'>): Model<Api> {
+  return {
+    id: input.id,
+    name: input.name ?? input.id,
+    provider: input.provider,
+    api: input.api,
+    baseUrl: input.baseUrl ?? '',
+    reasoning: input.reasoning ?? true,
+    input: input.input ?? ['text', 'image'],
+    cost: input.cost ?? {
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    },
+    contextWindow: input.contextWindow ?? 128_000,
+    maxTokens: input.maxTokens ?? 128_000,
+  } as Model<Api>;
+}
+
+function registerImageTool() {
+  let registeredTool:
+    | {
+      name: string;
+      execute: (...args: unknown[]) => Promise<{ content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; details?: Record<string, unknown> }>;
+      promptGuidelines?: string[];
+    }
+    | undefined;
+
+  createImageAgentExtension()({
+    registerTool: (tool: unknown) => {
+      registeredTool = tool as typeof registeredTool;
+    },
+  } as never);
+
+  if (!registeredTool) {
+    throw new Error('Image tool was not registered.');
+  }
+
+  return registeredTool;
+}
+
+function createToolContext(options: {
+  currentModel?: Model<Api>;
+  models?: Model<Api>[];
+  authByProvider?: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
+} = {}) {
+  const models = options.models ?? [];
+  const authByProvider = options.authByProvider ?? {};
+
+  return {
+    cwd: '/tmp/workspace',
+    hasUI: false,
+    isIdle: () => true,
+    abort: () => {},
+    hasPendingMessages: () => false,
+    shutdown: () => {},
+    getContextUsage: () => undefined,
+    compact: () => {},
+    getSystemPrompt: () => '',
+    model: options.currentModel,
+    modelRegistry: {
+      find: (provider: string, modelId: string) => models.find((model) => model.provider === provider && model.id === modelId),
+      getApiKeyAndHeaders: async (model: Model<Api>) => {
+        const auth = authByProvider[model.provider];
+        if (!auth?.apiKey) {
+          return { ok: false as const, error: `No API key for ${model.provider}` };
+        }
+
+        return {
+          ok: true as const,
+          apiKey: auth.apiKey,
+          headers: auth.headers,
+        };
+      },
+    },
+    sessionManager: {
+      getSessionId: () => 'conv-123',
+    },
+    ui: {},
+  };
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+describe('image agent extension', () => {
+  it('parses image-generation SSE output', () => {
+    const parsed = parseImageGenerationSse([
+      'event: response.output_item.done',
+      'data: {"item":{"type":"image_generation_call","result":"ZmFrZS1pbWFnZQ==","output_format":"png","quality":"medium","background":"opaque"}}',
+      '',
+      'event: response.output_text.done',
+      'data: {"text":"Here you go."}',
+      '',
+      'event: response.completed',
+      'data: {"response":{"id":"resp_123"}}',
+      '',
+    ].join('\n'));
+
+    expect(parsed).toEqual({
+      assistantText: 'Here you go.',
+      imageBase64: 'ZmFrZS1pbWFnZQ==',
+      outputFormat: 'png',
+      quality: 'medium',
+      background: 'opaque',
+      responseId: 'resp_123',
+    });
+  });
+
+  it('executes against the codex responses backend and returns an inline image', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(new Response([
+      'event: response.output_item.done',
+      'data: {"item":{"type":"image_generation_call","result":"ZmFrZS1pbWFnZQ==","output_format":"png","quality":"low","background":"opaque"}}',
+      '',
+      'event: response.output_text.done',
+      'data: {"text":"Generated image."}',
+      '',
+      'event: response.completed',
+      'data: {"response":{"id":"resp_image"}}',
+      '',
+    ].join('\n'), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await imageTool.execute(
+      'tool-1',
+      {
+        prompt: 'A tiny orange robot waving.',
+      },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: codexModel,
+        models: [codexModel],
+        authByProvider: {
+          'openai-codex': { apiKey: token },
+        },
+      }),
+    );
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://chatgpt.com/backend-api/codex/responses');
+    expect(request.method).toBe('POST');
+    const headers = new Headers(request.headers as HeadersInit);
+    expect(headers.get('authorization')).toBe(`Bearer ${token}`);
+    expect(headers.get('chatgpt-account-id')).toBe('acct-123');
+    expect(headers.get('openai-beta')).toBe('responses=experimental');
+
+    const body = JSON.parse(String(request.body)) as {
+      model: string;
+      tools: Array<{ type: string }>;
+      input: Array<{ content: Array<{ text?: string }> }>;
+    };
+    expect(body.model).toBe('gpt-5.4');
+    expect(body.tools).toEqual([{ type: 'image_generation' }]);
+    expect(body.input[0]?.content[0]?.text).toBe('A tiny orange robot waving.');
+
+    expect(result.content).toEqual([
+      { type: 'text', text: 'Generated image.' },
+      { type: 'image', data: 'ZmFrZS1pbWFnZQ==', mimeType: 'image/png' },
+    ]);
+    expect(result.details).toMatchObject({
+      provider: 'openai-codex',
+      model: 'gpt-5.4',
+      responseId: 'resp_image',
+      outputFormat: 'png',
+      quality: 'low',
+      background: 'opaque',
+      size: 'auto',
+    });
+  });
+
+  it('fails clearly when no compatible auth is configured', async () => {
+    const imageTool = registerImageTool();
+    const anthropicModel = createModel({
+      id: 'claude-sonnet-4-6',
+      provider: 'anthropic',
+      api: 'anthropic-messages',
+      input: ['text'],
+      reasoning: false,
+    });
+
+    await expect(imageTool.execute(
+      'tool-1',
+      { prompt: 'A skyline at dusk.' },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: anthropicModel,
+        models: [anthropicModel],
+      }),
+    )).rejects.toThrow('Image generation requires configured openai-codex or openai auth with a GPT-5 model.');
+  });
+});

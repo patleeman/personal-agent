@@ -579,6 +579,7 @@ const TOOL_META: Record<string, { icon: string; label: string; color: string; to
   edit:        { icon: '✎',  label: 'edit',            color: 'text-accent bg-accent/5',     tone: 'accent' },
   web_search:  { icon: '⌕',  label: 'web_search',      color: 'text-success bg-success/5',   tone: 'success' },
   web_fetch:   { icon: '⌕',  label: 'web_fetch',       color: 'text-success bg-success/5',   tone: 'success' },
+  image:       { icon: '◌',  label: 'image',           color: 'text-accent bg-accent/5',     tone: 'accent' },
   screenshot:  { icon: '⊡',  label: 'screenshot',      color: 'text-secondary bg-elevated',  tone: 'muted' },
   artifact:    { icon: '◫',  label: 'artifact',        color: 'text-accent bg-accent/5',     tone: 'accent' },
   checkpoint:  { icon: '✓',  label: 'checkpoint',      color: 'text-success bg-success/5',   tone: 'success' },
