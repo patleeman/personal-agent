@@ -84,6 +84,10 @@ That keeps the repo from growing nested package islands for every built-in exten
 
 Only add a local extension `package.json` when the extension truly needs isolation from the main app dependency graph, and document why.
 
+The inverse rule also matters: workspace packages must declare their own runtime dependencies in their local `package.json` files even if the repo root already installs them.
+
+That is especially important for `packages/web`, because the packaged desktop app ships the web server from the workspace package boundary, not from the repo root dependency list.
+
 ## What to avoid
 
 Avoid introducing new workspaces for:
@@ -95,9 +99,19 @@ Avoid introducing new workspaces for:
 
 The default move should be: add a folder, not a package.
 
+## App surfaces outside the workspace set
+
+Some shipped clients are not workspace packages:
+
+- `apps/ios/` — the host-connected iOS companion app
+- `apps/browser-extension/` — the Chrome/Firefox URL capture extension
+
+Those surfaces use local build scripts from the repo root instead of joining the TypeScript workspace graph.
+
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Release cycle](./release-cycle.md)
+- [Browser extension URL capture](./browser-extension.md)
 - [Web server route modules](./web-server-routing.md)
