@@ -1,4 +1,5 @@
 import { isComposerHistoryStorageKey } from '../conversation/composerHistory';
+import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from './knowledgeOpenFiles';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from './knowledgeTreeState';
 import { isRailWidthStorageKey } from '../ui-state/layoutSizing';
 
@@ -55,6 +56,7 @@ function removeStoredItemsMatching(predicate: (key: string) => boolean): void {
 
 export function resetStoredLayoutPreferences(): void {
   removeStoredItem(SIDEBAR_WIDTH_STORAGE_KEY);
+  removeStoredItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY);
   removeStoredItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY);
   removeStoredItemsMatching((key) => isRailWidthStorageKey(key) || isSidebarNavSectionStorageKey(key));
 }

@@ -6,6 +6,13 @@ import {
 } from 'react';
 import { vaultApi } from '../../client/api';
 import {
+  addOpenFileId,
+  readStoredOpenFileIds,
+  removeOpenFileId,
+  renameOpenFileIds,
+  writeStoredOpenFileIds,
+} from '../../local/knowledgeOpenFiles';
+import {
   addExpandedFolderId,
   collapseExpandedFolderIds,
   readStoredExpandedFolderIds,
@@ -41,6 +48,7 @@ const ICON = {
   move:       'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
   search:     'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
   import:     'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
+  x:          'M6 18 18 6M6 6l12 12',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -361,6 +369,95 @@ function insertEntry(nodes: TreeNode[], parentDir: string, entry: VaultEntry): T
   });
 }
 
+function formatOpenFileName(fileId: string): string {
+  return fileId.split('/').filter(Boolean).pop() ?? fileId;
+}
+
+function formatOpenFileDir(fileId: string): string {
+  return fileId.split('/').slice(0, -1).join('/');
+}
+
+function resolveRenamedFileId(fileId: string | null, oldId: string, newId: string): string | null {
+  if (!fileId) {
+    return null;
+  }
+
+  if (oldId.endsWith('/') && newId.endsWith('/') && fileId.startsWith(oldId)) {
+    return `${newId}${fileId.slice(oldId.length)}`;
+  }
+
+  if (fileId === oldId) {
+    return newId;
+  }
+
+  return null;
+}
+
+function OpenFilesSection({
+  openFileIds,
+  activeFileId,
+  onSelect,
+  onClose,
+}: {
+  openFileIds: readonly string[];
+  activeFileId: string | null;
+  onSelect: (id: string) => void;
+  onClose: (id: string) => void;
+}) {
+  return (
+    <div className="shrink-0 border-t border-border-subtle px-2 pb-2 pt-1.5">
+      <div className="flex items-center gap-2 px-1 pb-1">
+        <p className="ui-section-label flex-1">Open Files</p>
+        {openFileIds.length > 0 ? <span className="text-[10px] text-dim">{openFileIds.length}</span> : null}
+      </div>
+      {openFileIds.length === 0 ? (
+        <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
+      ) : (
+        <div className="max-h-44 space-y-1 overflow-y-auto">
+          {openFileIds.map((fileId) => {
+            const isActive = activeFileId === fileId;
+            const fileName = formatOpenFileName(fileId);
+            const parentDir = formatOpenFileDir(fileId);
+
+            return (
+              <div key={fileId} className="group flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label={`Open file ${fileId}`}
+                  className={[
+                    'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                    isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+                  ].join(' ')}
+                  aria-current={isActive ? 'true' : undefined}
+                  onClick={() => onSelect(fileId)}
+                >
+                  <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[12px] font-medium">{fileName.replace(/\.md$/, '')}</span>
+                    {parentDir ? <span className="block truncate text-[11px] text-dim">{parentDir}</span> : null}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Close file ${fileId}`}
+                  className="ui-icon-button ui-icon-button-compact shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onClose(fileId);
+                  }}
+                >
+                  <Ico d={ICON.x} size={10} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
@@ -372,13 +469,31 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
   const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
+  const initialOpenFileIds = useRef(activeFileId ? addOpenFileId(readStoredOpenFileIds(), activeFileId) : readStoredOpenFileIds());
+  const [openFileIds, setOpenFileIds] = useState<string[]>(initialOpenFileIds.current);
+  const openFileIdsRef = useRef<string[]>(initialOpenFileIds.current);
   const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
+
+  const persistOpenFileIds = useCallback((nextOpenFileIds: readonly string[]) => {
+    const normalized = [...nextOpenFileIds];
+    openFileIdsRef.current = normalized;
+    setOpenFileIds(normalized);
+    writeStoredOpenFileIds(normalized);
+  }, []);
 
   const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
     const normalized = new Set(nextExpandedFolderIds);
     expandedFolderIdsRef.current = normalized;
     writeStoredExpandedFolderIds(normalized);
   }, []);
+
+  useEffect(() => {
+    if (!activeFileId) {
+      return;
+    }
+
+    persistOpenFileIds(addOpenFileId(openFileIdsRef.current, activeFileId));
+  }, [activeFileId, persistOpenFileIds]);
 
   // ── Load root ───────────────────────────────────────────────────────────────
 
@@ -401,8 +516,20 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     const offs = [
       onKBEvent('kb:entries-changed', () => void loadRoot()),
       onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
+        persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
+
+        const nextActiveFileId = resolveRenamedFileId(activeFileId, oldId, newId);
+        if (nextActiveFileId) {
+          onFileSelect(nextActiveFileId);
+        }
+
         if (oldId.endsWith('/') || newId.endsWith('/')) {
           persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
+          void loadRoot();
+          return;
+        }
+
+        if (idToDir(oldId) !== idToDir(newId)) {
           void loadRoot();
           return;
         }
@@ -416,6 +543,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       }),
       onKBEvent<{ id: string }>('kb:file-created', () => void loadRoot()),
       onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
+        persistOpenFileIds(removeOpenFileId(openFileIdsRef.current, id));
         if (id.endsWith('/')) {
           persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
         }
@@ -423,7 +551,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       }),
     ];
     return () => offs.forEach((off) => off());
-  }, [loadRoot, persistExpandedFolderIds]);
+  }, [activeFileId, loadRoot, onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
 
   // ── Tree expansion ──────────────────────────────────────────────────────────
 
@@ -504,14 +632,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const handleMove = useCallback(async (entry: VaultEntry, targetDir: string) => {
     try {
       const updated = await vaultApi.move(entry.id, targetDir);
+      persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, entry.id, updated.id));
       if (entry.kind === 'folder') {
         persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, entry.id, updated.id));
       }
       setRoots((prev) => removeEntry(prev, entry.id));
-      emitKBEvent('kb:entries-changed');
-      if (activeFileId === entry.id) onFileSelect(updated.id);
+      emitKBEvent('kb:file-renamed', { oldId: entry.id, newId: updated.id });
     } catch (err) { console.error('move failed', err); }
-  }, [activeFileId, onFileSelect, persistExpandedFolderIds]);
+  }, [persistExpandedFolderIds, persistOpenFileIds]);
 
   const clearDragState = useCallback(() => {
     setDraggingEntry(null);
@@ -602,6 +730,19 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     if (editState.type === 'new-file') void confirmNewFile();
     if (editState.type === 'new-folder') void confirmNewFolder();
   }, [editState, confirmRename, confirmNewFile, confirmNewFolder]);
+
+  const handleOpenFileClose = useCallback((id: string) => {
+    const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, id);
+    const closedIndex = openFileIdsRef.current.indexOf(id);
+    persistOpenFileIds(nextOpenFileIds);
+
+    if (activeFileId !== id) {
+      return;
+    }
+
+    const fallbackIndex = Math.min(Math.max(closedIndex, 0), Math.max(nextOpenFileIds.length - 1, 0));
+    onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
+  }, [activeFileId, onFileSelect, persistOpenFileIds]);
 
   // ── Tree renderer ───────────────────────────────────────────────────────────
 
@@ -752,6 +893,13 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       )}
 
       {/* Move modal */}
+      <OpenFilesSection
+        openFileIds={openFileIds}
+        activeFileId={activeFileId}
+        onSelect={onFileSelect}
+        onClose={handleOpenFileClose}
+      />
+
       {moveEntry && (
         <MoveModal entry={moveEntry}
           onConfirm={(targetDir) => { void handleMove(moveEntry, targetDir); }}

@@ -3,6 +3,7 @@ import React, { act } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRoot, type Root } from 'react-dom/client';
 import { VaultFileTree } from './VaultFileTree';
+import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
 import type { VaultEntry, VaultTreeResult } from '../../shared/types';
 
@@ -100,6 +101,24 @@ function renderTree() {
   return { container, onFileSelect };
 }
 
+function ManagedTree({ initialActiveFileId = null }: { initialActiveFileId?: string | null }) {
+  const [activeFileId, setActiveFileId] = React.useState<string | null>(initialActiveFileId);
+  return <VaultFileTree activeFileId={activeFileId} onFileSelect={setActiveFileId} />;
+}
+
+function renderManagedTree(initialActiveFileId?: string | null) {
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  const root = createRoot(container);
+
+  act(() => {
+    root.render(<ManagedTree initialActiveFileId={initialActiveFileId} />);
+  });
+
+  mountedRoots.push(root);
+  return { container };
+}
+
 function getButton(container: HTMLElement, label: string): HTMLButtonElement {
   const button = container.querySelector(`button[aria-label="${label}"]`);
   if (!(button instanceof HTMLButtonElement)) {
@@ -191,5 +210,39 @@ describe('VaultFileTree', () => {
 
     expect(JSON.parse(localStorage.getItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY) ?? '[]')).toEqual(['notes/']);
     expect(container.querySelector('button[aria-label="todo.md"]')).toBeNull();
+  });
+
+  it('tracks open files, restores them after remount, and lets the active file close back to the previous one', async () => {
+    const { container } = renderManagedTree();
+    await flushAsyncWork();
+
+    click(getButton(container, 'README.md'));
+    await flushAsyncWork();
+    click(getButton(container, 'notes'));
+    await flushAsyncWork();
+    click(getButton(container, 'today.md'));
+    await flushAsyncWork();
+
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY) ?? '[]')).toEqual(['notes/today.md', 'README.md']);
+    expect(getButton(container, 'Open file notes/today.md')).toBeTruthy();
+    expect(getButton(container, 'Open file README.md')).toBeTruthy();
+
+    click(getButton(container, 'Close file notes/today.md'));
+    await flushAsyncWork();
+
+    expect(JSON.parse(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY) ?? '[]')).toEqual(['README.md']);
+    expect(getButton(container, 'Open file README.md')).toBeTruthy();
+
+    for (const root of mountedRoots.splice(0)) {
+      act(() => {
+        root.unmount();
+      });
+    }
+    container.remove();
+
+    const remounted = renderManagedTree();
+    await flushAsyncWork();
+
+    expect(getButton(remounted.container, 'Open file README.md')).toBeTruthy();
   });
 });
