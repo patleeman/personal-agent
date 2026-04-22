@@ -34,9 +34,6 @@ describe('vaultFiles', () => {
     const root = createVaultFixture();
 
     expect(listVaultFiles(root).map((file) => `${file.kind}:${file.id}`)).toEqual([
-      'folder:_profiles/',
-      'folder:_profiles/datadog/',
-      'file:_profiles/datadog/AGENTS.md',
       'folder:notes/',
       'file:notes/daily.md',
     ]);
@@ -51,7 +48,6 @@ describe('vaultFiles', () => {
     ).map((file) => `${file.kind}:${file.id}`)).toEqual([
       'folder:notes/',
       'file:notes/daily.md',
-      'file:_profiles/datadog/AGENTS.md',
     ]);
 
     expect(resolveVaultFileById('../secrets.txt', root)).toBeNull();

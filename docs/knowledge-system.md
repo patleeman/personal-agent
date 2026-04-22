@@ -59,7 +59,6 @@ These are not special KB contracts:
 
 - `notes/`
 - `projects/`
-- `_profiles/`
 - folder names used to imply semantics by themselves
 
 Those can still exist as conventions or implementation details, but the durable model should stay doc-first.
@@ -117,6 +116,10 @@ Use this rule:
 - do not put reusable procedures into random docs when they should be skills
 - do not rely on old conversation text as the only durable store
 - do not mix machine-local runtime/config state into the shared vault
+
+## Profiles are not vault content
+
+If you still use runtime profiles, their mutable config lives in machine-local config under `config/profiles/`, not inside the shared vault.
 
 ## Notes on old terminology
 

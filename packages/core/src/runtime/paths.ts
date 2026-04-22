@@ -119,8 +119,8 @@ function readMachineConfigRuntimeOverrides(): { vaultRoot?: string; knowledgeBas
 /**
  * Default durable knowledge vault root directory.
  *
- * Durable notes, projects, skills, and profile files now live in the external
- * vault by default rather than under the runtime state root.
+ * Durable notes, projects, and skills live in the external vault by default.
+ * Mutable profile config lives separately under machine-local config.
  */
 export function getDefaultVaultRoot(): string {
   return join(homedir(), 'Documents', 'personal-agent');
@@ -154,8 +154,8 @@ export function getVaultRoot(): string {
 /**
  * Default mutable profiles root directory.
  *
- * Profiles are legacy-only now, but the path helper remains so older callers can
- * still discover legacy profile-scoped vault content when it exists.
+ * Profiles are machine-local config now. They no longer live under the shared
+ * vault by default.
  */
 export function getDefaultProfilesRoot(): string {
   return getDurableProfilesDir();
@@ -206,28 +206,24 @@ function resolveDurableDir(syncRoot: string, canonicalName: string, legacyName?:
   return canonicalPath;
 }
 
-export function getDurableProfilesDir(vaultRoot: string = getVaultRoot()): string {
-  return resolveDurableDir(vaultRoot, '_profiles', 'profiles');
+export function getDurableProfilesDir(configRoot: string = getConfigRoot()): string {
+  return join(configRoot, 'profiles');
 }
 
 export function getDurableAgentFilePath(vaultRoot: string = getVaultRoot()): string {
   return join(vaultRoot, 'AGENTS.md');
 }
 
-export function getDurableProfileDir(profile: string, vaultRoot: string = getVaultRoot()): string {
-  return join(getDurableProfilesDir(vaultRoot), profile);
+export function getDurableProfileDir(profile: string, profilesRoot: string = getDurableProfilesDir()): string {
+  return join(profilesRoot, profile);
 }
 
-export function getDurableProfileAgentFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
-  return join(getDurableProfileDir(profile, vaultRoot), 'AGENTS.md');
+export function getDurableProfileSettingsFilePath(profile: string, profilesRoot: string = getDurableProfilesDir()): string {
+  return join(getDurableProfileDir(profile, profilesRoot), 'settings.json');
 }
 
-export function getDurableProfileSettingsFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
-  return join(getDurableProfileDir(profile, vaultRoot), 'settings.json');
-}
-
-export function getDurableProfileModelsFilePath(profile: string, vaultRoot: string = getVaultRoot()): string {
-  return join(getDurableProfileDir(profile, vaultRoot), 'models.json');
+export function getDurableProfileModelsFilePath(profile: string, profilesRoot: string = getDurableProfilesDir()): string {
+  return join(getDurableProfileDir(profile, profilesRoot), 'models.json');
 }
 
 export function getDurableSettingsDir(vaultRoot: string = getVaultRoot()): string {

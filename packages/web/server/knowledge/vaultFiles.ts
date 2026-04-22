@@ -16,6 +16,8 @@ const SKIPPED_DIRECTORY_NAMES = new Set([
   '.git',
   '.next',
   '.obsidian',
+  '_profiles',
+  'profiles',
   'coverage',
   'dist',
   'dist-server',
@@ -38,7 +40,7 @@ function isSafeVaultRelativePath(value: string): boolean {
   }
 
   const segments = normalizeVaultLookupPath(value).split('/').filter(Boolean);
-  return segments.length > 0 && segments.every((segment) => segment !== '.' && segment !== '..');
+  return segments.length > 0 && segments.every((segment) => segment !== '.' && segment !== '..' && !SKIPPED_DIRECTORY_NAMES.has(segment));
 }
 
 function isInsideRoot(root: string, targetPath: string): boolean {

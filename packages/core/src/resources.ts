@@ -1,21 +1,17 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import {
   getDurableAgentFilePath,
-  getDurableModelsDir as getCanonicalLegacyDurableModelsDir,
-  getDurableNodesDir as getCanonicalDurableNodesDir,
   getDurableProfilesDir as getCanonicalDurableProfilesDir,
   getDurableProfileDir,
-  getDurableProfileAgentFilePath,
   getDurableProfileModelsFilePath,
   getDurableProfileSettingsFilePath,
-  getDurableSettingsDir as getCanonicalLegacyDurableSettingsDir,
   getLocalProfileDir as getCanonicalLocalProfileDir,
   getVaultRoot,
 } from './runtime/paths.js';
 import { listUnifiedSkillNodeDirs } from './nodes.js';
 import { readMachineInstructionFiles, readMachineSkillDirs } from './machine-config.js';
 import { homedir } from 'os';
-import { basename, dirname, isAbsolute, join, relative, resolve } from 'path';
+import { dirname, isAbsolute, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { composePromptCatalogDirectory } from './prompt-catalog.js';
 
@@ -38,6 +34,7 @@ export interface ProfileLayer {
 export interface ResolvedResourceProfile {
   name: string;
   repoRoot: string;
+  vaultRoot: string;
   profilesRoot: string;
   layers: ProfileLayer[];
   extensionDirs: string[];
@@ -56,6 +53,7 @@ export interface ResolvedResourceProfile {
 
 export interface ResolveProfileOptions {
   repoRoot?: string;
+  vaultRoot?: string;
   localProfileDir?: string;
   profilesRoot?: string;
 }
@@ -267,33 +265,14 @@ export function resolveLocalProfileSettingsFilePath(options: ResolveProfileOptio
   return join(localProfileDir, 'settings.json');
 }
 
-function legacyScopedFileNameForProfile(profileName: string): string {
-  return profileName === 'shared' ? 'global.json' : `${profileName}.json`;
-}
-
-function resolveLegacyProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  validateProfileName(profileName || 'shared');
-  return join(getLegacySettingsRoot(options), legacyScopedFileNameForProfile(profileName || 'shared'));
-}
-
-function resolveLegacyProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  validateProfileName(profileName || 'shared');
-  return join(resolveProfilesRoot(options), profileName || 'shared', 'agent', 'AGENTS.md');
-}
-
 export function resolveProfileSettingsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return getDurableProfileSettingsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
+  return getDurableProfileSettingsFilePath(profileName || 'shared', resolveProfilesRoot(options));
 }
 
 export function resolveProfileModelsFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
   validateProfileName(profileName || 'shared');
-  return getDurableProfileModelsFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
-}
-
-export function resolveProfileAgentFilePath(profileName: string, options: ResolveProfileOptions = {}): string {
-  validateProfileName(profileName || 'shared');
-  return getDurableProfileAgentFilePath(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
+  return getDurableProfileModelsFilePath(profileName || 'shared', resolveProfilesRoot(options));
 }
 
 function readConfiguredPackageEntries(settingsPath: string): unknown[] {
@@ -317,11 +296,6 @@ function readWritableProfileSettingsObject(profileName: string, options: Resolve
     return readSettingsObject(canonicalPath);
   }
 
-  const legacyPath = resolveLegacyProfileSettingsFilePath(profileName, options);
-  if (existsSync(legacyPath)) {
-    return readSettingsObject(legacyPath);
-  }
-
   return {};
 }
 
@@ -329,11 +303,6 @@ function readWritableProfilePackageEntries(profileName: string, options: Resolve
   const canonicalPath = resolveProfileSettingsFilePath(profileName, options);
   if (existsSync(canonicalPath)) {
     return readConfiguredPackageEntries(canonicalPath);
-  }
-
-  const legacyPath = resolveLegacyProfileSettingsFilePath(profileName, options);
-  if (existsSync(legacyPath)) {
-    return readConfiguredPackageEntries(legacyPath);
   }
 
   return [];
@@ -463,33 +432,26 @@ export function getRepoDefaultsAgentDir(explicitRepoRoot?: string): string {
   return join(getRepoRoot(explicitRepoRoot), 'defaults', 'agent');
 }
 
+function resolveVaultRoot(options: ResolveProfileOptions = {}): string {
+  const explicit = options.vaultRoot ?? process.env.PERSONAL_AGENT_VAULT_ROOT;
+  if (typeof explicit === 'string' && explicit.trim().length > 0) {
+    return resolve(expandHomePath(explicit.trim()));
+  }
+
+  return resolve(getVaultRoot());
+}
+
 function resolveProfilesRoot(options: ResolveProfileOptions = {}): string {
   const explicit = options.profilesRoot ?? process.env.PERSONAL_AGENT_PROFILES_ROOT;
   if (typeof explicit === 'string' && explicit.trim().length > 0) {
     return resolve(expandHomePath(explicit.trim()));
   }
 
-  return getCanonicalDurableProfilesDir();
-}
-
-function getSyncRootFromProfilesRoot(profilesRoot: string): string {
-  return dirname(resolve(profilesRoot));
-}
-
-function getLegacySettingsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalLegacyDurableSettingsDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
-}
-
-function getLegacyModelsRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalLegacyDurableModelsDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
+  return resolve(getCanonicalDurableProfilesDir());
 }
 
 function getProfileDir(profileName: string, options: ResolveProfileOptions = {}): string {
-  return getDurableProfileDir(profileName || 'shared', getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
-}
-
-function getNodesRoot(options: ResolveProfileOptions = {}): string {
-  return getCanonicalDurableNodesDir(getSyncRootFromProfilesRoot(resolveProfilesRoot(options)));
+  return getDurableProfileDir(profileName || 'shared', resolveProfilesRoot(options));
 }
 
 function listProfilesInRoot(root: string): string[] {
@@ -502,75 +464,17 @@ function listProfilesInRoot(root: string): string[] {
   for (const entry of readdirSync(root, { withFileTypes: true })) {
     if (entry.isDirectory() && /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(entry.name)) {
       profiles.add(entry.name);
-      continue;
-    }
-
-    if (entry.isFile() && entry.name.endsWith('.json')) {
-      const name = entry.name.slice(0, -'.json'.length);
-      if (/^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(name)) {
-        profiles.add(name);
-      }
     }
   }
 
   return [...profiles].sort((left, right) => left.localeCompare(right));
 }
 
-function rootHasSharedDurableResources(root: string, extensions: string[]): boolean {
-  if (!existsSync(root)) {
-    return false;
-  }
-
-  const stack = [root];
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-    const entries = readdirSync(current, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === 'shared' || entry.name === 'global') {
-          return true;
-        }
-        stack.push(fullPath);
-        continue;
-      }
-
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      if (!extensions.some((extension) => entry.name.endsWith(extension))) {
-        continue;
-      }
-
-      const baseName = entry.name.replace(/\.[^.]+$/, '');
-      if (baseName === 'shared' || baseName === 'global') {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
-  const profilesRoot = resolveProfilesRoot(options);
-  const repoRoot = getRepoRoot(options.repoRoot);
   const profiles = new Set<string>([
-    ...listProfilesInRoot(profilesRoot),
+    'shared',
+    ...listProfilesInRoot(resolveProfilesRoot(options)),
   ]);
-
-  const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
-  if (
-    repoDefaultsAgentDir
-    || Boolean(resolveSharedVaultAgentFile(options))
-    || rootHasSharedDurableResources(getLegacySettingsRoot(options), ['.json'])
-    || rootHasSharedDurableResources(getLegacyModelsRoot(options), ['.json'])
-    || existsSync(getNodesRoot(options))
-  ) {
-    profiles.add('shared');
-  }
 
   return [...profiles].sort((left, right) => left.localeCompare(right));
 }
@@ -631,83 +535,6 @@ function resolveConfiguredSkillDirs(): string[] {
     const dir = existingDir(path);
     return dir ? collectConfiguredSkillDirs(dir) : [];
   }));
-}
-
-function isScopeAlias(value: string): boolean {
-  return value === 'shared' || value === 'global';
-}
-
-function fileDirectScopeApplies(baseName: string, profileName: string, knownProfiles: Set<string>): boolean | undefined {
-  if (isScopeAlias(baseName) || baseName.startsWith('shared-') || baseName.startsWith('global-')) {
-    return true;
-  }
-
-  if (baseName === profileName || baseName.startsWith(`${profileName}-`)) {
-    return true;
-  }
-
-  for (const knownProfile of knownProfiles) {
-    if (baseName === knownProfile || baseName.startsWith(`${knownProfile}-`)) {
-      return false;
-    }
-  }
-
-  return undefined;
-}
-
-function relativePathAppliesToProfile(root: string, filePath: string, profileName: string, knownProfiles: Set<string>): boolean {
-  const relativePath = relative(root, filePath).replace(/\\/g, '/');
-  const segments = relativePath.split('/').filter((segment) => segment.length > 0);
-  const firstSegment = segments[0];
-
-  if (firstSegment && segments.length > 1 && (knownProfiles.has(firstSegment) || isScopeAlias(firstSegment))) {
-    return isScopeAlias(firstSegment) || firstSegment === profileName;
-  }
-
-  const baseName = basename(filePath).replace(/\.[^.]+$/, '');
-  const directScope = fileDirectScopeApplies(baseName, profileName, knownProfiles);
-  if (directScope !== undefined) {
-    return directScope;
-  }
-
-  return true;
-}
-
-function collectScopedFiles(root: string, extensions: string[], profileName: string, knownProfiles: Set<string>): string[] {
-  if (!existsSync(root)) {
-    return [];
-  }
-
-  const output: string[] = [];
-  const stack = [resolve(root)];
-
-  while (stack.length > 0) {
-    const current = stack.pop() as string;
-    const entries = readdirSync(current, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = join(current, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(fullPath);
-        continue;
-      }
-
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      if (!extensions.some((extension) => entry.name.endsWith(extension))) {
-        continue;
-      }
-
-      if (relativePathAppliesToProfile(root, fullPath, profileName, knownProfiles)) {
-        output.push(fullPath);
-      }
-    }
-  }
-
-  output.sort();
-  return dedupe(output);
 }
 
 function isExtensionEntrypointFile(name: string): boolean {
@@ -794,31 +621,15 @@ function validateProfileName(profileName: string): void {
 }
 
 function resolveSharedVaultAgentFile(options: ResolveProfileOptions = {}): string | undefined {
-  return existingFile(getDurableAgentFilePath(getSyncRootFromProfilesRoot(resolveProfilesRoot(options))));
+  return existingFile(getDurableAgentFilePath(resolveVaultRoot(options)));
 }
 
-function resolveDurableAgentFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
-  const output: string[] = [];
-  const sharedAgent = resolveSharedVaultAgentFile(options)
-    ?? existingFile(resolveProfileAgentFilePath('shared', options))
-    ?? existingFile(resolveLegacyProfileAgentFilePath('shared', options));
-  const profileAgent = profileName === 'shared'
-    ? undefined
-    : existingFile(resolveProfileAgentFilePath(profileName, options))
-      ?? existingFile(resolveLegacyProfileAgentFilePath(profileName, options));
-
-  if (sharedAgent) {
-    output.push(sharedAgent);
-  }
-
-  if (profileAgent) {
-    output.push(profileAgent);
-  }
-
-  return dedupe(output);
+function resolveDurableAgentFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
+  const sharedAgent = resolveSharedVaultAgentFile(options);
+  return sharedAgent ? [sharedAgent] : [];
 }
 
-function resolveDurableSettingsFiles(profileName: string, knownProfiles: Set<string>, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableSettingsFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
   const output: string[] = [];
   const sharedSettings = existingFile(resolveProfileSettingsFilePath('shared', options));
   const profileSettings = existingFile(resolveProfileSettingsFilePath(profileName, options));
@@ -836,11 +647,10 @@ function resolveDurableSettingsFiles(profileName: string, knownProfiles: Set<str
     }
   }
 
-  output.push(...collectScopedFiles(getLegacySettingsRoot(options), ['.json'], profileName, knownProfiles));
   return dedupe(output);
 }
 
-function resolveDurableModelsFiles(profileName: string, knownProfiles: Set<string>, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableModelsFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
   const output: string[] = [];
   const sharedModels = existingFile(resolveProfileModelsFilePath('shared', options));
   const profileModels = existingFile(resolveProfileModelsFilePath(profileName, options));
@@ -858,7 +668,6 @@ function resolveDurableModelsFiles(profileName: string, knownProfiles: Set<strin
     }
   }
 
-  output.push(...collectScopedFiles(getLegacyModelsRoot(options), ['.json'], profileName, knownProfiles));
   return dedupe(output);
 }
 
@@ -870,20 +679,14 @@ export function resolveResourceProfile(
   validateProfileName(profileName);
 
   const repoRoot = getRepoRoot(options.repoRoot);
+  const vaultRoot = resolveVaultRoot(options);
   const profilesRoot = resolveProfilesRoot(options);
-  const syncRoot = getSyncRootFromProfilesRoot(profilesRoot);
   const declaredProfiles = listProfilesInRoot(profilesRoot);
   if (profileName !== 'shared' && !declaredProfiles.includes(profileName)) {
     throw new Error(
       `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName)}`,
     );
   }
-
-  const knownProfiles = new Set<string>([
-    ...declaredProfiles,
-    profileName,
-    'shared',
-  ]);
 
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   const localBase = resolveLocalProfileDir(options);
@@ -892,9 +695,9 @@ export function resolveResourceProfile(
   const durableAgentFiles = resolveDurableAgentFiles(profileName, options);
   const configuredInstructionFiles = resolveConfiguredInstructionFiles();
   const configuredSkillDirs = resolveConfiguredSkillDirs();
-  const durableSettingsFiles = resolveDurableSettingsFiles(profileName, knownProfiles, options);
-  const durableModelsFiles = resolveDurableModelsFiles(profileName, knownProfiles, options);
-  const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { profilesRoot });
+  const durableSettingsFiles = resolveDurableSettingsFiles(profileName, options);
+  const durableModelsFiles = resolveDurableModelsFiles(profileName, options);
+  const durableSkillDirs = listUnifiedSkillNodeDirs(profileName, { vaultRoot });
 
   const layers: ProfileLayer[] = [];
 
@@ -908,10 +711,9 @@ export function resolveResourceProfile(
     || durableModelsFiles.length > 0
     || durableSkillDirs.length > 0
     || existsSync(getProfileDir(profileName, options))
-    || existsSync(join(profilesRoot, `${profileName}.json`))
     || profileName === 'shared'
   ) {
-    layers.push({ name: 'durable', agentDir: syncRoot });
+    layers.push({ name: 'durable', agentDir: vaultRoot });
   }
 
   if (localAgentDir) {
@@ -920,7 +722,7 @@ export function resolveResourceProfile(
 
   if (layers.length === 0) {
     throw new Error(
-      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${syncRoot}`,
+      `Shared defaults not found. Checked ${getRepoDefaultsAgentDir(repoRoot)} and ${vaultRoot}`,
     );
   }
 
@@ -952,6 +754,7 @@ export function resolveResourceProfile(
   return {
     name: profileName,
     repoRoot,
+    vaultRoot,
     profilesRoot,
     layers,
     extensionDirs,
@@ -1105,7 +908,7 @@ export function materializeProfileToAgentDir(
     : undefined;
   const appendContent = combineMarkdownChunks([
     generatedAppendContent ?? '',
-    buildVaultRootAppendSystemChunk(getSyncRootFromProfilesRoot(profile.profilesRoot)),
+    buildVaultRootAppendSystemChunk(profile.vaultRoot),
     fileAppendContent ?? '',
   ]);
 

@@ -40,14 +40,10 @@ export function isEditableMemoryFilePath(filePath: string, profile: string): boo
   const profilesRoot = getProfilesRoot();
   const noteDir = normalizeMemoryPath(getDurableNotesDir(vaultRoot));
   const baseAgentFile = normalizeMemoryPath(getDurableAgentFilePath(vaultRoot));
-  const profileDir = normalizeMemoryPath(join(profilesRoot, profile));
-  const legacyAgentDir = normalizeMemoryPath(join(profilesRoot, profile, 'agent'));
   const sharedSkillsDir = normalizeMemoryPath(getDurableSkillsDir(vaultRoot));
 
   return normalized === baseAgentFile
     || normalized.startsWith(`${noteDir}/`)
-    || normalized.startsWith(`${profileDir}/`)
-    || normalized.startsWith(`${legacyAgentDir}/`)
     || normalized.startsWith(`${sharedSkillsDir}/`);
 }
 
@@ -146,7 +142,7 @@ export function buildRecentReadUsage(_paths: string[]): Map<string, RecentReadUs
 }
 
 export function listMemoryDocs(options: { includeSearchText?: boolean } = {}): MemoryDocItem[] {
-  const docs = loadUnifiedNodes({ profilesRoot: getProfilesRoot() }).nodes
+  const docs = loadUnifiedNodes().nodes
     .filter((doc) => doc.kinds.includes('note') || (!doc.kinds.includes('project') && !doc.kinds.includes('skill')))
     .map((doc) => mapLoadedMemoryDoc(doc, options.includeSearchText === true));
 
@@ -306,8 +302,6 @@ export function createSkillDoc(input: CreatedSkillDoc): SkillItem {
     body: input.body?.trim() || `# ${title}\n\n${description || `Use this skill for ${title}.`}`,
     tags: ['type:skill', `profile:${profile}`],
     force: input.force,
-  }, {
-    profilesRoot: getProfilesRoot(),
   });
 
   return {
@@ -472,8 +466,6 @@ export function createMemoryDoc(input: CreatedMemoryDoc): CreatedMemoryDoc {
     related: input.related,
     force: input.force,
     updatedAt: input.updated,
-  }, {
-    profilesRoot: getProfilesRoot(),
   });
 
   return {

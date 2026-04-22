@@ -119,7 +119,6 @@ import { cancelDurableRun, clearDurableRunsListCache, getDurableRun, getDurableR
 import { getDurableRunAttentionSignature } from './automation/durableRunAttention.js';
 import {
   buildReferencedMemoryDocsContext,
-  buildReferencedProfilesContext,
   buildReferencedSkillsContext,
   buildReferencedTasksContext,
   pickPromptReferencesInOrder,

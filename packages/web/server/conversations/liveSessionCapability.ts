@@ -467,7 +467,6 @@ interface PreparedLiveSessionPrompt {
     taskIds: string[];
     memoryDocIds: string[];
     skillNames: string[];
-    profileIds: string[];
   };
   referencedVaultFiles: Array<{ id: string; path: string }>;
   referencedAttachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>;
@@ -524,14 +523,12 @@ async function prepareLiveSessionPrompt(
         tasks,
         memoryDocs,
         skills: [],
-        profiles: [],
       })
     : {
         projectIds: [],
         taskIds: [],
         memoryDocIds: [],
         skillNames: [],
-        profileIds: [],
       };
   const expandedNodeReferences = promptReferences.projectIds.length > 0
     || promptReferences.memoryDocIds.length > 0

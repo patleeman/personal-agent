@@ -28,7 +28,6 @@ export {
   getDurableProfilesDir,
   getDurableAgentFilePath,
   getDurableProfileDir,
-  getDurableProfileAgentFilePath,
   getDurableProfileSettingsFilePath,
   getDurableProfileModelsFilePath,
   getDurableSettingsDir,

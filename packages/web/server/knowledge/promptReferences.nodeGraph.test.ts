@@ -1,10 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const getProfilesRootMock = vi.hoisted(() => vi.fn());
 const loadUnifiedNodesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@personal-agent/core', () => ({
-  getProfilesRoot: getProfilesRootMock,
   loadUnifiedNodes: loadUnifiedNodesMock,
 }));
 
@@ -12,9 +10,7 @@ import { expandPromptReferencesWithNodeGraph } from './promptReferences.js';
 
 describe('expandPromptReferencesWithNodeGraph', () => {
   beforeEach(() => {
-    getProfilesRootMock.mockReset();
     loadUnifiedNodesMock.mockReset();
-    getProfilesRootMock.mockReturnValue('/profiles-root');
   });
 
   it('adds parent, relationship, and child node references without duplicating seeds', () => {
@@ -102,7 +98,6 @@ describe('expandPromptReferencesWithNodeGraph', () => {
       skillNames: ['missing-seed', 'skill-related'],
     });
 
-    expect(getProfilesRootMock).toHaveBeenCalledTimes(1);
-    expect(loadUnifiedNodesMock).toHaveBeenCalledWith({ profilesRoot: '/profiles-root' });
+    expect(loadUnifiedNodesMock).toHaveBeenCalledWith();
   });
 });

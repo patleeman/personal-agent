@@ -46,6 +46,12 @@ ${profilesBlock}metadata:
 `);
 }
 
+function writeProfileDirs(stateRoot: string, ...profiles: string[]): void {
+  for (const profile of profiles) {
+    mkdirSync(join(stateRoot, 'config', 'profiles', profile), { recursive: true });
+  }
+}
+
 afterEach(async () => {
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   vi.restoreAllMocks();
@@ -67,8 +73,7 @@ describe('note policy extension', () => {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
+    writeProfileDirs(stateRoot, 'shared', 'datadog');
     mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
     writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
 id: artifacts
@@ -108,6 +113,7 @@ summary: How built-in rendered outputs behave.
     expect(prompt).toContain('- vault_root: vault');
     expect(prompt).toContain('- Shared notes dir: vault/notes');
     expect(prompt).toContain('Use the active-profile `AGENTS.md`, skills, and shared note nodes');
+    expect(prompt).toContain('- AGENTS.md: vault/AGENTS.md');
     expect(prompt).toContain(`- Internal skills folder: ${join(repoRoot, 'internal-skills')}`);
     expect(prompt).toContain('These are built-in runtime guides for personal-agent features.');
     expect(prompt).toContain('<available_internal_skills>');
@@ -131,7 +137,7 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'missing-profile';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
+    writeProfileDirs(stateRoot, 'shared');
     mkdirSync(join(repoRoot, 'internal-skills', 'artifacts'), { recursive: true });
     writeFileSync(join(repoRoot, 'internal-skills', 'artifacts', 'INDEX.md'), `---
 id: artifacts
@@ -167,7 +173,7 @@ summary: How built-in rendered outputs behave.
     expect(prompt).toContain(`- vault_root: ${join(stateRoot, 'vault')}`);
     expect(prompt).toContain('- requested_profile: missing-profile');
     expect(prompt).toContain('requested profile was missing');
-    expect(prompt).toContain('- AGENTS.md: none (shared profile does not use AGENTS.md)');
+    expect(prompt).toContain(`- AGENTS.md: ${join(stateRoot, 'vault', 'AGENTS.md')}`);
     expect(prompt).toContain(`- Scheduled tasks dir: ${join(stateRoot, 'sync', 'tasks')} (Note: Scheduled tasks belong here, not in shared notes).`);
     expect(prompt).not.toContain('## Shared Notes & Available Nodes');
   });
@@ -178,8 +184,6 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_REPO_ROOT = repoRoot;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
-
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -215,8 +219,7 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
+    writeProfileDirs(stateRoot, 'shared', 'datadog');
 
     let beforeAgentStartHandler: ((event: { prompt: string; systemPrompt: string }, ctx: { cwd: string }) => Promise<unknown>) | undefined;
 
@@ -246,13 +249,12 @@ summary: How built-in rendered outputs behave.
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = 'datadog';
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'vault');
 
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'shared'), { recursive: true });
-    mkdirSync(join(stateRoot, 'vault', '_profiles', 'datadog'), { recursive: true });
+    writeProfileDirs(stateRoot, 'shared', 'datadog');
 
     const context = resolveNoteProfileContext(repoRoot);
     expect(context.activeProfile).toBe('datadog');
     expect(context.layers.map((layer) => layer.name)).toEqual(['shared', 'datadog']);
-    expect(context.activeAgentsFile).toBe(join(stateRoot, 'vault', '_profiles', 'datadog', 'AGENTS.md'));
+    expect(context.activeAgentsFile).toBe(join(stateRoot, 'vault', 'AGENTS.md'));
     expect(context.activeSkillsDir).toBe(join(stateRoot, 'vault', 'skills'));
     expect(context.activeTasksDir).toBe(join(stateRoot, 'sync', 'tasks'));
     expect(context.activeNotesDir).toBe(join(stateRoot, 'vault', 'notes'));

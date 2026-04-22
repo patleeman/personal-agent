@@ -24,6 +24,7 @@ function createTempProfilesRoot(): string {
   const root = mkdtempSync(join(tmpdir(), 'personal-agent-profiles-'));
   const profilesRoot = join(root, 'sync', 'profiles');
   mkdirSync(profilesRoot, { recursive: true });
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(root, 'sync');
   tempDirs.push(root);
   return profilesRoot;
 }
@@ -67,7 +68,6 @@ describe('resources negative tests', () => {
       const profilesRoot = createTempProfilesRoot();
       const local = createTempDir('personal-agent-local-');
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-      writeFile(join(profilesRoot, 'shared.json'), '{}\n');
       writeFile(join(local, 'agent/AGENTS.md'), '# Local\n');
 
       const resolved = resolveResourceProfile('shared', {
@@ -142,27 +142,27 @@ describe('resources negative tests', () => {
   });
 
   describe('listProfiles edge cases', () => {
-    it('returns empty array when profiles directory does not exist', () => {
+    it('always includes the shared profile', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual([]);
+      expect(profiles).toEqual(['shared']);
     });
 
-    it('reads profile ids from json definition files', () => {
+    it('reads profile ids from profile directories', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(profilesRoot, 'incomplete.json'), '{}\n');
+      mkdirSync(join(profilesRoot, 'incomplete'), { recursive: true });
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual(['incomplete']);
+      expect(profiles).toEqual(['incomplete', 'shared']);
     });
 
     it('handles profiles with special characters in name (valid)', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
-      writeFile(join(profilesRoot, 'test-profile_v2.json'), '{}\n');
+      mkdirSync(join(profilesRoot, 'test-profile_v2'), { recursive: true });
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
       expect(profiles).toContain('test-profile_v2');

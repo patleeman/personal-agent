@@ -144,6 +144,16 @@ The machine-local overlay defaults to:
 
 Use it for local-only overrides that should not be shared through the vault.
 
+## Profile config root
+
+If you still use runtime profiles, their mutable per-profile config defaults to:
+
+```text
+~/.local/state/personal-agent/config/profiles/<profile>/
+```
+
+That is machine-local state, not part of the shared vault contract.
+
 ## Runtime state roots
 
 Machine-local runtime state defaults to:

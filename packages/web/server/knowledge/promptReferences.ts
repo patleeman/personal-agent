@@ -1,5 +1,5 @@
 import { relative } from 'node:path';
-import { getProfilesRoot, loadUnifiedNodes, type UnifiedNodeRecord } from '@personal-agent/core';
+import { loadUnifiedNodes, type UnifiedNodeRecord } from '@personal-agent/core';
 
 export interface PromptReferenceTask {
   id: string;
@@ -32,18 +32,11 @@ export interface PromptReferenceSkill {
   path: string;
 }
 
-export interface PromptReferenceProfile {
-  id: string;
-  source: string;
-  path: string;
-}
-
 export interface ResolvedPromptReferences {
   projectIds: string[];
   taskIds: string[];
   memoryDocIds: string[];
   skillNames: string[];
-  profileIds: string[];
 }
 
 export interface ExpandedPromptNodeGraphReferences {
@@ -106,25 +99,21 @@ export function resolvePromptReferences(input: {
   tasks: PromptReferenceTask[];
   memoryDocs: PromptReferenceMemoryDoc[];
   skills: PromptReferenceSkill[];
-  profiles: PromptReferenceProfile[];
 }): ResolvedPromptReferences {
   const mentionIds = extractMentionIds(input.text);
   const projectIdSet = new Set(input.availableProjectIds);
   const taskIdSet = new Set(input.tasks.map((task) => task.id));
   const memoryDocIdSet = new Set(input.memoryDocs.map((doc) => doc.id));
   const skillNameSet = new Set(input.skills.map((skill) => skill.name));
-  const profileIdSet = new Set(input.profiles.map((profile) => profile.id));
 
   const projectIds: string[] = [];
   const taskIds: string[] = [];
   const memoryDocIds: string[] = [];
   const skillNames: string[] = [];
-  const profileIds: string[] = [];
   const seenProjects = new Set<string>();
   const seenTasks = new Set<string>();
   const seenMemoryDocs = new Set<string>();
   const seenSkills = new Set<string>();
-  const seenProfiles = new Set<string>();
 
   for (const mentionId of mentionIds) {
     if (projectIdSet.has(mentionId)) {
@@ -139,9 +128,6 @@ export function resolvePromptReferences(input: {
     if (skillNameSet.has(mentionId)) {
       appendUnique(skillNames, seenSkills, mentionId);
     }
-    if (profileIdSet.has(mentionId)) {
-      appendUnique(profileIds, seenProfiles, mentionId);
-    }
   }
 
   return {
@@ -149,7 +135,6 @@ export function resolvePromptReferences(input: {
     taskIds,
     memoryDocIds,
     skillNames,
-    profileIds,
   };
 }
 
@@ -169,7 +154,7 @@ export function expandPromptReferencesWithNodeGraph(input: {
   skillNames: string[];
   maxRelatedPerSeed?: number;
 }): ExpandedPromptNodeGraphReferences {
-  const loaded = loadUnifiedNodes({ profilesRoot: getProfilesRoot() });
+  const loaded = loadUnifiedNodes();
   const nodesById = new Map(loaded.nodes.map((node) => [node.id, node] as const));
   const childrenByParent = new Map<string, string[]>();
   for (const node of loaded.nodes) {
@@ -341,14 +326,3 @@ export function buildReferencedSkillsContext(skills: PromptReferenceSkill[], rep
   ].join('\n');
 }
 
-export function buildReferencedProfilesContext(profiles: PromptReferenceProfile[], repoRoot: string): string {
-  return [
-    'Referenced profile instructions:',
-    ...profiles.map((profile) => [
-      `- @${profile.id}: ${profile.id} profile`,
-      `  path: ${toDisplayPath(repoRoot, profile.path)}`,
-      `  source: ${profile.source}`,
-    ].join('\n')),
-    'These are active profile instructions. Read them when the user refers to profile behavior, durable preferences, or operating constraints.',
-  ].join('\n');
-}

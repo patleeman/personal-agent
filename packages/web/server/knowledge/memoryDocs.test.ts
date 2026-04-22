@@ -123,8 +123,8 @@ Top-level note hub.
     expect(normalizeMemoryPath(null)).toBe('');
     expect(ensureMemoryDocsDir()).toBe(join(stateRoot, 'sync', 'notes'));
     expect(isEditableMemoryFilePath(notePath(stateRoot, 'memory-index'), 'assistant')).toBe(true);
-    expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'profile.md'), 'assistant')).toBe(true);
-    expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'agent', 'AGENTS.md'), 'assistant')).toBe(true);
+    expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'profile.md'), 'assistant')).toBe(false);
+    expect(isEditableMemoryFilePath(join(profilesRoot, 'assistant', 'agent', 'AGENTS.md'), 'assistant')).toBe(false);
     expect(isEditableMemoryFilePath(getDurableAgentFilePath(join(stateRoot, 'sync')), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(skillPath('browser-helper'), 'assistant')).toBe(true);
     expect(isEditableMemoryFilePath(join(stateRoot, 'outside.md'), 'assistant')).toBe(false);

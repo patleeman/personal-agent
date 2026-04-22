@@ -2,6 +2,7 @@ import { join, relative } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import {
+  getDurableAgentFilePath,
   getDurableNotesDir,
   getDurableSkillsDir,
   getDurableTasksDir,
@@ -165,7 +166,7 @@ export function resolveNoteProfileContext(cwd: string): NoteProfileContext {
     activeProfile,
     activeProfileDir,
     layers,
-    activeAgentsFile: activeProfile === 'shared' ? undefined : join(activeProfileDir, 'AGENTS.md'),
+    activeAgentsFile: getDurableAgentFilePath(getVaultRoot()),
     activeSkillsDir: getDurableSkillsDir(),
     activeTasksDir: getDurableTasksDir(),
     activeNotesDir: getDurableNotesDir(),
@@ -183,9 +184,7 @@ function buildNoteTemplateVariables(cwd: string, context: ReturnType<typeof reso
     repo_root: toDisplayPath(cwd, context.repoRoot),
     vault_root: toDisplayPath(cwd, getVaultRoot()),
     requested_profile: context.requestedProfile,
-    agents_edit_target: context.activeAgentsFile
-      ? toDisplayPath(cwd, context.activeAgentsFile)
-      : 'none (shared profile does not use AGENTS.md)',
+    agents_edit_target: toDisplayPath(cwd, context.activeAgentsFile ?? getDurableAgentFilePath(getVaultRoot())),
     skills_dir: toDisplayPath(cwd, context.activeSkillsDir),
     tasks_dir: context.activeTasksDir ? toDisplayPath(cwd, context.activeTasksDir) : 'none (shared profile does not use profile task dir)',
     notes_available: notesAvailable,

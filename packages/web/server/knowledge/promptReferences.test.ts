@@ -1,14 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildReferencedMemoryDocsContext,
-  buildReferencedProfilesContext,
   buildReferencedSkillsContext,
   buildReferencedTasksContext,
   extractMentionIds,
   pickPromptReferencesInOrder,
   resolvePromptReferences,
   type PromptReferenceMemoryDoc,
-  type PromptReferenceProfile,
   type PromptReferenceSkill,
   type PromptReferenceTask,
 } from './promptReferences.js';
@@ -54,19 +52,11 @@ const SKILLS: PromptReferenceSkill[] = [
   },
 ];
 
-const PROFILES: PromptReferenceProfile[] = [
-  {
-    id: 'assistant',
-    source: 'profile root',
-    path: '/vault/_profiles/assistant/AGENTS.md',
-  },
-];
-
 describe('promptReferences', () => {
   it('extracts unique mention ids in encounter order, including vault-style paths', () => {
-    expect(extractMentionIds('Check @daily-review and @_profiles/datadog/AGENTS.md then @daily-review again')).toEqual([
+    expect(extractMentionIds('Check @daily-review and @notes/project-state-model/INDEX.md then @daily-review again')).toEqual([
       'daily-review',
-      '_profiles/datadog/AGENTS.md',
+      'notes/project-state-model/INDEX.md',
     ]);
   });
 
@@ -77,30 +67,26 @@ describe('promptReferences', () => {
       tasks: TASKS,
       memoryDocs: MEMORY_DOCS,
       skills: [],
-      profiles: [],
     })).toEqual({
       projectIds: ['web-ui'],
       taskIds: ['memory-maintenance'],
       memoryDocIds: ['project-state-model'],
       skillNames: [],
-      profileIds: [],
     });
   });
 
-  it('ignores email-style @ tokens and resolves skill and profile mentions independently', () => {
+  it('ignores email-style @ tokens and resolves skill mentions independently', () => {
     expect(resolvePromptReferences({
-      text: 'Contact foo@bar.com, then use @backfill-tests with @assistant and @backfill-tests again.',
+      text: 'Contact foo@bar.com, then use @backfill-tests with @backfill-tests again.',
       availableProjectIds: [],
       tasks: TASKS,
       memoryDocs: MEMORY_DOCS,
       skills: SKILLS,
-      profiles: PROFILES,
     })).toEqual({
       projectIds: [],
       taskIds: [],
       memoryDocIds: [],
       skillNames: ['backfill-tests'],
-      profileIds: ['assistant'],
     });
   });
 
@@ -131,18 +117,12 @@ describe('promptReferences', () => {
     expect(context).toContain('description: Use this note when the user asks how durable project state is modeled or migrated.');
   });
 
-  it('builds skill and profile contexts using absolute paths outside the repo root', () => {
+  it('builds skill context using absolute paths outside the repo root', () => {
     const skillContext = buildReferencedSkillsContext(SKILLS, '/repo');
     expect(skillContext).toContain('Referenced skills:');
     expect(skillContext).toContain('@backfill-tests');
     expect(skillContext).toContain('path: /vault/_skills/backfill-tests/SKILL.md');
     expect(skillContext).toContain('source: durable node');
     expect(skillContext).toContain('description: Backfill tests for existing code.');
-
-    const profileContext = buildReferencedProfilesContext(PROFILES, '/repo');
-    expect(profileContext).toContain('Referenced profile instructions:');
-    expect(profileContext).toContain('@assistant: assistant profile');
-    expect(profileContext).toContain('path: /vault/_profiles/assistant/AGENTS.md');
-    expect(profileContext).toContain('source: profile root');
   });
 });

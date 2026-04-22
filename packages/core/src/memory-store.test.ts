@@ -15,10 +15,10 @@ const tempDirs: string[] = [];
 
 function createTempDir(prefix: string): string {
   const root = mkdtempSync(join(tmpdir(), prefix));
-  const profilesRoot = join(root, 'sync', '_profiles');
-  mkdirSync(profilesRoot, { recursive: true });
+  const vaultRoot = join(root, 'sync');
+  mkdirSync(vaultRoot, { recursive: true });
   tempDirs.push(root);
-  return profilesRoot;
+  return vaultRoot;
 }
 
 function writeFile(path: string, content: string): void {
@@ -26,8 +26,8 @@ function writeFile(path: string, content: string): void {
   writeFileSync(path, content, 'utf-8');
 }
 
-function memoryPath(profilesRoot: string, memoryId: string): string {
-  return join(profilesRoot, '..', 'notes', memoryId, 'INDEX.md');
+function memoryPath(vaultRoot: string, memoryId: string): string {
+  return join(vaultRoot, 'notes', memoryId, 'INDEX.md');
 }
 
 afterEach(async () => {
@@ -36,10 +36,10 @@ afterEach(async () => {
 
 describe('memory store organization metadata', () => {
   it('parses note nodes from sync/notes and tracks package-local references', () => {
-    const profilesRoot = createTempDir('personal-agent-memory-store-');
+    const vaultRoot = createTempDir('personal-agent-memory-store-');
 
     writeFile(
-      memoryPath(profilesRoot, 'personal-agent'),
+      memoryPath(vaultRoot, 'personal-agent'),
       `---
 id: personal-agent
 kind: note
@@ -65,7 +65,7 @@ Hub doc.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'web-ui.md'),
+      join(vaultRoot, 'notes', 'personal-agent', 'references', 'web-ui.md'),
       `---
 name: web-ui
 description: Durable UI notes.
@@ -80,14 +80,14 @@ Keep the right rail visible and resizable.
     );
 
     writeFile(
-      join(profilesRoot, '..', 'notes', 'personal-agent', 'references', 'state-model.md'),
+      join(vaultRoot, 'notes', 'personal-agent', 'references', 'state-model.md'),
       `# Project state model
 
 Keep planning state durable.
 `,
     );
 
-    const loaded = loadMemoryDocs({ profilesRoot });
+    const loaded = loadMemoryDocs({ vaultRoot });
     expect(loaded.parseErrors).toHaveLength(0);
     expect(loaded.docs.map((doc) => doc.id)).toEqual(['personal-agent']);
 
@@ -102,7 +102,7 @@ Keep planning state durable.
     });
     expect(hub?.referencePaths).toHaveLength(2);
 
-    const references = loadMemoryPackageReferences(join(profilesRoot, '..', 'notes', 'personal-agent'));
+    const references = loadMemoryPackageReferences(join(vaultRoot, 'notes', 'personal-agent'));
     expect(references.map((reference) => reference.title)).toEqual(['Project state model', 'web-ui']);
     expect(references[1]).toMatchObject({
       relativePath: 'references/web-ui.md',
@@ -117,7 +117,7 @@ Keep planning state durable.
   });
 
   it('creates note nodes in sync/notes', () => {
-    const profilesRoot = createTempDir('personal-agent-memory-create-');
+    const vaultRoot = createTempDir('personal-agent-memory-create-');
 
     const created = createMemoryDoc({
       id: 'memory-index',
@@ -129,7 +129,7 @@ Keep planning state durable.
       area: 'notes',
       role: 'hub',
       related: ['personal-agent'],
-    }, { profilesRoot });
+    }, { vaultRoot });
 
     expect(created).toMatchObject({
       id: 'memory-index',
@@ -139,7 +139,7 @@ Keep planning state durable.
     });
 
     const fileContent = readFileSync(created.filePath, 'utf-8');
-    expect(created.filePath).toBe(join(profilesRoot, '..', 'notes', 'memory-index.md'));
+    expect(created.filePath).toBe(join(vaultRoot, 'notes', 'memory-index.md'));
     expect(fileContent).toContain('id: memory-index');
     expect(fileContent).toContain('type:note');
     expect(fileContent).toContain('summary: Top-level memory hub.');
@@ -153,10 +153,10 @@ Keep planning state durable.
   });
 
   it('ignores project child markdown when listing top-level notes', () => {
-    const profilesRoot = createTempDir('personal-agent-memory-scope-');
+    const vaultRoot = createTempDir('personal-agent-memory-scope-');
 
     writeFile(
-      join(profilesRoot, '..', 'notes', 'top-level.md'),
+      join(vaultRoot, 'notes', 'top-level.md'),
       `---
 id: top-level
 title: Top-level note
@@ -173,7 +173,7 @@ tags:
     );
 
     writeFile(
-      join(profilesRoot, '..', 'projects', 'ship-it', 'project.md'),
+      join(vaultRoot, 'projects', 'ship-it', 'project.md'),
       `---
 id: ship-it
 kind: project
@@ -188,7 +188,7 @@ updatedAt: 2026-04-01T01:00:00.000Z
     );
 
     writeFile(
-      join(profilesRoot, '..', 'projects', 'ship-it', 'notes', 'scratch.md'),
+      join(vaultRoot, 'projects', 'ship-it', 'notes', 'scratch.md'),
       `---
 id: ship-it-scratch
 title: Scratch note
@@ -204,13 +204,13 @@ tags:
 `,
     );
 
-    const loaded = loadMemoryDocs({ profilesRoot });
+    const loaded = loadMemoryDocs({ vaultRoot });
     expect(loaded.docs.map((doc) => doc.id)).toEqual(['top-level']);
   });
 
   it('ignores legacy runtime notes outside the vault on load', () => {
-    const profilesRoot = createTempDir('personal-agent-memory-runtime-');
-    const runtimeNotePath = join(profilesRoot, '..', '..', 'pi-agent-runtime', 'notes', 'desktop.md');
+    const vaultRoot = createTempDir('personal-agent-memory-runtime-');
+    const runtimeNotePath = join(vaultRoot, '..', 'pi-agent-runtime', 'notes', 'desktop.md');
 
     writeFile(
       runtimeNotePath,
@@ -226,17 +226,17 @@ updatedAt: 2026-03-31
 `,
     );
 
-    const loaded = loadMemoryDocs({ profilesRoot });
+    const loaded = loadMemoryDocs({ vaultRoot });
     expect(loaded.docs.map((doc) => doc.id)).not.toContain('desktop');
     expect(existsSync(runtimeNotePath)).toBe(true);
-    expect(existsSync(join(profilesRoot, '..', 'notes', 'desktop.md'))).toBe(false);
+    expect(existsSync(join(vaultRoot, 'notes', 'desktop.md'))).toBe(false);
   });
 
   it('reports broken related references during lint', () => {
-    const profilesRoot = createTempDir('personal-agent-memory-lint-');
+    const vaultRoot = createTempDir('personal-agent-memory-lint-');
 
     writeFile(
-      memoryPath(profilesRoot, 'runpod'),
+      memoryPath(vaultRoot, 'runpod'),
       `---
 id: runpod
 kind: note
@@ -259,7 +259,7 @@ Broken related references.
 `,
     );
 
-    const result = lintMemoryDocs({ profilesRoot });
+    const result = lintMemoryDocs({ vaultRoot });
     expect(result.parseErrors).toEqual([]);
     expect(result.duplicateIds).toHaveLength(0);
     expect(result.referenceErrors).toEqual([

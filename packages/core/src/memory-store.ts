@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'fs';
 import { basename, join } from 'path';
 import { parseDocument, stringify } from 'yaml';
 import { createUnifiedNode, loadUnifiedNodes, type UnifiedNodeRecord } from './nodes.js';
-import { getDurableProfilesDir } from './runtime/paths.js';
+import { getVaultRoot } from './runtime/paths.js';
 import { getMemoryDocsDir, type ResolveMemoryDocsOptions } from './memory-docs.js';
 
 const FRONTMATTER_DELIMITER = '---';
@@ -124,12 +124,12 @@ export interface LintMemoryDocsResult {
   referenceErrors: MemoryDocReferenceError[];
 }
 
-function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string; profilesRoot: string } {
-  const profilesRoot = options.profilesRoot ?? getDurableProfilesDir();
+function resolveMemoryContext(options: ResolveMemoryDocsOptions = {}): { memoryDir: string; vaultRoot: string } {
+  const vaultRoot = options.vaultRoot ?? getVaultRoot();
 
   return {
-    memoryDir: getMemoryDocsDir({ profilesRoot }),
-    profilesRoot,
+    memoryDir: getMemoryDocsDir({ vaultRoot }),
+    vaultRoot,
   };
 }
 
@@ -342,8 +342,8 @@ export function validateMemoryDocId(id: string): void {
 }
 
 export function loadMemoryDocs(options: LoadMemoryDocsOptions = {}): LoadMemoryDocsResult {
-  const { memoryDir, profilesRoot } = resolveMemoryContext(options);
-  const loaded = loadUnifiedNodes({ profilesRoot });
+  const { memoryDir, vaultRoot } = resolveMemoryContext(options);
+  const loaded = loadUnifiedNodes({ vaultRoot });
 
   const docs = loaded.nodes
     .filter((node) => isNoteNode(node))
@@ -565,7 +565,7 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     throw new Error('summary is required');
   }
 
-  const { memoryDir, profilesRoot } = resolveMemoryContext(options);
+  const { memoryDir, vaultRoot } = resolveMemoryContext(options);
   const role = input.role?.trim().toLowerCase();
   const created = createUnifiedNode({
     id,
@@ -583,7 +583,7 @@ export function createMemoryDoc(input: CreateMemoryDocInput, options: ResolveMem
     related: input.related,
     updatedAt: input.updated?.trim() || currentDateYyyyMmDd(),
     force: input.force,
-  }, { profilesRoot });
+  }, { vaultRoot });
 
   const doc = mapUnifiedNodeToMemoryDoc(created.node);
   return {

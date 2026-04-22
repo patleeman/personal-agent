@@ -383,7 +383,7 @@ describe('live session routes', () => {
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
     resolveDurableRunsRootMock.mockReturnValue('/daemon/runs');
     resolveMentionedVaultFilesMock.mockReturnValue([]);
-    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: [], memoryDocIds: [], skillNames: [], profileIds: [] });
+    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: [], memoryDocIds: [], skillNames: [] });
     restoreQueuedMessageMock.mockResolvedValue({ restoredIndex: 0 });
     resumeLocalSessionMock.mockResolvedValue({ id: 'live-resumed' });
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
@@ -456,7 +456,7 @@ describe('live session routes', () => {
     expect(badAttachmentRes.json).toHaveBeenCalledWith({ error: 'Attachment not found' });
 
     extractMentionIdsMock.mockReturnValue(['task-1', 'note-1', 'vault-1']);
-    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: ['task-1'], memoryDocIds: ['note-1'], skillNames: [], profileIds: [] });
+    resolvePromptReferencesMock.mockReturnValue({ projectIds: [], taskIds: ['task-1'], memoryDocIds: ['note-1'], skillNames: [] });
     expandPromptReferencesWithNodeGraphMock.mockReturnValue({ projectIds: [], memoryDocIds: ['note-1'], skillNames: [] });
     resolveMentionedVaultFilesMock.mockReturnValue([{ id: 'vault-1', title: 'Vault file' }]);
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([

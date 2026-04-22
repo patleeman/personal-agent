@@ -216,9 +216,9 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders vault file mentions as a single pill', () => {
-    const html = renderAssistantText('Open @_profiles/datadog/AGENTS.md before editing.');
+    const html = renderAssistantText('Open @notes/reference/INDEX.md before editing.');
 
-    expect(html).toContain('@_profiles/datadog/AGENTS.md');
+    expect(html).toContain('@notes/reference/INDEX.md');
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
   });
 

@@ -22,7 +22,8 @@ function createTempStateRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'personal-agent-nodes-'));
   tempDirs.push(dir);
   process.env.PERSONAL_AGENT_STATE_ROOT = dir;
-  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'sync', '_profiles');
+  process.env.PERSONAL_AGENT_VAULT_ROOT = join(dir, 'sync');
+  process.env.PERSONAL_AGENT_PROFILES_ROOT = join(dir, 'config', 'profiles');
   return dir;
 }
 
@@ -43,6 +44,7 @@ afterEach(async () => {
 describe('unified nodes', () => {
   it('creates, updates, tags, and deletes a node', () => {
     const stateRoot = createTempStateRoot();
+    const vaultRoot = join(stateRoot, 'sync');
 
     const created = createUnifiedNode({
       id: 'sample-node',
@@ -53,7 +55,7 @@ describe('unified nodes', () => {
       parent: 'parent-node',
       related: ['sibling-node'],
       relationships: [{ type: 'depends-on', targetId: 'sibling-node' }],
-    }, { profilesRoot: join(stateRoot, 'sync', 'profiles') });
+    }, { vaultRoot });
 
     expect(created.node.kinds).toEqual(['note']);
     expect(created.node.links.parent).toBe('parent-node');
@@ -67,7 +69,7 @@ describe('unified nodes', () => {
       addTags: ['team:platform'],
       removeTags: ['area:test'],
       body: '# Renamed Node\n\nUpdated body.',
-    }, { profilesRoot: join(stateRoot, 'sync', 'profiles') });
+    }, { vaultRoot });
 
     expect(updated.title).toBe('Renamed Node');
     expect(updated.tags).toContain('team:platform');
@@ -77,24 +79,24 @@ describe('unified nodes', () => {
       id: 'sample-node',
       add: ['lang:typescript'],
       remove: ['team:platform'],
-    }, { profilesRoot: join(stateRoot, 'sync', 'profiles') });
+    }, { vaultRoot });
 
     expect(retagged.tags).toContain('lang:typescript');
     expect(retagged.tags).not.toContain('team:platform');
 
-    const loaded = loadUnifiedNodes({ profilesRoot: join(stateRoot, 'sync', 'profiles') });
+    const loaded = loadUnifiedNodes({ vaultRoot });
     expect(loaded.nodes).toHaveLength(1);
     expect(findUnifiedNodes(loaded.nodes, 'type:note AND profile:assistant')).toHaveLength(1);
     expect(findUnifiedNodes(loaded.nodes, 'parent:parent-node')).toHaveLength(1);
     expect(findUnifiedNodes(loaded.nodes, 'depends-on AND sibling-node')).toHaveLength(1);
 
-    expect(deleteUnifiedNode('sample-node', { profilesRoot: join(stateRoot, 'sync', 'profiles') })).toEqual({ ok: true, id: 'sample-node' });
-    expect(loadUnifiedNodes({ profilesRoot: join(stateRoot, 'sync', 'profiles') }).nodes).toHaveLength(0);
+    expect(deleteUnifiedNode('sample-node', { vaultRoot })).toEqual({ ok: true, id: 'sample-node' });
+    expect(loadUnifiedNodes({ vaultRoot }).nodes).toHaveLength(0);
   });
 
   it('loads notes, skills, and projects from the canonical vault layout', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', '_profiles');
+    const vaultRoot = join(stateRoot, 'sync');
 
     writeFile(join(stateRoot, 'sync', 'notes', 'desktop.md'), `---
 id: desktop
@@ -181,12 +183,12 @@ status: active
 # Scratch
 `);
 
-    const migration = migrateLegacyNodes({ profilesRoot });
+    const migration = migrateLegacyNodes({ vaultRoot });
     expect(migration.created).toEqual([]);
     expect(migration.updated).toEqual([]);
     expect(migration.conflicts).toEqual([]);
 
-    const loaded = loadUnifiedNodes({ profilesRoot });
+    const loaded = loadUnifiedNodes({ vaultRoot });
     expect(loaded.nodes.map((node) => node.id)).toEqual(['agent-browser', 'desktop', 'ship-it']);
     expect(findUnifiedNodes(loaded.nodes, 'type:skill AND profile:assistant').map((node) => node.id)).toEqual(['agent-browser']);
     expect(findUnifiedNodes(loaded.nodes, 'parent:infrastructure').map((node) => node.id)).toEqual(['desktop']);
@@ -196,13 +198,13 @@ status: active
     expect(projectNode?.body).toContain('# Ship It');
     expect(projectNode?.body).toContain('Ship the feature.');
 
-    const skillDirs = listUnifiedSkillNodeDirs('assistant', { profilesRoot });
+    const skillDirs = listUnifiedSkillNodeDirs('assistant', { vaultRoot });
     expect(skillDirs).toEqual([join(stateRoot, 'sync', '_skills', 'agent-browser')]);
   });
 
   it('reports duplicate ids across notes and projects and lints references', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', '_profiles');
+    const vaultRoot = join(stateRoot, 'sync');
 
     writeFile(join(stateRoot, 'sync', 'notes', 'shared-topic.md'), `---
 id: shared-topic
@@ -253,16 +255,16 @@ plan:
   tasks: []
 `);
 
-    const migration = migrateLegacyNodes({ profilesRoot });
+    const migration = migrateLegacyNodes({ vaultRoot });
     expect(migration.created).toEqual([]);
     expect(migration.updated).toEqual([]);
     expect(migration.conflicts).toEqual([]);
 
-    const loaded = loadUnifiedNodes({ profilesRoot });
+    const loaded = loadUnifiedNodes({ vaultRoot });
     expect(loaded.nodes).toHaveLength(2);
     expect(loaded.nodes.map((node) => node.id)).toEqual(['shared-topic', 'shared-topic']);
 
-    const lint = lintUnifiedNodes({ profilesRoot });
+    const lint = lintUnifiedNodes({ vaultRoot });
     expect(lint.duplicateIds).toEqual([
       expect.objectContaining({ id: 'shared-topic' }),
     ]);
@@ -273,7 +275,7 @@ plan:
 
   it('parses typed relationships from frontmatter objects', () => {
     const stateRoot = createTempStateRoot();
-    const profilesRoot = join(stateRoot, 'sync', '_profiles');
+    const vaultRoot = join(stateRoot, 'sync');
 
     writeFile(join(stateRoot, 'sync', 'notes', 'graph-node.md'), `---
 id: graph-node
@@ -295,7 +297,7 @@ links:
 Tracks graph relationships.
 `);
 
-    const loaded = loadUnifiedNodes({ profilesRoot });
+    const loaded = loadUnifiedNodes({ vaultRoot });
     expect(loaded.nodes[0]?.links.relationships).toEqual([
       { type: 'depends-on', targetId: 'upstream-node' },
       { type: 'implements', targetId: 'downstream-node' },
