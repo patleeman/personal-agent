@@ -7,6 +7,7 @@ import {
 import { vaultApi } from '../../client/api';
 import type { VaultEntry, VaultSearchResult } from '../../shared/types';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
+import { VAULT_ENTRY_DRAG_TYPE, canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -257,6 +258,8 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
+  const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
+  const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<VaultSearchResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -381,6 +384,55 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     } catch (err) { console.error('move failed', err); }
   }, [activeFileId, onFileSelect]);
 
+  const clearDragState = useCallback(() => {
+    setDraggingEntry(null);
+    setDropTargetDir(null);
+  }, []);
+
+  const handleEntryDragStart = useCallback((event: React.DragEvent<HTMLButtonElement>, entry: VaultEntry) => {
+    event.stopPropagation();
+    setDraggingEntry(entry);
+    setDropTargetDir(null);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(VAULT_ENTRY_DRAG_TYPE, entry.id);
+    event.dataTransfer.setData('text/plain', entry.id);
+  }, []);
+
+  const handleNodeDragOver = useCallback((event: React.DragEvent<HTMLButtonElement>, targetEntry: VaultEntry) => {
+    if (!draggingEntry) return;
+    const targetDir = normalizeVaultDir(targetEntry.kind === 'folder' ? targetEntry.id : idToDir(targetEntry.id));
+    if (!canDropVaultEntry(draggingEntry, targetDir)) {
+      if (dropTargetDir !== null) setDropTargetDir(null);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = 'move';
+    if (dropTargetDir !== targetDir) setDropTargetDir(targetDir);
+  }, [draggingEntry, dropTargetDir]);
+
+  const handleRootDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (!draggingEntry) return;
+    if (!canDropVaultEntry(draggingEntry, '')) {
+      if (dropTargetDir !== null) setDropTargetDir(null);
+      return;
+    }
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    if (dropTargetDir !== '') setDropTargetDir('');
+  }, [draggingEntry, dropTargetDir]);
+
+  const handleDropToDir = useCallback((event: React.DragEvent<HTMLElement>, targetDirInput: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const entry = draggingEntry;
+    clearDragState();
+    if (!entry) return;
+    const targetDir = normalizeVaultDir(targetDirInput);
+    if (!canDropVaultEntry(entry, targetDir)) return;
+    void handleMove(entry, targetDir);
+  }, [clearDragState, draggingEntry, handleMove]);
+
   // ── New file/folder ─────────────────────────────────────────────────────────
 
   const confirmNewFile = useCallback(async () => {
@@ -429,18 +481,27 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       const isFolder = node.entry.kind === 'folder';
       const isActive = activeFileId === node.entry.id;
       const isRenaming = editState?.type === 'rename' && editState.id === node.entry.id;
+      const nodeDropDir = normalizeVaultDir(isFolder ? node.entry.id : idToDir(node.entry.id));
+      const isDragging = draggingEntry?.id === node.entry.id;
+      const isDropTarget = dropTargetDir === nodeDropDir;
 
       return (
         <div key={node.entry.id}>
           <button
             type="button"
             aria-label={node.entry.name}
+            draggable={!isRenaming}
             className={['group flex w-full items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight text-left',
-              isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+              isDropTarget ? 'bg-accent/12 text-primary ring-1 ring-inset ring-accent/40' : isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
+              isDragging ? 'opacity-60' : '',
             ].join(' ')}
             style={{ paddingLeft: `${8 + depth * 14}px` }}
             onClick={isFolder ? () => { void handleToggle(node); } : () => onFileSelect(node.entry.id)}
             onContextMenu={(e) => handleContextMenu(e, node.entry)}
+            onDragStart={(e) => handleEntryDragStart(e, node.entry)}
+            onDragEnd={() => clearDragState()}
+            onDragOver={(e) => handleNodeDragOver(e, node.entry)}
+            onDrop={(e) => handleDropToDir(e, isFolder ? node.entry.id : idToDir(node.entry.id))}
           >
             <span className="shrink-0 w-3 flex items-center justify-center text-dim"
               style={{ transform: isFolder ? (node.expanded ? 'rotate(90deg)' : 'rotate(0deg)') : 'none', transition: 'transform 120ms' }}>
@@ -516,7 +577,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
       {/* Header (hidden while searching) */}
       {!inSearch && (
-        <div className="flex items-center gap-1 px-3 py-0.5 shrink-0">
+        <div className={['flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md', dropTargetDir === '' ? 'bg-accent/8 ring-1 ring-inset ring-accent/30' : ''].join(' ')}>
           <p className="ui-section-label flex-1">Knowledge Base</p>
           <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
             onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
@@ -530,7 +591,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-1 pb-3">
+      <div
+        className={['flex-1 overflow-y-auto min-h-0 px-1 pb-3', dropTargetDir === '' ? 'bg-accent/4' : ''].join(' ')}
+        onDragOver={!inSearch ? handleRootDragOver : undefined}
+        onDrop={!inSearch ? (e) => handleDropToDir(e, '') : undefined}
+      >
         {inSearch ? (
           searching
             ? <p className="px-3 py-4 text-[12px] text-dim text-center animate-pulse">Searching…</p>
