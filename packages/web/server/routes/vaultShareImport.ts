@@ -79,10 +79,10 @@ function buildSharedTextNote(input: {
   const summary = summarizeShareText(bodyText) || `Shared text captured on ${input.createdAt.slice(0, 10)}.`;
   const frontmatter: Record<string, unknown> = {
     title,
-    source_type: 'ios-share-text',
+    source_type: 'shared-text',
     captured_at: input.createdAt,
     summary,
-    tags: ['share', 'ios-share', 'text'],
+    tags: ['share', 'text'],
   };
   if (input.sourceApp) {
     frontmatter.source_app = input.sourceApp;
@@ -152,10 +152,10 @@ async function buildSharedUrlNote(input: {
   createdAt: string;
 }): Promise<{ title: string; content: string }> {
   const frontmatter: Record<string, unknown> = {
-    source_type: 'ios-share-url',
+    source_type: 'shared-url',
     source_url: input.url,
     captured_at: input.createdAt,
-    tags: ['share', 'ios-share', 'web-clip'],
+    tags: ['share', 'web-clip'],
   };
   if (input.sourceApp) {
     frontmatter.source_app = input.sourceApp;
@@ -228,11 +228,11 @@ function buildSharedImageNote(input: {
   const assetUrl = `/api/vault/asset?id=${encodeURIComponent(assetId)}`;
   const frontmatter: Record<string, unknown> = {
     title: baseTitle,
-    source_type: 'ios-share-image',
+    source_type: 'shared-image',
     captured_at: input.createdAt,
     asset_path: assetId,
     mime_type: input.mimeType ?? `image/${assetExt}`,
-    tags: ['share', 'ios-share', 'image'],
+    tags: ['share', 'image'],
   };
   if (input.sourceApp) {
     frontmatter.source_app = input.sourceApp;

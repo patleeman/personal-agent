@@ -17,7 +17,6 @@ The daemon owns long-lived runtime responsibilities such as:
 - setup QR generation state for native companion onboarding
 - companion network exposure state for desktop-owned local-network phone pairing
 - the daemon-hosted companion HTTP + WebSocket API
-- browser and native capture clients that pair through the companion API
 - maintenance and cleanup
 
 It gives the CLI and desktop shell one place to hand off long-lived work, and it is the intended backend for native companion clients.
@@ -112,7 +111,6 @@ When the daemon is unavailable:
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Browser extension URL capture](./browser-extension.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

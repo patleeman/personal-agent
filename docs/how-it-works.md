@@ -104,11 +104,7 @@ The desktop app wraps the web UI, owns a local backend while it is running, and 
 
 ### Daemon
 
-The daemon provides scheduled tasks / automations, deferred resumes, daemon-backed durable runs, and the companion API used by native clients and browser capture surfaces.
-
-### Browser extension
-
-The browser extension is a thin capture client for Chrome/Firefox. It pairs with a companion host and sends page or link URLs into the host-side knowledge import flow instead of writing vault files directly.
+The daemon provides scheduled tasks / automations, deferred resumes, and daemon-backed durable runs.
 
 ## Rules that keep the system coherent
 
@@ -128,4 +124,3 @@ The browser extension is a thin capture client for Chrome/Firefox. It pairs with
 - [Conversation Context Attachments](./conversation-context.md)
 - [Configuration](./configuration.md)
 - [Web UI Guide](./web-ui.md)
-- [Browser extension URL capture](./browser-extension.md)

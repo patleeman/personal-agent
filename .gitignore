@@ -13,7 +13,6 @@ build/generated/
 packages/*/dist/
 packages/*/dist-server/
 packages/desktop/vendor/
-apps/*/dist/
 profiles/**/dist/
 profiles/**/build/
 tools/*/.build/

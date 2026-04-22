@@ -377,8 +377,8 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
 
   if (!fileId) {
     return (
-      <div className="flex h-full w-full flex-1 items-center justify-center text-dim text-[13px]">
-        Select a file to edit
+      <div className="flex h-full w-full flex-1 items-center justify-center text-dim text-[13px] px-6 text-center">
+        Select a file to edit, or import a URL from the knowledge sidebar.
       </div>
     );
   }

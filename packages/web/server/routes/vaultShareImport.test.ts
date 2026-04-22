@@ -25,7 +25,7 @@ describe('vaultShareImport', () => {
     expect(imported.sourceKind).toBe('text');
     const note = readFileSync(imported.notePath, 'utf-8');
     expect(note).toContain('title: Quick note');
-    expect(note).toContain('source_type: ios-share-text');
+    expect(note).toContain('source_type: shared-text');
     expect(note).toContain('remember this snippet');
   });
 
@@ -45,7 +45,7 @@ describe('vaultShareImport', () => {
 
     expect(imported.asset?.id.startsWith('_attachments/')).toBe(true);
     const note = readFileSync(imported.notePath, 'utf-8');
-    expect(note).toContain('source_type: ios-share-image');
+    expect(note).toContain('source_type: shared-image');
     expect(note).toContain(imported.asset?.url ?? '');
   });
 
@@ -66,7 +66,7 @@ describe('vaultShareImport', () => {
     });
 
     const note = readFileSync(imported.notePath, 'utf-8');
-    expect(note).toContain('source_type: ios-share-url');
+    expect(note).toContain('source_type: shared-url');
     expect(note).toContain('source_url: https://example.com/post');
     expect(note).toContain('Important captured content.');
   });

@@ -101,6 +101,14 @@ That keeps the roles clean:
 - local config selects instruction files and skill dirs
 - the conversation stores references to the docs it cares about
 
+## URL import in the knowledge UI
+
+The Knowledge page can import a pasted web URL into a new markdown note.
+
+That flow uses the host-side share-import path, fetches readable page content when possible, and stores the original source URL plus capture metadata in frontmatter.
+
+Use it when the fastest correct move is “save this page into the vault as a note” rather than writing a note by hand.
+
 ## How to choose quickly
 
 Use this rule:

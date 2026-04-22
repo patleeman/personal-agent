@@ -104,7 +104,6 @@ The default move should be: add a folder, not a package.
 Some shipped clients are not workspace packages:
 
 - `apps/ios/` — the host-connected iOS companion app
-- `apps/browser-extension/` — the Chrome/Firefox URL capture extension
 
 Those surfaces use local build scripts from the repo root instead of joining the TypeScript workspace graph.
 
@@ -113,5 +112,4 @@ Those surfaces use local build scripts from the repo root instead of joining the
 - [How personal-agent works](./how-it-works.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Release cycle](./release-cycle.md)
-- [Browser extension URL capture](./browser-extension.md)
 - [Web server route modules](./web-server-routing.md)

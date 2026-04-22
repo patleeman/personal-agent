@@ -306,23 +306,6 @@ function collectReleaseFiles(releaseDir, version) {
   return files;
 }
 
-function collectBrowserExtensionReleaseFiles(browserExtensionReleaseDir, version) {
-  if (!existsSync(browserExtensionReleaseDir)) {
-    fail(`Browser extension release output directory not found: ${browserExtensionReleaseDir}`);
-  }
-
-  const files = readdirSync(browserExtensionReleaseDir)
-    .filter((name) => name.includes(`-${version}-`) && name.endsWith('.zip'))
-    .sort()
-    .map((name) => resolve(browserExtensionReleaseDir, name));
-
-  if (files.length === 0) {
-    fail(`Expected browser extension .zip artifacts in ${browserExtensionReleaseDir}`);
-  }
-
-  return files;
-}
-
 function collectPackagedAppPath(releaseDir) {
   const macOutputDir = resolve(releaseDir, 'mac-arm64');
   if (!existsSync(macOutputDir)) {
@@ -570,10 +553,8 @@ ensureReleaseRepoExists(releaseRepo);
 
 const buildRoot = createCleanReleaseSnapshot(env);
 const releaseDir = resolve(buildRoot, 'dist', 'release');
-const browserExtensionReleaseDir = resolve(buildRoot, 'apps', 'browser-extension', 'dist', 'release');
 
 rmSync(releaseDir, { recursive: true, force: true });
-rmSync(browserExtensionReleaseDir, { recursive: true, force: true });
 
 console.log(`Building signed desktop artifacts for ${tag} from the clean snapshot...`);
 run('npm', ['run', 'desktop:dist'], { cwd: buildRoot, env });
@@ -583,11 +564,6 @@ validatePackagedRuntimeDependencies(buildRoot, releaseDir);
 const files = collectReleaseFiles(releaseDir, version);
 notarizeDistributionContainers(env, files);
 
-console.log(`Building browser extension bundles for ${tag} from the clean snapshot...`);
-run('npm', ['run', 'extension:dist'], { cwd: buildRoot, env });
-const browserExtensionFiles = collectBrowserExtensionReleaseFiles(browserExtensionReleaseDir, version);
-const releaseAssets = [...files, ...browserExtensionFiles];
-
 console.log(`Pushing ${tag} to GitHub...`);
 pushReleaseRef(tag);
 
@@ -596,17 +572,16 @@ const releaseNotes = [
   '',
   'This repo intentionally only hosts release assets and update metadata.',
   'Source history stays in the private development repo.',
-  'Supplemental browser extension bundles are attached for manual installation.',
 ].join('\n');
 
 const releaseView = tryCapture('gh', ['release', 'view', tag, '--repo', releaseRepo, '--json', 'url']);
 if (releaseView.status === 0) {
   console.log(`Updating existing GitHub release ${tag} in ${releaseRepo}...`);
   run('gh', ['release', 'edit', tag, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes]);
-  run('gh', ['release', 'upload', tag, ...releaseAssets, '--repo', releaseRepo, '--clobber']);
+  run('gh', ['release', 'upload', tag, ...files, '--repo', releaseRepo, '--clobber']);
 } else if (`${releaseView.stderr}${releaseView.stdout}`.includes('release not found')) {
   console.log(`Creating GitHub release ${tag} in ${releaseRepo}...`);
-  const args = ['release', 'create', tag, ...releaseAssets, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes];
+  const args = ['release', 'create', tag, ...files, '--repo', releaseRepo, '--title', `Personal Agent ${version}`, '--notes', releaseNotes];
   if (version.includes('-')) {
     args.push('--prerelease');
   }

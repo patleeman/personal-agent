@@ -33,6 +33,7 @@ const ICON = {
   pencil:     'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
   move:       'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
   search:     'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
+  import:     'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -156,6 +157,104 @@ function MoveModal({ entry, onConfirm, onClose }: {
   );
 }
 
+function ImportUrlModal({
+  initialDirectoryId,
+  onImport,
+  onClose,
+}: {
+  initialDirectoryId: string;
+  onImport: (input: { url: string; title: string; directoryId: string }) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [url, setUrl] = useState('');
+  const [title, setTitle] = useState('');
+  const [directoryId, setDirectoryId] = useState(initialDirectoryId);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    urlRef.current?.focus();
+  }, []);
+
+  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmedUrl = url.trim();
+    if (!trimmedUrl) {
+      setError('URL is required.');
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    try {
+      await onImport({
+        url: trimmedUrl,
+        title: title.trim(),
+        directoryId: normalizeDirectoryId(directoryId),
+      });
+      onClose();
+    } catch (importError) {
+      setError(importError instanceof Error ? importError.message : String(importError));
+      setSubmitting(false);
+    }
+  }, [directoryId, onClose, onImport, title, url]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!submitting) onClose(); }}>
+      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(34rem,calc(100vw-2rem))] p-5" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-[13px] font-semibold text-primary mb-1">Import URL</h3>
+        <p className="text-[11px] text-dim mb-3">Paste a web URL and Personal Agent will fetch readable content into a new vault note.</p>
+        <form className="space-y-3" onSubmit={(event) => { void handleSubmit(event); }}>
+          <label className="block space-y-1">
+            <span className="text-[11px] text-dim">URL</span>
+            <input
+              ref={urlRef}
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://example.com/article"
+              className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 outline-none focus:border-accent"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] text-dim">Title override <span className="text-dim/70">optional</span></span>
+            <input
+              type="text"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Leave blank to use the page title"
+              className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 outline-none focus:border-accent"
+              autoComplete="off"
+            />
+          </label>
+          <label className="block space-y-1">
+            <span className="text-[11px] text-dim">Target folder <span className="text-dim/70">optional</span></span>
+            <input
+              type="text"
+              value={directoryId}
+              onChange={(event) => setDirectoryId(event.target.value)}
+              placeholder="Inbox"
+              className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 outline-none focus:border-accent"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
+          {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>Cancel</button>
+            <button type="submit" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70" disabled={submitting}>
+              {submitting ? 'Importing…' : 'Import URL'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── Inline name input ─────────────────────────────────────────────────────────
 
 function NameInput({ value, onChange, onConfirm, onCancel }: {
@@ -180,6 +279,10 @@ function idToDir(id: string): string {
   const parts = id.split('/');
   parts.pop();
   return parts.length > 0 ? `${parts.join('/')}/` : '';
+}
+
+function normalizeDirectoryId(value: string): string {
+  return value.trim().replace(/^\/+|\/+$/g, '');
 }
 
 function buildNode(entry: VaultEntry): TreeNode {
@@ -232,6 +335,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [editState, setEditState] = useState<EditState | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
+  const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
   const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
   const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
 
@@ -275,6 +379,21 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     const result = await vaultApi.tree(dir);
     setRoots((prev) => applyChildren(prev, node.entry.id, result.entries));
   }, []);
+
+  const openImportUrlModal = useCallback((directoryId?: string) => {
+    setImportDirectoryId(normalizeDirectoryId(directoryId ?? (activeFileId ? idToDir(activeFileId) : '')));
+  }, [activeFileId]);
+
+  const handleImportUrl = useCallback(async (input: { url: string; title: string; directoryId: string }) => {
+    const imported = await vaultApi.importUrl({
+      url: input.url,
+      ...(input.title ? { title: input.title } : {}),
+      ...(input.directoryId ? { directoryId: input.directoryId } : {}),
+      sourceApp: 'Personal Agent Knowledge UI',
+    });
+    emitKBEvent('kb:entries-changed');
+    onFileSelect(imported.note.id);
+  }, [onFileSelect]);
 
   // ── Context menu ────────────────────────────────────────────────────────────
 
@@ -501,6 +620,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         >
           <Ico d={ICON.search} size={12} />
         </button>
+        <button
+          type="button"
+          className="ui-icon-button ui-icon-button-compact"
+          title="Import URL"
+          onClick={() => openImportUrlModal()}
+        >
+          <Ico d={ICON.import} size={12} />
+        </button>
         <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
           onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
           <Ico d={ICON.plus} size={12} />
@@ -557,6 +684,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         <MoveModal entry={moveEntry}
           onConfirm={(targetDir) => { void handleMove(moveEntry, targetDir); }}
           onClose={() => setMoveEntry(null)} />
+      )}
+
+      {importDirectoryId !== null && (
+        <ImportUrlModal
+          initialDirectoryId={importDirectoryId}
+          onImport={handleImportUrl}
+          onClose={() => setImportDirectoryId(null)}
+        />
       )}
     </div>
   );

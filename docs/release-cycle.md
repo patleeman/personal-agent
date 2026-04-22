@@ -7,7 +7,7 @@ The release path is intentionally simple:
 1. bump the repo version with `npm version` at the repo root
 2. let the version hook sync every `packages/*/package.json` version and refresh `package-lock.json`
 3. build and notarize the macOS desktop app locally with Patrick's Keychain signing identity
-4. push the commit and tag to the private source repo, then create or update the matching GitHub release in the public `patleeman/personal-agent-releases` repo with the generated desktop updater assets plus supplemental browser-extension bundles
+4. push the commit and tag to the private source repo, then create or update the matching GitHub release in the public `patleeman/personal-agent-releases` repo with the generated updater assets
 
 ## Local commands
 
@@ -21,7 +21,6 @@ Those commands:
 
 - create the version bump commit and `v<version>` tag through `npm version`
 - build signed desktop artifacts locally
-- build browser-extension release bundles locally
 - push the commit and tag
 - create or update the matching GitHub release in `patleeman/personal-agent-releases`
 
@@ -50,7 +49,7 @@ If multiple `Developer ID Application` certificates are present, set `CSC_NAME` 
 
 ## What gets built
 
-`npm run desktop:dist` does the signed desktop build locally. `npm run extension:dist` builds the browser-extension bundles. The publish flow runs both. The desktop build:
+`npm run desktop:dist` does the release build locally. It:
 
 - cleans `packages/desktop/dist/`, rebuilds the desktop package, and rebuilds its dependencies
 - packages the Electron desktop app with `electron-builder` from a clean temporary snapshot of the repo
@@ -72,10 +71,9 @@ Override the target release repo by setting `PERSONAL_AGENT_RELEASE_REPO` before
 
 That repo is intentionally boring:
 
-- it exists only to host signed desktop artifacts, Electron updater metadata, and supplemental browser-extension bundles
+- it exists only to host signed desktop artifacts and Electron updater metadata
 - it should not contain source history from the private development repo
 - each release should include `latest-mac.yml`, the macOS `.zip`, the `.zip.blockmap`, and optionally the `.dmg` and `.dmg.blockmap`
-- releases may also include browser-extension install bundles such as `Personal-Agent-Browser-Extension-<version>-chrome-unpacked.zip` and `...-firefox-unpacked.zip`
 - release notes should stay generic so private commit history does not leak into the public feed
 
 ## Desktop update checks
@@ -106,10 +104,9 @@ When packaged, the desktop shell launches the bundled daemon and web server with
 
 This release flow currently targets macOS arm64 only.
 
-Shipped binaries, updater metadata, and supplemental browser-extension bundles are published through GitHub releases in `patleeman/personal-agent-releases` from Patrick's local signed build path.
+Shipped binaries and updater metadata are published through GitHub releases in `patleeman/personal-agent-releases` from Patrick's local signed build path.
 
 ## Related docs
 
 - [Electron desktop app plan](./electron-desktop-app-plan.md)
 - [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
-- [Browser extension URL capture](./browser-extension.md)

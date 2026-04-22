@@ -1209,3 +1209,13 @@ export interface VaultImageUploadResult {
   id: string;
   url: string;
 }
+
+export interface VaultShareImportResult {
+  note: VaultEntry;
+  sourceKind: 'text' | 'url' | 'image';
+  title: string;
+  asset?: {
+    id: string;
+    url: string;
+  };
+}
