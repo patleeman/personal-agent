@@ -1248,10 +1248,15 @@ body {
 
 /* ── Knowledge Base Editor ────────────────────────────────────────────────── */
 
+.kb-editor-shell {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
 .kb-editor-wrapper {
-  max-width: 720px;
-  margin: 0 auto;
-  padding: 1.5rem 2rem 6rem;
+  width: min(100%, 56rem);
+  padding: 1.75rem clamp(1.5rem, 3vw, 3rem) 6rem;
 }
 
 /* Obsidian-style editable title */
@@ -1319,6 +1324,7 @@ body {
 
 .kb-editor-content {
   outline: none;
+  width: 100%;
   font-size: 15px;
   line-height: 1.7;
   color: rgb(var(--color-primary));

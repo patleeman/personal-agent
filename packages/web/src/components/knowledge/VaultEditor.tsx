@@ -32,9 +32,6 @@ const ICON = {
   code:     'm16 18 6-6-6-6M8 6l-6 6 6 6',
   quote:    'M3 21c3 0 7-1 7-8V5c0-1.25-.756-2.017-2-2H4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2 1 0 1 0 1 1v1c0 1-1 2-2 2s-1 .008-1 1.031V20c0 1 0 1 1 1z M15 21c3 0 7-1 7-8V5c0-1.25-.757-2.017-2-2h-4c-1.25 0-2 .75-2 1.972V11c0 1.25.75 2 2 2h.75c0 2.25.25 4-2.75 4v3c0 1 0 1 1 1z',
   backlink: 'M9 15 3 9l6-6M3 9h12a6 6 0 0 1 0 12h-3',
-  tag:      'M9.568 3H5.25A2.25 2.25 0 0 0 3 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 0 0 5.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 0 0 9.568 3Z M6 6h.008v.008H6V6Z',
-  chevDown: 'm6 9 6 6 6-6',
-  image:    'M2.25 15.75l5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z',
 };
 
 function ToolbarButton({ active, onClick, title, children }: {
@@ -115,59 +112,6 @@ function serializeFrontmatter(fm: Frontmatter): string {
   return lines.join('\n') + '\n\n';
 }
 
-function FrontmatterPanel({ fm, onChange }: { fm: Frontmatter; onChange: (fm: Frontmatter) => void }) {
-  const [open, setOpen] = useState(false);
-  const [tagInput, setTagInput] = useState('');
-  const hasTags = fm.tags.length > 0;
-
-  return (
-    <div className="kb-fm-panel">
-      <button type="button" className="kb-fm-toggle" onClick={() => setOpen((o) => !o)}>
-        <Ico d={ICON.tag} size={11} />
-        <span>{hasTags ? fm.tags.join(', ') : 'Add tags…'}</span>
-        <Ico d={ICON.chevDown} size={11} />
-      </button>
-      {open && (
-        <div className="kb-fm-body">
-          <div className="kb-fm-row">
-            <span className="kb-fm-label">Tags</span>
-            <div className="flex flex-wrap gap-1 items-center flex-1">
-              {fm.tags.map((t) => (
-                <span key={t} className="kb-fm-tag">
-                  {t}
-                  <button type="button" className="ml-1 opacity-60 hover:opacity-100"
-                    onClick={() => onChange({ ...fm, tags: fm.tags.filter((x) => x !== t) })}>×</button>
-                </span>
-              ))}
-              <input
-                type="text"
-                placeholder="Add tag…"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if ((e.key === 'Enter' || e.key === ',') && tagInput.trim()) {
-                    e.preventDefault();
-                    const newTag = tagInput.trim().replace(/^#/, '');
-                    if (!fm.tags.includes(newTag)) onChange({ ...fm, tags: [...fm.tags, newTag] });
-                    setTagInput('');
-                  }
-                }}
-                className="bg-transparent outline-none text-[11px] text-primary placeholder:text-dim min-w-[80px] flex-1"
-              />
-            </div>
-          </div>
-          {fm.aliases.length > 0 && (
-            <div className="kb-fm-row">
-              <span className="kb-fm-label">Aliases</span>
-              <span className="text-[11px] text-secondary">{fm.aliases.join(', ')}</span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ── Editable title ────────────────────────────────────────────────────────────
 
 function EditableTitle({ fileName, fileId, onRenamed }: {
@@ -217,7 +161,7 @@ function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (i
   return (
     <div className="kb-backlinks">
       <div className="kb-backlinks-header"><Ico d={ICON.backlink} size={12} />
-        <span>{backlinks.length} backlink{backlinks.length !== 1 ? 's' : ''}</span>
+        <span>Linked from {backlinks.length} note{backlinks.length !== 1 ? 's' : ''}</span>
       </div>
       <div className="kb-backlinks-list">
         {backlinks.map((bl) => (
@@ -241,7 +185,6 @@ export interface VaultEditorProps {
 }
 
 export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }: VaultEditorProps) {
-  const [frontmatter, setFrontmatter] = useState<Frontmatter>({ tags: [], aliases: [] });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
@@ -351,8 +294,9 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     if (!fileId) {
       currentFileId.current = null;
       fileIdRef.current = null;
+      fmRef.current = { tags: [], aliases: [] };
       editor?.commands.setContent('', { contentType: 'markdown' });
-      setError(null); setFrontmatter({ tags: [], aliases: [] });
+      setError(null);
       return;
     }
     currentFileId.current = null;
@@ -361,7 +305,6 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     vaultApi.readFile(fileId)
       .then(({ content }) => {
         const { frontmatter: fm, body } = parseFrontmatter(content);
-        setFrontmatter(fm);
         fmRef.current = fm;
         if (editor) {
           editor.commands.setContent(body, { contentType: 'markdown' });
@@ -382,12 +325,6 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       Object.keys(fm).some((k) => k !== 'tags' && k !== 'aliases' && fm[k] !== '' && fm[k] != null);
     return hasFm ? serializeFrontmatter(fm) + body : body;
   }, [editor]);
-
-  const handleFmChange = useCallback((newFm: Frontmatter) => {
-    setFrontmatter(newFm);
-    fmRef.current = newFm;
-    if (currentFileId.current) setDirty(true);
-  }, []);
 
   const handleSaved = useCallback(() => { setDirty(false); setSavedAt(Date.now()); }, []);
   useAutosave(fileId ?? null, getContent, dirty, handleSaved);
@@ -413,9 +350,9 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0 flex-1 flex-col overflow-y-auto">
       {/* Status bar */}
-      <div className="flex items-center gap-2 px-6 py-1.5 shrink-0 border-b border-border-subtle">
+      <div className="flex items-center gap-2 border-b border-border-subtle px-6 py-1.5">
         <span className="text-[11px] text-dim truncate font-mono">{fileId}</span>
         <span className="ml-auto text-[11px] text-dim shrink-0">
           {dirty ? 'Unsaved' : savedAt ? 'Saved' : ''}
@@ -451,10 +388,8 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
         </BubbleMenu>
       )}
 
-      {/* Scrollable editor area */}
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="kb-editor-shell">
         <div className="kb-editor-wrapper">
-          <FrontmatterPanel fm={frontmatter} onChange={handleFmChange} />
           <EditableTitle
             fileName={titleName}
             fileId={fileId}

@@ -19,7 +19,7 @@ export function KnowledgePage() {
     : undefined;
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full flex-1 min-w-0">
       <VaultEditor
         fileId={activeFileId}
         fileName={fileName}
