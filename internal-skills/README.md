@@ -8,7 +8,6 @@ These are built-in runtime guides, not user-authored workflow skills. Use them w
 
 - [Artifacts and Rendered Outputs](./artifacts/INDEX.md)
 - [Async Attention and Wakeups](./async-attention/INDEX.md)
-- [Computer Use](./computer-use/INDEX.md)
 - [Scheduled Tasks](./scheduled-tasks/INDEX.md)
 - [Runs](./runs/INDEX.md)
 - [Reminders and Notification Delivery](./alerts/INDEX.md)
@@ -17,4 +16,4 @@ These are built-in runtime guides, not user-authored workflow skills. Use them w
 
 ## How to use this folder
 
-Each internal skill lives in its own directory with an `INDEX.md`, mirroring the shape of normal skills while staying a separate runtime category. Read the matching internal skill when the task touches a built-in `personal-agent` feature such as computer use, artifacts, tasks, runs, reminders, async attention, or runtime capabilities. Follow markdown cross-references within this folder first, then jump back to `docs/` for broader product context when needed.
+Each internal skill lives in its own directory with an `INDEX.md`, mirroring the shape of normal skills while staying a separate runtime category. Read the matching internal skill when the task touches a built-in `personal-agent` feature such as artifacts, tasks, runs, reminders, async attention, or runtime capabilities. Follow markdown cross-references within this folder first, then jump back to `docs/` for broader product context when needed.

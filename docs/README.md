@@ -43,7 +43,6 @@ Then use this order:
 - [Nodes](./nodes.md)
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Computer Use](../internal-skills/computer-use/INDEX.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 
@@ -54,7 +53,6 @@ Then use this order:
 - [Electron desktop app plan](./electron-desktop-app-plan.md)
 - [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Native UI Automation](./native-ui-automation.md)
 - [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
 - [Release cycle](./release-cycle.md)
 - [Repo layout](./repo-layout.md)
@@ -75,7 +73,6 @@ These pages live under `../internal-skills/` because they describe runtime featu
 
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Computer Use](../internal-skills/computer-use/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
