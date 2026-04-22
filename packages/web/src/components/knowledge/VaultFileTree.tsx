@@ -226,20 +226,26 @@ function createFallbackEntry(path: string, kind: VaultEntry['kind'], name?: stri
 
 function TreeContextMenu({ onDelete, onMove, onRename }: ContextMenuProps) {
   return (
-    <div className="ui-context-menu-shell min-w-[160px]">
-      <button type="button" className="ui-context-menu-item gap-2" onClick={onRename}>
-        <Ico d={ICON.pencil} size={12} />
-        Rename
-      </button>
-      <button type="button" className="ui-context-menu-item gap-2" onClick={onMove}>
-        <Ico d={ICON.move} size={12} />
-        Move to…
-      </button>
-      <div className="my-1 border-t border-border-subtle" />
-      <button type="button" className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10" onClick={onDelete}>
-        <Ico d={ICON.trash} size={12} />
-        Delete
-      </button>
+    <div
+      className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]"
+      role="menu"
+      aria-label="Knowledge entry actions"
+    >
+      <div className="space-y-px">
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onRename} role="menuitem">
+          <Ico d={ICON.pencil} size={12} />
+          Rename
+        </button>
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onMove} role="menuitem">
+          <Ico d={ICON.move} size={12} />
+          Move to…
+        </button>
+        <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+        <button type="button" className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10" onClick={onDelete} role="menuitem">
+          <Ico d={ICON.trash} size={12} />
+          Delete
+        </button>
+      </div>
     </div>
   );
 }
@@ -566,8 +572,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     initialSelectedPaths: activeFileId ? [activeFileId] : [],
     composition: {
       contextMenu: {
-        buttonVisibility: 'when-needed',
-        triggerMode: 'both',
+        triggerMode: 'right-click',
       },
     },
     onSelectionChange: (paths) => selectionChangeRef.current(paths),
