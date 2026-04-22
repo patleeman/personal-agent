@@ -36,6 +36,7 @@ import {
   type CompanionDurableRunLogInput,
   type CompanionRemoteDirectoryInput,
   type CompanionHostHello,
+  type CompanionKnowledgeImportInput,
   type CompanionPairedDeviceSummary,
   type CompanionRuntime,
   type CompanionRuntimeProvider,
@@ -225,6 +226,7 @@ function buildHello(stateRoot: string): CompanionHostHello {
       attachmentWrite: true,
       knowledge: true,
       knowledgeWrite: true,
+      knowledgeImport: true,
       deviceAdmin: true,
     },
   };
@@ -683,6 +685,34 @@ export class DaemonCompanionServer {
       const body = await parseJsonBody(request);
       const payload = isRecord(body) ? body : {};
       sendJson(response, 201, await runtime.createKnowledgeFolder(readRequiredString(payload.id, 'id')));
+      return;
+    }
+
+    if (request.method === 'POST' && pathname === `${COMPANION_API_ROOT}/knowledge/import`) {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const kind = readRequiredString(payload.kind, 'kind');
+      if (kind !== 'text' && kind !== 'url' && kind !== 'image') {
+        throw new Error('kind must be text, url, or image.');
+      }
+      const input: CompanionKnowledgeImportInput = {
+        kind,
+        ...(payload.directoryId !== undefined ? { directoryId: payload.directoryId === null ? null : readOptionalString(payload.directoryId) } : {}),
+        ...(payload.title !== undefined ? { title: payload.title === null ? null : readOptionalString(payload.title) } : {}),
+        ...(payload.text !== undefined ? { text: payload.text === null ? null : readOptionalString(payload.text) } : {}),
+        ...(payload.url !== undefined ? { url: payload.url === null ? null : readOptionalString(payload.url) } : {}),
+        ...(payload.mimeType !== undefined ? { mimeType: payload.mimeType === null ? null : readOptionalString(payload.mimeType) } : {}),
+        ...(payload.fileName !== undefined ? { fileName: payload.fileName === null ? null : readOptionalString(payload.fileName) } : {}),
+        ...(payload.dataBase64 !== undefined ? { dataBase64: payload.dataBase64 === null ? null : readOptionalString(payload.dataBase64) } : {}),
+        ...(payload.sourceApp !== undefined ? { sourceApp: payload.sourceApp === null ? null : readOptionalString(payload.sourceApp) } : {}),
+        ...(payload.createdAt !== undefined ? { createdAt: payload.createdAt === null ? null : readOptionalString(payload.createdAt) } : {}),
+      };
+      sendJson(response, 201, await runtime.importKnowledge(input));
       return;
     }
 

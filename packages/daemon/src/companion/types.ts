@@ -28,6 +28,7 @@ export interface CompanionHostHello {
     attachmentWrite: boolean;
     knowledge: boolean;
     knowledgeWrite: boolean;
+    knowledgeImport: boolean;
     deviceAdmin: boolean;
   };
 }
@@ -259,6 +260,19 @@ export interface CompanionAttachmentAssetInput {
   revision?: number;
 }
 
+export interface CompanionKnowledgeImportInput {
+  kind: 'text' | 'url' | 'image';
+  directoryId?: string | null;
+  title?: string | null;
+  text?: string | null;
+  url?: string | null;
+  mimeType?: string | null;
+  fileName?: string | null;
+  dataBase64?: string | null;
+  sourceApp?: string | null;
+  createdAt?: string | null;
+}
+
 export interface CompanionRuntime {
   listConversations(): Promise<unknown>;
   updateConversationTabs(input: CompanionConversationTabsUpdateInput): Promise<unknown>;
@@ -298,6 +312,7 @@ export interface CompanionRuntime {
   readKnowledgeFile(fileId: string): Promise<unknown>;
   writeKnowledgeFile(input: { fileId: string; content: string }): Promise<unknown>;
   createKnowledgeFolder(folderId: string): Promise<unknown>;
+  importKnowledge(input: CompanionKnowledgeImportInput): Promise<unknown>;
   listScheduledTasks(): Promise<unknown>;
   readScheduledTask(taskId: string): Promise<unknown>;
   readScheduledTaskLog(taskId: string): Promise<unknown>;

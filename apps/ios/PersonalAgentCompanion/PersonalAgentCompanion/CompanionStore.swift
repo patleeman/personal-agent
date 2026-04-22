@@ -2,6 +2,19 @@ import Foundation
 import Network
 import SwiftUI
 
+enum HostDashboardTab: Hashable {
+    case chat
+    case knowledge
+    case archived
+    case automations
+    case settings
+}
+
+struct KnowledgeNavigationRequest: Identifiable, Equatable {
+    let id = UUID()
+    let fileId: String
+}
+
 @MainActor
 final class CompanionAppModel: ObservableObject {
     @Published private(set) var hosts: [CompanionHostRecord] = []
@@ -9,6 +22,8 @@ final class CompanionAppModel: ObservableObject {
     @Published private(set) var activeSession: HostSessionModel?
     @Published var bannerMessage: String?
     @Published var hostSelectionPresented = false
+    @Published var selectedDashboardTab: HostDashboardTab = .chat
+    @Published var knowledgeNavigationRequest: KnowledgeNavigationRequest?
 
     private let defaults = UserDefaults.standard
     private let hostsStorageKey = "pa.ios.companion.hosts"
@@ -17,6 +32,7 @@ final class CompanionAppModel: ObservableObject {
     private let environment: [String: String]
     private var transientTokens: [UUID: String] = [:]
     private let useMockMode: Bool
+    private var isImportingKnowledgeShares = false
 
     let installationSurfaceId: String
 
@@ -34,6 +50,9 @@ final class CompanionAppModel: ObservableObject {
         seedMockHostIfNeeded()
         seedBootstrapHostIfNeeded()
         bootstrapInitialSelection()
+        Task {
+            await processPendingKnowledgeSharesIfPossible()
+        }
     }
 
     func pairHost(baseURLString: String, code: String, deviceLabel: String) async {
@@ -74,16 +93,23 @@ final class CompanionAppModel: ObservableObject {
         )
     }
 
-    func handleIncomingSetupURL(_ url: URL) async {
-        guard let setupLink = CompanionSetupLink(url: url) else {
-            bannerMessage = "That QR code or setup link is not a valid Personal Agent companion pairing link."
+    func handleIncomingURL(_ url: URL) async {
+        if let setupLink = CompanionSetupLink(url: url) {
+            await pairSetupLink(setupLink)
             return
         }
-
-        await pairSetupLink(setupLink)
+        if CompanionIncomingShareLink(url: url) != nil {
+            await processPendingKnowledgeSharesIfPossible(forceHostSelection: true)
+            return
+        }
+        bannerMessage = "That link is not a valid Personal Agent setup or share link."
     }
 
-    func selectHost(_ id: UUID?) async {
+    func handleIncomingSetupURL(_ url: URL) async {
+        await handleIncomingURL(url)
+    }
+
+    func selectHost(_ id: UUID?, processPendingShares: Bool = true) async {
         activeSession?.stop()
         activeSession = nil
         activeHostId = id
@@ -96,6 +122,9 @@ final class CompanionAppModel: ObservableObject {
             let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: installationSurfaceId)
             activeSession = session
             session.start()
+            if processPendingShares {
+                await processPendingKnowledgeSharesIfPossible()
+            }
             return
         }
         guard let record = hosts.first(where: { $0.id == id }) else {
@@ -109,6 +138,9 @@ final class CompanionAppModel: ObservableObject {
         let session = HostSessionModel(client: client, installationSurfaceId: installationSurfaceId)
         activeSession = session
         session.start()
+        if processPendingShares {
+            await processPendingKnowledgeSharesIfPossible()
+        }
     }
 
     func updateHost(_ host: CompanionHostRecord, baseURLString: String, displayName: String) async -> Bool {
@@ -153,6 +185,105 @@ final class CompanionAppModel: ObservableObject {
 
     func refreshActiveSession() {
         activeSession?.refresh()
+    }
+
+    func consumeKnowledgeNavigationRequest(_ request: KnowledgeNavigationRequest) {
+        if knowledgeNavigationRequest == request {
+            knowledgeNavigationRequest = nil
+        }
+    }
+
+    private func makeImportClient() async -> CompanionClientProtocol? {
+        if let session = activeSession {
+            return session.client
+        }
+        if activeHostId == nil {
+            activeHostId = hosts.first?.id
+            persistHosts()
+        }
+        guard let activeHostId else {
+            return nil
+        }
+        await selectHost(activeHostId, processPendingShares: false)
+        return activeSession?.client
+    }
+
+    private func processPendingKnowledgeSharesIfPossible(forceHostSelection: Bool = false) async {
+        guard !isImportingKnowledgeShares else {
+            return
+        }
+
+        let pending: [PendingKnowledgeShareEnvelope]
+        do {
+            pending = try KnowledgeShareInboxStore.loadAll()
+        } catch KnowledgeShareInboxError.appGroupUnavailable {
+            return
+        } catch {
+            bannerMessage = error.localizedDescription
+            return
+        }
+        guard !pending.isEmpty else {
+            return
+        }
+
+        if forceHostSelection, activeHostId == nil, hosts.isEmpty {
+            bannerMessage = "Pair a host before saving shared items to Knowledge."
+            hostSelectionPresented = true
+            return
+        }
+
+        guard let client = await makeImportClient() else {
+            bannerMessage = "Choose a host before saving shared items to Knowledge."
+            hostSelectionPresented = true
+            return
+        }
+
+        isImportingKnowledgeShares = true
+        defer { isImportingKnowledgeShares = false }
+
+        var importedCount = 0
+        var lastNoteId: String?
+
+        do {
+            for envelope in pending {
+                for item in envelope.items {
+                    let response = try await client.importKnowledge(CompanionKnowledgeImportRequest(
+                        kind: {
+                            switch item.kind {
+                            case .text: return .text
+                            case .url: return .url
+                            case .image: return .image
+                            }
+                        }(),
+                        directoryId: "Inbox",
+                        title: item.title,
+                        text: item.text,
+                        url: item.url,
+                        mimeType: item.mimeType,
+                        fileName: item.fileName,
+                        dataBase64: item.dataBase64,
+                        sourceApp: envelope.sourceApp,
+                        createdAt: item.createdAt
+                    ))
+                    importedCount += 1
+                    lastNoteId = response.note.id
+                }
+                try KnowledgeShareInboxStore.remove(envelope)
+            }
+        } catch {
+            bannerMessage = error.localizedDescription
+            return
+        }
+
+        guard importedCount > 0 else {
+            return
+        }
+        selectedDashboardTab = .knowledge
+        if let lastNoteId {
+            knowledgeNavigationRequest = KnowledgeNavigationRequest(fileId: lastNoteId)
+        }
+        activeSession?.refresh()
+        bannerMessage = importedCount == 1 ? "Saved shared item to Knowledge." : "Saved \(importedCount) shared items to Knowledge."
     }
 
     private func bootstrapInitialSelection() {
@@ -332,7 +463,7 @@ final class HostSessionModel: ObservableObject {
     @Published var errorMessage: String?
 
     let installationSurfaceId: String
-    private let client: CompanionClientProtocol
+    fileprivate let client: CompanionClientProtocol
     private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
     private var appEventsTask: Task<Void, Never>?
 

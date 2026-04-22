@@ -125,6 +125,7 @@ struct CompanionHello: Codable, Equatable {
         let attachmentWrite: Bool
         let knowledge: Bool?
         let knowledgeWrite: Bool?
+        let knowledgeImport: Bool?
         let deviceAdmin: Bool
     }
 
@@ -542,6 +543,37 @@ struct CompanionKnowledgeFileResponse: Codable, Equatable {
     let id: String
     let content: String
     let updatedAt: String
+}
+
+struct CompanionKnowledgeImportRequest: Equatable {
+    enum Kind: String, Equatable {
+        case text
+        case url
+        case image
+    }
+
+    let kind: Kind
+    let directoryId: String?
+    let title: String?
+    let text: String?
+    let url: String?
+    let mimeType: String?
+    let fileName: String?
+    let dataBase64: String?
+    let sourceApp: String?
+    let createdAt: String?
+}
+
+struct CompanionKnowledgeImportResponse: Codable, Equatable {
+    let note: CompanionKnowledgeEntry
+    let sourceKind: String
+    let title: String
+    let asset: CompanionKnowledgeImportedAsset?
+}
+
+struct CompanionKnowledgeImportedAsset: Codable, Equatable {
+    let id: String
+    let url: String
 }
 
 struct PromptAttachmentReference: Codable, Equatable, Identifiable {

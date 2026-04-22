@@ -84,6 +84,44 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('routes knowledge imports to the vault share-import endpoint', async () => {
+    const localController = {
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({
+        note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
+        sourceKind: 'url',
+        title: 'Shared link',
+      })),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.importKnowledge({
+      kind: 'url',
+      directoryId: 'Inbox',
+      title: 'Shared link',
+      url: 'https://example.com/post',
+    })).resolves.toEqual({
+      note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md' },
+      sourceKind: 'url',
+      title: 'Shared link',
+    });
+
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith({
+      method: 'POST',
+      path: '/api/vault/share-import',
+      body: {
+        kind: 'url',
+        directoryId: 'Inbox',
+        title: 'Shared link',
+        url: 'https://example.com/post',
+      },
+    });
+  });
+
   it('changes execution target then reloads bootstrap through the desktop API dispatcher', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ bootstrap: { conversationId: 'conv-1' } })),

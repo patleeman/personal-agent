@@ -47,6 +47,7 @@ protocol CompanionClientProtocol: AnyObject {
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry
+    func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse
     func listTasks() async throws -> [ScheduledTaskSummary]
     func readTask(taskId: String) async throws -> ScheduledTaskDetail
     func readTaskLog(taskId: String) async throws -> DurableRunLogResponse
@@ -578,6 +579,40 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry {
         try await authorizedJSON(path: "/companion/v1/knowledge/folder", method: "POST", body: ["id": folderId], decode: CompanionKnowledgeEntry.self)
+    }
+
+    func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {
+        var body: [String: Any] = [
+            "kind": input.kind.rawValue,
+        ]
+        if let directoryId = input.directoryId?.nilIfBlank {
+            body["directoryId"] = directoryId
+        }
+        if let title = input.title?.nilIfBlank {
+            body["title"] = title
+        }
+        if let text = input.text?.nilIfBlank {
+            body["text"] = text
+        }
+        if let url = input.url?.nilIfBlank {
+            body["url"] = url
+        }
+        if let mimeType = input.mimeType?.nilIfBlank {
+            body["mimeType"] = mimeType
+        }
+        if let fileName = input.fileName?.nilIfBlank {
+            body["fileName"] = fileName
+        }
+        if let dataBase64 = input.dataBase64?.nilIfBlank {
+            body["dataBase64"] = dataBase64
+        }
+        if let sourceApp = input.sourceApp?.nilIfBlank {
+            body["sourceApp"] = sourceApp
+        }
+        if let createdAt = input.createdAt?.nilIfBlank {
+            body["createdAt"] = createdAt
+        }
+        return try await authorizedJSON(path: "/companion/v1/knowledge/import", method: "POST", body: body, decode: CompanionKnowledgeImportResponse.self)
     }
 
     func listTasks() async throws -> [ScheduledTaskSummary] {
@@ -1775,7 +1810,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             protocolVersion: "v1",
             transport: .init(websocket: true, singleSocket: true, httpAvailable: true),
             auth: .init(pairingRequired: true, bearerTokens: true),
-            capabilities: .init(fullConversationLifecycle: true, executionTargets: true, executionTargetSwitching: true, attachments: true, attachmentWrite: true, knowledge: true, knowledgeWrite: true, deviceAdmin: true)
+            capabilities: .init(fullConversationLifecycle: true, executionTargets: true, executionTargetSwitching: true, attachments: true, attachmentWrite: true, knowledge: true, knowledgeWrite: true, knowledgeImport: true, deviceAdmin: true)
         )
     }
 
@@ -2629,6 +2664,49 @@ final class MockCompanionClient: CompanionClientProtocol {
             sizeBytes: 0,
             updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
         )
+    }
+
+    func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse {
+        let now = input.createdAt ?? ISO8601DateFormatter.flexible.string(from: .now)
+        let directoryId = normalizeKnowledgeId(input.directoryId ?? "Inbox") ?? "Inbox"
+        ensureKnowledgeParentFolders(for: directoryId)
+        let baseName: String = {
+            if let title = input.title?.trimmed.nilIfBlank {
+                return title
+            }
+            switch input.kind {
+            case .text:
+                return input.text?.trimmed.nilIfBlank?.split(separator: "\n").first.map(String.init) ?? "Shared text"
+            case .url:
+                return input.url?.trimmed.nilIfBlank ?? "Shared link"
+            case .image:
+                return input.fileName?.trimmed.nilIfBlank?.replacingOccurrences(of: #"\.[^.]+$"#, with: "", options: .regularExpression) ?? "Shared image"
+            }
+        }()
+        let slugBase = baseName
+            .lowercased()
+            .replacingOccurrences(of: #"[^a-z0-9]+"#, with: "-", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
+            .nilIfBlank ?? "shared-note"
+        var fileId = "\(directoryId)/\(slugBase).md"
+        var suffix = 2
+        while knowledgeFiles[fileId] != nil {
+            fileId = "\(directoryId)/\(slugBase)-\(suffix).md"
+            suffix += 1
+        }
+        let content: String = {
+            switch input.kind {
+            case .text:
+                return input.text?.trimmed.nilIfBlank ?? "Shared from iOS on \(now)."
+            case .url:
+                let url = input.url?.trimmed.nilIfBlank ?? ""
+                return "Source: [\(url)](\(url))"
+            case .image:
+                return "![\(baseName)](shared-image://\(slugBase))\n\nImported from iOS."
+            }
+        }()
+        let entry = try await writeKnowledgeFile(fileId: fileId, content: content)
+        return CompanionKnowledgeImportResponse(note: entry, sourceKind: input.kind.rawValue, title: baseName, asset: nil)
     }
 
     func listTasks() async throws -> [ScheduledTaskSummary] {

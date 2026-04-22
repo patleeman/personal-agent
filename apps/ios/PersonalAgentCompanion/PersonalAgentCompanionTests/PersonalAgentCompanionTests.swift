@@ -41,6 +41,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
     }
 
+    func testCompanionIncomingShareLinkParsesShareURL() {
+        XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion://share")!))
+    }
+
     func testUpdatingSavedHostNormalizesLocalHostsToHTTP() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
         let original = CompanionHostRecord(
@@ -105,6 +109,27 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.hosts.first?.hostLabel, "Demo Host")
         XCTAssertEqual(model.activeHostId, model.hosts.first?.id)
         XCTAssertNil(model.activeSession)
+    }
+
+    func testMockKnowledgeImportCreatesInboxNote() async throws {
+        let client = MockCompanionClient()
+        let result = try await client.importKnowledge(CompanionKnowledgeImportRequest(
+            kind: .url,
+            directoryId: "Inbox",
+            title: "Example link",
+            text: nil,
+            url: "https://example.com/post",
+            mimeType: nil,
+            fileName: nil,
+            dataBase64: nil,
+            sourceApp: "Safari",
+            createdAt: "2026-04-22T12:00:00Z"
+        ))
+
+        XCTAssertEqual(result.sourceKind, "url")
+        XCTAssertEqual(result.title, "Example link")
+        let file = try await client.readKnowledgeFile(fileId: result.note.id)
+        XCTAssertTrue(file.content.contains("https://example.com/post"))
     }
 
     func testMockClientCanLoadToolHeavyDeviceSnapshot() async throws {

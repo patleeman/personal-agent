@@ -22,6 +22,7 @@ import type {
   CompanionConversationTabsUpdateInput,
   CompanionConversationTakeoverInput,
   CompanionDurableRunLogInput,
+  CompanionKnowledgeImportInput,
   CompanionRemoteDirectoryInput,
   CompanionRuntime,
   CompanionScheduledTaskInput,
@@ -595,6 +596,14 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         body: {
           id: folderId,
         },
+      });
+    },
+
+    async importKnowledge(input: CompanionKnowledgeImportInput) {
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: '/api/vault/share-import',
+        body: input,
       });
     },
 

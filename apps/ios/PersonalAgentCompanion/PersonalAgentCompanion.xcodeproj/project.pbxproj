@@ -15,6 +15,10 @@
 		A10000010000000000000006 /* ConversationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* ConversationView.swift */; };
 		A10000010000000000000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* Assets.xcassets */; };
 		A10000010000000000000008 /* PersonalAgentCompanionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* PersonalAgentCompanionTests.swift */; };
+		B10000010000000000000001 /* KnowledgeShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* KnowledgeShareInbox.swift */; };
+		B10000010000000000000002 /* KnowledgeShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* KnowledgeShareInbox.swift */; };
+		B10000010000000000000003 /* KnowledgeShareExtensionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* KnowledgeShareExtensionViewController.swift */; };
+		B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -25,7 +29,27 @@
 			remoteGlobalIDString = A50000010000000000000001;
 			remoteInfo = PersonalAgentCompanion;
 		};
+		B30000010000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A40000010000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B50000010000000000000001;
+			remoteInfo = PersonalAgentCompanionShareExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B40000010000000000000001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in Embed App Extensions */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A20000010000000000000001 /* PersonalAgentCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCompanionApp.swift; sourceTree = "<group>"; };
@@ -39,6 +63,12 @@
 		A20000010000000000000009 /* PersonalAgentCompanionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalAgentCompanionTests.swift; sourceTree = "<group>"; };
 		A20000010000000000000010 /* PersonalAgentCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PersonalAgentCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000010000000000000011 /* PersonalAgentCompanionTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PersonalAgentCompanionTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000010000000000000001 /* KnowledgeShareInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeShareInbox.swift; sourceTree = "<group>"; };
+		B20000010000000000000002 /* KnowledgeShareExtensionViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeShareExtensionViewController.swift; sourceTree = "<group>"; };
+		B20000010000000000000003 /* PersonalAgentCompanion.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PersonalAgentCompanion.entitlements; sourceTree = "<group>"; };
+		B20000010000000000000004 /* KnowledgeShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = KnowledgeShareExtension.entitlements; sourceTree = "<group>"; };
+		B20000010000000000000005 /* KnowledgeShareExtension-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "KnowledgeShareExtension-Info.plist"; sourceTree = "<group>"; };
+		B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PersonalAgentCompanionShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +80,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A60000010000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B60000010000000000000001 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -77,8 +114,13 @@
 				A20000010000000000000004 /* CompanionStore.swift */,
 				A20000010000000000000005 /* RootView.swift */,
 				A20000010000000000000006 /* ConversationView.swift */,
+				B20000010000000000000001 /* KnowledgeShareInbox.swift */,
+				B20000010000000000000002 /* KnowledgeShareExtensionViewController.swift */,
 				A20000010000000000000007 /* Assets.xcassets */,
 				A20000010000000000000008 /* Info.plist */,
+				B20000010000000000000005 /* KnowledgeShareExtension-Info.plist */,
+				B20000010000000000000003 /* PersonalAgentCompanion.entitlements */,
+				B20000010000000000000004 /* KnowledgeShareExtension.entitlements */,
 			);
 			path = PersonalAgentCompanion;
 			sourceTree = "<group>";
@@ -95,6 +137,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000010000000000000010 /* PersonalAgentCompanion.app */,
+				B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */,
 				A20000010000000000000011 /* PersonalAgentCompanionTests.xctest */,
 			);
 			name = Products;
@@ -110,10 +153,12 @@
 				A80000010000000000000001 /* Sources */,
 				A60000010000000000000001 /* Frameworks */,
 				A80000010000000000000002 /* Resources */,
+				B40000010000000000000001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				BA0000010000000000000001 /* PBXTargetDependency */,
 			);
 			name = PersonalAgentCompanion;
 			productName = PersonalAgentCompanion;
@@ -137,6 +182,23 @@
 			productReference = A20000010000000000000011 /* PersonalAgentCompanionTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		B50000010000000000000001 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B90000010000000000000001 /* Build configuration list for PBXNativeTarget "PersonalAgentCompanionShareExtension" */;
+			buildPhases = (
+				B70000010000000000000001 /* Sources */,
+				B60000010000000000000001 /* Frameworks */,
+				B70000010000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PersonalAgentCompanionShareExtension;
+			productName = PersonalAgentCompanionShareExtension;
+			productReference = B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -154,6 +216,9 @@
 						CreatedOnToolsVersion = 26.4;
 						TestTargetID = A50000010000000000000001;
 					};
+					B50000010000000000000001 = {
+						CreatedOnToolsVersion = 26.4;
+					};
 				};
 			};
 			buildConfigurationList = A90000010000000000000003 /* Build configuration list for PBXProject "PersonalAgentCompanion" */;
@@ -170,6 +235,7 @@
 			projectRoot = "";
 			targets = (
 				A50000010000000000000001,
+				B50000010000000000000001,
 				A50000010000000000000002,
 			);
 		};
@@ -181,6 +247,13 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000010000000000000007 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B70000010000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -197,6 +270,7 @@
 				A10000010000000000000004 /* CompanionStore.swift in Sources */,
 				A10000010000000000000005 /* RootView.swift in Sources */,
 				A10000010000000000000006 /* ConversationView.swift in Sources */,
+				B10000010000000000000001 /* KnowledgeShareInbox.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -208,6 +282,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B70000010000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000010000000000000002 /* KnowledgeShareInbox.swift in Sources */,
+				B10000010000000000000003 /* KnowledgeShareExtensionViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -215,6 +298,11 @@
 			isa = PBXTargetDependency;
 			target = A50000010000000000000001 /* PersonalAgentCompanion */;
 			targetProxy = A30000010000000000000001 /* PBXContainerItemProxy */;
+		};
+		BA0000010000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B50000010000000000000001 /* PersonalAgentCompanionShareExtension */;
+			targetProxy = B30000010000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -268,11 +356,12 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ENABLE_TESTABILITY = YES;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/PersonalAgentCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PersonalAgentCompanion/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -293,6 +382,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/PersonalAgentCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = "";
@@ -353,6 +443,54 @@
 			};
 			name = Release;
 		};
+		BC0000010000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/KnowledgeShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PersonalAgentCompanion/KnowledgeShareExtension-Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalagent.ios.companion.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Debug;
+		};
+		BC0000010000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/KnowledgeShareExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PersonalAgentCompanion/KnowledgeShareExtension-Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.personalagent.ios.companion.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -379,6 +517,15 @@
 			buildConfigurations = (
 				AB0000010000000000000001 /* Debug */,
 				AB0000010000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B90000010000000000000001 /* Build configuration list for PBXNativeTarget "PersonalAgentCompanionShareExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				BC0000010000000000000031 /* Debug */,
+				BC0000010000000000000032 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

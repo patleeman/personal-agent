@@ -10,7 +10,7 @@ struct PersonalAgentCompanionApp: App {
                 .preferredColorScheme(.light)
                 .onOpenURL { url in
                     Task {
-                        await appModel.handleIncomingSetupURL(url)
+                        await appModel.handleIncomingURL(url)
                     }
                 }
         }

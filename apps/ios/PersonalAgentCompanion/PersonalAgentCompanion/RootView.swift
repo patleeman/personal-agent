@@ -127,31 +127,36 @@ struct HostDashboardView: View {
     @ObservedObject var session: HostSessionModel
 
     var body: some View {
-        TabView {
+        TabView(selection: $appModel.selectedDashboardTab) {
             ConversationListView(appModel: appModel, session: session)
                 .tabItem {
                     Label("Chat", systemImage: "message")
                 }
+                .tag(HostDashboardTab.chat)
 
             KnowledgeRootView(appModel: appModel, session: session)
                 .tabItem {
                     Label("Knowledge", systemImage: "book.closed")
                 }
+                .tag(HostDashboardTab.knowledge)
 
             ArchivedConversationListView(session: session)
                 .tabItem {
                     Label("Archived", systemImage: "archivebox")
                 }
+                .tag(HostDashboardTab.archived)
 
             AutomationListView(session: session)
                 .tabItem {
                     Label("Automations", systemImage: "clock.arrow.circlepath")
                 }
+                .tag(HostDashboardTab.automations)
 
             HostSettingsView(appModel: appModel, session: session)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
+                .tag(HostDashboardTab.settings)
         }
         .tint(CompanionTheme.accent)
     }
@@ -434,6 +439,19 @@ struct KnowledgeRootView: View {
                 case .note(let fileId):
                     KnowledgeNoteScreen(appModel: appModel, session: session, fileId: fileId)
                 }
+            }
+        }
+        .onChange(of: appModel.knowledgeNavigationRequest?.id) { _, _ in
+            guard let request = appModel.knowledgeNavigationRequest else {
+                return
+            }
+            path = [.note(request.fileId)]
+            appModel.consumeKnowledgeNavigationRequest(request)
+        }
+        .task {
+            if let request = appModel.knowledgeNavigationRequest {
+                path = [.note(request.fileId)]
+                appModel.consumeKnowledgeNavigationRequest(request)
             }
         }
     }

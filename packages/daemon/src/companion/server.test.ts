@@ -126,6 +126,7 @@ describe('daemon companion server', () => {
       readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
       writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
       createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      importKnowledge: async (input) => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: JSON.stringify(input).length, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: input.kind, title: input.title ?? 'Shared link' }),
       listScheduledTasks: async () => ({ tasks: [] }),
       readScheduledTask: async (taskId) => ({ taskId, title: 'Task' }),
       readScheduledTaskLog: async (taskId) => ({ path: `/tmp/${taskId}.log`, log: '' }),
@@ -274,6 +275,27 @@ describe('daemon companion server', () => {
       name: 'archive',
       sizeBytes: 0,
       updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const knowledgeImportResponse = await fetch(`${baseUrl}/companion/v1/knowledge/import`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ kind: 'url', title: 'Shared link', url: 'https://example.com/post' }),
+    });
+    expect(knowledgeImportResponse.status).toBe(201);
+    expect(await readJson(knowledgeImportResponse)).toEqual({
+      note: {
+        id: 'Inbox/shared-link.md',
+        kind: 'file',
+        name: 'shared-link.md',
+        sizeBytes: JSON.stringify({ kind: 'url', title: 'Shared link', url: 'https://example.com/post' }).length,
+        updatedAt: '2026-04-19T00:00:00.000Z',
+      },
+      sourceKind: 'url',
+      title: 'Shared link',
     });
 
     const { socket, firstMessage } = await openSocket(`${baseUrl!.replace('http://', 'ws://')}/v1/socket`, paired.bearerToken);
