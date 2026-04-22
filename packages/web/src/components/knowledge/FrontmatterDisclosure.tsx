@@ -91,7 +91,7 @@ export function FrontmatterDisclosure({
   const showTagEditor = Boolean(onChange) || tags.length > 0;
 
   return (
-    <div className="kb-fm-panel">
+    <div className={open ? 'kb-fm-panel kb-fm-panel-open' : 'kb-fm-panel'}>
       <button
         type="button"
         className="kb-fm-toggle"
