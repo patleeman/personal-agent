@@ -159,6 +159,20 @@ function isEventStreamRequest(request: Request): boolean {
     && (request.headers.get('accept') ?? '').toLowerCase().includes('text/event-stream');
 }
 
+function createBinaryProtocolResponse(response: {
+  statusCode: number;
+  headers: Record<string, string> | Headers;
+  body: Uint8Array;
+}): Response {
+  const body = response.body.byteLength > 0
+    ? Uint8Array.from(response.body)
+    : null;
+  return new Response(body, {
+    status: response.statusCode,
+    headers: response.headers,
+  });
+}
+
 function createSseProtocolResponse(subscribe: (onEvent: (event: DesktopApiStreamEvent) => void) => Promise<() => void>, request: Request): Response {
   const encoder = new TextEncoder();
   let unsubscribe: (() => void) | null = null;
@@ -292,10 +306,7 @@ export function createDesktopProtocolHandler(options?: {
             headers: requestHeaders,
           });
 
-          return new Response(response.body, {
-            status: response.statusCode,
-            headers: response.headers,
-          });
+          return createBinaryProtocolResponse(response);
         }
 
         const module = await loadLocalApi();
@@ -306,10 +317,7 @@ export function createDesktopProtocolHandler(options?: {
           headers: Object.fromEntries(request.headers.entries()),
         });
 
-        return new Response(response.body, {
-          status: response.statusCode,
-          headers: response.headers,
-        });
+        return createBinaryProtocolResponse(response);
       } catch (error) {
         return buildDesktopProtocolErrorResponse(error);
       }
