@@ -5,20 +5,32 @@ import { createRoot, type Root } from 'react-dom/client';
 import { VaultFileTree } from './VaultFileTree';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
-import type { VaultEntry, VaultTreeResult } from '../../shared/types';
+import type { VaultEntry, VaultFileListResult } from '../../shared/types';
 
 const apiMocks = vi.hoisted(() => ({
-  tree: vi.fn(),
-  search: vi.fn(),
-  rename: vi.fn(),
-  move: vi.fn(),
-  writeFile: vi.fn(),
-  deleteFile: vi.fn(),
   createFolder: vi.fn(),
+  deleteFile: vi.fn(),
+  move: vi.fn(),
+  rename: vi.fn(),
+  search: vi.fn(),
+  tree: vi.fn(),
+  vaultFiles: vi.fn(),
+  writeFile: vi.fn(),
 }));
 
 vi.mock('../../client/api', () => ({
-  vaultApi: apiMocks,
+  api: {
+    vaultFiles: apiMocks.vaultFiles,
+  },
+  vaultApi: {
+    createFolder: apiMocks.createFolder,
+    deleteFile: apiMocks.deleteFile,
+    move: apiMocks.move,
+    rename: apiMocks.rename,
+    search: apiMocks.search,
+    tree: apiMocks.tree,
+    writeFile: apiMocks.writeFile,
+  },
 }));
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -63,28 +75,16 @@ function createEntry(id: string, kind: VaultEntry['kind']): VaultEntry {
   };
 }
 
-const TREE: Record<string, VaultTreeResult> = {
-  __root__: {
-    root: '/vault',
-    entries: [
-      createEntry('notes/', 'folder'),
-      createEntry('projects/', 'folder'),
-      createEntry('README.md', 'file'),
-    ],
-  },
-  'notes/': {
-    root: '/vault/notes',
-    entries: [
-      createEntry('notes/work/', 'folder'),
-      createEntry('notes/today.md', 'file'),
-    ],
-  },
-  'notes/work/': {
-    root: '/vault/notes/work',
-    entries: [
-      createEntry('notes/work/todo.md', 'file'),
-    ],
-  },
+const TREE: VaultFileListResult = {
+  root: '/vault',
+  files: [
+    createEntry('notes/', 'folder'),
+    createEntry('notes/work/', 'folder'),
+    createEntry('notes/work/todo.md', 'file'),
+    createEntry('notes/today.md', 'file'),
+    createEntry('projects/', 'folder'),
+    createEntry('README.md', 'file'),
+  ],
 };
 
 function renderTree() {
@@ -119,8 +119,27 @@ function renderManagedTree(initialActiveFileId?: string | null) {
   return { container };
 }
 
+function queryInShadowRoots(root: ParentNode, selector: string): Element | null {
+  const directMatch = root.querySelector(selector);
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const elements = root.querySelectorAll('*');
+  for (const element of elements) {
+    if (element instanceof HTMLElement && element.shadowRoot) {
+      const nestedMatch = queryInShadowRoots(element.shadowRoot, selector);
+      if (nestedMatch) {
+        return nestedMatch;
+      }
+    }
+  }
+
+  return null;
+}
+
 function getButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = container.querySelector(`button[aria-label="${label}"]`);
+  const button = queryInShadowRoots(container, `button[aria-label="${label}"]`);
   if (!(button instanceof HTMLButtonElement)) {
     throw new Error(`Expected button ${label}`);
   }
@@ -137,6 +156,7 @@ async function flushAsyncWork() {
   await act(async () => {
     await Promise.resolve();
     await Promise.resolve();
+    await Promise.resolve();
     await new Promise((resolve) => window.setTimeout(resolve, 0));
   });
 }
@@ -144,15 +164,8 @@ async function flushAsyncWork() {
 describe('VaultFileTree', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createStorage());
-    apiMocks.tree.mockReset();
-    apiMocks.tree.mockImplementation(async (dir?: string) => {
-      const key = dir ?? '__root__';
-      const result = TREE[key];
-      if (!result) {
-        throw new Error(`Unexpected tree lookup for ${key}`);
-      }
-      return result;
-    });
+    apiMocks.vaultFiles.mockReset();
+    apiMocks.vaultFiles.mockResolvedValue(TREE);
   });
 
   afterEach(() => {
@@ -181,16 +194,11 @@ describe('VaultFileTree', () => {
       });
     }
     firstRender.container.remove();
-    apiMocks.tree.mockClear();
 
     const secondRender = renderTree();
     await flushAsyncWork();
 
-    expect(apiMocks.tree.mock.calls).toEqual([
-      [],
-      ['notes/'],
-      ['notes/work/'],
-    ]);
+    expect(apiMocks.vaultFiles).toHaveBeenCalledTimes(2);
     expect(getButton(secondRender.container, 'todo.md')).toBeTruthy();
   });
 
@@ -203,13 +211,15 @@ describe('VaultFileTree', () => {
     click(getButton(container, 'work'));
     await flushAsyncWork();
     click(getButton(container, 'notes'));
+    await flushAsyncWork();
 
     expect(localStorage.getItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY)).toBeNull();
 
     click(getButton(container, 'notes'));
+    await flushAsyncWork();
 
     expect(JSON.parse(localStorage.getItem(KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY) ?? '[]')).toEqual(['notes/']);
-    expect(container.querySelector('button[aria-label="todo.md"]')).toBeNull();
+    expect(queryInShadowRoots(container, 'button[aria-label="todo.md"]')).toBeNull();
   });
 
   it('tracks open files, restores them after remount, and lets the active file close back to the previous one', async () => {

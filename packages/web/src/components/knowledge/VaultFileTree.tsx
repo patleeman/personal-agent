@@ -1,10 +1,20 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
+  type CSSProperties,
 } from 'react';
-import { vaultApi } from '../../client/api';
+import {
+  FileTree as TreesModel,
+  type ContextMenuItem as FileTreeContextMenuItem,
+  type FileTreeDropContext,
+  type FileTreeDropResult,
+  type FileTreeRenameEvent,
+} from '@pierre/trees';
+import { FileTree as TreesFileTree } from '@pierre/trees/react';
+import { api, vaultApi } from '../../client/api';
 import {
   addOpenFileId,
   readStoredOpenFileIds,
@@ -13,157 +23,277 @@ import {
   writeStoredOpenFileIds,
 } from '../../local/knowledgeOpenFiles';
 import {
-  addExpandedFolderId,
   collapseExpandedFolderIds,
   readStoredExpandedFolderIds,
   renameExpandedFolderIds,
   writeStoredExpandedFolderIds,
 } from '../../local/knowledgeTreeState';
 import type { VaultEntry } from '../../shared/types';
-import { openCommandPalette } from '../../commands/commandPaletteEvents';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
-import { VAULT_ENTRY_DRAG_TYPE, canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
-
-// ── Icons ─────────────────────────────────────────────────────────────────────
+import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
-      stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round"
-      className="shrink-0">
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0"
+      aria-hidden="true"
+    >
       <path d={d} />
     </svg>
   );
 }
 
 const ICON = {
-  folder:     'M3.75 6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66H18A2.25 2.25 0 0 1 20.25 8.25v9A2.25 2.25 0 0 1 18 19.5H6A2.25 2.25 0 0 1 3.75 17.25V6Z',
-  folderOpen: 'M3.75 9.776c.112-.017.227-.026.344-.026h15.812c.117 0 .232.009.344.026m-16.5 0a2.25 2.25 0 0 0-1.883 2.542l.857 6a2.25 2.25 0 0 0 2.227 1.932H19.05a2.25 2.25 0 0 0 2.227-1.932l.857-6a2.25 2.25 0 0 0-1.883-2.542m-16.5 0V6A2.25 2.25 0 0 1 6 3.75h4.19a2.25 2.25 0 0 1 1.59.66l.91.9a2.25 2.25 0 0 0 1.59.66h3.96A2.25 2.25 0 0 1 20.25 8.25v1.526',
-  file:       'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
-  chevRight:  'm9 6 6 6-6 6',
-  plus:       'M12 5v14M5 12h14',
+  plus: 'M12 5v14M5 12h14',
   folderPlus: 'M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z',
-  trash:      'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
-  pencil:     'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
-  move:       'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
-  search:     'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
-  import:     'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
-  x:          'M6 18 18 6M6 6l12 12',
+  trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
+  pencil: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
+  move: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
+  search: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
+  import: 'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
+  x: 'M6 18 18 6M6 6l12 12',
+  file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
 };
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+const TREE_HOST_STYLE = {
+  display: 'block',
+  height: '100%',
+  '--trees-accent-override': 'rgb(var(--color-accent))',
+  '--trees-bg-override': 'transparent',
+  '--trees-bg-muted-override': 'transparent',
+  '--trees-border-color-override': 'rgb(var(--color-border-subtle))',
+  '--trees-fg-override': 'rgb(var(--color-secondary))',
+  '--trees-fg-muted-override': 'rgb(var(--color-dim))',
+  '--trees-focus-ring-color-override': 'rgb(var(--color-accent) / 0.35)',
+  '--trees-item-margin-x-override': '4px',
+  '--trees-item-padding-x-override': '8px',
+  '--trees-padding-inline-override': '0px',
+  '--trees-search-bg-override': 'rgb(var(--color-surface))',
+  '--trees-search-fg-override': 'rgb(var(--color-primary))',
+  '--trees-selected-bg-override': 'rgb(var(--color-accent) / 0.14)',
+  '--trees-selected-fg-override': 'rgb(var(--color-primary))',
+} satisfies CSSProperties & Record<string, string | number>;
 
 export interface FileTreeProps {
   activeFileId: string | null;
   onFileSelect: (id: string) => void;
 }
 
-interface TreeNode {
-  entry: VaultEntry;
-  children: TreeNode[] | null;
-  expanded: boolean;
+interface ContextMenuProps {
+  onDelete: () => void;
+  onMove: () => void;
+  onRename: () => void;
 }
 
-type EditState =
-  | { type: 'rename'; id: string; value: string }
-  | { type: 'new-file'; parentDir: string; value: string }
-  | { type: 'new-folder'; parentDir: string; value: string };
+interface FolderOption {
+  id: string;
+  label: string;
+}
 
-interface ContextMenuState { x: number; y: number; entry: VaultEntry }
+interface CreateEntryState {
+  kind: 'file' | 'folder';
+  value: string;
+}
 
-// ── Context menu ──────────────────────────────────────────────────────────────
+function normalizeDirectoryId(value: string): string {
+  return value.trim().replace(/^\/+|\/+$/g, '');
+}
 
-function ContextMenu({ state, onRename, onMove, onDelete, onClose }: {
-  state: ContextMenuState;
-  onRename: () => void;
-  onMove: () => void;
-  onDelete: () => void;
-  onClose: () => void;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const fn = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
-    document.addEventListener('mousedown', fn);
-    return () => document.removeEventListener('mousedown', fn);
-  }, [onClose]);
+function idToDir(id: string): string {
+  if (id.endsWith('/')) {
+    return id;
+  }
 
+  const parts = id.split('/');
+  parts.pop();
+  return parts.length > 0 ? `${parts.join('/')}/` : '';
+}
+
+function formatOpenFileName(fileId: string): string {
+  return fileId.split('/').filter(Boolean).pop() ?? fileId;
+}
+
+function formatOpenFileDir(fileId: string): string {
+  return fileId.split('/').slice(0, -1).join('/');
+}
+
+function resolveRenamedFileId(fileId: string | null, oldId: string, newId: string): string | null {
+  if (!fileId) {
+    return null;
+  }
+
+  if (oldId.endsWith('/') && newId.endsWith('/') && fileId.startsWith(oldId)) {
+    return `${newId}${fileId.slice(oldId.length)}`;
+  }
+
+  if (fileId === oldId) {
+    return newId;
+  }
+
+  return null;
+}
+
+function isPathAffectedByRemoval(path: string | null, removedId: string): boolean {
+  if (!path) {
+    return false;
+  }
+
+  if (removedId.endsWith('/')) {
+    return path.startsWith(removedId);
+  }
+
+  return path === removedId;
+}
+
+function removeOpenFileIdsWithin(openFileIds: readonly string[], removedId: string): string[] {
+  if (removedId.endsWith('/')) {
+    return openFileIds.filter((fileId) => !fileId.startsWith(removedId));
+  }
+
+  return removeOpenFileId(openFileIds, removedId);
+}
+
+function getExpandableFolderIds(path: string): string[] {
+  const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
+  const parts = trimmed.split('/').filter(Boolean);
+  if (parts.length === 0) {
+    return [];
+  }
+
+  const limit = path.endsWith('/') ? parts.length : parts.length - 1;
+  const folderIds: string[] = [];
+  for (let index = 1; index <= limit; index += 1) {
+    folderIds.push(`${parts.slice(0, index).join('/')}/`);
+  }
+  return folderIds;
+}
+
+function getTopLevelDraggedPaths(paths: readonly string[]): string[] {
+  const sorted = [...paths].sort((left, right) => left.length - right.length || left.localeCompare(right));
+  return sorted.filter((path, index) => !sorted.slice(0, index).some((candidate) => candidate.endsWith('/') && path.startsWith(candidate)));
+}
+
+function collectExpandedFolderIds(model: TreesModel, folderIds: readonly string[]): Set<string> {
+  const expanded = new Set<string>();
+  for (const folderId of folderIds) {
+    const item = model.getItem(folderId);
+    if (item?.isDirectory()) {
+      const directory = item;
+      const ancestors = getExpandableFolderIds(folderId).slice(0, -1);
+      const ancestorsExpanded = ancestors.every((ancestorId) => {
+        const ancestorItem = model.getItem(ancestorId);
+        return ancestorItem?.isDirectory() ? ancestorItem.isExpanded() : false;
+      });
+
+      if (directory.isExpanded() && ancestorsExpanded) {
+        expanded.add(folderId);
+      }
+    }
+  }
+  return expanded;
+}
+
+function collectRawExpandedFolderIds(model: TreesModel, folderIds: readonly string[]): Set<string> {
+  const expanded = new Set<string>();
+  for (const folderId of folderIds) {
+    const item = model.getItem(folderId);
+    if (item?.isDirectory() && item.isExpanded()) {
+      expanded.add(folderId);
+    }
+  }
+  return expanded;
+}
+
+function createFallbackEntry(path: string, kind: VaultEntry['kind'], name?: string): VaultEntry {
+  const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
+  return {
+    id: path,
+    kind,
+    name: name ?? trimmed.split('/').filter(Boolean).pop() ?? trimmed,
+    path: trimmed,
+    sizeBytes: 0,
+    updatedAt: '',
+  };
+}
+
+function TreeContextMenu({ onDelete, onMove, onRename }: ContextMenuProps) {
   return (
-    <div ref={ref} className="fixed z-50 min-w-[148px] rounded-lg border border-border-default bg-elevated shadow-lg py-1 text-[12px]"
-      style={{ left: state.x, top: state.y }}>
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-secondary hover:bg-accent/10 hover:text-primary"
-        onClick={() => { onRename(); onClose(); }}>
-        <Ico d={ICON.pencil} size={12} /> Rename
+    <div className="ui-context-menu-shell min-w-[160px]">
+      <button type="button" className="ui-context-menu-item gap-2" onClick={onRename}>
+        <Ico d={ICON.pencil} size={12} />
+        Rename
       </button>
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-secondary hover:bg-accent/10 hover:text-primary"
-        onClick={() => { onMove(); onClose(); }}>
-        <Ico d={ICON.move} size={12} /> Move to…
+      <button type="button" className="ui-context-menu-item gap-2" onClick={onMove}>
+        <Ico d={ICON.move} size={12} />
+        Move to…
       </button>
       <div className="my-1 border-t border-border-subtle" />
-      <button type="button" className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-danger hover:bg-danger/10"
-        onClick={() => { onDelete(); onClose(); }}>
-        <Ico d={ICON.trash} size={12} /> Delete
+      <button type="button" className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10" onClick={onDelete}>
+        <Ico d={ICON.trash} size={12} />
+        Delete
       </button>
     </div>
   );
 }
 
-// ── Move modal ────────────────────────────────────────────────────────────────
-
-function MoveModal({ entry, onConfirm, onClose }: {
+function MoveModal({
+  entry,
+  folderOptions,
+  onConfirm,
+  onClose,
+}: {
   entry: VaultEntry;
+  folderOptions: readonly FolderOption[];
   onConfirm: (targetDir: string) => void;
   onClose: () => void;
 }) {
-  const [folders, setFolders] = useState<Array<{ id: string; label: string }>>([]);
-  const [selected, setSelected] = useState('');
-
-  useEffect(() => {
-    // Collect all folders via BFS
-    const collect = async (dir: string, depth: number): Promise<Array<{ id: string; label: string }>> => {
-      if (depth > 6) return [];
-      const result = await vaultApi.tree(dir || undefined);
-      const thisFolders = result.entries.filter((e) => e.kind === 'folder');
-      const items: Array<{ id: string; label: string }> = [
-        { id: '', label: '/ (vault root)' },
-      ];
-      for (const f of thisFolders) {
-        items.push({ id: f.id, label: f.id });
-        const children = await collect(f.id, depth + 1);
-        items.push(...children.filter((c) => c.id !== ''));
-      }
-      return items;
-    };
-    collect('', 0).then((items) => {
-      // Deduplicate
-      const seen = new Set<string>();
-      setFolders(items.filter((i) => { if (seen.has(i.id)) return false; seen.add(i.id); return true; }));
-    }).catch(() => {});
-  }, []);
-
   const currentDir = entry.kind === 'file'
-    ? entry.id.split('/').slice(0, -1).join('/') + (entry.id.includes('/') ? '/' : '')
+    ? idToDir(entry.id)
     : entry.id;
+  const [selected, setSelected] = useState('');
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
-      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-80 p-5" onClick={(e) => e.stopPropagation()}>
-        <h3 className="text-[13px] font-semibold text-primary mb-1">Move "{entry.name}"</h3>
-        <p className="text-[11px] text-dim mb-3">Select destination folder</p>
-        <select
-          className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 mb-4 outline-none focus:border-accent"
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
-        >
-          {folders.map((f) => (
-            <option key={f.id} value={f.id} disabled={f.id === currentDir}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <div className="flex justify-end gap-2">
+      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-80 p-5" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-[13px] font-semibold text-primary mb-1">Move “{entry.name}”</h3>
+        <p className="text-[11px] text-dim mb-3">Select destination folder.</p>
+        <label className="block space-y-1">
+          <span className="text-[11px] text-dim">Destination</span>
+          <select
+            aria-label="Move destination"
+            className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 outline-none focus:border-accent"
+            value={selected}
+            onChange={(event) => setSelected(event.target.value)}
+          >
+            {folderOptions.map((folder) => (
+              <option
+                key={folder.id}
+                value={folder.id}
+                disabled={folder.id === currentDir || !canDropVaultEntry(entry, folder.id)}
+              >
+                {folder.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex justify-end gap-2 pt-4">
           <button type="button" className="ui-action-button text-[12px]" onClick={onClose}>Cancel</button>
-          <button type="button" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90"
-            onClick={() => { onConfirm(selected); onClose(); }}>
+          <button
+            type="button"
+            className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90"
+            onClick={() => {
+              onConfirm(selected);
+              onClose();
+            }}
+          >
             Move
           </button>
         </div>
@@ -270,127 +400,77 @@ function ImportUrlModal({
   );
 }
 
-// ── Inline name input ─────────────────────────────────────────────────────────
-
-function NameInput({ value, onChange, onConfirm, onCancel }: {
-  value: string; onChange: (v: string) => void; onConfirm: () => void; onCancel: () => void;
+function CreateEntryModal({
+  onClose,
+  onConfirm,
+  state,
+}: {
+  onClose: () => void;
+  onConfirm: (value: string) => Promise<void>;
+  state: CreateEntryState;
 }) {
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); ref.current?.select(); }, []);
-  return (
-    <input ref={ref} type="text" value={value}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onConfirm(); } if (e.key === 'Escape') { e.preventDefault(); onCancel(); } }}
-      onBlur={onCancel}
-      className="flex-1 min-w-0 bg-accent/10 rounded px-1 py-0 text-[12px] text-primary outline-none border border-accent/40"
-      onClick={(e) => e.stopPropagation()} />
-  );
-}
+  const [value, setValue] = useState(state.value);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-// ── Tree helpers ──────────────────────────────────────────────────────────────
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
 
-function idToDir(id: string): string {
-  if (id.endsWith('/')) return id;
-  const parts = id.split('/');
-  parts.pop();
-  return parts.length > 0 ? `${parts.join('/')}/` : '';
-}
-
-function normalizeDirectoryId(value: string): string {
-  return value.trim().replace(/^\/+|\/+$/g, '');
-}
-
-function buildNode(entry: VaultEntry): TreeNode {
-  return { entry, children: null, expanded: false };
-}
-
-async function hydrateExpandedTreeNodes(entries: VaultEntry[], expandedFolderIds: ReadonlySet<string>): Promise<TreeNode[]> {
-  return Promise.all(entries.map(async (entry) => {
-    if (entry.kind !== 'folder' || !expandedFolderIds.has(entry.id)) {
-      return buildNode(entry);
+  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = value.trim();
+    if (!trimmed) {
+      setError(state.kind === 'file' ? 'File name is required.' : 'Folder name is required.');
+      return;
     }
 
+    setSubmitting(true);
+    setError(null);
     try {
-      const result = await vaultApi.tree(entry.id);
-      return {
-        entry,
-        children: await hydrateExpandedTreeNodes(result.entries, expandedFolderIds),
-        expanded: true,
-      } satisfies TreeNode;
-    } catch {
-      return buildNode(entry);
+      await onConfirm(trimmed);
+      onClose();
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : String(submitError));
+      setSubmitting(false);
     }
-  }));
-}
+  }, [onClose, onConfirm, state.kind, value]);
 
-function applyChildren(nodes: TreeNode[], targetId: string, children: VaultEntry[]): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.entry.id === targetId) return { ...n, children: children.map(buildNode), expanded: true };
-    if (n.children) return { ...n, children: applyChildren(n.children, targetId, children) };
-    return n;
-  });
-}
+  const title = state.kind === 'file' ? 'New file' : 'New folder';
+  const label = state.kind === 'file' ? 'File name' : 'Folder name';
 
-function collapseNode(node: TreeNode): TreeNode {
-  return {
-    ...node,
-    expanded: false,
-    children: node.children?.map(collapseNode) ?? node.children,
-  };
-}
-
-function toggleNode(nodes: TreeNode[], id: string): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.entry.id === id) return n.expanded ? collapseNode(n) : { ...n, expanded: true };
-    if (n.children) return { ...n, children: toggleNode(n.children, id) };
-    return n;
-  });
-}
-
-function updateEntry(nodes: TreeNode[], oldId: string, newEntry: VaultEntry): TreeNode[] {
-  return nodes.map((n) => {
-    if (n.entry.id === oldId) return { ...n, entry: newEntry };
-    if (n.children) return { ...n, children: updateEntry(n.children, oldId, newEntry) };
-    return n;
-  });
-}
-
-function removeEntry(nodes: TreeNode[], id: string): TreeNode[] {
-  return nodes.filter((n) => n.entry.id !== id)
-    .map((n) => n.children ? { ...n, children: removeEntry(n.children, id) } : n);
-}
-
-function insertEntry(nodes: TreeNode[], parentDir: string, entry: VaultEntry): TreeNode[] {
-  if (!parentDir) return [...nodes, buildNode(entry)];
-  return nodes.map((n) => {
-    if (n.entry.id === parentDir && n.children !== null) return { ...n, children: [...n.children, buildNode(entry)] };
-    if (n.children) return { ...n, children: insertEntry(n.children, parentDir, entry) };
-    return n;
-  });
-}
-
-function formatOpenFileName(fileId: string): string {
-  return fileId.split('/').filter(Boolean).pop() ?? fileId;
-}
-
-function formatOpenFileDir(fileId: string): string {
-  return fileId.split('/').slice(0, -1).join('/');
-}
-
-function resolveRenamedFileId(fileId: string | null, oldId: string, newId: string): string | null {
-  if (!fileId) {
-    return null;
-  }
-
-  if (oldId.endsWith('/') && newId.endsWith('/') && fileId.startsWith(oldId)) {
-    return `${newId}${fileId.slice(oldId.length)}`;
-  }
-
-  if (fileId === oldId) {
-    return newId;
-  }
-
-  return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!submitting) onClose(); }}>
+      <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(28rem,calc(100vw-2rem))] p-5" onClick={(event) => event.stopPropagation()}>
+        <h3 className="text-[13px] font-semibold text-primary mb-1">{title}</h3>
+        <p className="text-[11px] text-dim mb-3">Create a new {state.kind === 'file' ? 'markdown file' : 'folder'} at the vault root.</p>
+        <form className="space-y-3" onSubmit={(event) => { void handleSubmit(event); }}>
+          <label className="block space-y-1">
+            <span className="text-[11px] text-dim">{label}</span>
+            <input
+              ref={inputRef}
+              type="text"
+              value={value}
+              onChange={(event) => setValue(event.target.value)}
+              placeholder={state.kind === 'file' ? 'untitled.md' : 'New Folder'}
+              className="w-full rounded-lg border border-border-default bg-surface text-[12px] text-primary px-3 py-2 outline-none focus:border-accent"
+              spellCheck={false}
+              autoComplete="off"
+            />
+          </label>
+          {error ? <p className="text-[12px] text-danger">{error}</p> : null}
+          <div className="flex justify-end gap-2 pt-1">
+            <button type="button" className="ui-action-button text-[12px]" onClick={onClose} disabled={submitting}>Cancel</button>
+            <button type="submit" className="ui-action-button text-[12px] bg-accent text-white hover:bg-accent/90 disabled:opacity-70" disabled={submitting}>
+              {submitting ? 'Creating…' : title}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function OpenFilesSection({
@@ -458,21 +538,56 @@ function OpenFilesSection({
   );
 }
 
-// ── Main component ────────────────────────────────────────────────────────────
-
 export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
-  const [roots, setRoots] = useState<TreeNode[]>([]);
+  const [entries, setEntries] = useState<VaultEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editState, setEditState] = useState<EditState | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
   const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
-  const [draggingEntry, setDraggingEntry] = useState<VaultEntry | null>(null);
-  const [dropTargetDir, setDropTargetDir] = useState<string | null>(null);
+  const [createEntryState, setCreateEntryState] = useState<CreateEntryState | null>(null);
   const initialOpenFileIds = useRef(activeFileId ? addOpenFileId(readStoredOpenFileIds(), activeFileId) : readStoredOpenFileIds());
   const [openFileIds, setOpenFileIds] = useState<string[]>(initialOpenFileIds.current);
   const openFileIdsRef = useRef<string[]>(initialOpenFileIds.current);
   const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
+  const visibleExpandedFolderIdsRef = useRef<Set<string>>(new Set(expandedFolderIdsRef.current));
+  const activeFileIdRef = useRef(activeFileId);
+  const entryMapRef = useRef<Map<string, VaultEntry>>(new Map());
+  const folderIdsRef = useRef<string[]>([]);
+  const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
+  const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
+  const canDropRef = useRef<(event: FileTreeDropContext) => boolean>(() => false);
+  const dropCompleteRef = useRef<(event: FileTreeDropResult) => void>(() => {});
+  const reconcilingExpansionRef = useRef(false);
+
+  const model = useMemo(() => new TreesModel({
+    paths: [],
+    search: true,
+    initialExpandedPaths: [...expandedFolderIdsRef.current],
+    initialSelectedPaths: activeFileId ? [activeFileId] : [],
+    composition: {
+      contextMenu: {
+        buttonVisibility: 'when-needed',
+        triggerMode: 'both',
+      },
+    },
+    onSelectionChange: (paths) => selectionChangeRef.current(paths),
+    renaming: {
+      onRename: (event) => renameRef.current(event),
+    },
+    dragAndDrop: {
+      canDrop: (event) => canDropRef.current(event),
+      onDropComplete: (event) => dropCompleteRef.current(event),
+      onDropError: (error) => {
+        console.error('knowledge tree drop failed', error);
+      },
+    },
+  }), []);
+
+  const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
+  const folderIds = useMemo(() => entries.filter((entry) => entry.kind === 'folder').map((entry) => entry.id), [entries]);
+  const folderOptions = useMemo<FolderOption[]>(() => [
+    { id: '', label: '/ (vault root)' },
+    ...folderIds.map((folderId) => ({ id: folderId, label: folderId })),
+  ], [folderIds]);
 
   const persistOpenFileIds = useCallback((nextOpenFileIds: readonly string[]) => {
     const normalized = [...nextOpenFileIds];
@@ -484,100 +599,98 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
     const normalized = new Set(nextExpandedFolderIds);
     expandedFolderIdsRef.current = normalized;
+    visibleExpandedFolderIdsRef.current = normalized;
     writeStoredExpandedFolderIds(normalized);
   }, []);
 
-  useEffect(() => {
-    if (!activeFileId) {
+  const applyRenameEffects = useCallback((oldId: string, newId: string) => {
+    persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
+
+    if (oldId.endsWith('/') && newId.endsWith('/')) {
+      persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
+    }
+
+    const nextActiveFileId = resolveRenamedFileId(activeFileIdRef.current, oldId, newId);
+    if (nextActiveFileId && nextActiveFileId !== activeFileIdRef.current) {
+      onFileSelect(nextActiveFileId);
+    }
+  }, [onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
+
+  const applyDeleteEffects = useCallback((id: string) => {
+    persistOpenFileIds(removeOpenFileIdsWithin(openFileIdsRef.current, id));
+
+    if (id.endsWith('/')) {
+      persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
+    }
+
+    if (isPathAffectedByRemoval(activeFileIdRef.current, id)) {
+      onFileSelect('');
+    }
+  }, [onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
+
+  const loadSnapshot = useCallback(async (options?: { keepLoadingState?: boolean }) => {
+    if (options?.keepLoadingState !== false) {
+      setLoading(true);
+    }
+
+    try {
+      const result = await api.vaultFiles();
+      setEntries(result.files);
+      model.resetPaths(result.files.map((entry) => entry.id), {
+        initialExpandedPaths: [...expandedFolderIdsRef.current],
+      });
+    } catch (error) {
+      console.error('failed to load knowledge base snapshot', error);
+      setEntries([]);
+      model.resetPaths([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [model]);
+
+  const handleRename = useCallback(async ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
+    try {
+      const newName = destinationPath.split('/').filter(Boolean).pop() ?? '';
+      const updated = await vaultApi.rename(sourcePath, newName);
+      emitKBEvent('kb:file-renamed', { oldId: sourcePath, newId: updated.id });
+    } catch (error) {
+      console.error('rename failed', error);
+      await loadSnapshot({ keepLoadingState: false });
+    }
+  }, [loadSnapshot]);
+
+  const handleMovePaths = useCallback(async (paths: readonly string[], targetDirInput: string, options?: { emitEntriesChangedOnly?: boolean }) => {
+    const targetDir = normalizeVaultDir(targetDirInput);
+    const movedPairs: Array<{ oldId: string; newId: string }> = [];
+
+    try {
+      for (const path of getTopLevelDraggedPaths(paths)) {
+        const updated = await vaultApi.move(path, targetDir);
+        movedPairs.push({ oldId: path, newId: updated.id });
+      }
+    } catch (error) {
+      console.error('move failed', error);
+      await loadSnapshot({ keepLoadingState: false });
       return;
     }
 
-    persistOpenFileIds(addOpenFileId(openFileIdsRef.current, activeFileId));
-  }, [activeFileId, persistOpenFileIds]);
-
-  // ── Load root ───────────────────────────────────────────────────────────────
-
-  const loadRoot = useCallback(async () => {
-    setLoading(true);
-    try {
-      const result = await vaultApi.tree();
-      const nextRoots = await hydrateExpandedTreeNodes(result.entries, expandedFolderIdsRef.current);
-      setRoots(nextRoots);
-    } catch (error) {
-      console.error('failed to load knowledge base tree', error);
-      setRoots([]);
-    } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void loadRoot(); }, [loadRoot]);
-
-  // Listen for kb events from editor
-  useEffect(() => {
-    const offs = [
-      onKBEvent('kb:entries-changed', () => void loadRoot()),
-      onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
-        persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
-
-        const nextActiveFileId = resolveRenamedFileId(activeFileId, oldId, newId);
-        if (nextActiveFileId) {
-          onFileSelect(nextActiveFileId);
-        }
-
-        if (oldId.endsWith('/') || newId.endsWith('/')) {
-          persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, oldId, newId));
-          void loadRoot();
-          return;
-        }
-
-        if (idToDir(oldId) !== idToDir(newId)) {
-          void loadRoot();
-          return;
-        }
-
-        // Try to update in-tree without full reload
-        vaultApi.tree(idToDir(newId)).then((r) => {
-          const found = r.entries.find((e) => e.id === newId);
-          if (found) setRoots((prev) => updateEntry(prev, oldId, found));
-          else void loadRoot();
-        }).catch(() => void loadRoot());
-      }),
-      onKBEvent<{ id: string }>('kb:file-created', () => void loadRoot()),
-      onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
-        persistOpenFileIds(removeOpenFileId(openFileIdsRef.current, id));
-        if (id.endsWith('/')) {
-          persistExpandedFolderIds(collapseExpandedFolderIds(expandedFolderIdsRef.current, id));
-        }
-        setRoots((prev) => removeEntry(prev, id));
-      }),
-    ];
-    return () => offs.forEach((off) => off());
-  }, [activeFileId, loadRoot, onFileSelect, persistExpandedFolderIds, persistOpenFileIds]);
-
-  // ── Tree expansion ──────────────────────────────────────────────────────────
-
-  const handleToggle = useCallback(async (node: TreeNode) => {
-    if (node.children !== null) {
-      setRoots((prev) => toggleNode(prev, node.entry.id));
-      persistExpandedFolderIds(
-        node.expanded
-          ? collapseExpandedFolderIds(expandedFolderIdsRef.current, node.entry.id)
-          : addExpandedFolderId(expandedFolderIdsRef.current, node.entry.id),
-      );
+    if (movedPairs.length === 0) {
       return;
     }
-    const dir = node.entry.kind === 'folder' ? node.entry.id : idToDir(node.entry.id);
-    try {
-      const result = await vaultApi.tree(dir);
-      persistExpandedFolderIds(addExpandedFolderId(expandedFolderIdsRef.current, node.entry.id));
-      setRoots((prev) => applyChildren(prev, node.entry.id, result.entries));
-    } catch (error) {
-      console.error('failed to expand knowledge tree folder', error);
-    }
-  }, [persistExpandedFolderIds]);
 
-  const openImportUrlModal = useCallback((directoryId?: string) => {
-    setImportDirectoryId(normalizeDirectoryId(directoryId ?? (activeFileId ? idToDir(activeFileId) : '')));
-  }, [activeFileId]);
+    if (options?.emitEntriesChangedOnly || movedPairs.length > 1) {
+      for (const pair of movedPairs) {
+        applyRenameEffects(pair.oldId, pair.newId);
+      }
+      emitKBEvent('kb:entries-changed');
+      return;
+    }
+
+    const pair = movedPairs[0];
+    if (pair) {
+      emitKBEvent('kb:file-renamed', { oldId: pair.oldId, newId: pair.newId });
+    }
+  }, [applyRenameEffects, loadSnapshot]);
 
   const handleImportUrl = useCallback(async (input: { url: string; title: string; directoryId: string }) => {
     const imported = await vaultApi.importUrl({
@@ -590,146 +703,36 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     onFileSelect(imported.note.id);
   }, [onFileSelect]);
 
-  // ── Context menu ────────────────────────────────────────────────────────────
+  const handleCreateEntry = useCallback(async (value: string) => {
+    if (!createEntryState) {
+      return;
+    }
 
-  const handleContextMenu = useCallback((e: React.MouseEvent, entry: VaultEntry) => {
-    e.preventDefault(); e.stopPropagation();
-    setContextMenu({ x: e.clientX, y: e.clientY, entry });
-  }, []);
+    if (createEntryState.kind === 'file') {
+      const fileId = value.endsWith('.md') ? value : `${value}.md`;
+      await vaultApi.writeFile(fileId, '');
+      emitKBEvent('kb:file-created', { id: fileId });
+      onFileSelect(fileId);
+      return;
+    }
 
-  // ── Rename ──────────────────────────────────────────────────────────────────
-
-  const confirmRename = useCallback(async () => {
-    if (!editState || editState.type !== 'rename') return;
-    const newName = editState.value.trim();
-    const oldBasename = editState.id.split('/').filter(Boolean).pop() ?? '';
-    if (!newName || newName === oldBasename) { setEditState(null); return; }
-    try {
-      const updated = await vaultApi.rename(editState.id, newName);
-      if (updated.kind !== 'folder') {
-        setRoots((prev) => updateEntry(prev, editState.id, updated));
-      }
-      emitKBEvent('kb:file-renamed', { oldId: editState.id, newId: updated.id });
-      if (activeFileId === editState.id) onFileSelect(updated.id);
-    } catch (err) { console.error('rename failed', err); }
-    setEditState(null);
-  }, [editState, activeFileId, onFileSelect]);
-
-  // ── Delete ──────────────────────────────────────────────────────────────────
+    const folderId = value.endsWith('/') ? value : `${value}/`;
+    const created = await vaultApi.createFolder(folderId);
+    emitKBEvent('kb:file-created', { id: created.id });
+  }, [createEntryState, onFileSelect]);
 
   const handleDelete = useCallback(async (entry: VaultEntry) => {
-    if (!window.confirm(`Delete "${entry.name}"?`)) return;
+    if (!window.confirm(`Delete “${entry.name}”?`)) {
+      return;
+    }
+
     try {
       await vaultApi.deleteFile(entry.id);
-      setRoots((prev) => removeEntry(prev, entry.id));
       emitKBEvent('kb:file-deleted', { id: entry.id });
-      if (activeFileId === entry.id) onFileSelect('');
-    } catch (err) { console.error('delete failed', err); }
-  }, [activeFileId, onFileSelect]);
-
-  // ── Move ────────────────────────────────────────────────────────────────────
-
-  const handleMove = useCallback(async (entry: VaultEntry, targetDir: string) => {
-    try {
-      const updated = await vaultApi.move(entry.id, targetDir);
-      persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, entry.id, updated.id));
-      if (entry.kind === 'folder') {
-        persistExpandedFolderIds(renameExpandedFolderIds(expandedFolderIdsRef.current, entry.id, updated.id));
-      }
-      setRoots((prev) => removeEntry(prev, entry.id));
-      emitKBEvent('kb:file-renamed', { oldId: entry.id, newId: updated.id });
-    } catch (err) { console.error('move failed', err); }
-  }, [persistExpandedFolderIds, persistOpenFileIds]);
-
-  const clearDragState = useCallback(() => {
-    setDraggingEntry(null);
-    setDropTargetDir(null);
-  }, []);
-
-  const handleEntryDragStart = useCallback((event: React.DragEvent<HTMLButtonElement>, entry: VaultEntry) => {
-    event.stopPropagation();
-    setDraggingEntry(entry);
-    setDropTargetDir(null);
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData(VAULT_ENTRY_DRAG_TYPE, entry.id);
-    event.dataTransfer.setData('text/plain', entry.id);
-  }, []);
-
-  const handleNodeDragOver = useCallback((event: React.DragEvent<HTMLButtonElement>, targetEntry: VaultEntry) => {
-    if (!draggingEntry) return;
-    const targetDir = normalizeVaultDir(targetEntry.kind === 'folder' ? targetEntry.id : idToDir(targetEntry.id));
-    if (!canDropVaultEntry(draggingEntry, targetDir)) {
-      if (dropTargetDir !== null) setDropTargetDir(null);
-      return;
+    } catch (error) {
+      console.error('delete failed', error);
     }
-    event.preventDefault();
-    event.stopPropagation();
-    event.dataTransfer.dropEffect = 'move';
-    if (dropTargetDir !== targetDir) setDropTargetDir(targetDir);
-  }, [draggingEntry, dropTargetDir]);
-
-  const handleRootDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
-    if (!draggingEntry) return;
-    if (!canDropVaultEntry(draggingEntry, '')) {
-      if (dropTargetDir !== null) setDropTargetDir(null);
-      return;
-    }
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-    if (dropTargetDir !== '') setDropTargetDir('');
-  }, [draggingEntry, dropTargetDir]);
-
-  const handleDropToDir = useCallback((event: React.DragEvent<HTMLElement>, targetDirInput: string) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const entry = draggingEntry;
-    clearDragState();
-    if (!entry) return;
-    const targetDir = normalizeVaultDir(targetDirInput);
-    if (!canDropVaultEntry(entry, targetDir)) return;
-    void handleMove(entry, targetDir);
-  }, [clearDragState, draggingEntry, handleMove]);
-
-  // ── New file/folder ─────────────────────────────────────────────────────────
-
-  const confirmNewFile = useCallback(async () => {
-    if (!editState || editState.type !== 'new-file') return;
-    const name = editState.value.trim();
-    if (!name) { setEditState(null); return; }
-    const finalName = name.endsWith('.md') ? name : `${name}.md`;
-    const id = editState.parentDir ? `${editState.parentDir}${finalName}` : finalName;
-    try {
-      await vaultApi.writeFile(id, '');
-      const result = await vaultApi.tree(editState.parentDir || undefined);
-      const newEntry = result.entries.find((e) => e.id === id);
-      if (newEntry) {
-        setRoots((prev) => insertEntry(prev, editState.parentDir, newEntry));
-        emitKBEvent('kb:file-created', { id });
-        onFileSelect(id);
-      }
-    } catch (err) { console.error('new file failed', err); }
-    setEditState(null);
-  }, [editState, onFileSelect]);
-
-  const confirmNewFolder = useCallback(async () => {
-    if (!editState || editState.type !== 'new-folder') return;
-    const name = editState.value.trim();
-    if (!name) { setEditState(null); return; }
-    const id = editState.parentDir ? `${editState.parentDir}${name}/` : `${name}/`;
-    try {
-      const newEntry = await vaultApi.createFolder(id);
-      setRoots((prev) => insertEntry(prev, editState.parentDir, newEntry));
-      emitKBEvent('kb:entries-changed');
-    } catch (err) { console.error('new folder failed', err); }
-    setEditState(null);
-  }, [editState]);
-
-  const handleEditConfirm = useCallback(() => {
-    if (!editState) return;
-    if (editState.type === 'rename') void confirmRename();
-    if (editState.type === 'new-file') void confirmNewFile();
-    if (editState.type === 'new-folder') void confirmNewFolder();
-  }, [editState, confirmRename, confirmNewFile, confirmNewFolder]);
+  }, []);
 
   const handleOpenFileClose = useCallback((id: string) => {
     const nextOpenFileIds = removeOpenFileId(openFileIdsRef.current, id);
@@ -744,92 +747,150 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
   }, [activeFileId, onFileSelect, persistOpenFileIds]);
 
-  // ── Tree renderer ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    activeFileIdRef.current = activeFileId;
+  }, [activeFileId]);
 
-  function renderNodes(nodes: TreeNode[], depth: number): React.ReactNode {
-    return nodes.map((node) => {
-      const isFolder = node.entry.kind === 'folder';
-      const isActive = activeFileId === node.entry.id;
-      const isRenaming = editState?.type === 'rename' && editState.id === node.entry.id;
-      const nodeDropDir = normalizeVaultDir(isFolder ? node.entry.id : idToDir(node.entry.id));
-      const isDragging = draggingEntry?.id === node.entry.id;
-      const isDropTarget = dropTargetDir === nodeDropDir;
+  useEffect(() => {
+    entryMapRef.current = entryMap;
+    folderIdsRef.current = folderIds;
+  }, [entryMap, folderIds]);
 
-      return (
-        <div key={node.entry.id}>
-          <button
-            type="button"
-            aria-label={node.entry.name}
-            draggable={!isRenaming}
-            className={['group flex w-full items-center gap-1 px-2 py-[3px] rounded-md cursor-pointer select-none text-[12px] leading-tight text-left',
-              isDropTarget ? 'bg-accent/12 text-primary ring-1 ring-inset ring-accent/40' : isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
-              isDragging ? 'opacity-60' : '',
-            ].join(' ')}
-            style={{ paddingLeft: `${8 + depth * 14}px` }}
-            onClick={isFolder ? () => { void handleToggle(node); } : () => onFileSelect(node.entry.id)}
-            onContextMenu={(e) => handleContextMenu(e, node.entry)}
-            onDragStart={(e) => handleEntryDragStart(e, node.entry)}
-            onDragEnd={() => clearDragState()}
-            onDragOver={(e) => handleNodeDragOver(e, node.entry)}
-            onDrop={(e) => handleDropToDir(e, isFolder ? node.entry.id : idToDir(node.entry.id))}
-          >
-            <span className="shrink-0 w-3 flex items-center justify-center text-dim"
-              style={{ transform: isFolder ? (node.expanded ? 'rotate(90deg)' : 'rotate(0deg)') : 'none', transition: 'transform 120ms' }}>
-              {isFolder ? <Ico d={ICON.chevRight} size={10} /> : <span className="w-3" />}
-            </span>
-            <span className="shrink-0 text-dim">
-              {isFolder ? <Ico d={node.expanded ? ICON.folderOpen : ICON.folder} size={12} /> : <Ico d={ICON.file} size={12} />}
-            </span>
-            {isRenaming ? (
-              <NameInput value={(editState as { value: string }).value}
-                onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-                onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
-            ) : (
-              <span className="flex-1 truncate">{node.entry.name}</span>
-            )}
-          </button>
-          {isFolder && node.expanded && node.children !== null && (
-            <div>
-              {/* Inline new-item rows inside folder */}
-              {editState?.type === 'new-folder' && editState.parentDir === node.entry.id && (
-                <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
-                  style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-                  <span className="shrink-0 w-3" />
-                  <span className="shrink-0 text-dim"><Ico d={ICON.folder} size={12} /></span>
-                  <NameInput value={editState.value}
-                    onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-                    onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
-                </div>
-              )}
-              {editState?.type === 'new-file' && editState.parentDir === node.entry.id && (
-                <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]"
-                  style={{ paddingLeft: `${8 + (depth + 1) * 14}px` }}>
-                  <span className="shrink-0 w-3" />
-                  <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
-                  <NameInput value={editState.value}
-                    onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-                    onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
-                </div>
-              )}
-              {renderNodes(node.children, depth + 1)}
-            </div>
-          )}
-        </div>
-      );
+  useEffect(() => {
+    if (!activeFileId) {
+      return;
+    }
+
+    persistOpenFileIds(addOpenFileId(openFileIdsRef.current, activeFileId));
+  }, [activeFileId, persistOpenFileIds]);
+
+  useEffect(() => {
+    selectionChangeRef.current = (paths) => {
+      const selectedPath = paths.find((path) => !path.endsWith('/')) ?? null;
+      if (selectedPath && selectedPath !== activeFileIdRef.current) {
+        onFileSelect(selectedPath);
+      }
+    };
+  }, [onFileSelect]);
+
+  useEffect(() => {
+    renameRef.current = (event) => {
+      void handleRename(event);
+    };
+  }, [handleRename]);
+
+  useEffect(() => {
+    canDropRef.current = (event) => {
+      const targetDir = normalizeVaultDir(event.target.directoryPath ?? '');
+      return getTopLevelDraggedPaths(event.draggedPaths).every((path) => {
+        const entry = entryMapRef.current.get(path);
+        return entry ? canDropVaultEntry(entry, targetDir) : false;
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    dropCompleteRef.current = (event) => {
+      void handleMovePaths(event.draggedPaths, event.target.directoryPath ?? '', { emitEntriesChangedOnly: event.draggedPaths.length > 1 });
+    };
+  }, [handleMovePaths]);
+
+  useEffect(() => {
+    const unsubscribe = model.subscribe(() => {
+      if (reconcilingExpansionRef.current) {
+        return;
+      }
+
+      const rawExpandedFolderIds = collectRawExpandedFolderIds(model, folderIdsRef.current);
+      const collapsedFolderIds = [...visibleExpandedFolderIdsRef.current].filter((folderId) => !rawExpandedFolderIds.has(folderId));
+      const descendantFolderIdsToCollapse = [...rawExpandedFolderIds].filter((folderId) => collapsedFolderIds.some((collapsedFolderId) => folderId !== collapsedFolderId && folderId.startsWith(collapsedFolderId)));
+
+      if (descendantFolderIdsToCollapse.length > 0) {
+        reconcilingExpansionRef.current = true;
+        try {
+          for (const folderId of descendantFolderIdsToCollapse) {
+            const item = model.getItem(folderId);
+            if (item?.isDirectory()) {
+              item.collapse();
+            }
+          }
+        } finally {
+          reconcilingExpansionRef.current = false;
+        }
+      }
+
+      persistExpandedFolderIds(collectExpandedFolderIds(model, folderIdsRef.current));
     });
-  }
+    return unsubscribe;
+  }, [model, persistExpandedFolderIds]);
 
-  // ── Render ──────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    void loadSnapshot();
+  }, [loadSnapshot]);
+
+  useEffect(() => {
+    if (!activeFileId) {
+      for (const selectedPath of model.getSelectedPaths()) {
+        model.getItem(selectedPath)?.deselect();
+      }
+      return;
+    }
+
+    for (const folderId of getExpandableFolderIds(activeFileId)) {
+      const item = model.getItem(folderId);
+      if (item?.isDirectory()) {
+        const directory = item;
+        directory.expand();
+      }
+    }
+
+    for (const selectedPath of model.getSelectedPaths()) {
+      if (selectedPath !== activeFileId) {
+        model.getItem(selectedPath)?.deselect();
+      }
+    }
+
+    const activeItem = model.getItem(activeFileId);
+    if (activeItem && !activeItem.isSelected()) {
+      activeItem.select();
+    }
+
+    persistExpandedFolderIds(collectExpandedFolderIds(model, folderIdsRef.current));
+  }, [activeFileId, entries, model, persistExpandedFolderIds]);
+
+  useEffect(() => () => {
+    model.cleanUp();
+  }, [model]);
+
+  useEffect(() => {
+    const off = [
+      onKBEvent('kb:entries-changed', () => { void loadSnapshot({ keepLoadingState: false }); }),
+      onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
+        applyRenameEffects(oldId, newId);
+        void loadSnapshot({ keepLoadingState: false });
+      }),
+      onKBEvent<{ id: string }>('kb:file-created', () => { void loadSnapshot({ keepLoadingState: false }); }),
+      onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
+        applyDeleteEffects(id);
+        void loadSnapshot({ keepLoadingState: false });
+      }),
+    ];
+
+    return () => {
+      off.forEach((unsubscribe) => unsubscribe());
+    };
+  }, [applyDeleteEffects, applyRenameEffects, loadSnapshot]);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className={['flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md', dropTargetDir === '' ? 'bg-accent/8 ring-1 ring-inset ring-accent/30' : ''].join(' ')}>
+    <div className="flex h-full flex-col">
+      <div className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
         <p className="ui-section-label flex-1">Knowledge Base</p>
         <button
           type="button"
           className="ui-icon-button ui-icon-button-compact"
-          title="Open file palette"
-          onClick={() => openCommandPalette({ scope: 'files' })}
+          title="Search tree"
+          aria-label="Search tree"
+          onClick={() => model.openSearch()}
         >
           <Ico d={ICON.search} size={12} />
         </button>
@@ -837,62 +898,66 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
           type="button"
           className="ui-icon-button ui-icon-button-compact"
           title="Import URL"
-          onClick={() => openImportUrlModal()}
+          aria-label="Import URL"
+          onClick={() => setImportDirectoryId(normalizeDirectoryId(activeFileId ? idToDir(activeFileId) : ''))}
         >
           <Ico d={ICON.import} size={12} />
         </button>
-        <button type="button" className="ui-icon-button ui-icon-button-compact" title="New file"
-          onClick={() => setEditState({ type: 'new-file', parentDir: '', value: 'untitled.md' })}>
+        <button
+          type="button"
+          className="ui-icon-button ui-icon-button-compact"
+          title="New file"
+          aria-label="New file"
+          onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
+        >
           <Ico d={ICON.plus} size={12} />
         </button>
-        <button type="button" className="ui-icon-button ui-icon-button-compact" title="New folder"
-          onClick={() => setEditState({ type: 'new-folder', parentDir: '', value: 'New Folder' })}>
+        <button
+          type="button"
+          className="ui-icon-button ui-icon-button-compact"
+          title="New folder"
+          aria-label="New folder"
+          onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
+        >
           <Ico d={ICON.folderPlus} size={12} />
         </button>
       </div>
 
-      <div
-        className={['flex-1 overflow-y-auto min-h-0 px-1 pb-3', dropTargetDir === '' ? 'bg-accent/4' : ''].join(' ')}
-        onDragOver={handleRootDragOver}
-        onDrop={(e) => handleDropToDir(e, '')}
-      >
+      <div className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
         {loading ? (
           <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
         ) : (
-          <div className="space-y-px">
-            {editState?.type === 'new-folder' && !editState.parentDir && (
-              <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]">
-                <span className="shrink-0 w-3" />
-                <span className="shrink-0 text-dim"><Ico d={ICON.folder} size={12} /></span>
-                <NameInput value={editState.value}
-                  onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-                  onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
-              </div>
-            )}
-            {editState?.type === 'new-file' && !editState.parentDir && (
-              <div className="flex w-full items-center gap-1 px-2 py-[3px] text-[12px]">
-                <span className="shrink-0 w-3" />
-                <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
-                <NameInput value={editState.value}
-                  onChange={(v) => setEditState((s) => s ? { ...s, value: v } : s)}
-                  onConfirm={handleEditConfirm} onCancel={() => setEditState(null)} />
-              </div>
-            )}
-            {renderNodes(roots, 0)}
-          </div>
+          <TreesFileTree
+            className="h-full"
+            model={model}
+            renderContextMenu={(item: FileTreeContextMenuItem, context) => {
+              const entry = entryMap.get(item.path)
+                ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+
+              return (
+                <TreeContextMenu
+                  onRename={() => {
+                    context.close({ restoreFocus: false });
+                    window.setTimeout(() => {
+                      model.startRenaming(entry.id);
+                    }, 0);
+                  }}
+                  onMove={() => {
+                    context.close();
+                    setMoveEntry(entry);
+                  }}
+                  onDelete={() => {
+                    context.close();
+                    void handleDelete(entry);
+                  }}
+                />
+              );
+            }}
+            style={TREE_HOST_STYLE}
+          />
         )}
       </div>
 
-      {/* Context menu */}
-      {contextMenu && (
-        <ContextMenu state={contextMenu}
-          onRename={() => setEditState({ type: 'rename', id: contextMenu.entry.id, value: contextMenu.entry.name })}
-          onMove={() => setMoveEntry(contextMenu.entry)}
-          onDelete={() => { void handleDelete(contextMenu.entry); }}
-          onClose={() => setContextMenu(null)} />
-      )}
-
-      {/* Move modal */}
       <OpenFilesSection
         openFileIds={openFileIds}
         activeFileId={activeFileId}
@@ -900,19 +965,30 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         onClose={handleOpenFileClose}
       />
 
-      {moveEntry && (
-        <MoveModal entry={moveEntry}
-          onConfirm={(targetDir) => { void handleMove(moveEntry, targetDir); }}
-          onClose={() => setMoveEntry(null)} />
-      )}
+      {moveEntry ? (
+        <MoveModal
+          entry={moveEntry}
+          folderOptions={folderOptions}
+          onConfirm={(targetDir) => { void handleMovePaths([moveEntry.id], targetDir); }}
+          onClose={() => setMoveEntry(null)}
+        />
+      ) : null}
 
-      {importDirectoryId !== null && (
+      {importDirectoryId !== null ? (
         <ImportUrlModal
           initialDirectoryId={importDirectoryId}
           onImport={handleImportUrl}
           onClose={() => setImportDirectoryId(null)}
         />
-      )}
+      ) : null}
+
+      {createEntryState ? (
+        <CreateEntryModal
+          state={createEntryState}
+          onConfirm={handleCreateEntry}
+          onClose={() => setCreateEntryState(null)}
+        />
+      ) : null}
     </div>
   );
 }
