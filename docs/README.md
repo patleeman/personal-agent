@@ -1,127 +1,88 @@
 # personal-agent docs
 
-This folder is the operator and agent guide to `personal-agent`.
+Use this folder for product semantics and current behavior.
 
-Use it for product behavior, durable-surface semantics, and interface-level guidance. Use runtime tool schemas for exact tool arguments, and use the internal skills for built-in feature behavior that lives outside `docs/`.
+Use the live tool schemas for exact tool arguments. Use `internal-skills/` for built-in feature behavior. Use repo and profile `AGENTS.md` files for runtime policy.
 
-## Source-of-truth boundaries
+## Path vocabulary
 
-Use these docs for:
+These aliases are used throughout the docs:
 
-- which durable surface to use
-- where state lives
-- how the CLI, web UI, daemon, and desktop shell fit together
-- current product behavior and the intended KB model
+- `<state-root>` — machine-local runtime state. Default: `~/.local/state/personal-agent`
+- `<config-root>` — machine-local config. Default: `<state-root>/config`
+- `<vault-root>` — effective durable knowledge root
 
-Use these other places for adjacent concerns:
+`<vault-root>` resolves in this order:
 
-- repo `AGENTS.md` — repo-specific harness instructions and engineering rules
-- selected instruction files — machine-local behavior selection for the active runtime
-- `../internal-skills/` — built-in runtime feature guides for runs, tasks, artifacts, reminders, async attention, and inbox removal
-- `~/Documents/personal-agent/skills/<skill>/SKILL.md` — reusable workflow skills
-- vault docs/packages — durable knowledge anywhere under the configured vault root
-- tool schemas / runtime prompt material — exact live tool contracts
+1. `PERSONAL_AGENT_VAULT_ROOT`
+2. `<state-root>/knowledge-base/repo` when `knowledgeBaseRepoUrl` is configured
+3. `vaultRoot` from `<config-root>/config.json`
+4. fallback default `~/Documents/personal-agent`
+
+In Patrick's normal setup, `<vault-root>` is usually the managed mirror under `<state-root>/knowledge-base/repo`.
 
 ## Start here
 
-If you are setting up `personal-agent` from scratch, read [Getting Started](./getting-started.md) first.
+1. [Getting Started](./getting-started.md)
+2. [Decision Guide](./decision-guide.md)
+3. [How personal-agent works](./how-it-works.md)
+4. [Knowledge System](./knowledge-system.md)
 
-Then use this order:
+## Doc map
 
-1. [Decision Guide](./decision-guide.md)
-2. [How personal-agent works](./how-it-works.md)
-3. [Knowledge Management System](./knowledge-system.md)
+### Product model
 
-## Core concepts
+- [Decision Guide](./decision-guide.md) — fastest way to pick the right durable surface
+- [How personal-agent works](./how-it-works.md) — repo defaults, vault, machine-local state, and runtime layering
+- [Knowledge System](./knowledge-system.md) — instruction files, docs, skills, projects, and old-term mappings
+- [Conversation Context](./conversation-context.md) — one-shot mentions vs attached docs vs binary attachments
+- [Conversations](./conversations.md) — live thread behavior, auto mode, and async follow-through
+- [Projects](./projects.md) — optional structured durable work packages
 
-- [Conversations](./conversations.md)
-- [Conversation Context Attachments](./conversation-context.md)
-- [Docs and Packages](./pages.md)
-- [Tracked Work Packages](./projects.md)
-- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
-- [Knowledge Management System](./knowledge-system.md)
-- [Nodes](./nodes.md)
-- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Runs](../internal-skills/runs/INDEX.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+### Interfaces
 
-## Interfaces
-
-- [Web UI Guide](./web-ui.md)
-- [iOS host-connected app design](./ios-host-app-plan.md)
-- [Electron desktop app plan](./electron-desktop-app-plan.md)
-- [Electron desktop app implementation spec](./electron-desktop-app-spec.md)
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Workspace](./workspace.md) — notes the removed in-app file browser and what to use instead
-- [Release cycle](./release-cycle.md)
-- [Repo layout](./repo-layout.md)
-
-## System surfaces
-
+- [Web UI Guide](./web-ui.md)
+- [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
-- [Daemon and Background Automation](./daemon.md)
 - [MCP](./mcp.md)
-- [Web server route modules](./web-server-routing.md)
+
+### Development and operations
+
+- [Repo Layout](./repo-layout.md)
+- [Release Cycle](./release-cycle.md)
 - [Troubleshooting](./troubleshooting.md)
-- [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
-- [Shared Inbox Removal](../internal-skills/inbox/INDEX.md)
 
-## Built-in internal skills
+## Built-in feature docs
 
-These pages live under `../internal-skills/` because they describe runtime features, not user-authored workflow skills:
+These live under `internal-skills/` because they describe runtime features rather than general product semantics:
 
-- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
 - [Runs](../internal-skills/runs/INDEX.md)
+- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
+- [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
 - [Shared Inbox Removal](../internal-skills/inbox/INDEX.md)
 - [Skills and Runtime Capabilities](../internal-skills/skills-and-capabilities/INDEX.md)
 
-## One place to go by question
+## Read by question
 
-| Question | Start here | Then go deeper in |
+| Question | Start here | Then read |
 | --- | --- | --- |
-| What should I use for this task? | [Decision Guide](./decision-guide.md) | feature-specific doc below |
-| What is the overall durable-state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md), [Docs and Packages](./pages.md) |
-| How is the repo organized, and where should new code live? | [Repo layout](./repo-layout.md) | [How personal-agent works](./how-it-works.md), [Web server route modules](./web-server-routing.md) |
-| How do instruction files, docs, skills, and conversation context fit together? | [Knowledge Management System](./knowledge-system.md) | [Instruction Files, Docs, and Skills](./instructions-docs-skills.md), [Conversation Context Attachments](./conversation-context.md) |
-| Where should durable knowledge live? | [Docs and Packages](./pages.md) | [Knowledge Management System](./knowledge-system.md) |
-| How should a conversation keep stable KB context? | [Conversation Context Attachments](./conversation-context.md) | [Conversations](./conversations.md) |
-| Where should structured long-running work live? | [Tracked Work Packages](./projects.md) | [Conversations](./conversations.md) |
-| How do async outcomes, reminders, wakeups, and owning surfaces differ? | [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md) | [Shared Inbox Removal](../internal-skills/inbox/INDEX.md), [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md) |
-| How do conversations behave? | [Conversations](./conversations.md) | [Web UI Guide](./web-ui.md) |
-| How should I handle local repo files? | [Workspace](./workspace.md) | [Web UI Guide](./web-ui.md) |
-| How do rendered outputs work? | [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md) | [Tracked Work Packages](./projects.md) |
-| Which interface should I use day to day? | [Web UI Guide](./web-ui.md) | [Electron desktop app](./electron-desktop-app-plan.md), [iOS host-connected app design](./ios-host-app-plan.md), [Command-Line Guide (`pa`)](./command-line.md) |
-| How should a phone or tablet connect to an existing PA host? | [iOS host-connected app design](./ios-host-app-plan.md) | [Web UI Guide](./web-ui.md), [Electron desktop app](./electron-desktop-app-plan.md) |
-| How do I import a page URL into the vault? | [Knowledge Management System](./knowledge-system.md) | [Web UI Guide](./web-ui.md), [Docs and Packages](./pages.md) |
-| How do MCP servers work here? | [MCP](./mcp.md) | [Command-Line Guide (`pa`)](./command-line.md) |
+| What durable surface should I use? | [Decision Guide](./decision-guide.md) | feature-specific doc or internal skill |
+| What is the actual state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md) |
+| Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
+| How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
+| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Web UI Guide](./web-ui.md) |
+| How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md) |
+| Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
+| How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |
+| How do I ship the desktop app? | [Release Cycle](./release-cycle.md) | repo `AGENTS.md` release notes |
 
-## Durable surfaces at a glance
+## Rules for agents
 
-| If you need to… | Use | Durable home |
-| --- | --- | --- |
-| Work with the agent right now | conversation / live session | local session state |
-| Save durable knowledge | doc | vault markdown anywhere |
-| Keep stable KB context in a thread | attached context doc(s) | conversation state + vault refs |
-| Save reusable procedure | skill | `~/Documents/personal-agent/skills/<skill>/SKILL.md` |
-| Save standing instructions | selected instruction file(s) | local config `instructionFiles[]` + vault docs |
-| Track structured ongoing work | tracked work package | current implementation may use `~/Documents/personal-agent/projects/<id>/...` |
-| Notice async results later | conversation attention / alerts | owning thread state + wakeup/alert state |
-| Wake the same conversation later | conversation queue or reminder | live queue state or machine-local wakeup state |
-| Run detached work now | durable background run | `~/.local/state/personal-agent/daemon/{runtime.db,runs/**}` |
-| Run automation later or repeatedly | scheduled task | `~/.local/state/personal-agent/sync/{_tasks|tasks}/**` |
-| Render inspectable output in a thread | conversation artifact | conversation artifact state |
-
-## Read this if you are an agent
-
-The highest-value rules are:
-
-- use the smallest correct durable surface
-- keep conversations for active work, not as the only durable store
-- keep durable knowledge in the vault, not in machine-local session state
-- prefer selected instruction files over magic KB folders
-- prefer the built-in runtime tools over shelling out to `pa` from inside a conversation
-- use internal skills for built-in feature behavior and `docs/` for product semantics
+- prefer the smallest correct durable surface
+- keep durable knowledge in `<vault-root>`, not only in conversation history
+- use docs for semantics, tool schemas for exact arguments
+- use `internal-skills/` when the question is about built-in runtime behavior
+- prefer current routes and commands over deleted legacy surfaces

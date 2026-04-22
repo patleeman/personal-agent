@@ -1,126 +1,94 @@
 # How personal-agent works
 
-`personal-agent` is a durable application layer around Pi.
+`personal-agent` wraps Pi with a durable state model.
 
-The main idea is simple:
+The core idea is simple: keep shipped defaults in the repo, keep durable knowledge in a vault, and keep machine-local runtime state outside the repo.
 
-- keep shared defaults in the repo
-- keep portable knowledge in an external vault of docs and skills
-- keep machine-local runtime state under `~/.local/state/personal-agent`
-- use the smallest correct durable surface for each job
-
-If you want the fastest routing layer first, read [Decision Guide](./decision-guide.md).
-
-## The three places state can live
+## The three state layers
 
 ### 1. Repo-managed defaults
 
-These ship with the repo and are shared through git:
+These ship in git and are shared by the repo itself:
 
-- `defaults/agent`
+- `defaults/agent/`
 - `extensions/`
-- `themes/`
 - `internal-skills/`
 - `prompt-catalog/`
-
-Built-in extensions in `extensions/` use the repo root dependency install; they are not separate workspace packages.
+- `docs/`
 
 ### 2. Durable knowledge vault
 
-By default, portable knowledge lives at:
+`<vault-root>` is the durable knowledge home.
 
-```text
-~/Documents/personal-agent/
-```
+Use it for:
 
-That vault is doc-first.
-
-Typical contents:
-
-- arbitrary markdown docs and doc packages
+- ordinary docs and doc packages
+- `AGENTS.md` and other instruction files
 - `skills/<skill>/SKILL.md`
-- optional conventions such as `instructions/`, `work/`, `systems/`, or `references/`
+- `projects/<projectId>/...`
 
-This is the canonical home for reusable knowledge and shared skill content.
+This is where reusable knowledge belongs.
 
 ### 3. Machine-local runtime state
 
-Machine-local state defaults to:
+`<state-root>` is durable on one machine but is not the portable vault.
 
-```text
-~/.local/state/personal-agent/
-```
+Important subtrees:
 
-Common pieces:
+- `<config-root>/config.json` — machine config
+- `<config-root>/profiles/<profile>/` — per-profile mutable config
+- `<state-root>/daemon/` — daemon socket, runtime DB, run logs
+- `<state-root>/web/` — web runtime state and pairing state
+- `<state-root>/desktop/` — desktop state and logs
+- `<state-root>/sync/` — durable session files and compatibility storage
+- `<state-root>/knowledge-base/repo` — managed KB mirror when KB sync is enabled
 
-- `config/config.json` — machine config, selected instruction files, web UI prefs, vault override
-- `daemon/` — daemon socket, log, runtime DB, durable runs
-- `web/` — remote browser pairing state and web runtime state
-- `desktop/` — Electron desktop config and logs
-- `sync/{_tasks|tasks}/` — scheduled task files
+## Runtime materialization
 
-This state is durable on one machine, but it is not the portable vault.
+When `pa` launches Pi or the web UI creates a live session, the runtime is assembled from layered inputs:
 
-## How a session starts
-
-When you start Pi through `pa`, `personal-agent` resolves layered runtime resources:
-
-1. repo defaults from `defaults/agent`
-2. selected instruction files, selected skill dirs, and vault docs discoverable from the configured vault root
-3. machine-local overlay from `~/.local/state/personal-agent/config/local`
-4. built-in repo extensions/themes and any discovered package sources
-
-Those layers are materialized into the runtime that Pi actually sees.
+1. repo defaults
+2. selected instruction files and skill directories
+3. the effective vault root and any managed KB mirror
+4. machine-local config and profile overrides
+5. built-in extensions and installed package sources
+6. conversation-specific context such as cwd, attachments, and attached docs
 
 ## Durable surfaces
 
-| Surface | Purpose | Durable home |
+| Surface | Purpose | Home |
 | --- | --- | --- |
-| Conversation | active work right now | session state |
-| Doc | reusable knowledge | vault markdown anywhere |
-| Skill | reusable procedure | vault `skills/` |
-| Attached context doc | persistent KB context for one thread | conversation state + vault refs |
-| Tracked work package | optional structured ongoing work | current implementation may use vault `projects/` |
-| Conversation attention | async follow-up on an owned thread | conversation attention state + linked records |
-| Reminder / alert | stronger tell-me-later delivery | machine-local alert/wakeup state |
-| Deferred resume | wake this conversation later | machine-local wakeup state |
-| Run | detached work started now | daemon runtime DB + `daemon/runs/` |
-| Scheduled task | later/recurring automation | machine-local `sync/{_tasks|tasks}/` |
-| Conversation artifact | rendered thread-local output | conversation artifact state |
+| conversation | active execution | session state |
+| doc | reusable knowledge | `<vault-root>` |
+| skill | reusable workflow | `<vault-root>/skills/` |
+| attached context doc | durable thread-scoped knowledge | conversation state + `<vault-root>` refs |
+| project | durable structured ongoing work | `<vault-root>/projects/` |
+| run | detached work started now | daemon state |
+| scheduled task / automation | saved later or recurring work | daemon state |
+| reminder | tell-me-later wakeup | reminder + wakeup state |
+| conversation artifact | rendered output tied to one thread | conversation artifact state |
+| project artifact | durable deliverable tied to a project | `<vault-root>/projects/<projectId>/artifacts/` |
 
-## Interfaces on top of the same model
+## Invariants
 
-### CLI
+- conversations are execution, not the only durable store
+- reusable knowledge should survive outside one thread
+- instruction files are selected behavior inputs, not a second chat log
+- machine-local runtime state should not leak into the shared vault
+- async work should have an owner: a conversation, an automation, a project, or a reminder
 
-`pa` launches Pi and manages the durable surfaces around it.
+## What docs are for
 
-### Web UI
+Use `docs/` for product semantics and current behavior.
 
-The web UI is the main day-to-day operator surface. It exposes conversations, automations, settings, and optional remote browser access when served over the tailnet.
+Use `internal-skills/` when the question is about built-in runtime features such as runs, tasks, artifacts, or reminder behavior.
 
-### Electron desktop shell
-
-The desktop app wraps the web UI, owns a local backend while it is running, and can switch to saved web or SSH hosts.
-
-### Daemon
-
-The daemon provides scheduled tasks / automations, deferred resumes, and daemon-backed durable runs.
-
-## Rules that keep the system coherent
-
-- conversations are for execution, not for being the only durable store
-- reusable knowledge belongs in vault docs
-- standing behavior belongs in selected instruction files
-- shared reusable workflows belong in `skills/`
-- scheduled task files stay machine-local
-- folder names should not carry more meaning than necessary
-- if a feature needs later attention, attach it to the owning conversation, automation, reminder, deferred resume, run, or scheduled task explicitly
+Use tool schemas for exact tool arguments.
 
 ## Related docs
 
 - [Decision Guide](./decision-guide.md)
-- [Knowledge Management System](./knowledge-system.md)
-- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
-- [Conversation Context Attachments](./conversation-context.md)
+- [Knowledge System](./knowledge-system.md)
 - [Configuration](./configuration.md)
+- [Conversations](./conversations.md)
 - [Web UI Guide](./web-ui.md)

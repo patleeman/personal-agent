@@ -245,5 +245,5 @@ Use the `scheduled_task` tool with `action: "validate"`.
 - [Async Attention and Wakeups](../async-attention/INDEX.md)
 - [Daemon and Background Automation](../../docs/daemon.md)
 - [Shared Inbox Removal](../inbox/INDEX.md)
-- [Tracked Pages](../../docs/projects.md)
+- [Projects](../../docs/projects.md)
 - [Runs](../runs/INDEX.md)

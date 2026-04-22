@@ -1,32 +1,22 @@
-# Daemon and Background Automation
+# Daemon
 
-`personal-agentd` is the shared long-lived runtime behind unattended behavior and companion access.
+The daemon owns unattended behavior.
 
-If you care about scheduled tasks / automations, deferred resumes, daemon-backed durable runs, or native companion clients, you usually want the daemon running.
+If something should keep running after the current shell or conversation turn, the daemon is usually involved.
 
-In the desktop app, the daemon can be owned directly by the Electron runtime instead of being managed as a separate OS service. The same daemon package still owns the background logic; only the host process changes.
+## What it owns
 
-## What the daemon does
-
-The daemon owns long-lived runtime responsibilities such as:
-
-- scheduled tasks / automations
-- deferred resume wakeups
 - durable background runs
-- companion pairing/device state
-- setup QR generation state for native companion onboarding
-- companion network exposure state for desktop-owned local-network phone pairing
-- the daemon-hosted companion HTTP + WebSocket API
-- maintenance and cleanup
+- scheduled tasks and automations
+- conversation wakeups and deferred resumes
+- run logs and automation activity
+- companion and pairing state for remote/native access
+- cleanup and maintenance
 
-It gives the CLI and desktop shell one place to hand off long-lived work, and it is the intended backend for native companion clients.
-
-## On-disk state
-
-By default, daemon state lives under:
+## State layout
 
 ```text
-~/.local/state/personal-agent/daemon/
+<state-root>/daemon/
 ├── personal-agentd.sock
 ├── logs/
 │   └── daemon.log
@@ -34,54 +24,23 @@ By default, daemon state lives under:
 └── runs/
 ```
 
-The desktop testing launch uses its own runtime home instead:
-
-```text
-~/.local/state/personal-agent-testing/daemon/
-```
-
-That keeps stable and testing desktop launches from fighting over the same daemon socket and companion port.
-
-If the configured companion TCP port is already busy, the daemon now falls back to an available local port instead of failing startup. The desktop shell proxies against the live listener, and setup/pairing flows expose the actual chosen port.
-
 Important pieces:
 
-- `runtime.db` stores daemon-backed runtime state, including durable run metadata and task scheduler state
-- `runs/<run-id>/` stores per-run logs and results
-- `companion/` stores companion host identity plus pairing/device auth state
+- `runtime.db` — run metadata, automation definitions, scheduler state
+- `runs/<run-id>/` — per-run logs and result blobs
 
 ## When you need it
 
-Keep the daemon on if you use:
+Keep the daemon running when you use:
 
-- scheduled tasks / automations
-- deferred resumes
-- durable runs
-- unattended background workflows that should survive the current shell
+- `run`
+- `scheduled_task`
+- queued wakeups that should survive the current UI process
+- remote pairing or companion behavior
 
-You can still use `pa tui` and much of the web UI without it, but background behavior becomes limited.
-
-## Built-in modules
-
-### Maintenance
-
-Periodic housekeeping for daemon runtime files.
-
-### Tasks
-
-Loads scheduled task files, keeps runtime state in SQLite, runs due work, and tracks retries/status.
-
-### Deferred resume
-
-Wakes saved conversations back up when deferred work becomes due.
+You can still do direct foreground conversation work without it, but unattended behavior degrades.
 
 ## Service management
-
-The CLI service commands matter for headless / CLI-managed daemon usage.
-
-When the packaged desktop app owns the daemon directly, desktop lifecycle controls are the source of truth instead and launchd/systemd service actions are intentionally not the normal control path.
-
-CLI surface:
 
 ```bash
 pa daemon status
@@ -94,25 +53,24 @@ pa daemon service status
 pa daemon service uninstall
 ```
 
-Managed services use:
+Managed services use `launchd` on macOS and `systemd --user` on Linux.
 
-- `launchd` on macOS
-- `systemd --user` on Linux
+## Desktop shell note
 
-## What happens if the daemon is off
+The desktop app can own the daemon directly instead of relying on a separately managed OS service.
 
-When the daemon is unavailable:
+The daemon package still owns the background behavior. Only the host process changes.
 
-- direct live conversation work can still continue in desktop-local flows
-- scheduled tasks / automations do not run
-- deferred resumes do not fire
-- daemon-backed runs cannot be managed normally
-- the companion API is unavailable to remote/native clients
-- some surfaces fall back to degraded behavior instead of hard-failing
+## What breaks when it is off
+
+- scheduled automations do not run
+- detached runs cannot be launched or inspected normally
+- deferred wakeups do not fire
+- remote pairing and companion APIs are unavailable
 
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
+- [Web UI Guide](./web-ui.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
-- [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

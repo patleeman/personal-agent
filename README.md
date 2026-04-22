@@ -1,151 +1,88 @@
 # personal-agent
 
-`personal-agent` is a durable application layer over Pi.
+`personal-agent` is a durable application layer on top of Pi.
 
-It keeps repo-managed defaults in git, portable knowledge in an external vault, and machine-local runtime state under `~/.local/state/personal-agent`. The result is one system that can be used from the CLI, the web UI, or the Electron desktop shell without turning conversations into your long-term storage layer.
+It keeps repo-managed runtime defaults in git, durable knowledge in a vault, and machine-local runtime state under `~/.local/state/personal-agent`. Conversations are where execution happens. Durable knowledge, workflows, and automation state should live somewhere more precise.
 
-## Current feature set
+The docs in this repo are written for agents first, humans second. Start with [`docs/README.md`](docs/README.md). Use runtime tool schemas for exact arguments. Use [`internal-skills/`](internal-skills/) for built-in behavior such as runs, scheduled tasks, artifacts, reminders, and async attention.
 
-- `pa` CLI for launching Pi and managing local services
-- external durable vault at `~/Documents/personal-agent` for markdown docs/packages plus shared skills
-- local instruction-file selection through machine config / Settings instead of a vault profile hierarchy
-- daemon-backed runs, scheduled tasks, deferred resumes, reminders, and wakeups
-- web UI for conversations, automations, checkpoint review, tools, and settings
-- optional remote browser access over Tailscale Serve when the web UI is exposed on the tailnet
-- Electron desktop shell that owns a local backend and can connect to saved web or SSH hosts
-- MCP inspection/calls plus package-source installs for extending Pi, including skill-bundled `mcp.json` manifests
-
-## Packages
-
-- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, profile/resource resolution
-- `@personal-agent/cli` — `pa` command
-- `@personal-agent/daemon` — background daemon, scheduled tasks, durable runs, deferred resumes, and managed service helpers
-- `@personal-agent/web` — web UI client and server
-- `@personal-agent/desktop` — Electron desktop shell
-
-## Documentation
-
-Start with:
-
-- `docs/README.md` — docs map
-- `docs/repo-layout.md` — current monorepo boundaries and where code should live
-- `docs/getting-started.md` — install and first-run flow
-- `docs/decision-guide.md` — which surface to use
-- `docs/how-it-works.md` — durable-state mental model
-- `docs/knowledge-system.md` — KB model
-- `docs/conversation-context.md` — target model for attached conversation docs
-- `docs/web-ui.md` — desktop web UI, remote browser pairing, and live updates
-- `docs/electron-desktop-app-plan.md` — current desktop-shell overview
-- `docs/command-line.md` — `pa` command guide
-
-Built-in runtime feature guides live under `internal-skills/`:
-
-- `internal-skills/runs/INDEX.md`
-- `internal-skills/scheduled-tasks/INDEX.md`
-- `internal-skills/async-attention/INDEX.md`
-- `internal-skills/artifacts/INDEX.md`
-- `internal-skills/inbox/INDEX.md`
-- `internal-skills/alerts/INDEX.md`
-
-## Install from source
-
-Prerequisites:
-
-- Node.js 20+
-- npm
-
-From the repo root:
+## Quick start
 
 ```bash
 npm install
 npm run build
 npm link --workspace @personal-agent/cli
-```
 
-If you do not want to link the CLI globally:
-
-```bash
-npm exec pa -- --help
-```
-
-## First run
-
-```bash
 pa doctor
 pa status
 pa tui
 ```
 
-Other useful entry points:
+Useful entry points:
 
 ```bash
-pa ui foreground --open      # desktop web UI
-pa ui install                # managed web UI service
-npm run desktop:start        # Electron desktop shell
-npm run desktop:start -- --no-quit-confirmation
+pa ui foreground --open
+pa ui install
+npm run desktop:start
 ```
 
-## Common commands
+## Mental model
 
-```bash
-pa status
-pa doctor
-pa ui
-pa daemon status
-pa mcp list --probe
-```
+- repo files define shipped defaults: `defaults/agent/`, `extensions/`, `internal-skills/`, `prompt-catalog/`
+- the effective durable knowledge root is the **vault**
+- machine-local runtime state lives under `~/.local/state/personal-agent`
+- conversations are for active execution, not long-term storage
+- choose the smallest correct durable surface: doc, skill, project, queue item, reminder, run, or automation
 
-A few higher-signal flows:
+## Main interfaces
 
-```bash
-pa ui pairing-code
-pa install https://github.com/user/pi-extension
-pa mcp list --probe
-pa restart
-pa update --repo-only
-```
+- `pa tui` — launch Pi with the resolved local runtime
+- `pa ui` — inspect or manage the local web UI
+- `npm run desktop:start` — start the Electron desktop shell
+- `pa daemon ...` — manage daemon-backed background behavior
+- `pa mcp ...` — inspect and call configured MCP servers
 
-## State layout
+## Docs
 
-Shared defaults stay in the repo:
+Start here:
 
-- `defaults/agent`
-- `extensions/`
-- `internal-skills/`
-- `prompt-catalog/`
-- `themes/`
+- [`docs/README.md`](docs/README.md) — docs map and path vocabulary
+- [`docs/getting-started.md`](docs/getting-started.md) — install and first-run flow
+- [`docs/decision-guide.md`](docs/decision-guide.md) — which durable surface to use
+- [`docs/how-it-works.md`](docs/how-it-works.md) — state model and runtime layering
+- [`docs/knowledge-system.md`](docs/knowledge-system.md) — instruction files, docs, skills, and projects
+- [`docs/conversations.md`](docs/conversations.md) — live thread model
+- [`docs/web-ui.md`](docs/web-ui.md) — current UI surfaces and live-update model
+- [`docs/command-line.md`](docs/command-line.md) — `pa` command map
+- [`docs/repo-layout.md`](docs/repo-layout.md) — where code should live
 
-Portable knowledge defaults to the external vault:
+Built-in feature docs live under `internal-skills/`:
 
-- `~/Documents/personal-agent/**/*.md`
-- `~/Documents/personal-agent/**/INDEX.md`
-- `~/Documents/personal-agent/skills/<skill>/SKILL.md`
+- [`internal-skills/runs/INDEX.md`](internal-skills/runs/INDEX.md)
+- [`internal-skills/scheduled-tasks/INDEX.md`](internal-skills/scheduled-tasks/INDEX.md)
+- [`internal-skills/async-attention/INDEX.md`](internal-skills/async-attention/INDEX.md)
+- [`internal-skills/artifacts/INDEX.md`](internal-skills/artifacts/INDEX.md)
+- [`internal-skills/alerts/INDEX.md`](internal-skills/alerts/INDEX.md)
+- [`internal-skills/inbox/INDEX.md`](internal-skills/inbox/INDEX.md)
 
-Machine-local runtime state defaults to:
+## Packages
 
-- `~/.local/state/personal-agent/config/config.json`
-- `~/.local/state/personal-agent/daemon/**`
-- `~/.local/state/personal-agent/web/**`
-- `~/.local/state/personal-agent/desktop/**`
-- `~/.local/state/personal-agent/sync/{_tasks|tasks}/**`
+- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
+- `@personal-agent/cli` — the `pa` command
+- `@personal-agent/daemon` — durable runs, automations, wakeups, companion plumbing, service helpers
+- `@personal-agent/web` — browser UI and server routes
+- `@personal-agent/desktop` — Electron shell
 
-## Repo extensions
+## Repo runtime resources
 
-The repo currently ships these built-in Pi extensions:
-
-- `note-policy` — injects selected instruction files, vault context, and available docs/skills/internal skills into the runtime prompt
-- `web-tools` — `web_search` and `web_fetch`
-- `daemon-run-orchestration-prompt` — extra system-prompt guidance for durable background orchestration
-- `openai-native-compaction` — uses Codex/OpenAI compaction replay for direct Responses API sessions while preserving Pi's normal portable text summary
-- `gpt-apply-patch` — registers an `apply_patch` tool and swaps it in for `edit` when the active model is GPT-family
+- `defaults/agent/` — shipped Pi defaults
+- `extensions/` — built-in runtime extensions
+- `internal-skills/` — built-in feature behavior docs
+- `prompt-catalog/` — reusable prompt material
+- `docs/` — product docs for agents
 
 ## Release flow
 
-Desktop releases are tag-driven:
+Desktop releases are built, signed, notarized, and published locally.
 
-```bash
-npm run release:patch   # or release:minor / release:major
-git push --follow-tags
-```
-
-That pushes a `v*` tag, triggers `.github/workflows/release.yml`, builds the macOS desktop app, and publishes `.dmg` and `.zip` artifacts to GitHub Releases.
+See [`docs/release-cycle.md`](docs/release-cycle.md) for the exact flow.

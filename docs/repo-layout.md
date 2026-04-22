@@ -1,115 +1,69 @@
-# Repo layout
+# Repo Layout
 
-`personal-agent` keeps the monorepo intentionally small.
+This monorepo intentionally keeps package boundaries small.
 
-## Workspace boundaries
+## Workspace packages
 
-There are only five workspace packages:
+- `packages/core` — shared path resolution, durable state helpers, resource loading, knowledge/project helpers, MCP helpers
+- `packages/daemon` — daemon runtime, runs, automations, wakeups, companion plumbing
+- `packages/cli` — `pa`
+- `packages/web` — browser UI plus server routes
+- `packages/desktop` — Electron shell
 
-- `packages/core` — shared durable-state, profile/resource loading, knowledge, MCP, and utility logic
-- `packages/daemon` — background runtime, durable runs, scheduled tasks, managed service helpers, and other automation plumbing
-- `packages/cli` — the `pa` command surface
-- `packages/web` — the browser app plus its server routes
-- `packages/desktop` — the Electron shell
+Default rule: add a folder before adding a package.
 
-That split is deliberate:
+## Repo runtime resources
 
-- `core` is the default home for reusable app logic
-- `daemon` owns background/runtime concerns that should not leak into every surface
-- `cli`, `web`, and `desktop` are product surfaces, not general-purpose utility packages
-
-If new code does not need a new deployment boundary, keep it inside one of those existing packages.
-
-## `packages/web` structure
-
-The web package is big enough that folder boundaries matter.
-
-Use these defaults:
-
-- `packages/web/src/app/` — app-shell composition, entrypoint/bootstrap files, global browser declarations, and app-wide React contexts
-- `packages/web/src/pages/` — route-level UI surfaces
-- `packages/web/src/components/` — reusable UI pieces
-- `packages/web/src/automation/` — automation/run presentation helpers, task schedule parsing, scheduled-task detail guards, and checklist draft helpers
-- `packages/web/src/client/` — browser-side API calls, API path helpers, app event normalization, and client perf diagnostics
-- `packages/web/src/commands/` — slash-command discovery, command palette ranking, and command-palette event helpers
-- `packages/web/src/conversation/` — conversation-specific client helpers, including draft/fork state, related-thread search, search state helpers, formatting helpers, and parsing logic
-- `packages/web/src/deferred-resume/` — deferred-resume parsing, labeling, and browser-local deferred resume helpers
-- `packages/web/src/desktop/` — desktop-shell bridge helpers, desktop-only event plumbing, and desktop UI support logic
-- `packages/web/src/content/` — content rendering helpers for drawings, LaTeX artifacts, and file-path-aware rich text
-- `packages/web/src/knowledge/` — note/skill/note-mention helpers, markdown document helpers, and knowledge-workspace presentation utilities
-- `packages/web/src/local/` — browser-local storage, persisted UI state, saved workspace path helpers, and local-path detection helpers
-- `packages/web/src/model/` — model filtering, grouping, and model-preference presentation helpers
-- `packages/web/src/navigation/` — route redirects, lazy-route recovery, and URL search-param selection helpers for cross-page navigation
-- `packages/web/src/pending/` — pending prompt persistence and optimistic pending-message presentation helpers
-- `packages/web/src/session/` — session snapshot, tab layout, refresh scheduling, and session attention helpers
-- `packages/web/src/transcript/` — transcript block transformation, interactive transcript tool-block helpers, and streaming status presentation
-- `packages/web/src/ui-state/` — browser-only theme, panel sizing, warm live-session cache, and open-shelf UI state helpers
-- `packages/web/src/hooks/` — reusable React hooks and hook-backed data helpers
-- `packages/web/server/` — server routes, automation wiring, conversation backends, and shared server utilities
-
-If a file owns app-shell bootstrapping or app-wide React context wiring, keep it under `src/app/`.
-If a new client-side helper is clearly conversation-specific, keep it under `src/conversation/` instead of dropping another `conversation*` file into `src/`.
-If it formats or validates automation and durable-run UI state, or supports automation checklist editing, keep it under `src/automation/`.
-If it owns browser-side API transport or client event normalization, keep it under `src/client/`.
-If it powers slash-command discovery or command-palette ranking/event wiring, keep it under `src/commands/`.
-If it exists to parse or present deferred resume state, keep it under `src/deferred-resume/`.
-If it only exists because the Electron shell injects extra capabilities, keep it under `src/desktop/`.
-If it renders drawings, LaTeX artifacts, or file-path-aware content fragments, keep it under `src/content/`.
-If it manages markdown/note/skill/node-mention rendering for the knowledge surfaces, keep it under `src/knowledge/`.
-If it manages browser-local persistence or saved local workspace state, keep it under `src/local/`.
-If it manages model filtering or reusable model preference presentation logic, keep it under `src/model/`.
-If it manages route redirects or search-param driven page navigation state, keep it under `src/navigation/`.
-If it manages pending prompt staging or optimistic pending-message state, keep it under `src/pending/`.
-If it manages session list, tab, or snapshot state, keep it under `src/session/`.
-If it transforms or annotates transcript blocks for the chat surface, keep it under `src/transcript/`.
-If it manages browser-only theme or layout/view state, keep it under `src/ui-state/`.
-
-## Repo-level runtime resources
-
-Some important repo directories are not workspace packages at all:
+These are shipped runtime inputs, not workspace packages:
 
 - `defaults/agent/`
 - `extensions/`
 - `internal-skills/`
 - `prompt-catalog/`
-- `themes/`
+- `docs/`
 
-Those ship as repo-managed runtime resources.
+## Where new code should live
 
-## Built-in extension dependency rule
+### General rule
 
-Built-in extensions under `extensions/` resolve their dependencies from the repo root `package.json` and top-level `node_modules`.
+- reusable app logic shared across surfaces → `packages/core`
+- long-lived unattended runtime behavior → `packages/daemon`
+- CLI-only behavior → `packages/cli`
+- web UI and local API behavior → `packages/web`
+- Electron-only shell behavior → `packages/desktop`
 
-That keeps the repo from growing nested package islands for every built-in extension.
+### `packages/web` rule of thumb
 
-Only add a local extension `package.json` when the extension truly needs isolation from the main app dependency graph, and document why.
+- route components → `packages/web/src/pages/`
+- reusable UI → `packages/web/src/components/`
+- conversation-specific client logic → `packages/web/src/conversation/`
+- knowledge/vault UI logic → `packages/web/src/knowledge/`
+- automation/run UI logic → `packages/web/src/automation/`
+- browser transport and API helpers → `packages/web/src/client/`
+- server routes and backend wiring → `packages/web/server/`
 
-The inverse rule also matters: workspace packages must declare their own runtime dependencies in their local `package.json` files even if the repo root already installs them.
+Do not drop new feature files at the root of `src/` if they already have an obvious home.
 
-That is especially important for `packages/web`, because the packaged desktop app ships the web server from the workspace package boundary, not from the repo root dependency list.
+## Built-in extensions
 
-## What to avoid
+Built-in extensions live under `extensions/` and resolve dependencies from the repo root install.
 
-Avoid introducing new workspaces for:
+Only give an extension its own `package.json` when it genuinely needs dependency isolation.
 
-- one-off helpers
-- thin wrappers around existing `core` or `daemon` code
-- a single extension with a couple of dependencies
-- surface-local code that can live under `packages/cli`, `packages/web`, or `packages/desktop`
+## Docs and skills
 
-The default move should be: add a folder, not a package.
+- `docs/` explains product semantics for agents
+- `internal-skills/` explains built-in runtime feature behavior
+- repo `AGENTS.md` holds repo-specific engineering instructions
 
-## App surfaces outside the workspace set
+If you change product behavior, update the relevant docs.
 
-Some shipped clients are not workspace packages:
+## Other shipped clients
 
-- `apps/ios/` — the host-connected iOS companion app
-
-Those surfaces use local build scripts from the repo root instead of joining the TypeScript workspace graph.
+- `apps/ios/` — iOS companion app, outside the TypeScript workspace graph
 
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
-- [Command-Line Guide (`pa`)](./command-line.md)
-- [Release cycle](./release-cycle.md)
-- [Web server route modules](./web-server-routing.md)
+- [Web UI Guide](./web-ui.md)
+- [Release Cycle](./release-cycle.md)

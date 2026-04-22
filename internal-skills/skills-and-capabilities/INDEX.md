@@ -2,108 +2,66 @@
 id: skills-and-capabilities
 kind: internal-skill
 title: Skills and Runtime Capabilities
-summary: Built-in guidance for distinguishing workflow skills from runtime features and extensions.
+summary: Built-in guidance for distinguishing reusable workflow skills from runtime features and extensions.
 ---
 
 # Skills and Runtime Capabilities
 
-This page explains the user-facing difference between **skill pages** and **extensions**.
+Use this doc when you need to decide whether something should be a skill, a doc, an instruction file, or an extension.
 
-Most users and agents should think about them this way:
+## Fast split
 
-- **skill pages** are reusable workflows
-- **extensions** are runtime behaviors that change what the agent can do
+- **instruction file** — standing behavior and policy
+- **doc** — reusable knowledge
+- **skill** — reusable workflow
+- **extension** — runtime behavior implemented in code
 
-See [Pages](../../docs/pages.md) for the product model and [Nodes](../../docs/nodes.md) for the storage compatibility term.
+## Skills
 
-## Skills vs extensions
+Skills are reusable workflow packages.
 
-| Feature | What it is | How to think about it |
-| --- | --- | --- |
-| Skill page | named workflow with instructions and supporting files | reusable capability the agent can call on |
-| Extension | code that changes runtime behavior | a built-in or profile-provided feature of the agent runtime |
+Shared contract:
 
-## Skill pages
+```text
+<vault-root>/skills/<skill>/SKILL.md
+```
 
-Skill pages live in the shared durable vault plus optional local overlay skill dirs:
+Use a skill when you want:
 
-- `~/Documents/personal-agent/_skills/<skill>/SKILL.md`
-- local overlay skill dirs
-- repo defaults and built-in runtime capabilities
-
-A skill page is the right place for:
-
-- repeatable workflows
-- domain-specific procedures
-- operational runbooks with commands or helper scripts
-
-Examples include:
-
-- browser automation helpers
-- morning report workflows
-- repo and coding best-practice workflows
-- deep research and code review workflows
-
-Skill pages are surfaced in user-facing places like:
-
-- the agent's normal resource loading when a profile is active
-- conversation mentions and runtime resource discovery
+- a named repeatable workflow
+- reusable procedural guidance
+- supporting files bundled with the workflow
 
 ## Extensions
 
-Extensions add runtime behavior.
+Extensions change what the runtime can do.
 
-Most of the time, you use them indirectly rather than thinking about their source code.
+Examples in this repo:
 
-Examples of user-visible extension behavior in this repo:
+- `note-policy`
+- `web-tools`
+- `daemon-run-orchestration-prompt`
+- `openai-native-compaction`
+- `gpt-apply-patch`
 
-- **note-page policy** — keeps AGENTS, skills, and note-page rules visible to the agent
-- **web-tools** — gives the agent web search/fetch capability
-- **daemon-run orchestration prompt** — gives the agent better policy for daemon-backed durable background work
+Use an extension when the change requires code and runtime integration, not just new instructions.
 
 ## What to edit when you want to change behavior
 
-Use this rule:
+- change `AGENTS.md` or selected instruction files for policy and standing behavior
+- add or edit a doc for reusable knowledge
+- add or edit a skill for reusable workflow
+- add or edit an extension when the runtime itself needs new behavior
 
-- change `AGENTS.md` when you want to change durable behavior or policy
-- add or update a **skill page** when you want a reusable workflow
-- add or update a **page** when you want durable knowledge or reference material
-- create or update a **tracked page** when you want tracked work state
-- create a **scheduled task** when you want unattended automation
+## Practical rule
 
-Only reach for extensions when you need to change runtime behavior itself.
+If markdown is enough, do not start with an extension.
 
-## Reloading and availability
-
-Profile resources are loaded when `pa` launches Pi or when the web UI creates a live session.
-
-Useful patterns:
-
-- start a fresh run with `pa tui` or the web UI
-- use `/reload` in supported live interfaces when you want runtime resources reloaded
-
-Extension dependencies are auto-installed when needed, so users usually do not need to manage them manually.
-
-## Where these capabilities show up
-
-### Web UI
-
-- conversations can reference skills with `@`
-- the Tools page shows the live runtime tool definitions and prompt assembly
-- the Instructions page shows loaded instruction sources
-- live sessions use the active profile's runtime behavior
-
-### CLI / TUI
-
-- `pa tui` launches Pi with the resolved layered resources
-- the active profile controls which skill pages and extensions are available
+Reach for an extension only when you need new tools, UI, event handling, runtime hooks, or permission behavior.
 
 ## Related docs
 
+- [Knowledge System](../../docs/knowledge-system.md)
 - [Decision Guide](../../docs/decision-guide.md)
-- [Knowledge Management System](../../docs/knowledge-system.md)
-- [Pages](../../docs/pages.md)
-- [Nodes](../../docs/nodes.md)
-- [Profiles, AGENTS, Pages, and Skills](../../docs/profiles-memory-skills.md)
-- [How personal-agent works](../../docs/how-it-works.md)
+- [Command-Line Guide (`pa`)](../../docs/command-line.md)
 - [Web UI Guide](../../docs/web-ui.md)

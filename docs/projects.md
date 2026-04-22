@@ -1,42 +1,39 @@
-# Tracked Work Packages
+# Projects
 
-Tracked work packages are an optional durable wrapper for ongoing work in `personal-agent`.
+Projects are the optional structured durable-work surface.
 
-Use one when the work should survive the current conversation and you want structured status, next steps, milestones, blockers, or validation.
+Use one only when a plain doc or conversation is no longer enough.
 
-They are useful, but they are not the primary KB contract.
+## When to use a project
 
-Most durable knowledge should still just be ordinary docs.
+Good fits:
 
-## Mental model
+- work with milestones or durable tasks
+- work with blockers and validation status
+- handoff-ready work that needs a stable state file
+- work with durable attachments or artifacts that belong to the project
 
-A useful rule of thumb:
-
-- conversation = active execution right now
-- doc = reusable knowledge
-- skill = reusable procedure
-- tracked work package = durable work that needs structured state
-
-If the work should still make sense next week and needs a living status record, a tracked work package can help.
+Do not default to a project for ordinary notes or one-off conversations.
 
 ## Current on-disk shape
 
-The current implementation uses project packages under the durable vault:
-
 ```text
-~/Documents/personal-agent/projects/<projectId>/
-├── project.md
+<vault-root>/projects/<projectId>/
 ├── state.yaml
+├── project.md
+├── tasks/
+├── files/
 ├── attachments/
-├── artifacts/
-└── documents/
+└── artifacts/
 ```
 
-`project.md` is the main human-readable record.
+Important pieces:
 
-`state.yaml` is the structured execution state.
-
-That shape is an implementation detail of the tracked-work feature, not a rule for all durable knowledge.
+- `state.yaml` — structured machine-readable state
+- `project.md` — human-readable summary and context
+- `tasks/` — optional task-level files when the project needs them
+- `attachments/` — project-owned supporting files
+- `artifacts/` — project-owned deliverables and exports
 
 ## What goes where
 
@@ -44,50 +41,40 @@ That shape is an implementation detail of the tracked-work feature, not a rule f
 
 Use it for:
 
-- what the work is
+- what the project is
 - why it exists
 - current summary
-- plan and notes that should stay human-readable
-- links to related work
+- design notes that should stay readable
+- links to related docs and threads
 
 ### `state.yaml`
 
-Use it for structured status such as:
+Use it for:
 
-- status and milestones
-- tasks / next steps
+- status
+- milestones
+- tasks
 - blockers
-- timestamps
-- machine-readable validation data
+- validation facts
+- timestamps and machine-readable progress
 
-### Supporting directories
+## What not to do
 
-Use these only when they add value:
-
-- `attachments/` for files that belong to the tracked work
-- `artifacts/` for rendered deliverables kept with the package
-- `documents/` for supporting docs too specific for `project.md`
-
-## What does not belong here
-
-Do not use a tracked work package for:
-
-- general reusable reference material
-- standing instructions or behavior docs
-- work that is only a one-off conversation with no durable execution state
+- do not use a project for general reusable reference material
+- do not use a project when a normal doc would do
+- do not confuse project tasks with daemon scheduled tasks
 
 ## Validation
 
-Validate tracked work packages with:
+Validate project files with:
 
 ```bash
 npm run validate:projects
-node scripts/validate-projects.mjs --project <projectId>
 ```
 
 ## Related docs
 
+- [Decision Guide](./decision-guide.md)
+- [Knowledge System](./knowledge-system.md)
 - [Conversations](./conversations.md)
-- [Knowledge Management System](./knowledge-system.md)
-- [Conversation Context Attachments](./conversation-context.md)
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)

@@ -1,147 +1,135 @@
-# Knowledge Management System
+# Knowledge System
 
-This page explains the durable knowledge model for `personal-agent`.
+Use this doc for the durable knowledge model.
 
-The short version is:
+## The four durable content types
 
-- the KB is a file-backed vault of markdown docs
-- docs are the default unit of durable knowledge
-- skills are the only special shared folder contract
-- instruction files are selected docs, not a vault profile system
-- conversations can reference docs either one-shot or persistently
+### 1. Instruction files
 
-## One knowledge system, different uses
-
-### Instruction files = behavioral context
-
-Instruction files shape how the agent behaves because they were selected locally.
+Instruction files shape agent behavior.
 
 Use them for:
 
-- standing instructions
+- standing policy
 - role and mission
-- preference defaults
+- workflow defaults
 - operating constraints
 
-An instruction file can live anywhere. `AGENTS.md` is a useful convention, but not the only valid shape.
+They are selected through config or Settings. `AGENTS.md` is the strongest convention, but not the only valid filename.
 
-### Docs = knowledge context
+### 2. Docs
 
-Use ordinary docs for reusable information such as:
+Docs are the default unit of durable knowledge.
 
-- research notes
+Use them for:
+
 - architecture notes
-- references
-- plans and design briefs
-- distilled learnings
+- reference material
+- research
+- design notes
+- plans that should outlive a thread
 
-A doc can be a single markdown file or a doc package with an `INDEX.md`.
+A doc can be a single markdown file or a folder with `INDEX.md`.
 
-### Skills = procedural context
+### 3. Skills
 
-Use skill packages for reusable workflows the agent should invoke again later.
+Skills are reusable workflow packages.
 
-The shared skill contract is:
+Shared contract:
 
 ```text
-skills/<skill>/SKILL.md
+<vault-root>/skills/<skill>/SKILL.md
 ```
 
-## What is special and what is not
+Use a skill when the content is procedural and should be invoked again later.
 
-These are special:
+### 4. Projects
+
+Projects are optional structured work packages.
+
+Use them only when the work needs durable machine-readable state such as milestones, blockers, tasks, or validation.
+
+Shared contract:
+
+```text
+<vault-root>/projects/<projectId>/
+```
+
+See [Projects](./projects.md).
+
+## What is special vs freeform
+
+Special durable contracts:
 
 - selected instruction files
-- `skills/<skill>/SKILL.md`
-- conversation attachments and mentions
+- `<vault-root>/skills/<skill>/SKILL.md`
+- `<vault-root>/projects/<projectId>/...`
+- conversation mentions and attached context docs
 
-These are not special KB contracts:
+Freeform conventions:
 
 - `notes/`
-- `projects/`
-- folder names used to imply semantics by themselves
+- `references/`
+- `systems/`
+- `people/`
+- any other folder taxonomy you choose for normal docs
 
-Those can still exist as conventions or implementation details, but the durable model should stay doc-first.
+Folder names can be useful, but they should not carry more product meaning than the actual file content.
 
-## Where it lives
+## Effective vault root
 
-By default, the durable vault is:
+`<vault-root>` resolves in this order:
 
-```text
-~/Documents/personal-agent/
-├── skills/
-├── work/
-├── systems/
-├── people/
-└── ...
-```
+1. `PERSONAL_AGENT_VAULT_ROOT`
+2. managed KB mirror at `<state-root>/knowledge-base/repo` when `knowledgeBaseRepoUrl` is configured
+3. `vaultRoot` from `<config-root>/config.json`
+4. default `~/Documents/personal-agent`
 
-That vault is the source of truth for portable knowledge.
+In Patrick's active setup, assume the managed KB mirror unless you know otherwise.
 
-If you configure a git-backed KB repo in Settings, PA keeps a managed local mirror under:
+## Conversation interaction with the vault
 
-```text
-~/.local/state/personal-agent/knowledge-base/repo
-```
+A conversation can use durable knowledge in two different ways:
 
-That mirror becomes the effective indexed root while PA handles git sync in the background.
-
-Machine-local runtime state lives separately under `~/.local/state/personal-agent/`.
-
-## Conversations and the vault
-
-A conversation should be able to use vault docs in two ways:
-
-- mention a doc with `@...` for one turn
-- attach docs persistently for the lifetime of the conversation
+- `@file-or-doc` for one turn
+- attached context docs for durable thread-scoped context
 
 That keeps the roles clean:
 
-- the vault stores the docs
-- local config selects instruction files and skill dirs
-- the conversation stores references to the docs it cares about
+- the vault stores the source document
+- the conversation stores a reference to the document
+- the agent loads the exact file only when needed
 
-## URL import in the knowledge UI
+## URL import
 
-The Knowledge page can import a pasted web URL into a new markdown note.
+The web UI Knowledge page can import a web page into `<vault-root>`.
 
-That flow uses the host-side share-import path, fetches readable page content when possible, and stores the original source URL plus capture metadata in frontmatter.
+Use that when the right move is “save this URL as a durable note” rather than “quote it inside a conversation”.
 
-Use it when the fastest correct move is “save this page into the vault as a note” rather than writing a note by hand.
+## Old terms you may still see
 
-## How to choose quickly
+Older code and docs still use some legacy terms.
 
-Use this rule:
+Preferred current mapping:
 
-- “How should the agent behave?” → selected instruction file
-- “What should be remembered as reusable knowledge?” → ordinary doc
-- “How should this workflow be repeated?” → skill
-- “What should stay in scope for this thread?” → attached conversation doc
+- **page** → doc
+- **node** → doc or project, depending on context
+- **tracked page** → project
+- **memory note** → normal doc in `<vault-root>`
 
-## What not to do
+When in doubt, think in terms of doc, skill, project, and instruction file.
 
-- do not treat folder names as the primary meaning system
-- do not put reusable procedures into random docs when they should be skills
-- do not rely on old conversation text as the only durable store
-- do not mix machine-local runtime/config state into the shared vault
+## Practical rules
 
-## Profiles are not vault content
-
-If you still use runtime profiles, their mutable config lives in machine-local config under `config/profiles/`, not inside the shared vault.
-
-## Notes on old terminology
-
-You will still see older terms such as **page** and **node** in some docs, APIs, and tests.
-
-The preferred user mental model is simpler:
-
-- doc = durable markdown content
-- skill = reusable workflow package
-- instruction file = selected behavioral doc
+- if it should be remembered outside the current task, write it into `<vault-root>`
+- if it is procedural, make it a skill
+- if it is behavior or policy, make it an instruction file
+- if it needs structured progress state, make it a project
+- do not treat old chat history as the canonical durable store
 
 ## Related docs
 
-- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
-- [Docs and Packages](./pages.md)
-- [Conversation Context Attachments](./conversation-context.md)
+- [Conversation Context](./conversation-context.md)
+- [Conversations](./conversations.md)
+- [Projects](./projects.md)
 - [Configuration](./configuration.md)

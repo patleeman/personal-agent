@@ -1,43 +1,27 @@
 # MCP
 
-`personal-agent` can inspect and call configured MCP servers through `pa mcp` and through Pi's MCP-aware runtime.
+`personal-agent` can inspect and call configured MCP servers through `pa mcp` and through Pi's runtime.
 
-Use MCP when the capability should come from a configured external tool server rather than from a built-in local tool or ad hoc shell command.
-
-## When to use it
-
-Good fits:
-
-- SaaS or internal systems already exposed through MCP
-- authenticated remote tool access
-- probing server/tool schemas before use
-- reusing one tool contract across CLI and conversations
-
-Do not reach for MCP when a dedicated first-party runtime tool already exists.
-
-## Server types
-
-An MCP server can be configured as either:
-
-- **stdio** — a local command the client starts
-- **remote** — an HTTP/SSE MCP endpoint
+Use MCP when the capability should come from an external tool server instead of a built-in local tool.
 
 ## Config discovery
 
-By default, MCP config is searched in this order:
+Without an explicit `--config`, MCP config is resolved in this order:
 
-1. `./mcp_servers.json` in the current working directory
+1. `./mcp_servers.json`
 2. `~/.mcp_servers.json`
 3. `~/.config/mcp/mcp_servers.json`
 
-You can also pass an explicit config path with `-c` / `--config`.
+When `pa` materializes a profile, it also merges any skill-bundled `mcp.json` manifests from the active skill directories. Explicit user config wins on name conflicts.
 
-When `pa` launches Pi with a resolved profile, and when `pa mcp` runs without an explicit `--config`, the runtime also merges any skill-bundled `mcp.json` manifests from the active profile's resolved skill directories. Explicit config entries win when the same server name appears in both places.
+## Server types
 
-## CLI commands
+- `stdio` — local command started by the client
+- `remote` — HTTP/SSE MCP endpoint
+
+## Command map
 
 ```bash
-pa mcp list
 pa mcp list --probe
 pa mcp info <server>
 pa mcp info <server>/<tool>
@@ -47,30 +31,19 @@ pa mcp auth <server>
 pa mcp logout <server>
 ```
 
-`pa mcp call` reads JSON from stdin if the JSON argument is omitted.
-
-## OAuth and auth state
-
-Remote MCP servers can use OAuth.
-
-- `pa mcp auth <server>` triggers login or connectivity validation
-- `pa mcp logout <server>` clears stored OAuth state for that server
-
-Auth state is machine-local, not part of the shared vault.
+`pa mcp call` reads JSON from stdin when the JSON argument is omitted.
 
 ## Skill-bundled MCP manifests
 
-A skill package can keep its MCP wrapper config next to `SKILL.md`.
-
-Example:
+A skill can ship an `mcp.json` next to `SKILL.md`:
 
 ```text
-_skills/dd-atlassian-mcp/
+<vault-root>/skills/<skill>/
 ├── SKILL.md
 └── mcp.json
 ```
 
-Use the same server shape as `mcp_servers.json`:
+Example:
 
 ```json
 {
@@ -83,18 +56,25 @@ Use the same server shape as `mcp_servers.json`:
 }
 ```
 
-That keeps the workflow instructions and MCP wrapper definition together in one skill package while still letting explicit user config override server details when needed.
+That keeps workflow instructions and the MCP wrapper together.
 
-The Settings page’s Skills section also surfaces bundled wrappers so you can see which active skills are contributing MCP servers and which ones were overridden by explicit config.
+## OAuth and auth state
+
+Remote MCP servers can use OAuth.
+
+- `pa mcp auth <server>` starts login or validates connectivity
+- `pa mcp logout <server>` clears stored auth state
+
+Auth state is machine-local and should not be committed into `<vault-root>`.
 
 ## Practical flow
 
 1. `pa mcp list --probe`
 2. `pa mcp info <server>/<tool>`
 3. `pa mcp auth <server>` if needed
-4. call the tool from the CLI or let the conversation runtime use it
+4. call the tool directly or let the runtime use it
 
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Web UI Guide](./web-ui.md)
+- [Configuration](./configuration.md)

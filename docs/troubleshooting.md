@@ -1,10 +1,8 @@
 # Troubleshooting
 
-This page covers the most common failures in `personal-agent`.
+Use this doc for the common local failures.
 
 ## Start here
-
-Run these first:
 
 ```bash
 pa doctor
@@ -13,193 +11,106 @@ pa daemon status
 pa ui status
 ```
 
-If automations or runs are involved, start from the owning web UI surface and the daemon:
+If runs or automations are involved, also check:
 
 ```bash
-pa daemon status
 pa daemon logs
 ```
 
-## `pa` cannot find Pi
+## `pa` or Pi will not start
 
-Typical fix:
+Run:
 
 ```bash
 npm install
 npm run build
 ```
 
-Optional global fallback:
-
-```bash
-npm install -g @mariozechner/pi-coding-agent
-```
-
-## `npm` or Homebrew tools are missing inside agent shells
-
-Recent runtimes hydrate their own `PATH` from your login shell at startup so GUI and launchd launches can still find Homebrew-installed tools.
-
-If you are still on an older running daemon or web service after updating, restart them:
-
-```bash
-pa daemon restart
-pa ui restart
-```
-
-If the path is still wrong after that, reinstall the managed service so launchd picks up the refreshed environment.
+Then retry `pa doctor`.
 
 ## Web UI will not start
 
-Check whether the build exists and whether the port is already occupied:
+Check:
 
 ```bash
 pa ui status
 lsof -i tcp:3741
 ```
 
-Useful fixes:
+Common fixes:
 
-- run `npm run build`
-- stop the process already using the port
-- use `pa ui foreground --port <port>` for a one-off override
+- build artifacts are missing → `npm run build`
+- another process already owns the port
+- the managed web UI service needs `pa ui restart`
 
-## Daemon is not running
+## Daemon is unhealthy
 
-Inspect status and logs:
+Check:
 
 ```bash
 pa daemon status
 pa daemon logs
 ```
 
-If you want the background service installed persistently:
+If you need the persistent user service:
 
 ```bash
 pa daemon service install
 ```
 
-## Scheduled tasks are not firing
+## Automations are not firing
 
 Check all of these:
 
-```bash
-pa daemon status
-pa daemon logs
-```
+- daemon is running
+- the automation is enabled
+- the schedule is valid
+- the automation has not already resolved if it is one-shot
+- the daemon was not offline outside the catch-up window
 
-Then inspect the automation detail page, including its owned run history and Activity section, or validate legacy task files with the `scheduled_task` tool.
+Then inspect the automation detail page and owned run history in the web UI.
 
-Common causes:
+## Detached run failed or looks stuck
 
-- daemon is off
-- invalid task frontmatter
-- task file is in the wrong directory
-- one-time task already completed
-- cron automation has no catch-up window configured, so a sleep/offline miss is skipped instead of replayed
-- task run is failing and needs log inspection
+Use the owning conversation or automation detail first, then check daemon logs.
 
-## Durable run is stuck or failed
+Use the built-in `run` tool to rerun, follow up, or cancel. Do not reach for an old `pa runs` workflow.
 
-Inspect the owning conversation or automation detail, then check daemon logs if needed:
+## Vault root looks wrong
 
-```bash
-pa daemon logs
-```
+Check in this order:
 
-If you need to act on the run, use the built-in `run` tool rather than a CLI subcommand.
+1. `PERSONAL_AGENT_VAULT_ROOT`
+2. `<config-root>/config.json` → `knowledgeBaseRepoUrl`
+3. `<config-root>/config.json` → `vaultRoot`
 
-For interrupted conversations in the web UI:
-
-- if the last turn is recoverable but no longer active, the conversation page should show a recovery strip above the composer instead of silently looking live
-- startup recovery now only auto-resumes conversations that still have a real pending turn to replay; interrupted sessions without replayable work stay non-live so the explicit resume affordance remains visible
+Remember: configured `knowledgeBaseRepoUrl` switches the effective root to `<state-root>/knowledge-base/repo` unless the env var overrides it.
 
 ## Pairing code or remote browser access fails
 
 Remember the current rules:
 
-- pairing codes expire after 10 minutes
-- paired sessions expire after 30 days of inactivity unless refreshed by active use
-- `pa ui pairing-code` needs the local web UI/admin surface reachable
+- pairing codes are short-lived
+- paired browser sessions expire after inactivity
+- `pa ui pairing-code` requires the local web admin surface to be reachable
 
-If needed, generate a new code and pair again.
+Generate a fresh code if needed.
 
-## Tailscale Serve is not exposing the UI
+## Desktop shell will not launch
 
-Check the current web UI status and preference first:
-
-```bash
-pa ui status
-```
-
-If you are using a managed service, restart it after changing settings:
-
-```bash
-pa ui restart
-```
-
-## Vault path looks wrong
-
-Inspect the effective machine config:
-
-- `~/.local/state/personal-agent/config/config.json`
-- `PERSONAL_AGENT_VAULT_ROOT` if set in your shell/service environment
-
-The environment variable wins over machine config.
-
-## Electron desktop shell will not launch
-
-The desktop shell is a menu bar app on macOS. When no window is open, look for the status item in the menu bar; the Dock icon only appears while a desktop window is visible.
-
-The local desktop backend intentionally refuses to start if:
-
-- port `3741` is already in use
-
-If a separate daemon is already healthy, the desktop app now refuses to attach to it instead of silently reusing it.
-
-Stable and testing desktop launches now use separate runtime homes by default, so they can run side by side without sharing a daemon. The testing desktop also shifts its companion listener off the stable default port.
-
-If the companion listener's preferred port is busy anyway, the daemon now falls back to an available local port instead of aborting startup. Companion setup links and the desktop companion proxy use the live port automatically.
-
-Stop or uninstall the external daemon, then relaunch the desktop app:
-
-```bash
-pa daemon stop
-pa daemon service uninstall
-```
-
-Quitting the desktop app does **not** stop that external daemon. Stop or uninstall it explicitly if you want the whole local stack off.
-
-For fast restart loops while testing, launch with `npm run desktop:start -- --no-quit-confirmation`. The desktop runtime also honors `PERSONAL_AGENT_DESKTOP_SKIP_QUIT_CONFIRMATION=1` if you need an environment override.
-
-If startup fails, the menu bar item stays alive and offers **Retry Personal Agent** plus **Open Desktop Logs**.
-
-Recent desktop builds also try to surface the failure inside the main window:
-
-- startup/bootstrap failures open a dedicated error page in Electron with the error message and a shortcut to the desktop logs
-- renderer recoveries inside the normal app shell keep the **Conversation unavailable** card, but now include the thrown error message in an **Error details** section
-
-Desktop logs live under:
+Check the desktop logs:
 
 ```text
-~/.local/state/personal-agent/desktop/logs/
+<state-root>/desktop/logs/
 ```
 
-If a macOS dev launch opens a white window or spinner and the Electron helpers crash with `icudtl.dat not found in bundle`, the generated dev app bundle is usually stale or was copied incorrectly. Remove `dist/dev-desktop/` and relaunch so the desktop script rebuilds the app bundle with the expected framework links intact.
+Also check whether another process already owns the local web or daemon resources.
 
-## SSH remote desktop host will not connect
-
-Check:
-
-- `ssh` works manually to the target host without password prompts in the desktop context
-- the remote machine is macOS or Linux on `x64` or `arm64`
-- the remote user can write to `~/.cache/personal-agent/ssh-runtime/`
-- the desktop machine can download the matching Pi GitHub release asset locally
-- the remote helper and Pi binaries were copied successfully to the remote cache
-- the remote cwd you selected actually exists on the remote machine
+The desktop shell may own the daemon directly; a separately managed daemon can still interfere depending on startup state.
 
 ## MCP auth problems
 
-Useful checks:
+Run:
 
 ```bash
 pa mcp list --probe
@@ -210,24 +121,21 @@ pa mcp auth <server>
 Common causes:
 
 - wrong `mcp_servers.json`
-- missing OAuth client metadata for remote MCP servers
-- stale machine-local auth state
+- stale auth state
+- missing remote OAuth metadata
 
 ## Useful log locations
 
-By default:
-
 ```text
-~/.local/state/personal-agent/daemon/logs/daemon.log
-~/.local/state/personal-agent/web/logs/web.log
-~/.local/state/personal-agent/desktop/logs/main.log
-~/.local/state/personal-agent/desktop/logs/daemon.log
+<state-root>/daemon/logs/daemon.log
+<state-root>/web/logs/web.log
+<state-root>/desktop/logs/main.log
+<state-root>/desktop/logs/daemon.log
 ```
 
 ## Related docs
 
 - [Getting Started](./getting-started.md)
 - [Configuration](./configuration.md)
-- [Daemon and Background Automation](./daemon.md)
+- [Daemon](./daemon.md)
 - [Web UI Guide](./web-ui.md)
-- [Electron desktop app](./electron-desktop-app-plan.md)

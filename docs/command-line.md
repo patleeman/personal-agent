@@ -1,13 +1,8 @@
 # Command-Line Guide (`pa`)
 
-`pa` is the main command-line entry point for `personal-agent`.
+`pa` is the command-line entry point for `personal-agent`.
 
-It has two jobs:
-
-1. launch Pi with the right layered instruction/skill resources
-2. manage local system services and machine-level setup around Pi
-
-Inside a live conversation, prefer the built-in runtime tools over shelling out to `pa`. Durable runs and scheduled automations are tool-first now, not public CLI workflows.
+Use it to launch Pi with the resolved runtime and to manage local machine services around that runtime.
 
 ## Command map
 
@@ -17,6 +12,7 @@ Top-level commands:
 pa status
 pa tui
 pa install
+pa profile
 pa doctor
 pa restart
 pa update
@@ -25,62 +21,66 @@ pa ui
 pa mcp
 ```
 
-## Launch Pi
+Use `pa help <command>` for exact flags.
 
-Use `pa tui` to start Pi with the resolved local configuration, selected instruction files, and available skill dirs:
+## Launch Pi
 
 ```bash
 pa tui
-pa tui -p "summarize this repo"
-pa tui -- --model kimi-coding/k2p5
+pa tui -- --model openai-codex/gpt-5.4-mini
+pa tui -- -p "summarize this repo"
 ```
 
-Pi passthrough is explicit now: use the `tui` subcommand.
+Everything after `--` is passed through to Pi.
 
-## Inspect local status
+## Inspect local health
 
 ```bash
 pa status
 pa doctor
 ```
 
-- `pa status` gives the quick machine summary
-- `pa doctor` validates the local install and runtime wiring
+Use these before debugging anything more specific.
 
 ## Install package sources
 
 ```bash
-pa install https://github.com/user/pi-extension
+pa install https://github.com/user/pi-package
 pa install npm:@scope/package@1.2.3
-pa install --local ./my-extension
+pa install --profile assistant ./my-package
+pa install --local ./my-package
 ```
 
-This writes package sources into local settings or the local overlay.
+`--profile` writes into that profile's durable settings. `--local` writes into the machine-local overlay.
 
-## Web UI
+## Profile commands
+
+```bash
+pa profile list
+pa profile show
+pa profile use <name>
+```
+
+## Web UI commands
 
 ```bash
 pa ui
+pa ui status
 pa ui open
 pa ui foreground --open
+pa ui logs --tail 120
+pa ui pairing-code
 pa ui install
 pa ui start
 pa ui stop
 pa ui restart
-pa ui logs --tail 120
-pa ui pairing-code
+pa ui uninstall
 ```
 
-Notes:
-
-- `pa ui` with no subcommand shows status and hints
-- `pa ui foreground --open` is the fastest local launch
-- managed web UI service commands use launchd on macOS and systemd user services on Linux
-- `pa ui pairing-code` creates a short-lived pairing code for remote browser access
-
-## Daemon
+## Daemon commands
 
 ```bash
+pa daemon
 pa daemon status
 pa daemon start
 pa daemon stop
@@ -91,22 +91,9 @@ pa daemon service status
 pa daemon service uninstall
 ```
 
-Use the daemon if you rely on scheduled tasks, deferred resumes, or durable runs.
-
-## Runs and automations
-
-There is no public `pa runs` or `pa tasks` workflow anymore.
-
-Use these instead:
-
-- the built-in `run` tool for detached background work
-- the built-in `scheduled_task` tool for automations and legacy task-file validation
-- the web UI for automation detail, status, and owned run history
-
-## MCP
+## MCP commands
 
 ```bash
-pa mcp list
 pa mcp list --probe
 pa mcp info <server>
 pa mcp info <server>/<tool>
@@ -116,35 +103,39 @@ pa mcp auth <server>
 pa mcp logout <server>
 ```
 
-## Update and restart helpers
+## What no longer has a public CLI workflow
+
+Do not expect these as primary public commands:
+
+- `pa runs`
+- `pa tasks`
+
+Use the built-in runtime tools instead:
+
+- `run`
+- `scheduled_task`
+- `conversation_queue`
+- `reminder`
+
+Use the web UI for visual inspection of automations and owned run history.
+
+## Practical flows
+
+### Start a local operator session
 
 ```bash
-pa restart
-pa update
-pa update --repo-only
-```
-
-- `pa restart` restarts the daemon and managed web UI if installed
-- `pa update` pulls repo changes, refreshes dependencies, rebuilds, and restarts services
-
-## Practical CLI flows
-
-### Bring up the web stack
-
-```bash
-pa daemon start
+pa doctor
 pa ui foreground --open
 ```
 
-### Run an investigation in the background
+### Bring up background behavior
 
-Use the `run` tool from a conversation, then inspect the owning thread or run detail in the web UI.
+```bash
+pa daemon start
+pa ui install
+```
 
-### Validate legacy task files after edits
-
-Use the `scheduled_task` tool with `action: "validate"`.
-
-### Inspect configured MCP servers
+### Inspect MCP before use
 
 ```bash
 pa mcp list --probe -d
@@ -154,8 +145,6 @@ pa mcp list --probe -d
 
 - [Getting Started](./getting-started.md)
 - [Web UI Guide](./web-ui.md)
+- [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
-- [Daemon and Background Automation](./daemon.md)
 - [MCP](./mcp.md)
-- [Runs](../internal-skills/runs/INDEX.md)
-- [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

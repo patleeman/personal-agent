@@ -1,123 +1,96 @@
-# Conversation Context Attachments
+# Conversation Context
 
-This doc describes the target model for durable KB context inside a conversation.
+Use this doc when deciding how a conversation should carry durable context.
 
-The problem is simple:
+## Four context types
 
-- `@` mentions are good for one turn
-- they are bad for persistent thread context
-- users need a way to keep a stable set of KB docs attached to a conversation
+### 1. One-shot mention
 
-## Current baseline
+Use `@file` or `@doc` when the content matters for one turn only.
 
-Today the conversation composer already supports `@`-tagging files and docs.
+Good fit:
 
-That is useful for:
+- "review this file"
+- "use this note for the next answer"
 
-- pulling in a doc for one prompt
-- pointing at a specific file during active work
-- giving the agent a concrete reference without changing long-term conversation state
+### 2. Attached context doc
 
-That should stay.
+Use an attached context doc when the conversation should keep durable knowledge in scope across turns.
 
-## Target behavior
+Good fit:
 
-A conversation should also support **persistent attached docs**.
+- long-lived project context
+- a standing design brief for one thread
+- a spec the thread will revisit repeatedly
 
-Those docs stay linked to the conversation across turns until removed.
+Attached context docs are stored as references, not pasted snapshots.
 
-That gives the thread stable context without forcing the user to repeat `@foo.md` every time.
+Current state file:
 
-## UI shape
-
-The simplest UI is a small context shelf above the composer.
-
-That shelf should show the docs currently attached to the conversation.
-
-Each attached doc should expose:
-
-- title or filename
-- short path hint
-- remove action
-- open/reveal action when useful
-
-Adding docs should be lightweight. Good options:
-
-- attach from a file/doc picker
-- promote a current `@` mention into a persistent attachment
-- attach from KB search results or doc detail views
-
-The shelf should stay simple. This is context, not a second sidebar app.
-
-## Semantics
-
-### Attached docs are references, not copies
-
-Conversation state should store references to docs, not pasted copies of their full markdown.
-
-That means later turns can see the latest version of the doc.
-
-### One-shot mention vs attached doc
-
-Use this split:
-
-- **`@doc` mention** = include for this turn
-- **attached doc** = keep for the whole conversation until removed
-
-### Prompt assembly
-
-Attached docs should not dump their full bodies into every prompt by default.
-
-A sane default is:
-
-- always provide doc identity: title, path, type hints, summary
-- provide a short excerpt when needed
-- load more content only when explicitly requested or clearly relevant
-
-That keeps prompt size under control and avoids context sludge.
-
-### Missing or moved docs
-
-If an attached doc is renamed, moved, or deleted, the conversation should surface that clearly.
-
-Do not silently keep stale phantom context.
-
-## Relationship to skills and instruction files
-
-Attached docs are ordinary conversation context.
-
-They are not the same thing as:
-
-- selected instruction files that shape behavior
-- skill packages that define reusable workflows
-
-Those surfaces can coexist, but they should stay distinct.
-
-## Suggested conversation state
-
-Keep it boring:
-
-```ts
-attachedDocPaths: string[]
+```text
+<state-root>/pi-agent/state/conversation-context-docs/<conversationId>.json
 ```
 
-If later needed, that can grow into richer records with cached titles or summaries, but the first version should stay path-first and simple.
+### 3. Binary or editor attachment
 
-## Why this is better than folder taxonomies
+Use conversation attachments for images, drawings, and other thread-local assets that belong to the conversation itself.
 
-A conversation usually needs a few specific docs, not an entire folder religion.
+Examples:
 
-Attaching docs directly means:
+- screenshots
+- drawings
+- generated images
+- attachment-backed prompt inputs
 
-- a design brief can live anywhere in the vault
-- a reference note can live anywhere in the vault
-- a so-called project doc can live anywhere in the vault
-- the conversation still gets stable context from all of them
+These are conversation-local assets, not vault docs.
 
-That is simpler than teaching the user which special folder unlocks which behavior.
+### 4. Conversation artifact
+
+Use a conversation artifact for rendered outputs that should stay inspectable in the transcript.
+
+Examples:
+
+- HTML memo
+- Mermaid diagram
+- LaTeX output
+
+See [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md).
+
+## Attached docs vs repeated `@` mentions
+
+Use this rule:
+
+- include once with `@...` when the context is temporary
+- attach the doc when the thread should keep it in scope across turns
+
+## Prompt budgeting
+
+Attached docs should not be pasted in full on every turn.
+
+The normal pattern is:
+
+- store a reference to the source file
+- include title, path, and short summary in prompt assembly
+- read the full file only when the turn actually needs it
+
+## What belongs in `<vault-root>` vs the conversation
+
+Keep this split:
+
+- source knowledge lives in `<vault-root>`
+- thread-local references live in conversation state
+- binary conversation assets live in conversation attachment state
+- rendered thread outputs live in artifact state
+
+## Practical rules
+
+- do not duplicate large docs into transcript text unless necessary
+- prefer attached docs over re-mentioning the same file every turn
+- prefer vault docs for reusable knowledge and conversation attachments for thread-local assets
+- use artifacts when rendering is the point, not just storage
 
 ## Related docs
 
 - [Conversations](./conversations.md)
-- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
-- [Knowledge Management System](./knowledge-system.md)
+- [Knowledge System](./knowledge-system.md)
+- [Decision Guide](./decision-guide.md)

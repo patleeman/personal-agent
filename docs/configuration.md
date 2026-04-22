@@ -1,24 +1,18 @@
 # Configuration
 
-This page explains the current configuration model for `personal-agent`.
+Use this doc for the machine-local config model and path precedence.
 
-The main principle is:
+## Main config file
 
-- keep shared defaults in repo files
-- keep portable knowledge in the external vault
-- keep machine-local behavior in machine config and local overlays
-- use environment variables mostly for machine bootstrap and secret resolution
-
-## Machine config
-
-The main machine-local config file is:
+Primary machine config:
 
 ```text
-~/.local/state/personal-agent/config/config.json
+<config-root>/config.json
 ```
 
 Common top-level keys:
 
+- `defaultProfile`
 - `vaultRoot`
 - `knowledgeBaseRepoUrl`
 - `knowledgeBaseBranch`
@@ -31,6 +25,7 @@ Example:
 
 ```json
 {
+  "defaultProfile": "shared",
   "vaultRoot": "~/Documents/personal-agent",
   "knowledgeBaseRepoUrl": "https://github.com/you/knowledge-base.git",
   "knowledgeBaseBranch": "main",
@@ -38,22 +33,8 @@ Example:
     "~/Documents/personal-agent/instructions/base.md"
   ],
   "skillDirs": [
-    "~/Documents/personal-agent/skills",
-    "~/Documents/shared-agent-skills"
+    "~/Documents/personal-agent/skills"
   ],
-  "daemon": {
-    "logLevel": "info",
-    "modules": {
-      "tasks": {
-        "enabled": true,
-        "taskDir": "~/.local/state/personal-agent/sync/_tasks",
-        "tickIntervalSeconds": 30,
-        "maxRetries": 3,
-        "reapAfterDays": 7,
-        "defaultTimeoutSeconds": 1800
-      }
-    }
-  },
   "webUi": {
     "port": 3741,
     "useTailscaleServe": false,
@@ -62,170 +43,66 @@ Example:
 }
 ```
 
-Existing installs may still use `.../sync/tasks` instead of `.../sync/_tasks`; the runtime honors either.
+If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` becomes the managed mirror at `<state-root>/knowledge-base/repo` unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
 
-## Managed git-backed knowledge base
+## Other important config locations
 
-If `knowledgeBaseRepoUrl` is set, PA manages a local git checkout for the KB under:
+- `<config-root>/profiles/<profile>/settings.json`
+- `<config-root>/profiles/<profile>/models.json`
+- `<config-root>/local/` — machine-local overlay
+- `<state-root>/desktop/config.json` — desktop-specific state
 
-```text
-~/.local/state/personal-agent/knowledge-base/repo
-```
+## Path precedence
 
-That managed checkout becomes the effective indexed root unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
+### Vault root
 
-PA bootstraps a few boring defaults on first sync:
+Resolution order:
 
-- `skills/`
-- `notes/`
-- `.gitignore` for local junk such as `.DS_Store` and `.obsidian/`
+1. `PERSONAL_AGENT_VAULT_ROOT`
+2. managed KB mirror when `knowledgeBaseRepoUrl` is configured
+3. `vaultRoot` from `config.json`
+4. default `~/Documents/personal-agent`
 
-Everything else stays freeform.
+### Config root
 
-PA also runs lightweight local git maintenance on the managed clone after successful syncs, plus a rarer full maintenance pass, so frequent note commits do not slowly turn the repo into soup.
+Resolution order:
 
-`knowledgeBaseBranch` defaults to `main`.
+1. `PERSONAL_AGENT_CONFIG_FILE` for the exact file
+2. `PERSONAL_AGENT_CONFIG_ROOT`
+3. default `<state-root>/config`
 
-## Durable vault root
+### State root
 
-The default durable vault root is:
+Resolution order:
 
-```text
-~/Documents/personal-agent
-```
+1. `PERSONAL_AGENT_STATE_ROOT`
+2. default `~/.local/state/personal-agent`
 
-That vault should be treated as a file-backed KB.
+## Environment variables worth knowing
 
-A typical layout might look like:
-
-```text
-~/Documents/personal-agent/
-├── skills/
-├── instructions/
-├── work/
-├── systems/
-└── references/
-```
-
-The only broad shared folder contract is `skills/`.
-
-Everything else can stay freeform.
-
-You can override the vault root with either:
-
-- `vaultRoot` in machine config
+- `PERSONAL_AGENT_STATE_ROOT`
+- `PERSONAL_AGENT_CONFIG_ROOT`
+- `PERSONAL_AGENT_CONFIG_FILE`
 - `PERSONAL_AGENT_VAULT_ROOT`
-
-The environment variable wins. If `knowledgeBaseRepoUrl` is configured and no env override is set, the managed checkout path wins over `vaultRoot`.
-
-## Instruction files
-
-Instruction files are selected docs.
-
-They are configured through `instructionFiles[]` in machine config or the Settings UI.
-
-Commonly people may keep one at `AGENTS.md`, but that is a convention, not the whole KB model.
-
-Repo-root `AGENTS.md` can still matter for coding-harness compatibility, but the product should think in terms of selected instruction docs.
-
-## Skill folders
-
-The canonical shared skills live under the vault `skills/` directory.
-
-If you want additional machine-local skill folders, add them through Settings or write them directly to `config.json` → `skillDirs`.
-
-## Local overlay
-
-The machine-local overlay defaults to:
-
-```text
-~/.local/state/personal-agent/config/local
-```
-
-Use it for local-only overrides that should not be shared through the vault.
-
-## Profile config root
-
-If you still use runtime profiles, their mutable per-profile config defaults to:
-
-```text
-~/.local/state/personal-agent/config/profiles/<profile>/
-```
-
-That is machine-local state, not part of the shared vault contract.
-
-## Runtime state roots
-
-Machine-local runtime state defaults to:
-
-```text
-~/.local/state/personal-agent/
-├── config/
-├── daemon/
-├── desktop/
-├── web/
-└── sync/
-```
-
-Important subtrees:
-
-- `daemon/` — socket, logs, `runtime.db`, durable runs
-- `desktop/` — desktop config and logs
-- `web/` — remote browser pairing state and web runtime state
-- `sync/{_tasks|tasks}/` — scheduled task files
-
-## Desktop config
-
-The Electron desktop shell stores its own machine-local state in:
-
-```text
-~/.local/state/personal-agent/desktop/config.json
-```
-
-That file holds:
-
-- saved host records
-- default host selection
-- main window bounds
-- desktop open-on-launch preference
-- desktop auto-install-updates preference
-- desktop start-on-system-start preference
-
-## Environment variables
-
-The most useful overrides are:
-
-- `PERSONAL_AGENT_STATE_ROOT` — override the machine-local state root
-- `PERSONAL_AGENT_CONFIG_ROOT` — override the config directory
-- `PERSONAL_AGENT_CONFIG_FILE` — override the machine config file path
-- `PERSONAL_AGENT_VAULT_ROOT` — override the durable vault root
-- `PERSONAL_AGENT_LOCAL_PROFILE_DIR` — override the local overlay directory
-- `PERSONAL_AGENT_DAEMON_SOCKET_PATH` — override daemon socket path
-- `PERSONAL_AGENT_WEB_TAILSCALE_SERVE` — force Tailscale Serve on/off for the web UI
-- `PERSONAL_AGENT_PI_TIMEOUT_MS` — Pi execution timeout
-- `PI_OPENAI_NATIVE_COMPACTION=0` — disable the built-in Codex/OpenAI compaction replay extension
-- `PI_OPENAI_NATIVE_COMPACTION_NOTIFY=1` — show UI notices when Codex/OpenAI compaction activates or falls back
-- `PERSONAL_AGENT_OP_BIN` and `OP_SERVICE_ACCOUNT_TOKEN` — 1Password CLI secret resolution
-
-The Codex/OpenAI compaction extension only applies to direct OpenAI Responses and ChatGPT/Codex responses models; other providers keep Pi's default compaction behavior.
-
-Older single-section overrides like `PERSONAL_AGENT_DAEMON_CONFIG` and `PERSONAL_AGENT_WEB_CONFIG_FILE` are still honored for compatibility.
+- `PERSONAL_AGENT_DAEMON_SOCKET_PATH`
+- `PERSONAL_AGENT_WEB_TAILSCALE_SERVE`
+- `PERSONAL_AGENT_PI_TIMEOUT_MS`
+- `PI_OPENAI_NATIVE_COMPACTION`
+- `PI_OPENAI_NATIVE_COMPACTION_NOTIFY`
 
 ## What belongs where
 
 | Setting type | Best home |
 | --- | --- |
-| shared product defaults | repo files |
-| durable behavior and standing instructions | vault docs selected via `instructionFiles[]` |
-| portable knowledge | vault docs and `skills/` |
-| machine-local deployment/runtime settings | local `config.json` |
-| model provider defs | local settings/models files |
-| machine-local extra skills | machine `skillDirs` |
-| machine-local one-off tweaks | local overlay |
+| shipped defaults | repo files |
+| standing behavior | selected instruction files |
+| durable knowledge | docs, skills, and projects in `<vault-root>` |
+| machine-local runtime settings | `<config-root>/config.json` |
+| profile-local mutable settings | `<config-root>/profiles/<profile>/...` |
+| machine-local one-off overrides | environment variables or `<config-root>/local/` |
 
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
-- [Instruction Files, Docs, and Skills](./instructions-docs-skills.md)
-- [Conversation Context Attachments](./conversation-context.md)
+- [Knowledge System](./knowledge-system.md)
 - [Web UI Guide](./web-ui.md)

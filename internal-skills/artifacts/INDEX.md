@@ -69,9 +69,9 @@ This is the right way to iterate on the same rendered output without creating a 
 
 ## Project artifacts
 
-Project artifacts are plain durable files stored with one tracked page under:
+Project artifacts are plain durable files stored with one project under:
 
-- `~/Documents/personal-agent/projects/<projectId>/artifacts/`
+- `<vault-root>/projects/<projectId>/artifacts/`
 
 Use them for:
 
@@ -83,8 +83,8 @@ Use them for:
 
 Project artifacts are different from conversation artifacts:
 
-- they are durable tracked-page files, not conversation-viewer records
-- they travel with the tracked page package
+- they are durable project-owned files, not conversation-viewer records
+- they travel with the project package
 - they are the right fit when the output belongs to the project as a deliverable
 
 ## Conversation artifact vs project artifact
@@ -160,6 +160,6 @@ Then choose the right home:
 ## Related docs
 
 - [Decision Guide](../../docs/decision-guide.md)
-- [Tracked Pages](../../docs/projects.md)
+- [Projects](../../docs/projects.md)
 - [Conversations](../../docs/conversations.md)
 - [Web UI Guide](../../docs/web-ui.md)
