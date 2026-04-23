@@ -446,6 +446,12 @@ export function isDesktopShell(): boolean {
   return /Electron/i.test(navigator.userAgent);
 }
 
+// App-owned context menus stay in-app on both web and desktop. The native
+// Electron menu path caused hangs and split the UX between surfaces.
+export function shouldUseNativeAppContextMenus(): boolean {
+  return false;
+}
+
 // Desktop environment reads cross the Electron bridge and can trigger daemon
 // status checks. Cache the in-flight result so route changes do not keep poking
 // the desktop runtime while the user clicks around the app.

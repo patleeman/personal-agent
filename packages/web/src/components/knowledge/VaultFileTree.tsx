@@ -52,6 +52,7 @@ import type { VaultEntry } from '../../shared/types';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 import { cx } from '../ui';
+import { shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
@@ -104,9 +105,6 @@ const TREE_HOST_STYLE = {
 const MIN_TREE_HOST_HEIGHT = 120;
 const OPEN_FILES_SECTION_RESIZE_STEP = 24;
 const OPEN_FILES_SECTION_RESIZER_HEIGHT = 8;
-// Native desktop right-click menus are currently causing visible hangs on the
-// knowledge tree. Keep the in-app menu until the native path is fixed.
-const USE_NATIVE_KNOWLEDGE_CONTEXT_MENU = false;
 
 export interface FileTreeProps {
   activeFileId: string | null;
@@ -610,7 +608,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const useNativeKnowledgeContextMenu = USE_NATIVE_KNOWLEDGE_CONTEXT_MENU;
+  const useNativeKnowledgeContextMenu = shouldUseNativeAppContextMenus();
   const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
   const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
   const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);

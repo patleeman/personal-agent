@@ -1,5 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+describe('shouldUseNativeAppContextMenus', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+  });
+
+  it('keeps app-owned context menus in-app across desktop and web', async () => {
+    const { shouldUseNativeAppContextMenus } = await import('./desktopBridge');
+
+    expect(shouldUseNativeAppContextMenus()).toBe(false);
+  });
+});
+
 describe('readDesktopEnvironment', () => {
   beforeEach(() => {
     vi.resetModules();

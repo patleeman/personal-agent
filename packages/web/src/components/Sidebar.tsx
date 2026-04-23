@@ -29,6 +29,7 @@ import {
 } from '../conversation/conversationCwdGroups';
 import {
   getDesktopBridge,
+  shouldUseNativeAppContextMenus,
   type DesktopConversationContextMenuAction,
   type DesktopConversationCwdGroupContextMenuAction,
 } from '../desktop/desktopBridge';
@@ -1096,7 +1097,7 @@ function ConversationCwdGroupHeader({
       return;
     }
 
-    const desktopBridge = getDesktopBridge();
+    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
     if (desktopBridge?.showConversationCwdGroupContextMenu) {
       setMenuOpen(false);
       setMenuPosition(null);
@@ -1530,7 +1531,7 @@ function OpenConversationRow({
     stopRowInteraction(event);
     const x = event.clientX;
     const y = event.clientY;
-    const desktopBridge = getDesktopBridge();
+    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
 
     if (desktopBridge?.showConversationContextMenu) {
       setMenuOpen(false);

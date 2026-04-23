@@ -39,7 +39,7 @@ import { extractMarkdownTextContent, InlineMarkdownCode } from '../MarkdownInlin
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { readTerminalBashToolPresentation } from '../../transcript/terminalBashBlock';
 import { getStreamingThroughputLabel } from '../../transcript/streamingThroughput';
-import { getDesktopBridge } from '../../desktop/desktopBridge';
+import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 import { Pill, SurfacePanel, cx } from '../ui';
 
@@ -4557,7 +4557,7 @@ export const ChatView = memo(function ChatView({
       text: selectionText,
       replySelection: resolvedReplySelection?.selection ?? null,
     };
-    const desktopBridge = getDesktopBridge();
+    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
 
     if (desktopBridge?.showSelectionContextMenu) {
       closeSelectionContextMenu();
