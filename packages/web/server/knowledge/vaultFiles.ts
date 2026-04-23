@@ -24,6 +24,12 @@ const SKIPPED_DIRECTORY_NAMES = new Set([
   'node_modules',
 ]);
 
+const SKIPPED_FILE_NAMES = new Set([
+  '.DS_Store',
+  'Thumbs.db',
+  'desktop.ini',
+]);
+
 const MAX_REFERENCED_FOLDER_CHILDREN = 20;
 
 function normalizeVaultRelativePath(value: string): string {
@@ -57,6 +63,14 @@ function sortVaultFiles(files: VaultFileSummary[]): VaultFileSummary[] {
   return files.sort((left, right) => left.id.localeCompare(right.id) || kindOrder[left.kind] - kindOrder[right.kind] || left.path.localeCompare(right.path));
 }
 
+function shouldSkipVaultEntry(name: string, kind: VaultFileSummary['kind']): boolean {
+  if (kind === 'folder') {
+    return SKIPPED_DIRECTORY_NAMES.has(name);
+  }
+
+  return SKIPPED_FILE_NAMES.has(name) || name.startsWith('._');
+}
+
 function buildVaultSummary(root: string, absolutePath: string, stats: Stats): VaultFileSummary | null {
   const relativePath = normalizeVaultRelativePath(relative(root, absolutePath));
   if (!relativePath) {
@@ -79,7 +93,12 @@ function readVaultChildSummary(parent: VaultFileSummary, entry: Dirent): VaultFi
     return null;
   }
 
-  if (entry.isDirectory() && SKIPPED_DIRECTORY_NAMES.has(entry.name)) {
+  const expectedKind: VaultFileSummary['kind'] | null = entry.isDirectory()
+    ? 'folder'
+    : entry.isFile()
+      ? 'file'
+      : null;
+  if (!expectedKind || shouldSkipVaultEntry(entry.name, expectedKind)) {
     return null;
   }
 
@@ -96,6 +115,10 @@ function readVaultChildSummary(parent: VaultFileSummary, entry: Dirent): VaultFi
   }
 
   const kind: VaultFileSummary['kind'] = stats.isDirectory() ? 'folder' : 'file';
+  if (shouldSkipVaultEntry(entry.name, kind)) {
+    return null;
+  }
+
   return {
     id: kind === 'folder' ? `${parent.id}${entry.name}/` : `${parent.id}${entry.name}`,
     kind,
@@ -160,7 +183,7 @@ export function listVaultFiles(vaultRoot: string = getVaultRoot()): VaultFileSum
       }
 
       if (entry.isDirectory()) {
-        if (SKIPPED_DIRECTORY_NAMES.has(entry.name)) {
+        if (shouldSkipVaultEntry(entry.name, 'folder')) {
           continue;
         }
 
@@ -172,7 +195,7 @@ export function listVaultFiles(vaultRoot: string = getVaultRoot()): VaultFileSum
         continue;
       }
 
-      if (!entry.isFile()) {
+      if (!entry.isFile() || shouldSkipVaultEntry(entry.name, 'file')) {
         continue;
       }
 
@@ -209,6 +232,11 @@ export function resolveVaultFileById(id: string, vaultRoot: string = getVaultRoo
     return null;
   }
   if (!expectsFolder && !stats.isFile()) {
+    return null;
+  }
+
+  const kind: VaultFileSummary['kind'] = stats.isDirectory() ? 'folder' : 'file';
+  if (shouldSkipVaultEntry(basename(absolutePath), kind)) {
     return null;
   }
 

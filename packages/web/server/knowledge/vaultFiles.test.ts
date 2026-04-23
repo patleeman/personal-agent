@@ -17,7 +17,10 @@ function createVaultFixture(): string {
   mkdirSync(join(root, 'notes'), { recursive: true });
   mkdirSync(join(root, '_profiles', 'datadog'), { recursive: true });
   mkdirSync(join(root, '.git'), { recursive: true });
+  writeFileSync(join(root, '.DS_Store'), 'junk\n');
   writeFileSync(join(root, 'notes', 'daily.md'), '# Daily\n');
+  writeFileSync(join(root, 'notes', 'Thumbs.db'), 'junk\n');
+  writeFileSync(join(root, 'notes', '._daily.md'), 'junk\n');
   writeFileSync(join(root, '_profiles', 'datadog', 'AGENTS.md'), '# Datadog\n');
   writeFileSync(join(root, '.git', 'HEAD'), 'ref: refs/heads/main\n');
   return root;
@@ -30,7 +33,7 @@ afterEach(() => {
 });
 
 describe('vaultFiles', () => {
-  it('lists root-relative folders and files and skips ignored directories', () => {
+  it('lists root-relative folders and files and skips ignored directories and junk files', () => {
     const root = createVaultFixture();
 
     expect(listVaultFiles(root).map((file) => `${file.kind}:${file.id}`)).toEqual([
@@ -43,7 +46,7 @@ describe('vaultFiles', () => {
     const root = createVaultFixture();
 
     expect(resolveMentionedVaultFiles(
-      'Review @notes/ and @notes/daily.md and then @_profiles/datadog/AGENTS.md but ignore @../secrets.txt.',
+      'Review @notes/ and @notes/daily.md and then @_profiles/datadog/AGENTS.md and @.DS_Store but ignore @../secrets.txt.',
       root,
     ).map((file) => `${file.kind}:${file.id}`)).toEqual([
       'folder:notes/',
@@ -51,6 +54,9 @@ describe('vaultFiles', () => {
     ]);
 
     expect(resolveVaultFileById('../secrets.txt', root)).toBeNull();
+    expect(resolveVaultFileById('.DS_Store', root)).toBeNull();
+    expect(resolveVaultFileById('notes/Thumbs.db', root)).toBeNull();
+    expect(resolveVaultFileById('notes/._daily.md', root)).toBeNull();
     expect(resolveVaultFileById('notes/', root)?.kind).toBe('folder');
   });
 

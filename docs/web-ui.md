@@ -57,6 +57,7 @@ Use it for:
 - quick-open
 - wikilinks and backlinks
 - URL import into the vault
+- hiding OS junk files like `.DS_Store`, `Thumbs.db`, and AppleDouble `._*` entries from indexed navigation
 
 ### Automations
 
