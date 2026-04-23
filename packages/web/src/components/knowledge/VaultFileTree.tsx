@@ -139,10 +139,6 @@ function formatOpenFileName(fileId: string): string {
   return fileId.split('/').filter(Boolean).pop() ?? fileId;
 }
 
-function formatOpenFileDir(fileId: string): string {
-  return fileId.split('/').slice(0, -1).join('/');
-}
-
 function resolveRenamedFileId(fileId: string | null, oldId: string, newId: string): string | null {
   if (!fileId) {
     return null;
@@ -528,38 +524,37 @@ function OpenFilesSection({
           {openFileIds.map((fileId) => {
             const isActive = activeFileId === fileId;
             const fileName = formatOpenFileName(fileId);
-            const parentDir = formatOpenFileDir(fileId);
 
             return (
-              <div key={fileId} className="group flex items-center gap-1">
+              <div key={fileId} className="group relative">
                 <button
                   type="button"
                   aria-label={`Open file ${fileId}`}
+                  title={fileId}
                   className={[
-                    'flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                    'flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
                     isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary',
                   ].join(' ')}
                   aria-current={isActive ? 'true' : undefined}
                   onClick={() => onSelect(fileId)}
                 >
                   <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[12px] font-medium">{fileName.replace(/\.md$/, '')}</span>
-                    {parentDir ? <span className="block truncate text-[11px] text-dim">{parentDir}</span> : null}
-                  </span>
+                  <span className="block min-w-0 flex-1 truncate text-[12px] font-medium">{fileName.replace(/\.md$/, '')}</span>
                 </button>
-                <button
-                  type="button"
-                  aria-label={`Close file ${fileId}`}
-                  className="ui-icon-button ui-icon-button-compact shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    onClose(fileId);
-                  }}
-                >
-                  <Ico d={ICON.x} size={10} />
-                </button>
+                <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center">
+                  <button
+                    type="button"
+                    aria-label={`Close file ${fileId}`}
+                    className="pointer-events-auto ui-icon-button ui-icon-button-compact shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      onClose(fileId);
+                    }}
+                  >
+                    <Ico d={ICON.x} size={10} />
+                  </button>
+                </div>
               </div>
             );
           })}

@@ -244,7 +244,10 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(JSON.parse(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY) ?? '[]')).toEqual(['notes/today.md', 'README.md']);
-    expect(getButton(container, 'Open file notes/today.md')).toBeTruthy();
+    const openTodayButton = getButton(container, 'Open file notes/today.md');
+    expect(openTodayButton).toBeTruthy();
+    expect(openTodayButton.textContent).toBe('today');
+    expect(openTodayButton.getAttribute('title')).toBe('notes/today.md');
     expect(getButton(container, 'Open file README.md')).toBeTruthy();
 
     click(getButton(container, 'Close file notes/today.md'));
