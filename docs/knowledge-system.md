@@ -87,6 +87,8 @@ Folder names can be useful, but they should not carry more product meaning than 
 
 In Patrick's active setup, assume the managed KB mirror unless you know otherwise.
 
+When managed sync is first pointed at an empty or bootstrap-only repo, PA imports files from the old unmanaged vault root (`vaultRoot` from config, or the default path when unset) into the managed mirror before pushing. It does not auto-import into a non-empty repo.
+
 ## Conversation interaction with the vault
 
 A conversation can use durable knowledge in two different ways:
@@ -112,6 +114,8 @@ It can surface:
 - sync in progress or the latest sync error
 
 That status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
+
+If the managed repo is still empty after sync, check whether the old unmanaged vault root actually had content worth importing.
 
 ## URL import
 

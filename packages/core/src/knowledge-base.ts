@@ -4,18 +4,22 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   renameSync,
   rmSync,
   statSync,
   unlinkSync,
   writeFileSync,
+  type Dirent,
 } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { getConfigRoot, getManagedKnowledgeBaseRoot, getStateRoot, getVaultRoot } from './runtime/paths.js';
+import { getConfigRoot, getDefaultVaultRoot, getManagedKnowledgeBaseRoot, getStateRoot, getVaultRoot } from './runtime/paths.js';
 import {
   DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH,
   readMachineKnowledgeBaseBranch,
   readMachineKnowledgeBaseRepoUrl,
+  readMachineVaultRoot,
   type MachineConfigOptions,
   type MachineKnowledgeBaseState,
   writeMachineKnowledgeBase,
@@ -96,10 +100,29 @@ const LOCAL_STATE_FILE_NAME = 'state.json';
 const RECOVERY_INDEX_FILE_NAME = 'recovery-index.json';
 const SNAPSHOT_VERSION = 1;
 const SOURCE_ENV_VAR = 'PERSONAL_AGENT_VAULT_ROOT';
+const BOOTSTRAP_RELATIVE_PATHS = new Set(['.gitignore', 'notes/.gitkeep', 'skills/.gitkeep']);
 const SKIPPED_RECOVERY_PATH_SEGMENTS = new Set(['', '.', '..']);
+const SKIPPED_LEGACY_IMPORT_PATH_SEGMENTS = new Set(['', '.', '..', '.git', '.obsidian']);
+const SKIPPED_LEGACY_IMPORT_FILE_NAMES = new Set(['.DS_Store']);
 const managerRegistry = new Map<string, KnowledgeBaseManager>();
 
 type KnowledgeBaseStateListener = (state: KnowledgeBaseState) => void;
+
+function expandHomePath(value: string): string {
+  if (value === '~') {
+    return homedir();
+  }
+
+  if (value.startsWith('~/')) {
+    return join(homedir(), value.slice(2));
+  }
+
+  return value;
+}
+
+function normalizeRelativePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\/+/, '').replace(/\/+/g, '/');
+}
 
 function normalizeRepoUrl(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -439,6 +462,143 @@ function ensureBootstrapFiles(root: string): void {
   }
 }
 
+function isBootstrapRelativePath(relativePath: string): boolean {
+  return BOOTSTRAP_RELATIVE_PATHS.has(normalizeRelativePath(relativePath));
+}
+
+function isBootstrapOnlySnapshot(snapshot: Snapshot): boolean {
+  return Object.keys(snapshot).every((relativePath) => isBootstrapRelativePath(relativePath));
+}
+
+function shouldSkipLegacyImportPath(relativePath: string): boolean {
+  const normalized = normalizeRelativePath(relativePath);
+  const segments = normalized.split('/').filter((segment) => segment.length > 0);
+  if (segments.length === 0) {
+    return false;
+  }
+
+  if (segments.some((segment) => SKIPPED_LEGACY_IMPORT_PATH_SEGMENTS.has(segment))) {
+    return true;
+  }
+
+  return SKIPPED_LEGACY_IMPORT_FILE_NAMES.has(segments[segments.length - 1] ?? '');
+}
+
+function listLegacyImportableFilePaths(root: string, relativeDir = ''): string[] {
+  const currentDir = relativeDir ? join(root, relativeDir) : root;
+  let entries: Dirent<string>[] = [];
+  try {
+    entries = readdirSync(currentDir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+
+  const result: string[] = [];
+  for (const entry of entries) {
+    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (shouldSkipLegacyImportPath(relativePath)) {
+      continue;
+    }
+
+    if (entry.isDirectory()) {
+      result.push(...listLegacyImportableFilePaths(root, relativePath));
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    result.push(normalizeRelativePath(relativePath));
+  }
+
+  return result;
+}
+
+function hasMeaningfulLegacyImportContent(root: string): boolean {
+  return listLegacyImportableFilePaths(root).some((relativePath) => !isBootstrapRelativePath(relativePath));
+}
+
+function mergeGitignoreContents(existing: string, incoming: string): string {
+  const mergedLines: string[] = [];
+  const seen = new Set<string>();
+
+  const appendLines = (content: string) => {
+    for (const line of content.split(/\r?\n/u)) {
+      const normalized = line.trim();
+      if (normalized.length === 0 || seen.has(normalized)) {
+        continue;
+      }
+
+      seen.add(normalized);
+      mergedLines.push(line);
+    }
+  };
+
+  appendLines(existing);
+  appendLines(incoming);
+  return mergedLines.length > 0 ? `${mergedLines.join('\n')}\n` : '';
+}
+
+function copyLegacyVaultRootContents(sourceRoot: string, targetRoot: string, relativeDir = ''): boolean {
+  const currentDir = relativeDir ? join(sourceRoot, relativeDir) : sourceRoot;
+  let entries: Dirent<string>[] = [];
+  try {
+    entries = readdirSync(currentDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  let changed = false;
+  for (const entry of entries) {
+    const relativePath = relativeDir ? `${relativeDir}/${entry.name}` : entry.name;
+    if (shouldSkipLegacyImportPath(relativePath)) {
+      continue;
+    }
+
+    const normalizedPath = normalizeRelativePath(relativePath);
+    if (entry.isDirectory()) {
+      changed = copyLegacyVaultRootContents(sourceRoot, targetRoot, normalizedPath) || changed;
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const sourcePath = join(sourceRoot, normalizedPath);
+    const targetPath = join(targetRoot, normalizedPath);
+    ensureParentDirectory(targetPath);
+
+    if (normalizedPath === '.gitignore') {
+      const existingContent = existsSync(targetPath) ? readFileSync(targetPath, 'utf-8') : '';
+      const mergedContent = mergeGitignoreContents(existingContent, readFileSync(sourcePath, 'utf-8'));
+      if (!existsSync(targetPath) || mergedContent !== existingContent) {
+        writeFileSync(targetPath, mergedContent);
+        changed = true;
+      }
+      continue;
+    }
+
+    const sourceContent = readFileSync(sourcePath);
+    const existingContent = existsSync(targetPath) ? readFileSync(targetPath) : null;
+    if (!existingContent || !existingContent.equals(sourceContent)) {
+      writeFileSync(targetPath, sourceContent);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function pathsOverlap(left: string, right: string): boolean {
+  const resolvedLeft = resolve(left);
+  const resolvedRight = resolve(right);
+  return resolvedLeft === resolvedRight
+    || resolvedLeft.startsWith(`${resolvedRight}/`)
+    || resolvedRight.startsWith(`${resolvedLeft}/`);
+}
+
 function readRemoteFileBuffer(cwd: string, branch: string, relativePath: string): Buffer | null {
   const remoteRef = getRemoteRef(branch);
   if (!refExists(cwd, remoteRef)) {
@@ -619,6 +779,43 @@ export class KnowledgeBaseManager {
     }
 
     return stored;
+  }
+
+  private readLegacyVaultRoot(): string | null {
+    if (typeof process.env[SOURCE_ENV_VAR] === 'string' && process.env[SOURCE_ENV_VAR]!.trim().length > 0) {
+      return null;
+    }
+
+    const configuredVaultRoot = readMachineVaultRoot(this.machineConfigOptions()).trim();
+    const legacyRoot = configuredVaultRoot.length > 0
+      ? expandHomePath(configuredVaultRoot)
+      : getDefaultVaultRoot();
+    return resolve(legacyRoot);
+  }
+
+  private maybeImportLegacyVaultRoot(root: string): boolean {
+    const legacyRoot = this.readLegacyVaultRoot();
+    if (!legacyRoot || pathsOverlap(legacyRoot, root)) {
+      return false;
+    }
+
+    if (!existsSync(legacyRoot)) {
+      return false;
+    }
+
+    try {
+      if (!statSync(legacyRoot).isDirectory()) {
+        return false;
+      }
+    } catch {
+      return false;
+    }
+
+    if (!hasMeaningfulLegacyImportContent(legacyRoot)) {
+      return false;
+    }
+
+    return copyLegacyVaultRootContents(legacyRoot, root);
   }
 
   private archiveManagedRoot(reason: string): void {
@@ -866,6 +1063,7 @@ export class KnowledgeBaseManager {
       if (!remoteExists) {
         this.checkoutRemoteBase(root, config.branch, false);
         ensureBootstrapFiles(root);
+        this.maybeImportLegacyVaultRoot(root);
         this.stageAndCommitIfNeeded(root, config.branch, timestamp);
         const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, timestamp);
         const snapshot = listWorkingSnapshot(root);
@@ -886,6 +1084,11 @@ export class KnowledgeBaseManager {
         const nextState = this.readState();
         this.notifyListeners(previousState, nextState);
         return nextState;
+      }
+
+      const workingSnapshotBeforeImport = listWorkingSnapshot(root);
+      if (isBootstrapOnlySnapshot(remoteSnapshot) && isBootstrapOnlySnapshot(workingSnapshotBeforeImport)) {
+        this.maybeImportLegacyVaultRoot(root);
       }
 
       const workingSnapshot = listWorkingSnapshot(root);

@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -60,6 +60,11 @@ function readKnowledgeBaseStateFile(stateRoot: string): Record<string, unknown> 
   return JSON.parse(readFileSync(join(stateRoot, 'knowledge-base', 'state.json'), 'utf-8')) as Record<string, unknown>;
 }
 
+function writeMachineConfigFile(configRoot: string, config: Record<string, unknown>): void {
+  mkdirSync(configRoot, { recursive: true });
+  writeFileSync(join(configRoot, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
+}
+
 describe('KnowledgeBaseManager', () => {
   it('bootstraps and pushes a managed knowledge base into an empty remote repo', () => {
     const remoteRepo = initBareRepo();
@@ -84,6 +89,93 @@ describe('KnowledgeBaseManager', () => {
     const storedState = readKnowledgeBaseStateFile(stateRoot);
     expect(typeof storedState.lastMaintenanceAt).toBe('string');
     expect(storedState.lastFullMaintenanceAt).toBeUndefined();
+  });
+
+  it('imports the old unmanaged vault into an empty managed repo on first enable', () => {
+    const remoteRepo = initBareRepo();
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const legacyVaultRoot = createTempDir('pa-kb-legacy-');
+    writeMachineConfigFile(configRoot, { vaultRoot: legacyVaultRoot });
+
+    writeFileSync(join(legacyVaultRoot, 'AGENTS.md'), '# Agent\n');
+    mkdirSync(join(legacyVaultRoot, 'notes'), { recursive: true });
+    writeFileSync(join(legacyVaultRoot, 'notes', 'daily.md'), '# Daily\n');
+    mkdirSync(join(legacyVaultRoot, 'skills', 'capture'), { recursive: true });
+    writeFileSync(join(legacyVaultRoot, 'skills', 'capture', 'SKILL.md'), '# Capture\n');
+    mkdirSync(join(legacyVaultRoot, '.obsidian'), { recursive: true });
+    writeFileSync(join(legacyVaultRoot, '.obsidian', 'workspace.json'), '{}\n');
+
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const state = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    expect(readFileSync(join(state.managedRoot, 'AGENTS.md'), 'utf-8')).toBe('# Agent\n');
+    expect(readFileSync(join(state.managedRoot, 'notes', 'daily.md'), 'utf-8')).toBe('# Daily\n');
+    expect(readFileSync(join(state.managedRoot, 'skills', 'capture', 'SKILL.md'), 'utf-8')).toBe('# Capture\n');
+    expect(existsSync(join(state.managedRoot, '.obsidian'))).toBe(false);
+
+    const remoteClone = createTempDir('pa-kb-verify-');
+    runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
+    expect(readFileSync(join(remoteClone, 'AGENTS.md'), 'utf-8')).toBe('# Agent\n');
+    expect(readFileSync(join(remoteClone, 'notes', 'daily.md'), 'utf-8')).toBe('# Daily\n');
+    expect(readFileSync(join(remoteClone, 'skills', 'capture', 'SKILL.md'), 'utf-8')).toBe('# Capture\n');
+    expect(existsSync(join(remoteClone, '.obsidian'))).toBe(false);
+  });
+
+  it('imports the old unmanaged vault into an already-configured bootstrap-only repo on the next sync', () => {
+    const remoteRepo = initBareRepo();
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    writeMachineConfigFile(configRoot, { vaultRoot: join(stateRoot, 'missing-legacy-root') });
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+
+    manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    const legacyVaultRoot = createTempDir('pa-kb-legacy-');
+    writeFileSync(join(legacyVaultRoot, 'AGENTS.md'), '# Imported later\n');
+    mkdirSync(join(legacyVaultRoot, 'projects', 'kb-migration'), { recursive: true });
+    writeFileSync(join(legacyVaultRoot, 'projects', 'kb-migration', 'plan.md'), '# Plan\n');
+    writeMachineConfigFile(configRoot, {
+      knowledgeBaseRepoUrl: remoteRepo,
+      knowledgeBaseBranch: 'main',
+      vaultRoot: legacyVaultRoot,
+    });
+
+    const syncedState = manager.syncNow();
+    expect(readFileSync(join(syncedState.managedRoot, 'AGENTS.md'), 'utf-8')).toBe('# Imported later\n');
+    expect(readFileSync(join(syncedState.managedRoot, 'projects', 'kb-migration', 'plan.md'), 'utf-8')).toBe('# Plan\n');
+
+    const remoteClone = createTempDir('pa-kb-verify-');
+    runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
+    expect(readFileSync(join(remoteClone, 'AGENTS.md'), 'utf-8')).toBe('# Imported later\n');
+    expect(readFileSync(join(remoteClone, 'projects', 'kb-migration', 'plan.md'), 'utf-8')).toBe('# Plan\n');
+  });
+
+  it('does not import the old unmanaged vault into a non-empty managed repo', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/remote.md': '# Remote\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const legacyVaultRoot = createTempDir('pa-kb-legacy-');
+    writeFileSync(join(legacyVaultRoot, 'AGENTS.md'), '# Should stay local\n');
+    writeMachineConfigFile(configRoot, { vaultRoot: legacyVaultRoot });
+
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const state = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    expect(existsSync(join(state.managedRoot, 'AGENTS.md'))).toBe(false);
+    expect(readFileSync(join(state.managedRoot, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
+
+    const remoteClone = createTempDir('pa-kb-verify-');
+    runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
+    expect(existsSync(join(remoteClone, 'AGENTS.md'))).toBe(false);
+    expect(readFileSync(join(remoteClone, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
   });
 
   it('reports local and remote git sync drift for the managed mirror', () => {
