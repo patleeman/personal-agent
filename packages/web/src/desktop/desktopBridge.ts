@@ -72,6 +72,8 @@ export type DesktopConversationCwdGroupContextMenuAction =
   | 'archive-threads'
   | 'remove';
 
+export type DesktopKnowledgeEntryContextMenuAction = 'rename' | 'move' | 'delete';
+
 type DesktopSelectionContextMenuAction = 'reply' | 'copy';
 
 interface DesktopConversationContextMenuRequest {
@@ -94,6 +96,14 @@ interface DesktopConversationCwdGroupContextMenuRequest {
   canEditName?: boolean;
   canArchiveThreads?: boolean;
   canRemove?: boolean;
+}
+
+interface DesktopKnowledgeEntryContextMenuRequest {
+  x: number;
+  y: number;
+  canRename?: boolean;
+  canMove?: boolean;
+  canDelete?: boolean;
 }
 
 export interface DesktopScreenshotCaptureResult {
@@ -122,6 +132,7 @@ export interface PersonalAgentDesktopBridge {
   openNewConversation(): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
+  showKnowledgeEntryContextMenu(input: DesktopKnowledgeEntryContextMenuRequest): Promise<{ action: DesktopKnowledgeEntryContextMenuAction | null }>;
   showSelectionContextMenu(input: { x: number; y: number; canReply?: boolean; canCopy?: boolean }): Promise<{ action: DesktopSelectionContextMenuAction | null }>;
   openPath(targetPath: string): Promise<{ path: string; opened: boolean; error?: string }>;
   readDesktopAppPreferences(): Promise<DesktopAppPreferencesState>;

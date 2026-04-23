@@ -59,6 +59,13 @@ const desktopBridge = {
     canArchiveThreads?: boolean;
     canRemove?: boolean;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-conversation-cwd-group-context-menu`, input),
+  showKnowledgeEntryContextMenu: (input: {
+    x: number;
+    y: number;
+    canRename?: boolean;
+    canMove?: boolean;
+    canDelete?: boolean;
+  }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:show-knowledge-entry-context-menu`, input),
   showSelectionContextMenu: (input: {
     x: number;
     y: number;

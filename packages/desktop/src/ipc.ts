@@ -1,6 +1,7 @@
 import { ipcMain, shell, type WebContents } from 'electron';
 import { showConversationContextMenu } from './conversation-context-menu.js';
 import { showConversationCwdGroupContextMenu } from './conversation-cwd-group-context-menu.js';
+import { showKnowledgeEntryContextMenu } from './knowledge-entry-context-menu.js';
 import { showSelectionContextMenu } from './selection-context-menu.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopWindowController } from './window.js';
@@ -152,6 +153,10 @@ export function registerDesktopIpc(options: {
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-cwd-group-context-menu`, async (event, input) => {
     return showConversationCwdGroupContextMenu(event.sender, input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:show-knowledge-entry-context-menu`, async (event, input) => {
+    return showKnowledgeEntryContextMenu(event.sender, input ?? {});
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:show-selection-context-menu`, async (event, input) => {

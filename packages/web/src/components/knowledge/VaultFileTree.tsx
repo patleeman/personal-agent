@@ -11,12 +11,14 @@ import {
 import {
   FileTree as TreesModel,
   type ContextMenuItem as FileTreeContextMenuItem,
+  type ContextMenuOpenContext as FileTreeContextMenuOpenContext,
   type FileTreeDropContext,
   type FileTreeDropResult,
   type FileTreeRenameEvent,
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { api, vaultApi } from '../../client/api';
+import { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge } from '../../desktop/desktopBridge';
 import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
 import { useApi } from '../../hooks/useApi';
 import { getKnowledgeBaseSyncPresentation } from '../../knowledge/knowledgeBaseSyncStatus';
@@ -580,6 +582,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const recentlyClosedFileIdsRef = useRef<string[]>(readStoredRecentlyClosedFileIds());
   const expandedFolderIdsRef = useRef<Set<string>>(readStoredExpandedFolderIds());
   const visibleExpandedFolderIdsRef = useRef<Set<string>>(new Set(expandedFolderIdsRef.current));
+  const initialActiveFileIdRef = useRef(activeFileId);
   const activeFileIdRef = useRef(activeFileId);
   const entryMapRef = useRef<Map<string, VaultEntry>>(new Map());
   const folderIdsRef = useRef<string[]>([]);
@@ -591,6 +594,8 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
+  const nativeKnowledgeContextMenuRef = useRef(Boolean(getDesktopBridge()?.showKnowledgeEntryContextMenu));
+  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
   const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
   const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
   const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
@@ -600,16 +605,23 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     error: knowledgeBaseError,
     refetch: refetchKnowledgeBase,
   } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
+  const useNativeKnowledgeContextMenu = nativeKnowledgeContextMenuRef.current;
 
   const model = useMemo(() => new TreesModel({
     paths: [],
     search: false,
     initialExpandedPaths: [...expandedFolderIdsRef.current],
-    initialSelectedPaths: activeFileId ? [activeFileId] : [],
+    initialSelectedPaths: initialActiveFileIdRef.current ? [initialActiveFileIdRef.current] : [],
     composition: {
-      contextMenu: {
-        triggerMode: 'right-click',
-      },
+      contextMenu: useNativeKnowledgeContextMenu
+        ? {
+            enabled: true,
+            triggerMode: 'right-click',
+            onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
+          }
+        : {
+            triggerMode: 'right-click',
+          },
     },
     onSelectionChange: (paths) => selectionChangeRef.current(paths),
     renaming: {
@@ -622,7 +634,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         console.error('knowledge tree drop failed', error);
       },
     },
-  }), []);
+  }), [useNativeKnowledgeContextMenu]);
 
   const entryMap = useMemo(() => new Map(entries.map((entry) => [entry.id, entry])), [entries]);
   const folderIds = useMemo(() => entries.filter((entry) => entry.kind === 'folder').map((entry) => entry.id), [entries]);
@@ -856,6 +868,31 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     }
   }, []);
 
+  const runKnowledgeContextMenuAction = useCallback(async (
+    action: DesktopKnowledgeEntryContextMenuAction | null,
+    entry: VaultEntry,
+    context: FileTreeContextMenuOpenContext,
+  ) => {
+    switch (action) {
+      case 'rename':
+        context.close({ restoreFocus: false });
+        window.setTimeout(() => {
+          model.startRenaming(entry.id);
+        }, 0);
+        return;
+      case 'move':
+        context.close();
+        setMoveEntry(entry);
+        return;
+      case 'delete':
+        context.close();
+        await handleDelete(entry);
+        return;
+      default:
+        context.close();
+    }
+  }, [handleDelete, model]);
+
   const handleOpenFileClose = useCallback((id: string) => {
     const normalizedId = id.trim();
     if (!normalizedId) {
@@ -954,6 +991,32 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       void handleRename(event);
     };
   }, [handleRename]);
+
+  useEffect(() => {
+    nativeContextMenuOpenRef.current = (item, context) => {
+      const desktopBridge = getDesktopBridge();
+      if (!desktopBridge?.showKnowledgeEntryContextMenu) {
+        context.close();
+        return;
+      }
+
+      const entry = entryMapRef.current.get(item.path)
+        ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+
+      void desktopBridge.showKnowledgeEntryContextMenu({
+        x: context.anchorRect.x,
+        y: context.anchorRect.y,
+        canRename: true,
+        canMove: true,
+        canDelete: true,
+      })
+        .then(({ action }) => runKnowledgeContextMenuAction(action, entry, context))
+        .catch((error) => {
+          console.error('failed to open native knowledge context menu', error);
+          context.close();
+        });
+    };
+  }, [runKnowledgeContextMenuAction]);
 
   useEffect(() => {
     canDropRef.current = (event) => {
@@ -1266,29 +1329,31 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
               <TreesFileTree
                 className="h-full"
                 model={model}
-                renderContextMenu={(item: FileTreeContextMenuItem, context) => {
-                  const entry = entryMap.get(item.path)
-                    ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+                {...(!useNativeKnowledgeContextMenu ? {
+                  renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
+                    const entry = entryMap.get(item.path)
+                      ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
 
-                  return (
-                    <TreeContextMenu
-                      onRename={() => {
-                        context.close({ restoreFocus: false });
-                        window.setTimeout(() => {
-                          model.startRenaming(entry.id);
-                        }, 0);
-                      }}
-                      onMove={() => {
-                        context.close();
-                        setMoveEntry(entry);
-                      }}
-                      onDelete={() => {
-                        context.close();
-                        void handleDelete(entry);
-                      }}
-                    />
-                  );
-                }}
+                    return (
+                      <TreeContextMenu
+                        onRename={() => {
+                          context.close({ restoreFocus: false });
+                          window.setTimeout(() => {
+                            model.startRenaming(entry.id);
+                          }, 0);
+                        }}
+                        onMove={() => {
+                          context.close();
+                          setMoveEntry(entry);
+                        }}
+                        onDelete={() => {
+                          context.close();
+                          void handleDelete(entry);
+                        }}
+                      />
+                    );
+                  },
+                } : {})}
                 style={TREE_HOST_STYLE}
               />
             )}
