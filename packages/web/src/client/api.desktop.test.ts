@@ -96,7 +96,12 @@ describe('api desktop transport', () => {
     const readSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
     const readSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
     const readSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
-    const readModels = vi.fn().mockResolvedValue({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
+    const readModels = vi.fn().mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [{ id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 272_000 }],
+    });
     const updateModelPreferences = vi.fn().mockResolvedValue({ ok: true });
     const readModelProviders = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
     const saveModelProvider = vi.fn().mockResolvedValue({ providers: [{ id: 'openrouter', models: [] }] });
@@ -429,7 +434,12 @@ describe('api desktop transport', () => {
     expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
     expect(sessionMeta).toEqual({ id: 'conversation-1', title: 'Conversation 1' });
     expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
-    expect(models).toEqual({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: '', models: [] });
+    expect(models).toEqual({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [{ id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 272_000 }],
+    });
     expect(modelPreferenceUpdate).toEqual({ ok: true });
     expect(modelProviders).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
     expect(savedModelProvider).toEqual({ providers: [{ id: 'openrouter', models: [] }] });
@@ -1379,6 +1389,42 @@ describe('api desktop transport', () => {
       .mockResolvedValueOnce(createJsonResponse({ currentModel: 'http-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }] }));
     vi.stubGlobal('fetch', fetchMock);
     const readModels = vi.fn().mockRejectedValue(new Error('ipc failed'));
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+        }),
+        readModels,
+      },
+    });
+
+    const { api } = await import('./api');
+    const models = await api.models();
+
+    expect(readModels).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/models', { method: 'GET', cache: 'no-store' });
+    expect(models).toEqual({
+      currentModel: 'http-model',
+      currentThinkingLevel: 'medium',
+      currentServiceTier: '',
+      models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }],
+    });
+  });
+
+  it('falls back to HTTP when the local desktop bridge returns an empty model list', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'http-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readModels = vi.fn().mockResolvedValue({
+      currentModel: 'gpt-5.4',
+      currentThinkingLevel: 'high',
+      currentServiceTier: '',
+      models: [],
+    });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({

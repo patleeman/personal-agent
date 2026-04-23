@@ -279,7 +279,10 @@ export const api = {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       try {
-        return await desktopBridge.readModels();
+        const result = await desktopBridge.readModels();
+        if (Array.isArray(result?.models) && result.models.length > 0) {
+          return result;
+        }
       } catch {
         // Fall back to the local HTTP API when the desktop bridge model read fails.
       }
