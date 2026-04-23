@@ -654,7 +654,7 @@ function getStreamingStatusLabel(messages: MessageBlock[], isStreaming: boolean)
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
-function ArtifactToolBlock({
+const ArtifactToolBlock = memo(function ArtifactToolBlock({
   block,
   artifact,
   onOpenArtifact,
@@ -720,9 +720,9 @@ function ArtifactToolBlock({
       </div>
     </SurfacePanel>
   );
-}
+});
 
-function CheckpointToolBlock({
+const CheckpointToolBlock = memo(function CheckpointToolBlock({
   block,
   checkpoint,
   onOpenCheckpoint,
@@ -796,9 +796,9 @@ function CheckpointToolBlock({
       </div>
     </SurfacePanel>
   );
-}
+});
 
-function TerminalToolBlock({
+const TerminalToolBlock = memo(function TerminalToolBlock({
   block,
   onHydrateMessage,
   hydratingMessageBlockIds,
@@ -894,7 +894,7 @@ function TerminalToolBlock({
       </div>
     </div>
   );
-}
+});
 
 interface AskUserQuestionState {
   status: 'pending' | 'answered' | 'superseded';
@@ -2536,7 +2536,7 @@ function ToolBlock({
 
 // ── ThinkingBlock ─────────────────────────────────────────────────────────────
 
-function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'thinking' }>; autoOpen: boolean }) {
+const ThinkingBlock = memo(function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { type: 'thinking' }>; autoOpen: boolean }) {
   const [preference, setPreference] = useState<DisclosurePreference>('auto');
   const open = resolveDisclosureOpen(autoOpen, preference);
   const preview = useMemo(() => buildSummaryPreview(block.text, 1), [block.text]);
@@ -2564,11 +2564,11 @@ function ThinkingBlock({ block, autoOpen }: { block: Extract<MessageBlock, { typ
       )}
     </SurfacePanel>
   );
-}
+});
 
 // ── SubagentBlock ─────────────────────────────────────────────────────────────
 
-function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subagent' }> }) {
+const SubagentBlock = memo(function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subagent' }> }) {
   const [open, setOpen] = useState(false);
   const clr = { running: 'text-steel bg-steel/8 border-steel/20', complete: 'text-success bg-success/8 border-success/20', failed: 'text-danger bg-danger/8 border-danger/20' }[block.status];
   const tone = { running: 'steel', complete: 'success', failed: 'danger' }[block.status] as 'steel' | 'success' | 'danger';
@@ -2602,7 +2602,7 @@ function SubagentBlock({ block }: { block: Extract<MessageBlock, { type: 'subage
       )}
     </div>
   );
-}
+});
 
 function traceSummaryTone(category: TraceClusterSummaryCategory) {
   switch (category.kind) {
@@ -2962,7 +2962,7 @@ function ImagePreview({
   );
 }
 
-function ImageBlock({
+const ImageBlock = memo(function ImageBlock({
   block,
   onHydrateMessage,
   hydratingMessageBlockIds,
@@ -2991,7 +2991,7 @@ function ImageBlock({
       onInspect={onInspectImage}
     />
   );
-}
+});
 
 function ResumeConversationAction({
   onResume,
@@ -3043,7 +3043,7 @@ function ResumeConversationAction({
 
 // ── ErrorBlock ────────────────────────────────────────────────────────────────
 
-function ErrorBlock({
+const ErrorBlock = memo(function ErrorBlock({
   block,
   messageIndex,
   onResume,
@@ -3086,7 +3086,7 @@ function ErrorBlock({
       </div>
     </SurfacePanel>
   );
-}
+});
 
 // ── Message actions ───────────────────────────────────────────────────────────
 
@@ -3230,9 +3230,10 @@ function MsgActions({
 
 // ── UserMessage ───────────────────────────────────────────────────────────────
 
-function UserMessage({
+const UserMessage = memo(function UserMessage({
   block,
-  onRewind,
+  messageIndex,
+  onRewindMessage,
   onHydrateMessage,
   hydratingMessageBlockIds,
   onOpenFilePath,
@@ -3241,7 +3242,8 @@ function UserMessage({
   layout = 'default',
 }: {
   block: Extract<MessageBlock, { type: 'user' }>;
-  onRewind?: () => Promise<void> | void;
+  messageIndex?: number;
+  onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
   onOpenFilePath?: (path: string) => void;
@@ -3251,10 +3253,17 @@ function UserMessage({
 }) {
   const hasText = block.text.trim().length > 0;
   const skillBlock = hasText ? parseSkillBlock(block.text) : null;
+  const handleRewind = useCallback(() => {
+    if (typeof messageIndex !== 'number') {
+      return;
+    }
+
+    return onRewindMessage?.(messageIndex);
+  }, [messageIndex, onRewindMessage]);
 
   return (
     <div className="group flex flex-col items-end gap-1.5">
-      <MsgActions isUser onRewind={onRewind} />
+      <MsgActions isUser onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined} />
       <div className={layout === 'compact' ? 'max-w-[92%] sm:max-w-[88%]' : 'max-w-[86%]'}>
         <div className="ui-message-card-user space-y-2">
           {block.images && block.images.length > 0 && (
@@ -3297,15 +3306,15 @@ function UserMessage({
       </div>
     </div>
   );
-}
+});
 
 // ── AssistantMessage ──────────────────────────────────────────────────────────
 
-function AssistantMessage({
+const AssistantMessage = memo(function AssistantMessage({
   block,
   messageIndex,
-  onFork,
-  onRewind,
+  onForkMessage,
+  onRewindMessage,
   onOpenFilePath,
   onOpenCheckpoint,
   onSelectionGesture,
@@ -3314,8 +3323,8 @@ function AssistantMessage({
 }: {
   block: Extract<MessageBlock, { type: 'text' }>;
   messageIndex?: number;
-  onFork?: () => Promise<void> | void;
-  onRewind?: () => Promise<void> | void;
+  onForkMessage?: (messageIndex: number) => Promise<void> | void;
+  onRewindMessage?: (messageIndex: number) => Promise<void> | void;
   onOpenFilePath?: (path: string) => void;
   onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
@@ -3325,6 +3334,20 @@ function AssistantMessage({
   const shouldShowCursor = showCursor || !!block.streaming;
   const blockId = block.id?.trim() || undefined;
   const replySelectionScopeProps = buildReplySelectionScopeProps(messageIndex, blockId, onSelectionGesture);
+  const handleRewind = useCallback(() => {
+    if (typeof messageIndex !== 'number') {
+      return;
+    }
+
+    return onRewindMessage?.(messageIndex);
+  }, [messageIndex, onRewindMessage]);
+  const handleFork = useCallback(() => {
+    if (typeof messageIndex !== 'number') {
+      return;
+    }
+
+    return onForkMessage?.(messageIndex);
+  }, [messageIndex, onForkMessage]);
 
   return (
     <div className={cx('group flex items-start', layout === 'compact' ? 'gap-2.5' : 'gap-3')}>
@@ -3347,14 +3370,18 @@ function AssistantMessage({
         <div className="flex flex-wrap items-center gap-2 pt-0.5">
           <p className="ui-message-meta">{timeAgo(block.ts)}</p>
           <span className="flex-1" />
-          <MsgActions copyText={block.text} onRewind={onRewind} onFork={onFork} />
+          <MsgActions
+            copyText={block.text}
+            onRewind={onRewindMessage && typeof messageIndex === 'number' ? handleRewind : undefined}
+            onFork={onForkMessage && typeof messageIndex === 'number' ? handleFork : undefined}
+          />
         </div>
       </div>
     </div>
   );
-}
+});
 
-function ContextMessage({
+const ContextMessage = memo(function ContextMessage({
   block,
   messageIndex,
   onOpenFilePath,
@@ -3388,7 +3415,7 @@ function ContextMessage({
       </div>
     </div>
   );
-}
+});
 
 function resolveCompactionSummaryLabel(title: string | undefined): string {
   const normalized = title?.trim();
@@ -3419,7 +3446,7 @@ function resolveCompactionSummaryDetail(title: string | undefined, extraDetail?:
     : baseDetail;
 }
 
-function SummaryMessage({
+const SummaryMessage = memo(function SummaryMessage({
   block,
   messageIndex,
   onOpenFilePath,
@@ -3517,7 +3544,7 @@ function SummaryMessage({
       </SurfacePanel>
     </div>
   );
-}
+});
 
 function StreamingIndicator({ label }: { label: string }) {
   return (
@@ -4355,7 +4382,8 @@ export const ChatView = memo(function ChatView({
           return (
             <UserMessage
               block={block}
-              onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
+              messageIndex={absoluteIndex}
+              onRewindMessage={onRewindMessage}
               onHydrateMessage={onHydrateMessage}
               hydratingMessageBlockIds={hydratingMessageBlockIds}
               onOpenFilePath={onOpenFilePath}
@@ -4370,8 +4398,8 @@ export const ChatView = memo(function ChatView({
               block={block}
               messageIndex={absoluteIndex}
               showCursor={showStreamingCursor}
-              onRewind={onRewindMessage ? () => onRewindMessage(absoluteIndex) : undefined}
-              onFork={onForkMessage ? () => onForkMessage(absoluteIndex) : undefined}
+              onRewindMessage={onRewindMessage}
+              onForkMessage={onForkMessage}
               onOpenFilePath={onOpenFilePath}
               onOpenCheckpoint={onOpenCheckpoint}
               onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
