@@ -392,7 +392,7 @@ describe('model routes', () => {
     return files;
   }
 
-  it('serves model state, including the built-in fallback path', () => {
+  it('serves model state, returning only live models unless the registry throws', () => {
     const desktop = createDesktopHarness(allocateFiles());
 
     const desktopRes = createResponse();
@@ -405,13 +405,25 @@ describe('model routes', () => {
       models: [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     });
 
-    getAvailableModelsMock.mockImplementation(() => {
-      throw new Error('registry unavailable');
-    });
+    getAvailableModelsMock.mockReturnValue([]);
     normalizeSavedModelPreferencesMock.mockReturnValue({
       currentModel: 'missing-model',
       currentThinkingLevel: 'medium',
       currentServiceTier: '',
+    });
+
+    const emptyRes = createResponse();
+    desktop.getHandler('/api/models')(createRequest(), emptyRes);
+
+    expect(emptyRes.json).toHaveBeenCalledWith({
+      currentModel: '',
+      currentThinkingLevel: 'medium',
+      currentServiceTier: '',
+      models: [],
+    });
+
+    getAvailableModelsMock.mockImplementation(() => {
+      throw new Error('registry unavailable');
     });
 
     const fallbackRes = createResponse();

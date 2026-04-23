@@ -17,24 +17,20 @@ const BUILT_IN_MODELS = [
 
 export function listModelDefinitions() {
   try {
-    const live = getAvailableModels();
-    if (live.length > 0) {
-      return live.map((model) => ({
-        id: model.id,
-        provider: model.provider,
-        name: model.name,
-        context: model.contextWindow ?? model.context ?? 128_000,
-        supportedServiceTiers: getSupportedServiceTiersForModel(model),
-      }));
-    }
+    return getAvailableModels().map((model) => ({
+      id: model.id,
+      provider: model.provider,
+      name: model.name,
+      context: model.contextWindow ?? model.context ?? 128_000,
+      supportedServiceTiers: getSupportedServiceTiersForModel(model),
+    }));
   } catch {
-    // Fall back to built-ins when the live registry cannot be materialized.
+    // Fall back to built-ins only when the live registry cannot be materialized.
+    return BUILT_IN_MODELS.map((model) => ({
+      ...model,
+      supportedServiceTiers: getSupportedServiceTiersForModel(model),
+    }));
   }
-
-  return BUILT_IN_MODELS.map((model) => ({
-    ...model,
-    supportedServiceTiers: getSupportedServiceTiersForModel(model),
-  }));
 }
 
 export function readModelState(settingsFile: string) {
