@@ -57,6 +57,16 @@ For day-to-day managed service mode:
 pa ui install
 ```
 
+### Browser validation in this repo
+
+When you validate the local web UI with `agent-browser`, use the repo wrapper so Playwright sessions do not pile up:
+
+```bash
+npm run ab:run -- --session smoke-check --command "ab open http://127.0.0.1:3741 && ab wait 1000 && ab snapshot -i"
+```
+
+See [Agent Browser in this repo](./agent-browser.md).
+
 ### Desktop shell
 
 ```bash
@@ -125,3 +135,4 @@ The environment variable wins.
 2. [How personal-agent works](./how-it-works.md)
 3. [Knowledge System](./knowledge-system.md)
 4. [Web UI Guide](./web-ui.md)
+5. [Agent Browser in this repo](./agent-browser.md)

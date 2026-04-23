@@ -39,7 +39,9 @@
     "doctor": "node packages/cli/dist/index.js doctor",
     "profile:list": "node packages/cli/dist/index.js profile list",
     "daemon": "node packages/daemon/dist/index.js",
-    "validate:projects": "node scripts/validate-projects.mjs"
+    "validate:projects": "node scripts/validate-projects.mjs",
+    "ab:run": "node scripts/agent-browser-session.mjs run",
+    "ab:cleanup": "node scripts/agent-browser-session.mjs cleanup"
   },
   "devDependencies": {
     "@types/jsdom": "^28.0.1",

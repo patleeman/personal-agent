@@ -12,7 +12,7 @@ This is personal software, built for Patrick by Patrick.
 ## Always validate your work!
 
 - After you complete a feature, make sure you actually inspect your work. 
-- If you're working in the web-ui, ppin up the UI on a separate port and use the agent-browser CLI tool to inspect and interact with your changes. Read the agent-browser skill for more information.
+- If you're working in the web-ui, spin up the UI on a separate port and use the repo wrapper `npm run ab:run -- --session <name> --command "ab ..."` instead of raw `agent-browser` so sessions always close cleanly. See `docs/agent-browser.md` and the agent-browser skill for more information.
 - Make sure the work is complete, to spec, works without bugs, and looks good.
 
 ## UI Design Bans
