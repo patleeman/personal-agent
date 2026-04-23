@@ -489,6 +489,8 @@ describe('ConversationPage', () => {
     expect(html).toContain('Saved workspace');
     expect(html).toContain('Use saved default workspace');
     expect(html).toContain('Choose workspace folder');
+    expect(html).toContain('max-w-[38rem] text-left');
+    expect(html).not.toContain('max-w-[72rem] text-left');
     expect(html).toContain('More composer settings');
     expect(html).not.toContain('Browse…');
     expect(html).not.toContain('Start typing to create a conversation.');

@@ -821,6 +821,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
 }
 
 const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+const DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS = 'max-w-[38rem]';
 const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
 function FolderIcon({ className }: { className?: string }) {
@@ -7190,7 +7191,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           <AppPageEmptyState
             align={draft ? 'start' : 'center'}
             className={draft ? 'px-4 pt-12 sm:px-6' : undefined}
-            contentClassName={draft ? 'max-w-[72rem] text-left' : undefined}
+            contentClassName={draft ? `${DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS} text-left` : undefined}
             icon={draft ? undefined : (
               <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
@@ -7205,7 +7206,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
             action={draft ? (
-              <div className="mx-auto mt-4 w-full max-w-[72rem] space-y-3">
+              <div className="mt-4 w-full space-y-3">
                 <div className="flex items-center justify-start gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
                   <FolderIcon className="text-accent" />
                   <span>Workspace</span>
