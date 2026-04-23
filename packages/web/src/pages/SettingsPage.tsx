@@ -1479,19 +1479,63 @@ export function SettingsPage() {
       return undefined;
     }
 
+    const sections = visibleQuickLinks
+      .map((item) => {
+        const section = container.querySelector<HTMLElement>(`#${item.id}`);
+        return section ? { id: item.id, section } : null;
+      })
+      .filter((item): item is { id: SettingsQuickLinkId; section: HTMLElement } => item !== null);
+    if (sections.length === 0) {
+      return undefined;
+    }
+
+    if (typeof IntersectionObserver !== 'undefined') {
+      const visibleIds = new Set<SettingsQuickLinkId>();
+      const updateActiveQuickLink = () => {
+        let nextId = sections[0].id;
+        for (const item of sections) {
+          if (visibleIds.has(item.id)) {
+            nextId = item.id;
+          }
+        }
+
+        setActiveQuickLinkId((current) => (current === nextId ? current : nextId));
+      };
+
+      const observer = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          const sectionId = entry.target.id as SettingsQuickLinkId;
+          if (entry.isIntersecting) {
+            visibleIds.add(sectionId);
+          } else {
+            visibleIds.delete(sectionId);
+          }
+        }
+
+        updateActiveQuickLink();
+      }, {
+        root: container,
+        rootMargin: '-96px 0px -60% 0px',
+        threshold: 0,
+      });
+
+      for (const item of sections) {
+        observer.observe(item.section);
+      }
+
+      return () => {
+        observer.disconnect();
+      };
+    }
+
     let frame: number | null = null;
     const updateActiveQuickLink = () => {
       frame = null;
       const containerTop = container.getBoundingClientRect().top;
-      let nextId = visibleQuickLinks[0].id;
+      let nextId = sections[0].id;
 
-      for (const item of visibleQuickLinks) {
-        const section = container.querySelector<HTMLElement>(`#${item.id}`);
-        if (!section) {
-          continue;
-        }
-
-        if (section.getBoundingClientRect().top - containerTop <= 96) {
+      for (const item of sections) {
+        if (item.section.getBoundingClientRect().top - containerTop <= 96) {
           nextId = item.id;
         }
       }
@@ -2583,7 +2627,7 @@ export function SettingsPage() {
   function navigateToSection(sectionId: SettingsQuickLinkId) {
     setActiveQuickLinkId(sectionId);
     const section = settingsScrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
-    section?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    section?.scrollIntoView({ block: 'start' });
   }
 
   return (

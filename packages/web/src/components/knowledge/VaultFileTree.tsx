@@ -18,7 +18,6 @@ import {
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { api, vaultApi } from '../../client/api';
-import { type DesktopKnowledgeEntryContextMenuAction, getDesktopBridge } from '../../desktop/desktopBridge';
 import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
 import { useApi } from '../../hooks/useApi';
 import { getKnowledgeBaseSyncPresentation } from '../../knowledge/knowledgeBaseSyncStatus';
@@ -105,6 +104,9 @@ const TREE_HOST_STYLE = {
 const MIN_TREE_HOST_HEIGHT = 120;
 const OPEN_FILES_SECTION_RESIZE_STEP = 24;
 const OPEN_FILES_SECTION_RESIZER_HEIGHT = 8;
+// Native desktop right-click menus are currently causing visible hangs on the
+// knowledge tree. Keep the in-app menu until the native path is fixed.
+const USE_NATIVE_KNOWLEDGE_CONTEXT_MENU = false;
 
 export interface FileTreeProps {
   activeFileId: string | null;
@@ -608,8 +610,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-  const nativeKnowledgeContextMenuRef = useRef(Boolean(getDesktopBridge()?.showKnowledgeEntryContextMenu));
-  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
+  const useNativeKnowledgeContextMenu = USE_NATIVE_KNOWLEDGE_CONTEXT_MENU;
   const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
   const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
   const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
@@ -619,8 +620,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     error: knowledgeBaseError,
     refetch: refetchKnowledgeBase,
   } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
-  const useNativeKnowledgeContextMenu = nativeKnowledgeContextMenuRef.current;
-
   const model = useMemo(() => new TreesModel({
     paths: [],
     search: false,
@@ -631,7 +630,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         ? {
             enabled: true,
             triggerMode: 'right-click',
-            onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
           }
         : {
             triggerMode: 'right-click',
@@ -889,31 +887,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     }
   }, []);
 
-  const runKnowledgeContextMenuAction = useCallback(async (
-    action: DesktopKnowledgeEntryContextMenuAction | null,
-    entry: VaultEntry,
-    context: FileTreeContextMenuOpenContext,
-  ) => {
-    switch (action) {
-      case 'rename':
-        context.close({ restoreFocus: false });
-        window.setTimeout(() => {
-          model.startRenaming(entry.id);
-        }, 0);
-        return;
-      case 'move':
-        context.close();
-        setMoveEntry(entry);
-        return;
-      case 'delete':
-        context.close();
-        await handleDelete(entry);
-        return;
-      default:
-        context.close();
-    }
-  }, [handleDelete, model]);
-
   const handleOpenFileClose = useCallback((id: string) => {
     const normalizedId = id.trim();
     if (!normalizedId) {
@@ -1012,32 +985,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       void handleRename(event);
     };
   }, [handleRename]);
-
-  useEffect(() => {
-    nativeContextMenuOpenRef.current = (item, context) => {
-      const desktopBridge = getDesktopBridge();
-      if (!desktopBridge?.showKnowledgeEntryContextMenu) {
-        context.close();
-        return;
-      }
-
-      const entry = entryMapRef.current.get(item.path)
-        ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
-
-      void desktopBridge.showKnowledgeEntryContextMenu({
-        x: context.anchorRect.x,
-        y: context.anchorRect.y,
-        canRename: true,
-        canMove: true,
-        canDelete: true,
-      })
-        .then(({ action }) => runKnowledgeContextMenuAction(action, entry, context))
-        .catch((error) => {
-          console.error('failed to open native knowledge context menu', error);
-          context.close();
-        });
-    };
-  }, [runKnowledgeContextMenuAction]);
 
   useEffect(() => {
     canDropRef.current = (event) => {
