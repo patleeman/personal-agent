@@ -236,6 +236,46 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
 
+    func testConversationPresencePresentationBlocksComposerWhenAnotherSurfaceControls() {
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let state = LiveSessionPresenceState(
+            surfaces: [
+                .init(surfaceId: "desktop-1", surfaceType: "desktop_app", connectedAt: now),
+                .init(surfaceId: "ios-test", surfaceType: "ios_native", connectedAt: now),
+            ],
+            controllerSurfaceId: "desktop-1",
+            controllerSurfaceType: "desktop_app",
+            controllerAcquiredAt: now
+        )
+
+        let presentation = ConversationPresencePresentation(state: state, installationSurfaceId: "ios-test")
+
+        XCTAssertTrue(presentation.shouldDisplay)
+        XCTAssertTrue(presentation.shouldBlockComposer)
+        XCTAssertTrue(presentation.controllingElsewhere)
+        XCTAssertFalse(presentation.controllingHere)
+    }
+
+    func testConversationPresencePresentationKeepsComposerWhenThisPhoneControls() {
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let state = LiveSessionPresenceState(
+            surfaces: [
+                .init(surfaceId: "desktop-1", surfaceType: "desktop_app", connectedAt: now),
+                .init(surfaceId: "ios-test", surfaceType: "ios_native", connectedAt: now),
+            ],
+            controllerSurfaceId: "ios-test",
+            controllerSurfaceType: "ios_native",
+            controllerAcquiredAt: now
+        )
+
+        let presentation = ConversationPresencePresentation(state: state, installationSurfaceId: "ios-test")
+
+        XCTAssertTrue(presentation.shouldDisplay)
+        XCTAssertFalse(presentation.shouldBlockComposer)
+        XCTAssertFalse(presentation.controllingElsewhere)
+        XCTAssertTrue(presentation.controllingHere)
+    }
+
     func testPromptSendClearsComposerAndAddsBlocks() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

@@ -33,6 +33,12 @@ struct ConversationScreen: View {
         viewModel.promptText.trimmed.nilIfBlank != nil || !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty
     }
 
+    private var presencePresentation: ConversationPresencePresentation? {
+        viewModel.presenceState.map {
+            ConversationPresencePresentation(state: $0, installationSurfaceId: viewModel.installationSurfaceId)
+        }
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -47,11 +53,9 @@ struct ConversationScreen: View {
                         )
                     }
 
-                    if let presenceState = viewModel.presenceState,
-                       PresenceBannerView.shouldDisplay(state: presenceState, installationSurfaceId: viewModel.installationSurfaceId) {
+                    if let presencePresentation, presencePresentation.shouldDisplay {
                         PresenceBannerView(
-                            state: presenceState,
-                            installationSurfaceId: viewModel.installationSurfaceId,
+                            presentation: presencePresentation,
                             onTakeOver: viewModel.takeOver
                         )
                     }
@@ -292,115 +296,122 @@ struct ConversationScreen: View {
 
     private var composer: some View {
         VStack(spacing: 10) {
-            if !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    if !viewModel.promptImages.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 10) {
-                                ForEach(viewModel.promptImages) { image in
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        if let uiImage = UIImage(data: image.previewData) {
-                                            Image(uiImage: uiImage)
-                                                .resizable()
-                                                .scaledToFill()
-                                                .frame(width: 92, height: 68)
-                                                .clipShape(RoundedRectangle(cornerRadius: 10))
+            if let presencePresentation, presencePresentation.shouldBlockComposer {
+                TakeOverComposerView(
+                    summary: presencePresentation.summary,
+                    onTakeOver: viewModel.takeOver
+                )
+            } else {
+                if !viewModel.promptImages.isEmpty || !viewModel.promptAttachmentRefs.isEmpty {
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !viewModel.promptImages.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    ForEach(viewModel.promptImages) { image in
+                                        VStack(alignment: .leading, spacing: 6) {
+                                            if let uiImage = UIImage(data: image.previewData) {
+                                                Image(uiImage: uiImage)
+                                                    .resizable()
+                                                    .scaledToFill()
+                                                    .frame(width: 92, height: 68)
+                                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                                            }
+                                            HStack {
+                                                Text(image.name)
+                                                    .font(.caption2)
+                                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                                    .lineLimit(1)
+                                                Spacer(minLength: 4)
+                                                Button(role: .destructive) {
+                                                    viewModel.removePromptImage(image.id)
+                                                } label: {
+                                                    Image(systemName: "xmark.circle.fill")
+                                                }
+                                                .buttonStyle(.plain)
+                                            }
                                         }
-                                        HStack {
-                                            Text(image.name)
-                                                .font(.caption2)
-                                                .foregroundStyle(CompanionTheme.textPrimary)
+                                        .frame(width: 96)
+                                    }
+                                }
+                                .padding(.horizontal, 16)
+                            }
+                        }
+
+                        if !viewModel.promptAttachmentRefs.isEmpty {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(viewModel.promptAttachmentRefs) { ref in
+                                        HStack(spacing: 6) {
+                                            Image(systemName: "scribble.variable")
+                                            Text(ref.title)
                                                 .lineLimit(1)
-                                            Spacer(minLength: 4)
-                                            Button(role: .destructive) {
-                                                viewModel.removePromptImage(image.id)
+                                            Button {
+                                                viewModel.removeAttachmentReference(ref.id)
                                             } label: {
                                                 Image(systemName: "xmark.circle.fill")
                                             }
                                             .buttonStyle(.plain)
                                         }
-                                    }
-                                    .frame(width: 96)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                        }
-                    }
-
-                    if !viewModel.promptAttachmentRefs.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(viewModel.promptAttachmentRefs) { ref in
-                                    HStack(spacing: 6) {
-                                        Image(systemName: "scribble.variable")
-                                        Text(ref.title)
-                                            .lineLimit(1)
-                                        Button {
-                                            viewModel.removeAttachmentReference(ref.id)
-                                        } label: {
-                                            Image(systemName: "xmark.circle.fill")
+                                        .font(.caption)
+                                        .foregroundStyle(CompanionTheme.textPrimary)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(CompanionTheme.panelRaised, in: Capsule())
+                                        .overlay {
+                                            Capsule()
+                                                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                                         }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .font(.caption)
-                                    .foregroundStyle(CompanionTheme.textPrimary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(CompanionTheme.panelRaised, in: Capsule())
-                                    .overlay {
-                                        Capsule()
-                                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                                     }
                                 }
+                                .padding(.horizontal, 16)
                             }
-                            .padding(.horizontal, 16)
                         }
                     }
                 }
-            }
 
-            HStack(alignment: .bottom, spacing: 12) {
-                HStack(alignment: .bottom, spacing: 10) {
-                    Menu {
-                        Button {
-                            showingPhotoLibraryPicker = true
+                HStack(alignment: .bottom, spacing: 12) {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        Menu {
+                            Button {
+                                showingPhotoLibraryPicker = true
+                            } label: {
+                                Label("Photo library", systemImage: "photo.on.rectangle")
+                            }
+                            Button {
+                                showingImageFileImporter = true
+                            } label: {
+                                Label("Image file", systemImage: "folder.badge.plus")
+                            }
+                            Button {
+                                showingAttachments = true
+                            } label: {
+                                Label("Saved drawing", systemImage: "paperclip")
+                            }
                         } label: {
-                            Label("Photo library", systemImage: "photo.on.rectangle")
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(CompanionTheme.accent)
+                                .frame(width: 28, height: 28)
                         }
-                        Button {
-                            showingImageFileImporter = true
-                        } label: {
-                            Label("Image file", systemImage: "folder.badge.plus")
-                        }
-                        Button {
-                            showingAttachments = true
-                        } label: {
-                            Label("Saved drawing", systemImage: "paperclip")
-                        }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(CompanionTheme.accent)
-                            .frame(width: 28, height: 28)
+
+                        TextField("Message", text: $viewModel.promptText, axis: .vertical)
+                            .lineLimit(1...6)
+                            .foregroundStyle(CompanionTheme.textPrimary)
+                    }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
                     }
 
-                    TextField("Message", text: $viewModel.promptText, axis: .vertical)
-                        .lineLimit(1...6)
-                        .foregroundStyle(CompanionTheme.textPrimary)
+                    composerActions
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
-                .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(CompanionTheme.panelBorder, lineWidth: 1)
-                }
-
-                composerActions
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 14)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
-            .padding(.bottom, 14)
         }
         .background(CompanionTheme.panel)
         .overlay(alignment: .top) {
@@ -1219,30 +1230,30 @@ private struct ConversationBlockView: View {
     }
 }
 
-private struct PresenceBannerView: View {
+struct ConversationPresencePresentation {
     let state: LiveSessionPresenceState
     let installationSurfaceId: String
-    let onTakeOver: () -> Void
 
-    static func shouldDisplay(state: LiveSessionPresenceState, installationSurfaceId: String) -> Bool {
-        if let controller = state.controllerSurfaceId?.nilIfBlank, controller != installationSurfaceId {
-            return true
+    var controllingHere: Bool {
+        state.controllerSurfaceId?.nilIfBlank == installationSurfaceId
+    }
+
+    var controllingElsewhere: Bool {
+        guard let controller = state.controllerSurfaceId?.nilIfBlank else {
+            return false
         }
-        return state.surfaces.count > 1
+        return controller != installationSurfaceId
     }
 
-    private var controllingHere: Bool {
-        state.controllerSurfaceId == installationSurfaceId
+    var shouldDisplay: Bool {
+        controllingElsewhere || state.surfaces.count > 1
     }
 
-    private var controllingElsewhere: Bool {
-        if let controller = state.controllerSurfaceId?.nilIfBlank {
-            return controller != installationSurfaceId
-        }
-        return false
+    var shouldBlockComposer: Bool {
+        controllingElsewhere
     }
 
-    private var summary: String {
+    var summary: String {
         if controllingHere {
             return state.surfaces.count > 1
                 ? "This phone controls the conversation. \(state.surfaces.count) surfaces are connected."
@@ -1257,16 +1268,21 @@ private struct PresenceBannerView: View {
             ? "1 surface is connected."
             : "\(state.surfaces.count) surfaces are connected."
     }
+}
+
+private struct PresenceBannerView: View {
+    let presentation: ConversationPresencePresentation
+    let onTakeOver: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: controllingHere ? "hand.raised.fill" : "person.2")
-                .foregroundStyle(controllingElsewhere ? .orange : CompanionTheme.accent)
-            Text(summary)
+            Image(systemName: presentation.controllingHere ? "hand.raised.fill" : "person.2")
+                .foregroundStyle(presentation.controllingElsewhere ? .orange : CompanionTheme.accent)
+            Text(presentation.summary)
                 .font(.footnote)
                 .foregroundStyle(CompanionTheme.textSecondary)
             Spacer()
-            if controllingElsewhere {
+            if presentation.controllingElsewhere {
                 Button("Take over") {
                     onTakeOver()
                 }
@@ -1274,11 +1290,47 @@ private struct PresenceBannerView: View {
             }
         }
         .padding(12)
-        .background(controllingElsewhere ? Color.orange.opacity(0.08) : CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(presentation.controllingElsewhere ? Color.orange.opacity(0.08) : CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(controllingElsewhere ? Color.orange.opacity(0.18) : CompanionTheme.panelBorder, lineWidth: 1)
+                .stroke(presentation.controllingElsewhere ? Color.orange.opacity(0.18) : CompanionTheme.panelBorder, lineWidth: 1)
         }
+    }
+}
+
+private struct TakeOverComposerView: View {
+    let summary: String
+    let onTakeOver: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "hand.raised.fill")
+                    .foregroundStyle(.orange)
+                    .padding(.top, 2)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Take over to reply from this phone")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textPrimary)
+                    Text(summary)
+                        .font(.footnote)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            Button(action: onTakeOver) {
+                Label("Take over here", systemImage: "hand.raised.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 14)
     }
 }
 
