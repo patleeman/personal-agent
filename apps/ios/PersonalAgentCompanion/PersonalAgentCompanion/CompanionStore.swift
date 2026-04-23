@@ -1652,6 +1652,8 @@ final class ConversationViewModel: ObservableObject {
     let conversationId: String
     let installationSurfaceId: String
 
+    private static let bootstrapTailBlocks = ConversationBootstrapRequestOptions.defaultTailBlocks
+
     private let client: CompanionClientProtocol
     private let autoStartRunningSimulation: Bool
     private var didAutoStartRunningSimulation = false
@@ -1703,7 +1705,10 @@ final class ConversationViewModel: ObservableObject {
             isLoading = true
             defer { isLoading = false }
             do {
-                let envelope = try await client.conversationBootstrap(conversationId: conversationId)
+                let envelope = try await client.conversationBootstrap(
+                    conversationId: conversationId,
+                    options: ConversationBootstrapRequestOptions(tailBlocks: Self.bootstrapTailBlocks)
+                )
                 errorMessage = nil
                 applyBootstrap(envelope)
             } catch {

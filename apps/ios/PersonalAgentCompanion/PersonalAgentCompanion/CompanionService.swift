@@ -20,7 +20,7 @@ protocol CompanionClientProtocol: AnyObject {
     func deleteSshTarget(targetId: String) async throws -> CompanionSshTargetState
     func testSshTarget(sshTarget: String) async throws -> CompanionSshTargetTestResult
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing
-    func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope
+    func conversationBootstrap(conversationId: String, options: ConversationBootstrapRequestOptions) async throws -> ConversationBootstrapEnvelope
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope
     func resumeConversation(_ input: ResumeConversationRequest) async throws -> ConversationBootstrapEnvelope
     func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws
@@ -70,6 +70,36 @@ protocol CompanionClientProtocol: AnyObject {
     func deletePairedDevice(deviceId: String) async throws -> CompanionDeviceAdminState
     func subscribeAppEvents() async throws -> AsyncStream<CompanionAppEvent>
     func subscribeConversationEvents(conversationId: String, surfaceId: String) async throws -> AsyncStream<CompanionConversationEvent>
+}
+
+struct ConversationBootstrapRequestOptions: Equatable {
+    static let defaultTailBlocks = 120
+
+    let tailBlocks: Int?
+    let knownSessionSignature: String?
+    let knownBlockOffset: Int?
+    let knownTotalBlocks: Int?
+    let knownLastBlockId: String?
+
+    init(
+        tailBlocks: Int? = nil,
+        knownSessionSignature: String? = nil,
+        knownBlockOffset: Int? = nil,
+        knownTotalBlocks: Int? = nil,
+        knownLastBlockId: String? = nil
+    ) {
+        self.tailBlocks = tailBlocks
+        self.knownSessionSignature = knownSessionSignature
+        self.knownBlockOffset = knownBlockOffset
+        self.knownTotalBlocks = knownTotalBlocks
+        self.knownLastBlockId = knownLastBlockId
+    }
+}
+
+extension CompanionClientProtocol {
+    func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
+        try await conversationBootstrap(conversationId: conversationId, options: ConversationBootstrapRequestOptions())
+    }
 }
 
 struct AttachmentAssetDownload: Equatable {
@@ -316,8 +346,24 @@ final class LiveCompanionClient: CompanionClientProtocol {
         return try await authorizedJSON(path: endpoint, method: "GET", body: nil, decode: CompanionRemoteDirectoryListing.self)
     }
 
-    func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
-        try await sendCommand(name: "conversation.bootstrap", payload: ["conversationId": conversationId], as: ConversationBootstrapEnvelope.self)
+    func conversationBootstrap(conversationId: String, options: ConversationBootstrapRequestOptions) async throws -> ConversationBootstrapEnvelope {
+        var payload: [String: Any] = ["conversationId": conversationId]
+        if let tailBlocks = options.tailBlocks, tailBlocks > 0 {
+            payload["tailBlocks"] = tailBlocks
+        }
+        if let knownSessionSignature = options.knownSessionSignature.nilIfBlank {
+            payload["knownSessionSignature"] = knownSessionSignature
+        }
+        if let knownBlockOffset = options.knownBlockOffset, knownBlockOffset >= 0 {
+            payload["knownBlockOffset"] = knownBlockOffset
+        }
+        if let knownTotalBlocks = options.knownTotalBlocks, knownTotalBlocks >= 0 {
+            payload["knownTotalBlocks"] = knownTotalBlocks
+        }
+        if let knownLastBlockId = options.knownLastBlockId.nilIfBlank {
+            payload["knownLastBlockId"] = knownLastBlockId
+        }
+        return try await sendCommand(name: "conversation.bootstrap", payload: payload, as: ConversationBootstrapEnvelope.self)
     }
 
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope {
@@ -806,7 +852,7 @@ final class LiveCompanionClient: CompanionClientProtocol {
                         _ = try await self.sendMessageAndDecode(topic: "conversation", key: conversationId, payload: [
                             "surfaceId": surfaceId,
                             "surfaceType": "ios_native",
-                            "tailBlocks": 200,
+                            "tailBlocks": ConversationBootstrapRequestOptions.defaultTailBlocks,
                         ], type: "subscribe", as: Subscribed.self)
                     } catch {
                         continuation.yield(.error(error.localizedDescription))
@@ -1281,6 +1327,7 @@ private struct MockCompanionSeed {
 final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
     var supportsRunningConversationSimulation: Bool { true }
+    private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
 
     private var listState: ConversationListState
     private var conversations: [String: ConversationBootstrapEnvelope]
@@ -2075,7 +2122,8 @@ final class MockCompanionClient: CompanionClientProtocol {
         }
     }
 
-    func conversationBootstrap(conversationId: String) async throws -> ConversationBootstrapEnvelope {
+    func conversationBootstrap(conversationId: String, options: ConversationBootstrapRequestOptions) async throws -> ConversationBootstrapEnvelope {
+        lastConversationBootstrapOptions = options
         guard let value = conversations[conversationId] else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }

@@ -214,8 +214,9 @@ final class PersonalAgentCompanionTests: XCTestCase {
     }
 
     func testConversationBootstrapLoadsTranscriptAndAttachments() async throws {
+        let client = MockCompanionClient()
         let model = ConversationViewModel(
-            client: MockCompanionClient(),
+            client: client,
             conversationId: "conv-1",
             installationSurfaceId: "ios-test",
             initialSession: nil,
@@ -227,6 +228,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         model.loadBootstrap()
         try await Task.sleep(for: .milliseconds(50))
 
+        XCTAssertEqual(client.lastConversationBootstrapOptions?.tailBlocks, ConversationBootstrapRequestOptions.defaultTailBlocks)
         XCTAssertEqual(model.title, "iOS companion app")
         XCTAssertEqual(model.blocks.count, 5)
         XCTAssertTrue(model.blocks.contains(where: { $0.type == "tool_use" }))
