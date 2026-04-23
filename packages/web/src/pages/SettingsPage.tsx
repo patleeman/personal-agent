@@ -194,6 +194,37 @@ function formatProviderModelSummary(model: ModelProviderModelConfig): string {
   return parts.join(' · ');
 }
 
+function listKnownModelProviderIds(
+  modelProviderState: ModelProviderState | undefined,
+  providerAuthState: { providers: ProviderAuthSummary[] } | undefined,
+  models: ModelOption[] | undefined,
+): string[] {
+  const providerIds = new Set<string>();
+
+  for (const provider of modelProviderState?.providers ?? []) {
+    const id = provider.id.trim();
+    if (id) {
+      providerIds.add(id);
+    }
+  }
+
+  for (const provider of providerAuthState?.providers ?? []) {
+    const id = provider.id.trim();
+    if (id) {
+      providerIds.add(id);
+    }
+  }
+
+  for (const model of models ?? []) {
+    const provider = model.provider.trim();
+    if (provider) {
+      providerIds.add(provider);
+    }
+  }
+
+  return [...providerIds].sort((left, right) => left.localeCompare(right));
+}
+
 function splitModelRef(modelRef: string): { provider: string; model: string } {
   const slashIndex = modelRef.indexOf('/');
   if (slashIndex <= 0 || slashIndex >= modelRef.length - 1) {
@@ -1520,6 +1551,11 @@ export function SettingsPage() {
     [conversationTitleState?.effectiveModel, modelState?.models],
   );
 
+  const availableModelProviderIds = useMemo(
+    () => listKnownModelProviderIds(modelProviderState, providerAuthState, modelState?.models),
+    [modelProviderState, providerAuthState, modelState?.models],
+  );
+
   const selectedModelProvider = useMemo(() => {
     if (!modelProviderState || !selectedModelProviderId || selectedModelProviderId === NEW_MODEL_PROVIDER_ID) {
       return null;
@@ -1527,6 +1563,18 @@ export function SettingsPage() {
 
     return modelProviderState.providers.find((provider) => provider.id === selectedModelProviderId) ?? null;
   }, [modelProviderState, selectedModelProviderId]);
+
+  const editableModelProviderId = useMemo(() => {
+    if (selectedModelProvider) {
+      return selectedModelProvider.id;
+    }
+
+    if (selectedModelProviderId === NEW_MODEL_PROVIDER_ID) {
+      return modelProviderDraft.id.trim();
+    }
+
+    return '';
+  }, [modelProviderDraft.id, selectedModelProvider, selectedModelProviderId]);
 
   const editingProviderModel = useMemo(() => {
     if (!selectedModelProvider || !editingModelId || editingModelId === NEW_MODEL_ID) {
@@ -2106,24 +2154,51 @@ export function SettingsPage() {
     }
   }
 
-  function selectModelProvider(providerId: string) {
-    if (providerId === NEW_MODEL_PROVIDER_ID) {
-      setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
-      setModelProviderDraft(createProviderEditorDraft(null));
-      setEditingModelId(null);
-      setModelDraft(createModelEditorDraft(null));
-    } else {
-      const provider = modelProviderState?.providers.find((candidate) => candidate.id === providerId) ?? null;
-      setSelectedModelProviderId(providerId);
-      setModelProviderDraft(createProviderEditorDraft(provider));
-      setEditingModelId(null);
-      setModelDraft(createModelEditorDraft(null));
-    }
-
+  function startNewModelProvider(initialId = '') {
+    setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
+    setModelProviderDraft({
+      ...createProviderEditorDraft(null),
+      id: initialId,
+    });
+    setEditingModelId(null);
+    setModelDraft(createModelEditorDraft(null));
     setModelProviderEditorError(null);
     setModelProviderMessage(null);
     setModelDraftError(null);
     setModelDraftMessage(null);
+  }
+
+  function selectModelProvider(providerId: string) {
+    if (providerId === NEW_MODEL_PROVIDER_ID) {
+      startNewModelProvider();
+      return;
+    }
+
+    const provider = modelProviderState?.providers.find((candidate) => candidate.id === providerId) ?? null;
+    setSelectedModelProviderId(providerId);
+    setModelProviderDraft(createProviderEditorDraft(provider));
+    setEditingModelId(null);
+    setModelDraft(createModelEditorDraft(null));
+    setModelProviderEditorError(null);
+    setModelProviderMessage(null);
+    setModelDraftError(null);
+    setModelDraftMessage(null);
+  }
+
+  function selectKnownModelProvider(providerId: string) {
+    const normalizedProviderId = providerId.trim();
+    if (!normalizedProviderId) {
+      startNewModelProvider();
+      return;
+    }
+
+    const provider = modelProviderState?.providers.find((candidate) => candidate.id === normalizedProviderId) ?? null;
+    if (provider) {
+      selectModelProvider(provider.id);
+      return;
+    }
+
+    startNewModelProvider(normalizedProviderId);
   }
 
   function startEditingProviderModel(modelId: string) {
@@ -2251,7 +2326,13 @@ export function SettingsPage() {
   }
 
   async function handleSaveProviderModel() {
-    if (!selectedModelProvider || modelDraftAction !== null) {
+    if (modelDraftAction !== null) {
+      return;
+    }
+
+    const providerId = editableModelProviderId;
+    if (!providerId) {
+      setModelDraftError('Pick or type a provider id first.');
       return;
     }
 
@@ -2276,7 +2357,7 @@ export function SettingsPage() {
       setModelDraftError(null);
       setModelDraftMessage(null);
 
-      const state = await api.saveModelProviderModel(selectedModelProvider.id, {
+      const state = await api.saveModelProviderModel(providerId, {
         modelId,
         name: modelDraft.name.trim() || undefined,
         api: modelDraft.api || undefined,
@@ -2295,7 +2376,7 @@ export function SettingsPage() {
         compat,
       });
 
-      syncModelProviderSelection(state, selectedModelProvider.id, modelId);
+      syncModelProviderSelection(state, providerId, modelId);
       setModelDraftMessage(existed ? `Saved ${modelId}.` : `Added ${modelId}.`);
       await Promise.all([
         refetchModels({ resetLoading: false }),
@@ -3297,7 +3378,9 @@ export function SettingsPage() {
                   <div className="space-y-4 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">
-                        {selectedModelProviderId === NEW_MODEL_PROVIDER_ID ? 'New provider' : (selectedModelProvider?.id ?? 'Provider')}
+                        {selectedModelProviderId === NEW_MODEL_PROVIDER_ID
+                          ? (modelProviderDraft.id.trim() ? `New provider · ${modelProviderDraft.id.trim()}` : 'New provider')
+                          : (selectedModelProvider?.id ?? 'Provider')}
                       </h3>
                       <p className="ui-card-meta max-w-3xl">
                         Use built-in ids like <span className="font-mono text-[11px]">anthropic</span>, <span className="font-mono text-[11px]">openai</span>, <span className="font-mono text-[11px]">openai-codex</span>, or <span className="font-mono text-[11px]">google</span> to override a built-in provider. Use any new id for a custom provider.
@@ -3311,6 +3394,27 @@ export function SettingsPage() {
                         void handleSaveModelProvider();
                       }}
                     >
+                      {selectedModelProviderId === NEW_MODEL_PROVIDER_ID && availableModelProviderIds.length > 0 && (
+                        <div className="space-y-2 min-w-0">
+                          <label className="ui-card-meta" htmlFor="settings-model-provider-existing">Existing provider</label>
+                          <select
+                            id="settings-model-provider-existing"
+                            value={availableModelProviderIds.includes(modelProviderDraft.id.trim()) ? modelProviderDraft.id.trim() : ''}
+                            onChange={(event) => { selectKnownModelProvider(event.target.value); }}
+                            className={INPUT_CLASS}
+                            disabled={modelProviderAction !== null || modelDraftAction !== null}
+                          >
+                            <option value="">Type a custom id or choose a built-in provider</option>
+                            {availableModelProviderIds.map((providerId) => (
+                              <option key={providerId} value={providerId}>{providerId}</option>
+                            ))}
+                          </select>
+                          <p className="ui-card-meta max-w-3xl">
+                            Pick a built-in or discovered provider to add models right away. You can still type any provider id below.
+                          </p>
+                        </div>
+                      )}
+
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2 min-w-0">
                           <label className="ui-card-meta" htmlFor="settings-model-provider-id">Provider id</label>
@@ -3462,22 +3566,24 @@ export function SettingsPage() {
                         <p className="ui-card-meta max-w-3xl">
                           {selectedModelProvider
                             ? `Models under ${selectedModelProvider.id}. Matching a built-in id replaces that provider model.`
-                            : 'Save or select a provider before adding models.'}
+                            : editableModelProviderId
+                              ? `Add models under ${editableModelProviderId}. Saving a model creates that provider entry in models.json immediately. Save the provider form too if you also want provider-level overrides.`
+                              : 'Pick or type a provider id before adding models.'}
                         </p>
                       </div>
                       <button
                         type="button"
                         onClick={() => { startEditingProviderModel(NEW_MODEL_ID); }}
-                        disabled={!selectedModelProvider || modelDraftAction !== null}
+                        disabled={!editableModelProviderId || modelDraftAction !== null}
                         className={ACTION_BUTTON_CLASS}
                       >
                         Add model
                       </button>
                     </div>
 
-                    {selectedModelProvider ? (
+                    {editableModelProviderId ? (
                       <>
-                        {selectedModelProvider.models.length > 0 ? (
+                        {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
                           <div className="space-y-px">
                             {selectedModelProvider.models.map((model) => (
                               <div
@@ -3763,7 +3869,7 @@ export function SettingsPage() {
                         )}
                       </>
                     ) : (
-                      <p className="ui-card-meta">Select or create a provider to edit its models.</p>
+                      <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
                     )}
                   </div>
                 </div>

@@ -87,7 +87,7 @@ Use it for:
 - instruction file selection
 - skill folder selection
 - vault root and knowledge-base sync config
-- provider auth and model defaults
+- provider auth, model defaults, and adding custom models to existing providers
 - desktop host settings when running in Electron
 
 ## Page layout rhythm
