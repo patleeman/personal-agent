@@ -1,88 +1,194 @@
 # personal-agent
 
-`personal-agent` is a durable application layer on top of Pi.
+`personal-agent` is a durable runtime around Pi for running a personal agent with real state.
 
-It keeps repo-managed runtime defaults in git, durable knowledge in a vault, and machine-local runtime state under `~/.local/state/personal-agent`. Conversations are where execution happens. Durable knowledge, workflows, and automation state should live somewhere more precise.
+It separates three things cleanly:
 
-The docs in this repo are written for agents first, humans second. Start with [`docs/README.md`](docs/README.md). Use runtime tool schemas for exact arguments. Use [`internal-skills/`](internal-skills/) for built-in behavior such as runs, scheduled tasks, artifacts, reminders, and async attention.
+- **repo-managed defaults** live in git
+- **durable knowledge** lives in a vault
+- **machine-local runtime state** lives under `~/.local/state/personal-agent`
+
+Conversations are for live execution. Reusable knowledge, workflows, reminders, runs, and automations should live in explicit durable surfaces instead of getting buried in chat history.
+
+## What this repo contains
+
+`personal-agent` currently ships:
+
+- a **CLI** (`pa`) for launching Pi and managing the local runtime
+- a **web UI** for conversations, knowledge, automations, and settings
+- an **Electron desktop shell** around the same web app
+- a **daemon** for runs, scheduled tasks, wakeups, and reminders
+- a **knowledge system** built around docs, instruction files, skills, and projects
+- **MCP integration** for external tool servers
+- built-in **extensions**, **internal skills**, and a **prompt catalog**
+- an **iOS companion app** under `apps/ios/`
 
 ## Quick start
+
+### Prerequisites
+
+- Node.js **20+**
+- npm **11+** recommended
+
+### Install from source
 
 ```bash
 npm install
 npm run build
 npm link --workspace @personal-agent/cli
-
-pa doctor
-pa status
-pa tui
 ```
 
-Useful entry points:
+If you do not want a global `pa` symlink:
 
 ```bash
+node packages/cli/dist/index.js --help
+```
+
+### Verify the install
+
+```bash
+pa doctor
+pa status
+```
+
+### Start an interface
+
+```bash
+pa tui
 pa ui foreground --open
-pa ui install
 npm run desktop:start
 ```
 
-## Mental model
+For day-to-day managed web UI mode:
 
-- repo files define shipped defaults: `defaults/agent/`, `extensions/`, `internal-skills/`, `prompt-catalog/`
-- the effective durable knowledge root is the **vault**
-- machine-local runtime state lives under `~/.local/state/personal-agent`
-- conversations are for active execution, not long-term storage
-- choose the smallest correct durable surface: doc, skill, project, queue item, reminder, run, or automation
+```bash
+pa ui install
+pa ui start
+```
 
-## Main interfaces
+## Core mental model
 
-- `pa tui` — launch Pi with the resolved local runtime
-- `pa ui` — inspect or manage the local web UI
-- `npm run desktop:start` — start the Electron desktop shell
-- `pa daemon ...` — manage daemon-backed background behavior
-- `pa mcp ...` — inspect and call configured MCP servers
+There are three important roots:
 
-## Docs
+- **`<repo-root>`** — shipped defaults and code in this repo
+- **`<vault-root>`** — durable knowledge: docs, skills, projects, instruction files
+- **`<state-root>`** — machine-local runtime state, usually `~/.local/state/personal-agent`
+
+The durable rule is simple:
+
+- use a **conversation** when work is happening now
+- use the **vault** when knowledge should outlive the thread
+- use daemon-backed surfaces for **runs**, **automations**, **queues**, and **reminders**
+
+If something should still matter next week, do not leave the only copy in a conversation.
+
+## Common commands
+
+```bash
+# health / setup
+pa doctor
+pa status
+pa profile list
+
+# interfaces
+pa tui
+pa ui foreground --open
+pa ui logs --tail 120
+npm run desktop:start
+
+# background runtime
+pa daemon status
+pa daemon logs
+
+# MCP
+pa mcp list --probe
+pa mcp info <server>/<tool>
+```
+
+Use `pa help <command>` for exact flags.
+
+## Repo layout
+
+### Workspace packages
+
+- `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
+- `packages/daemon` — runs, automations, wakeups, daemon runtime
+- `packages/cli` — `pa`
+- `packages/web` — browser UI and local server routes
+- `packages/desktop` — Electron shell
+
+### Shipped runtime resources
+
+- `defaults/agent/` — repo-managed Pi defaults
+- `extensions/` — built-in runtime extensions
+- `internal-skills/` — built-in feature behavior docs
+- `prompt-catalog/` — prompt text owned by this repo
+- `docs/` — product semantics and current behavior
+- `apps/ios/` — iOS companion app
+
+## Development
+
+```bash
+npm install
+npm run build
+npm test
+npm run lint
+```
+
+Useful dev entry points:
+
+```bash
+pa ui foreground --open
+npm run desktop:start
+npm run ab:run -- --session smoke-check --command "ab open http://127.0.0.1:3741 && ab wait 1000 && ab snapshot -i"
+```
+
+Notes:
+
+- Use the repo `agent-browser` wrapper via `npm run ab:run` instead of raw `agent-browser`.
+- If you change product behavior, update the relevant docs in `docs/` or `internal-skills/`.
+- Exact tool arguments come from runtime tool schemas, not from README prose.
+
+## Release flow
+
+Desktop releases are built, signed, notarized, and published locally.
+
+```bash
+npm run release:desktop:patch
+npm run release:desktop:minor
+npm run release:desktop:major
+```
+
+If the version bump already happened and you just need to retry publish:
+
+```bash
+npm run release:publish
+```
+
+See [`docs/release-cycle.md`](docs/release-cycle.md) for the real details.
+
+## Documentation map
+
+The docs in this repo are written for agents first, humans second.
 
 Start here:
 
 - [`docs/README.md`](docs/README.md) — docs map and path vocabulary
 - [`docs/getting-started.md`](docs/getting-started.md) — install and first-run flow
-- [`docs/decision-guide.md`](docs/decision-guide.md) — which durable surface to use
+- [`docs/decision-guide.md`](docs/decision-guide.md) — pick the right durable surface
 - [`docs/how-it-works.md`](docs/how-it-works.md) — state model and runtime layering
-- [`docs/knowledge-system.md`](docs/knowledge-system.md) — instruction files, docs, skills, and projects
-- [`docs/conversations.md`](docs/conversations.md) — live thread model
-- [`docs/web-ui.md`](docs/web-ui.md) — current UI surfaces and live-update model
+- [`docs/knowledge-system.md`](docs/knowledge-system.md) — docs, instruction files, skills, and projects
+- [`docs/conversations.md`](docs/conversations.md) — conversation model, auto mode, async follow-through
+- [`docs/web-ui.md`](docs/web-ui.md) — main UI surfaces and live-update behavior
 - [`docs/command-line.md`](docs/command-line.md) — `pa` command map
 - [`docs/repo-layout.md`](docs/repo-layout.md) — where code should live
+- [`internal-skills/README.md`](internal-skills/README.md) — built-in runtime feature docs
 
-Built-in feature docs live under `internal-skills/`:
+For built-in feature behavior, read the matching internal skill:
 
 - [`internal-skills/runs/INDEX.md`](internal-skills/runs/INDEX.md)
 - [`internal-skills/scheduled-tasks/INDEX.md`](internal-skills/scheduled-tasks/INDEX.md)
 - [`internal-skills/async-attention/INDEX.md`](internal-skills/async-attention/INDEX.md)
 - [`internal-skills/artifacts/INDEX.md`](internal-skills/artifacts/INDEX.md)
 - [`internal-skills/alerts/INDEX.md`](internal-skills/alerts/INDEX.md)
-- [`internal-skills/inbox/INDEX.md`](internal-skills/inbox/INDEX.md)
-
-## Packages
-
-- `@personal-agent/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
-- `@personal-agent/cli` — the `pa` command
-- `@personal-agent/daemon` — durable runs, automations, wakeups, companion plumbing, service helpers
-- `@personal-agent/web` — browser UI and server routes
-- `@personal-agent/desktop` — Electron shell
-
-## Repo runtime resources
-
-- `defaults/agent/` — shipped Pi defaults
-- `extensions/` — built-in runtime extensions
-- `internal-skills/` — built-in feature behavior docs
-- `prompt-catalog/` — reusable prompt material
-- `docs/` — product docs for agents
-
-## Release flow
-
-Desktop releases are built, signed, notarized, and published locally.
-
-See [`docs/release-cycle.md`](docs/release-cycle.md) for the exact flow.
+- [`internal-skills/skills-and-capabilities/INDEX.md`](internal-skills/skills-and-capabilities/INDEX.md)
