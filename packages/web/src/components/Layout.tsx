@@ -1,8 +1,7 @@
-import { Component, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { Component, Suspense, lazy, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
-import { ContextRail, prefetchConversationRailData } from './ContextRail';
 import { Sidebar } from './Sidebar';
 import { DesktopTopBar } from './DesktopTopBar';
 import { PageSearchBar } from './PageSearchBar';
@@ -20,6 +19,7 @@ import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-st
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
+const ContextRail = lazy(() => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail';
 
@@ -257,9 +257,35 @@ function useViewportWidth() {
 
 const ENABLE_OPEN_CONVERSATION_WARMING = true;
 const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
-const OPEN_TAB_WARM_BOOT_DELAY_MS = 1500;
-const OPEN_TAB_WARM_START_DELAY_MS = 250;
+const OPEN_TAB_WARM_IDLE_TIMEOUT_MS = 1500;
+const OPEN_TAB_WARM_START_DELAY_MS = 0;
 const OPEN_TAB_WARM_INTERLEAVE_MS = 25;
+
+type IdleCallbackHandle = number;
+type IdleCallbackLike = (deadline: { didTimeout: boolean; timeRemaining(): number }) => void;
+
+type IdleWindow = Window & typeof globalThis & {
+  requestIdleCallback?: (callback: IdleCallbackLike, options?: { timeout: number }) => IdleCallbackHandle;
+  cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
+};
+
+function scheduleIdleWarmup(callback: () => void, timeoutMs: number): () => void {
+  const idleWindow = window as IdleWindow;
+  if (typeof idleWindow.requestIdleCallback === 'function') {
+    const handle = idleWindow.requestIdleCallback(() => {
+      callback();
+    }, { timeout: timeoutMs });
+
+    return () => {
+      idleWindow.cancelIdleCallback?.(handle);
+    };
+  }
+
+  const timer = window.setTimeout(callback, timeoutMs);
+  return () => {
+    window.clearTimeout(timer);
+  };
+}
 
 function getActiveConversationId(pathname: string): string | null {
   const parts = pathname.split('/').filter(Boolean);
@@ -290,13 +316,9 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
       return;
     }
 
-    const timer = window.setTimeout(() => {
+    return scheduleIdleWarmup(() => {
       setWarmingEnabled(true);
-    }, OPEN_TAB_WARM_BOOT_DELAY_MS);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
+    }, OPEN_TAB_WARM_IDLE_TIMEOUT_MS);
   }, []);
 
   useEffect(() => {
@@ -364,23 +386,16 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
             return;
           }
 
-          const [bootstrapResult] = await Promise.allSettled([
-            fetchConversationBootstrapCached(
-              conversationId,
-              { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
-              bootstrapVersionKey,
-            ),
-            prefetchConversationRailData({
-              conversationId,
-              workspaceVersion: versions.workspace,
-              runsVersion: versions.runs,
-            }),
-          ]);
+          const bootstrapResult = await fetchConversationBootstrapCached(
+            conversationId,
+            { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
+            bootstrapVersionKey,
+          ).catch(() => null);
 
-          if (bootstrapResult?.status === 'fulfilled' && bootstrapResult.value.sessionDetail) {
+          if (bootstrapResult?.sessionDetail) {
             primeSessionDetailCache(
               conversationId,
-              bootstrapResult.value.sessionDetail,
+              bootstrapResult.sessionDetail,
               { tailBlocks: OPEN_TAB_WARM_TAIL_BLOCKS },
               versions.sessionFiles,
             );
@@ -399,42 +414,7 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.runs, versions.sessionFiles, versions.sessions, versions.workspace, warmingEnabled]);
-
-  useEffect(() => {
-    if (!warmingEnabled || versions.runs === 0) {
-      return;
-    }
-
-    const idsToWarm = openConversationIds
-      .filter((conversationId) => conversationId !== activeConversationId)
-      .filter((conversationId) => sessions !== null ? sessionsById.has(conversationId) : true);
-    if (idsToWarm.length === 0) {
-      return;
-    }
-
-    let cancelled = false;
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        for (const conversationId of idsToWarm) {
-          if (cancelled) {
-            return;
-          }
-
-          await prefetchConversationRailData({
-            conversationId,
-            workspaceVersion: versions.workspace,
-            runsVersion: versions.runs,
-          }).catch(() => undefined);
-        }
-      })();
-    }, OPEN_TAB_WARM_START_DELAY_MS);
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.runs, versions.workspace, warmingEnabled]);
+  }, [activeConversationId, openConversationIds, sessions, sessionsById, versions.sessionFiles, versions.sessions, warmingEnabled]);
 
   if (!ENABLE_OPEN_CONVERSATION_WARMING) {
     return [];
@@ -591,7 +571,9 @@ export function Layout() {
                 <>
                   <ResizeHandle onMouseDown={rail.onMouseDown} onDoubleClick={rail.reset} />
                   <div style={{ width: railWidth }} className="relative z-10 flex-shrink-0 overflow-hidden select-text">
-                    <ContextRail />
+                    <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
+                      <ContextRail />
+                    </Suspense>
                   </div>
                 </>
               ) : null}
