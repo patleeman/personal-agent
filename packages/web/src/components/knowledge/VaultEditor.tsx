@@ -53,6 +53,7 @@ function ToolbarButton({ active, onClick, title, children }: {
 // ── Autosave ──────────────────────────────────────────────────────────────────
 
 const AUTOSAVE_MS = 800;
+const MAX_CACHED_VAULT_DOCUMENTS = 24;
 
 function useAutosave(
   fileId: string | null,
@@ -88,6 +89,134 @@ function useAutosave(
   }, [fileId, dirty, revision, getContent, onSaved, onError]);
 }
 
+interface CachedVaultDocument {
+  body: string;
+  frontmatter: Frontmatter;
+  rawFrontmatter: string | null;
+  frontmatterError: string | null;
+}
+
+const cachedVaultDocuments = new Map<string, CachedVaultDocument>();
+const pendingVaultDocumentReads = new Map<string, Promise<CachedVaultDocument>>();
+const cachedVaultBacklinks = new Map<string, VaultBacklink[]>();
+const pendingVaultBacklinkReads = new Map<string, Promise<VaultBacklink[]>>();
+
+function rememberCachedValue<T>(cache: Map<string, T>, key: string, value: T) {
+  if (cache.has(key)) {
+    cache.delete(key);
+  }
+  cache.set(key, value);
+
+  while (cache.size > MAX_CACHED_VAULT_DOCUMENTS) {
+    const oldestKey = cache.keys().next().value;
+    if (!oldestKey) {
+      break;
+    }
+    cache.delete(oldestKey);
+  }
+}
+
+function readCachedVaultDocument(fileId: string): CachedVaultDocument | null {
+  const cached = cachedVaultDocuments.get(fileId);
+  if (!cached) {
+    return null;
+  }
+
+  rememberCachedValue(cachedVaultDocuments, fileId, cached);
+  return cached;
+}
+
+function cacheVaultDocument(fileId: string, document: CachedVaultDocument) {
+  rememberCachedValue(cachedVaultDocuments, fileId, document);
+}
+
+async function loadVaultDocument(fileId: string): Promise<CachedVaultDocument> {
+  const cached = readCachedVaultDocument(fileId);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = pendingVaultDocumentReads.get(fileId);
+  if (pending) {
+    return pending;
+  }
+
+  const request = vaultApi.readFile(fileId)
+    .then(({ content }) => {
+      const { frontmatter, rawFrontmatter, frontmatterError, body } = parseMarkdownDocument(content);
+      const document = {
+        body,
+        frontmatter: frontmatter ?? {},
+        rawFrontmatter,
+        frontmatterError,
+      } satisfies CachedVaultDocument;
+      cacheVaultDocument(fileId, document);
+      return document;
+    })
+    .finally(() => {
+      if (pendingVaultDocumentReads.get(fileId) === request) {
+        pendingVaultDocumentReads.delete(fileId);
+      }
+    });
+
+  pendingVaultDocumentReads.set(fileId, request);
+  return request;
+}
+
+function readCachedBacklinks(fileId: string): VaultBacklink[] | null {
+  const cached = cachedVaultBacklinks.get(fileId);
+  if (!cached) {
+    return null;
+  }
+
+  rememberCachedValue(cachedVaultBacklinks, fileId, cached);
+  return [...cached];
+}
+
+function cacheBacklinks(fileId: string, backlinks: readonly VaultBacklink[]) {
+  rememberCachedValue(cachedVaultBacklinks, fileId, [...backlinks]);
+}
+
+async function loadVaultBacklinks(fileId: string): Promise<VaultBacklink[]> {
+  const cached = readCachedBacklinks(fileId);
+  if (cached) {
+    return cached;
+  }
+
+  const pending = pendingVaultBacklinkReads.get(fileId);
+  if (pending) {
+    return pending;
+  }
+
+  const request = vaultApi.backlinks(fileId)
+    .then(({ backlinks }) => {
+      cacheBacklinks(fileId, backlinks);
+      return [...backlinks];
+    })
+    .finally(() => {
+      if (pendingVaultBacklinkReads.get(fileId) === request) {
+        pendingVaultBacklinkReads.delete(fileId);
+      }
+    });
+
+  pendingVaultBacklinkReads.set(fileId, request);
+  return request;
+}
+
+function moveCachedVaultDocument(oldId: string, newId: string) {
+  const cached = cachedVaultDocuments.get(oldId);
+  if (cached) {
+    cachedVaultDocuments.delete(oldId);
+    cacheVaultDocument(newId, cached);
+  }
+
+  pendingVaultDocumentReads.delete(oldId);
+  cachedVaultBacklinks.delete(oldId);
+  cachedVaultBacklinks.delete(newId);
+  pendingVaultBacklinkReads.delete(oldId);
+  pendingVaultBacklinkReads.delete(newId);
+}
+
 // ── Frontmatter ───────────────────────────────────────────────────────────────
 
 type Frontmatter = MarkdownFrontmatter;
@@ -107,6 +236,7 @@ function EditableTitle({ fileName, fileId, onRenamed }: {
     const newName = trimmed.endsWith('.md') ? trimmed : `${trimmed}.md`;
     try {
       const updated = await vaultApi.rename(fileId, newName);
+      moveCachedVaultDocument(fileId, updated.id);
       emitKBEvent('kb:file-renamed', { oldId: fileId, newId: updated.id });
       onRenamed(updated.id);
     } catch { setValue(fileName); }
@@ -128,27 +258,71 @@ function EditableTitle({ fileName, fileId, onRenamed }: {
 
 function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (id: string) => void }) {
   const contentId = useId();
-  const [backlinks, setBacklinks] = useState<VaultBacklink[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [backlinks, setBacklinks] = useState<VaultBacklink[]>(() => readCachedBacklinks(fileId) ?? []);
+  const [loading, setLoading] = useState(false);
+  const [loaded, setLoaded] = useState(() => readCachedBacklinks(fileId) !== null);
   const [open, setOpen] = useState(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
+    requestIdRef.current += 1;
     setOpen(false);
-    setLoading(true);
-    vaultApi.backlinks(fileId).then((r) => setBacklinks(r.backlinks)).catch(() => setBacklinks([]))
-      .finally(() => setLoading(false));
+    setLoading(false);
+    const cached = readCachedBacklinks(fileId);
+    setBacklinks(cached ?? []);
+    setLoaded(cached !== null);
   }, [fileId]);
 
-  if (loading || backlinks.length === 0) return null;
+  const ensureBacklinksLoaded = useCallback(async () => {
+    const cached = readCachedBacklinks(fileId);
+    if (cached) {
+      setBacklinks(cached);
+      setLoaded(true);
+      setLoading(false);
+      return;
+    }
 
-  const summary = `${backlinks.length} backlink${backlinks.length !== 1 ? 's' : ''}`;
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    setLoading(true);
+    try {
+      const nextBacklinks = await loadVaultBacklinks(fileId);
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+      setBacklinks(nextBacklinks);
+      setLoaded(true);
+    } catch {
+      if (requestIdRef.current !== requestId) {
+        return;
+      }
+      setBacklinks([]);
+      setLoaded(true);
+    } finally {
+      if (requestIdRef.current === requestId) {
+        setLoading(false);
+      }
+    }
+  }, [fileId]);
+
+  const summary = loading
+    ? 'Loading backlinks…'
+    : loaded
+      ? `${backlinks.length} backlink${backlinks.length !== 1 ? 's' : ''}`
+      : 'Load backlinks';
 
   return (
     <div className={open ? 'kb-bl-panel kb-bl-panel-open' : 'kb-bl-panel'}>
       <button
         type="button"
         className="kb-bl-toggle"
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          const nextOpen = !open;
+          setOpen(nextOpen);
+          if (nextOpen) {
+            void ensureBacklinksLoaded();
+          }
+        }}
         aria-expanded={open}
         aria-controls={contentId}
       >
@@ -161,14 +335,20 @@ function BacklinksPanel({ fileId, onNavigate }: { fileId: string; onNavigate: (i
 
       {open ? (
         <div id={contentId} className="kb-bl-body">
-          <div className="kb-backlinks-list">
-            {backlinks.map((bl) => (
-              <button key={bl.id} type="button" className="kb-backlink-item" onClick={() => onNavigate(bl.id)}>
-                <span className="kb-backlink-name">{bl.name.replace(/\.md$/, '')}</span>
-                <span className="kb-backlink-excerpt">{bl.excerpt}</span>
-              </button>
-            ))}
-          </div>
+          {loading ? (
+            <p className="kb-backlink-excerpt">Loading backlinks…</p>
+          ) : backlinks.length === 0 ? (
+            <p className="kb-backlink-excerpt">No backlinks yet.</p>
+          ) : (
+            <div className="kb-backlinks-list">
+              {backlinks.map((bl) => (
+                <button key={bl.id} type="button" className="kb-backlink-item" onClick={() => onNavigate(bl.id)}>
+                  <span className="kb-backlink-name">{bl.name.replace(/\.md$/, '')}</span>
+                  <span className="kb-backlink-excerpt">{bl.excerpt}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : null}
     </div>
@@ -193,6 +373,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   const [saveError, setSaveError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
   const currentFileId = useRef<string | null>(null);
+  const loadRequestIdRef = useRef(0);
   const fmRef = useRef<Frontmatter>({});
   const rawFrontmatterRef = useRef<string | null>(null);
   const frontmatterErrorRef = useRef<string | null>(null);
@@ -298,11 +479,28 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     },
   });
 
+  const applyLoadedDocument = useCallback((nextFileId: string, nextDocument: CachedVaultDocument) => {
+    currentFileId.current = null;
+    setFrontmatter(nextDocument.frontmatter);
+    fmRef.current = nextDocument.frontmatter;
+    setRawFrontmatter(nextDocument.rawFrontmatter);
+    rawFrontmatterRef.current = nextDocument.rawFrontmatter;
+    setFrontmatterError(nextDocument.frontmatterError);
+    frontmatterErrorRef.current = nextDocument.frontmatterError;
+    if (editor) {
+      editor.commands.setContent(nextDocument.body, { contentType: 'markdown' });
+      editor.commands.focus('start');
+    }
+    currentFileId.current = nextFileId;
+  }, [editor]);
+
   // Keep fileIdRef in sync for paste handlers
   useEffect(() => { fileIdRef.current = fileId; }, [fileId]);
 
   // Load file
   useEffect(() => {
+    loadRequestIdRef.current += 1;
+
     if (!fileId) {
       currentFileId.current = null;
       fileIdRef.current = null;
@@ -317,30 +515,44 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
       fmRef.current = {};
       rawFrontmatterRef.current = null;
       frontmatterErrorRef.current = null;
+      setLoading(false);
       return;
     }
-    currentFileId.current = null;
-    setLoading(true); setDirty(false); setError(null); setSaveError(null); setRevision(0);
 
-    vaultApi.readFile(fileId)
-      .then(({ content }) => {
-        const { frontmatter: parsedFrontmatter, rawFrontmatter: nextRawFrontmatter, frontmatterError: nextFrontmatterError, body } = parseMarkdownDocument(content);
-        const fm = parsedFrontmatter ?? {};
-        setFrontmatter(fm);
-        fmRef.current = fm;
-        setRawFrontmatter(nextRawFrontmatter);
-        rawFrontmatterRef.current = nextRawFrontmatter;
-        setFrontmatterError(nextFrontmatterError);
-        frontmatterErrorRef.current = nextFrontmatterError;
-        if (editor) {
-          editor.commands.setContent(body, { contentType: 'markdown' });
-          editor.commands.focus('start');
+    const requestId = loadRequestIdRef.current;
+    currentFileId.current = null;
+    setLoading(true);
+    setDirty(false);
+    setError(null);
+    setSaveError(null);
+    setRevision(0);
+
+    const cached = readCachedVaultDocument(fileId);
+    if (cached) {
+      applyLoadedDocument(fileId, cached);
+      setLoading(false);
+      return;
+    }
+
+    loadVaultDocument(fileId)
+      .then((nextDocument) => {
+        if (loadRequestIdRef.current !== requestId) {
+          return;
         }
-        currentFileId.current = fileId;
+        applyLoadedDocument(fileId, nextDocument);
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
-      .finally(() => setLoading(false));
-  }, [fileId, editor]);
+      .catch((err: unknown) => {
+        if (loadRequestIdRef.current !== requestId) {
+          return;
+        }
+        setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (loadRequestIdRef.current === requestId) {
+          setLoading(false);
+        }
+      });
+  }, [applyLoadedDocument, editor, fileId]);
 
   // Build full file content (frontmatter + body) for saving
   const getContent = useCallback(() => {
@@ -361,11 +573,19 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
   }, []);
 
   const handleSaved = useCallback(() => {
+    if (fileId) {
+      cacheVaultDocument(fileId, {
+        body: readMarkdownFromEditor(editor),
+        frontmatter: fmRef.current,
+        rawFrontmatter: rawFrontmatterRef.current,
+        frontmatterError: frontmatterErrorRef.current,
+      });
+    }
     setDirty(false);
     setSaveError(null);
     setSavedAt(Date.now());
     emitKBEvent('kb:content-saved');
-  }, []);
+  }, [editor, fileId]);
   useAutosave(fileId ?? null, getContent, dirty, revision, handleSaved, setSaveError);
 
   // ── States ────────────────────────────────────────────────────────────────
