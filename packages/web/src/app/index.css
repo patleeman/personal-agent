@@ -417,6 +417,70 @@
     @apply text-xs text-secondary mt-1;
   }
 
+  .ui-app-page-shell {
+    @apply mx-auto w-full px-4 py-8 sm:px-6 sm:py-10;
+  }
+
+  .ui-app-page-grid {
+    @apply grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14;
+  }
+
+  .ui-app-page-main {
+    @apply mx-auto w-full min-w-0;
+  }
+
+  .ui-app-page-aside {
+    @apply hidden lg:block lg:sticky lg:top-8 lg:self-start;
+  }
+
+  .ui-app-page-intro {
+    @apply flex flex-wrap items-start justify-between gap-4;
+  }
+
+  .ui-app-page-eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-dim;
+  }
+
+  .ui-app-page-title {
+    @apply text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px];
+  }
+
+  .ui-app-page-summary {
+    @apply max-w-3xl text-[13px] leading-6 text-secondary;
+  }
+
+  .ui-app-page-section {
+    @apply scroll-mt-24 space-y-6;
+  }
+
+  .ui-app-page-section-body {
+    @apply border-t border-border-subtle/65 pt-6;
+  }
+
+  .ui-app-page-toc-title {
+    @apply text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/85;
+  }
+
+  .ui-app-page-toc-link {
+    @apply block border-l border-border-subtle/60 py-1 pl-4 pr-1 text-secondary transition-colors hover:border-border-default hover:text-primary;
+  }
+
+  .ui-app-page-toc-link-active {
+    @apply border-accent text-primary;
+  }
+
+  .ui-app-page-empty-shell {
+    @apply flex min-h-0 flex-1 justify-center px-4 pb-6 sm:px-6;
+  }
+
+  .ui-app-page-empty-shell-start {
+    @apply items-start pt-8;
+  }
+
+  .ui-app-page-empty-shell-center {
+    @apply items-center;
+  }
+
   .ui-section-label {
     @apply text-[10px] font-semibold uppercase tracking-wider;
     color: rgb(var(--color-teal) / 0.88);

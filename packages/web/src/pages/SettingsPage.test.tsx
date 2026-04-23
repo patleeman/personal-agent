@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../client/api';
 import { useApi } from '../hooks/useApi';
-import { useSseConnection } from '../app/contexts';
+import { useAppEvents, useSseConnection } from '../app/contexts';
 import { useTheme } from '../ui-state/theme';
 import { SettingsPage } from './SettingsPage.js';
 
@@ -13,6 +13,7 @@ vi.mock('../hooks/useApi', () => ({
 }));
 
 vi.mock('../app/contexts', () => ({
+  useAppEvents: vi.fn(),
   useSseConnection: vi.fn(),
 }));
 
@@ -67,6 +68,16 @@ describe('SettingsPage', () => {
       status: 'open',
     });
 
+    vi.mocked(useAppEvents).mockReturnValue({
+      versions: {
+        workspace: 1,
+        sessions: 1,
+        sessionFiles: 1,
+        tasks: 1,
+        runs: 1,
+        daemon: 1,
+      },
+    });
 
     vi.mocked(useApi).mockImplementation((fetcher, key) => {
       if (fetcher === api.skillFolders) {
@@ -285,7 +296,7 @@ describe('SettingsPage', () => {
   it('renders the reorganized single-page settings view', () => {
     const html = renderPage('/settings');
 
-    expect(html).toContain('class="sr-only">Settings<');
+    expect(html).toContain('>Settings</h1>');
     expect(html).toContain('aria-label="Settings sections"');
     expect(html.indexOf('href="#settings-appearance"')).toBeLessThan(html.indexOf('href="#settings-general"'));
     expect(html.indexOf('href="#settings-general"')).toBeLessThan(html.indexOf('href="#settings-skills"'));
@@ -295,6 +306,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('Skill folders');
     expect(html).toContain('Knowledge base');
     expect(html).toContain('/Users/patrick/.local/state/personal-agent/knowledge-base/repo');
+    expect(html).toContain('In sync · Last synced');
     expect(html).toContain('Bundled MCP wrappers');
     expect(html).toContain('Bundled with dd-atlassian-mcp');
     expect(html).toContain('Callback');
@@ -316,6 +328,7 @@ describe('SettingsPage', () => {
     expect(html).toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
+    expect(html).not.toContain('↻ Refresh');
     expect(html).not.toContain('Appearance, workspace defaults, providers, and local browser state in one place.');
   });
 
@@ -331,7 +344,7 @@ describe('SettingsPage', () => {
   it('renders the same consolidated settings page for legacy query routes', () => {
     const html = renderPage('/settings?page=system-daemon');
 
-    expect(html).toContain('class="sr-only">Settings<');
+    expect(html).toContain('>Settings</h1>');
     expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Restart daemon');

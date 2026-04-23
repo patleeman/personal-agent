@@ -4,7 +4,7 @@ import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
 import { ensureConversationTabOpen } from '../session/sessionTabs';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
-import { ErrorState, LoadingState, ToolbarButton, cx } from '../components/ui';
+import { AppPageIntro, AppPageLayout, AppPageSection, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
@@ -248,10 +248,9 @@ function AutomationsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-4', className)}>
-      <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
+    <AppPageSection id={id} title={label} className={className} bodyClassName="pt-6">
       {children}
-    </section>
+    </AppPageSection>
   );
 }
 
@@ -606,49 +605,12 @@ function AutomationDetailView({
 
   return (
     <>
-      <div className="flex h-full flex-col">
-        <div className="sticky top-0 z-10 border-b border-border-subtle bg-base/94 px-6 py-4 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-[960px] flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 text-[12px] text-dim">
-                <button type="button" onClick={onBack} className="transition-colors hover:text-primary">Automations</button>
-                <span>›</span>
-                <span className="truncate text-secondary">{title}</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>
-                ↻ Refresh
-              </ToolbarButton>
-              <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
-                {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
-              </ToolbarButton>
-              {detail?.threadConversationId && (
-                <ToolbarButton onClick={() => navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`)}>
-                  Open thread
-                </ToolbarButton>
-              )}
-              <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
-              <ToolbarButton
-                onClick={() => {
-                  setDeleteError(null);
-                  setDeleteModalOpen(true);
-                }}
-                disabled={deleting}
-                className="text-danger hover:text-danger"
-              >
-                Delete
-              </ToolbarButton>
-              <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
-                {runningNow ? 'Running…' : '▷ Run now'}
-              </ToolbarButton>
-            </div>
-          </div>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto px-8 py-8">
-          <div className="mx-auto max-w-[960px] space-y-8">
-            <section className="space-y-4">
+      <div className="h-full overflow-y-auto">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[60rem] space-y-8">
+          <AppPageIntro
+            eyebrow="Automations"
+            title={title}
+            summary={(
               <div className="flex flex-wrap items-center gap-3 text-[13px]">
                 <span className={`inline-flex items-center gap-2 ${status.cls}`}>
                   <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(effectiveSummary)}`} />
@@ -657,29 +619,60 @@ function AutomationDetailView({
                 <span className="text-dim">{scheduleLabel}</span>
                 <span className="text-dim">{targetLabel}</span>
               </div>
-              <div>
-                <h1 className="text-[46px] font-semibold tracking-[-0.04em] text-primary">{title}</h1>
-              </div>
-            </section>
+            )}
+            titleClassName="text-[40px] sm:text-[46px]"
+            actions={(
+              <>
+                <ToolbarButton onClick={onBack}>Back</ToolbarButton>
+                <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>
+                  ↻ Refresh
+                </ToolbarButton>
+                <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
+                  {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
+                </ToolbarButton>
+                {detail?.threadConversationId && (
+                  <ToolbarButton onClick={() => {
+                    if (detail.threadConversationId) {
+                      navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`);
+                    }
+                  }}>
+                    Open thread
+                  </ToolbarButton>
+                )}
+                <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
+                <ToolbarButton
+                  onClick={() => {
+                    setDeleteError(null);
+                    setDeleteModalOpen(true);
+                  }}
+                  disabled={deleting}
+                  className="text-danger hover:text-danger"
+                >
+                  Delete
+                </ToolbarButton>
+                <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
+                  {runningNow ? 'Running…' : '▷ Run now'}
+                </ToolbarButton>
+              </>
+            )}
+          />
 
-            <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
-              <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
-              <DetailMetaBlock label="Target" value={targetLabel} hint={detail?.targetType === 'conversation' ? 'injects the prompt back into a thread' : 'runs the prompt as a background automation'} />
-              <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
-              <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
-              <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
-              <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
-              <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'thread wakeups reuse the thread context instead' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
-            </section>
+          <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
+            <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
+            <DetailMetaBlock label="Target" value={targetLabel} hint={detail?.targetType === 'conversation' ? 'injects the prompt back into a thread' : 'runs the prompt as a background automation'} />
+            <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
+            <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
+            <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
+            <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
+            <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'thread wakeups reuse the thread context instead' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
+          </section>
 
-            <section className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Configuration</h2>
-                  <p className="mt-1 text-[13px] text-secondary">The bits that matter without shoving them into a skinny side rail.</p>
-                </div>
-                {definitionLabel && <span className="truncate text-[12px] text-dim">{definitionLabel}</span>}
-              </div>
+          <AppPageSection
+            title="Configuration"
+            description="The bits that matter without shoving them into a skinny side rail."
+          >
+            <div className="space-y-4">
+              {definitionLabel && <span className="block truncate text-[12px] text-dim">{definitionLabel}</span>}
               <div className="grid gap-6 sm:grid-cols-2">
                 <DetailMetaBlock label="Automation ID" value={effectiveSummary.id} />
                 <DetailMetaBlock label="Folder" value={folderLabel} />
@@ -691,28 +684,28 @@ function AutomationDetailView({
                 )}
                 {detail?.filePath && <DetailMetaBlock label="Definition path" value={detail.filePath} />}
               </div>
-            </section>
+            </div>
+          </AppPageSection>
 
-            <section className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-[20px] font-semibold tracking-tight text-primary">Prompt</h2>
-                {definitionLabel && <span className="truncate text-[12px] text-dim">{definitionLabel}</span>}
-              </div>
+          <AppPageSection title="Prompt">
+            <div className="space-y-4">
+              {definitionLabel && <span className="block truncate text-[12px] text-dim">{definitionLabel}</span>}
               {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
-            </section>
+            </div>
+          </AppPageSection>
 
-            <section className="space-y-4 border-t border-border-subtle pt-6">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Runs</h2>
-                  <p className="mt-1 text-[13px] text-secondary">This automation owns its run history.</p>
-                </div>
-                {selectedRunId && (
+          <AppPageSection
+            title="Runs"
+            description="This automation owns its run history."
+          >
+            <div className="space-y-4">
+              {selectedRunId && (
+                <div className="flex justify-end">
                   <ToolbarButton onClick={() => setSelectedRun(null)}>
                     Hide run details
                   </ToolbarButton>
-                )}
-              </div>
+                </div>
+              )}
 
               {taskRuns.length === 0 ? (
                 <p className="text-[14px] text-secondary">{runHistoryLabel}</p>
@@ -751,48 +744,46 @@ function AutomationDetailView({
                   })}
                 </div>
               )}
-            </section>
+            </div>
+          </AppPageSection>
 
-            {detail && (
-              <section className="space-y-4 border-t border-border-subtle pt-6">
-                <div>
-                  <h2 className="text-[20px] font-semibold tracking-tight text-primary">Activity</h2>
-                  <p className="mt-1 text-[13px] text-secondary">Missed schedules and catch-up decisions for this automation.</p>
-                </div>
+          {detail && (
+            <AppPageSection
+              title="Activity"
+              description="Missed schedules and catch-up decisions for this automation."
+            >
+              {activityEntries.length === 0 ? (
+                <p className="text-[14px] text-secondary">No schedule events yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {activityEntries.map((entry) => {
+                    const statusMeta = automationActivityStatus(entry);
 
-                {activityEntries.length === 0 ? (
-                  <p className="text-[14px] text-secondary">No schedule events yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {activityEntries.map((entry) => {
-                      const statusMeta = automationActivityStatus(entry);
-
-                      return (
-                        <div key={entry.id} className="rounded-2xl border border-border-subtle/80 px-4 py-3">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-[14px] font-medium text-primary">{automationActivityHeadline(entry)}</p>
-                                <span className={`text-[12px] ${statusMeta.cls}`}>{statusMeta.text}</span>
-                              </div>
-                              <p className="mt-1 text-[12px] text-secondary">{automationActivitySummary(entry)}</p>
-                              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
-                                <span>Detected {timeAgo(entry.createdAt)}</span>
-                                <span>·</span>
-                                <span>Latest slot {timeAgo(entry.lastScheduledAt)}</span>
-                                {entry.count > 1 && <><span>·</span><span>First slot {timeAgo(entry.firstScheduledAt)}</span></>}
-                              </div>
+                    return (
+                      <div key={entry.id} className="rounded-2xl border border-border-subtle/80 px-4 py-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-[14px] font-medium text-primary">{automationActivityHeadline(entry)}</p>
+                              <span className={`text-[12px] ${statusMeta.cls}`}>{statusMeta.text}</span>
+                            </div>
+                            <p className="mt-1 text-[12px] text-secondary">{automationActivitySummary(entry)}</p>
+                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
+                              <span>Detected {timeAgo(entry.createdAt)}</span>
+                              <span>·</span>
+                              <span>Latest slot {timeAgo(entry.lastScheduledAt)}</span>
+                              {entry.count > 1 && <><span>·</span><span>First slot {timeAgo(entry.firstScheduledAt)}</span></>}
                             </div>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
-        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </AppPageSection>
+          )}
+        </AppPageLayout>
       </div>
 
       {deleteModalOpen && (
@@ -928,32 +919,30 @@ function AutomationsOverview({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[72rem] px-4 py-8 sm:px-6 sm:py-10">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0 space-y-2">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Automations</p>
-            <div className="space-y-1">
-              <h1 className="text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px]">Automations</h1>
-              <p className="text-[13px] text-secondary">{pageMeta}</p>
-            </div>
-          </div>
-          <ToolbarButton
-            className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-            onClick={onCreate}
-          >
-            + New automation
-          </ToolbarButton>
-        </div>
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-12">
+        <AppPageIntro
+          eyebrow="Automations"
+          title="Automations"
+          summary={pageMeta}
+          actions={(
+            <ToolbarButton
+              className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
+              onClick={onCreate}
+            >
+              + New automation
+            </ToolbarButton>
+          )}
+        />
 
-        <div className="mt-10 space-y-12">
+        <div className="space-y-12">
           <AutomationsSection id="automation-jobs" label="Jobs">
             {tasks.length === 0 ? (
-              <div className="space-y-4 border-t border-border-subtle/65 pt-6">
+              <div className="space-y-4">
                 <p className="max-w-xl text-[14px] leading-6 text-secondary">No jobs yet.</p>
                 <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
               </div>
             ) : (
-              <div className="border-t border-border-subtle/70">
+              <div>
                 {rows.map((task) => (
                   <AutomationListRow key={task.id} task={task} />
                 ))}
@@ -963,11 +952,11 @@ function AutomationsOverview({
 
           <AutomationsSection id="automation-threads" label="Threads">
             {associatedThreads.length === 0 ? (
-              <div className="border-t border-border-subtle/65 pt-6">
+              <div>
                 <p className="max-w-xl text-[14px] leading-6 text-secondary">No associated threads yet.</p>
               </div>
             ) : (
-              <div className="border-t border-border-subtle/70">
+              <div>
                 {associatedThreads.map((thread) => (
                   <AutomationThreadRow key={thread.conversationId} thread={thread} />
                 ))}
@@ -975,7 +964,7 @@ function AutomationsOverview({
             )}
           </AutomationsSection>
         </div>
-      </div>
+      </AppPageLayout>
     </div>
   );
 }

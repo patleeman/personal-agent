@@ -2,7 +2,9 @@ import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } fro
 import QRCode from 'qrcode';
 import { formatContextWindowLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import { api } from '../client/api';
+import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useApi } from '../hooks/useApi';
+import { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSyncStatus';
 import { THINKING_LEVEL_OPTIONS, getModelSelectableServiceTierOptions, groupModelsByProvider } from '../model/modelPreferences';
 import { resetStoredConversationUiState, resetStoredLayoutPreferences } from '../local/localSettings';
 import { type ThemePreference, useTheme } from '../ui-state/theme';
@@ -25,7 +27,7 @@ import type {
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
 } from '../shared/types';
-import { Pill, ToolbarButton, cx } from '../components/ui';
+import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, Pill, ToolbarButton, cx } from '../components/ui';
 
 const INPUT_CLASS = 'w-full rounded-lg border border-border-subtle bg-surface/70 px-3 py-2 text-[13px] text-primary shadow-none transition-colors focus:border-accent/50 focus:bg-surface focus:outline-none disabled:opacity-50';
 const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px] shadow-none';
@@ -326,13 +328,9 @@ function SettingsSection({
   className?: string;
 }) {
   return (
-    <section id={id} className={cx('scroll-mt-24 space-y-6', className)}>
-      <div className="space-y-2">
-        <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{label}</h2>
-        {description ? <p className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</p> : null}
-      </div>
-      <div className="border-t border-border-subtle/65 pt-6">{children}</div>
-    </section>
+    <AppPageSection id={id} title={label} description={description} className={className}>
+      {children}
+    </AppPageSection>
   );
 }
 
@@ -807,36 +805,12 @@ function SettingsTableOfContents({
   onNavigate: (sectionId: SettingsQuickLinkId) => void;
 }) {
   return (
-    <aside className="hidden lg:block lg:sticky lg:top-8 lg:self-start">
-      <nav aria-label="Settings sections" className="space-y-3">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim/85">On this page</p>
-        <div className="space-y-2">
-          {items.map((item) => {
-            const active = item.id === activeId;
-            return (
-              <a
-                key={item.id}
-                href={`#${item.id}`}
-                onClick={(event) => {
-                  event.preventDefault();
-                  onNavigate(item.id);
-                }}
-                className={cx(
-                  'block border-l py-1 pl-4 pr-1 transition-colors',
-                  active ? 'border-accent text-primary' : 'border-border-subtle/60 text-secondary hover:border-border-default hover:text-primary',
-                )}
-                aria-current={active ? 'location' : undefined}
-              >
-                <span className="block text-[13px] font-medium">{item.label}</span>
-                <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
-                  {item.summary}
-                </span>
-              </a>
-            );
-          })}
-        </div>
-      </nav>
-    </aside>
+    <AppPageToc
+      items={items}
+      activeId={activeId}
+      onNavigate={onNavigate}
+      ariaLabel="Settings sections"
+    />
   );
 }
 
@@ -1353,7 +1327,6 @@ export function SettingsPage() {
     data: modelProviderState,
     loading: modelProviderLoading,
     error: modelProviderError,
-    refetch: refetchModelProviders,
     replaceData: replaceModelProviderState,
   } = useApi(api.modelProviders);
   const {
@@ -1433,7 +1406,7 @@ export function SettingsPage() {
   const settingsScrollRef = useRef<HTMLDivElement | null>(null);
   const [activeQuickLinkId, setActiveQuickLinkId] = useState<SettingsQuickLinkId>(SETTINGS_QUICK_LINKS[0].id);
 
-  const visibleQuickLinks = useMemo(
+  const visibleQuickLinks = useMemo<readonly SettingsQuickLink[]>(
     () => (desktopEnvironment?.isElectron || isDesktopShell())
       ? SETTINGS_QUICK_LINKS
       : SETTINGS_QUICK_LINKS.filter((item) => item.id !== 'settings-desktop'),
@@ -1579,6 +1552,10 @@ export function SettingsPage() {
       || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
     : false;
   const vaultRootManagedByKnowledgeBase = vaultRootState?.source === 'knowledge-base';
+  const knowledgeBaseSyncPresentation = useMemo(
+    () => getKnowledgeBaseSyncPresentation(knowledgeBaseState, { includeLastSyncAt: true }),
+    [knowledgeBaseState],
+  );
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
@@ -1594,6 +1571,8 @@ export function SettingsPage() {
   const pickingDefaultCwd = pathPickerTarget === 'default-cwd';
   const pickingSkillFolders = pathPickerTarget === 'skill-folders';
   const pickingInstructionFiles = pathPickerTarget === 'instruction-files';
+
+  useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
 
   useEffect(() => {
     if (vaultRootState) {
@@ -2520,21 +2499,6 @@ export function SettingsPage() {
     }
   }
 
-  function handleRefresh() {
-    void Promise.all([
-      refetchSkillFolders({ resetLoading: false }),
-      refetchInstructions({ resetLoading: false }),
-      refetchModels({ resetLoading: false }),
-      refetchModelProviders({ resetLoading: false }),
-      refetchVaultRoot({ resetLoading: false }),
-      refetchKnowledgeBase({ resetLoading: false }),
-      refetchDefaultCwd({ resetLoading: false }),
-      refetchConversationTitleSettings({ resetLoading: false }),
-      refetchProviderAuth({ resetLoading: false }),
-      oauthLoginState ? api.providerOAuthLogin(oauthLoginState.id).then(setOauthLoginState).catch(() => null) : Promise.resolve(null),
-    ]);
-  }
-
   function navigateToSection(sectionId: SettingsQuickLinkId) {
     setActiveQuickLinkId(sectionId);
     const section = settingsScrollRef.current?.querySelector<HTMLElement>(`#${sectionId}`);
@@ -2543,22 +2507,25 @@ export function SettingsPage() {
 
   return (
     <div ref={settingsScrollRef} className="h-full overflow-y-auto">
-      <div className="mx-auto w-full max-w-[86rem] px-4 py-8 sm:px-6 sm:py-10">
-        <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14">
-          <div className="min-w-0">
-            <div className="mx-auto flex w-full max-w-[58rem] flex-col gap-12">
-              <div className="flex justify-end">
-                <h1 className="sr-only">Settings</h1>
-                <ToolbarButton
-                  className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-                  onClick={handleRefresh}
-                >
-                  ↻ Refresh
-                </ToolbarButton>
-              </div>
+      <AppPageLayout
+        shellClassName="max-w-[86rem]"
+        contentClassName="max-w-[58rem] flex flex-col gap-12"
+        aside={(
+          <SettingsTableOfContents
+            items={visibleQuickLinks}
+            activeId={activeQuickLinkId}
+            onNavigate={navigateToSection}
+          />
+        )}
+      >
+        <AppPageIntro
+          eyebrow="Settings"
+          title="Settings"
+          summary="Defaults, providers, skills, desktop runtime, and interface state."
+        />
 
-              <div className="flex flex-col gap-12">
-                <SettingsSection
+        <div className="flex flex-col gap-12">
+          <SettingsSection
                   id="settings-skills"
                   label="Skills"
                   description="Skill discovery, bundled MCP wrappers, and extra runtime instructions."
@@ -2959,18 +2926,12 @@ export function SettingsPage() {
                       disabled={knowledgeBaseAction !== null}
                     />
                     <p className="ui-card-meta break-all">Local mirror · <span className="font-mono text-[11px]">{knowledgeBaseState.managedRoot}</span></p>
-                    <p className="ui-card-meta break-all">
+                    <p className={cx('ui-card-meta break-all', knowledgeBaseAction === null && knowledgeBaseSyncPresentation.toneClass)}>
                       {knowledgeBaseAction === 'save'
                         ? 'Saving knowledge base…'
                         : knowledgeBaseAction === 'sync'
                           ? 'Syncing knowledge base…'
-                          : knowledgeBaseState.syncStatus === 'error'
-                            ? `Last sync failed · ${knowledgeBaseState.lastError ?? 'Unknown error'}`
-                            : knowledgeBaseState.lastSyncAt
-                              ? `Last synced · ${new Date(knowledgeBaseState.lastSyncAt).toLocaleString()}`
-                              : knowledgeBaseState.configured
-                                ? 'Ready to sync.'
-                                : 'No managed knowledge base repo configured.'}
+                          : knowledgeBaseSyncPresentation.text}
                     </p>
                     <p className="ui-card-meta break-all">Recovery copies · <span className="font-mono text-[11px]">{knowledgeBaseState.recoveryDir}</span> · {knowledgeBaseState.recoveredEntryCount} saved</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -4065,17 +4026,8 @@ export function SettingsPage() {
               </div>
             </SettingsPanel>
           </SettingsSection>
-              </div>
-            </div>
-          </div>
-
-          <SettingsTableOfContents
-            items={visibleQuickLinks}
-            activeId={activeQuickLinkId}
-            onNavigate={navigateToSection}
-          />
         </div>
-      </div>
+      </AppPageLayout>
     </div>
   );
 }

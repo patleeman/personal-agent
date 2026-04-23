@@ -140,4 +140,184 @@ export function EmptyState({
   );
 }
 
+export interface AppPageTocItem<TId extends string = string> {
+  id: TId;
+  label: ReactNode;
+  summary?: ReactNode;
+}
+
+export function AppPageLayout({
+  children,
+  aside,
+  shellClassName,
+  gridClassName,
+  contentClassName,
+  asideClassName,
+}: {
+  children: ReactNode;
+  aside?: ReactNode;
+  shellClassName?: string;
+  gridClassName?: string;
+  contentClassName?: string;
+  asideClassName?: string;
+}) {
+  if (!aside) {
+    return (
+      <div className={cx('ui-app-page-shell', shellClassName)}>
+        <div className={cx('ui-app-page-main', contentClassName)}>{children}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={cx('ui-app-page-shell', shellClassName)}>
+      <div className={cx('ui-app-page-grid', gridClassName)}>
+        <div className={cx('ui-app-page-main', contentClassName)}>{children}</div>
+        <div className={cx('ui-app-page-aside', asideClassName)}>{aside}</div>
+      </div>
+    </div>
+  );
+}
+
+export function AppPageIntro({
+  eyebrow,
+  title,
+  summary,
+  actions,
+  className,
+  titleClassName,
+  summaryClassName,
+}: {
+  eyebrow?: ReactNode;
+  title: ReactNode;
+  summary?: ReactNode;
+  actions?: ReactNode;
+  className?: string;
+  titleClassName?: string;
+  summaryClassName?: string;
+}) {
+  return (
+    <section className={cx('ui-app-page-intro', className)}>
+      <div className="min-w-0 space-y-2">
+        {eyebrow ? <div className="ui-app-page-eyebrow">{eyebrow}</div> : null}
+        <div className="space-y-1.5">
+          <h1 className={cx('ui-app-page-title', titleClassName)}>{title}</h1>
+          {summary ? <div className={cx('ui-app-page-summary', summaryClassName)}>{summary}</div> : null}
+        </div>
+      </div>
+      {actions ? <div className="flex flex-wrap items-center justify-end gap-2">{actions}</div> : null}
+    </section>
+  );
+}
+
+export function AppPageSection({
+  id,
+  title,
+  description,
+  children,
+  className,
+  bodyClassName,
+}: {
+  id?: string;
+  title?: ReactNode;
+  description?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  bodyClassName?: string;
+}) {
+  return (
+    <section id={id} className={cx('ui-app-page-section', className)}>
+      {title || description ? (
+        <div className="space-y-2">
+          {title ? <h2 className="text-[28px] font-semibold tracking-[-0.035em] text-primary sm:text-[30px]">{title}</h2> : null}
+          {description ? <div className="max-w-3xl text-[13px] leading-6 text-secondary">{description}</div> : null}
+        </div>
+      ) : null}
+      <div className={cx('ui-app-page-section-body', bodyClassName)}>{children}</div>
+    </section>
+  );
+}
+
+export function AppPageToc<TId extends string>({
+  items,
+  activeId,
+  onNavigate,
+  ariaLabel = 'Page sections',
+  title = 'On this page',
+}: {
+  items: readonly AppPageTocItem<TId>[];
+  activeId: TId;
+  onNavigate: (sectionId: TId) => void;
+  ariaLabel?: string;
+  title?: ReactNode;
+}) {
+  return (
+    <aside>
+      <nav aria-label={ariaLabel} className="space-y-3">
+        <div className="ui-app-page-toc-title">{title}</div>
+        <div className="space-y-2">
+          {items.map((item) => {
+            const active = item.id === activeId;
+            return (
+              <a
+                key={item.id}
+                href={`#${item.id}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  onNavigate(item.id);
+                }}
+                className={cx('ui-app-page-toc-link', active && 'ui-app-page-toc-link-active')}
+                aria-current={active ? 'location' : undefined}
+              >
+                <span className="block text-[13px] font-medium">{item.label}</span>
+                {item.summary ? (
+                  <span className={cx('mt-0.5 block text-[11px] leading-5', active ? 'text-primary/75' : 'text-dim')}>
+                    {item.summary}
+                  </span>
+                ) : null}
+              </a>
+            );
+          })}
+        </div>
+      </nav>
+    </aside>
+  );
+}
+
+export function AppPageEmptyState({
+  icon,
+  title,
+  body,
+  action,
+  align = 'center',
+  className,
+  contentClassName,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  body?: ReactNode;
+  action?: ReactNode;
+  align?: 'start' | 'center';
+  className?: string;
+  contentClassName?: string;
+}) {
+  return (
+    <div
+      className={cx(
+        'ui-app-page-empty-shell',
+        align === 'start' ? 'ui-app-page-empty-shell-start' : 'ui-app-page-empty-shell-center',
+        className,
+      )}
+    >
+      <EmptyState
+        icon={icon}
+        title={title}
+        body={body}
+        action={action}
+        className={cx('w-full max-w-[34rem]', contentClassName)}
+      />
+    </div>
+  );
+}
+
 

@@ -82,6 +82,19 @@ Use it for:
 - provider auth and model defaults
 - desktop host settings when running in Electron
 
+## Page layout rhythm
+
+Top-level web UI pages should share the same structure instead of each route inventing its own chrome.
+
+Use this pattern for main pages:
+
+- intro row with eyebrow, page title, short summary, and optional actions
+- top-aligned empty states inside the same content width as the main page body
+- sections separated by light top borders instead of nested cards
+- a right-side table of contents only for long detail pages like Settings
+
+Keep workspace-style surfaces like Conversations and the Knowledge editor lighter, but make their empty and onboarding states follow the same spacing and typography.
+
 ## Live updates
 
 The UI prefers pushed updates.
