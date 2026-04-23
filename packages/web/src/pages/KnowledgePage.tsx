@@ -24,9 +24,8 @@ export function KnowledgePage() {
   if (!activeFileId) {
     return (
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[58rem] flex min-h-full flex-col gap-10">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
           <AppPageIntro
-            eyebrow="Knowledge"
             title="Knowledge"
             summary="Edit durable files under the indexed knowledge root and move between notes from the sidebar."
           />

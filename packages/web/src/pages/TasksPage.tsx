@@ -606,9 +606,8 @@ function AutomationDetailView({
   return (
     <>
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[60rem] space-y-8">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] space-y-8">
           <AppPageIntro
-            eyebrow="Automations"
             title={title}
             summary={(
               <div className="flex flex-wrap items-center gap-3 text-[13px]">
@@ -921,7 +920,6 @@ function AutomationsOverview({
     <div className="h-full overflow-y-auto">
       <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-12">
         <AppPageIntro
-          eyebrow="Automations"
           title="Automations"
           summary={pageMeta}
           actions={(

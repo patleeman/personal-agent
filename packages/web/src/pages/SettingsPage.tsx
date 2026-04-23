@@ -2508,8 +2508,8 @@ export function SettingsPage() {
   return (
     <div ref={settingsScrollRef} className="h-full overflow-y-auto">
       <AppPageLayout
-        shellClassName="max-w-[86rem]"
-        contentClassName="max-w-[58rem] flex flex-col gap-12"
+        shellClassName="max-w-[90rem]"
+        contentClassName="max-w-[72rem] flex flex-col gap-12"
         aside={(
           <SettingsTableOfContents
             items={visibleQuickLinks}
@@ -2519,7 +2519,6 @@ export function SettingsPage() {
         )}
       >
         <AppPageIntro
-          eyebrow="Settings"
           title="Settings"
           summary="Defaults, providers, skills, desktop runtime, and interface state."
         />
