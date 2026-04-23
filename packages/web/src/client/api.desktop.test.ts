@@ -1374,6 +1374,37 @@ describe('api desktop transport', () => {
     expect(result).toEqual({ ok: true });
   });
 
+  it('falls back to HTTP when the local desktop bridge model read fails', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(createJsonResponse({ currentModel: 'http-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readModels = vi.fn().mockRejectedValue(new Error('ipc failed'));
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'local',
+          activeHostLabel: 'Local',
+          activeHostKind: 'local',
+          activeHostSummary: 'Local backend is healthy.',
+        }),
+        readModels,
+      },
+    });
+
+    const { api } = await import('./api');
+    const models = await api.models();
+
+    expect(readModels).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/models', { method: 'GET', cache: 'no-store' });
+    expect(models).toEqual({
+      currentModel: 'http-model',
+      currentThinkingLevel: 'medium',
+      currentServiceTier: '',
+      models: [{ id: 'http-model', provider: 'openai-codex', name: 'HTTP Model', context: 128_000 }],
+    });
+  });
+
   it('falls back to HTTP for desktop model and provider settings on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ currentModel: 'remote-model', currentThinkingLevel: 'medium', currentServiceTier: '', models: [] }))
