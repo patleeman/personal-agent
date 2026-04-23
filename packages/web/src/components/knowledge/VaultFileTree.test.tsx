@@ -248,7 +248,7 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(container.textContent).toContain('Sync a repo to enable Knowledge.');
-    expect(container.textContent).toContain('won’t fall back to the old local vault path');
+    expect(container.textContent).toContain('The Knowledge UI stays empty until a managed repo is configured.');
     expect(queryInShadowRoots(container, 'button[aria-label="New file"]')).toBeNull();
     expect(apiMocks.vaultFiles).not.toHaveBeenCalled();
   });

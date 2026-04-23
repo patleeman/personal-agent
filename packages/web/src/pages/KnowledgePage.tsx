@@ -56,7 +56,7 @@ export function KnowledgePage() {
           <AppPageEmptyState
             align="start"
             title="Sync a repo to enable Knowledge"
-            body="The Knowledge UI stays empty until managed sync is configured, so it won’t fall back to the old local vault path."
+            body="The Knowledge UI stays empty until a managed repo is configured."
             action={<Link to="/settings#settings-general" className="ui-toolbar-button">Open Settings</Link>}
           />
         </AppPageLayout>

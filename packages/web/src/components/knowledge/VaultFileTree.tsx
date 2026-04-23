@@ -1317,7 +1317,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         <div className="flex flex-1 min-h-0 items-start px-3 pb-3 pt-2">
           <div className="space-y-1.5 text-[12px] leading-5 text-secondary">
             <p className="font-medium text-primary">Sync a repo to enable Knowledge.</p>
-            <p>The Knowledge UI stays empty until managed sync is configured, so it won’t fall back to the old local vault path.</p>
+            <p>The Knowledge UI stays empty until a managed repo is configured.</p>
           </div>
         </div>
       ) : (

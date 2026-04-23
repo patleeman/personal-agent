@@ -45,9 +45,9 @@ Use it for:
 
 Managed knowledge-repo editor for files under `<state-root>/knowledge-base/repo`.
 
-It stays in setup mode until `knowledgeBaseRepoUrl` is configured, so the Knowledge UI does not fall back to the old direct vault-root path.
+It stays in setup mode until `knowledgeBaseRepoUrl` is configured.
 
-When managed sync is first pointed at an empty or bootstrap-only repo, PA copies content from the old unmanaged vault root into the managed mirror before pushing.
+If you still have content in an old unmanaged local vault, copy it into the managed repo yourself before switching over. PA no longer auto-imports legacy vault content.
 
 Use it for:
 

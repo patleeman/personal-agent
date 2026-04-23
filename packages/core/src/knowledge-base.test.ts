@@ -96,7 +96,7 @@ describe('KnowledgeBaseManager', () => {
     expect(storedState.lastFullMaintenanceAt).toBeUndefined();
   });
 
-  it('imports the old unmanaged vault into an empty managed repo on first enable', () => {
+  it('does not import the old unmanaged vault into an empty managed repo on first enable', () => {
     const remoteRepo = initBareRepo();
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -108,26 +108,22 @@ describe('KnowledgeBaseManager', () => {
     writeFileSync(join(legacyVaultRoot, 'notes', 'daily.md'), '# Daily\n');
     mkdirSync(join(legacyVaultRoot, 'skills', 'capture'), { recursive: true });
     writeFileSync(join(legacyVaultRoot, 'skills', 'capture', 'SKILL.md'), '# Capture\n');
-    mkdirSync(join(legacyVaultRoot, '.obsidian'), { recursive: true });
-    writeFileSync(join(legacyVaultRoot, '.obsidian', 'workspace.json'), '{}\n');
 
     const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
     const state = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
 
-    expect(readFileSync(join(state.managedRoot, 'AGENTS.md'), 'utf-8')).toBe('# Agent\n');
-    expect(readFileSync(join(state.managedRoot, 'notes', 'daily.md'), 'utf-8')).toBe('# Daily\n');
-    expect(readFileSync(join(state.managedRoot, 'skills', 'capture', 'SKILL.md'), 'utf-8')).toBe('# Capture\n');
-    expect(existsSync(join(state.managedRoot, '.obsidian'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'notes', 'daily.md'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'skills', 'capture', 'SKILL.md'))).toBe(false);
 
     const remoteClone = createTempDir('pa-kb-verify-');
     runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
-    expect(readFileSync(join(remoteClone, 'AGENTS.md'), 'utf-8')).toBe('# Agent\n');
-    expect(readFileSync(join(remoteClone, 'notes', 'daily.md'), 'utf-8')).toBe('# Daily\n');
-    expect(readFileSync(join(remoteClone, 'skills', 'capture', 'SKILL.md'), 'utf-8')).toBe('# Capture\n');
-    expect(existsSync(join(remoteClone, '.obsidian'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'notes', 'daily.md'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'skills', 'capture', 'SKILL.md'))).toBe(false);
   });
 
-  it('imports the old unmanaged vault into an already-configured bootstrap-only repo on the next sync', () => {
+  it('does not import the old unmanaged vault into an already-configured bootstrap-only repo on the next sync', () => {
     const remoteRepo = initBareRepo();
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -147,13 +143,13 @@ describe('KnowledgeBaseManager', () => {
     });
 
     const syncedState = manager.syncNow();
-    expect(readFileSync(join(syncedState.managedRoot, 'AGENTS.md'), 'utf-8')).toBe('# Imported later\n');
-    expect(readFileSync(join(syncedState.managedRoot, 'projects', 'kb-migration', 'plan.md'), 'utf-8')).toBe('# Plan\n');
+    expect(existsSync(join(syncedState.managedRoot, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(syncedState.managedRoot, 'projects', 'kb-migration', 'plan.md'))).toBe(false);
 
     const remoteClone = createTempDir('pa-kb-verify-');
     runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
-    expect(readFileSync(join(remoteClone, 'AGENTS.md'), 'utf-8')).toBe('# Imported later\n');
-    expect(readFileSync(join(remoteClone, 'projects', 'kb-migration', 'plan.md'), 'utf-8')).toBe('# Plan\n');
+    expect(existsSync(join(remoteClone, 'AGENTS.md'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'projects', 'kb-migration', 'plan.md'))).toBe(false);
   });
 
   it('does not import the old unmanaged vault into a non-empty managed repo', () => {

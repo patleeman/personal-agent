@@ -75,7 +75,7 @@ describe('KnowledgePage', () => {
     consoleErrorSpy.mockRestore();
   });
 
-  it('shows setup guidance instead of the legacy vault when managed sync is off', () => {
+  it('shows setup guidance when managed sync is off', () => {
     vi.mocked(useApi).mockImplementationOnce((fetcher) => {
       if (fetcher === api.knowledgeBase) {
         return buildUseApiResult({
@@ -97,7 +97,7 @@ describe('KnowledgePage', () => {
     const html = renderPage('/knowledge');
 
     expect(html).toContain('Sync a repo to enable Knowledge');
-    expect(html).toContain('won’t fall back to the old local vault path');
+    expect(html).toContain('The Knowledge UI stays empty until a managed repo is configured.');
     expect(html).toContain('href="/settings#settings-general"');
     expect(html).not.toContain('Select a file to start editing');
   });
