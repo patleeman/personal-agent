@@ -216,13 +216,13 @@ export function useConversations() {
     [tasks],
   );
 
-  const withTitles = (sessions ?? []).map((session) => {
+  const withTitles = useMemo(() => (sessions ?? []).map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
     const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
     const title = liveTitle ?? sessionTitle;
 
     return title === session.title ? session : { ...session, title };
-  });
+  }), [liveTitles, sessions]);
   const openIdSet = useMemo(() => new Set(openIds), [openIds]);
   const pinnedIdSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
   const sessionsById = useMemo(

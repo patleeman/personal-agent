@@ -257,8 +257,8 @@ function useViewportWidth() {
 
 const ENABLE_OPEN_CONVERSATION_WARMING = true;
 const OPEN_TAB_WARM_TAIL_BLOCKS = 120;
-const OPEN_TAB_WARM_BOOT_DELAY_MS = 0;
-const OPEN_TAB_WARM_START_DELAY_MS = 0;
+const OPEN_TAB_WARM_BOOT_DELAY_MS = 1500;
+const OPEN_TAB_WARM_START_DELAY_MS = 250;
 const OPEN_TAB_WARM_INTERLEAVE_MS = 25;
 
 function getActiveConversationId(pathname: string): string | null {

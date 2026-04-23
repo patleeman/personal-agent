@@ -238,7 +238,7 @@ export function fetchConversationBootstrapCached(
   }
 
   const request = (async () => {
-    const cached = await readConversationBootstrapEntry(conversationId, options);
+    const cached = readCachedConversationBootstrapEntry(conversationId, options);
     if (cached && cached.versionKey === versionKey) {
       return cached.data;
     }
@@ -327,42 +327,46 @@ export function useConversationBootstrap(
     }
 
     let cancelled = false;
+    const cached = readCachedConversationBootstrapEntry(conversationId, options);
 
-    void (async () => {
-      let cached = readCachedConversationBootstrapEntry(conversationId, options);
-      if (!cached) {
-        cached = await readConversationBootstrapEntry(conversationId, options);
-        if (cancelled) {
-          return;
-        }
+    if (!cached) {
+      void readConversationBootstrapEntry(conversationId, options)
+        .then((persisted) => {
+          if (cancelled || !persisted) {
+            return;
+          }
 
-        if (cached) {
-          setData(cached.data);
+          setData((current) => current ?? persisted.data);
           setLoading(false);
-        }
-      }
+        })
+        .catch(() => {
+          // Ignore persisted bootstrap misses; the network request owns freshness.
+        });
+    }
 
-      if (cached?.versionKey === versionKey) {
-        return;
-      }
+    if (cached?.versionKey === versionKey) {
+      return () => {
+        cancelled = true;
+      };
+    }
 
-      try {
-        const nextData = await fetchConversationBootstrapCached(conversationId, options, versionKey);
+    void fetchConversationBootstrapCached(conversationId, options, versionKey)
+      .then((nextData) => {
         if (cancelled) {
           return;
         }
 
         setData(nextData);
         setLoading(false);
-      } catch (nextError) {
+      })
+      .catch((nextError) => {
         if (cancelled) {
           return;
         }
 
         setError(nextError instanceof Error ? nextError.message : String(nextError));
         setLoading(false);
-      }
-    })();
+      });
 
     return () => {
       cancelled = true;

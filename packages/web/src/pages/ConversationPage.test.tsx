@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ConversationPage,
   resolveDisplayedConversationPendingStatusLabel,
+  resolveConversationPerformanceMode,
   shouldShowMissingConversationState,
   shouldAutoDispatchPendingInitialPrompt,
   hasConversationTranscriptAcceptedPendingInitialPrompt,
@@ -14,6 +15,7 @@ import {
   shouldLoadConversationModels,
   shouldUseHealthyDesktopConversationState,
   shouldFetchConversationAttachments,
+  shouldRenderConversationRail,
   constrainPromptImageDimensions,
 } from './ConversationPage.js';
 
@@ -117,6 +119,28 @@ describe('prompt image resizing', () => {
 
   it('shrinks oversized portrait images to a 2000px long side', () => {
     expect(constrainPromptImageDimensions(1200, 3600)).toEqual({ width: 667, height: 2000 });
+  });
+});
+
+describe('conversation rendering mode', () => {
+  it('switches to aggressive rendering for large transcripts', () => {
+    expect(resolveConversationPerformanceMode({ messageCount: 95 })).toBe('default');
+    expect(resolveConversationPerformanceMode({ messageCount: 96 })).toBe('aggressive');
+    expect(resolveConversationPerformanceMode({ messageCount: 240 })).toBe('aggressive');
+  });
+
+  it('turns off the conversation rail when aggressive rendering is active', () => {
+    expect(shouldRenderConversationRail({
+      hasRenderableMessages: true,
+      realMessages: [{ type: 'text', ts: '2026-04-23T12:00:00.000Z', text: 'hello' }],
+      performanceMode: 'default',
+    })).toBe(true);
+
+    expect(shouldRenderConversationRail({
+      hasRenderableMessages: true,
+      realMessages: [{ type: 'text', ts: '2026-04-23T12:00:00.000Z', text: 'hello' }],
+      performanceMode: 'aggressive',
+    })).toBe(false);
   });
 });
 

@@ -601,6 +601,7 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
+const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
 
 function resolveConversationInitialHistoricalWarmupTarget(input: {
   draft: boolean;
@@ -687,6 +688,25 @@ export function shouldFetchConversationAttachments(input: {
   drawingsPickerOpen: boolean;
 }): boolean {
   return !input.draft && Boolean(input.conversationId) && input.drawingsPickerOpen;
+}
+
+export function resolveConversationPerformanceMode(input: {
+  messageCount: number;
+}): 'default' | 'aggressive' {
+  return input.messageCount >= AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD
+    ? 'aggressive'
+    : 'default';
+}
+
+export function shouldRenderConversationRail(input: {
+  hasRenderableMessages: boolean;
+  realMessages: MessageBlock[] | undefined;
+  performanceMode: 'default' | 'aggressive';
+}): boolean {
+  return input.hasRenderableMessages
+    && Boolean(input.realMessages)
+    && input.performanceMode === 'default'
+    && (input.realMessages?.length ?? 0) <= MAX_CONVERSATION_RAIL_BLOCKS;
 }
 
 function resolveConversationVisibleScrollBinding(input: {
@@ -7016,12 +7036,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || drawingsBusy
     || Boolean(drawingsError);
   const keyboardOpen = keyboardInset > 120;
-  // Keep the rail off once transcripts are large enough to trigger windowing.
-  // The rail continuously re-measures mounted message markers, which makes
-  // composer-driven layout work scale with transcript size.
-  const shouldRenderConversationRail = hasRenderableMessages
-    && Boolean(realMessages)
-    && (realMessages?.length ?? 0) <= MAX_CONVERSATION_RAIL_BLOCKS;
+  const conversationPerformanceMode = resolveConversationPerformanceMode({
+    messageCount: realMessages?.length ?? 0,
+  });
+  // Keep the rail off once transcripts are large enough to trigger aggressive
+  // transcript rendering. The rail continuously re-measures mounted message
+  // markers, which makes composer-driven layout work scale with transcript size.
+  const showConversationRail = shouldRenderConversationRail({
+    hasRenderableMessages,
+    realMessages,
+    performanceMode: conversationPerformanceMode,
+  });
   const editingDrawingAttachment = useMemo(() => {
     if (!editingDrawingLocalId || editingDrawingLocalId === '__new__') {
       return null;
@@ -7169,6 +7194,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               isStreaming={renderingStaleTranscript ? false : stream.isStreaming}
               isCompacting={renderingStaleTranscript ? false : stream.isCompacting}
               pendingStatusLabel={renderingStaleTranscript ? null : displayedPendingAssistantStatusLabel}
+              performanceMode={conversationPerformanceMode}
               onForkMessage={!renderingStaleTranscript && id && !stream.isStreaming ? forkConversationFromMessage : undefined}
               onRewindMessage={!renderingStaleTranscript && id && !stream.isStreaming ? rewindConversationFromMessage : undefined}
               onReplyToSelection={renderingStaleTranscript ? undefined : handleReplyToSelection}
@@ -7321,7 +7347,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           />
         </div>
       )}
-      {!showConversationLoadingState && shouldRenderConversationRail && realMessages && (
+      {!showConversationLoadingState && showConversationRail && realMessages && (
         <ConversationRail
           messages={realMessages}
           messageIndexOffset={messageIndexOffset}
@@ -7359,12 +7385,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     selectedArtifactId,
     selectedCheckpointId,
     sessionLoading,
-    shouldRenderConversationRail,
+    showConversationRail,
     showConversationLoadingState,
     showInlineConversationLoadingState,
     showScrollToBottomControl,
     stream.isCompacting,
     stream.isStreaming,
+    conversationPerformanceMode,
     submitAskUserQuestion,
     historicalTotalBlocks,
     availableDraftWorkspacePaths,

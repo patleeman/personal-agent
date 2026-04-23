@@ -1,11 +1,10 @@
-import { type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, type DragEvent, type MouseEvent as ReactMouseEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { VaultFileTree } from './knowledge/VaultFileTree';
 import { emitKBEvent } from './knowledge/knowledgeEvents';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { ConversationStatusText } from './ConversationStatusText';
 import { api } from '../client/api';
-import { useAppData } from '../app/contexts';
+import { useAppData, useAppEvents } from '../app/contexts';
 import { useConversations } from '../hooks/useConversations';
 import { sessionNeedsAttention } from '../session/sessionIndicators';
 import {
@@ -41,8 +40,12 @@ import {
 } from '../conversation/conversationRoutes';
 import { buildSidebarNavSectionStorageKey } from '../local/localSettings';
 import { getOrCreateConversationSurfaceId, retryLiveSessionActionAfterTakeover } from '../hooks/useSessionStream';
+import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import type { SessionMeta } from '../shared/types';
+
+const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
+const SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS = 120;
 
 function Ico({ d, size = 16 }: { d: string; size?: number }) {
   return (
@@ -201,6 +204,56 @@ function normalizeStoredStringList(values: Iterable<unknown>): string[] {
   }
 
   return normalized;
+}
+
+function getKnowledgeFallbackFileLabel(fileId: string): string {
+  const normalized = fileId.trim();
+  if (!normalized) {
+    return 'Untitled';
+  }
+
+  return normalized.split('/').filter(Boolean).pop() ?? normalized;
+}
+
+function VaultFileTreeFallback({
+  activeFileId,
+  onFileSelect,
+}: {
+  activeFileId: string | null;
+  onFileSelect: (id: string) => void;
+}) {
+  const fileId = activeFileId?.trim() || null;
+  const fileLabel = fileId ? getKnowledgeFallbackFileLabel(fileId) : null;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col border-t border-border-subtle/70">
+      <div className="px-4 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-dim/70">Open Files</div>
+      {fileId && fileLabel ? (
+        <div className="px-2 pb-3">
+          <div className="flex items-center gap-2 rounded-lg bg-surface/55 px-2.5 py-2 text-[12px] text-secondary">
+            <button
+              type="button"
+              onClick={() => onFileSelect(fileId)}
+              className="min-w-0 flex-1 truncate text-left text-primary"
+              aria-label={`Open file ${fileLabel}`}
+            >
+              {fileLabel}
+            </button>
+            <button
+              type="button"
+              className="text-dim/70"
+              aria-label={`Close file ${fileLabel}`}
+              disabled
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 py-2 text-[12px] text-dim">Loading files…</div>
+      )}
+    </div>
+  );
 }
 
 function WorkspaceQuickSelectModal({
@@ -1234,6 +1287,7 @@ function OpenConversationRow({
   onCopyWorkingDirectory,
   onCopyId,
   onCopyDeeplink,
+  onPrefetch,
   isAutomation = false,
   automationTitle,
   onDragStart,
@@ -1256,6 +1310,7 @@ function OpenConversationRow({
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
   onCopyId?: () => boolean | Promise<boolean>;
   onCopyDeeplink?: () => boolean | Promise<boolean>;
+  onPrefetch?: () => void;
   isAutomation?: boolean;
   automationTitle?: string;
   onDragStart?: (event: DragEvent<HTMLDivElement>) => void;
@@ -1463,6 +1518,10 @@ function OpenConversationRow({
     }
   }
 
+  const handleConversationIntent = useCallback(() => {
+    onPrefetch?.();
+  }, [onPrefetch]);
+
   function handleContextMenu(event: ReactMouseEvent<HTMLDivElement>) {
     if (!hasContextMenuActions) {
       return;
@@ -1523,6 +1582,9 @@ function OpenConversationRow({
       <Link
         to={`/conversations/${session.id}`}
         draggable={false}
+        onMouseEnter={handleConversationIntent}
+        onFocus={handleConversationIntent}
+        onPointerDown={handleConversationIntent}
         className={[
           'ui-sidebar-session-row select-none',
           active && 'ui-sidebar-session-row-active',
@@ -1740,6 +1802,7 @@ function OpenConversationRow({
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { versions } = useAppEvents();
   const { sessions, tasks } = useAppData();
   const {
     pinnedIds,
@@ -1977,6 +2040,22 @@ export function Sidebar() {
 
     return decodeURIComponent(match[1]);
   }, [location.pathname]);
+  const conversationBootstrapVersionKey = useMemo(() => buildConversationBootstrapVersionKey({
+    sessionsVersion: versions.sessions,
+    sessionFilesVersion: versions.sessionFiles,
+  }), [versions.sessionFiles, versions.sessions]);
+  const prefetchConversation = useCallback((conversationId: string) => {
+    const normalizedConversationId = conversationId.trim();
+    if (!normalizedConversationId || normalizedConversationId === activeConversationId) {
+      return;
+    }
+
+    void fetchConversationBootstrapCached(
+      normalizedConversationId,
+      { tailBlocks: SIDEBAR_CONVERSATION_PREFETCH_TAIL_BLOCKS },
+      conversationBootstrapVersionKey,
+    ).catch(() => undefined);
+  }, [activeConversationId, conversationBootstrapVersionKey]);
   const activeConversationSurfaceId = useMemo(() => {
     if (location.pathname === DRAFT_CONVERSATION_ROUTE) {
       return DRAFT_CONVERSATION_ID;
@@ -3045,6 +3124,7 @@ export function Sidebar() {
         onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}
         onCopyId={!isDraftTab ? () => handleCopyConversationId(session.id) : undefined}
         onCopyDeeplink={!isDraftTab ? () => handleCopyConversationDeeplink(session.id) : undefined}
+        onPrefetch={!isDraftTab ? () => prefetchConversation(session.id) : undefined}
         onDragStart={canDrag ? (event) => handleTabDragStart(section, session.id, event) : undefined}
         onDragOver={canDrag ? (event) => handleTabDragOver(section, session.id, event) : undefined}
         onDrop={canDrag ? (event) => handleTabDrop(section, session.id, event) : undefined}
@@ -3110,10 +3190,12 @@ export function Sidebar() {
 
         {isKnowledgeRoute ? (
           <div className="flex-1 overflow-hidden min-h-0">
-            <VaultFileTree
-              activeFileId={knowledgeActiveFileId}
-              onFileSelect={handleKnowledgeFileSelect}
-            />
+            <Suspense fallback={<VaultFileTreeFallback activeFileId={knowledgeActiveFileId} onFileSelect={handleKnowledgeFileSelect} />}>
+              <VaultFileTree
+                activeFileId={knowledgeActiveFileId}
+                onFileSelect={handleKnowledgeFileSelect}
+              />
+            </Suspense>
           </div>
         ) : null}
 
