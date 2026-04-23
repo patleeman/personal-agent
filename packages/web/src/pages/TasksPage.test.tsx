@@ -114,6 +114,9 @@ describe('TasksPage', () => {
     expect(html).toContain('Threads');
     expect(html).toContain('No jobs yet.');
     expect(html).toContain('No associated threads yet.');
+    expect(html).not.toContain('No automation jobs yet.');
+    expect(html).not.toContain('+ New automation');
+    expect(html.match(/New automation/g)?.length ?? 0).toBe(1);
     expect(html).not.toContain('Create one to start recurring work.');
     expect(html).not.toContain('Automation jobs');
     expect(html).not.toContain('Automation threads');

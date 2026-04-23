@@ -819,7 +819,7 @@ function AutomationsOverview({
 
   const pageMeta = useMemo(() => {
     if (tasks.length === 0) {
-      return 'No automation jobs yet.';
+      return undefined;
     }
 
     const segments = [`${enabledCount} enabled`];
@@ -922,14 +922,14 @@ function AutomationsOverview({
         <AppPageIntro
           title="Automations"
           summary={pageMeta}
-          actions={(
+          actions={tasks.length > 0 ? (
             <ToolbarButton
               className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
               onClick={onCreate}
             >
               + New automation
             </ToolbarButton>
-          )}
+          ) : undefined}
         />
 
         <div className="space-y-12">
