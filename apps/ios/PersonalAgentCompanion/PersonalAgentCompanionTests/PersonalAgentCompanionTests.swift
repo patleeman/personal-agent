@@ -378,6 +378,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(presentation.subtitle, "personal-agent")
     }
 
+    func testTranscriptMarkdownVerbatimFallbackKeepsOrderedLists() {
+        XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("1. First\n2. Second\n3. Third"))
+        XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("- First\n- Second"))
+        XCTAssertFalse(shouldRenderTranscriptMarkdownVerbatim("**Bold** inline text only"))
+    }
+
     func testPromptSendClearsComposerAndAddsBlocks() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

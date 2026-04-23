@@ -1710,6 +1710,24 @@ private extension JSONValue {
     }
 }
 
+func shouldRenderTranscriptMarkdownVerbatim(_ text: String) -> Bool {
+    let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+    guard lines.count > 1 else {
+        return false
+    }
+
+    return lines.contains { line in
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty {
+            return false
+        }
+        if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") || trimmed.hasPrefix("+ ") || trimmed.hasPrefix("> ") || trimmed.hasPrefix("#") {
+            return true
+        }
+        return trimmed.range(of: #"^\d+\.\s+"#, options: .regularExpression) != nil
+    }
+}
+
 private struct MarkdownText: View {
     let text: String
 
@@ -1718,10 +1736,12 @@ private struct MarkdownText: View {
     }
 
     var body: some View {
-        if let attributed = try? AttributedString(markdown: text) {
+        if shouldRenderTranscriptMarkdownVerbatim(text) {
+            Text(verbatim: text)
+        } else if let attributed = try? AttributedString(markdown: text) {
             Text(attributed)
         } else {
-            Text(text)
+            Text(verbatim: text)
         }
     }
 }
