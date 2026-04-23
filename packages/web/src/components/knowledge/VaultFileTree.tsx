@@ -630,6 +630,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     { id: '', label: '/ (vault root)' },
     ...folderIds.map((folderId) => ({ id: folderId, label: folderId })),
   ], [folderIds]);
+  const knowledgeBaseDisabled = knowledgeBaseState?.configured === false;
   const knowledgeBaseSyncPresentation = useMemo(() => {
     if (knowledgeBaseError && !knowledgeBaseState && !knowledgeBaseLoading) {
       return {
@@ -1000,8 +1001,19 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, [model, persistExpandedFolderIds]);
 
   useEffect(() => {
+    if (!knowledgeBaseState) {
+      return;
+    }
+
+    if (knowledgeBaseDisabled) {
+      setEntries([]);
+      model.resetPaths([]);
+      setLoading(false);
+      return;
+    }
+
     void loadSnapshot();
-  }, [loadSnapshot]);
+  }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, model]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -1067,6 +1079,16 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   useEffect(() => () => {
     model.cleanUp();
   }, [model]);
+
+  useEffect(() => {
+    if (!knowledgeBaseDisabled) {
+      return;
+    }
+
+    setMoveEntry(null);
+    setImportDirectoryId(null);
+    setCreateEntryState(null);
+  }, [knowledgeBaseDisabled]);
 
   useEffect(() => {
     const refreshKnowledgeBaseStatus = () => {
@@ -1187,33 +1209,37 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       <div ref={headerRef} className="px-3 pt-1 pb-1 shrink-0 rounded-md">
         <div className="flex items-center gap-1">
           <p className="ui-section-label flex-1">Knowledge Base</p>
-          <button
-            type="button"
-            className="ui-icon-button ui-icon-button-compact"
-            title="Import URL"
-            aria-label="Import URL"
-            onClick={() => setImportDirectoryId(normalizeDirectoryId(activeFileId ? idToDir(activeFileId) : ''))}
-          >
-            <Ico d={ICON.import} size={12} />
-          </button>
-          <button
-            type="button"
-            className="ui-icon-button ui-icon-button-compact"
-            title="New file"
-            aria-label="New file"
-            onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
-          >
-            <Ico d={ICON.plus} size={12} />
-          </button>
-          <button
-            type="button"
-            className="ui-icon-button ui-icon-button-compact"
-            title="New folder"
-            aria-label="New folder"
-            onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
-          >
-            <Ico d={ICON.folderPlus} size={12} />
-          </button>
+          {knowledgeBaseDisabled ? null : (
+            <>
+              <button
+                type="button"
+                className="ui-icon-button ui-icon-button-compact"
+                title="Import URL"
+                aria-label="Import URL"
+                onClick={() => setImportDirectoryId(normalizeDirectoryId(activeFileId ? idToDir(activeFileId) : ''))}
+              >
+                <Ico d={ICON.import} size={12} />
+              </button>
+              <button
+                type="button"
+                className="ui-icon-button ui-icon-button-compact"
+                title="New file"
+                aria-label="New file"
+                onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
+              >
+                <Ico d={ICON.plus} size={12} />
+              </button>
+              <button
+                type="button"
+                className="ui-icon-button ui-icon-button-compact"
+                title="New folder"
+                aria-label="New folder"
+                onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
+              >
+                <Ico d={ICON.folderPlus} size={12} />
+              </button>
+            </>
+          )}
         </div>
         <div className={cx('mt-0.5 flex items-center gap-2 text-[11px]', knowledgeBaseSyncPresentation.toneClass)}>
           <span
@@ -1224,78 +1250,89 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         </div>
       </div>
 
-      <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
-        {loading ? (
-          <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
-        ) : (
-          <TreesFileTree
-            className="h-full"
-            model={model}
-            renderContextMenu={(item: FileTreeContextMenuItem, context) => {
-              const entry = entryMap.get(item.path)
-                ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
-
-              return (
-                <TreeContextMenu
-                  onRename={() => {
-                    context.close({ restoreFocus: false });
-                    window.setTimeout(() => {
-                      model.startRenaming(entry.id);
-                    }, 0);
-                  }}
-                  onMove={() => {
-                    context.close();
-                    setMoveEntry(entry);
-                  }}
-                  onDelete={() => {
-                    context.close();
-                    void handleDelete(entry);
-                  }}
-                />
-              );
-            }}
-            style={TREE_HOST_STYLE}
-          />
-        )}
-      </div>
-
-      {openFileIds.length > 0 ? (
-        <>
-          <div
-            role="separator"
-            aria-label="Resize open files section"
-            aria-orientation="horizontal"
-            aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
-            aria-valuemax={maxOpenFilesSectionHeight}
-            aria-valuenow={openFilesSectionHeight}
-            tabIndex={0}
-            className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
-            onMouseDown={handleOpenFilesSectionResizeMouseDown}
-            onKeyDown={handleOpenFilesSectionResizeKeyDown}
-            onDoubleClick={handleOpenFilesSectionResizeReset}
-          >
-            <div className="flex h-2 items-center">
-              <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
-            </div>
+      {knowledgeBaseDisabled ? (
+        <div className="flex flex-1 min-h-0 items-start px-3 pb-3 pt-2">
+          <div className="space-y-1.5 text-[12px] leading-5 text-secondary">
+            <p className="font-medium text-primary">Sync a repo to enable Knowledge.</p>
+            <p>The Knowledge UI stays empty until managed sync is configured, so it won’t fall back to the old local vault path.</p>
           </div>
-          <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
+        </div>
+      ) : (
+        <>
+          <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
+            {loading ? (
+              <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
+            ) : (
+              <TreesFileTree
+                className="h-full"
+                model={model}
+                renderContextMenu={(item: FileTreeContextMenuItem, context) => {
+                  const entry = entryMap.get(item.path)
+                    ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+
+                  return (
+                    <TreeContextMenu
+                      onRename={() => {
+                        context.close({ restoreFocus: false });
+                        window.setTimeout(() => {
+                          model.startRenaming(entry.id);
+                        }, 0);
+                      }}
+                      onMove={() => {
+                        context.close();
+                        setMoveEntry(entry);
+                      }}
+                      onDelete={() => {
+                        context.close();
+                        void handleDelete(entry);
+                      }}
+                    />
+                  );
+                }}
+                style={TREE_HOST_STYLE}
+              />
+            )}
+          </div>
+
+          {openFileIds.length > 0 ? (
+            <>
+              <div
+                role="separator"
+                aria-label="Resize open files section"
+                aria-orientation="horizontal"
+                aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
+                aria-valuemax={maxOpenFilesSectionHeight}
+                aria-valuenow={openFilesSectionHeight}
+                tabIndex={0}
+                className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
+                onMouseDown={handleOpenFilesSectionResizeMouseDown}
+                onKeyDown={handleOpenFilesSectionResizeKeyDown}
+                onDoubleClick={handleOpenFilesSectionResizeReset}
+              >
+                <div className="flex h-2 items-center">
+                  <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
+                </div>
+              </div>
+              <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
+                <OpenFilesSection
+                  openFileIds={openFileIds}
+                  activeFileId={activeFileId}
+                  onSelect={onFileSelect}
+                  onClose={handleOpenFileClose}
+                  bordered={false}
+                  className="h-full"
+                />
+              </div>
+            </>
+          ) : (
             <OpenFilesSection
               openFileIds={openFileIds}
               activeFileId={activeFileId}
               onSelect={onFileSelect}
               onClose={handleOpenFileClose}
-              bordered={false}
-              className="h-full"
             />
-          </div>
+          )}
         </>
-      ) : (
-        <OpenFilesSection
-          openFileIds={openFileIds}
-          activeFileId={activeFileId}
-          onSelect={onFileSelect}
-          onClose={handleOpenFileClose}
-        />
       )}
 
       {moveEntry ? (

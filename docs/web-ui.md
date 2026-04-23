@@ -43,7 +43,9 @@ Use it for:
 
 ### Knowledge
 
-Vault editor for files under `<vault-root>`.
+Managed knowledge-repo editor for files under `<state-root>/knowledge-base/repo`.
+
+It stays in setup mode until `knowledgeBaseRepoUrl` is configured, so the Knowledge UI does not fall back to the old direct vault-root path.
 
 Use it for:
 
@@ -56,7 +58,7 @@ Use it for:
 - full-text search
 - quick-open
 - wikilinks and backlinks
-- URL import into the vault
+- URL import into the synced repo mirror
 - hiding OS junk files like `.DS_Store`, `Thumbs.db`, and AppleDouble `._*` entries from indexed navigation
 
 ### Automations

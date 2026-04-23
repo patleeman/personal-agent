@@ -231,6 +231,28 @@ describe('VaultFileTree', () => {
     expect(container.textContent).toContain('Pending sync · 2 local changes');
   });
 
+  it('stays empty when managed sync is off', async () => {
+    apiMocks.knowledgeBase.mockResolvedValueOnce({
+      repoUrl: '',
+      branch: 'main',
+      configured: false,
+      effectiveRoot: '/vault',
+      managedRoot: '/runtime/knowledge-base/repo',
+      usesManagedRoot: false,
+      syncStatus: 'disabled',
+      recoveredEntryCount: 0,
+      recoveryDir: '/runtime/knowledge-base/recovered',
+    });
+
+    const { container } = renderTree();
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('Sync a repo to enable Knowledge.');
+    expect(container.textContent).toContain('won’t fall back to the old local vault path');
+    expect(queryInShadowRoots(container, 'button[aria-label="New file"]')).toBeNull();
+    expect(apiMocks.vaultFiles).not.toHaveBeenCalled();
+  });
+
   it('persists expanded folders and restores them after remount', async () => {
     const firstRender = renderTree();
     await flushAsyncWork();
@@ -250,6 +272,9 @@ describe('VaultFileTree', () => {
     firstRender.container.remove();
 
     const secondRender = renderTree();
+    await flushAsyncWork();
+    await flushAsyncWork();
+    await flushAsyncWork();
     await flushAsyncWork();
 
     expect(apiMocks.vaultFiles).toHaveBeenCalledTimes(2);

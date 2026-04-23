@@ -1,12 +1,18 @@
 import { useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { api } from '../client/api';
 import { VaultEditor } from '../components/knowledge/VaultEditor';
 import { AppPageEmptyState, AppPageIntro, AppPageLayout } from '../components/ui';
+import { useApi } from '../hooks/useApi';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 
 export function KnowledgePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
+  const {
+    data: knowledgeBaseState,
+    loading: knowledgeBaseLoading,
+  } = useApi(api.knowledgeBase, 'knowledge-page-knowledge-base');
   const handleFileNavigate = useCallback((id: string) => {
     navigateKnowledgeFile(setSearchParams, id);
   }, [setSearchParams]);
@@ -21,13 +27,50 @@ export function KnowledgePage() {
     ? activeFileId.split('/').filter(Boolean).pop()
     : undefined;
 
+  if (knowledgeBaseLoading && !knowledgeBaseState) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
+          <AppPageIntro
+            title="Knowledge"
+            summary="Browse and edit files from the managed knowledge repo."
+          />
+          <AppPageEmptyState
+            align="start"
+            title="Loading knowledge base…"
+            body="Checking whether managed sync is enabled."
+          />
+        </AppPageLayout>
+      </div>
+    );
+  }
+
+  if (knowledgeBaseState?.configured === false) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
+          <AppPageIntro
+            title="Knowledge"
+            summary="Browse and edit files from the managed knowledge repo."
+          />
+          <AppPageEmptyState
+            align="start"
+            title="Sync a repo to enable Knowledge"
+            body="The Knowledge UI stays empty until managed sync is configured, so it won’t fall back to the old local vault path."
+            action={<Link to="/settings#settings-general" className="ui-toolbar-button">Open Settings</Link>}
+          />
+        </AppPageLayout>
+      </div>
+    );
+  }
+
   if (!activeFileId) {
     return (
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
           <AppPageIntro
             title="Knowledge"
-            summary="Edit durable files under the indexed knowledge root and move between notes from the sidebar."
+            summary="Browse and edit files from the managed knowledge repo."
           />
           <AppPageEmptyState
             align="start"
