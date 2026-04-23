@@ -353,13 +353,15 @@ function readSyncLockMetadata(filePath: string): SyncLockMetadata | null {
 
   try {
     const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<SyncLockMetadata>;
-    if (!Number.isInteger(parsed.pid) || typeof parsed.acquiredAt !== 'string' || parsed.acquiredAt.trim().length === 0) {
+    const pid = parsed.pid;
+    const acquiredAt = parsed.acquiredAt;
+    if (typeof pid !== 'number' || !Number.isInteger(pid) || typeof acquiredAt !== 'string' || acquiredAt.trim().length === 0) {
       return null;
     }
 
     return {
-      pid: parsed.pid,
-      acquiredAt: parsed.acquiredAt.trim(),
+      pid,
+      acquiredAt: acquiredAt.trim(),
     };
   } catch {
     return null;
