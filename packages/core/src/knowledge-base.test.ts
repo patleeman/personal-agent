@@ -24,6 +24,11 @@ function runGit(args: string[], cwd: string, env: Record<string, string> = {}): 
   });
 }
 
+function readGitConfigValues(cwd: string, key: string): string[] {
+  const output = runGit(['config', '--get-all', key], cwd);
+  return output.split(/\r?\n/u).map((line) => line.trim()).filter((line) => line.length > 0);
+}
+
 function initBareRepo(): string {
   const repoRoot = createTempDir('pa-kb-remote-');
   runGit(['init', '--bare', '--initial-branch=main'], repoRoot);
@@ -176,6 +181,39 @@ describe('KnowledgeBaseManager', () => {
     runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
     expect(existsSync(join(remoteClone, 'AGENTS.md'))).toBe(false);
     expect(readFileSync(join(remoteClone, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
+  });
+
+  it('normalizes duplicated upstream tracking config during sync', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+    const managedRoot = initialState.managedRoot;
+
+    runGit(['config', '--add', 'branch.main.remote', 'origin'], managedRoot);
+    runGit(['config', '--add', 'branch.main.merge', 'refs/heads/main'], managedRoot);
+    runGit(['config', '--add', 'branch.main.merge', 'refs/heads/main'], managedRoot);
+    expect(readGitConfigValues(managedRoot, 'branch.main.remote')).toEqual(['origin', 'origin']);
+    expect(readGitConfigValues(managedRoot, 'branch.main.merge')).toEqual([
+      'refs/heads/main',
+      'refs/heads/main',
+      'refs/heads/main',
+    ]);
+
+    manager.syncNow();
+
+    expect(readGitConfigValues(managedRoot, 'branch.main.remote')).toEqual(['origin']);
+    expect(readGitConfigValues(managedRoot, 'branch.main.merge')).toEqual(['refs/heads/main']);
+    expect(runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'], managedRoot).trim()).toBe('origin/main');
+    expect(() => runGit(['push', '--dry-run'], managedRoot)).not.toThrow();
   });
 
   it('reports local and remote git sync drift for the managed mirror', () => {

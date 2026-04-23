@@ -661,6 +661,11 @@ function runRepositoryMaintenance(root: string, task: 'auto' | 'gc'): boolean {
   return tryRunGitCommand(root, ['gc', '--auto', '--quiet']);
 }
 
+function normalizeBranchTracking(root: string, branch: string, remoteName = 'origin'): void {
+  runGitText(root, ['config', '--replace-all', `branch.${branch}.remote`, remoteName]);
+  runGitText(root, ['config', '--replace-all', `branch.${branch}.merge`, `refs/heads/${branch}`]);
+}
+
 function maybeRunRepositoryMaintenance(
   root: string,
   storedState: StoredKnowledgeBaseState | null,
@@ -858,15 +863,18 @@ export class KnowledgeBaseManager {
       const remoteRef = getRemoteRef(branch);
       runGitText(root, ['checkout', '-B', branch, remoteRef]);
       runGitText(root, ['reset', '--hard', remoteRef]);
+      normalizeBranchTracking(root, branch);
       return;
     }
 
     if (headExists(root)) {
       runGitText(root, ['checkout', '-B', branch]);
+      normalizeBranchTracking(root, branch);
       return;
     }
 
     runGitText(root, ['checkout', '--orphan', branch], { allowFailure: true });
+    normalizeBranchTracking(root, branch);
   }
 
   private readState(): KnowledgeBaseState {
