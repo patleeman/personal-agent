@@ -27,6 +27,33 @@ const macDevAppDir = resolve(repoRoot, 'dist', 'dev-desktop');
 const desktopVariant = 'testing';
 const testingProductSuffix = ' Testing';
 const desktopLaunchArgs = process.argv.slice(2);
+const ELECTRON_SWITCH_PREFIXES = [
+  '--remote-debugging-port',
+  '--inspect',
+  '--inspect-brk',
+  '--js-flags',
+  '--enable-logging',
+  '--trace-startup',
+];
+
+function isElectronSwitch(arg) {
+  return ELECTRON_SWITCH_PREFIXES.some((prefix) => arg === prefix || arg.startsWith(`${prefix}=`));
+}
+
+function splitDesktopLaunchArgs(args = []) {
+  const electronSwitches = [];
+  const appArgs = [];
+
+  for (const arg of args) {
+    if (isElectronSwitch(arg)) {
+      electronSwitches.push(arg);
+    } else {
+      appArgs.push(arg);
+    }
+  }
+
+  return { electronSwitches, appArgs };
+}
 
 function shouldSkipQuitConfirmationForLaunch(args = []) {
   return args.includes('--no-quit-confirmation') || args.includes('--skip-quit-confirmation');
@@ -188,7 +215,8 @@ async function waitForDetachedLaunch(child) {
 
 async function launchMacDevApp() {
   const { appBundlePath } = ensureMacDevAppBundle();
-  const child = spawn('open', ['-n', appBundlePath, '--args', desktopMainFile, ...desktopLaunchArgs], {
+  const { electronSwitches, appArgs } = splitDesktopLaunchArgs(desktopLaunchArgs);
+  const child = spawn('open', ['-n', appBundlePath, '--args', ...electronSwitches, desktopMainFile, ...appArgs], {
     stdio: 'ignore',
     cwd: packageDir,
     env: {
@@ -205,7 +233,8 @@ if (process.platform === 'darwin') {
   await launchMacDevApp();
 }
 
-const result = spawnSync(electronBinary, [desktopMainFile, ...desktopLaunchArgs], {
+const { electronSwitches, appArgs } = splitDesktopLaunchArgs(desktopLaunchArgs);
+const result = spawnSync(electronBinary, [...electronSwitches, desktopMainFile, ...appArgs], {
   stdio: 'inherit',
   cwd: packageDir,
   env: buildDesktopLaunchEnv(process.env, desktopLaunchArgs),
