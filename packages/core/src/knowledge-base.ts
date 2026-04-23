@@ -78,6 +78,11 @@ interface RuntimeSyncState {
   recoveredEntryCount: number;
 }
 
+interface SyncLockMetadata {
+  pid: number;
+  acquiredAt: string;
+}
+
 interface PathChangeResolution {
   path: string;
   winner: 'local' | 'remote';
@@ -92,8 +97,11 @@ const SYNC_COMMIT_AUTHOR_EMAIL = 'kb@personal-agent.local';
 const KNOWLEDGE_BASE_SYNC_INTERVAL_MS = 15_000;
 const KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
+const KNOWLEDGE_BASE_SYNC_LOCK_STALE_MS = 5 * 60 * 1_000;
 const LOCAL_STATE_FILE_NAME = 'state.json';
 const RECOVERY_INDEX_FILE_NAME = 'recovery-index.json';
+const SYNC_LOCK_DIR_NAME = 'sync.lock';
+const SYNC_LOCK_METADATA_FILE_NAME = 'metadata.json';
 const SNAPSHOT_VERSION = 1;
 const SOURCE_ENV_VAR = 'PERSONAL_AGENT_VAULT_ROOT';
 const SKIPPED_RECOVERY_PATH_SEGMENTS = new Set(['', '.', '..']);
@@ -320,6 +328,42 @@ function safeSlug(value: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 48) || 'knowledge-base';
+}
+
+function isProcessAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) {
+    return false;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const errorCode = typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code?: unknown }).code ?? '')
+      : '';
+    return errorCode === 'EPERM';
+  }
+}
+
+function readSyncLockMetadata(filePath: string): SyncLockMetadata | null {
+  if (!existsSync(filePath)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(readFileSync(filePath, 'utf-8')) as Partial<SyncLockMetadata>;
+    if (!Number.isInteger(parsed.pid) || typeof parsed.acquiredAt !== 'string' || parsed.acquiredAt.trim().length === 0) {
+      return null;
+    }
+
+    return {
+      pid: parsed.pid,
+      acquiredAt: parsed.acquiredAt.trim(),
+    };
+  } catch {
+    return null;
+  }
 }
 
 function sanitizeRecoveryRelativePath(relativePath: string): string {
@@ -582,10 +626,13 @@ export class KnowledgeBaseManager {
   private readonly localStateFilePath: string;
   private readonly recoveryDir: string;
   private readonly recoveryIndexPath: string;
+  private readonly syncLockDir: string;
+  private readonly syncLockMetadataPath: string;
   private readonly listeners = new Set<KnowledgeBaseStateListener>();
   private runtimeState: RuntimeSyncState;
   private interval: NodeJS.Timeout | null = null;
   private syncInProgress = false;
+  private activeSyncLockTimestamp: string | null = null;
 
   constructor(options: KnowledgeBaseManagerOptions = {}) {
     this.stateRoot = resolve(options.stateRoot ?? getStateRoot());
@@ -593,6 +640,8 @@ export class KnowledgeBaseManager {
     this.localStateFilePath = join(this.stateRoot, 'knowledge-base', LOCAL_STATE_FILE_NAME);
     this.recoveryDir = join(this.stateRoot, 'knowledge-base', 'recovered');
     this.recoveryIndexPath = join(this.stateRoot, 'knowledge-base', RECOVERY_INDEX_FILE_NAME);
+    this.syncLockDir = join(this.stateRoot, 'knowledge-base', SYNC_LOCK_DIR_NAME);
+    this.syncLockMetadataPath = join(this.syncLockDir, SYNC_LOCK_METADATA_FILE_NAME);
 
     const storedState = readStoredState(this.localStateFilePath);
     this.runtimeState = {
@@ -760,6 +809,58 @@ export class KnowledgeBaseManager {
     this.runtimeState.recoveredEntryCount = nextCount;
   }
 
+  private tryAcquireSyncLock(timestamp: string): boolean {
+    ensureParentDirectory(this.syncLockMetadataPath);
+
+    const acquire = (): boolean => {
+      try {
+        mkdirSync(this.syncLockDir);
+      } catch (error) {
+        const errorCode = typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code?: unknown }).code ?? '')
+          : '';
+        if (errorCode === 'EEXIST') {
+          return false;
+        }
+        throw error;
+      }
+
+      writeFileSync(this.syncLockMetadataPath, `${JSON.stringify({ pid: process.pid, acquiredAt: timestamp }, null, 2)}\n`);
+      this.activeSyncLockTimestamp = timestamp;
+      return true;
+    };
+
+    if (acquire()) {
+      return true;
+    }
+
+    const existingLock = readSyncLockMetadata(this.syncLockMetadataPath);
+    const lockAcquiredAtMs = parseTimestampMs(existingLock?.acquiredAt);
+    const staleByAge = lockAcquiredAtMs !== null && Date.now() - lockAcquiredAtMs > KNOWLEDGE_BASE_SYNC_LOCK_STALE_MS;
+    const stale = !existingLock || !isProcessAlive(existingLock.pid) || staleByAge;
+    if (!stale) {
+      return false;
+    }
+
+    rmSync(this.syncLockDir, { recursive: true, force: true });
+    return acquire();
+  }
+
+  private releaseSyncLock(): void {
+    const activeTimestamp = this.activeSyncLockTimestamp;
+    this.activeSyncLockTimestamp = null;
+    if (!activeTimestamp) {
+      return;
+    }
+
+    const existingLock = readSyncLockMetadata(this.syncLockMetadataPath);
+    if (!existingLock || existingLock.pid !== process.pid || existingLock.acquiredAt !== activeTimestamp) {
+      return;
+    }
+
+    rmSync(this.syncLockDir, { recursive: true, force: true });
+  }
+
   private stageAndCommitIfNeeded(root: string, branch: string, timestamp: string): void {
     const statusOutput = runGitText(root, ['status', '--porcelain=v1', '--untracked-files=all'], { allowFailure: true }).trim();
     if (!statusOutput) {
@@ -854,6 +955,11 @@ export class KnowledgeBaseManager {
       return this.readState();
     }
 
+    const syncTimestamp = toIsoTimestamp();
+    if (!this.tryAcquireSyncLock(syncTimestamp)) {
+      return this.readState();
+    }
+
     this.syncInProgress = true;
     setRuntimeState(this.runtimeState, {
       syncStatus: 'syncing',
@@ -869,26 +975,25 @@ export class KnowledgeBaseManager {
       const remoteExists = Object.keys(remoteSnapshot).length > 0 || refExists(root, getRemoteRef(config.branch));
       const storedState = this.readStoredStateForConfig(config);
       const baseSnapshot = storedState?.snapshot ?? (remoteExists ? remoteSnapshot : {});
-      const timestamp = toIsoTimestamp();
 
       if (!remoteExists) {
         this.checkoutRemoteBase(root, config.branch, false);
         ensureBootstrapFiles(root);
-        this.stageAndCommitIfNeeded(root, config.branch, timestamp);
-        const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, timestamp);
+        this.stageAndCommitIfNeeded(root, config.branch, syncTimestamp);
+        const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, syncTimestamp);
         const snapshot = listWorkingSnapshot(root);
         writeStoredState(this.localStateFilePath, {
           version: SNAPSHOT_VERSION,
           repoUrl: config.repoUrl,
           branch: config.branch,
-          lastSyncAt: timestamp,
+          lastSyncAt: syncTimestamp,
           ...(headExists(root) ? { lastSyncHead: getHeadSha(root) } : {}),
           ...maintenanceMetadata,
           snapshot,
         });
         setRuntimeState(this.runtimeState, {
           syncStatus: 'idle',
-          lastSyncAt: timestamp,
+          lastSyncAt: syncTimestamp,
           lastError: undefined,
         });
         const nextState = this.readState();
@@ -920,7 +1025,7 @@ export class KnowledgeBaseManager {
 
       const finalPaths = new Set<string>(Object.keys(remoteSnapshot));
       for (const resolution of resolutions) {
-        const timestampForRecovery = timestamp;
+        const timestampForRecovery = syncTimestamp;
         const localContent = localContents.get(resolution.path) ?? null;
         const remoteContent = resolution.remoteExists ? readRemoteFileBuffer(root, config.branch, resolution.path) : null;
 
@@ -959,15 +1064,15 @@ export class KnowledgeBaseManager {
       }
 
       ensureBootstrapFiles(root);
-      this.stageAndCommitIfNeeded(root, config.branch, timestamp);
+      this.stageAndCommitIfNeeded(root, config.branch, syncTimestamp);
 
-      const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, timestamp);
+      const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, syncTimestamp);
       const snapshot = listWorkingSnapshot(root);
       writeStoredState(this.localStateFilePath, {
         version: SNAPSHOT_VERSION,
         repoUrl: config.repoUrl,
         branch: config.branch,
-        lastSyncAt: timestamp,
+        lastSyncAt: syncTimestamp,
         ...(headExists(root) ? { lastSyncHead: getHeadSha(root) } : {}),
         ...maintenanceMetadata,
         snapshot,
@@ -975,7 +1080,7 @@ export class KnowledgeBaseManager {
 
       setRuntimeState(this.runtimeState, {
         syncStatus: 'idle',
-        lastSyncAt: timestamp,
+        lastSyncAt: syncTimestamp,
         lastError: undefined,
       });
       const nextState = this.readState();
@@ -991,6 +1096,7 @@ export class KnowledgeBaseManager {
       return nextState;
     } finally {
       this.syncInProgress = false;
+      this.releaseSyncLock();
     }
   }
 

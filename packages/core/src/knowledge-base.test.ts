@@ -70,6 +70,12 @@ function writeMachineConfigFile(configRoot: string, config: Record<string, unkno
   writeFileSync(join(configRoot, 'config.json'), `${JSON.stringify(config, null, 2)}\n`);
 }
 
+function writeSyncLock(stateRoot: string, metadata: { pid: number; acquiredAt: string }): void {
+  const lockDir = join(stateRoot, 'knowledge-base', 'sync.lock');
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(join(lockDir, 'metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`);
+}
+
 describe('KnowledgeBaseManager', () => {
   it('bootstraps and pushes a managed knowledge base into an empty remote repo', () => {
     const remoteRepo = initBareRepo();
@@ -313,6 +319,76 @@ describe('KnowledgeBaseManager', () => {
     expect(recoveryDirs.length).toBeGreaterThan(0);
     const recoveryFile = join(recoveryRoot, recoveryDirs[0] as string, 'notes', 'daily.md');
     expect(readFileSync(recoveryFile, 'utf-8')).toBe('# Local\nolder\n');
+  });
+
+  it('skips sync work while another live process holds the cross-process lock', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    const remoteEditor = createTempDir('pa-kb-editor-');
+    runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
+    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.name', 'Patrick Lee'], remoteEditor);
+    writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
+    runGit(['add', 'notes/remote.md'], remoteEditor);
+    runGit(['commit', '-m', 'remote edit'], remoteEditor, {
+      GIT_AUTHOR_DATE: '2026-03-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-03-01T00:00:00Z',
+    });
+    runGit(['push', 'origin', 'main'], remoteEditor);
+
+    writeSyncLock(stateRoot, { pid: process.pid, acquiredAt: new Date().toISOString() });
+
+    const skippedState = manager.syncNow();
+    expect(skippedState.lastSyncAt).toBe(initialState.lastSyncAt);
+    expect(existsSync(join(initialState.managedRoot, 'notes', 'remote.md'))).toBe(false);
+
+    rmSync(join(stateRoot, 'knowledge-base', 'sync.lock'), { recursive: true, force: true });
+    manager.syncNow();
+    expect(readFileSync(join(initialState.managedRoot, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
+  });
+
+  it('reclaims a stale sync lock before syncing', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    const remoteEditor = createTempDir('pa-kb-editor-');
+    runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
+    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.name', 'Patrick Lee'], remoteEditor);
+    writeFileSync(join(remoteEditor, 'notes', 'stale-lock.md'), '# Remote\n');
+    runGit(['add', 'notes/stale-lock.md'], remoteEditor);
+    runGit(['commit', '-m', 'remote edit'], remoteEditor, {
+      GIT_AUTHOR_DATE: '2026-03-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-03-01T00:00:00Z',
+    });
+    runGit(['push', 'origin', 'main'], remoteEditor);
+
+    writeSyncLock(stateRoot, { pid: 999_999, acquiredAt: '2026-01-01T00:00:00.000Z' });
+
+    manager.syncNow();
+    expect(readFileSync(join(initialState.managedRoot, 'notes', 'stale-lock.md'), 'utf-8')).toBe('# Remote\n');
+    expect(existsSync(join(stateRoot, 'knowledge-base', 'sync.lock'))).toBe(false);
   });
 
   it('runs a full maintenance pass when the prior one is stale', () => {

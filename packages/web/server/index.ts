@@ -181,6 +181,7 @@ import {
   getAlertSnapshotForProfile,
   snoozeAlertForProfile,
 } from './automation/alerts.js';
+import { applyWebRuntimeEnvironmentOverrides } from './runtime-env.js';
 import {
   cancelDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
@@ -189,6 +190,7 @@ import {
 } from './automation/deferredResumes.js';
 
 hydrateProcessEnvFromShell();
+applyWebRuntimeEnvironmentOverrides();
 subscribeKnowledgeBaseState(() => {
   invalidateAppTopics('knowledgeBase');
 });

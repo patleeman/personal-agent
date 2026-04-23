@@ -26,6 +26,8 @@ pa ui logs --tail 120
 
 Default local address: `http://localhost:3741`
 
+Non-default standalone web ports run against an isolated testing state root by default, so ad hoc preview servers do not share the production knowledge-base mirror.
+
 ## Main routes
 
 ### Conversations
@@ -44,6 +46,8 @@ Use it for:
 ### Knowledge
 
 Managed knowledge-repo editor for files under `<state-root>/knowledge-base/repo`.
+
+On standalone test ports, that mirror lives under the testing state root unless you explicitly override the runtime paths.
 
 It stays in setup mode until `knowledgeBaseRepoUrl` is configured.
 

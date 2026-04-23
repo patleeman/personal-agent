@@ -115,6 +115,8 @@ It can surface:
 
 That status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
 
+The sync engine now uses a cross-process lock for that mirror, so multiple runtimes do not race each other through the same checkout.
+
 If the managed repo is still missing content after sync, compare it with any old local vault and copy the missing files over manually.
 
 ## URL import
