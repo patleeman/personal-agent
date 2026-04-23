@@ -16,6 +16,7 @@ vi.mock('@personal-agent/core', async () => {
   return {
     ...actual,
     startKnowledgeBaseSyncLoop: vi.fn(),
+    subscribeKnowledgeBaseState: vi.fn(() => vi.fn()),
   };
 });
 

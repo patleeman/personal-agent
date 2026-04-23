@@ -86,6 +86,67 @@ describe('KnowledgeBaseManager', () => {
     expect(storedState.lastFullMaintenanceAt).toBeUndefined();
   });
 
+  it('reports local and remote git sync drift for the managed mirror', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    expect(initialState.gitStatus).toEqual({
+      localChangeCount: 0,
+      aheadCount: 0,
+      behindCount: 0,
+    });
+
+    const managedRoot = initialState.managedRoot;
+    const managedFile = join(managedRoot, 'notes', 'daily.md');
+    writeFileSync(managedFile, '# Seed\nlocal edit\n');
+
+    const dirtyState = manager.readKnowledgeBaseState();
+    expect(dirtyState.gitStatus?.localChangeCount).toBe(1);
+    expect(dirtyState.gitStatus?.aheadCount).toBe(0);
+    expect(dirtyState.gitStatus?.behindCount).toBe(0);
+
+    runGit(['config', 'user.email', 'patrick@example.com'], managedRoot);
+    runGit(['config', 'user.name', 'Patrick Lee'], managedRoot);
+    runGit(['add', 'notes/daily.md'], managedRoot);
+    runGit(['commit', '-m', 'local edit'], managedRoot, {
+      GIT_AUTHOR_DATE: '2026-02-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-02-01T00:00:00Z',
+    });
+
+    const aheadState = manager.readKnowledgeBaseState();
+    expect(aheadState.gitStatus?.localChangeCount).toBe(0);
+    expect(aheadState.gitStatus?.aheadCount).toBe(1);
+    expect(aheadState.gitStatus?.behindCount).toBe(0);
+
+    const remoteEditor = createTempDir('pa-kb-editor-');
+    runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
+    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.name', 'Patrick Lee'], remoteEditor);
+    writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
+    runGit(['add', 'notes/remote.md'], remoteEditor);
+    runGit(['commit', '-m', 'remote edit'], remoteEditor, {
+      GIT_AUTHOR_DATE: '2026-03-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-03-01T00:00:00Z',
+    });
+    runGit(['push', 'origin', 'main'], remoteEditor);
+
+    runGit(['fetch', 'origin'], managedRoot);
+    const divergedState = manager.readKnowledgeBaseState();
+    expect(divergedState.gitStatus?.localChangeCount).toBe(0);
+    expect(divergedState.gitStatus?.aheadCount).toBe(1);
+    expect(divergedState.gitStatus?.behindCount).toBe(1);
+  });
+
   it('auto-resolves same-file collisions by keeping the newer remote version and saving a recovery copy', () => {
     const remoteRepo = initBareRepo();
     seedRemoteRepo(remoteRepo, {

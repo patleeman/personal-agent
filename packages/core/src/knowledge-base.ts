@@ -40,6 +40,12 @@ interface StoredKnowledgeBaseState {
 
 export type KnowledgeBaseSyncStatus = 'disabled' | 'idle' | 'syncing' | 'error';
 
+export interface KnowledgeBaseGitStatus {
+  localChangeCount: number;
+  aheadCount: number;
+  behindCount: number;
+}
+
 export interface KnowledgeBaseState {
   repoUrl: string;
   branch: string;
@@ -50,6 +56,7 @@ export interface KnowledgeBaseState {
   syncStatus: KnowledgeBaseSyncStatus;
   lastSyncAt?: string;
   lastError?: string;
+  gitStatus?: KnowledgeBaseGitStatus | null;
   recoveredEntryCount: number;
   recoveryDir: string;
 }
@@ -91,6 +98,8 @@ const SNAPSHOT_VERSION = 1;
 const SOURCE_ENV_VAR = 'PERSONAL_AGENT_VAULT_ROOT';
 const SKIPPED_RECOVERY_PATH_SEGMENTS = new Set(['', '.', '..']);
 const managerRegistry = new Map<string, KnowledgeBaseManager>();
+
+type KnowledgeBaseStateListener = (state: KnowledgeBaseState) => void;
 
 function normalizeRepoUrl(value: string | null | undefined): string {
   return typeof value === 'string' ? value.trim() : '';
@@ -257,6 +266,51 @@ function snapshotsEqual(left: WorkingSnapshotEntry | undefined, right: WorkingSn
 
 function readGitRemoteUrl(cwd: string): string {
   return runGitText(cwd, ['remote', 'get-url', 'origin'], { allowFailure: true }).trim();
+}
+
+function countWorkingTreeChanges(cwd: string): number {
+  const output = runGitText(cwd, ['status', '--porcelain=v1', '--untracked-files=all'], { allowFailure: true }).trim();
+  if (!output) {
+    return 0;
+  }
+
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .length;
+}
+
+function readAheadBehindCounts(cwd: string, branch: string): Pick<KnowledgeBaseGitStatus, 'aheadCount' | 'behindCount'> {
+  if (!headExists(cwd)) {
+    return { aheadCount: 0, behindCount: 0 };
+  }
+
+  const remoteRef = getRemoteRef(branch);
+  if (!refExists(cwd, remoteRef)) {
+    return { aheadCount: 0, behindCount: 0 };
+  }
+
+  const output = runGitText(cwd, ['rev-list', '--left-right', '--count', `HEAD...${remoteRef}`], { allowFailure: true }).trim();
+  const [aheadRaw, behindRaw] = output.split(/\s+/u);
+  const aheadCount = Number.parseInt(aheadRaw ?? '', 10);
+  const behindCount = Number.parseInt(behindRaw ?? '', 10);
+
+  return {
+    aheadCount: Number.isFinite(aheadCount) ? aheadCount : 0,
+    behindCount: Number.isFinite(behindCount) ? behindCount : 0,
+  };
+}
+
+function readGitStatus(root: string, branch: string): KnowledgeBaseGitStatus | null {
+  if (!existsSync(join(root, '.git'))) {
+    return null;
+  }
+
+  return {
+    localChangeCount: countWorkingTreeChanges(root),
+    ...readAheadBehindCounts(root, branch),
+  };
 }
 
 function safeSlug(value: string): string {
@@ -480,6 +534,25 @@ function maybeRunRepositoryMaintenance(
   };
 }
 
+function knowledgeBaseStateEquals(left: KnowledgeBaseState, right: KnowledgeBaseState): boolean {
+  const leftGit = left.gitStatus ?? null;
+  const rightGit = right.gitStatus ?? null;
+  return left.repoUrl === right.repoUrl
+    && left.branch === right.branch
+    && left.configured === right.configured
+    && left.effectiveRoot === right.effectiveRoot
+    && left.managedRoot === right.managedRoot
+    && left.usesManagedRoot === right.usesManagedRoot
+    && left.syncStatus === right.syncStatus
+    && left.lastError === right.lastError
+    && left.recoveredEntryCount === right.recoveredEntryCount
+    && left.recoveryDir === right.recoveryDir
+    && (leftGit === null ? rightGit === null : rightGit !== null
+      && leftGit.localChangeCount === rightGit.localChangeCount
+      && leftGit.aheadCount === rightGit.aheadCount
+      && leftGit.behindCount === rightGit.behindCount);
+}
+
 function setRuntimeState(
   runtimeState: RuntimeSyncState,
   input: Partial<RuntimeSyncState>,
@@ -504,6 +577,7 @@ export class KnowledgeBaseManager {
   private readonly localStateFilePath: string;
   private readonly recoveryDir: string;
   private readonly recoveryIndexPath: string;
+  private readonly listeners = new Set<KnowledgeBaseStateListener>();
   private runtimeState: RuntimeSyncState;
   private interval: NodeJS.Timeout | null = null;
   private syncInProgress = false;
@@ -603,6 +677,7 @@ export class KnowledgeBaseManager {
     const configured = config.repoUrl.length > 0;
     const sourceOverrideActive = typeof process.env[SOURCE_ENV_VAR] === 'string' && process.env[SOURCE_ENV_VAR]!.trim().length > 0;
     const managedRoot = getManagedKnowledgeBaseRoot(this.stateRoot);
+    const gitStatus = configured ? readGitStatus(managedRoot, config.branch) : null;
     return {
       repoUrl: config.repoUrl,
       branch: config.branch,
@@ -613,8 +688,26 @@ export class KnowledgeBaseManager {
       syncStatus: configured ? this.runtimeState.syncStatus : 'disabled',
       ...(this.runtimeState.lastSyncAt ? { lastSyncAt: this.runtimeState.lastSyncAt } : {}),
       ...(this.runtimeState.lastError ? { lastError: this.runtimeState.lastError } : {}),
+      ...(gitStatus ? { gitStatus } : {}),
       recoveredEntryCount: this.runtimeState.recoveredEntryCount,
       recoveryDir: this.recoveryDir,
+    };
+  }
+
+  private notifyListeners(previousState: KnowledgeBaseState, nextState: KnowledgeBaseState): void {
+    if (knowledgeBaseStateEquals(previousState, nextState)) {
+      return;
+    }
+
+    for (const listener of this.listeners) {
+      listener(nextState);
+    }
+  }
+
+  subscribe(listener: KnowledgeBaseStateListener): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
     };
   }
 
@@ -623,6 +716,7 @@ export class KnowledgeBaseManager {
   }
 
   updateKnowledgeBase(input: UpdateKnowledgeBaseInput): KnowledgeBaseState {
+    const previousState = this.readState();
     const currentConfig = this.readConfig();
     const nextRepoUrl = input.repoUrl === undefined ? currentConfig.repoUrl : normalizeRepoUrl(input.repoUrl);
     const nextBranch = input.branch === undefined ? currentConfig.branch : normalizeBranch(input.branch);
@@ -642,11 +736,11 @@ export class KnowledgeBaseManager {
 
     writeMachineKnowledgeBase({ repoUrl: nextRepoUrl, branch: nextBranch }, this.machineConfigOptions());
 
-    if (nextRepoUrl) {
-      this.syncNow();
-    }
-
-    return this.readState();
+    const nextState = nextRepoUrl
+      ? this.syncNow(previousState)
+      : this.readState();
+    this.notifyListeners(previousState, nextState);
+    return nextState;
   }
 
   private writeRecoveryCopy(relativePath: string, content: Buffer, timestamp: string): void {
@@ -735,14 +829,17 @@ export class KnowledgeBaseManager {
     return resolutions;
   }
 
-  syncNow(): KnowledgeBaseState {
+  syncNow(previousStateInput?: KnowledgeBaseState): KnowledgeBaseState {
+    const previousState = previousStateInput ?? this.readState();
     const config = this.readConfig();
     if (!config.repoUrl) {
       setRuntimeState(this.runtimeState, {
         syncStatus: 'disabled',
         lastError: undefined,
       });
-      return this.readState();
+      const nextState = this.readState();
+      this.notifyListeners(previousState, nextState);
+      return nextState;
     }
 
     if (this.syncInProgress) {
@@ -786,7 +883,9 @@ export class KnowledgeBaseManager {
           lastSyncAt: timestamp,
           lastError: undefined,
         });
-        return this.readState();
+        const nextState = this.readState();
+        this.notifyListeners(previousState, nextState);
+        return nextState;
       }
 
       const workingSnapshot = listWorkingSnapshot(root);
@@ -871,13 +970,17 @@ export class KnowledgeBaseManager {
         lastSyncAt: timestamp,
         lastError: undefined,
       });
-      return this.readState();
+      const nextState = this.readState();
+      this.notifyListeners(previousState, nextState);
+      return nextState;
     } catch (error) {
       setRuntimeState(this.runtimeState, {
         syncStatus: 'error',
         lastError: error instanceof Error ? error.message : String(error),
       });
-      return this.readState();
+      const nextState = this.readState();
+      this.notifyListeners(previousState, nextState);
+      return nextState;
     } finally {
       this.syncInProgress = false;
     }
@@ -934,6 +1037,13 @@ export function updateKnowledgeBase(input: UpdateKnowledgeBaseInput, options: Kn
 
 export function syncKnowledgeBaseNow(options: KnowledgeBaseManagerOptions = {}): KnowledgeBaseState {
   return getKnowledgeBaseManager(options).syncNow();
+}
+
+export function subscribeKnowledgeBaseState(
+  listener: KnowledgeBaseStateListener,
+  options: KnowledgeBaseManagerOptions = {},
+): () => void {
+  return getKnowledgeBaseManager(options).subscribe(listener);
 }
 
 export function startKnowledgeBaseSyncLoop(options: KnowledgeBaseManagerOptions & { intervalMs?: number } = {}): void {

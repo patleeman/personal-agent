@@ -19,6 +19,7 @@ const ALL_TOPICS = [
   'automation',
   'daemon',
   'workspace',
+  'knowledgeBase',
 ] as const;
 
 function createTempDir(prefix: string): string {

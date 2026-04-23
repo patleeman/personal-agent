@@ -508,6 +508,7 @@ describe('model routes', () => {
     patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' } }), saveRes);
     expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' });
     expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
     expect(saveRes.json).toHaveBeenCalledWith(expect.objectContaining({
       repoUrl: 'https://github.com/patleeman/kb.git',
       branch: 'trunk',
@@ -517,6 +518,7 @@ describe('model routes', () => {
     const syncRes = createResponse();
     postHandler('/api/knowledge-base/sync')(createRequest(), syncRes);
     expect(syncKnowledgeBaseNowMock).toHaveBeenCalledTimes(1);
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
     expect(syncRes.json).toHaveBeenCalledWith(expect.objectContaining({
       repoUrl: 'https://github.com/patleeman/kb.git',
       branch: 'trunk',

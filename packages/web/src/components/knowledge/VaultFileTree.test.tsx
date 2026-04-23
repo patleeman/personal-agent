@@ -12,6 +12,7 @@ import type { VaultEntry, VaultFileListResult } from '../../shared/types';
 const apiMocks = vi.hoisted(() => ({
   createFolder: vi.fn(),
   deleteFile: vi.fn(),
+  knowledgeBase: vi.fn(),
   move: vi.fn(),
   rename: vi.fn(),
   search: vi.fn(),
@@ -22,6 +23,7 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock('../../client/api', () => ({
   api: {
+    knowledgeBase: apiMocks.knowledgeBase,
     vaultFiles: apiMocks.vaultFiles,
   },
   vaultApi: {
@@ -174,6 +176,24 @@ async function flushAsyncWork() {
 describe('VaultFileTree', () => {
   beforeEach(() => {
     vi.stubGlobal('localStorage', createStorage());
+    apiMocks.knowledgeBase.mockReset();
+    apiMocks.knowledgeBase.mockResolvedValue({
+      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      branch: 'main',
+      configured: true,
+      effectiveRoot: '/vault',
+      managedRoot: '/runtime/knowledge-base/repo',
+      usesManagedRoot: true,
+      syncStatus: 'idle',
+      lastSyncAt: '2026-04-22T12:00:00.000Z',
+      gitStatus: {
+        localChangeCount: 0,
+        aheadCount: 0,
+        behindCount: 0,
+      },
+      recoveredEntryCount: 0,
+      recoveryDir: '/runtime/knowledge-base/recovered',
+    });
     apiMocks.vaultFiles.mockReset();
     apiMocks.vaultFiles.mockResolvedValue(TREE);
   });
@@ -185,6 +205,30 @@ describe('VaultFileTree', () => {
       });
     }
     document.body.innerHTML = '';
+  });
+
+  it('shows the managed sync status in the knowledge header', async () => {
+    apiMocks.knowledgeBase.mockResolvedValueOnce({
+      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      branch: 'main',
+      configured: true,
+      effectiveRoot: '/vault',
+      managedRoot: '/runtime/knowledge-base/repo',
+      usesManagedRoot: true,
+      syncStatus: 'idle',
+      gitStatus: {
+        localChangeCount: 2,
+        aheadCount: 0,
+        behindCount: 0,
+      },
+      recoveredEntryCount: 0,
+      recoveryDir: '/runtime/knowledge-base/recovered',
+    });
+
+    const { container } = renderTree();
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('Pending sync · 2 local changes');
   });
 
   it('persists expanded folders and restores them after remount', async () => {

@@ -48,6 +48,7 @@ import {
 import { readSavedDefaultCwdPreferences, writeSavedDefaultCwdPreference } from '../ui/defaultCwdPreferences.js';
 import { readConversationPlansWorkspace } from '../ui/conversationPlanPreferences.js';
 import {
+  invalidateAppTopics,
   logError,
   persistSettingsWrite,
   reloadAllLiveSessionAuth,
@@ -235,6 +236,7 @@ export function registerModelRoutes(
         ...(branch !== undefined ? { branch: branch as string | null } : {}),
       });
       materializeWebProfileFn(getCurrentProfileFn());
+      invalidateAppTopics('knowledgeBase');
       res.json(nextState);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -244,7 +246,9 @@ export function registerModelRoutes(
 
   router.post('/api/knowledge-base/sync', (_req, res) => {
     try {
-      res.json(syncKnowledgeBaseNow());
+      const nextState = syncKnowledgeBaseNow();
+      invalidateAppTopics('knowledgeBase');
+      res.json(nextState);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       res.status(500).json({ error: message });

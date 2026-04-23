@@ -25,7 +25,8 @@ export type AppEventTopic =
   | 'runs'
   | 'automation'
   | 'daemon'
-  | 'workspace';
+  | 'workspace'
+  | 'knowledgeBase';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -75,6 +76,7 @@ const ALL_TOPICS: AppEventTopic[] = [
   'automation',
   'daemon',
   'workspace',
+  'knowledgeBase',
 ];
 const listeners = new Set<AppEventListener>();
 let monitorStop: WatchStop | undefined;
@@ -220,6 +222,7 @@ function createTopicSources(options: AppEventMonitorOptions, profile: string): T
       { path: daemonPaths.socketPath, kind: 'file' },
     ],
     workspace: [],
+    knowledgeBase: [],
   };
 }
 

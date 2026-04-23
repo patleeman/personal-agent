@@ -364,6 +364,7 @@ export function VaultEditor({ fileId, fileName, onFileNavigate, onFileRenamed }:
     setDirty(false);
     setSaveError(null);
     setSavedAt(Date.now());
+    emitKBEvent('kb:content-saved');
   }, []);
   useAutosave(fileId ?? null, getContent, dirty, revision, handleSaved, setSaveError);
 

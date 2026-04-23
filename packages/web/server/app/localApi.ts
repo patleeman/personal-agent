@@ -13,6 +13,7 @@ import {
   readMachineConfig,
   readMachineKnowledgeBase,
   startKnowledgeBaseSyncLoop,
+  subscribeKnowledgeBaseState,
   syncKnowledgeBaseNow,
   updateKnowledgeBase,
   updateMachineConfig,
@@ -620,6 +621,9 @@ function readConfiguredKnowledgeBase() {
   return readMachineKnowledgeBase();
 }
 
+subscribeKnowledgeBaseState(() => {
+  invalidateAppTopics('knowledgeBase');
+});
 startKnowledgeBaseSyncLoop();
 
 function renderStatusText(statusCode: number): string {
@@ -1514,11 +1518,14 @@ export async function updateDesktopKnowledgeBase(input: { repoUrl?: string | nul
   const state = updateKnowledgeBase(input);
   const context = await getLocalServerRouteContext();
   context.materializeWebProfile(context.getCurrentProfile());
+  invalidateAppTopics('knowledgeBase');
   return state;
 }
 
 export async function syncDesktopKnowledgeBase() {
-  return syncKnowledgeBaseNow();
+  const state = syncKnowledgeBaseNow();
+  invalidateAppTopics('knowledgeBase');
+  return state;
 }
 
 export async function updateDesktopVaultRoot(root: string | null) {

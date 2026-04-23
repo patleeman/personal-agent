@@ -17,6 +17,9 @@ import {
 } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import { api, vaultApi } from '../../client/api';
+import { useInvalidateOnTopics } from '../../hooks/useInvalidateOnTopics';
+import { useApi } from '../../hooks/useApi';
+import { getKnowledgeBaseSyncPresentation } from '../../knowledge/knowledgeBaseSyncStatus';
 import {
   addOpenFileId,
   normalizeOpenFileIds,
@@ -47,6 +50,7 @@ import {
 import type { VaultEntry } from '../../shared/types';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
+import { cx } from '../ui';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
@@ -590,6 +594,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
   const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
   const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
+  const {
+    data: knowledgeBaseState,
+    loading: knowledgeBaseLoading,
+    error: knowledgeBaseError,
+    refetch: refetchKnowledgeBase,
+  } = useApi(api.knowledgeBase, 'knowledge-base-tree-status');
 
   const model = useMemo(() => new TreesModel({
     paths: [],
@@ -620,6 +630,18 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     { id: '', label: '/ (vault root)' },
     ...folderIds.map((folderId) => ({ id: folderId, label: folderId })),
   ], [folderIds]);
+  const knowledgeBaseSyncPresentation = useMemo(() => {
+    if (knowledgeBaseError && !knowledgeBaseState && !knowledgeBaseLoading) {
+      return {
+        text: `Sync status unavailable · ${knowledgeBaseError}`,
+        toneClass: 'text-danger',
+        dotClass: 'bg-danger',
+        pulse: false,
+      };
+    }
+
+    return getKnowledgeBaseSyncPresentation(knowledgeBaseState);
+  }, [knowledgeBaseError, knowledgeBaseLoading, knowledgeBaseState]);
 
   const persistOpenFileIds = useCallback((nextOpenFileIds: readonly string[]) => {
     const normalized = [...nextOpenFileIds];
@@ -857,7 +879,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
 
   const handleReopenLastClosedFile = useCallback(() => {
-    let remaining = [...recentlyClosedFileIdsRef.current];
+    const remaining = [...recentlyClosedFileIdsRef.current];
     while (remaining.length > 0) {
       const candidate = remaining.shift()?.trim() ?? '';
       if (!candidate || candidate.endsWith('/')) {
@@ -1040,28 +1062,45 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     persistExpandedFolderIds(collectExpandedFolderIds(model, folderIdsRef.current));
   }, [activeFileId, entries, model, persistExpandedFolderIds]);
 
+  useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
+
   useEffect(() => () => {
     model.cleanUp();
   }, [model]);
 
   useEffect(() => {
+    const refreshKnowledgeBaseStatus = () => {
+      void refetchKnowledgeBase({ resetLoading: false });
+    };
+
     const off = [
-      onKBEvent('kb:entries-changed', () => { void loadSnapshot({ keepLoadingState: false }); }),
+      onKBEvent('kb:entries-changed', () => {
+        void loadSnapshot({ keepLoadingState: false });
+        refreshKnowledgeBaseStatus();
+      }),
+      onKBEvent('kb:content-saved', () => {
+        refreshKnowledgeBaseStatus();
+      }),
       onKBEvent<{ oldId: string; newId: string }>('kb:file-renamed', ({ oldId, newId }) => {
         applyRenameEffects(oldId, newId);
         void loadSnapshot({ keepLoadingState: false });
+        refreshKnowledgeBaseStatus();
       }),
-      onKBEvent<{ id: string }>('kb:file-created', () => { void loadSnapshot({ keepLoadingState: false }); }),
+      onKBEvent<{ id: string }>('kb:file-created', () => {
+        void loadSnapshot({ keepLoadingState: false });
+        refreshKnowledgeBaseStatus();
+      }),
       onKBEvent<{ id: string }>('kb:file-deleted', ({ id }) => {
         applyDeleteEffects(id);
         void loadSnapshot({ keepLoadingState: false });
+        refreshKnowledgeBaseStatus();
       }),
     ];
 
     return () => {
       off.forEach((unsubscribe) => unsubscribe());
     };
-  }, [applyDeleteEffects, applyRenameEffects, loadSnapshot]);
+  }, [applyDeleteEffects, applyRenameEffects, loadSnapshot, refetchKnowledgeBase]);
 
   useEffect(() => {
     const wrapper = treeHostWrapperRef.current;
@@ -1145,35 +1184,44 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   return (
     <div ref={rootRef} className="flex h-full flex-col">
-      <div ref={headerRef} className="flex items-center gap-1 px-3 py-0.5 shrink-0 rounded-md">
-        <p className="ui-section-label flex-1">Knowledge Base</p>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="Import URL"
-          aria-label="Import URL"
-          onClick={() => setImportDirectoryId(normalizeDirectoryId(activeFileId ? idToDir(activeFileId) : ''))}
-        >
-          <Ico d={ICON.import} size={12} />
-        </button>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="New file"
-          aria-label="New file"
-          onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
-        >
-          <Ico d={ICON.plus} size={12} />
-        </button>
-        <button
-          type="button"
-          className="ui-icon-button ui-icon-button-compact"
-          title="New folder"
-          aria-label="New folder"
-          onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
-        >
-          <Ico d={ICON.folderPlus} size={12} />
-        </button>
+      <div ref={headerRef} className="px-3 pt-1 pb-1 shrink-0 rounded-md">
+        <div className="flex items-center gap-1">
+          <p className="ui-section-label flex-1">Knowledge Base</p>
+          <button
+            type="button"
+            className="ui-icon-button ui-icon-button-compact"
+            title="Import URL"
+            aria-label="Import URL"
+            onClick={() => setImportDirectoryId(normalizeDirectoryId(activeFileId ? idToDir(activeFileId) : ''))}
+          >
+            <Ico d={ICON.import} size={12} />
+          </button>
+          <button
+            type="button"
+            className="ui-icon-button ui-icon-button-compact"
+            title="New file"
+            aria-label="New file"
+            onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
+          >
+            <Ico d={ICON.plus} size={12} />
+          </button>
+          <button
+            type="button"
+            className="ui-icon-button ui-icon-button-compact"
+            title="New folder"
+            aria-label="New folder"
+            onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
+          >
+            <Ico d={ICON.folderPlus} size={12} />
+          </button>
+        </div>
+        <div className={cx('mt-0.5 flex items-center gap-2 text-[11px]', knowledgeBaseSyncPresentation.toneClass)}>
+          <span
+            aria-hidden="true"
+            className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
+          />
+          <p className="truncate" title={knowledgeBaseSyncPresentation.text}>{knowledgeBaseSyncPresentation.text}</p>
+        </div>
       </div>
 
       <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">

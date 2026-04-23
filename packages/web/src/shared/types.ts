@@ -515,7 +515,8 @@ export type AppEventTopic =
   | 'tasks'
   | 'runs'
   | 'daemon'
-  | 'workspace';
+  | 'workspace'
+  | 'knowledgeBase';
 
 export type AppEvent =
   | { type: 'connected' }
@@ -971,6 +972,12 @@ export interface VaultRootState {
   source: 'env' | 'config' | 'knowledge-base' | 'default';
 }
 
+export interface KnowledgeBaseGitStatus {
+  localChangeCount: number;
+  aheadCount: number;
+  behindCount: number;
+}
+
 export interface KnowledgeBaseState {
   repoUrl: string;
   branch: string;
@@ -981,6 +988,7 @@ export interface KnowledgeBaseState {
   syncStatus: 'disabled' | 'idle' | 'syncing' | 'error';
   lastSyncAt?: string;
   lastError?: string;
+  gitStatus?: KnowledgeBaseGitStatus | null;
   recoveredEntryCount: number;
   recoveryDir: string;
 }

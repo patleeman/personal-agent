@@ -157,6 +157,7 @@ import {
   readMcpConfig,
   resolveConversationAttachmentPromptFiles,
   saveConversationAttachment,
+  subscribeKnowledgeBaseState,
   summarizeConversationAttention,
   startKnowledgeBaseSyncLoop,
 } from '@personal-agent/core';
@@ -188,6 +189,9 @@ import {
 } from './automation/deferredResumes.js';
 
 hydrateProcessEnvFromShell();
+subscribeKnowledgeBaseState(() => {
+  invalidateAppTopics('knowledgeBase');
+});
 startKnowledgeBaseSyncLoop();
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);

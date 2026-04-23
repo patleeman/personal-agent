@@ -100,6 +100,19 @@ That keeps the roles clean:
 - the conversation stores a reference to the document
 - the agent loads the exact file only when needed
 
+## Managed git sync status
+
+When managed KB sync is enabled, the Knowledge page sidebar shows the mirror's current git sync state.
+
+It can surface:
+
+- in sync
+- pending local changes
+- pending local commits or remote commits
+- sync in progress or the latest sync error
+
+That status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
+
 ## URL import
 
 The web UI Knowledge page can import a web page into `<vault-root>`.
