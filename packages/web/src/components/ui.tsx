@@ -149,6 +149,7 @@ export interface AppPageTocItem<TId extends string = string> {
 export function AppPageLayout({
   children,
   aside,
+  asideLayout = 'split',
   shellClassName,
   gridClassName,
   contentClassName,
@@ -156,6 +157,7 @@ export function AppPageLayout({
 }: {
   children: ReactNode;
   aside?: ReactNode;
+  asideLayout?: 'split' | 'centered';
   shellClassName?: string;
   gridClassName?: string;
   contentClassName?: string;
@@ -171,9 +173,9 @@ export function AppPageLayout({
 
   return (
     <div className={cx('ui-app-page-shell', shellClassName)}>
-      <div className={cx('ui-app-page-grid', gridClassName)}>
-        <div className={cx('ui-app-page-main', contentClassName)}>{children}</div>
-        <div className={cx('ui-app-page-aside', asideClassName)}>{aside}</div>
+      <div className={cx(asideLayout === 'centered' ? 'ui-app-page-grid-centered' : 'ui-app-page-grid', gridClassName)}>
+        <div className={cx('ui-app-page-main', asideLayout === 'centered' && 'ui-app-page-main-centered', contentClassName)}>{children}</div>
+        <div className={cx(asideLayout === 'centered' ? 'ui-app-page-aside-centered' : 'ui-app-page-aside', asideClassName)}>{aside}</div>
       </div>
     </div>
   );

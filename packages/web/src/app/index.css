@@ -425,12 +425,24 @@
     @apply grid gap-10 lg:grid-cols-[minmax(0,1fr)_13.5rem] lg:items-start xl:gap-14;
   }
 
+  .ui-app-page-grid-centered {
+    @apply grid gap-10 2xl:grid-cols-[minmax(0,1fr)_minmax(0,72rem)_13.5rem_minmax(0,1fr)] 2xl:items-start 2xl:gap-x-10;
+  }
+
   .ui-app-page-main {
     @apply mx-auto w-full min-w-0;
   }
 
+  .ui-app-page-main-centered {
+    @apply 2xl:col-start-2 2xl:mx-0;
+  }
+
   .ui-app-page-aside {
     @apply hidden lg:block lg:sticky lg:top-8 lg:self-start;
+  }
+
+  .ui-app-page-aside-centered {
+    @apply hidden 2xl:block 2xl:sticky 2xl:top-8 2xl:self-start 2xl:col-start-3;
   }
 
   .ui-app-page-intro {

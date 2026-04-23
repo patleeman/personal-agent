@@ -2508,7 +2508,7 @@ export function SettingsPage() {
   return (
     <div ref={settingsScrollRef} className="h-full overflow-y-auto">
       <AppPageLayout
-        shellClassName="max-w-[90rem]"
+        asideLayout="centered"
         contentClassName="max-w-[72rem] flex flex-col gap-12"
         aside={(
           <SettingsTableOfContents

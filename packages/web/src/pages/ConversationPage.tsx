@@ -7190,7 +7190,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           <AppPageEmptyState
             align={draft ? 'start' : 'center'}
             className={draft ? 'px-4 pt-12 sm:px-6' : undefined}
-            contentClassName={draft ? 'max-w-[30rem]' : undefined}
+            contentClassName={draft ? 'max-w-[72rem] text-left' : undefined}
             icon={draft ? undefined : (
               <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mx-auto">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="text-accent">
@@ -7205,12 +7205,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 ? 'This conversation is live but has no messages yet. Send a prompt to get started.'
                 : 'Start a Pi session to populate this conversation.'}
             action={draft ? (
-              <div className="mx-auto mt-4 w-full max-w-[30rem] space-y-2.5">
-                <div className="flex items-center justify-center gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
+              <div className="mx-auto mt-4 w-full max-w-[72rem] space-y-3">
+                <div className="flex items-center justify-start gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
                   <FolderIcon className="text-accent" />
                   <span>Workspace</span>
                 </div>
-                <div className="flex w-full flex-wrap items-center justify-center gap-1.5">
+                <div className="flex w-full flex-wrap items-center justify-start gap-1.5">
                   {selectedExecutionTargetIsRemote ? (
                     <label className="min-w-[16rem] max-w-full flex-1 rounded-md border border-border-subtle bg-surface/45 px-2 shadow-sm">
                       <span className="sr-only">Remote workspace path</span>
@@ -7278,11 +7278,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 </div>
 
                 {selectedExecutionTargetIsRemote ? (
-                  <p className="text-center text-[11px] text-secondary">Remote path on {selectedExecutionTargetLabel}.</p>
+                  <p className="text-[11px] text-secondary">Remote path on {selectedExecutionTargetLabel}.</p>
                 ) : null}
 
                 {draftCwdError && (
-                  <p className="text-center text-[11px] text-danger/80">{draftCwdError}</p>
+                  <p className="text-[11px] text-danger/80">{draftCwdError}</p>
                 )}
 
                 <DraftRelatedThreadsPanel
