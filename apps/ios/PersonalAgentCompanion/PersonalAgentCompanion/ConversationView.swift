@@ -20,6 +20,7 @@ struct ConversationScreen: View {
     @State private var showingModelPreferences = false
     @State private var showingArtifacts = false
     @State private var showingCheckpoints = false
+    @State private var composerTextHeight: CGFloat = 36
 
     private var currentExecutionTargetLabel: String {
         viewModel.executionTargets.first(where: { $0.id == viewModel.currentExecutionTargetId })?.label ?? "Local"
@@ -294,6 +295,22 @@ struct ConversationScreen: View {
         importedPhotoItems.removeAll()
     }
 
+    private func attachPromptImage(data: Data, mimeType: String?, fileName: String?) {
+        guard let draft = PromptImageDraft.fromImportedData(data: data, mimeType: mimeType, fileName: fileName) else {
+            viewModel.errorMessage = "Couldn't attach that image."
+            return
+        }
+        viewModel.addPromptImage(draft)
+    }
+
+    private func pasteClipboardImage() {
+        guard let image = UIPasteboard.general.image,
+              let data = image.pngData() else {
+            return
+        }
+        attachPromptImage(data: data, mimeType: "image/png", fileName: "clipboard-image.png")
+    }
+
     private var composer: some View {
         VStack(spacing: 10) {
             if let presencePresentation, presencePresentation.shouldBlockComposer {
@@ -382,6 +399,13 @@ struct ConversationScreen: View {
                             } label: {
                                 Label("Image file", systemImage: "folder.badge.plus")
                             }
+                            if UIPasteboard.general.image != nil {
+                                Button {
+                                    pasteClipboardImage()
+                                } label: {
+                                    Label("Paste image", systemImage: "doc.on.clipboard")
+                                }
+                            }
                             Button {
                                 showingAttachments = true
                             } label: {
@@ -394,9 +418,19 @@ struct ConversationScreen: View {
                                 .frame(width: 28, height: 28)
                         }
 
-                        TextField("Message", text: $viewModel.promptText, axis: .vertical)
-                            .lineLimit(1...6)
-                            .foregroundStyle(CompanionTheme.textPrimary)
+                        ZStack(alignment: .topLeading) {
+                            if viewModel.promptText.isEmpty {
+                                Text("Message")
+                                    .foregroundStyle(CompanionTheme.textSecondary)
+                                    .padding(.top, 8)
+                            }
+                            ConversationComposerTextEditor(
+                                text: $viewModel.promptText,
+                                height: $composerTextHeight,
+                                onPasteImage: attachPromptImage
+                            )
+                            .frame(height: composerTextHeight)
+                        }
                     }
                     .padding(.horizontal, 14)
                     .padding(.vertical, 12)
@@ -2666,14 +2700,123 @@ private extension ConversationAttachmentRecord {
     }
 }
 
+private final class ConversationComposerTextView: UITextView {
+    var onPasteImage: ((Data, String?, String?) -> Void)?
+
+    override func paste(_ sender: Any?) {
+        if let image = UIPasteboard.general.image,
+           let data = image.pngData() {
+            onPasteImage?(data, "image/png", "clipboard-image.png")
+            return
+        }
+        super.paste(sender)
+    }
+}
+
+private struct ConversationComposerTextEditor: UIViewRepresentable {
+    static let minHeight: CGFloat = 24
+    static let maxHeight: CGFloat = 116
+
+    @Binding var text: String
+    @Binding var height: CGFloat
+    let onPasteImage: (Data, String?, String?) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIView(context: Context) -> ConversationComposerTextView {
+        let view = ConversationComposerTextView(frame: .zero)
+        view.delegate = context.coordinator
+        view.backgroundColor = .clear
+        view.autocorrectionType = .default
+        view.smartDashesType = .no
+        view.smartQuotesType = .no
+        view.smartInsertDeleteType = .no
+        view.font = .preferredFont(forTextStyle: .body)
+        view.textColor = UIColor(CompanionTheme.textPrimary)
+        view.tintColor = UIColor(CompanionTheme.accent)
+        view.keyboardDismissMode = .interactive
+        view.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+        view.textContainer.lineFragmentPadding = 0
+        view.isScrollEnabled = false
+        view.onPasteImage = onPasteImage
+        view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        context.coordinator.apply(text: text, to: view)
+        context.coordinator.updateHeight(for: view)
+        return view
+    }
+
+    func updateUIView(_ uiView: ConversationComposerTextView, context: Context) {
+        context.coordinator.parent = self
+        uiView.onPasteImage = onPasteImage
+        uiView.textColor = UIColor(CompanionTheme.textPrimary)
+        uiView.tintColor = UIColor(CompanionTheme.accent)
+        if !context.coordinator.isApplyingProgrammaticChange, uiView.text != text {
+            context.coordinator.apply(text: text, to: uiView)
+        }
+        context.coordinator.updateHeight(for: uiView)
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        var parent: ConversationComposerTextEditor
+        var isApplyingProgrammaticChange = false
+
+        init(parent: ConversationComposerTextEditor) {
+            self.parent = parent
+        }
+
+        func textViewDidChange(_ textView: UITextView) {
+            guard !isApplyingProgrammaticChange else {
+                return
+            }
+            parent.text = textView.text
+            updateHeight(for: textView)
+        }
+
+        func apply(text: String, to textView: UITextView) {
+            guard textView.text != text else {
+                return
+            }
+            isApplyingProgrammaticChange = true
+            textView.text = text
+            isApplyingProgrammaticChange = false
+        }
+
+        func updateHeight(for textView: UITextView) {
+            let targetWidth = max(textView.bounds.width, UIScreen.main.bounds.width - 120)
+            let measuredHeight = textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height
+            let clampedHeight = min(ConversationComposerTextEditor.maxHeight, max(ConversationComposerTextEditor.minHeight, measuredHeight))
+            textView.isScrollEnabled = measuredHeight > ConversationComposerTextEditor.maxHeight
+            guard abs(parent.height - clampedHeight) > 0.5 else {
+                return
+            }
+            DispatchQueue.main.async {
+                self.parent.height = clampedHeight
+            }
+        }
+    }
+}
+
 private extension PromptImageDraft {
+    static func fromImportedData(data: Data, mimeType: String?, fileName: String?) -> PromptImageDraft? {
+        let resolvedName = fileName?.nilIfBlank ?? "Image"
+        let resolvedMimeType = mimeType?.nilIfBlank
+            ?? UTType(filenameExtension: URL(fileURLWithPath: resolvedName).pathExtension)?.preferredMIMEType
+            ?? "application/octet-stream"
+        return PromptImageDraft(name: resolvedName, mimeType: resolvedMimeType, base64Data: data.base64EncodedString(), previewData: data)
+    }
+
     static func fromPhotosItem(_ item: PhotosPickerItem) async throws -> PromptImageDraft? {
         let data = try await item.loadTransferable(type: Data.self)
-        guard let data, let mimeType = item.supportedContentTypes.first?.preferredMIMEType else {
+        guard let data else {
             return nil
         }
-        let name = item.itemIdentifier ?? "Image"
-        return PromptImageDraft(name: name, mimeType: mimeType, base64Data: data.base64EncodedString(), previewData: data)
+        return fromImportedData(
+            data: data,
+            mimeType: item.supportedContentTypes.first?.preferredMIMEType,
+            fileName: item.itemIdentifier ?? "Image"
+        )
     }
 
     static func fromImageFile(url: URL) async throws -> PromptImageDraft? {
@@ -2682,8 +2825,11 @@ private extension PromptImageDraft {
             if granted { url.stopAccessingSecurityScopedResource() }
         }
         let data = try Data(contentsOf: url)
-        let mimeType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-        return PromptImageDraft(name: url.lastPathComponent, mimeType: mimeType, base64Data: data.base64EncodedString(), previewData: data)
+        return fromImportedData(
+            data: data,
+            mimeType: UTType(filenameExtension: url.pathExtension)?.preferredMIMEType,
+            fileName: url.lastPathComponent
+        )
     }
 }
 

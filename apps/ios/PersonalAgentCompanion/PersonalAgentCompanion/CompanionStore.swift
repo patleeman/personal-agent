@@ -1071,6 +1071,83 @@ struct KnowledgeDraftRecord: Codable, Equatable {
     var savedAt: String
 }
 
+struct ConversationComposerDraftRecord: Codable, Equatable {
+    let draftKey: String
+    var promptText: String
+    var images: [ConversationComposerDraftImage]
+    var attachmentRefs: [PromptAttachmentReference]
+    var savedAt: String
+}
+
+struct ConversationComposerDraftImage: Codable, Equatable {
+    let name: String
+    let mimeType: String
+    let base64Data: String
+
+    init(_ draft: PromptImageDraft) {
+        self.name = draft.name
+        self.mimeType = draft.mimeType
+        self.base64Data = draft.base64Data
+    }
+
+    var promptImageDraft: PromptImageDraft {
+        PromptImageDraft(
+            name: name,
+            mimeType: mimeType,
+            base64Data: base64Data,
+            previewData: Data(base64Encoded: base64Data) ?? Data()
+        )
+    }
+}
+
+final class ConversationComposerDraftStore {
+    static let shared = ConversationComposerDraftStore()
+
+    private let fileManager: FileManager
+    private let directoryURL: URL
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(fileManager: FileManager = .default, baseURL: URL? = nil) {
+        self.fileManager = fileManager
+        let root = baseURL
+            ?? fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? fileManager.temporaryDirectory
+        self.directoryURL = root.appendingPathComponent("ConversationComposerDrafts", isDirectory: true)
+    }
+
+    func load(draftKey: String) -> ConversationComposerDraftRecord? {
+        let url = fileURL(for: draftKey)
+        guard let data = try? Data(contentsOf: url) else {
+            return nil
+        }
+        return try? decoder.decode(ConversationComposerDraftRecord.self, from: data)
+    }
+
+    func save(_ record: ConversationComposerDraftRecord) {
+        do {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+            let data = try encoder.encode(record)
+            try data.write(to: fileURL(for: record.draftKey), options: [.atomic])
+        } catch {
+            // Keep draft storage best-effort so editing continues even if persistence fails.
+        }
+    }
+
+    func remove(draftKey: String) {
+        try? fileManager.removeItem(at: fileURL(for: draftKey))
+    }
+
+    func removeAll() {
+        try? fileManager.removeItem(at: directoryURL)
+    }
+
+    private func fileURL(for draftKey: String) -> URL {
+        let safeName = draftKey.replacingOccurrences(of: #"[^a-zA-Z0-9._-]"#, with: "_", options: .regularExpression)
+        return directoryURL.appendingPathComponent("\(safeName).json")
+    }
+}
+
 final class KnowledgeDraftStore {
     static let shared = KnowledgeDraftStore()
 
@@ -1645,9 +1722,30 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var isStreaming = false
     @Published var errorMessage: String?
     @Published var composerNotice: String?
-    @Published var promptText: String = ""
-    @Published var promptImages: [PromptImageDraft] = []
-    @Published var promptAttachmentRefs: [PromptAttachmentReference] = []
+    @Published var promptText: String = "" {
+        didSet {
+            guard promptText != oldValue else {
+                return
+            }
+            handleComposerDraftDidChange()
+        }
+    }
+    @Published var promptImages: [PromptImageDraft] = [] {
+        didSet {
+            guard promptImages != oldValue else {
+                return
+            }
+            handleComposerDraftDidChange()
+        }
+    }
+    @Published var promptAttachmentRefs: [PromptAttachmentReference] = [] {
+        didSet {
+            guard promptAttachmentRefs != oldValue else {
+                return
+            }
+            handleComposerDraftDidChange()
+        }
+    }
 
     let conversationId: String
     let installationSurfaceId: String
@@ -1655,10 +1753,15 @@ final class ConversationViewModel: ObservableObject {
     private static let bootstrapTailBlocks = ConversationBootstrapRequestOptions.defaultTailBlocks
 
     private let client: CompanionClientProtocol
+    private let composerDraftStore: ConversationComposerDraftStore
+    private let composerDraftKey: String
     private let autoStartRunningSimulation: Bool
     private var didAutoStartRunningSimulation = false
+    private var didRestoreComposerDraft = false
+    private var isApplyingComposerDraft = false
     private var streamTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
+    private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
     private var lastStreamingThinkingBlockId: String?
 
@@ -1669,7 +1772,8 @@ final class ConversationViewModel: ObservableObject {
         initialSession: SessionMeta?,
         initialExecutionTargets: [ExecutionTargetSummary],
         initialWorkspacePaths: [String] = [],
-        initialModelState: CompanionModelState? = nil
+        initialModelState: CompanionModelState? = nil,
+        composerDraftStore: ConversationComposerDraftStore = .shared
     ) {
         self.client = client
         self.conversationId = conversationId
@@ -1680,6 +1784,8 @@ final class ConversationViewModel: ObservableObject {
         self.workspacePaths = initialWorkspacePaths
         self.modelState = initialModelState
         self.currentExecutionTargetId = initialSession?.remoteHostId ?? "local"
+        self.composerDraftStore = composerDraftStore
+        self.composerDraftKey = "\(client.host.hostInstanceId)::\(conversationId)"
         self.autoStartRunningSimulation = ProcessInfo.processInfo.environment["PA_IOS_AUTO_START_MOCK_RUNNING"] == "1"
     }
 
@@ -1688,12 +1794,15 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func start() {
+        restoreComposerDraftIfNeeded()
         loadBootstrap()
         refreshModelState()
         subscribeConversationEvents()
     }
 
     func stop() {
+        composerDraftSaveTask?.cancel()
+        persistComposerDraftIfNeeded()
         streamTask?.cancel()
         streamTask = nil
         composerNoticeTask?.cancel()
@@ -1756,9 +1865,7 @@ final class ConversationViewModel: ObservableObject {
                     mode: resolvedMode,
                     surfaceId: installationSurfaceId
                 )
-                promptText = ""
-                promptImages.removeAll()
-                promptAttachmentRefs.removeAll()
+                clearComposerDraftState()
                 if let notice = resolvedMode.noticeMessage {
                     showComposerNotice(notice)
                 }
@@ -2131,6 +2238,63 @@ final class ConversationViewModel: ObservableObject {
 
     func removeAttachmentReference(_ id: String) {
         promptAttachmentRefs.removeAll { $0.id == id }
+    }
+
+    private var hasComposerDraftContent: Bool {
+        promptText.trimmed.nilIfBlank != nil || !promptImages.isEmpty || !promptAttachmentRefs.isEmpty
+    }
+
+    private func restoreComposerDraftIfNeeded() {
+        guard !didRestoreComposerDraft else {
+            return
+        }
+        didRestoreComposerDraft = true
+        guard let record = composerDraftStore.load(draftKey: composerDraftKey) else {
+            return
+        }
+        isApplyingComposerDraft = true
+        promptText = record.promptText
+        promptImages = record.images.map(\.promptImageDraft)
+        promptAttachmentRefs = record.attachmentRefs
+        isApplyingComposerDraft = false
+    }
+
+    private func handleComposerDraftDidChange() {
+        guard !isApplyingComposerDraft else {
+            return
+        }
+        composerDraftSaveTask?.cancel()
+        composerDraftSaveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else {
+                return
+            }
+            self.persistComposerDraftIfNeeded()
+        }
+    }
+
+    private func persistComposerDraftIfNeeded() {
+        guard hasComposerDraftContent else {
+            composerDraftStore.remove(draftKey: composerDraftKey)
+            return
+        }
+        composerDraftStore.save(ConversationComposerDraftRecord(
+            draftKey: composerDraftKey,
+            promptText: promptText,
+            images: promptImages.map(ConversationComposerDraftImage.init),
+            attachmentRefs: promptAttachmentRefs,
+            savedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        ))
+    }
+
+    private func clearComposerDraftState() {
+        composerDraftSaveTask?.cancel()
+        isApplyingComposerDraft = true
+        promptText = ""
+        promptImages.removeAll()
+        promptAttachmentRefs.removeAll()
+        isApplyingComposerDraft = false
+        composerDraftStore.remove(draftKey: composerDraftKey)
     }
 
     private func subscribeConversationEvents() {

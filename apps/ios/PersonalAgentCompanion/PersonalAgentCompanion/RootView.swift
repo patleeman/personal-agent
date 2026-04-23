@@ -1944,53 +1944,75 @@ func knowledgeSmartReturnMutation(text: String, selectedRange: NSRange) -> Knowl
     return nil
 }
 
+struct ConversationRowPresentation {
+    let session: SessionMeta
+
+    var hasUnreadMessages: Bool {
+        let unreadCount = max(session.attentionUnreadMessageCount ?? 0, session.attentionUnreadActivityCount ?? 0)
+        return unreadCount > 0 || session.needsAttention == true
+    }
+
+    var showsRunningIndicator: Bool {
+        session.isRunning == true
+    }
+
+    var subtitle: String? {
+        let fragments = [
+            session.cwdSlug.nilIfBlank,
+            session.remoteHostLabel?.nilIfBlank,
+            session.automationTitle?.nilIfBlank.map { "Auto: \($0)" },
+        ].compactMap { $0 }
+        return fragments.isEmpty ? nil : fragments.joined(separator: " · ")
+    }
+}
+
 private struct ConversationRow: View {
     let session: SessionMeta
 
+    private var presentation: ConversationRowPresentation {
+        ConversationRowPresentation(session: session)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(session.title)
-                    .font(.headline)
-                    .foregroundStyle(CompanionTheme.textPrimary)
-                    .lineLimit(2)
+            Text(session.title)
+                .font(.headline)
+                .foregroundStyle(CompanionTheme.textPrimary)
+                .lineLimit(2)
+
+            HStack(alignment: .center, spacing: 8) {
+                if let subtitle = presentation.subtitle {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .lineLimit(1)
+                }
+
                 Spacer(minLength: 8)
-                if session.needsAttention == true {
-                    Text(attentionLabel)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.red)
-                }
-            }
-            HStack(spacing: 8) {
-                Text(session.cwdSlug)
-                Text(session.model)
-                if let remoteLabel = session.remoteHostLabel?.nilIfBlank {
-                    Text(remoteLabel)
-                }
-                if let automationTitle = session.automationTitle?.nilIfBlank {
-                    Text("Auto: \(automationTitle)")
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(CompanionTheme.textSecondary)
-            HStack {
+
                 Text(formatRelativeCompanionDate(session.lastActivityAt ?? session.timestamp))
                     .font(.caption)
                     .foregroundStyle(CompanionTheme.textDim)
-                Spacer()
-                if session.isLive == true {
-                    Label("Live", systemImage: "dot.radiowaves.left.and.right")
-                        .font(.caption)
-                        .foregroundStyle(CompanionTheme.textSecondary)
+
+                if presentation.hasUnreadMessages {
+                    Circle()
+                        .fill(CompanionTheme.accent)
+                        .frame(width: 8, height: 8)
+                }
+
+                if presentation.showsRunningIndicator {
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(.orange)
+                            .frame(width: 8, height: 8)
+                        Text("Running")
+                            .font(.caption2.weight(.semibold))
+                    }
+                    .foregroundStyle(.orange)
                 }
             }
         }
         .padding(.vertical, 2)
-    }
-
-    private var attentionLabel: String {
-        let count = max(session.attentionUnreadMessageCount ?? 0, session.attentionUnreadActivityCount ?? 0)
-        return count > 0 ? "\(count) new" : "Needs attention"
     }
 }
 

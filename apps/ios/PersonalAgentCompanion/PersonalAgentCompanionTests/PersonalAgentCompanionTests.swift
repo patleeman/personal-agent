@@ -10,10 +10,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
     override func setUp() {
         super.setUp()
         clearStoredHostState()
+        ConversationComposerDraftStore.shared.removeAll()
     }
 
     override func tearDown() {
         clearStoredHostState()
+        ConversationComposerDraftStore.shared.removeAll()
         unsetenv("PA_IOS_MOCK_MODE")
         unsetenv("PA_IOS_USE_DEVICE_DEMO_DATA")
         unsetenv("PA_IOS_DEMO_SNAPSHOT_FILE")
@@ -236,6 +238,71 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
 
+    func testConversationComposerDraftRestoresAcrossViewModels() {
+        let client = MockCompanionClient()
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let draftStore = ConversationComposerDraftStore(baseURL: tempDraftRoot)
+        let imageData = Data("image-data".utf8)
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let attachmentRevision = ConversationAttachmentRevision(
+            revision: 1,
+            createdAt: now,
+            sourceName: "drawing.excalidraw",
+            sourceMimeType: "application/vnd.excalidraw+json",
+            sourceDownloadPath: "/source",
+            previewName: "drawing.png",
+            previewMimeType: "image/png",
+            previewDownloadPath: "/preview",
+            note: nil
+        )
+
+        let first = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil,
+            composerDraftStore: draftStore
+        )
+        first.promptText = "Keep this draft"
+        first.addPromptImage(PromptImageDraft(name: "pasted.png", mimeType: "image/png", base64Data: imageData.base64EncodedString(), previewData: imageData))
+        first.attachDrawingReference(
+            attachment: ConversationAttachmentSummary(
+                id: "att-1",
+                conversationId: "conv-1",
+                kind: "excalidraw",
+                title: "Sketch",
+                createdAt: now,
+                updatedAt: now,
+                currentRevision: 1,
+                latestRevision: attachmentRevision
+            ),
+            revision: 1
+        )
+        first.stop()
+
+        let second = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil,
+            composerDraftStore: draftStore
+        )
+        second.start()
+
+        XCTAssertEqual(second.promptText, "Keep this draft")
+        XCTAssertEqual(second.promptImages.count, 1)
+        XCTAssertEqual(second.promptImages.first?.name, "pasted.png")
+        XCTAssertEqual(second.promptAttachmentRefs.count, 1)
+        XCTAssertEqual(second.promptAttachmentRefs.first?.attachmentId, "att-1")
+        second.stop()
+    }
+
     func testConversationPresencePresentationBlocksComposerWhenAnotherSurfaceControls() {
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let state = LiveSessionPresenceState(
@@ -274,6 +341,41 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertFalse(presentation.shouldBlockComposer)
         XCTAssertFalse(presentation.controllingElsewhere)
         XCTAssertTrue(presentation.controllingHere)
+    }
+
+    func testConversationRowPresentationUsesUnreadAndRunningIndicators() {
+        let session = SessionMeta(
+            id: "conversation-1",
+            file: "/tmp/conversation-1.jsonl",
+            timestamp: ISO8601DateFormatter.flexible.string(from: .now),
+            cwd: "/Users/patrick/workingdir/personal-agent",
+            cwdSlug: "personal-agent",
+            model: "gpt-5.4",
+            title: "Unread running thread",
+            messageCount: 5,
+            isRunning: true,
+            isLive: true,
+            lastActivityAt: nil,
+            parentSessionFile: nil,
+            parentSessionId: nil,
+            sourceRunId: nil,
+            remoteHostId: nil,
+            remoteHostLabel: nil,
+            remoteConversationId: nil,
+            automationTaskId: nil,
+            automationTitle: nil,
+            needsAttention: true,
+            attentionUpdatedAt: nil,
+            attentionUnreadMessageCount: 2,
+            attentionUnreadActivityCount: 2,
+            attentionActivityIds: nil
+        )
+
+        let presentation = ConversationRowPresentation(session: session)
+
+        XCTAssertTrue(presentation.hasUnreadMessages)
+        XCTAssertTrue(presentation.showsRunningIndicator)
+        XCTAssertEqual(presentation.subtitle, "personal-agent")
     }
 
     func testPromptSendClearsComposerAndAddsBlocks() async throws {
