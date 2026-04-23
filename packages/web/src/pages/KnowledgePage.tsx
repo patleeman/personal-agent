@@ -76,11 +76,13 @@ export function KnowledgePage() {
   return (
     <div className="flex h-full flex-1 min-w-0">
       <VaultEditor
+        // Keep the editor instance stable across file switches. Re-mounting the
+        // whole TipTap tree on every click is expensive and caused knowledge-page
+        // interaction spikes in the desktop app.
         fileId={activeFileId}
         fileName={fileName}
         onFileNavigate={handleFileNavigate}
         onFileRenamed={handleFileRenamed}
-        key={activeFileId ?? '__empty'}
       />
     </div>
   );

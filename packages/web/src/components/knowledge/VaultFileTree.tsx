@@ -232,6 +232,20 @@ function collectRawExpandedFolderIds(model: TreesModel, folderIds: readonly stri
   return expanded;
 }
 
+function hasSameStringSet(left: ReadonlySet<string>, right: ReadonlySet<string>): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 function createFallbackEntry(path: string, kind: VaultEntry['kind'], name?: string): VaultEntry {
   const trimmed = path.endsWith('/') ? path.slice(0, -1) : path;
   return {
@@ -671,6 +685,13 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
   const persistExpandedFolderIds = useCallback((nextExpandedFolderIds: ReadonlySet<string>) => {
     const normalized = new Set(nextExpandedFolderIds);
+    if (
+      hasSameStringSet(expandedFolderIdsRef.current, normalized)
+      && hasSameStringSet(visibleExpandedFolderIdsRef.current, normalized)
+    ) {
+      return;
+    }
+
     expandedFolderIdsRef.current = normalized;
     visibleExpandedFolderIdsRef.current = normalized;
     writeStoredExpandedFolderIds(normalized);
@@ -1191,11 +1212,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     const wrapper = treeHostWrapperRef.current;
     const host = wrapper?.querySelector('file-tree-container');
     const shadowRoot = host instanceof HTMLElement ? host.shadowRoot : null;
-    if (!shadowRoot) {
+    if (!shadowRoot || typeof window === 'undefined') {
       return;
     }
 
+    let frameId: number | null = null;
+
     const syncVisibleLabels = () => {
+      frameId = null;
       const rows = shadowRoot.querySelectorAll<HTMLElement>('[role="treeitem"]');
       for (const row of rows) {
         const content = row.querySelector<HTMLElement>('[data-item-section="content"]');
@@ -1253,9 +1277,19 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       }
     };
 
-    syncVisibleLabels();
+    const scheduleVisibleLabelSync = () => {
+      if (frameId !== null) {
+        return;
+      }
+
+      frameId = window.requestAnimationFrame(() => {
+        syncVisibleLabels();
+      });
+    };
+
+    scheduleVisibleLabelSync();
     const observer = new MutationObserver(() => {
-      syncVisibleLabels();
+      scheduleVisibleLabelSync();
     });
     observer.observe(shadowRoot, {
       childList: true,
@@ -1264,6 +1298,9 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     return () => {
       observer.disconnect();
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
     };
   }, [entries, loading]);
 
