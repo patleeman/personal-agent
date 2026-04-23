@@ -194,7 +194,14 @@ applyWebRuntimeEnvironmentOverrides();
 subscribeKnowledgeBaseState(() => {
   invalidateAppTopics('knowledgeBase');
 });
-startKnowledgeBaseSyncLoop();
+// In the desktop app the local API server runs inside Electron's main process.
+// The managed knowledge-base sync loop does synchronous git work, which can
+// freeze the whole app and show the macOS beachball. Keep manual sync and state
+// reads, but do not run the background loop in-process until it moves off the
+// desktop main thread.
+if (process.env.PERSONAL_AGENT_DESKTOP_RUNTIME !== '1') {
+  startKnowledgeBaseSyncLoop();
+}
 
 const PORT = parseInt(process.env.PA_WEB_PORT ?? '3741', 10);
 const LOOPBACK_HOST = '127.0.0.1';
