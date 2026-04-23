@@ -481,21 +481,32 @@ struct ConversationScreen: View {
     }
 
     private func promptSendButton(defaultMode: ConversationPromptSubmissionMode, showStreamingOptions: Bool) -> some View {
-        Button {
-            viewModel.sendPrompt(mode: defaultMode)
-        } label: {
-            Image(systemName: defaultMode.systemImage)
-                .font(.headline.weight(.bold))
-                .frame(width: 42, height: 42)
-                .background(composerHasContent ? CompanionTheme.accent : CompanionTheme.panelBorder, in: Circle())
-                .foregroundStyle(.white)
-        }
-        .disabled(!composerHasContent)
-        .contextMenu {
+        Group {
             if showStreamingOptions {
-                queuedPromptActions
+                Menu {
+                    queuedPromptActions
+                } label: {
+                    sendButtonLabel(defaultMode: defaultMode)
+                } primaryAction: {
+                    viewModel.sendPrompt(mode: defaultMode)
+                }
+            } else {
+                Button {
+                    viewModel.sendPrompt(mode: defaultMode)
+                } label: {
+                    sendButtonLabel(defaultMode: defaultMode)
+                }
             }
         }
+        .disabled(!composerHasContent)
+    }
+
+    private func sendButtonLabel(defaultMode: ConversationPromptSubmissionMode) -> some View {
+        Image(systemName: defaultMode.systemImage)
+            .font(.headline.weight(.bold))
+            .frame(width: 42, height: 42)
+            .background(composerHasContent ? CompanionTheme.accent : CompanionTheme.panelBorder, in: Circle())
+            .foregroundStyle(.white)
     }
 
     @ViewBuilder
