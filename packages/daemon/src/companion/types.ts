@@ -311,6 +311,8 @@ export interface CompanionRuntime {
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;
   changeConversationCwd(input: CompanionConversationCwdChangeInput): Promise<unknown>;
+  readConversationAutoMode(conversationId: string): Promise<unknown>;
+  updateConversationAutoMode(input: { conversationId: string; enabled: boolean; surfaceId?: string }): Promise<unknown>;
   readConversationModelPreferences(conversationId: string): Promise<unknown>;
   updateConversationModelPreferences(input: CompanionConversationModelPreferencesUpdateInput): Promise<unknown>;
   createConversationCheckpoint(input: CompanionConversationCheckpointCreateInput): Promise<unknown>;

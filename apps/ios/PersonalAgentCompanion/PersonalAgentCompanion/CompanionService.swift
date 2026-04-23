@@ -30,6 +30,8 @@ protocol CompanionClientProtocol: AnyObject {
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
     func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult
+    func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState
+    func updateConversationAutoMode(conversationId: String, enabled: Bool, surfaceId: String) async throws -> ConversationAutoModeState
     func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState
     func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState
     func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary]
@@ -483,6 +485,27 @@ final class LiveCompanionClient: CompanionClientProtocol {
                 "surfaceId": surfaceId,
             ],
             decode: ConversationCwdChangeResult.self
+        )
+    }
+
+    func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/auto-mode",
+            method: "GET",
+            body: nil,
+            decode: ConversationAutoModeState.self
+        )
+    }
+
+    func updateConversationAutoMode(conversationId: String, enabled: Bool, surfaceId: String) async throws -> ConversationAutoModeState {
+        try await authorizedJSON(
+            path: "/companion/v1/conversations/\(conversationId)/auto-mode",
+            method: "PATCH",
+            body: [
+                "enabled": enabled,
+                "surfaceId": surfaceId,
+            ],
+            decode: ConversationAutoModeState.self
         )
     }
 
@@ -1334,6 +1357,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private var attachmentsByConversation: [String: [ConversationAttachmentRecord]]
     private var artifactsByConversation: [String: [ConversationArtifactRecord]]
     private var checkpointsByConversation: [String: [ConversationCommitCheckpointRecord]]
+    private var autoModeByConversation: [String: ConversationAutoModeState] = [:]
     private var knowledgeFiles: [String: String]
     private var knowledgeFolders: Set<String>
     private var knowledgeRootPath: String
@@ -1590,6 +1614,9 @@ final class MockCompanionClient: CompanionClientProtocol {
             "conv-2": []
         ]
         }
+        self.autoModeByConversation = Dictionary(uniqueKeysWithValues: self.conversations.keys.map {
+            ($0, ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil))
+        })
         self.knowledgeRootPath = "/Users/patrick/Documents/personal-agent"
         self.knowledgeFiles = Self.defaultKnowledgeFiles()
         self.knowledgeFolders = Self.buildKnowledgeFolderSet(from: self.knowledgeFiles.keys)
@@ -2174,6 +2201,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             executionTargets: listState.executionTargets ?? []
         )
         conversations[conversationId] = envelope
+        autoModeByConversation[conversationId] = ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil)
         attachmentsByConversation[conversationId] = []
         artifactsByConversation[conversationId] = []
         checkpointsByConversation[conversationId] = []
@@ -2548,6 +2576,26 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         emitApp(.conversationListState(listState))
         return ConversationCwdChangeResult(id: nextId, sessionFile: meta.file, cwd: cwd, changed: true)
+    }
+
+    func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState {
+        guard conversations[conversationId] != nil else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        return autoModeByConversation[conversationId] ?? ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil)
+    }
+
+    func updateConversationAutoMode(conversationId: String, enabled: Bool, surfaceId: String) async throws -> ConversationAutoModeState {
+        guard conversations[conversationId] != nil else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let nextState = ConversationAutoModeState(
+            enabled: enabled,
+            stopReason: enabled ? nil : autoModeByConversation[conversationId]?.stopReason,
+            updatedAt: ISO8601DateFormatter.flexible.string(from: .now)
+        )
+        autoModeByConversation[conversationId] = nextState
+        return nextState
     }
 
     func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState {

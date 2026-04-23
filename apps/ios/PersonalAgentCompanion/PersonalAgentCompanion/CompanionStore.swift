@@ -2038,6 +2038,28 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func loadAutoModeState() async -> ConversationAutoModeState? {
+        do {
+            return try await client.readConversationAutoMode(conversationId: conversationId)
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func saveAutoMode(enabled: Bool) async -> ConversationAutoModeState? {
+        do {
+            return try await client.updateConversationAutoMode(
+                conversationId: conversationId,
+                enabled: enabled,
+                surfaceId: installationSurfaceId
+            )
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
     func loadModelPreferences() async -> ConversationModelPreferencesState? {
         do {
             async let preferences = client.readConversationModelPreferences(conversationId: conversationId)

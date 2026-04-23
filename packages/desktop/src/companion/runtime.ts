@@ -432,6 +432,24 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async readConversationAutoMode(conversationId: string) {
+      return invokeDesktopApi(hostManager, {
+        method: 'GET',
+        path: `/api/conversations/${encodeURIComponent(conversationId)}/auto-mode`,
+      });
+    },
+
+    async updateConversationAutoMode(input: { conversationId: string; enabled: boolean; surfaceId?: string }) {
+      return invokeDesktopApi(hostManager, {
+        method: 'PATCH',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/auto-mode`,
+        body: {
+          enabled: input.enabled,
+          ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
+        },
+      });
+    },
+
     async readConversationModelPreferences(conversationId: string) {
       const localController = hostManager.getHostController('local');
       if (localController.readConversationModelPreferences) {

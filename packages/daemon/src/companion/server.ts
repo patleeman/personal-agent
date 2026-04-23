@@ -933,6 +933,38 @@ export class DaemonCompanionServer {
       return;
     }
 
+    const autoModeMatch = /^\/companion\/v1\/conversations\/([^/]+)\/auto-mode$/.exec(pathname);
+    if (autoModeMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.readConversationAutoMode(decodeURIComponent(autoModeMatch[1] || '')));
+      return;
+    }
+
+    if (autoModeMatch && request.method === 'PATCH') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const body = await parseJsonBody(request);
+      const payload = isRecord(body) ? body : {};
+      const enabled = payload.enabled;
+      if (typeof enabled !== 'boolean') {
+        sendJson(response, 400, { error: 'enabled must be boolean' });
+        return;
+      }
+      sendJson(response, 200, await runtime.updateConversationAutoMode({
+        conversationId: decodeURIComponent(autoModeMatch[1] || ''),
+        enabled,
+        ...(readOptionalString(payload.surfaceId) ? { surfaceId: readOptionalString(payload.surfaceId) } : {}),
+      }));
+      return;
+    }
+
     const modelPreferencesMatch = /^\/companion\/v1\/conversations\/([^/]+)\/model-preferences$/.exec(pathname);
     if (modelPreferencesMatch && request.method === 'GET') {
       if (!await this.requireBearer(request, response)) {

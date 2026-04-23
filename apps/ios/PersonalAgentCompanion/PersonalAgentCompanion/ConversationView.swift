@@ -1984,6 +1984,7 @@ private struct ConversationModelPreferencesView: View {
     @State private var model = ""
     @State private var thinkingLevel = ""
     @State private var fastModeEnabled = false
+    @State private var autoModeEnabled = false
     @State private var isLoading = false
 
     private var modelOptions: [CompanionPickerOption] {
@@ -2030,6 +2031,9 @@ private struct ConversationModelPreferencesView: View {
                     if supportsFastMode {
                         Toggle("Fast mode", isOn: $fastModeEnabled)
                     }
+
+                    Toggle("Auto mode", isOn: $autoModeEnabled)
+                        .tint(.orange)
                 }
             }
             .navigationTitle("Model preferences")
@@ -2041,22 +2045,32 @@ private struct ConversationModelPreferencesView: View {
                     Button(isLoading ? "Saving…" : "Save") {
                         Task {
                             isLoading = true
-                            _ = await viewModel.saveModelPreferences(
+                            let savedPreferences = await viewModel.saveModelPreferences(
                                 model: model,
                                 thinkingLevel: thinkingLevel,
                                 serviceTier: fastModeEnabled ? "priority" : ""
                             )
+                            let savedAutoMode = await viewModel.saveAutoMode(enabled: autoModeEnabled)
                             isLoading = false
-                            dismiss()
+                            if savedPreferences != nil && savedAutoMode != nil {
+                                dismiss()
+                            }
                         }
                     }
                 }
             }
             .task {
-                guard let state = await viewModel.loadModelPreferences() else { return }
-                model = state.currentModel
-                thinkingLevel = state.currentThinkingLevel
-                fastModeEnabled = companionFastModeEnabled(serviceTier: state.currentServiceTier)
+                async let preferencesTask = viewModel.loadModelPreferences()
+                async let autoModeTask = viewModel.loadAutoModeState()
+
+                if let state = await preferencesTask {
+                    model = state.currentModel
+                    thinkingLevel = state.currentThinkingLevel
+                    fastModeEnabled = companionFastModeEnabled(serviceTier: state.currentServiceTier)
+                }
+                if let autoModeState = await autoModeTask {
+                    autoModeEnabled = autoModeState.enabled
+                }
             }
         }
     }

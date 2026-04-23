@@ -105,6 +105,8 @@ describe('daemon companion server', () => {
       takeOverConversation: async (input) => ({ ok: true, surfaceId: input.surfaceId }),
       renameConversation: async (input) => ({ ok: true, title: input.name }),
       changeConversationCwd: async (input) => ({ ok: true, conversationId: input.conversationId, cwd: input.cwd }),
+      readConversationAutoMode: async () => ({ enabled: false, stopReason: null, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      updateConversationAutoMode: async ({ enabled }) => ({ enabled, stopReason: null, updatedAt: '2026-04-19T00:00:00.000Z' }),
       readConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
       updateConversationModelPreferences: async () => ({ currentModel: 'gpt-5.4', currentThinkingLevel: 'high', currentServiceTier: 'default', hasExplicitServiceTier: false }),
       createConversationCheckpoint: async (input) => ({ id: 'checkpoint-1', conversationId: input.conversationId, title: input.message, shortSha: 'abc1234', commitSha: 'abc1234def', subject: input.message, fileCount: input.paths.length, linesAdded: 1, linesDeleted: 0, cwd: '/repo', authorName: 'Patrick', committedAt: '2026-04-19T00:00:00.000Z', createdAt: '2026-04-19T00:00:00.000Z', updatedAt: '2026-04-19T00:00:00.000Z', commentCount: 0, files: [], comments: [] }),
@@ -228,6 +230,31 @@ describe('daemon companion server', () => {
     expect(assetResponse.status).toBe(200);
     expect(assetResponse.headers.get('content-type')).toBe('image/png');
     expect(await assetResponse.text()).toBe('preview-bytes');
+
+    const autoModeResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/auto-mode`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(autoModeResponse.status).toBe(200);
+    expect(await readJson(autoModeResponse)).toEqual({
+      enabled: false,
+      stopReason: null,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const autoModeUpdateResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/auto-mode`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ enabled: true, surfaceId: 'ios-1' }),
+    });
+    expect(autoModeUpdateResponse.status).toBe(200);
+    expect(await readJson(autoModeUpdateResponse)).toEqual({
+      enabled: true,
+      stopReason: null,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
 
     const knowledgeTreeResponse = await fetch(`${baseUrl}/companion/v1/knowledge/tree`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },

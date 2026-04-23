@@ -667,6 +667,12 @@ struct ConversationModelPreferencesState: Codable, Equatable {
     let hasExplicitServiceTier: Bool
 }
 
+struct ConversationAutoModeState: Codable, Equatable {
+    let enabled: Bool
+    let stopReason: String?
+    let updatedAt: String?
+}
+
 struct CompanionQueueRestoreResult: Codable, Equatable {
     let ok: Bool
     let text: String

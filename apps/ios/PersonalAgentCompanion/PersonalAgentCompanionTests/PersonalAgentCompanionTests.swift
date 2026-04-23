@@ -343,6 +343,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(presentation.controllingHere)
     }
 
+    func testMockConversationAutoModeCanBeReadAndUpdated() async throws {
+        let client = MockCompanionClient()
+
+        let initialState = try await client.readConversationAutoMode(conversationId: "conv-1")
+        XCTAssertFalse(initialState.enabled)
+
+        let enabledState = try await client.updateConversationAutoMode(conversationId: "conv-1", enabled: true, surfaceId: "ios-test")
+        XCTAssertTrue(enabledState.enabled)
+        XCTAssertNotNil(enabledState.updatedAt)
+
+        let persistedState = try await client.readConversationAutoMode(conversationId: "conv-1")
+        XCTAssertTrue(persistedState.enabled)
+    }
+
     func testConversationRowPresentationUsesUnreadAndRunningIndicators() {
         let session = SessionMeta(
             id: "conversation-1",
