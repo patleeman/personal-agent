@@ -4110,7 +4110,9 @@ export const ChatView = memo(function ChatView({
       sync();
     });
 
-    for (const delayMs of [40, 120, 240]) {
+    // Electron selection updates can land a little after the initial event, but
+    // a permanent polling loop made large transcripts do steady background work.
+    for (const delayMs of [40, 120, 240, 480]) {
       const timeoutId = window.setTimeout(() => {
         replySelectionSyncTimeoutRefs.current = replySelectionSyncTimeoutRefs.current.filter((currentId) => currentId !== timeoutId);
         sync();
@@ -4127,9 +4129,6 @@ export const ChatView = memo(function ChatView({
       return;
     }
 
-    const fallbackIntervalId = window.setInterval(() => {
-      syncReplySelectionFromSelection();
-    }, 180);
     const handleDocumentReplySelectionSync = () => {
       scheduleReplySelectionSync();
     };
@@ -4152,7 +4151,6 @@ export const ChatView = memo(function ChatView({
     window.addEventListener('pageshow', handleFocus);
 
     return () => {
-      window.clearInterval(fallbackIntervalId);
       document.removeEventListener('selectionchange', handleDocumentReplySelectionSync);
       document.removeEventListener('mouseup', handleDocumentReplySelectionSync);
       document.removeEventListener('pointerup', handleDocumentReplySelectionSync);
@@ -4164,7 +4162,7 @@ export const ChatView = memo(function ChatView({
       clearScheduledReplySelectionSync();
       cancelReplySelectionClear();
     };
-  }, [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionSync, syncReplySelectionFromSelection]);
+  }, [cancelReplySelectionClear, clearReplySelection, clearScheduledReplySelectionSync, onReplyToSelection, scheduleReplySelectionSync]);
 
   useEffect(() => {
     if (!replySelection || typeof document === 'undefined' || typeof window === 'undefined') {

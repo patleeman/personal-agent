@@ -75,6 +75,7 @@ describe('ChatView rendering stability', () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     for (const root of mountedRoots.splice(0)) {
       act(() => {
         root.unmount();
@@ -104,5 +105,27 @@ describe('ChatView rendering stability', () => {
     expect(container.textContent).toContain('Tail draft with more output');
     expect(timeAgoSpy).toHaveBeenCalledTimes(1);
     expect(timeAgoSpy).toHaveBeenCalledWith(updatedTail.ts);
+  });
+
+  it('does not install continuous reply-selection polling when selection replies are enabled', () => {
+    const setIntervalSpy = vi.spyOn(window, 'setInterval');
+
+    renderChatView([createAssistantBlock()]);
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(
+        <ChatView
+          messages={[createAssistantBlock()]}
+          onReplyToSelection={() => undefined}
+        />,
+      );
+    });
+
+    expect(setIntervalSpy).not.toHaveBeenCalled();
   });
 });

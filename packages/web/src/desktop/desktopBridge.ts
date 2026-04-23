@@ -446,13 +446,35 @@ export function isDesktopShell(): boolean {
   return /Electron/i.test(navigator.userAgent);
 }
 
+// Desktop environment reads cross the Electron bridge and can trigger daemon
+// status checks. Cache the in-flight result so route changes do not keep poking
+// the desktop runtime while the user clicks around the app.
+let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
+let desktopEnvironmentBridge: PersonalAgentDesktopBridge | null = null;
+
 export async function readDesktopEnvironment(): Promise<DesktopEnvironmentState | null> {
   const bridge = getDesktopBridge();
   if (!bridge) {
+    desktopEnvironmentBridge = null;
+    desktopEnvironmentPromise = null;
     return null;
   }
 
-  return bridge.getEnvironment();
+  if (desktopEnvironmentBridge === bridge && desktopEnvironmentPromise) {
+    return desktopEnvironmentPromise;
+  }
+
+  desktopEnvironmentBridge = bridge;
+  const request = bridge.getEnvironment()
+    .catch((error) => {
+      if (desktopEnvironmentPromise === request) {
+        desktopEnvironmentPromise = null;
+        desktopEnvironmentBridge = null;
+      }
+      throw error;
+    });
+  desktopEnvironmentPromise = request;
+  return request;
 }
 
 export async function readDesktopConnections(): Promise<DesktopConnectionsState | null> {

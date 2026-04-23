@@ -488,7 +488,7 @@ export function Layout() {
     return () => {
       cancelled = true;
     };
-  }, [location.pathname]);
+  }, []);
 
   const showContextRail = canShowContextRail && railOpen;
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
