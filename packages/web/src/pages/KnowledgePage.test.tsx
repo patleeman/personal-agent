@@ -99,6 +99,7 @@ describe('KnowledgePage', () => {
     expect(html).toContain('Sync a repo to enable Knowledge');
     expect(html).toContain('The Knowledge UI stays empty until a managed repo is configured.');
     expect(html).toContain('href="/settings#settings-general"');
+    expect(html).not.toContain('Browse and edit files from the managed knowledge repo.');
     expect(html).not.toContain('Select a file to start editing');
   });
 
@@ -107,5 +108,6 @@ describe('KnowledgePage', () => {
 
     expect(html).toContain('Select a file to start editing');
     expect(html).toContain('Pick a note from the sidebar');
+    expect(html).not.toContain('Browse and edit files from the managed knowledge repo.');
   });
 });

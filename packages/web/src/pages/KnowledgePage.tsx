@@ -31,10 +31,7 @@ export function KnowledgePage() {
     return (
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro
-            title="Knowledge"
-            summary="Browse and edit files from the managed knowledge repo."
-          />
+          <AppPageIntro title="Knowledge" />
           <AppPageEmptyState
             align="start"
             title="Loading knowledge base…"
@@ -49,10 +46,7 @@ export function KnowledgePage() {
     return (
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro
-            title="Knowledge"
-            summary="Browse and edit files from the managed knowledge repo."
-          />
+          <AppPageIntro title="Knowledge" />
           <AppPageEmptyState
             align="start"
             title="Sync a repo to enable Knowledge"
@@ -68,10 +62,7 @@ export function KnowledgePage() {
     return (
       <div className="h-full overflow-y-auto">
         <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] flex min-h-full flex-col gap-10">
-          <AppPageIntro
-            title="Knowledge"
-            summary="Browse and edit files from the managed knowledge repo."
-          />
+          <AppPageIntro title="Knowledge" />
           <AppPageEmptyState
             align="start"
             title="Select a file to start editing"
