@@ -5,10 +5,12 @@ const electronMocks = vi.hoisted(() => ({
   registerSchemesAsPrivileged: vi.fn(),
   protocolHandle: vi.fn(),
   partitionProtocolHandle: vi.fn(),
+  partitionSetProxy: vi.fn().mockResolvedValue(undefined),
   fromPartition: vi.fn(() => ({
     protocol: {
       handle: electronMocks.partitionProtocolHandle,
     },
+    setProxy: electronMocks.partitionSetProxy,
   })),
 }));
 
@@ -41,7 +43,7 @@ vi.mock('@personal-agent/daemon', () => ({
   getDaemonClientTransportOverride: daemonMocks.getDaemonClientTransportOverride,
 }));
 
-import { createDesktopProtocolHandler } from './app-protocol.js';
+import { createDesktopProtocolHandler, ensureDesktopAppProtocolForHost } from './app-protocol.js';
 
 function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): LocalApiModule {
   return {
@@ -105,6 +107,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
 describe('createDesktopProtocolHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    electronMocks.partitionSetProxy.mockResolvedValue(undefined);
     daemonMocks.loadDaemonConfig.mockReturnValue({
       companion: {
         host: '127.0.0.1',
@@ -112,6 +115,18 @@ describe('createDesktopProtocolHandler', () => {
       },
     });
     daemonMocks.getDaemonClientTransportOverride.mockReturnValue(undefined);
+  });
+
+  it('configures the local desktop partition to bypass proxy resolution', () => {
+    ensureDesktopAppProtocolForHost({} as never, 'local');
+
+    expect(electronMocks.partitionSetProxy).toHaveBeenCalledWith({ mode: 'direct' });
+  });
+
+  it('does not force direct proxy mode for non-local host partitions', () => {
+    ensureDesktopAppProtocolForHost({} as never, 'remote-host');
+
+    expect(electronMocks.partitionSetProxy).not.toHaveBeenCalled();
   });
 
   it('serves local conversation resources through the in-process API dispatcher', async () => {

@@ -112,6 +112,7 @@ function withViewProfile(path: string, profile?: string): string {
 }
 
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
+let pendingKnowledgeBaseRequest: Promise<KnowledgeBaseState> | null = null;
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
 
 function buildMemoryRequestKey(options?: { profile?: string }): string {
@@ -136,6 +137,20 @@ async function getMemoryData(options?: { profile?: string }): Promise<MemoryData
     pendingMemoryRequests.delete(cacheKey);
   });
   pendingMemoryRequests.set(cacheKey, request);
+  return request;
+}
+
+async function getKnowledgeBaseState(): Promise<KnowledgeBaseState> {
+  if (pendingKnowledgeBaseRequest) {
+    return pendingKnowledgeBaseRequest;
+  }
+
+  const request = get<KnowledgeBaseState>('/knowledge-base').finally(() => {
+    if (pendingKnowledgeBaseRequest === request) {
+      pendingKnowledgeBaseRequest = null;
+    }
+  });
+  pendingKnowledgeBaseRequest = request;
   return request;
 }
 
@@ -372,7 +387,7 @@ export const api = {
     return get<VaultRootState>('/vault-root');
   },
   knowledgeBase: async () => {
-    return get<KnowledgeBaseState>('/knowledge-base');
+    return getKnowledgeBaseState();
   },
   vaultFiles: async () => {
     const desktopBridge = getDesktopBridge();
@@ -423,9 +438,11 @@ export const api = {
     return patch<VaultRootState>('/vault-root', { root });
   },
   updateKnowledgeBase: async (input: { repoUrl?: string | null; branch?: string | null }) => {
+    pendingKnowledgeBaseRequest = null;
     return patch<KnowledgeBaseState>('/knowledge-base', input);
   },
   syncKnowledgeBase: async () => {
+    pendingKnowledgeBaseRequest = null;
     return post<KnowledgeBaseState>('/knowledge-base/sync', {});
   },
   providerAuth: async () => {

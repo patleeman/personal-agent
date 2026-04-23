@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, protocol, session } from 'electron';
+import { app, protocol, session, type Session as ElectronSession } from 'electron';
 import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
@@ -363,6 +363,17 @@ export function createDesktopProtocolHandler(options?: {
 
 const registeredDesktopProtocolPartitions = new Set<string>();
 
+function configureDesktopProtocolSession(partitionSession: ElectronSession, hostId: string): void {
+  // The local desktop app only serves internal app routes from this partition.
+  // Forcing direct proxy mode avoids repeated system proxy/PAC resolution work
+  // on macOS, which can show up as browser-process stalls while clicking around.
+  if (hostId === 'local') {
+    void partitionSession.setProxy({ mode: 'direct' }).catch(() => {
+      // Keep the desktop shell usable even if Chromium rejects a proxy update.
+    });
+  }
+}
+
 export function ensureDesktopAppProtocolForHost(hostManager: HostManager, hostId: string): void {
   const partition = getHostBrowserPartition(hostId);
   if (registeredDesktopProtocolPartitions.has(partition)) {
@@ -370,6 +381,7 @@ export function ensureDesktopAppProtocolForHost(hostManager: HostManager, hostId
   }
 
   const partitionSession = session.fromPartition(partition);
+  configureDesktopProtocolSession(partitionSession, hostId);
   partitionSession.protocol.handle(DESKTOP_APP_SCHEME, createDesktopProtocolHandler({
     hostManager,
     hostId,
