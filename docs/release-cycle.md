@@ -16,12 +16,15 @@ npm run release:desktop:major
 
 Those commands:
 
-1. bump the version with `npm version`
-2. sync workspace package versions and refresh `package-lock.json`
-3. build signed desktop artifacts locally
-4. notarize the artifacts
-5. push the commit and tag
-6. create or update the matching GitHub release in `patleeman/personal-agent-releases`
+1. bump the app version with `npm version`
+2. refresh `@mariozechner/pi-coding-agent` to the latest published npm version
+3. sync workspace package versions and refresh `package-lock.json`
+4. build signed desktop artifacts locally
+5. notarize the artifacts
+6. push the commit and tag
+7. create or update the matching GitHub release in `patleeman/personal-agent-releases`
+
+Pi is now updated automatically by the `npm version` step used by the desktop release commands. If Pi is already current, the step is a no-op.
 
 If the version bump already happened and you only need to retry publish:
 
