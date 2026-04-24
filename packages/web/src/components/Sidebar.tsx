@@ -660,7 +660,7 @@ function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId'
   if (!remoteHostId) {
     return {
       key: 'local',
-      label: 'Local project',
+      label: 'Local',
       isLocal: true,
     };
   }
@@ -2109,7 +2109,7 @@ export function Sidebar() {
     if (threadsFilterMode === 'all' && workspaceOrder.length > 0 && !targetBuckets.has('local')) {
       targetBuckets.set('local', {
         executionTargetKey: 'local',
-        executionTargetLabel: 'Local project',
+        executionTargetLabel: 'Local',
         executionTargetIsLocal: true,
         items: [],
       });

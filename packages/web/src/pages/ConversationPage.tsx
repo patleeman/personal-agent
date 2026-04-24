@@ -23,7 +23,7 @@ import { appendComposerHistory, readComposerHistory } from '../conversation/comp
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
-import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { formatContextUsageLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -992,6 +992,43 @@ interface TokenCounts {
   total: number | null;
   contextWindow: number;
   segments?: ContextUsageSegment[];
+}
+
+function ContextUsageIndicator({ tokens }: { tokens: TokenCounts }) {
+  const label = formatContextUsageLabel(tokens.total, tokens.contextWindow);
+  const percent = getContextUsagePercent(tokens.total, tokens.contextWindow);
+  const boundedPercent = Math.max(0, Math.min(100, percent ?? 0));
+  const toneClass = percent === null
+    ? 'bg-dim/70'
+    : percent >= 90
+      ? 'bg-danger'
+      : percent >= 70
+        ? 'bg-warning'
+        : 'bg-accent';
+  const ringColor = percent === null
+    ? 'rgba(151, 164, 203, 0.5)'
+    : percent >= 90
+      ? 'rgba(248, 113, 113, 0.95)'
+      : percent >= 70
+        ? 'rgba(251, 191, 36, 0.95)'
+        : 'rgba(139, 167, 255, 0.95)';
+
+  return (
+    <span className="group relative inline-flex shrink-0 items-center" role="img" title={label} aria-label={`Context usage: ${label}`}>
+      <span
+        className="grid h-3.5 w-3.5 place-items-center rounded-full border border-border-subtle/70 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]"
+        style={{ background: `conic-gradient(${ringColor} ${boundedPercent}%, rgba(151, 164, 203, 0.22) 0)` }}
+        aria-hidden="true"
+      >
+        <span className="grid h-2 w-2 place-items-center rounded-full bg-base">
+          <span className={cx('h-1 w-1 rounded-full', toneClass)} />
+        </span>
+      </span>
+      <span className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 whitespace-nowrap rounded-md border border-border-subtle bg-elevated px-2 py-1 font-mono text-[10px] text-primary opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        {label}
+      </span>
+    </span>
+  );
 }
 
 function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):
@@ -2063,7 +2100,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
         setDesktopConnectionsState(connections);
         setContinueInOptions([
-          { value: 'local', label: 'Local project' },
+          { value: 'local', label: 'Local' },
           ...connections.hosts.map((host) => ({ value: host.id, label: host.label })),
         ]);
       })
@@ -2082,7 +2119,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const executionTargetOptions = useMemo(() => {
     const baseOptions = continueInOptions.length > 0
       ? [...continueInOptions]
-      : (getDesktopBridge() ? [{ value: 'local', label: 'Local project' }] : []);
+      : (getDesktopBridge() ? [{ value: 'local', label: 'Local' }] : []);
     const currentRemoteHostId = sessionSnapshot?.remoteHostId?.trim() || '';
     const currentRemoteHostLabel = sessionSnapshot?.remoteHostLabel?.trim() || currentRemoteHostId;
 
@@ -2103,7 +2140,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   );
   const selectedExecutionTargetLabel = selectedExecutionTargetHost?.label
     ?? executionTargetOptions.find((option) => option.value === selectedExecutionTargetId)?.label
-    ?? (selectedExecutionTargetId === 'local' ? 'Local project' : selectedExecutionTargetId);
+    ?? (selectedExecutionTargetId === 'local' ? 'Local' : selectedExecutionTargetId);
   const selectedExecutionTargetIsRemote = selectedExecutionTargetId !== 'local';
 
   const sessionsLoaded = sessions !== null;
@@ -8222,8 +8259,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
 
           {showComposerMeta ? (
-            <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-col gap-1.5 px-3 text-[10px] text-dim xl:flex-row xl:items-start xl:justify-between xl:gap-3">
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2 overflow-hidden">
+            <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
+              <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
                 {showExecutionTargetPicker ? (
                   <label className="relative inline-flex min-w-0 items-center">
                     <span className="sr-only">Execution target</span>
@@ -8368,9 +8405,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 ) : null}
               </div>
 
-              <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden xl:shrink-0 xl:justify-end xl:text-right">
+              <div className="flex shrink-0 items-center justify-end gap-2 text-right">
                 {!draft && branchLabel ? (
-                  <span className="truncate font-mono" title={branchLabel}>{branchLabel}</span>
+                  <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>{branchLabel}</span>
                 ) : null}
                 {!draft && hasGitSummary ? (
                   gitSummaryPresentation.kind === 'diff' ? (
@@ -8383,9 +8420,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
                   )
                 ) : null}
-                {sessionTokens ? (
-                  <span className="font-mono tabular-nums">{formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow)}</span>
-                ) : null}
+                {sessionTokens ? <ContextUsageIndicator tokens={sessionTokens} /> : null}
               </div>
             </div>
           ) : null}
