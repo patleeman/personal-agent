@@ -15,8 +15,7 @@ Conversations are for live execution. Reusable knowledge, workflows, reminders, 
 `personal-agent` currently ships:
 
 - a **CLI** (`pa`) for launching Pi and managing the local runtime
-- a **web UI** for conversations, knowledge, automations, and settings
-- an **Electron desktop shell** around the same web app
+- a **desktop app** for conversations, knowledge, automations, and settings
 - a **daemon** for runs, scheduled tasks, wakeups, and reminders
 - a **knowledge system** built around docs, instruction files, skills, and projects
 - **MCP integration** for external tool servers
@@ -55,16 +54,10 @@ pa status
 
 ```bash
 pa tui
-pa ui foreground --open
 npm run desktop:start
 ```
 
-For day-to-day managed web UI mode:
-
-```bash
-pa ui install
-pa ui start
-```
+The old standalone browser UI / `pa ui` service has been removed; Electron serves the renderer through `personal-agent://app/`.
 
 ## Core mental model
 
@@ -92,8 +85,6 @@ pa profile list
 
 # interfaces
 pa tui
-pa ui foreground --open
-pa ui logs --tail 120
 npm run desktop:start
 
 # background runtime
@@ -114,8 +105,8 @@ Use `pa help <command>` for exact flags.
 - `packages/core` — path resolution, durable state helpers, knowledge/project utilities, MCP helpers, resource loading
 - `packages/daemon` — runs, automations, wakeups, daemon runtime
 - `packages/cli` — `pa`
-- `packages/web` — browser UI and local server routes
-- `packages/desktop` — Electron shell
+- `packages/web` — React renderer and local API modules used by Electron
+- `packages/desktop` — Electron app shell
 
 ### Shipped runtime resources
 
@@ -138,9 +129,8 @@ npm run lint
 Useful dev entry points:
 
 ```bash
-pa ui foreground --open
 npm run desktop:start
-npm run ab:run -- --session smoke-check --command "ab open http://127.0.0.1:3741 && ab wait 1000 && ab snapshot -i"
+npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
 ```
 
 Notes:
@@ -179,7 +169,7 @@ Start here:
 - [`docs/how-it-works.md`](docs/how-it-works.md) — state model and runtime layering
 - [`docs/knowledge-system.md`](docs/knowledge-system.md) — docs, instruction files, skills, and projects
 - [`docs/conversations.md`](docs/conversations.md) — conversation model, auto mode, async follow-through
-- [`docs/web-ui.md`](docs/web-ui.md) — main UI surfaces and live-update behavior
+- [`docs/desktop-app.md`](docs/desktop-app.md) — desktop app runtime and UI surface
 - [`docs/command-line.md`](docs/command-line.md) — `pa` command map
 - [`docs/repo-layout.md`](docs/repo-layout.md) — where code should live
 - [`internal-skills/README.md`](internal-skills/README.md) — built-in runtime feature docs

@@ -10,10 +10,9 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
-import { getWebUiServiceStatus } from '@personal-agent/daemon';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
-const DESKTOP_WEB_UI_RESTART_MESSAGE = 'Managed web UI restart is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
+const REMOVED_WEB_UI_RESTART_MESSAGE = 'Managed web UI restart has been removed. Use the Personal Agent desktop app.';
 
 type ApplicationCommand = 'restart' | 'update' | 'web-ui-service-restart';
 
@@ -38,16 +37,12 @@ export interface ApplicationCommandRequestResult {
 export type ApplicationRestartRequestResult = ApplicationCommandRequestResult;
 export type WebUiServiceRestartRequestResult = ApplicationCommandRequestResult;
 
-function isDesktopRuntime(): boolean {
-  return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
-}
-
 function resolveApplicationCommandLockFile(): string {
   return join(getStateRoot(), 'web', 'app-restart.lock.json');
 }
 
-function resolveDefaultWebUiLogFile(): string {
-  return join(getStateRoot(), 'web', 'logs', 'web.log');
+function resolveApplicationCommandLogFile(): string {
+  return join(getStateRoot(), 'desktop', 'logs', 'application-command.log');
 }
 
 function resolveCliEntryFile(repoRoot: string): string {
@@ -91,13 +86,13 @@ function commandLabel(action: ApplicationCommand): string {
   return 'restart';
 }
 
-function buildCliCommand(action: ApplicationCommand, cliEntryFile: string, port: number): string[] {
+function buildCliCommand(action: ApplicationCommand, cliEntryFile: string): string[] {
   if (action === 'update') {
     return [process.execPath, cliEntryFile, 'update'];
   }
 
   if (action === 'web-ui-service-restart') {
-    return [process.execPath, cliEntryFile, 'ui', 'service', 'restart', '--port', String(port)];
+    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
   }
 
   return [process.execPath, cliEntryFile, 'restart', '--rebuild'];
@@ -109,7 +104,7 @@ function buildRequestMessage(action: ApplicationCommand): string {
   }
 
   if (action === 'web-ui-service-restart') {
-    return 'Managed web UI restart requested. This page will reconnect when the service is back.';
+    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
   }
 
   return 'Application restart requested. Rebuilding packages and restarting background services.';
@@ -187,19 +182,11 @@ function requestApplicationCommand(input: {
 }): ApplicationCommandRequestResult {
   const repoRoot = resolve(input.repoRoot);
   const profile = input.profile?.trim() ?? '';
-  if (input.action === 'web-ui-service-restart' && isDesktopRuntime()) {
-    throw new Error(DESKTOP_WEB_UI_RESTART_MESSAGE);
+  if (input.action === 'web-ui-service-restart') {
+    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
   }
-  if (input.action !== 'web-ui-service-restart' && profile.length === 0) {
+  if (profile.length === 0) {
     throw new Error(`Application ${commandLabel(input.action)} requires a profile.`);
-  }
-
-  const webUiStatus = getWebUiServiceStatus({ repoRoot });
-
-  if (!webUiStatus.installed) {
-    throw new Error(
-      'Managed web UI service is not installed. Install it from the Web UI page before restarting the application from inside the UI.',
-    );
   }
 
   const cliEntryFile = resolveCliEntryFile(repoRoot);
@@ -211,18 +198,18 @@ function requestApplicationCommand(input: {
   mkdirSync(dirname(lockFile), { recursive: true });
   ensureApplicationCommandNotRunning(lockFile);
 
-  const logFile = webUiStatus.logFile ?? resolveDefaultWebUiLogFile();
+  const logFile = resolveApplicationCommandLogFile();
   mkdirSync(dirname(logFile), { recursive: true });
 
   const requestedAt = new Date().toISOString();
-  const command = buildCliCommand(input.action, cliEntryFile, webUiStatus.port);
+  const command = buildCliCommand(input.action, cliEntryFile);
 
   writeFileSync(lockFile, `${JSON.stringify({
     action: input.action,
     requestedAt,
     repoRoot,
     profile,
-    port: webUiStatus.port,
+    port: 0,
     command,
   }, null, 2)}\n`, {
     flag: 'wx',
@@ -259,7 +246,7 @@ function requestApplicationCommand(input: {
       requestedAt,
       repoRoot,
       profile,
-      port: webUiStatus.port,
+      port: 0,
       command,
     }, null, 2)}\n`);
   } catch (error) {

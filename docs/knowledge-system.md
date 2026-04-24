@@ -121,7 +121,7 @@ If the managed repo is still missing content after sync, compare it with any old
 
 ## URL import
 
-The web UI Knowledge page can import a web page into `<vault-root>`.
+The desktop app Knowledge page can import a web page into `<vault-root>`.
 
 Use that when the right move is “save this URL as a durable note” rather than “quote it inside a conversation”.
 

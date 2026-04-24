@@ -319,7 +319,7 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Web UI');
     expect(html).not.toContain('Daemon');
-    expect(html).toContain('Theme and other visual preferences for the web UI.');
+    expect(html).toContain('Theme and other visual preferences for the desktop app.');
     expect(html).toContain('Workspace defaults, knowledge base, and conversation behavior.');
     expect(html).toContain('Skill discovery, bundled MCP wrappers, and extra runtime instructions.');
     expect(html).toContain('Load extra skill folders alongside the root skills directory.');

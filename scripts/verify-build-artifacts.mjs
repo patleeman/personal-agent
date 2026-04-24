@@ -15,7 +15,7 @@ const requiredArtifacts = [
   'packages/cli/dist/index.js',
   'packages/daemon/dist/index.js',
   'packages/daemon/dist/service.js',
-  'packages/web/dist-server/index.js',
+  'packages/web/dist-server/app/localApi.js',
 ];
 
 const missingArtifacts = requiredArtifacts.filter((relativePath) => !existsSync(join(repoRoot, relativePath)));

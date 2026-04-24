@@ -8,7 +8,6 @@ Use this doc for the common local failures.
 pa doctor
 pa status
 pa daemon status
-pa ui status
 ```
 
 If runs or automations are involved, also check:
@@ -28,20 +27,19 @@ npm run build
 
 Then retry `pa doctor`.
 
-## Web UI will not start
+## Desktop app will not start
 
 Check:
 
 ```bash
-pa ui status
-lsof -i tcp:3741
+npm run desktop:start
 ```
 
 Common fixes:
 
 - build artifacts are missing → `npm run build`
-- another process already owns the port
-- the managed web UI service needs `pa ui restart`
+- another process already owns the daemon socket or companion port
+- the desktop app is blocked by an external daemon ownership conflict
 
 ## Daemon is unhealthy
 
@@ -68,7 +66,7 @@ Check all of these:
 - the automation has not already resolved if it is one-shot
 - the daemon was not offline outside the catch-up window
 
-Then inspect the automation detail page and owned run history in the web UI.
+Then inspect the automation detail page and owned run history in the desktop app.
 
 ## Detached run failed or looks stuck
 
@@ -86,13 +84,13 @@ Check in this order:
 
 Remember: configured `knowledgeBaseRepoUrl` switches the effective root to `<state-root>/knowledge-base/repo` unless the env var overrides it.
 
-## Pairing code or remote browser access fails
+## Companion pairing fails
 
 Remember the current rules:
 
 - pairing codes are short-lived
-- paired browser sessions expire after inactivity
-- `pa ui pairing-code` requires the local web admin surface to be reachable
+- paired companion devices can be revoked from Settings
+- the companion HTTP/WebSocket API must be reachable from the phone or Tailnet
 
 Generate a fresh code if needed.
 
@@ -148,4 +146,4 @@ Common causes:
 - [Getting Started](./getting-started.md)
 - [Configuration](./configuration.md)
 - [Daemon](./daemon.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)

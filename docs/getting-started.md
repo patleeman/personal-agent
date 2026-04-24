@@ -45,33 +45,21 @@ pa status
 pa tui
 ```
 
-### Web UI
-
-```bash
-pa ui foreground --open
-```
-
-For day-to-day managed service mode:
-
-```bash
-pa ui install
-```
-
-### Browser validation in this repo
-
-When you validate the local web UI with `agent-browser`, use the repo wrapper so Playwright sessions do not pile up:
-
-```bash
-npm run ab:run -- --session smoke-check --command "ab open http://127.0.0.1:3741 && ab wait 1000 && ab snapshot -i"
-```
-
-See [Agent Browser in this repo](./agent-browser.md).
-
-### Desktop shell
+### Desktop app
 
 ```bash
 npm run desktop:start
 ```
+
+### Browser validation in this repo
+
+When you validate the local desktop app with `agent-browser`, use the repo wrapper so Playwright sessions do not pile up:
+
+```bash
+npm run ab:run -- --session smoke-check --command "ab open personal-agent://app/ && ab wait 1000 && ab snapshot -i"
+```
+
+See [Agent Browser in this repo](./agent-browser.md).
 
 ## Create the first durable inputs
 
@@ -106,7 +94,7 @@ Create a reusable workflow skill at:
 
 ```bash
 pa tui
-pa ui
+npm run desktop:start
 pa daemon status
 pa mcp list --probe
 pa profile list
@@ -134,5 +122,5 @@ The environment variable wins.
 1. [Decision Guide](./decision-guide.md)
 2. [How personal-agent works](./how-it-works.md)
 3. [Knowledge System](./knowledge-system.md)
-4. [Web UI Guide](./web-ui.md)
+4. [Desktop App](./desktop-app.md)
 5. [Agent Browser in this repo](./agent-browser.md)

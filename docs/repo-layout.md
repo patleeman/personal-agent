@@ -29,7 +29,7 @@ These are shipped runtime inputs, not workspace packages:
 - reusable app logic shared across surfaces → `packages/core`
 - long-lived unattended runtime behavior → `packages/daemon`
 - CLI-only behavior → `packages/cli`
-- web UI and local API behavior → `packages/web`
+- desktop app and local API behavior → `packages/web`
 - Electron-only shell behavior → `packages/desktop`
 
 ### `packages/web` rule of thumb
@@ -65,5 +65,5 @@ If you change product behavior, update the relevant docs.
 ## Related docs
 
 - [How personal-agent works](./how-it-works.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)
 - [Release Cycle](./release-cycle.md)

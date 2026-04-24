@@ -17,7 +17,6 @@ pa doctor
 pa restart
 pa update
 pa daemon
-pa ui
 pa mcp
 ```
 
@@ -61,20 +60,16 @@ pa profile show
 pa profile use <name>
 ```
 
-## Web UI commands
+## Removed standalone UI command
 
 ```bash
 pa ui
-pa ui status
-pa ui open
-pa ui foreground --open
-pa ui logs --tail 120
-pa ui pairing-code
-pa ui install
-pa ui start
-pa ui stop
-pa ui restart
-pa ui uninstall
+```
+
+`pa ui` now exits with an error. The standalone browser UI and managed web UI service were removed. Use the Electron desktop app instead:
+
+```bash
+npm run desktop:start
 ```
 
 ## Daemon commands
@@ -117,7 +112,7 @@ Use the built-in runtime tools instead:
 - `conversation_queue`
 - `reminder`
 
-Use the web UI for visual inspection of automations and owned run history.
+Use the desktop app for visual inspection of automations and owned run history.
 
 ## Practical flows
 
@@ -125,14 +120,13 @@ Use the web UI for visual inspection of automations and owned run history.
 
 ```bash
 pa doctor
-pa ui foreground --open
+npm run desktop:start
 ```
 
 ### Bring up background behavior
 
 ```bash
 pa daemon start
-pa ui install
 ```
 
 ### Inspect MCP before use
@@ -144,7 +138,7 @@ pa mcp list --probe -d
 ## Related docs
 
 - [Getting Started](./getting-started.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)
 - [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
 - [MCP](./mcp.md)

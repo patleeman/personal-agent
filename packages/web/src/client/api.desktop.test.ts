@@ -88,11 +88,6 @@ describe('api desktop transport', () => {
       runtime: { running: true, socketPath: '/tmp/daemon.sock', moduleCount: 3 },
       log: { lines: [] },
     });
-    const readWebUiState = vi.fn().mockResolvedValue({
-      warnings: [],
-      service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
-      log: { lines: [] },
-    });
     const readSessions = vi.fn().mockResolvedValue([{ id: 'conversation-1', title: 'Conversation 1' }]);
     const readSessionMeta = vi.fn().mockResolvedValue({ id: 'conversation-1', title: 'Conversation 1' });
     const readSessionSearchIndex = vi.fn().mockResolvedValue({ index: { 'conversation-1': 'hello world' } });
@@ -204,7 +199,6 @@ describe('api desktop transport', () => {
         getEnvironment,
         readAppStatus,
         readDaemonState,
-        readWebUiState,
         readSessions,
         readSessionMeta,
         readSessionSearchIndex,
@@ -264,7 +258,6 @@ describe('api desktop transport', () => {
     const { api } = await import('./api');
     const status = await api.status();
     const daemon = await api.daemon();
-    const webUiState = await api.webUiState();
     const sessions = await api.sessions();
     const sessionMeta = await api.sessionMeta('conversation-1');
     const sessionSearchIndex = await api.sessionSearchIndex(['conversation-1']);
@@ -326,7 +319,6 @@ describe('api desktop transport', () => {
     expect(getEnvironment).toHaveBeenCalledTimes(1);
     expect(readAppStatus).toHaveBeenCalledTimes(1);
     expect(readDaemonState).toHaveBeenCalledTimes(1);
-    expect(readWebUiState).toHaveBeenCalledTimes(1);
     expect(readSessions).toHaveBeenCalledTimes(1);
     expect(readSessionMeta).toHaveBeenCalledWith('conversation-1');
     expect(readSessionSearchIndex).toHaveBeenCalledWith(['conversation-1']);
@@ -426,11 +418,6 @@ describe('api desktop transport', () => {
       runtime: { running: true, socketPath: '/tmp/daemon.sock', moduleCount: 3 },
       log: { lines: [] },
     });
-    expect(webUiState).toEqual({
-      warnings: [],
-      service: { platform: 'desktop', identifier: 'web-ui', manifestPath: '/tmp/web-ui.plist', installed: true, running: true, url: 'personal-agent://app' },
-      log: { lines: [] },
-    });
     expect(sessions).toEqual([{ id: 'conversation-1', title: 'Conversation 1' }]);
     expect(sessionMeta).toEqual({ id: 'conversation-1', title: 'Conversation 1' });
     expect(sessionSearchIndex).toEqual({ index: { 'conversation-1': 'hello world' } });
@@ -526,31 +513,6 @@ describe('api desktop transport', () => {
     expect(summaryFork).toEqual({ newSessionId: 'summary-1', sessionFile: '/tmp/summary-1.jsonl' });
     expect(aborted).toEqual({ ok: true });
     expect(destroyed).toEqual({ ok: true });
-  });
-
-  it('skips the remote access session probe for the local Electron host', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const invokeLocalApi = vi.fn();
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-        invokeLocalApi,
-      },
-    });
-
-    const { api } = await import('./api');
-    const authState = await api.remoteAccessSession();
-
-    expect(invokeLocalApi).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(authState).toEqual({ required: false, session: null });
   });
 
   it('uses dedicated desktop conversation artifact and attachment bridges on the local Electron host', async () => {
@@ -864,34 +826,9 @@ describe('api desktop transport', () => {
     });
   });
 
-  it('uses dedicated desktop system admin bridges on the local Electron host', async () => {
+  it('uses dedicated desktop open-conversation bridges on the local Electron host', async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
-    const updateWebUiConfig = vi.fn().mockResolvedValue({
-      warnings: [],
-      service: {
-        running: true,
-        platform: 'desktop',
-        identifier: 'web-ui',
-        tailscaleServe: false,
-        resumeFallbackPrompt: 'Resume the task.',
-      },
-      log: { lines: [] },
-    });
-    const readRemoteAccessState = vi.fn().mockResolvedValue({
-      pendingPairings: [],
-      sessions: [{ id: 'session-1', label: 'iPhone' }],
-    });
-    const createRemoteAccessPairingCode = vi.fn().mockResolvedValue({
-      id: 'pairing-1',
-      code: '123456',
-      createdAt: '2026-04-15T10:00:00.000Z',
-      expiresAt: '2026-04-15T10:10:00.000Z',
-    });
-    const revokeRemoteAccessSession = vi.fn().mockResolvedValue({
-      ok: true,
-      state: { pendingPairings: [], sessions: [] },
-    });
     const readOpenConversationTabs = vi.fn().mockResolvedValue({
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
@@ -914,27 +851,15 @@ describe('api desktop transport', () => {
           activeHostKind: 'local',
           activeHostSummary: 'Local backend is healthy.',
         }),
-        updateWebUiConfig,
-        readRemoteAccessState,
-        createRemoteAccessPairingCode,
-        revokeRemoteAccessSession,
         readOpenConversationTabs,
         updateOpenConversationTabs,
       },
     });
 
     const { api } = await import('./api');
-    const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
-    const authState = await api.remoteAccessState();
-    const pairing = await api.createRemoteAccessPairingCode();
-    const revoked = await api.revokeRemoteAccessSession('session-1');
     const layout = await api.openConversationTabs();
     const savedLayout = await api.setOpenConversationTabs(['conversation-4'], ['conversation-5'], ['conversation-6']);
 
-    expect(updateWebUiConfig).toHaveBeenCalledWith({ resumeFallbackPrompt: 'Resume the task.' });
-    expect(readRemoteAccessState).toHaveBeenCalledTimes(1);
-    expect(createRemoteAccessPairingCode).toHaveBeenCalledTimes(1);
-    expect(revokeRemoteAccessSession).toHaveBeenCalledWith('session-1');
     expect(readOpenConversationTabs).toHaveBeenCalledTimes(1);
     expect(updateOpenConversationTabs).toHaveBeenCalledWith({
       sessionIds: ['conversation-4'],
@@ -942,25 +867,6 @@ describe('api desktop transport', () => {
       archivedSessionIds: ['conversation-6'],
     });
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(webUiState).toEqual({
-      warnings: [],
-      service: {
-        running: true,
-        platform: 'desktop',
-        identifier: 'web-ui',
-        tailscaleServe: false,
-        resumeFallbackPrompt: 'Resume the task.',
-      },
-      log: { lines: [] },
-    });
-    expect(authState).toEqual({ pendingPairings: [], sessions: [{ id: 'session-1', label: 'iPhone' }] });
-    expect(pairing).toEqual({
-      id: 'pairing-1',
-      code: '123456',
-      createdAt: '2026-04-15T10:00:00.000Z',
-      expiresAt: '2026-04-15T10:10:00.000Z',
-    });
-    expect(revoked).toEqual({ ok: true, state: { pendingPairings: [], sessions: [] } });
     expect(layout).toEqual({
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
@@ -974,67 +880,6 @@ describe('api desktop transport', () => {
       archivedSessionIds: ['conversation-6'],
       workspacePaths: ['/tmp/beta'],
     });
-  });
-
-  it('falls back to HTTP for remote-access exchange/logout even on the local Electron host', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ required: false, session: { id: 'session-1', label: 'Browser' } }))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true }));
-    vi.stubGlobal('fetch', fetchMock);
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'local',
-          activeHostLabel: 'Local',
-          activeHostKind: 'local',
-          activeHostSummary: 'Local backend is healthy.',
-        }),
-      },
-    });
-
-    const { api } = await import('./api');
-    const exchanged = await api.exchangeRemoteAccessPairingCode('PAIR-1234', 'Safari');
-    const loggedOut = await api.logoutRemoteAccessSession();
-
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/remote-access/exchange', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: 'PAIR-1234', deviceLabel: 'Safari' }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/remote-access/logout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: undefined,
-    });
-    expect(exchanged).toEqual({ required: false, session: { id: 'session-1', label: 'Browser' } });
-    expect(loggedOut).toEqual({ ok: true });
-  });
-
-  it('falls back to HTTP for remote access session checks on non-local hosts', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ required: true, session: null }));
-    vi.stubGlobal('fetch', fetchMock);
-    const invokeLocalApi = vi.fn();
-    Object.assign(window as { personalAgentDesktop?: unknown }, {
-      personalAgentDesktop: {
-        getEnvironment: vi.fn().mockResolvedValue({
-          isElectron: true,
-          activeHostId: 'web-1',
-          activeHostLabel: 'Tailnet',
-          activeHostKind: 'web',
-          activeHostSummary: 'Remote host reachable.',
-        }),
-        invokeLocalApi,
-      },
-    });
-
-    const { api } = await import('./api');
-    const authState = await api.remoteAccessSession();
-
-    expect(invokeLocalApi).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/remote-access/session', { method: 'GET', cache: 'no-store' });
-    expect(authState).toEqual({ required: true, session: null });
   });
 
   it('falls back to HTTP for desktop operator settings on non-local hosts', async () => {
@@ -1179,25 +1024,6 @@ describe('api desktop transport', () => {
   it('falls back to HTTP for desktop system admin bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({
-        warnings: [],
-        service: {
-          running: true,
-          platform: 'desktop',
-          identifier: 'web-ui',
-          tailscaleServe: false,
-          resumeFallbackPrompt: 'Resume the task.',
-        },
-        log: { lines: [] },
-      }))
-      .mockResolvedValueOnce(createJsonResponse({ pendingPairings: [], sessions: [{ id: 'session-1', label: 'iPhone' }] }))
-      .mockResolvedValueOnce(createJsonResponse({
-        id: 'pairing-1',
-        code: '123456',
-        createdAt: '2026-04-15T10:00:00.000Z',
-        expiresAt: '2026-04-15T10:10:00.000Z',
-      }))
-      .mockResolvedValueOnce(createJsonResponse({ ok: true, state: { pendingPairings: [], sessions: [] } }))
-      .mockResolvedValueOnce(createJsonResponse({
         sessionIds: ['conversation-1'],
         pinnedSessionIds: ['conversation-2'],
         archivedSessionIds: ['conversation-3'],
@@ -1211,10 +1037,6 @@ describe('api desktop transport', () => {
         workspacePaths: ['/tmp/beta'],
       }));
     vi.stubGlobal('fetch', fetchMock);
-    const updateWebUiConfig = vi.fn();
-    const readRemoteAccessState = vi.fn();
-    const createRemoteAccessPairingCode = vi.fn();
-    const revokeRemoteAccessSession = vi.fn();
     const readOpenConversationTabs = vi.fn();
     const updateOpenConversationTabs = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
@@ -1226,47 +1048,19 @@ describe('api desktop transport', () => {
           activeHostKind: 'web',
           activeHostSummary: 'Remote host reachable.',
         }),
-        updateWebUiConfig,
-        readRemoteAccessState,
-        createRemoteAccessPairingCode,
-        revokeRemoteAccessSession,
         readOpenConversationTabs,
         updateOpenConversationTabs,
       },
     });
 
     const { api } = await import('./api');
-    const webUiState = await api.setWebUiConfig({ resumeFallbackPrompt: 'Resume the task.' });
-    const authState = await api.remoteAccessState();
-    const pairing = await api.createRemoteAccessPairingCode();
-    const revoked = await api.revokeRemoteAccessSession('session-1');
     const layout = await api.openConversationTabs();
     const savedLayout = await api.setOpenConversationTabs(['conversation-4'], ['conversation-5'], ['conversation-6']);
 
-    expect(updateWebUiConfig).not.toHaveBeenCalled();
-    expect(readRemoteAccessState).not.toHaveBeenCalled();
-    expect(createRemoteAccessPairingCode).not.toHaveBeenCalled();
-    expect(revokeRemoteAccessSession).not.toHaveBeenCalled();
     expect(readOpenConversationTabs).not.toHaveBeenCalled();
     expect(updateOpenConversationTabs).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/web-ui/config', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ resumeFallbackPrompt: 'Resume the task.' }),
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/remote-access', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/remote-access/pairing-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: undefined,
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(4, '/api/remote-access/sessions/session-1', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: undefined,
-    });
-    expect(fetchMock).toHaveBeenNthCalledWith(5, '/api/web-ui/open-conversations', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(6, '/api/web-ui/open-conversations', {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/web-ui/open-conversations', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/web-ui/open-conversations', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1275,25 +1069,6 @@ describe('api desktop transport', () => {
         archivedSessionIds: ['conversation-6'],
       }),
     });
-    expect(webUiState).toEqual({
-      warnings: [],
-      service: {
-        running: true,
-        platform: 'desktop',
-        identifier: 'web-ui',
-        tailscaleServe: false,
-        resumeFallbackPrompt: 'Resume the task.',
-      },
-      log: { lines: [] },
-    });
-    expect(authState).toEqual({ pendingPairings: [], sessions: [{ id: 'session-1', label: 'iPhone' }] });
-    expect(pairing).toEqual({
-      id: 'pairing-1',
-      code: '123456',
-      createdAt: '2026-04-15T10:00:00.000Z',
-      expiresAt: '2026-04-15T10:10:00.000Z',
-    });
-    expect(revoked).toEqual({ ok: true, state: { pendingPairings: [], sessions: [] } });
     expect(layout).toEqual({
       sessionIds: ['conversation-1'],
       pinnedSessionIds: ['conversation-2'],
@@ -1312,12 +1087,10 @@ describe('api desktop transport', () => {
   it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' }))
-      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }))
-      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } }));
+      .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }));
     vi.stubGlobal('fetch', fetchMock);
     const readAppStatus = vi.fn();
     const readDaemonState = vi.fn();
-    const readWebUiState = vi.fn();
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
         getEnvironment: vi.fn().mockResolvedValue({
@@ -1329,24 +1102,19 @@ describe('api desktop transport', () => {
         }),
         readAppStatus,
         readDaemonState,
-        readWebUiState,
       },
     });
 
     const { api } = await import('./api');
     const status = await api.status();
     const daemon = await api.daemon();
-    const webUiState = await api.webUiState();
 
     expect(readAppStatus).not.toHaveBeenCalled();
     expect(readDaemonState).not.toHaveBeenCalled();
-    expect(readWebUiState).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/status', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/daemon', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(3, '/api/web-ui/state', { method: 'GET', cache: 'no-store' });
     expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' });
     expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
-    expect(webUiState).toEqual({ warnings: [], service: { running: true, url: 'https://agent.example.com' }, log: { lines: [] } });
   });
 
   it('falls back to HTTP for desktop durable-run attention on non-local hosts', async () => {

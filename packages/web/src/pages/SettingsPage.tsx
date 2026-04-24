@@ -3326,7 +3326,7 @@ export function SettingsPage() {
           <SettingsSection
             id="settings-appearance"
             label="Appearance"
-            description="Theme and other visual preferences for the web UI."
+            description="Theme and other visual preferences for the desktop app."
             className="order-1"
           >
             <div className="space-y-0">
@@ -4161,7 +4161,7 @@ export function SettingsPage() {
                 <div className="space-y-2 border-t border-border-subtle pt-6 min-w-0">
                   <h3 className="text-[13px] font-medium text-primary">Conversation UI state</h3>
                   <p className="ui-card-meta">
-                    Clears stored open-tab state, seen message counts, and composer history in this browser, plus the durable open-tab snapshot stored by the web UI, then reloads the page.
+                    Clears stored open-tab state, seen message counts, and composer history in this app, plus the durable open-tab snapshot stored by the desktop UI, then reloads the page.
                   </p>
                   <button
                     type="button"

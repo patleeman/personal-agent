@@ -1,15 +1,14 @@
 {
   "name": "@personal-agent/web",
   "version": "0.5.6",
-  "description": "Personal agent web UI",
+  "description": "Personal Agent desktop renderer",
   "type": "module",
   "scripts": {
     "build:deps": "npm --prefix ../core run build && npm --prefix ../daemon run build",
     "build": "npm run build:deps && vite build && rm -rf dist-server && tsc -p tsconfig.server.json",
     "build:client": "vite build",
     "build:server": "npm run build:deps && rm -rf dist-server && tsc -p tsconfig.server.json",
-    "dev:client": "vite",
-    "start": "node dist-server/index.js"
+    "dev:client": "vite"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",

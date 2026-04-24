@@ -113,7 +113,7 @@ describe('mountStaticServerApps without built assets', () => {
     const response = await fetch(`${appBaseUrl}/`);
 
     expect(response.status).toBe(200);
-    expect(await response.text()).toContain('personal-agent web UI');
+    expect(await response.text()).toContain('personal-agent desktop renderer');
     expect(await fetch(`${appBaseUrl}/`).then((result) => result.text())).toContain('SPA not built yet.');
   });
 

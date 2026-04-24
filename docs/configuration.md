@@ -19,7 +19,7 @@ Common top-level keys:
 - `instructionFiles`
 - `skillDirs`
 - `daemon`
-- `webUi`
+- `webUi` — legacy name for UI preferences still stored in machine config
 
 Example:
 
@@ -36,12 +36,12 @@ Example:
     "~/Documents/personal-agent/skills"
   ],
   "webUi": {
-    "port": 3741,
-    "useTailscaleServe": false,
     "resumeFallbackPrompt": "Continue from where you left off."
   }
 }
 ```
+
+The old `webUi.port` and `webUi.useTailscaleServe` settings are ignored by current desktop-only builds.
 
 If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` becomes the managed mirror at `<state-root>/knowledge-base/repo` unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
 
@@ -105,4 +105,4 @@ Resolution order:
 
 - [How personal-agent works](./how-it-works.md)
 - [Knowledge System](./knowledge-system.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)

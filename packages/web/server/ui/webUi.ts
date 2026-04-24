@@ -7,25 +7,12 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import {
-  DEFAULT_WEB_UI_PORT,
   getStateRoot,
   readMachineWebUiConfig,
   writeMachineWebUiConfig,
   type MachineWebUiConfigState,
   type WriteMachineWebUiConfigInput,
 } from '@personal-agent/core';
-import {
-  getWebUiDeploymentSummary,
-  getWebUiServiceStatus,
-  installWebUiService,
-  resolveWebUiTailscaleUrl,
-  restartWebUiService,
-  startWebUiService,
-  stopWebUiService,
-  syncWebUiTailscaleServe,
-  uninstallWebUiService,
-  type WebUiDeploymentSummary,
-} from '@personal-agent/daemon';
 import { filterSystemLogTailLines } from '../shared/systemLogTail.js';
 
 interface LogTail {
@@ -33,53 +20,30 @@ interface LogTail {
   lines: string[];
 }
 
-interface WebUiReleaseSummary {
-  distDir: string;
-  serverDir: string;
-  serverEntryFile: string;
-  sourceRepoRoot: string;
-  revision?: string;
-}
-
-interface WebUiServiceSummary {
+interface DesktopUiServiceSummary {
   platform: string;
   identifier: string;
   manifestPath: string;
   installed: boolean;
   running: boolean;
   logFile?: string;
-  error?: string;
   repoRoot: string;
   port: number;
   url: string;
   tailscaleServe: boolean;
   tailscaleUrl?: string;
   resumeFallbackPrompt: string;
-  deployment?: {
-    stablePort: number;
-    activeRelease?: WebUiReleaseSummary;
-  };
 }
 
 export interface WebUiStateSnapshot {
   warnings: string[];
-  service: WebUiServiceSummary;
+  service: DesktopUiServiceSummary;
   log: LogTail;
 }
 
 const WEB_REPO_ROOT = process.env.PERSONAL_AGENT_REPO_ROOT ?? process.cwd();
 const DESKTOP_SHELL_URL = 'personal-agent://app/';
-const DESKTOP_WEB_UI_SERVICE_MESSAGE = 'Managed web UI service lifecycle is unavailable in desktop runtime. The packaged desktop shell owns the local UI surface.';
-
-function isDesktopRuntime(): boolean {
-  return process.env.PERSONAL_AGENT_DESKTOP_RUNTIME === '1';
-}
-
-function assertManagedWebUiServiceLifecycleAvailable(): void {
-  if (isDesktopRuntime()) {
-    throw new Error(DESKTOP_WEB_UI_SERVICE_MESSAGE);
-  }
-}
+const REMOVED_STANDALONE_WEB_UI_MESSAGE = 'The standalone web UI service has been removed. Use the Personal Agent desktop app.';
 
 export type WebUiConfigState = MachineWebUiConfigState;
 
@@ -91,12 +55,8 @@ export function writeWebUiConfig(input: WriteMachineWebUiConfigInput): WebUiConf
   return writeMachineWebUiConfig(input);
 }
 
-export function syncConfiguredWebUiTailscaleServe(enabled: boolean): void {
-  const config = readWebUiConfig();
-  syncWebUiTailscaleServe({
-    enabled,
-    port: config.port,
-  });
+export function syncConfiguredWebUiTailscaleServe(_enabled: boolean): void {
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }
 
 function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 192 * 1024): string[] {
@@ -133,18 +93,7 @@ function readTailLines(filePath: string | undefined, maxLines = 160, maxBytes = 
   }
 }
 
-function toDeploymentSummary(summary: WebUiDeploymentSummary | undefined): WebUiServiceSummary['deployment'] | undefined {
-  if (!summary) {
-    return undefined;
-  }
-
-  return {
-    stablePort: summary.stablePort,
-    activeRelease: summary.activeRelease,
-  };
-}
-
-function readDesktopWebUiServiceSummary(config: WebUiConfigState): WebUiServiceSummary {
+function readDesktopUiServiceSummary(config: WebUiConfigState): DesktopUiServiceSummary {
   return {
     platform: 'desktop',
     identifier: 'desktop-app-shell',
@@ -155,76 +104,17 @@ function readDesktopWebUiServiceSummary(config: WebUiConfigState): WebUiServiceS
     repoRoot: WEB_REPO_ROOT,
     port: 0,
     url: DESKTOP_SHELL_URL,
-    tailscaleServe: config.useTailscaleServe,
+    tailscaleServe: false,
     tailscaleUrl: undefined,
     resumeFallbackPrompt: config.resumeFallbackPrompt,
-    deployment: toDeploymentSummary(getWebUiDeploymentSummary({ repoRoot: WEB_REPO_ROOT, stablePort: DEFAULT_WEB_UI_PORT })),
   };
 }
 
-function readWebUiServiceSummary(): WebUiServiceSummary {
-  const config = readWebUiConfig();
-  const tailscaleUrl = config.useTailscaleServe ? resolveWebUiTailscaleUrl() : undefined;
-
-  if (isDesktopRuntime()) {
-    return readDesktopWebUiServiceSummary(config);
-  }
-
-  try {
-    const status = getWebUiServiceStatus({ repoRoot: WEB_REPO_ROOT });
-    return {
-      platform: status.platform,
-      identifier: status.identifier,
-      manifestPath: status.manifestPath,
-      installed: status.installed,
-      running: status.running,
-      logFile: status.logFile,
-      repoRoot: status.repoRoot,
-      port: status.port,
-      url: status.url,
-      tailscaleServe: config.useTailscaleServe,
-      tailscaleUrl,
-      resumeFallbackPrompt: config.resumeFallbackPrompt,
-      deployment: toDeploymentSummary(status.deployment),
-    };
-  } catch (error) {
-    return {
-      platform: process.platform,
-      identifier: 'personal-agent-web-ui',
-      manifestPath: '',
-      installed: false,
-      running: false,
-      repoRoot: process.cwd(),
-      port: DEFAULT_WEB_UI_PORT,
-      url: `http://127.0.0.1:${DEFAULT_WEB_UI_PORT}`,
-      tailscaleServe: config.useTailscaleServe,
-      tailscaleUrl,
-      resumeFallbackPrompt: config.resumeFallbackPrompt,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
 export function readWebUiState(): WebUiStateSnapshot {
-  const service = readWebUiServiceSummary();
-  const warnings: string[] = [];
-
-  if (service.error) {
-    warnings.push(`Could not inspect web UI service status: ${service.error}`);
-  } else if (!isDesktopRuntime() && service.installed && !service.running) {
-    warnings.push('Web UI service is installed but not running.');
-  } else if (!isDesktopRuntime() && !service.installed) {
-    warnings.push('Web UI service is not installed. Install it from this page or run `pa ui service install`.');
-  }
-
-  if (isDesktopRuntime() && service.tailscaleServe) {
-    warnings.push('The packaged desktop shell does not expose Tailnet HTTPS access. Run a managed web UI separately if you need remote browser access.');
-  } else if (service.tailscaleServe && !service.tailscaleUrl) {
-    warnings.push('Tailscale Serve is enabled, but a Tailnet URL could not be resolved from `tailscale status --json`. Ensure Tailscale is running and authenticated on this machine.');
-  }
+  const service = readDesktopUiServiceSummary(readWebUiConfig());
 
   return {
-    warnings,
+    warnings: [],
     service,
     log: {
       path: service.logFile,
@@ -234,31 +124,21 @@ export function readWebUiState(): WebUiStateSnapshot {
 }
 
 export function installWebUiServiceAndReadState(): WebUiStateSnapshot {
-  assertManagedWebUiServiceLifecycleAvailable();
-  installWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }
 
 export function startWebUiServiceAndReadState(): WebUiStateSnapshot {
-  assertManagedWebUiServiceLifecycleAvailable();
-  startWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }
 
 export function restartWebUiServiceAndReadState(): WebUiStateSnapshot {
-  assertManagedWebUiServiceLifecycleAvailable();
-  restartWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }
 
 export function stopWebUiServiceAndReadState(): WebUiStateSnapshot {
-  assertManagedWebUiServiceLifecycleAvailable();
-  stopWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }
 
 export function uninstallWebUiServiceAndReadState(): WebUiStateSnapshot {
-  assertManagedWebUiServiceLifecycleAvailable();
-  uninstallWebUiService({ repoRoot: WEB_REPO_ROOT });
-  return readWebUiState();
+  throw new Error(REMOVED_STANDALONE_WEB_UI_MESSAGE);
 }

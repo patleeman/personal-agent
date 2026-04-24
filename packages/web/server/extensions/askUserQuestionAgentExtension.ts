@@ -51,7 +51,7 @@ const AskUserQuestionToolParams = Type.Object({
   questions: Type.Optional(Type.Array(AskUserQuestionPromptParams, {
     minItems: 1,
     maxItems: ASK_USER_QUESTION_MAX_QUESTIONS,
-    description: 'Structured questions to render in the web UI. Prefer this for multiple questions and radio/check layouts.',
+    description: 'Structured questions to render in the desktop UI. Prefer this for multiple questions and radio/check layouts.',
   })),
 });
 
@@ -267,8 +267,8 @@ export function createAskUserQuestionAgentExtension(): (pi: ExtensionAPI) => voi
     pi.registerTool({
       name: 'ask_user_question',
       label: 'Ask User Question',
-      description: 'Ask one or more focused questions in the web UI and wait for the user to answer or skip with a normal prompt.',
-      promptSnippet: 'Ask one or more focused questions in the web UI.',
+      description: 'Ask one or more focused questions in the desktop UI and wait for the user to answer or skip with a normal prompt.',
+      promptSnippet: 'Ask one or more focused questions in the desktop UI.',
       promptGuidelines: [
         'Use this tool when you need a specific answer, choice, or approval from the user before you can continue.',
         'Do not use this for time-based follow-up; if no answer is needed and you just need to check again later, use conversation_queue with trigger="delay" or trigger="at".',

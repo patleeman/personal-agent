@@ -6,11 +6,6 @@ export interface SyncTailscaleServeProxyInput {
   path?: string;
 }
 
-export interface SyncWebUiTailscaleServeInput {
-  enabled: boolean;
-  port: number;
-}
-
 export interface SyncCompanionTailscaleServeInput {
   enabled: boolean;
   port: number;
@@ -395,13 +390,6 @@ export function syncTailscaleServeProxy(input: SyncTailscaleServeProxyInput): vo
   });
 }
 
-export function syncWebUiTailscaleServe(input: SyncWebUiTailscaleServeInput): void {
-  syncTailscaleServeProxy({
-    ...input,
-    path: '/',
-  });
-}
-
 export function syncCompanionTailscaleServe(input: SyncCompanionTailscaleServeInput): void {
   syncTailscaleServeProxy({
     ...input,
@@ -417,10 +405,6 @@ export function resolveTailscaleServeBaseUrl(): string | undefined {
 
   const dnsName = resolveDnsNameFromStatus(status.payload);
   return dnsName ? `https://${dnsName}` : undefined;
-}
-
-export function resolveWebUiTailscaleUrl(): string | undefined {
-  return resolveTailscaleServeBaseUrl();
 }
 
 export function resolveCompanionTailscaleUrl(port: number): string | undefined {

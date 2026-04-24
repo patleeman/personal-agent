@@ -94,5 +94,5 @@ Use the owning thread as the default place where async outcomes remain visible.
 - [Conversation Context](./conversation-context.md)
 - [Knowledge System](./knowledge-system.md)
 - [Projects](./projects.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

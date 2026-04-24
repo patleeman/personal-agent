@@ -42,7 +42,7 @@ In Patrick's normal setup, `<vault-root>` is usually the managed mirror under `<
 ### Interfaces
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)
 - [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
 - [MCP](./mcp.md)
@@ -74,7 +74,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 | What is the actual state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md) |
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
-| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Web UI Guide](./web-ui.md), [Agent Browser in this repo](./agent-browser.md) |
+| How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Desktop App](./desktop-app.md), [Agent Browser in this repo](./agent-browser.md) |
 | How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md) |
 | Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
 | How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |

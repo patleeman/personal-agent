@@ -9,7 +9,7 @@ Why: raw `agent-browser --session ...` launches a Playwright-backed daemon per s
 From the repo root:
 
 ```bash
-npm run ab:run -- --session kb-check --command "ab open http://127.0.0.1:3741/knowledge && ab wait 1500 && ab snapshot -i"
+npm run ab:run -- --session kb-check --command "ab open personal-agent://app/knowledge && ab wait 1500 && ab snapshot -i"
 ```
 
 Inside the `--command` string, use `ab ...` instead of `agent-browser ...`.
@@ -25,7 +25,7 @@ The wrapper:
 Only keep a session open if you need browser state across multiple separate commands or turns:
 
 ```bash
-npm run ab:run -- --session my-long-check --keep-open --command "ab open http://127.0.0.1:3741"
+npm run ab:run -- --session my-long-check --keep-open --command "ab open personal-agent://app/"
 agent-browser --session my-long-check snapshot -i
 agent-browser --session my-long-check close
 ```
@@ -50,7 +50,7 @@ The cleanup command removes dead sessions immediately and closes old live sessio
 
 ## Repo rule
 
-For web UI validation in `personal-agent`, prefer:
+For desktop app validation in `personal-agent`, prefer:
 
 ```bash
 npm run ab:run -- --session <short-name> --command "ab ..."

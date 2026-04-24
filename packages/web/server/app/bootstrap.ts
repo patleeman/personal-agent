@@ -134,7 +134,7 @@ export function mountStaticServerApps(options: {
     app.get('/', (_req, res) => {
       res.send(
         '<pre style="font-family:monospace;padding:2rem;background:#07090e;color:#bfcfee">'
-          + 'personal-agent web UI\n\n'
+          + 'personal-agent desktop renderer\n\n'
           + 'SPA not built yet.\n'
           + 'Run: npm run build in packages/web\n'
           + '</pre>',
@@ -154,7 +154,7 @@ export function startServerListeners(options: {
   handleUpgrade?: (request: IncomingMessage, socket: Socket, head: Buffer) => void;
 }): void {
   const server = options.app.listen(options.port, options.loopbackHost, () => {
-    logInfo('web ui started', {
+    logInfo('desktop renderer server started', {
       url: `http://${options.loopbackHost}:${options.port}`,
       profile: options.getCurrentProfile(),
       repoRoot: options.repoRoot,

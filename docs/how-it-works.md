@@ -45,7 +45,7 @@ Important subtrees:
 
 ## Runtime materialization
 
-When `pa` launches Pi or the web UI creates a live session, the runtime is assembled from layered inputs:
+When `pa` launches Pi or the desktop app creates a live session, the runtime is assembled from layered inputs:
 
 1. repo defaults
 2. selected instruction files and skill directories
@@ -91,4 +91,4 @@ Use tool schemas for exact tool arguments.
 - [Knowledge System](./knowledge-system.md)
 - [Configuration](./configuration.md)
 - [Conversations](./conversations.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)

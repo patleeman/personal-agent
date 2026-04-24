@@ -71,6 +71,6 @@ The daemon package still owns the background behavior. Only the host process cha
 ## Related docs
 
 - [Command-Line Guide (`pa`)](./command-line.md)
-- [Web UI Guide](./web-ui.md)
+- [Desktop App](./desktop-app.md)
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)

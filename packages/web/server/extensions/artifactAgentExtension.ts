@@ -81,10 +81,10 @@ export function createArtifactAgentExtension(options: {
     pi.registerTool({
       name: 'artifact',
       label: 'Artifact',
-      description: 'Create, update, inspect, and delete rendered conversation artifacts for the web UI.',
+      description: 'Create, update, inspect, and delete rendered conversation artifacts for the desktop UI.',
       promptSnippet: 'Create or update rendered HTML, Mermaid, and LaTeX artifacts for the artifact viewer.',
       promptGuidelines: [
-        'Use this tool when the user asks for a rendered artifact in the web UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
+        'Use this tool when the user asks for a rendered artifact in the desktop UI, or when rendering would explain an idea more clearly than plain chat (for example, Mermaid diagrams or HTML mockups).',
         'Use kind=html for self-contained interactive artifacts, kind=mermaid for diagrams, and kind=latex for raw LaTeX source, including full document-style reports when appropriate.',
         `For report-style HTML artifacts, read the built-in artifacts internal skill at ${resolveArtifactInternalSkillPath(options.repoRoot)} and adapt the white-paper reference at ${resolveArtifactWhitePaperReferencePath(options.repoRoot)}.`,
         'Default white-paper/report HTML to a self-contained single-column reading layout with calm typography; think internal memo or technical report, not dashboard or landing page chrome.',

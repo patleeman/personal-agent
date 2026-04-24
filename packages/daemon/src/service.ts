@@ -3,14 +3,9 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { dirname, join, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { getStateRoot, resolveChildProcessEnv } from '@personal-agent/core';
+import { resolveChildProcessEnv } from '@personal-agent/core';
 import { loadDaemonConfig } from './config.js';
 import { resolveDaemonPaths } from './paths.js';
-import {
-  ensureActiveWebUiRelease,
-  getWebUiDeploymentSummary,
-  type WebUiDeploymentSummary,
-} from './web-ui-deploy.js';
 
 export type ManagedServicePlatform = 'launchd' | 'systemd';
 
@@ -21,27 +16,6 @@ export interface ManagedDaemonServiceInfo {
 }
 
 export interface ManagedDaemonServiceStatus extends ManagedDaemonServiceInfo {
-  installed: boolean;
-  running: boolean;
-}
-
-export interface WebUiServiceOptions {
-  repoRoot?: string;
-  port?: number;
-}
-
-export interface WebUiServiceInfo {
-  platform: ManagedServicePlatform;
-  identifier: string;
-  manifestPath: string;
-  logFile?: string;
-  repoRoot: string;
-  port: number;
-  url: string;
-  deployment?: WebUiDeploymentSummary;
-}
-
-export interface WebUiServiceStatus extends WebUiServiceInfo {
   installed: boolean;
   running: boolean;
 }
@@ -128,10 +102,6 @@ function getDaemonLogFile(): string {
   return resolveDaemonPaths(config.ipc.socketPath).logFile;
 }
 
-function getWebUiLogFile(): string {
-  return join(getStateRoot(), 'web', 'logs', 'web.log');
-}
-
 function buildDaemonServiceEnvironment(): Record<string, string> {
   const resolvedEnv = resolveChildProcessEnv();
   const environment: Record<string, string> = {};
@@ -142,43 +112,6 @@ function buildDaemonServiceEnvironment(): Record<string, string> {
     'PERSONAL_AGENT_CONFIG_FILE',
     'PERSONAL_AGENT_OP_BIN',
     'OP_SERVICE_ACCOUNT_TOKEN',
-  ] as const;
-
-  for (const key of passthroughKeys) {
-    const value = resolvedEnv[key];
-    if (typeof value === 'string' && value.trim().length > 0) {
-      environment[key] = value;
-    }
-  }
-
-  return environment;
-}
-
-function buildWebUiServiceEnvironment(
-  options: Required<WebUiServiceOptions>,
-  release: { distDir: string; revision?: string },
-): Record<string, string> {
-  const resolvedEnv = resolveChildProcessEnv();
-  const environment: Record<string, string> = {
-    PERSONAL_AGENT_REPO_ROOT: resolve(options.repoRoot),
-    PA_WEB_PORT: String(options.port),
-    PA_WEB_DIST: release.distDir,
-  };
-
-  if (release.revision) {
-    environment.PERSONAL_AGENT_WEB_REVISION = release.revision;
-  }
-
-  const passthroughKeys = [
-    'PATH',
-    'PERSONAL_AGENT_STATE_ROOT',
-    'PERSONAL_AGENT_CONFIG_FILE',
-    'PERSONAL_AGENT_LOCAL_PROFILE_DIR',
-    'PERSONAL_AGENT_DISABLE_DAEMON_EVENTS',
-    'PERSONAL_AGENT_OP_BIN',
-    'OP_SERVICE_ACCOUNT_TOKEN',
-    'XDG_CONFIG_HOME',
-    'XDG_STATE_HOME',
   ] as const;
 
   for (const key of passthroughKeys) {
@@ -274,26 +207,8 @@ function getLaunchdDaemonLabel(): string {
   return 'io.personal-agent.daemon';
 }
 
-function getLaunchdWebUiLabel(): string {
-  return 'io.personal-agent.web-ui';
-}
-
 function getLaunchdPlistPath(label: string): string {
   return join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
-}
-
-function normalizeWebUiServiceOptions(options: WebUiServiceOptions = {}): Required<WebUiServiceOptions> {
-  const repoRoot = resolve(options.repoRoot ?? process.cwd());
-  const deployment = getWebUiDeploymentSummary({ repoRoot, stablePort: options.port });
-
-  return {
-    repoRoot,
-    port: options.port ?? deployment.stablePort,
-  };
-}
-
-function buildWebUiUrl(port: number): string {
-  return `http://localhost:${port}`;
 }
 
 function installLaunchdDaemonService(): ManagedDaemonServiceInfo {
@@ -366,117 +281,14 @@ function uninstallLaunchdDaemonService(): ManagedDaemonServiceInfo {
   };
 }
 
-function installLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const deployment = getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port });
-  const release = deployment.activeRelease ?? ensureActiveWebUiRelease({
-    repoRoot: normalizedOptions.repoRoot,
-    stablePort: normalizedOptions.port,
-  });
-  const label = getLaunchdWebUiLabel();
-  const manifestPath = getLaunchdPlistPath(label);
-  const logFile = getWebUiLogFile();
-  const domain = getLaunchdDomain();
-  const serviceTarget = `${domain}/${label}`;
-
-  const nodePath = process.execPath;
-  const environment = buildWebUiServiceEnvironment(normalizedOptions, release);
-
-  mkdirSync(dirname(manifestPath), { recursive: true });
-  mkdirSync(dirname(logFile), { recursive: true });
-
-  const content = buildLaunchdPlistContent({
-    label,
-    nodePath,
-    entryFile: release.serverEntryFile,
-    workingDirectory: normalizedOptions.repoRoot,
-    logFile,
-    environment,
-  });
-
-  writeFileSync(manifestPath, `${content}\n`);
-
-  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
-  runCommand('launchctl', ['bootstrap', domain, manifestPath]);
-  runCommand('launchctl', ['kickstart', '-k', serviceTarget], { allowNonZero: true });
-
-  return {
-    platform: 'launchd',
-    identifier: label,
-    manifestPath,
-    logFile,
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-  };
-}
-
-function getLaunchdWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const label = getLaunchdWebUiLabel();
-  const manifestPath = getLaunchdPlistPath(label);
-  const domain = getLaunchdDomain();
-  const serviceTarget = `${domain}/${label}`;
-  const status = runCommand('launchctl', ['print', serviceTarget], { allowNonZero: true });
-
-  return {
-    platform: 'launchd',
-    identifier: label,
-    manifestPath,
-    logFile: getWebUiLogFile(),
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-    installed: existsSync(manifestPath),
-    running: isLaunchdServiceRunning(status),
-  };
-}
-
-function uninstallLaunchdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const label = getLaunchdWebUiLabel();
-  const manifestPath = getLaunchdPlistPath(label);
-  const domain = getLaunchdDomain();
-
-  runCommand('launchctl', ['bootout', domain, manifestPath], { allowNonZero: true });
-
-  if (existsSync(manifestPath)) {
-    rmSync(manifestPath, { force: true });
-  }
-
-  return {
-    platform: 'launchd',
-    identifier: label,
-    manifestPath,
-    logFile: getWebUiLogFile(),
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-  };
-}
-
 interface SystemdDaemonUnitInput {
   nodePath: string;
   entryFile: string;
   environment: Record<string, string>;
 }
 
-interface SystemdWebUiUnitInput {
-  nodePath: string;
-  entryFile: string;
-  workingDirectory: string;
-  environment: Record<string, string>;
-}
-
 function getSystemdDaemonUnitName(): string {
   return 'personal-agent-daemon.service';
-}
-
-function getSystemdWebUiUnitName(): string {
-  return 'personal-agent-web-ui.service';
 }
 
 function buildSystemdDaemonUnitContent(input: SystemdDaemonUnitInput): string {
@@ -494,34 +306,6 @@ function buildSystemdDaemonUnitContent(input: SystemdDaemonUnitInput): string {
     'Type=simple',
     `ExecStart=${quoteSystemdValue(input.nodePath)} ${quoteSystemdValue(input.entryFile)}`,
     `WorkingDirectory=${quoteSystemdValue(homedir())}`,
-    environmentLines,
-    'Restart=always',
-    'RestartSec=5',
-    '',
-    '[Install]',
-    'WantedBy=default.target',
-  ];
-
-  return lines
-    .filter((line) => line.length > 0)
-    .join('\n');
-}
-
-function buildSystemdWebUiUnitContent(input: SystemdWebUiUnitInput): string {
-  const environmentLines = Object.entries(input.environment)
-    .map(([key, value]) => `Environment=${key}=${quoteSystemdValue(value)}`)
-    .join('\n');
-
-  const lines = [
-    '[Unit]',
-    'Description=Personal Agent web UI',
-    'After=network-online.target',
-    'Wants=network-online.target',
-    '',
-    '[Service]',
-    'Type=simple',
-    `ExecStart=${quoteSystemdValue(input.nodePath)} ${quoteSystemdValue(input.entryFile)}`,
-    `WorkingDirectory=${quoteSystemdValue(input.workingDirectory)}`,
     environmentLines,
     'Restart=always',
     'RestartSec=5',
@@ -597,87 +381,6 @@ function uninstallSystemdDaemonService(): ManagedDaemonServiceInfo {
   };
 }
 
-function installSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const deployment = getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port });
-  const release = deployment.activeRelease ?? ensureActiveWebUiRelease({
-    repoRoot: normalizedOptions.repoRoot,
-    stablePort: normalizedOptions.port,
-  });
-  const unitName = getSystemdWebUiUnitName();
-  const manifestPath = getSystemdUnitPath(unitName);
-  const nodePath = process.execPath;
-  const environment = buildWebUiServiceEnvironment(normalizedOptions, release);
-
-  mkdirSync(dirname(manifestPath), { recursive: true });
-
-  const content = buildSystemdWebUiUnitContent({
-    nodePath,
-    entryFile: release.serverEntryFile,
-    workingDirectory: normalizedOptions.repoRoot,
-    environment,
-  });
-
-  writeFileSync(manifestPath, `${content}\n`);
-
-  runCommand('systemctl', ['--user', 'daemon-reload']);
-  runCommand('systemctl', ['--user', 'enable', '--now', unitName]);
-
-  return {
-    platform: 'systemd',
-    identifier: unitName,
-    manifestPath,
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-  };
-}
-
-function getSystemdWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const unitName = getSystemdWebUiUnitName();
-  const manifestPath = getSystemdUnitPath(unitName);
-  const status = runCommand('systemctl', ['--user', 'is-active', unitName], { allowNonZero: true });
-  const activeState = status.stdout.trim().toLowerCase();
-
-  return {
-    platform: 'systemd',
-    identifier: unitName,
-    manifestPath,
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-    installed: existsSync(manifestPath),
-    running: (status.status ?? 1) === 0 && activeState === 'active',
-  };
-}
-
-function uninstallSystemdWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const normalizedOptions = normalizeWebUiServiceOptions(options);
-  const unitName = getSystemdWebUiUnitName();
-  const manifestPath = getSystemdUnitPath(unitName);
-
-  runCommand('systemctl', ['--user', 'disable', '--now', unitName], { allowNonZero: true });
-
-  if (existsSync(manifestPath)) {
-    rmSync(manifestPath, { force: true });
-  }
-
-  runCommand('systemctl', ['--user', 'daemon-reload']);
-
-  return {
-    platform: 'systemd',
-    identifier: unitName,
-    manifestPath,
-    repoRoot: normalizedOptions.repoRoot,
-    port: normalizedOptions.port,
-    url: buildWebUiUrl(normalizedOptions.port),
-    deployment: getWebUiDeploymentSummary({ repoRoot: normalizedOptions.repoRoot, stablePort: normalizedOptions.port }),
-  };
-}
-
 function startLaunchdService(label: string, manifestPath: string): void {
   const domain = getLaunchdDomain();
   const serviceTarget = `${domain}/${label}`;
@@ -740,38 +443,6 @@ function startSystemdDaemonService(): void {
 
 function stopSystemdDaemonService(): void {
   const unitName = getSystemdDaemonUnitName();
-  stopSystemdService(unitName);
-}
-
-function restartLaunchdWebUiService(): void {
-  const label = getLaunchdWebUiLabel();
-  const manifestPath = getLaunchdPlistPath(label);
-  restartLaunchdService(label, manifestPath);
-}
-
-function restartSystemdWebUiService(): void {
-  const unitName = getSystemdWebUiUnitName();
-  restartSystemdService(unitName);
-}
-
-function startLaunchdWebUiService(): void {
-  const label = getLaunchdWebUiLabel();
-  const manifestPath = getLaunchdPlistPath(label);
-  startLaunchdService(label, manifestPath);
-}
-
-function stopLaunchdWebUiService(): void {
-  const manifestPath = getLaunchdPlistPath(getLaunchdWebUiLabel());
-  stopLaunchdService(manifestPath);
-}
-
-function startSystemdWebUiService(): void {
-  const unitName = getSystemdWebUiUnitName();
-  startSystemdService(unitName);
-}
-
-function stopSystemdWebUiService(): void {
-  const unitName = getSystemdWebUiUnitName();
   stopSystemdService(unitName);
 }
 
@@ -845,108 +516,6 @@ export function stopManagedDaemonService(): ManagedDaemonServiceStatus {
   }
 
   return getManagedDaemonServiceStatus();
-}
-
-export function installWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return installLaunchdWebUiService(options);
-  }
-
-  return installSystemdWebUiService(options);
-}
-
-export function uninstallWebUiService(options: WebUiServiceOptions = {}): WebUiServiceInfo {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return uninstallLaunchdWebUiService(options);
-  }
-
-  return uninstallSystemdWebUiService(options);
-}
-
-export function getWebUiServiceStatus(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const platform = resolveServicePlatform();
-
-  if (platform === 'launchd') {
-    return getLaunchdWebUiServiceStatus(options);
-  }
-
-  return getSystemdWebUiServiceStatus(options);
-}
-
-export function startWebUiService(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const status = getWebUiServiceStatus(options);
-
-  if (!status.installed) {
-    throw new Error('Managed web UI service is not installed. Run `pa ui service install` first.');
-  }
-
-  if (status.running) {
-    return status;
-  }
-
-  if (status.platform === 'launchd') {
-    startLaunchdWebUiService();
-  } else {
-    startSystemdWebUiService();
-  }
-
-  return getWebUiServiceStatus(options);
-}
-
-export function stopWebUiService(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const status = getWebUiServiceStatus(options);
-
-  if (!status.installed) {
-    throw new Error('Managed web UI service is not installed. Run `pa ui service install` first.');
-  }
-
-  if (!status.running) {
-    return status;
-  }
-
-  if (status.platform === 'launchd') {
-    stopLaunchdWebUiService();
-  } else {
-    stopSystemdWebUiService();
-  }
-
-  return getWebUiServiceStatus(options);
-}
-
-export function restartWebUiService(options: WebUiServiceOptions = {}): WebUiServiceStatus {
-  const status = getWebUiServiceStatus(options);
-
-  if (!status.installed) {
-    throw new Error('Managed web UI service is not installed. Run `pa ui service install` first.');
-  }
-
-  if (status.platform === 'launchd') {
-    restartLaunchdWebUiService();
-  } else {
-    restartSystemdWebUiService();
-  }
-
-  return getWebUiServiceStatus(options);
-}
-
-export function restartWebUiServiceIfInstalled(options: WebUiServiceOptions = {}): WebUiServiceStatus | undefined {
-  const status = getWebUiServiceStatus(options);
-
-  if (!status.installed) {
-    return undefined;
-  }
-
-  if (status.platform === 'launchd') {
-    restartLaunchdWebUiService();
-  } else {
-    restartSystemdWebUiService();
-  }
-
-  return getWebUiServiceStatus(options);
 }
 
 export function restartManagedDaemonServiceIfInstalled(): ManagedDaemonServiceStatus | undefined {
