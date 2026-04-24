@@ -901,6 +901,15 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
         XCTAssertNil(session.errorMessage)
         XCTAssertFalse(session.sections.isEmpty)
+
+        let createdConversationId = await session.createConversation(NewConversationRequest(cwd: config.cwd ?? FileManager.default.currentDirectoryPath))
+        let createdId = try XCTUnwrap(createdConversationId)
+        XCTAssertFalse(createdId.isEmpty)
+        try await waitForCondition(timeout: .seconds(20)) {
+            session.sessions[createdId] != nil || session.errorMessage != nil
+        }
+        XCTAssertNil(session.errorMessage)
+        XCTAssertNotNil(session.sessions[createdId])
     }
 
     func testLiveCompanionRoundTripAgainstDesktopHost() async throws {
