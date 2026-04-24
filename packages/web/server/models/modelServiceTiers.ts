@@ -7,12 +7,13 @@ export type ServiceTierValue = typeof SERVICE_TIER_VALUES[number];
 //
 // Notes:
 // - `models.dev` currently exposes service_tier metadata for GPT-5.4 and GPT-5.4 Mini
-//   (priority mode).
+//   (priority mode); GPT-5.5 supports the same priority fast mode.
 // - We also include OpenAI Codex variants that are currently accepted by the live API
 //   with `service_tier=priority` in local verification.
 //
 // Any model not listed here is treated as not supporting service tiers.
 const MODEL_SERVICE_TIER_DEFINITIONS: Record<string, readonly ServiceTierValue[]> = {
+  'gpt-5.5': ['priority'],
   'gpt-5.2': ['priority'],
   'gpt-5.3-codex': ['priority'],
   'gpt-5.3-codex-spark': ['priority'],

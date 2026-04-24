@@ -1719,6 +1719,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             currentThinkingLevel: "medium",
             currentServiceTier: "",
             models: [
+                CompanionModelInfo(id: "gpt-5.5", provider: "openai", name: "GPT-5.5", context: 128000, supportedServiceTiers: ["auto", "priority"]),
                 CompanionModelInfo(id: "gpt-5.4", provider: "openai", name: "GPT-5.4", context: 128000, supportedServiceTiers: ["auto", "priority"]),
                 CompanionModelInfo(id: "gpt-5.4-mini", provider: "openai", name: "GPT-5.4 Mini", context: 128000, supportedServiceTiers: ["auto", "priority"]),
                 CompanionModelInfo(id: "claude-sonnet-4-6", provider: "anthropic", name: "Claude Sonnet 4.6", context: 200000, supportedServiceTiers: nil),

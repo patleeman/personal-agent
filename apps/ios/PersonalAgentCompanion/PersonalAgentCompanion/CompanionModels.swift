@@ -734,6 +734,7 @@ func companionModelOptions(current: String? = nil, defaultLabel: String? = nil) 
         options.append(CompanionPickerOption(value: "", label: defaultLabel))
     }
     options += [
+        CompanionPickerOption(value: "gpt-5.5", label: "GPT-5.5"),
         CompanionPickerOption(value: "gpt-5.4", label: "GPT-5.4"),
         CompanionPickerOption(value: "gpt-5.4-mini", label: "GPT-5.4 Mini"),
         CompanionPickerOption(value: "gpt-5.2", label: "GPT-5.2"),
