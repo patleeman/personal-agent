@@ -273,6 +273,7 @@ struct SessionMeta: Codable, Equatable, Identifiable {
     let attentionUnreadMessageCount: Int?
     let attentionUnreadActivityCount: Int?
     let attentionActivityIds: [String]?
+    var deferredResumes: [DeferredResumeSummary]? = nil
 
     var effectiveActivityDate: Date? {
         ISO8601DateFormatter.flexible.date(from: lastActivityAt ?? timestamp)
@@ -281,6 +282,32 @@ struct SessionMeta: Codable, Equatable, Identifiable {
     var cwdDisplayName: String? {
         companionPathLeafName(cwd) ?? cwdSlug.nilIfBlank
     }
+}
+
+struct DeferredResumeDelivery: Codable, Equatable {
+    let alertLevel: String?
+    let autoResumeIfOpen: Bool?
+    let requireAck: Bool?
+}
+
+struct DeferredResumeSummary: Codable, Equatable, Identifiable {
+    let id: String
+    let sessionFile: String
+    let prompt: String
+    let dueAt: String
+    let createdAt: String
+    let attempts: Int
+    let status: String
+    let readyAt: String?
+    let kind: String?
+    let title: String?
+    let behavior: String?
+    let delivery: DeferredResumeDelivery?
+}
+
+struct DeferredResumeListResponse: Codable, Equatable {
+    let conversationId: String
+    let resumes: [DeferredResumeSummary]
 }
 
 struct MessageImage: Codable, Equatable, Identifiable {
@@ -1428,4 +1455,13 @@ func formatRelativeCompanionDate(_ string: String?) -> String {
         return string ?? "—"
     }
     return DateFormatter.relativeTimestamp.localizedString(for: date, relativeTo: .now)
+}
+
+func isActiveRunStatus(_ status: String?) -> Bool {
+    switch status {
+    case "running", "queued", "waiting":
+        return true
+    default:
+        return false
+    }
 }

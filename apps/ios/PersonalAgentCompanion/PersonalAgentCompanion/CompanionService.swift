@@ -26,6 +26,8 @@ protocol CompanionClientProtocol: AnyObject {
     func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws
     func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult
     func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult
+    func cancelDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse
+    func fireDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse
     func abortConversation(conversationId: String) async throws
     func takeOverConversation(conversationId: String, surfaceId: String) async throws
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws
@@ -453,6 +455,14 @@ final class LiveCompanionClient: CompanionClientProtocol {
 
     func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult {
         try await authorizedJSON(path: "/companion/v1/conversations/\(conversationId)/parallel-jobs/\(jobId)", method: "POST", body: ["action": action, "surfaceId": surfaceId], decode: CompanionParallelJobActionResult.self)
+    }
+
+    func cancelDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
+        try await authorizedJSON(path: "/companion/v1/conversations/\(conversationId)/deferred-resumes/\(resumeId)", method: "DELETE", body: nil, decode: DeferredResumeListResponse.self)
+    }
+
+    func fireDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
+        try await authorizedJSON(path: "/companion/v1/conversations/\(conversationId)/deferred-resumes/\(resumeId)/fire", method: "POST", body: nil, decode: DeferredResumeListResponse.self)
     }
 
     func abortConversation(conversationId: String) async throws {
@@ -2465,6 +2475,14 @@ final class MockCompanionClient: CompanionClientProtocol {
         default:
             throw CompanionClientError.requestFailed("Unsupported parallel job action.")
         }
+    }
+
+    func cancelDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
+        DeferredResumeListResponse(conversationId: conversationId, resumes: conversations[conversationId]?.sessionMeta?.deferredResumes ?? [])
+    }
+
+    func fireDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
+        DeferredResumeListResponse(conversationId: conversationId, resumes: conversations[conversationId]?.sessionMeta?.deferredResumes ?? [])
     }
 
     func abortConversation(conversationId: String) async throws {

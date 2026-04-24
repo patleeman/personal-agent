@@ -1721,6 +1721,7 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var queuedSteeringPrompts: [QueuedPromptPreview] = []
     @Published private(set) var queuedFollowUpPrompts: [QueuedPromptPreview] = []
     @Published private(set) var parallelJobs: [ParallelPromptPreview] = []
+    @Published private(set) var connectedRuns: [DurableRunSummary] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isStreaming = false
     @Published var errorMessage: String?
@@ -1763,6 +1764,7 @@ final class ConversationViewModel: ObservableObject {
     private var didRestoreComposerDraft = false
     private var isApplyingComposerDraft = false
     private var streamTask: Task<Void, Never>?
+    private var activityRefreshTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
     private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
@@ -1803,6 +1805,8 @@ final class ConversationViewModel: ObservableObject {
         restoreComposerDraftIfNeeded()
         loadBootstrap()
         refreshModelState()
+        refreshActivityRuns()
+        startActivityRefreshLoop()
         updateConversationSubscription(isLive: sessionMeta?.isLive == true)
     }
 
@@ -1811,6 +1815,8 @@ final class ConversationViewModel: ObservableObject {
         persistComposerDraftIfNeeded()
         streamTask?.cancel()
         streamTask = nil
+        activityRefreshTask?.cancel()
+        activityRefreshTask = nil
         composerNoticeTask?.cancel()
         composerNoticeTask = nil
         transcriptImageCache.removeAll()
@@ -1981,6 +1987,82 @@ final class ConversationViewModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    func cancelConnectedRun(_ runId: String) {
+        Task {
+            do {
+                _ = try await client.cancelRun(runId: runId)
+                refreshActivityRuns()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func cancelDeferredResume(_ resumeId: String) {
+        Task {
+            do {
+                let result = try await client.cancelDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
+                updateDeferredResumes(result.resumes)
+                loadBootstrap()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func fireDeferredResume(_ resumeId: String) {
+        Task {
+            do {
+                let result = try await client.fireDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
+                updateDeferredResumes(result.resumes)
+                loadBootstrap()
+                refreshActivityRuns()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshActivityRuns() {
+        Task {
+            do {
+                let result = try await client.listRuns()
+                connectedRuns = result.runs.filter { run in
+                    guard isActiveRunStatus(run.status?.status) else { return false }
+                    let source = run.manifest?.source
+                    if source?.id == conversationId || source?.id == liveConversationId {
+                        return true
+                    }
+                    if source?.type == "deferred-resume",
+                       let sourceId = source?.id,
+                       sessionMeta?.deferredResumes?.contains(where: { $0.id == sourceId }) == true {
+                        return true
+                    }
+                    return false
+                }
+            } catch {
+                // Activity runs are auxiliary; leave the conversation usable if this refresh misses.
+            }
+        }
+    }
+
+    private func startActivityRefreshLoop() {
+        activityRefreshTask?.cancel()
+        activityRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(8))
+                if Task.isCancelled { break }
+                self?.refreshActivityRuns()
+            }
+        }
+    }
+
+    private func updateDeferredResumes(_ resumes: [DeferredResumeSummary]) {
+        guard var meta = sessionMeta else { return }
+        meta.deferredResumes = resumes
+        sessionMeta = meta
     }
 
     func abort() {

@@ -63,12 +63,8 @@ struct ConversationScreen: View {
                         )
                     }
 
-                    if !viewModel.queuedSteeringPrompts.isEmpty || !viewModel.queuedFollowUpPrompts.isEmpty {
-                        QueuedPromptsShelf(viewModel: viewModel)
-                    }
-
-                    if !viewModel.parallelJobs.isEmpty {
-                        ParallelJobsShelf(viewModel: viewModel, onOpenConversation: onOpenConversation)
+                    if ConversationActivityShelf.hasItems(viewModel) {
+                        ConversationActivityShelf(viewModel: viewModel, onOpenConversation: onOpenConversation)
                     }
 
                     ForEach(transcriptItems) { item in
@@ -1387,6 +1383,195 @@ private struct TakeOverComposerView: View {
         .padding(.horizontal, 16)
         .padding(.top, 12)
         .padding(.bottom, 14)
+    }
+}
+
+private struct ConversationActivityShelf: View {
+    @ObservedObject var viewModel: ConversationViewModel
+    let onOpenConversation: (String) -> Void
+
+    private struct QueuedItem: Identifiable {
+        let id: String
+        let behavior: String
+        let index: Int
+        let preview: QueuedPromptPreview
+    }
+
+    private var queuedItems: [QueuedItem] {
+        let steering = viewModel.queuedSteeringPrompts.enumerated().map {
+            QueuedItem(id: "steer-\($0.element.id)", behavior: "steer", index: $0.offset, preview: $0.element)
+        }
+        let followUp = viewModel.queuedFollowUpPrompts.enumerated().map {
+            QueuedItem(id: "followUp-\($0.element.id)", behavior: "followUp", index: $0.offset, preview: $0.element)
+        }
+        return steering + followUp
+    }
+
+    static func hasItems(_ viewModel: ConversationViewModel) -> Bool {
+        !viewModel.queuedSteeringPrompts.isEmpty
+            || !viewModel.queuedFollowUpPrompts.isEmpty
+            || !(viewModel.sessionMeta?.deferredResumes ?? []).isEmpty
+            || !viewModel.connectedRuns.isEmpty
+            || !viewModel.parallelJobs.isEmpty
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: "bolt.horizontal")
+                    .font(.caption.weight(.semibold))
+                Text("Activity")
+                    .font(.caption.weight(.semibold))
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(CompanionTheme.textSecondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 8) {
+                    ForEach(queuedItems) { item in
+                        ActivityTile(
+                            title: item.behavior == "steer" ? "Steer queued" : "Follow-up queued",
+                            detail: previewText(item.preview.text, maxLength: 90),
+                            status: item.preview.imageCount > 0 ? "\(item.preview.imageCount) image\(item.preview.imageCount == 1 ? "" : "s")" : nil,
+                            tint: item.behavior == "steer" ? .orange : .teal
+                        ) {
+                            if item.preview.restorable != false {
+                                Button("Restore") {
+                                    viewModel.restoreQueuedPrompt(behavior: item.behavior, index: item.index, previewId: item.preview.id)
+                                }
+                            }
+                        }
+                    }
+
+                    ForEach(viewModel.sessionMeta?.deferredResumes ?? []) { resume in
+                        ActivityTile(
+                            title: resume.title?.nilIfBlank ?? "Deferred resume",
+                            detail: previewText(resume.prompt, maxLength: 90),
+                            status: formatRelativeCompanionDate(resume.dueAt),
+                            tint: .purple
+                        ) {
+                            Button("Run now") { viewModel.fireDeferredResume(resume.id) }
+                            Button("Cancel", role: .destructive) { viewModel.cancelDeferredResume(resume.id) }
+                        }
+                    }
+
+                    ForEach(viewModel.connectedRuns) { run in
+                        ActivityTile(
+                            title: run.manifest?.kind.nilIfBlank ?? "Run",
+                            detail: run.runId,
+                            status: runStatusLabel(run.status?.status),
+                            tint: runStatusTint(run.status?.status)
+                        ) {
+                            Button("Cancel", role: .destructive) { viewModel.cancelConnectedRun(run.runId) }
+                        }
+                    }
+
+                    ForEach(viewModel.parallelJobs) { job in
+                        ActivityTile(
+                            title: "Parallel",
+                            detail: previewText(job.prompt, maxLength: 90),
+                            status: parallelStatusLabel(job.status),
+                            tint: parallelStatusTint(job.status)
+                        ) {
+                            if job.status == "ready" || job.status == "failed" {
+                                Button("Import") { viewModel.manageParallelJob(job.id, action: "importNow") }
+                            }
+                            if job.status == "running" {
+                                Button("Cancel", role: .destructive) { viewModel.manageParallelJob(job.id, action: "cancel") }
+                            } else if job.status != "importing" {
+                                Button("Skip", role: .destructive) { viewModel.manageParallelJob(job.id, action: "skip") }
+                            }
+                            Button("Open") { onOpenConversation(job.childConversationId) }
+                        }
+                    }
+                }
+                .padding(.vertical, 1)
+            }
+        }
+    }
+}
+
+private struct ActivityTile<Actions: View>: View {
+    let title: String
+    let detail: String
+    let status: String?
+    let tint: Color
+    @ViewBuilder let actions: Actions
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(tint)
+                .frame(width: 7, height: 7)
+                .padding(.top, 5)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textPrimary)
+                    .lineLimit(1)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                    .lineLimit(2)
+                    .frame(width: 136, alignment: .leading)
+                if let status {
+                    Text(status)
+                        .font(.caption2)
+                        .foregroundStyle(tint)
+                        .lineLimit(1)
+                }
+            }
+            Menu {
+                actions
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private func runStatusLabel(_ status: String?) -> String {
+    switch status {
+    case "running": return "Running"
+    case "queued": return "Queued"
+    case "waiting": return "Waiting"
+    default: return status?.capitalized ?? "Active"
+    }
+}
+
+private func runStatusTint(_ status: String?) -> Color {
+    switch status {
+    case "running": return .blue
+    case "queued": return .orange
+    case "waiting": return .purple
+    default: return CompanionTheme.textSecondary
+    }
+}
+
+private func parallelStatusLabel(_ status: String) -> String {
+    switch status {
+    case "running": return "Running"
+    case "ready": return "Ready"
+    case "failed": return "Failed"
+    case "importing": return "Importing"
+    default: return status.capitalized
+    }
+}
+
+private func parallelStatusTint(_ status: String) -> Color {
+    switch status {
+    case "running": return .blue
+    case "ready": return CompanionTheme.accent
+    case "failed": return .red
+    case "importing": return .orange
+    default: return CompanionTheme.textSecondary
     }
 }
 
