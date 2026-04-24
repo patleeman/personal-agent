@@ -4306,8 +4306,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
+    const previousScrollTop = el.scrollTop;
+    const selectionEnd = el.selectionEnd ?? el.value.length;
+    const shouldKeepCaretVisible = document.activeElement === el && selectionEnd >= el.value.length;
+
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+    const nextHeight = Math.min(el.scrollHeight, 160);
+    el.style.height = `${nextHeight}px`;
+    el.style.overflowY = el.scrollHeight > nextHeight ? 'auto' : 'hidden';
+
+    // iOS Safari can leave the caret below the visible textarea after the
+    // auto-height reset, making lines appear only after another character is
+    // typed. Keep normal in-field scrolling stable, but pin typing-at-end to
+    // the bottom so newly inserted lines are immediately editable.
+    el.scrollTop = shouldKeepCaretVisible ? el.scrollHeight : previousScrollTop;
   }, []);
 
   const scheduleComposerResize = useCallback(() => {
@@ -7976,14 +7988,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       onPaste={handlePaste}
                       rows={1}
                       disabled={composerDisabled}
-                      className="w-full resize-none bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
+                      className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
                       placeholder={pendingAskUserQuestion
                         ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
                         : 'Message… (/ for commands, @ to reference notes, tasks, and indexed folders/files)'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                         : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                      style={{ minHeight: '44px', maxHeight: '180px' }}
+                      style={{ minHeight: '44px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' }}
                     />
                   </div>
 
