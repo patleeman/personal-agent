@@ -115,7 +115,7 @@ It can surface:
 
 That status is about the managed mirror under `<state-root>/knowledge-base/repo`, not an arbitrary overridden vault root.
 
-The sync engine now uses a cross-process lock for that mirror, so multiple runtimes do not race each other through the same checkout.
+The sync engine uses a cross-process lock for that mirror, so multiple runtimes do not race each other through the same checkout. It also waits for local file edits to be quiet for about two minutes before creating a sync commit, and the background loop runs every five minutes. Manual sync still checks immediately, but fresh autosave writes stay local until they settle.
 
 If the managed repo is still missing content after sync, compare it with any old local vault and copy the missing files over manually.
 

@@ -336,6 +336,45 @@ describe('KnowledgeBaseManager', () => {
     expect(divergedState.gitStatus?.behindCount).toBe(1);
   });
 
+  it('waits for local changes to go quiet before committing and pushing them', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/daily.md': '# Seed\n',
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+    const initialLastSyncAt = initialState.lastSyncAt;
+
+    const managedFile = join(initialState.managedRoot, 'notes', 'daily.md');
+    writeFileSync(managedFile, '# Seed\nfresh local edit\n');
+
+    const skippedState = manager.syncNow();
+
+    expect(skippedState.lastSyncAt).toBe(initialLastSyncAt);
+    expect(skippedState.gitStatus?.localChangeCount).toBe(1);
+
+    const remoteCloneBeforeQuiet = createTempDir('pa-kb-verify-before-');
+    runGit(['clone', remoteRepo, remoteCloneBeforeQuiet], dirname(remoteCloneBeforeQuiet));
+    expect(readFileSync(join(remoteCloneBeforeQuiet, 'notes', 'daily.md'), 'utf-8')).toBe('# Seed\n');
+
+    const quietTimestamp = new Date(Date.now() - 3 * 60 * 1000);
+    utimesSync(managedFile, quietTimestamp, quietTimestamp);
+
+    const syncedState = manager.syncNow();
+    expect(syncedState.gitStatus?.localChangeCount).toBe(0);
+    expect(syncedState.gitStatus?.aheadCount).toBe(0);
+
+    const remoteCloneAfterQuiet = createTempDir('pa-kb-verify-after-');
+    runGit(['clone', remoteRepo, remoteCloneAfterQuiet], dirname(remoteCloneAfterQuiet));
+    expect(readFileSync(join(remoteCloneAfterQuiet, 'notes', 'daily.md'), 'utf-8')).toBe('# Seed\nfresh local edit\n');
+  });
+
   it('auto-resolves same-file collisions by keeping the newer remote version and saving a recovery copy', () => {
     const remoteRepo = initBareRepo();
     seedRemoteRepo(remoteRepo, {

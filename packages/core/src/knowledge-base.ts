@@ -94,7 +94,8 @@ interface PathChangeResolution {
 
 const SYNC_COMMIT_AUTHOR_NAME = 'Personal Agent';
 const SYNC_COMMIT_AUTHOR_EMAIL = 'kb@personal-agent.local';
-const KNOWLEDGE_BASE_SYNC_INTERVAL_MS = 15_000;
+const KNOWLEDGE_BASE_SYNC_INTERVAL_MS = 5 * 60 * 1_000;
+const KNOWLEDGE_BASE_LOCAL_CHANGE_QUIET_MS = 2 * 60 * 1_000;
 const KNOWLEDGE_BASE_AUTO_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_FULL_MAINTENANCE_INTERVAL_MS = 7 * 24 * 60 * 60 * 1_000;
 const KNOWLEDGE_BASE_SYNC_LOCK_STALE_MS = 5 * 60 * 1_000;
@@ -500,6 +501,27 @@ function readLocalPathTimestampMs(root: string, relativePath: string, existsInLo
   } catch {
     return Date.now();
   }
+}
+
+function hasRecentLocalChanges(root: string, baseSnapshot: Snapshot, workingSnapshot: Snapshot, nowMs: number): boolean {
+  const changedPaths = new Set<string>([
+    ...Object.keys(baseSnapshot),
+    ...Object.keys(workingSnapshot),
+  ]);
+
+  for (const path of changedPaths) {
+    if (snapshotsEqual(baseSnapshot[path], workingSnapshot[path])) {
+      continue;
+    }
+
+    const existsInLocal = Boolean(workingSnapshot[path]);
+    const localTimestampMs = readLocalPathTimestampMs(root, path, existsInLocal);
+    if (nowMs - localTimestampMs < KNOWLEDGE_BASE_LOCAL_CHANGE_QUIET_MS) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function tryRunGitCommand(cwd: string, args: string[]): boolean {
@@ -955,6 +977,17 @@ export class KnowledgeBaseManager {
       const remoteExists = Object.keys(remoteSnapshot).length > 0 || refExists(root, getRemoteRef(config.branch));
       const storedState = this.readStoredStateForConfig(config);
       const baseSnapshot = storedState?.snapshot ?? (remoteExists ? remoteSnapshot : {});
+      const workingSnapshot = listWorkingSnapshot(root);
+
+      if (hasRecentLocalChanges(root, baseSnapshot, workingSnapshot, Date.now())) {
+        setRuntimeState(this.runtimeState, {
+          syncStatus: 'idle',
+          lastError: undefined,
+        });
+        const nextState = this.readState();
+        this.notifyListeners(previousState, nextState);
+        return nextState;
+      }
 
       if (!remoteExists) {
         this.checkoutRemoteBase(root, config.branch, false);
@@ -980,7 +1013,6 @@ export class KnowledgeBaseManager {
         return nextState;
       }
 
-      const workingSnapshot = listWorkingSnapshot(root);
       const localContents = new Map<string, Buffer>();
       for (const path of Object.keys(workingSnapshot)) {
         const content = readLocalFileBuffer(root, path);
