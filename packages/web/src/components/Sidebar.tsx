@@ -56,6 +56,16 @@ function Ico({ d, size = 16 }: { d: string; size?: number }) {
   );
 }
 
+function MoreActionsIcon({ size = 12 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
+      <circle cx="2" cy="6" r="1.15" />
+      <circle cx="6" cy="6" r="1.15" />
+      <circle cx="10" cy="6" r="1.15" />
+    </svg>
+  );
+}
+
 const PATH = {
   conversations: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v7.5a2.25 2.25 0 0 1-2.25 2.25H13.5l-3 3v-3H6.75A2.25 2.25 0 0 1 4.5 14.25v-7.5Z',
   nodes: 'M6 6.75h4.5v4.5H6v-4.5Zm7.5 0H18v4.5h-4.5v-4.5Zm-3.75 7.5h4.5v4.5h-4.5v-4.5Z',
@@ -69,7 +79,6 @@ const PATH = {
   chevronDown: 'm6 9 6 6 6-6',
   chevronRight: 'm9 6 6 6-6 6',
   plus: 'M12 5v14M5 12h14',
-  moreHorizontal: 'M5.25 12h.01M12 12h.01M18.75 12h.01',
   filter: 'M4.5 7.5h15M7.5 12h9M10.5 16.5h3',
   list: 'M8.25 6.75h9m-9 5.25h9m-9 5.25h9M5.25 6.75h.01M5.25 12h.01M5.25 17.25h.01',
   grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
@@ -1180,7 +1189,7 @@ function ConversationCwdGroupHeader({
             title={workspaceActionsTitle}
             aria-label={workspaceActionsTitle}
           >
-            <Ico d={PATH.moreHorizontal} size={11} />
+            <MoreActionsIcon size={12} />
           </button>
         ) : null}
         <button
