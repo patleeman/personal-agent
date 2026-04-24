@@ -2251,6 +2251,18 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
+    func saveNewAttachmentAndAttach(_ draft: AttachmentEditorDraft) async -> Bool {
+        do {
+            let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
+            savedAttachments = result.attachments
+            attachDrawingReference(attachment: result.attachment.summary, revision: result.attachment.currentRevision)
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
     func saveExistingAttachment(attachmentId: String, draft: AttachmentEditorDraft) async -> Bool {
         do {
             let result = try await client.updateAttachment(conversationId: conversationId, attachmentId: attachmentId, draft: draft)

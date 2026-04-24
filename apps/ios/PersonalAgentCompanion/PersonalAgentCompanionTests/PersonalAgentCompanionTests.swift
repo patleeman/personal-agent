@@ -480,6 +480,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.blocks.contains(where: { $0.type == "user" && $0.text == "Ship the iOS host client" }))
     }
 
+    func testSavingDrawingAttachmentAddsItToPrompt() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let saved = await model.saveNewAttachmentAndAttach(makeLiveAttachmentDraft())
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.promptAttachmentRefs.count, 1)
+        XCTAssertEqual(model.promptAttachmentRefs.first?.title, "Live test drawing")
+        XCTAssertTrue(model.savedAttachments.contains(where: { $0.id == model.promptAttachmentRefs.first?.attachmentId }))
+    }
+
     func testMockKnowledgeListsFoldersAndNotes() async throws {
         let client = MockCompanionClient()
 

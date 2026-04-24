@@ -15,6 +15,8 @@ struct ConversationScreen: View {
     @State private var importedPhotoItems: [PhotosPickerItem] = []
     @State private var showingPhotoLibraryPicker = false
     @State private var showingImageFileImporter = false
+    @State private var showingDrawingEditor = false
+    @State private var drawingDraft = AttachmentEditorDraft(title: "Drawing")
     @State private var showingCwdEditor = false
     @State private var cwdText = ""
     @State private var showingModelPreferences = false
@@ -95,6 +97,14 @@ struct ConversationScreen: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingAttachments = true
+                    } label: {
+                        Image(systemName: "paperclip")
+                    }
+                    .accessibilityLabel("Attachments")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         Section("Execution target") {
                             ForEach(viewModel.executionTargets) { target in
@@ -154,11 +164,6 @@ struct ConversationScreen: View {
                                 Label("Checkpoints", systemImage: "point.topleft.down.curvedto.point.bottomright.up")
                             }
                             Button {
-                                showingAttachments = true
-                            } label: {
-                                Label("Saved drawings", systemImage: "paperclip")
-                            }
-                            Button {
                                 renameText = viewModel.title
                                 showingRename = true
                             } label: {
@@ -206,6 +211,14 @@ struct ConversationScreen: View {
             }
             .sheet(isPresented: $showingAttachments) {
                 AttachmentBrowserView(viewModel: viewModel)
+            }
+            .sheet(isPresented: $showingDrawingEditor) {
+                AttachmentEditorView(draft: $drawingDraft, title: "Drawing", showsMetadata: false, saveButtonTitle: "Attach") {
+                    if await viewModel.saveNewAttachmentAndAttach(drawingDraft) {
+                        drawingDraft = AttachmentEditorDraft(title: "Drawing")
+                        showingDrawingEditor = false
+                    }
+                }
             }
             .sheet(isPresented: $showingRename) {
                 RenameConversationView(title: $renameText) {
@@ -402,9 +415,10 @@ struct ConversationScreen: View {
                                 }
                             }
                             Button {
-                                showingAttachments = true
+                                drawingDraft = AttachmentEditorDraft(title: "Drawing")
+                                showingDrawingEditor = true
                             } label: {
-                                Label("Saved drawing", systemImage: "paperclip")
+                                Label("Drawing", systemImage: "scribble.variable")
                             }
                         } label: {
                             Image(systemName: "plus.circle.fill")
@@ -2624,6 +2638,8 @@ private struct AttachmentEditorView: View {
 
     @Binding var draft: AttachmentEditorDraft
     let title: String
+    var showsMetadata = true
+    var saveButtonTitle = "Save"
     let onSave: () async -> Void
 
     @State private var drawing = PKDrawing()
@@ -2641,10 +2657,12 @@ private struct AttachmentEditorView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Metadata") {
-                    TextField("Title", text: $draft.title)
-                    TextField("Note", text: $draft.note, axis: .vertical)
-                        .lineLimit(3...6)
+                if showsMetadata {
+                    Section("Metadata") {
+                        TextField("Title", text: $draft.title)
+                        TextField("Note", text: $draft.note, axis: .vertical)
+                            .lineLimit(3...6)
+                    }
                 }
 
                 Section("Drawing") {
@@ -2700,7 +2718,7 @@ private struct AttachmentEditorView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Saving…" : "Save") {
+                    Button(isSaving ? "Saving…" : saveButtonTitle) {
                         Task {
                             isSaving = true
                             if let assets = buildNativeDrawingAttachmentAssets(
