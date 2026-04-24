@@ -72,7 +72,7 @@ export type DesktopConversationCwdGroupContextMenuAction =
   | 'archive-threads'
   | 'remove';
 
-export type DesktopKnowledgeEntryContextMenuAction = 'rename' | 'move' | 'delete';
+export type DesktopKnowledgeEntryContextMenuAction = 'open-in-finder' | 'rename' | 'move' | 'delete';
 
 type DesktopSelectionContextMenuAction = 'reply' | 'copy';
 
@@ -101,6 +101,7 @@ interface DesktopConversationCwdGroupContextMenuRequest {
 interface DesktopKnowledgeEntryContextMenuRequest {
   x: number;
   y: number;
+  canOpenInFinder?: boolean;
   canRename?: boolean;
   canMove?: boolean;
   canDelete?: boolean;

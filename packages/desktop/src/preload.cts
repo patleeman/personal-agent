@@ -62,6 +62,7 @@ const desktopBridge = {
   showKnowledgeEntryContextMenu: (input: {
     x: number;
     y: number;
+    canOpenInFinder?: boolean;
     canRename?: boolean;
     canMove?: boolean;
     canDelete?: boolean;

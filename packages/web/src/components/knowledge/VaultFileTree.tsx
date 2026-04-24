@@ -52,7 +52,7 @@ import type { VaultEntry } from '../../shared/types';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 import { cx } from '../ui';
-import { shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
+import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
@@ -83,6 +83,7 @@ const ICON = {
   import: 'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
   x: 'M6 18 18 6M6 6l12 12',
   file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
+  folderOpen: 'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
 };
 
 const TREE_HOST_STYLE = {
@@ -113,6 +114,7 @@ export interface FileTreeProps {
 
 interface ContextMenuProps {
   onDelete: () => void;
+  onOpenInFinder?: () => void;
   onMove: () => void;
   onRename: () => void;
 }
@@ -258,7 +260,26 @@ function createFallbackEntry(path: string, kind: VaultEntry['kind'], name?: stri
   };
 }
 
-function TreeContextMenu({ onDelete, onMove, onRename }: ContextMenuProps) {
+function resolveFinderTargetPath(root: string | null | undefined, entry: VaultEntry): string | null {
+  const normalizedRoot = root?.trim().replace(/\/+$/u, '') ?? '';
+  if (!normalizedRoot) {
+    return null;
+  }
+
+  const relativePath = entry.id.trim().replace(/^\/+|\/+$/gu, '');
+  if (!relativePath) {
+    return normalizedRoot;
+  }
+
+  if (entry.kind === 'folder') {
+    return `${normalizedRoot}/${relativePath}`;
+  }
+
+  const parentPath = relativePath.split('/').slice(0, -1).join('/');
+  return parentPath ? `${normalizedRoot}/${parentPath}` : normalizedRoot;
+}
+
+function TreeContextMenu({ onDelete, onOpenInFinder, onMove, onRename }: ContextMenuProps) {
   return (
     <div
       className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]"
@@ -266,6 +287,15 @@ function TreeContextMenu({ onDelete, onMove, onRename }: ContextMenuProps) {
       aria-label="Knowledge entry actions"
     >
       <div className="space-y-px">
+        {onOpenInFinder ? (
+          <>
+            <button type="button" className="ui-context-menu-item gap-2" onClick={onOpenInFinder} role="menuitem">
+              <Ico d={ICON.folderOpen} size={12} />
+              Open in Finder
+            </button>
+            <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+          </>
+        ) : null}
         <button type="button" className="ui-context-menu-item gap-2" onClick={onRename} role="menuitem">
           <Ico d={ICON.pencil} size={12} />
           Rename
@@ -885,6 +915,23 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     }
   }, []);
 
+  const handleOpenInFinder = useCallback(async (entry: VaultEntry) => {
+    const desktopBridge = getDesktopBridge();
+    const targetPath = resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry);
+    if (!desktopBridge?.openPath || !targetPath) {
+      return;
+    }
+
+    try {
+      const result = await desktopBridge.openPath(targetPath);
+      if (!result.opened) {
+        console.error('open in Finder failed', result.error ?? 'Unknown error');
+      }
+    } catch (error) {
+      console.error('open in Finder failed', error);
+    }
+  }, [knowledgeBaseState?.effectiveRoot]);
+
   const handleOpenFileClose = useCallback((id: string) => {
     const normalizedId = id.trim();
     if (!normalizedId) {
@@ -1315,9 +1362,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                   renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
                     const entry = entryMap.get(item.path)
                       ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+                    const canOpenInFinder = Boolean(getDesktopBridge()?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry));
 
                     return (
                       <TreeContextMenu
+                        onOpenInFinder={canOpenInFinder ? () => {
+                          context.close();
+                          void handleOpenInFinder(entry);
+                        } : undefined}
                         onRename={() => {
                           context.close({ restoreFocus: false });
                           window.setTimeout(() => {

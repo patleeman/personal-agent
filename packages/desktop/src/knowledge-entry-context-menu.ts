@@ -1,10 +1,11 @@
 import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron';
 
-export type KnowledgeEntryContextMenuAction = 'rename' | 'move' | 'delete';
+export type KnowledgeEntryContextMenuAction = 'open-in-finder' | 'rename' | 'move' | 'delete';
 
 export interface KnowledgeEntryContextMenuInput {
   x?: number;
   y?: number;
+  canOpenInFinder?: boolean;
   canRename?: boolean;
   canMove?: boolean;
   canDelete?: boolean;
@@ -43,6 +44,13 @@ export function buildKnowledgeEntryContextMenuTemplate(
 ): MenuItemConstructorOptions[] {
   const primarySection: MenuItemConstructorOptions[] = [];
   const destructiveSection: MenuItemConstructorOptions[] = [];
+
+  if (input.canOpenInFinder) {
+    primarySection.push({
+      label: 'Open in Finder',
+      click: () => onSelect('open-in-finder'),
+    });
+  }
 
   if (input.canRename) {
     primarySection.push({

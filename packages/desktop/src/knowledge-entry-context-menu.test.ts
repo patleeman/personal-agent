@@ -4,12 +4,14 @@ import { buildKnowledgeEntryContextMenuTemplate } from './knowledge-entry-contex
 describe('buildKnowledgeEntryContextMenuTemplate', () => {
   it('groups rename and move before delete with a native separator', () => {
     const template = buildKnowledgeEntryContextMenuTemplate({
+      canOpenInFinder: true,
       canRename: true,
       canMove: true,
       canDelete: true,
     }, vi.fn());
 
     expect(template.map((item) => item.type === 'separator' ? 'separator' : item.label)).toEqual([
+      'Open in Finder',
       'Rename',
       'Move to…',
       'separator',
