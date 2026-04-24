@@ -7100,8 +7100,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         className="conversation-scroll-shell h-full overflow-y-auto overflow-x-hidden"
         style={{ scrollPaddingTop: `${conversationHeaderOffset + 16}px` }}
       >
-        <div ref={conversationHeaderRef} className="sticky top-0 z-30 px-4 pt-3 sm:px-6 sm:pt-4">
-          <div className="mx-auto w-full max-w-6xl bg-gradient-to-b from-base/95 via-base/80 to-base/0 pb-3 pt-1">
+        <div ref={conversationHeaderRef} className="sticky top-0 z-30 bg-base/95 px-4 pt-3 backdrop-blur sm:px-6 sm:pt-4">
+          <div className="mx-auto w-full max-w-6xl pb-3 pt-1">
             <div className="max-w-4xl">
               {isEditingTitle && !draft ? (
                 <form
