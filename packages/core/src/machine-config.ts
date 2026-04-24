@@ -2,14 +2,12 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 import { getConfigRoot } from './runtime/paths.js';
 
-export const DEFAULT_MACHINE_DEFAULT_PROFILE = 'shared';
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
 export const DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH = 'main';
 
 export type MachineConfigSectionKey = 'daemon' | 'ui';
 
 export interface MachineConfigDocument {
-  defaultProfile?: string;
   vaultRoot?: string;
   knowledgeBaseRepoUrl?: string;
   knowledgeBaseBranch?: string;
@@ -111,9 +109,6 @@ function normalizeStringArray(value: unknown): string[] | undefined {
 
 function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const document = isRecord(value) ? value : {};
-  const defaultProfile = typeof document.defaultProfile === 'string' && document.defaultProfile.trim().length > 0
-    ? document.defaultProfile.trim()
-    : undefined;
   const vaultRoot = typeof document.vaultRoot === 'string' && document.vaultRoot.trim().length > 0
     ? document.vaultRoot.trim()
     : undefined;
@@ -129,7 +124,6 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const ui = normalizeSection(document.ui);
 
   return {
-    ...(defaultProfile ? { defaultProfile } : {}),
     ...(vaultRoot ? { vaultRoot } : {}),
     ...(knowledgeBaseRepoUrl ? { knowledgeBaseRepoUrl } : {}),
     ...(knowledgeBaseBranch ? { knowledgeBaseBranch } : {}),
@@ -308,18 +302,6 @@ export function updateMachineConfigSection(
 
     return next;
   }, sectionOptions);
-}
-
-export function readMachineDefaultProfile(options: MachineConfigOptions = {}): string {
-  return readMachineConfig(options).defaultProfile ?? DEFAULT_MACHINE_DEFAULT_PROFILE;
-}
-
-export function writeMachineDefaultProfile(profile: string, options: MachineConfigOptions = {}): MachineConfigDocument {
-  const normalizedProfile = profile.trim();
-  return updateMachineConfig((current) => ({
-    ...current,
-    ...(normalizedProfile.length > 0 ? { defaultProfile: normalizedProfile } : {}),
-  }), options);
 }
 
 export function readMachineInstructionFiles(options: MachineConfigOptions = {}): string[] {

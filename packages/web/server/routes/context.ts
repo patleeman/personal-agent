@@ -49,11 +49,8 @@ export interface ProfileAgentItemSummary {
 
 export interface ServerRouteContext {
   getCurrentProfile: () => string;
-  setCurrentProfile: (profile: string) => Promise<string>;
-  listAvailableProfiles: () => string[];
   getRepoRoot: () => string;
   getProfilesRoot: () => string;
-  getCurrentProfileSettingsFile: () => string;
   materializeWebProfile: (profile: string) => void;
   getSettingsFile: () => string;
   getAuthFile: () => string;

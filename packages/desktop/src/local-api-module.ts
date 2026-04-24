@@ -37,8 +37,6 @@ export interface LocalApiModule {
   readDesktopSessions(): Promise<unknown>;
   readDesktopSessionMeta(sessionId: string): Promise<unknown>;
   readDesktopSessionSearchIndex(sessionIds: string[]): Promise<unknown>;
-  readDesktopProfiles(): Promise<unknown>;
-  setDesktopCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readDesktopModels(): Promise<unknown>;
   updateDesktopModelPreferences(input: {
     model?: string | null;

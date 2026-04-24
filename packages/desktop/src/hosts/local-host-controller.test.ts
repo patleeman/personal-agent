@@ -31,8 +31,6 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     readDesktopSessions: vi.fn(),
     readDesktopSessionMeta: vi.fn(),
     readDesktopSessionSearchIndex: vi.fn(),
-    readDesktopProfiles: vi.fn(),
-    setDesktopCurrentProfile: vi.fn(),
     readDesktopModels: vi.fn(),
     updateDesktopModelPreferences: vi.fn(),
     readDesktopDefaultCwd: vi.fn(),
@@ -288,8 +286,6 @@ describe('LocalHostController', () => {
   });
 
   it('routes desktop operator settings through the local API module without loopback proxying', async () => {
-    const readDesktopProfiles = vi.fn().mockResolvedValue({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
-    const setDesktopCurrentProfile = vi.fn().mockResolvedValue({ ok: true, currentProfile: 'shared' });
     const readDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readDesktopVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
@@ -299,8 +295,6 @@ describe('LocalHostController', () => {
     const readDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     const updateDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
-      readDesktopProfiles,
-      setDesktopCurrentProfile,
       readDesktopDefaultCwd,
       updateDesktopDefaultCwd,
       readDesktopVaultRoot,
@@ -317,8 +311,6 @@ describe('LocalHostController', () => {
       loadLocalApi,
     );
 
-    await expect(controller.readProfiles?.()).resolves.toEqual({ currentProfile: 'assistant', profiles: ['assistant', 'shared'] });
-    await expect(controller.setCurrentProfile?.('shared')).resolves.toEqual({ ok: true, currentProfile: 'shared' });
     await expect(controller.readDefaultCwd?.()).resolves.toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     await expect(controller.updateDefaultCwd?.('./repo')).resolves.toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
     await expect(controller.readVaultRoot?.()).resolves.toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
@@ -328,8 +320,6 @@ describe('LocalHostController', () => {
     await expect(controller.readConversationTitleSettings?.()).resolves.toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     await expect(controller.updateConversationTitleSettings?.({ enabled: false, model: 'anthropic/claude-sonnet-4-6' })).resolves.toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
 
-    expect(readDesktopProfiles).toHaveBeenCalledTimes(1);
-    expect(setDesktopCurrentProfile).toHaveBeenCalledWith('shared');
     expect(readDesktopDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDesktopDefaultCwd).toHaveBeenCalledWith('./repo');
     expect(readDesktopVaultRoot).toHaveBeenCalledTimes(1);

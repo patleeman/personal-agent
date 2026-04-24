@@ -11,10 +11,7 @@ describe('createServerRouteContext', () => {
       repoRoot: '/repo',
       settingsFile: '/repo/settings.json',
       authFile: '/repo/auth.json',
-      getCurrentProfile: () => 'assistant',
-      setCurrentProfile: async (profile: string) => profile,
-      listAvailableProfiles: () => ['assistant', 'shared'],
-      getCurrentProfileSettingsFile: () => '/repo/profiles/assistant/settings.json',
+      getCurrentProfile: () => 'shared',
       materializeWebProfile: () => undefined,
       getStateRoot: () => '/state',
       serverPort: 4111,
@@ -39,12 +36,9 @@ describe('createServerRouteContext', () => {
 
     const context = createServerRouteContext(options);
 
-    expect(context.getCurrentProfile()).toBe('assistant');
-    await expect(context.setCurrentProfile('shared')).resolves.toBe('shared');
-    expect(context.listAvailableProfiles()).toEqual(['assistant', 'shared']);
+    expect(context.getCurrentProfile()).toBe('shared');
     expect(context.getRepoRoot()).toBe('/repo');
     expect(context.getProfilesRoot()).toBe('/tmp/test-profiles');
-    expect(context.getCurrentProfileSettingsFile()).toBe('/repo/profiles/assistant/settings.json');
     expect(context.getSettingsFile()).toBe('/repo/settings.json');
     expect(context.getAuthFile()).toBe('/repo/auth.json');
     expect(context.getStateRoot()).toBe('/state');

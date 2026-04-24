@@ -354,8 +354,6 @@ export interface HostController {
   readSessions?(): Promise<unknown>;
   readSessionMeta?(sessionId: string): Promise<unknown>;
   readSessionSearchIndex?(sessionIds: string[]): Promise<unknown>;
-  readProfiles?(): Promise<unknown>;
-  setCurrentProfile?(profile: string): Promise<{ ok: true; currentProfile: string }>;
   readModels?(): Promise<unknown>;
   updateModelPreferences?(input: DesktopModelPreferencesUpdateRequest): Promise<{ ok: true }>;
   readDefaultCwd?(): Promise<unknown>;

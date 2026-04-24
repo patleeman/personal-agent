@@ -7,7 +7,6 @@ import {
   inspectMcpServer,
   inspectMcpTool,
   listMcpCatalog,
-  readMachineDefaultProfile,
   writeMergedMcpConfigFile,
   type McpServerConfig,
 } from '@personal-agent/core';
@@ -156,8 +155,7 @@ async function withEffectiveMcpConfigPath<T>(
     return run(configPath.trim());
   }
 
-  const profile = process.env.PERSONAL_AGENT_ACTIVE_PROFILE?.trim() || readMachineDefaultProfile();
-  const resolvedProfile = resolveResourceProfile(profile);
+  const resolvedProfile = resolveResourceProfile('shared');
   const merged = buildMergedMcpConfigDocument({
     cwd: process.cwd(),
     env: process.env,

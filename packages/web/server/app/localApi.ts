@@ -109,9 +109,6 @@ import { registerServerRoutes } from '../routes/registerAll.js';
 import { buildSnapshotEventsForTopic, INITIAL_APP_EVENT_TOPICS } from '../routes/system.js';
 import { invalidateAppTopics, subscribeAppEvents } from '../shared/appEvents.js';
 import {
-  getProfileConfigFilePath,
-} from '../ui/profilePreferences.js';
-import {
   readSavedConversationTitlePreferences,
   writeSavedConversationTitlePreferences,
 } from '../ui/conversationTitlePreferences.js';
@@ -438,13 +435,11 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
   const repoRoot = resolveRepoRoot();
   const agentDir = getPiAgentRuntimeDir();
   const authFile = join(agentDir, 'auth.json');
-  const profileConfigFile = getProfileConfigFilePath();
   const settingsFile = DEFAULT_RUNTIME_SETTINGS_FILE;
 
   const profileState = createProfileState({
     repoRoot,
     agentDir,
-    profileConfigFile,
     logger: {
       warn: () => {
         // Ignore local desktop route-context warnings here.
@@ -470,9 +465,6 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     settingsFile,
     authFile,
     getCurrentProfile: profileState.getCurrentProfile,
-    setCurrentProfile: profileState.setCurrentProfile,
-    listAvailableProfiles: profileState.listAvailableProfiles,
-    getCurrentProfileSettingsFile: profileState.getCurrentProfileSettingsFile,
     materializeWebProfile: profileState.materializeWebProfile,
     getStateRoot,
     serverPort: 0,
@@ -1423,25 +1415,6 @@ export async function readDesktopSessionMeta(sessionId: string) {
 export async function readDesktopSessionSearchIndex(sessionIds: string[]) {
   await getLocalRoutes();
   return readConversationSessionSearchIndexCapability({ sessionIds });
-}
-
-export async function readDesktopProfiles() {
-  return {
-    currentProfile: 'shared',
-    profiles: ['shared'],
-  };
-}
-
-export async function setDesktopCurrentProfile(profileInput: string) {
-  const profile = profileInput.trim();
-  if (!profile) {
-    throw new Error('profile required');
-  }
-
-  return {
-    ok: true as const,
-    currentProfile: 'shared',
-  };
 }
 
 export async function readDesktopModels() {

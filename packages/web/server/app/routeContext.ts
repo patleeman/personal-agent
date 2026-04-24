@@ -12,9 +12,6 @@ interface CreateServerRouteContextOptions {
   settingsFile: string;
   authFile: string;
   getCurrentProfile: () => string;
-  setCurrentProfile: (profile: string) => Promise<string>;
-  listAvailableProfiles: () => string[];
-  getCurrentProfileSettingsFile: () => string;
   materializeWebProfile: (profile: string) => void;
   getStateRoot: () => string;
   serverPort: number;
@@ -36,11 +33,8 @@ export function createServerRouteContext(options: CreateServerRouteContextOption
 
   return {
     getCurrentProfile: options.getCurrentProfile,
-    setCurrentProfile: options.setCurrentProfile,
-    listAvailableProfiles: options.listAvailableProfiles,
     getRepoRoot: () => options.repoRoot,
     getProfilesRoot,
-    getCurrentProfileSettingsFile: options.getCurrentProfileSettingsFile,
     materializeWebProfile: options.materializeWebProfile,
     getSettingsFile: () => options.settingsFile,
     getAuthFile: () => options.authFile,

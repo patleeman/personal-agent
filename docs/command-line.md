@@ -48,7 +48,7 @@ pa install npm:@scope/package@1.2.3
 pa install --local ./my-package
 ```
 
-`--local` writes into the machine-local overlay. Profiles have been collapsed to the shared runtime; prefer local config plus selected instruction/skill folders.
+`--local` writes into the machine-local overlay. The normal install target is the shared runtime config.
 
 ## Desktop app
 

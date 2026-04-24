@@ -21,7 +21,6 @@ import {
   getExtensionDependencyDirs,
   getRepoRoot,
   installPackageSource,
-  listProfiles,
   materializeProfileToAgentDir,
   mergeJsonFiles,
   resolveResourceProfile,
@@ -46,9 +45,7 @@ import {
 } from '@personal-agent/daemon';
 import { hasOption } from './args.js';
 import { mcpCommand } from './mcp-command.js';
-import { readConfig, setDefaultProfile } from './config.js';
 import {
-  accent,
   bullet,
   configureUi,
   dim,
@@ -100,18 +97,16 @@ function parseGlobalFlags(argv: string[]): ParsedGlobalFlags {
 }
 
 const PI_PACKAGE_NAME = '@mariozechner/pi-coding-agent';
-const INSTALL_COMMAND_USAGE = 'pa install <source> [--profile <name> | -l | --local]';
-const INSTALL_COMMAND_HELP_TEXT = `Default target: active mutable profile settings.json.
+const INSTALL_COMMAND_USAGE = 'pa install <source> [-l | --local]';
+const INSTALL_COMMAND_HELP_TEXT = `Default target: shared runtime settings.json.
 
 Options:
-  --profile <name>   Install into the selected profile's settings.json
   -l, --local        Install into the machine-local overlay settings.json
 
 Examples:
   pa install https://github.com/davebcn87/pi-autoresearch
   pa install npm:@scope/package@1.2.3
   pa install ./my-package
-  pa install --profile assistant https://github.com/user/repo
   pa install --local ./my-package`;
 
 function resolveApplicationCommandLockFile(): string {
@@ -312,8 +307,7 @@ function ensureExtensionDependencies(profile: ReturnType<typeof resolveResourceP
 }
 
 function resolveProfileName(): string {
-  const config = readConfig();
-  return config.defaultProfile;
+  return 'shared';
 }
 
 async function applyDefaultModelArgs(
@@ -649,47 +643,6 @@ async function runPiWithResolvedProfile(
   return statusCode;
 }
 
-function printProfileList(): void {
-  const profiles = listProfiles();
-  const config = readConfig();
-
-  if (profiles.length === 0) {
-    console.log(warning('No profiles found under profiles/.'));
-    console.log(`  ${formatHint('Create a profile under profiles/<name>/agent')}`);
-    return;
-  }
-
-  console.log(section('Profiles:'));
-
-  for (const profile of profiles) {
-    const isDefault = profile === config.defaultProfile;
-    const marker = isDefault ? accent('*') : dim('·');
-    const suffix = isDefault ? ` ${dim('(default)')}` : '';
-    console.log(` ${marker} ${profile}${suffix}`);
-  }
-}
-
-function showProfile(name?: string): void {
-  const profileName = name ?? resolveProfileName();
-  const resolved = resolveResourceProfile(profileName);
-
-  const payload = {
-    name: resolved.name,
-    layers: resolved.layers,
-    extensionDirs: resolved.extensionDirs,
-    skillDirs: resolved.skillDirs,
-    promptDirs: resolved.promptDirs,
-    themeDirs: resolved.themeDirs,
-    agentsFiles: resolved.agentsFiles,
-    appendSystemFiles: resolved.appendSystemFiles,
-    systemPromptFile: resolved.systemPromptFile,
-    settingsFiles: resolved.settingsFiles,
-    modelsFiles: resolved.modelsFiles,
-  };
-
-  console.log(JSON.stringify(payload, null, 2));
-}
-
 function doctorError(label: string, message: string, hint?: string): void {
   console.error(uiError(label, message));
 
@@ -761,40 +714,22 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
     return 1;
   }
 
-  const profiles = listProfiles();
-  if (profiles.length === 0) {
-    const hint = 'Create profiles/<name>/agent and run pa profile list';
-
-    if (options.json) {
-      printDoctorJson({
-        ok: false,
-        check: 'profiles',
-        error: 'none found',
-        hint,
-      });
-    } else {
-      doctorError('profiles', 'none found', hint);
-    }
-
-    return 1;
-  }
-
   let resolvedProfile: ReturnType<typeof resolveResourceProfile>;
   try {
     resolvedProfile = resolveResourceProfile(profileName);
   } catch (error) {
     const message = (error as Error).message;
-    const hint = 'Run pa profile list and pa profile use <name>';
+    const hint = 'Check repo defaults, selected instruction files, and local config.';
 
     if (options.json) {
       printDoctorJson({
         ok: false,
-        check: 'profile',
+        check: 'runtime resources',
         error: message,
         hint,
       });
     } else {
-      doctorError('profile', message, hint);
+      doctorError('runtime resources', message, hint);
     }
 
     return 1;
@@ -855,7 +790,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
 
   const report = {
     ok: true,
-    profile: resolvedProfile.name,
+    runtime: resolvedProfile.name,
     layers: resolvedProfile.layers.map((layer) => layer.name),
     runtimeRoot: statePaths.root,
     runtimeAgentDir: runtime.agentDir,
@@ -883,7 +818,7 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
   console.log('');
 
   doctorOk('pi binary');
-  doctorOk('profile', report.profile);
+  doctorOk('runtime', report.runtime);
   doctorOk('layers', report.layers.join(' -> '));
   doctorOk('runtime root', report.runtimeRoot);
   doctorOk('runtime agent dir', report.runtimeAgentDir);
@@ -910,13 +845,11 @@ async function doctor(options: DoctorOptions = {}): Promise<number> {
 }
 
 interface ParsedRunCommandArgs {
-  profileName: string;
   piArgs: string[];
 }
 
 function parseRunCommandArgs(args: string[]): ParsedRunCommandArgs {
   const filteredArgs: string[] = [];
-  let profileName = resolveProfileName();
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -924,29 +857,6 @@ function parseRunCommandArgs(args: string[]): ParsedRunCommandArgs {
     if (arg === '--') {
       filteredArgs.push(...args.slice(i));
       break;
-    }
-
-    if (arg === '--profile') {
-      const value = args[i + 1];
-
-      if (!value || value.startsWith('-')) {
-        throw new Error('tui --profile requires a profile name');
-      }
-
-      profileName = value;
-      i += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--profile=')) {
-      const value = arg.slice('--profile='.length).trim();
-
-      if (value.length === 0) {
-        throw new Error('tui --profile requires a profile name');
-      }
-
-      profileName = value;
-      continue;
     }
 
     filteredArgs.push(arg);
@@ -957,24 +867,20 @@ function parseRunCommandArgs(args: string[]): ParsedRunCommandArgs {
     : filteredArgs;
 
   return {
-    profileName,
     piArgs,
   };
 }
 
 async function runCommand(args: string[]): Promise<number> {
   const parsed = parseRunCommandArgs(args);
-  return runPi(parsed.profileName, parsed.piArgs);
+  return runPi(resolveProfileName(), parsed.piArgs);
 }
 
 interface CliHomeSnapshot {
-  profile: string;
   daemonSummary: string;
 }
 
 async function collectCliHomeSnapshot(): Promise<CliHomeSnapshot> {
-  const profile = resolveProfileName();
-
   const daemonConfig = loadDaemonConfig();
   const daemonPaths = resolveDaemonPaths(daemonConfig.ipc.socketPath);
   let daemonSummary = `${statusChip('stopped')} ${dim(daemonPaths.socketPath)}`;
@@ -994,7 +900,6 @@ async function collectCliHomeSnapshot(): Promise<CliHomeSnapshot> {
   }
 
   return {
-    profile,
     daemonSummary,
   };
 }
@@ -1005,7 +910,6 @@ async function printCliHome(options: { includeTailHint?: boolean } = {}): Promis
 
   console.log(section('Personal Agent'));
   console.log('');
-  console.log(keyValue('Profile', snapshot.profile));
   console.log(keyValue('Daemon', snapshot.daemonSummary));
 
   if (includeTailHint) {
@@ -1020,66 +924,9 @@ async function statusCommand(args: string[]): Promise<number> {
   return 0;
 }
 
-function printProfileHelp(): void {
-  console.log('Profile');
-  console.log('');
-  printDenseUsage('pa profile [list|show|use|help]');
-  console.log('');
-  printDenseCommandList('Commands', [
-    { usage: 'list', description: 'List available profiles' },
-    { usage: 'show [name]', description: 'Show profile details' },
-    { usage: 'use <name>', description: 'Set default profile' },
-    { usage: 'help', description: 'Show profile help' },
-  ]);
-}
-
-async function profileCommand(args: string[]): Promise<number> {
-  const [subcommand, value] = args;
-
-  if (!subcommand) {
-    printProfileHelp();
-    return 0;
-  }
-
-  if (isCliHelpToken(subcommand)) {
-    ensureNoExtraCommandArgs(args.slice(1), 'pa profile help');
-    printProfileHelp();
-    return 0;
-  }
-
-  if (subcommand === 'list') {
-    printProfileList();
-    return 0;
-  }
-
-  if (subcommand === 'show') {
-    showProfile(value);
-    return 0;
-  }
-
-  if (subcommand === 'use') {
-    if (!value) {
-      throw new Error('profile use requires a profile name');
-    }
-
-    const profiles = listProfiles();
-    if (!profiles.includes(value)) {
-      throw new Error(`Unknown profile: ${value}`);
-    }
-
-    setDefaultProfile(value);
-    console.log(success('Default profile set to', value));
-    console.log(`  ${formatNextStep('pa tui -p "hello"')}`);
-    return 0;
-  }
-
-  throw new Error(`Unknown profile subcommand: ${subcommand}`);
-}
-
 interface ParsedInstallCommandArgs {
   source: string;
   local: boolean;
-  profileName?: string;
 }
 
 function printInstallHelp(): void {
@@ -1090,7 +937,6 @@ function printInstallHelp(): void {
   printDenseParagraph('Add a Pi package source to the durable settings used by pa.');
   console.log('');
   printDenseLines('Options', [
-    '--profile <name>   Install into the selected profile\'s settings.json',
     '-l, --local        Install into the machine-local overlay settings.json',
   ]);
   console.log('');
@@ -1098,7 +944,6 @@ function printInstallHelp(): void {
     'pa install https://github.com/davebcn87/pi-autoresearch',
     'pa install npm:@scope/package@1.2.3',
     'pa install ./my-package',
-    'pa install --profile assistant https://github.com/user/repo',
     'pa install --local ./my-package',
   ]);
 }
@@ -1106,7 +951,6 @@ function printInstallHelp(): void {
 function parseInstallCommandArgs(args: string[]): ParsedInstallCommandArgs {
   let source: string | undefined;
   let local = false;
-  let profileName: string | undefined;
   let parseOptions = true;
 
   for (let i = 0; i < args.length; i++) {
@@ -1122,27 +966,6 @@ function parseInstallCommandArgs(args: string[]): ParsedInstallCommandArgs {
       continue;
     }
 
-    if (parseOptions && arg === '--profile') {
-      const value = args[i + 1];
-      if (!value || value.startsWith('-')) {
-        throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
-      }
-
-      profileName = value;
-      i += 1;
-      continue;
-    }
-
-    if (parseOptions && arg.startsWith('--profile=')) {
-      const value = arg.slice('--profile='.length).trim();
-      if (value.length === 0) {
-        throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
-      }
-
-      profileName = value;
-      continue;
-    }
-
     if (parseOptions && arg.startsWith('-')) {
       throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
     }
@@ -1155,14 +978,13 @@ function parseInstallCommandArgs(args: string[]): ParsedInstallCommandArgs {
     throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
   }
 
-  if (!source || (local && profileName)) {
+  if (!source) {
     throw new Error(`Usage: ${INSTALL_COMMAND_USAGE}`);
   }
 
   return {
     source,
     local,
-    profileName,
   };
 }
 
@@ -1177,16 +999,17 @@ async function installCommand(args: string[]): Promise<number> {
 
   const parsed = parseInstallCommandArgs(args);
   const target = parsed.local ? 'local' : 'profile';
-  const profileName = parsed.local ? undefined : (parsed.profileName ?? resolveProfileName());
+  const profileName = parsed.local ? undefined : 'shared';
   const result = installPackageSource({
     repoRoot: getRepoRoot(),
-    profilesRoot: getDurableProfilesDir(),
+    profilesRoot: process.env.PERSONAL_AGENT_PROFILES_ROOT ?? getDurableProfilesDir(),
+    localProfileDir: process.env.PERSONAL_AGENT_LOCAL_PROFILE_DIR,
     source: parsed.source,
     target,
     profileName,
     sourceBaseDir: process.cwd(),
   });
-  const targetLabel = target === 'local' ? 'local overlay' : `profile ${profileName}`;
+  const targetLabel = target === 'local' ? 'local overlay' : 'shared runtime';
 
   if (result.alreadyPresent) {
     console.log(warning(`Package source already present in ${result.settingsPath}`));
@@ -1910,23 +1733,11 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       run: installCommand,
     },
     {
-      name: 'profile',
-      category: 'configuration',
-      usage: 'profile [list|show|use|help] [args...]',
-      description: 'Manage profile settings',
-      disableBuiltInHelp: true,
-      run: profileCommand,
-    },
-    {
       name: 'doctor',
       category: 'system',
       usage: 'doctor [args...]',
       description: 'Validate local setup',
       run: async (args) => {
-        if (hasOption(args, '--profile')) {
-          throw new Error('doctor no longer accepts --profile. Set it once with: pa profile use <name>');
-        }
-
         return doctor({ json: hasOption(args, '--json') });
       },
     },

@@ -25,7 +25,7 @@ function configureStateEnv(stateRoot: string): void {
   process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', '_profiles');
 }
 
-function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROOT ?? ''): string {
+function createTestRepo(_stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROOT ?? ''): string {
   const repo = createTempDir('personal-agent-cli-repo-');
 
   writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
@@ -37,11 +37,6 @@ function createTestRepo(stateRoot: string = process.env.PERSONAL_AGENT_STATE_ROO
       defaultThinkingLevel: 'off',
     }),
   );
-
-  if (stateRoot) {
-    writeFile(join(stateRoot, 'sync', '_profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', '_profiles', 'datadog', 'AGENTS.md'), '# Datadog\n');
-  }
 
   return repo;
 }
@@ -73,7 +68,7 @@ beforeEach(() => {
   const configDir = createTempDir('personal-agent-cli-config-');
   const configPath = join(configDir, 'config.json');
   const stateRoot = createTempDir('personal-agent-cli-state-');
-  writeFileSync(configPath, JSON.stringify({ defaultProfile: 'shared' }));
+  writeFileSync(configPath, JSON.stringify({}));
 
   process.env = {
     ...originalEnv,
@@ -94,32 +89,23 @@ afterEach(async () => {
 });
 
 describe('CLI command flows', () => {
-  it('persists selected profile and reuses it for run', async () => {
+  it('runs tui with shared runtime resources', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const repo = createTestRepo(stateRoot);
-    const configDir = createTempDir('personal-agent-cli-config-');
     const runLogDir = createTempDir('personal-agent-cli-log-');
 
-    const configPath = join(configDir, 'config.json');
     const argsLogPath = join(runLogDir, 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     configureStateEnv(stateRoot);
-    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
-
-    expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
-
-    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { defaultProfile: string };
-    expect(config.defaultProfile).toBe('datadog');
 
     expect(await runCli(['tui', '--', '-p', 'Say ok'])).toBe(0);
 
     const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
     const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');
     expect(runtimeAgents).toContain('Shared');
-    expect(runtimeAgents).toContain('Datadog');
 
     const loggedArgs = readFileSync(argsLogPath, 'utf-8');
     expect(loggedArgs).toContain('--model');
@@ -128,38 +114,6 @@ describe('CLI command flows', () => {
     expect(loggedArgs).toContain('off');
     expect(loggedArgs).toContain('-p');
     expect(loggedArgs).toContain('Say ok');
-  });
-
-  it('allows one-off profile override for tui with --profile', async () => {
-    const stateRoot = createTempDir('personal-agent-cli-state-');
-    const repo = createTestRepo(stateRoot);
-    const configDir = createTempDir('personal-agent-cli-config-');
-    const runLogDir = createTempDir('personal-agent-cli-log-');
-
-    const configPath = join(configDir, 'config.json');
-    const argsLogPath = join(runLogDir, 'pi-args.log');
-    const fakePiBinDir = createFakePiBinary(argsLogPath);
-
-    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
-    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    configureStateEnv(stateRoot);
-    process.env.PERSONAL_AGENT_CONFIG_FILE = configPath;
-
-    expect(await runCli(['profile', 'use', 'shared'])).toBe(0);
-    expect(await runCli(['tui', '--profile', 'datadog', '--', '-p', 'override test'])).toBe(0);
-
-    const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
-    const runtimeAgents = readFileSync(runtimeAgentsPath, 'utf-8');
-    expect(runtimeAgents).toContain('Shared');
-    expect(runtimeAgents).toContain('Datadog');
-
-    const config = JSON.parse(readFileSync(configPath, 'utf-8')) as { defaultProfile: string };
-    expect(config.defaultProfile).toBe('shared');
-
-    const loggedArgs = readFileSync(argsLogPath, 'utf-8');
-    expect(loggedArgs).toContain('-p');
-    expect(loggedArgs).toContain('override test');
-    expect(loggedArgs).not.toContain('--profile');
   });
 
   it('shows home with no args, root help with --help, and rejects unknown top-level args', async () => {
@@ -196,7 +150,6 @@ describe('CLI command flows', () => {
     expect(logs.join('\n')).toContain('mcp [list|info|grep|call|auth|logout|help]');
 
     expect(await runCli(['-p', 'hello from pa'])).toBe(1);
-    expect(await runCli(['--profile', 'shared', '-p', 'hello from pa'])).toBe(1);
     expect(await runCli(['unknown'])).toBe(1);
     expect(errors.some((line) => line.includes("Use 'pa tui ...' to pass arguments to Pi."))).toBe(true);
     expect(existsSync(argsLogPath)).toBe(false);
@@ -206,7 +159,7 @@ describe('CLI command flows', () => {
     errorSpy.mockRestore();
   });
 
-  it('returns non-zero for invalid profile usage and rejects doctor --profile flag', async () => {
+  it('rejects removed profile command', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const repo = createTestRepo(stateRoot);
     const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
@@ -216,27 +169,18 @@ describe('CLI command flows', () => {
     configureStateEnv(stateRoot);
 
     expect(await runCli(['profile', 'use'])).toBe(1);
-    expect(await runCli(['doctor', '--profile', 'datadog'])).toBe(1);
-    expect(await runCli(['tui', '--profile'])).toBe(1);
-    expect(await runCli(['tui', '--profile='])).toBe(1);
   });
 
-  it('runs doctor success and failure paths based on configured profile', async () => {
+  it('runs doctor success path with shared runtime resources', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
     const repo = createTestRepo(stateRoot);
-    const configDir = createTempDir('personal-agent-cli-config-');
     const fakePiBinDir = createFakePiBinary(join(createTempDir('personal-agent-cli-log-'), 'pi-args.log'));
 
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     configureStateEnv(stateRoot);
-    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
     expect(await runCli(['doctor'])).toBe(0);
-
-    writeFileSync(process.env.PERSONAL_AGENT_CONFIG_FILE, JSON.stringify({ defaultProfile: 'missing' }));
-    expect(await runCli(['doctor'])).toBe(1);
   });
 
   it('prints daemon status for explicit status command', async () => {

@@ -235,8 +235,7 @@ function createDesktopHarness(files = createRouteFiles()) {
 
   registerModelRoutes(router as never, {
     getAuthFile: () => files.authFile,
-    getCurrentProfile: () => 'assistant',
-    getCurrentProfileSettingsFile: () => files.profileSettingsFile,
+    getCurrentProfile: () => 'shared',
     getSettingsFile: () => files.settingsFile,
     materializeWebProfile,
   });
@@ -506,7 +505,7 @@ describe('model routes', () => {
     const saveRes = createResponse();
     patchHandler('/api/knowledge-base')(createRequest({ body: { repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' } }), saveRes);
     expect(updateKnowledgeBaseMock).toHaveBeenCalledWith({ repoUrl: 'https://github.com/patleeman/kb.git', branch: 'trunk' });
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(invalidateAppTopicsMock).toHaveBeenCalledWith('knowledgeBase');
     expect(saveRes.json).toHaveBeenCalledWith(expect.objectContaining({
       repoUrl: 'https://github.com/patleeman/kb.git',
@@ -583,7 +582,7 @@ describe('model routes', () => {
     const updateRes = createResponse();
     patchHandler('/api/vault-root')(createRequest({ body: { root: validDir } }), updateRes);
     expect(updateMachineConfigMock).toHaveBeenCalled();
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(updateRes.json).toHaveBeenCalledWith({
       currentRoot: validDir,
       effectiveRoot: validDir,
@@ -629,7 +628,7 @@ describe('model routes', () => {
     const saveRes = createResponse();
     patchHandler('/api/skill-folders')(createRequest({ body: { skillDirs: [skillDirA, skillDirB] } }), saveRes);
     expect(writeMachineSkillDirsMock).toHaveBeenCalledWith([skillDirA, skillDirB]);
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(saveRes.json).toHaveBeenCalledWith({
       configFile: '/config/config.json',
       skillDirs: [skillDirA, skillDirB],
@@ -666,7 +665,7 @@ describe('model routes', () => {
     const saveRes = createResponse();
     patchHandler('/api/instructions')(createRequest({ body: { instructionFiles: [instructionA, instructionB] } }), saveRes);
     expect(writeMachineInstructionFilesMock).toHaveBeenCalledWith([instructionA, instructionB]);
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(saveRes.json).toHaveBeenCalledWith({
       configFile: '/config/config.json',
       instructionFiles: [instructionA, instructionB],
@@ -724,7 +723,7 @@ describe('model routes', () => {
 
     const providersRes = createResponse();
     getHandler('/api/model-providers')(createRequest(), providersRes);
-    expect(readModelProvidersStateMock).toHaveBeenCalledWith('assistant');
+    expect(readModelProvidersStateMock).toHaveBeenCalledWith('shared');
     expect(providersRes.json).toHaveBeenCalledWith({ providers: [] });
 
     const invalidCreateRes = createResponse();
@@ -740,11 +739,11 @@ describe('model routes', () => {
         apiKey: 'secret',
       },
     }), createRes);
-    expect(upsertModelProviderMock).toHaveBeenCalledWith('assistant', 'openrouter', expect.objectContaining({
+    expect(upsertModelProviderMock).toHaveBeenCalledWith('shared', 'openrouter', expect.objectContaining({
       apiKey: 'secret',
       baseUrl: 'https://openrouter.ai',
     }));
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
+    expect(materializeWebProfile).toHaveBeenCalledWith('shared');
     expect(refreshAllLiveSessionModelRegistriesMock).toHaveBeenCalled();
     expect(createRes.json).toHaveBeenCalledWith({ providers: [{ id: 'openrouter' }] });
 
@@ -755,7 +754,7 @@ describe('model routes', () => {
 
     const deleteProviderRes = createResponse();
     deleteHandler('/api/model-providers/providers/:provider')(createRequest({ params: { provider: 'openrouter' } }), deleteProviderRes);
-    expect(removeModelProviderMock).toHaveBeenCalledWith('assistant', 'openrouter');
+    expect(removeModelProviderMock).toHaveBeenCalledWith('shared', 'openrouter');
     expect(deleteProviderRes.json).toHaveBeenCalledWith({ providers: [] });
 
     const invalidCreateModelRes = createResponse();
@@ -775,7 +774,7 @@ describe('model routes', () => {
         contextWindow: 128000,
       },
     }), createModelRes);
-    expect(upsertModelProviderModelMock).toHaveBeenCalledWith('assistant', 'openrouter', 'model-b', expect.objectContaining({
+    expect(upsertModelProviderModelMock).toHaveBeenCalledWith('shared', 'openrouter', 'model-b', expect.objectContaining({
       contextWindow: 128000,
       name: 'Model B',
     }));
@@ -792,7 +791,7 @@ describe('model routes', () => {
     deleteHandler('/api/model-providers/providers/:provider/models/:modelId')(createRequest({
       params: { provider: 'openrouter', modelId: 'model-b' },
     }), deleteModelRes);
-    expect(removeModelProviderModelMock).toHaveBeenCalledWith('assistant', 'openrouter', 'model-b');
+    expect(removeModelProviderModelMock).toHaveBeenCalledWith('shared', 'openrouter', 'model-b');
     expect(deleteModelRes.json).toHaveBeenCalledWith({ providers: [] });
   });
 

@@ -124,16 +124,6 @@ export class LocalHostController implements HostController {
     return module.readDesktopSessionSearchIndex(sessionIds);
   }
 
-  async readProfiles(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopProfiles();
-  }
-
-  async setCurrentProfile(profile: string): Promise<{ ok: true; currentProfile: string }> {
-    const module = await this.loadLocalApi();
-    return module.setDesktopCurrentProfile(profile);
-  }
-
   async readModels(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopModels();

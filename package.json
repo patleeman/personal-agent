@@ -38,7 +38,6 @@
     "clean": "npm run clean --workspaces --if-present && rm -f tsconfig.tsbuildinfo",
     "run": "node packages/cli/dist/index.js run",
     "doctor": "node packages/cli/dist/index.js doctor",
-    "profile:list": "node packages/cli/dist/index.js profile list",
     "daemon": "node packages/daemon/dist/index.js",
     "validate:projects": "node scripts/validate-projects.mjs",
     "ab:run": "node scripts/agent-browser-session.mjs run",

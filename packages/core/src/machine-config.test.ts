@@ -11,7 +11,6 @@ import {
   readMachineSkillDirs,
   readMachineVaultRoot,
   updateMachineConfigSection,
-  writeMachineDefaultProfile,
   writeMachineInstructionFiles,
   writeMachineKnowledgeBase,
   writeMachineSkillDirs,
@@ -59,15 +58,6 @@ describe('machine config', () => {
 
     expect(readMachineConfigSection('daemon')).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
     expect(JSON.parse(readFileSync(daemonConfigPath, 'utf-8'))).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
-  });
-
-  it('writes generic machine config to config.json even when daemon section env vars are set', () => {
-    const configDir = createTempDir('pa-machine-config-');
-    process.env.PERSONAL_AGENT_DAEMON_CONFIG = join(configDir, 'daemon.json');
-
-    writeMachineDefaultProfile('assistant', { configRoot: configDir });
-
-    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({ defaultProfile: 'assistant' });
   });
 
   it('reads and writes the machine vault root in config.json', () => {

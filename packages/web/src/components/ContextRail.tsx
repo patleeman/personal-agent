@@ -606,7 +606,7 @@ function RunContextPanel({
                 {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
                 {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
                 {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
-                {targetProfile && <RailMetadataRow label="Profile" value={targetProfile} />}
+                {targetProfile && <RailMetadataRow label="Runtime" value={targetProfile} />}
                 <RailMetadataRow label="Run" value={run.manifest?.kind ?? 'unknown kind'} />
                 <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
                 <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
@@ -1489,11 +1489,11 @@ function SettingsOverviewContext() {
     <div className="px-4 py-4 space-y-4">
       <div className="space-y-1">
         <p className="ui-card-title">Settings</p>
-        <p className="ui-card-meta">This page controls runtime defaults, profiles, layout preferences, desktop connections, and integration settings.</p>
+        <p className="ui-card-meta">This page controls runtime defaults, layout preferences, desktop connections, and integration settings.</p>
       </div>
 
       <div className="space-y-2">
-        <RailMetadataRow label="Profiles" value="Active profile, requested profile, and switching" />
+        <RailMetadataRow label="Runtime" value="Shared runtime resources and local overrides" />
         <RailMetadataRow label="Defaults" value="Model, cwd, and new-session behavior" />
         <RailMetadataRow label="Layout" value="Sidebar width, rail width, and reset actions" />
       </div>

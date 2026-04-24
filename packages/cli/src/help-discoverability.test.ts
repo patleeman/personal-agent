@@ -44,11 +44,7 @@ describe('subcommand help discoverability', () => {
   it.each([
     {
       argv: ['install', '--help'],
-      expected: ['Install', 'Usage: pa install <source> [--profile <name> | -l | --local]', 'pa install https://github.com/davebcn87/pi-autoresearch'],
-    },
-    {
-      argv: ['profile', '--help'],
-      expected: ['Profile', 'Usage: pa profile [list|show|use|help]', 'list'],
+      expected: ['Install', 'Usage: pa install <source> [-l | --local]', 'pa install https://github.com/davebcn87/pi-autoresearch'],
     },
     {
       argv: ['daemon', '--help'],

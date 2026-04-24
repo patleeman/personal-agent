@@ -12,7 +12,6 @@ Primary machine config:
 
 Common top-level keys:
 
-- `defaultProfile`
 - `vaultRoot`
 - `knowledgeBaseRepoUrl`
 - `knowledgeBaseBranch`

@@ -49,12 +49,9 @@ describe('registerServerRoutes smoke test', () => {
     writeFileSync(authFile, JSON.stringify({}, null, 2));
 
     const context: ServerRouteContext = {
-      getCurrentProfile: () => 'assistant',
-      setCurrentProfile: async (profile) => profile,
-      listAvailableProfiles: () => ['assistant', 'other'],
+      getCurrentProfile: () => 'shared',
       getRepoRoot: () => tempRoot,
       getProfilesRoot: () => profilesRoot,
-      getCurrentProfileSettingsFile: () => settingsFile,
       materializeWebProfile: () => {},
       getSettingsFile: () => settingsFile,
       getAuthFile: () => authFile,

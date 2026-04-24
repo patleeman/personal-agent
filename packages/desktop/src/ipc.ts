@@ -256,28 +256,6 @@ export function registerDesktopIpc(options: {
     return controller.readSessionSearchIndex(sessionIds);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:read-profiles`, async (event) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.readProfiles) {
-      throw new Error('Dedicated desktop profile reads are only available for the local host.');
-    }
-
-    return controller.readProfiles();
-  });
-
-  ipcMain.handle(`${CHANNEL_PREFIX}:set-current-profile`, async (event, profile: string) => {
-    const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
-      ?? options.hostManager.getActiveHostId();
-    const controller = options.hostManager.getHostController(hostId);
-    if (!controller.setCurrentProfile) {
-      throw new Error('Dedicated desktop profile writes are only available for the local host.');
-    }
-
-    return controller.setCurrentProfile(profile);
-  });
-
   ipcMain.handle(`${CHANNEL_PREFIX}:read-models`, async (event) => {
     const hostId = options.windowController.getHostIdForWebContentsId(event.sender.id)
       ?? options.hostManager.getActiveHostId();

@@ -83,8 +83,6 @@ const desktopBridge = {
   readSessions: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-sessions`),
   readSessionMeta: (sessionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-meta`, sessionId),
   readSessionSearchIndex: (sessionIds: string[]) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-session-search-index`, sessionIds),
-  readProfiles: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-profiles`),
-  setCurrentProfile: (profile: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:set-current-profile`, profile),
   readModels: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:read-models`),
   updateModelPreferences: (input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:update-model-preferences`, input),

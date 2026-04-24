@@ -4,9 +4,7 @@ import { join } from 'node:path';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { getProfilesRoot, getStateRoot, writeMergedMcpConfigFile } from '@personal-agent/core';
 import {
-  listProfiles,
   materializeProfileToAgentDir,
-  resolveProfileSettingsFilePath,
   resolveResourceProfile,
 } from '@personal-agent/core';
 import { createArtifactAgentExtension } from '../extensions/artifactAgentExtension.js';
@@ -21,9 +19,6 @@ import { createReminderAgentExtension } from '../extensions/reminderAgentExtensi
 import { createRunAgentExtension } from '../extensions/runAgentExtension.js';
 import { createScheduledTaskAgentExtension } from '../extensions/scheduledTaskAgentExtension.js';
 import { requestConversationWorkingDirectoryChange } from '../conversations/liveSessions.js';
-import { clearMemoryBrowserCaches, warmMemoryBrowserCaches } from '../knowledge/memoryDocs.js';
-import { invalidateAppTopics } from '../middleware/index.js';
-import { readSavedProfilePreferences, resolveActiveProfile, writeSavedProfilePreferences } from '../ui/profilePreferences.js';
 import type { LiveSessionResourceOptions } from '../routes/context.js';
 
 export interface ProfileStateLogger {
@@ -33,31 +28,20 @@ export interface ProfileStateLogger {
 export interface CreateProfileStateOptions {
   repoRoot: string;
   agentDir: string;
-  profileConfigFile: string;
   logger: ProfileStateLogger;
-  onProfileChanged?: (profile: string) => Promise<void> | void;
 }
 
 export interface ProfileState {
   getCurrentProfile: () => string;
-  setCurrentProfile: (profile: string) => Promise<string>;
-  listAvailableProfiles: () => string[];
   materializeWebProfile: (profile: string) => void;
-  getCurrentProfileSettingsFile: () => string;
   buildLiveSessionExtensionFactories: () => ExtensionFactory[];
   buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions;
   withTemporaryProfileAgentDir: <T>(profile: string, run: (agentDir: string) => Promise<T>) => Promise<T>;
 }
 
 export function createProfileState(options: CreateProfileStateOptions): ProfileState {
-  const { repoRoot, agentDir, profileConfigFile, logger, onProfileChanged } = options;
-
-  function listAvailableProfiles(): string[] {
-    return listProfiles({
-      repoRoot,
-      profilesRoot: getProfilesRoot(),
-    });
-  }
+  const { repoRoot, agentDir, logger } = options;
+  const currentProfile = 'shared';
 
   function applyProfileEnvironment(profile: string, mcpConfigPath?: string | null): void {
     process.env.PERSONAL_AGENT_ACTIVE_PROFILE = profile;
@@ -88,12 +72,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     applyProfileEnvironment(profile, mergedMcpConfig.bundledServerCount > 0 ? materializedMcpConfigPath : null);
   }
 
-  let currentProfile = resolveActiveProfile({
-    explicitProfile: process.env.PERSONAL_AGENT_ACTIVE_PROFILE,
-    savedProfile: readSavedProfilePreferences(profileConfigFile).defaultProfile,
-    availableProfiles: listAvailableProfiles(),
-  });
-
   try {
     materializeWebProfile(currentProfile);
   } catch (error) {
@@ -105,13 +83,6 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
 
   function getCurrentProfile(): string {
     return currentProfile;
-  }
-
-  function getCurrentProfileSettingsFile(): string {
-    return resolveProfileSettingsFilePath(getCurrentProfile(), {
-      repoRoot,
-      profilesRoot: getProfilesRoot(),
-    });
   }
 
   function buildLiveSessionExtensionFactories(): ExtensionFactory[] {
@@ -175,37 +146,9 @@ export function createProfileState(options: CreateProfileStateOptions): ProfileS
     });
   }
 
-  async function setCurrentProfile(profile: string): Promise<string> {
-    const availableProfiles = listAvailableProfiles();
-    if (!availableProfiles.includes(profile)) {
-      throw new Error(`Unknown profile: ${profile}`);
-    }
-
-    if (profile === currentProfile) {
-      return currentProfile;
-    }
-
-    materializeWebProfile(profile);
-    currentProfile = profile;
-    writeSavedProfilePreferences(profile, profileConfigFile);
-    clearMemoryBrowserCaches();
-    warmMemoryBrowserCaches(profile);
-    await onProfileChanged?.(profile);
-    invalidateAppTopics(
-      'sessions',
-      'tasks',
-      'runs',
-      'daemon',
-    );
-    return currentProfile;
-  }
-
   return {
     getCurrentProfile,
-    setCurrentProfile,
-    listAvailableProfiles,
     materializeWebProfile,
-    getCurrentProfileSettingsFile,
     buildLiveSessionExtensionFactories,
     buildLiveSessionResourceOptions,
     withTemporaryProfileAgentDir,

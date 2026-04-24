@@ -3,7 +3,7 @@
  * Validates main CLI flows working together across packages
  */
 
-import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } from 'fs';
+import { chmodSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { dirname, join } from 'path';
@@ -51,11 +51,12 @@ beforeEach(() => {
   const sessionDir = createTempDir('pi-session-');
   const configDir = createTempDir('personal-agent-cli-config-');
   const configPath = join(configDir, 'config.json');
-  writeFileSync(configPath, JSON.stringify({ defaultProfile: 'shared' }));
+  writeFileSync(configPath, JSON.stringify({}));
 
   process.env = {
     ...originalEnv,
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
+    PERSONAL_AGENT_NO_DAEMON_PROMPT: '1',
     PERSONAL_AGENT_CONFIG_FILE: configPath,
     PI_SESSION_DIR: sessionDir,
   };
@@ -68,10 +69,9 @@ afterEach(async () => {
 });
 
 describe('CLI main flow integration', () => {
-  it('full workflow: profile use -> doctor -> run', async () => {
+  it('full workflow: doctor -> run', async () => {
     const repo = createTempDir('personal-agent-cli-repo-');
     const stateRoot = createTempDir('personal-agent-cli-state-');
-    const configDir = createTempDir('personal-agent-cli-config-');
     const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
     const fakePiBinDir = createFakePiBinary(argsLogPath);
 
@@ -80,59 +80,17 @@ describe('CLI main flow integration', () => {
       join(repo, 'defaults/agent/settings.json'),
       JSON.stringify({ defaultProvider: 'test', defaultModel: 'model' })
     );
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog\n');
-
     process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
     process.env.PERSONAL_AGENT_REPO_ROOT = repo;
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
     process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
-    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
 
-    expect(await runCli(['profile', 'use', 'datadog'])).toBe(0);
     expect(await runCli(['doctor'])).toBe(0);
     expect(await runCli(['tui', '-p', 'hello'])).toBe(0);
 
     const loggedArgs = readFileSync(argsLogPath, 'utf-8');
     expect(loggedArgs).toContain('-p');
     expect(loggedArgs).toContain('hello');
-  });
-
-  it('handles profile switch and materializes correct files', async () => {
-    const repo = createTempDir('personal-agent-cli-repo-');
-    const stateRoot = createTempDir('personal-agent-cli-state-');
-    const configDir = createTempDir('personal-agent-cli-config-');
-    const argsLogPath = join(createTempDir('personal-agent-cli-log-'), 'pi-args.log');
-    const fakePiBinDir = createFakePiBinary(argsLogPath);
-
-    writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared Content\n');
-    writeFile(join(repo, 'defaults/agent/settings.json'), JSON.stringify({ shared: true }));
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog.json'), '{"title":"Datadog"}\n');
-    writeFile(join(stateRoot, 'sync', 'profiles', 'datadog', 'agent', 'AGENTS.md'), '# Datadog Content\n');
-    writeFile(join(stateRoot, 'sync', 'settings', 'datadog.json'), JSON.stringify({ datadog: true }));
-
-    process.env.PATH = `${fakePiBinDir}:${process.env.PATH}`;
-    process.env.PERSONAL_AGENT_REPO_ROOT = repo;
-    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
-    process.env.PERSONAL_AGENT_PROFILES_ROOT = join(stateRoot, 'sync', 'profiles');
-    process.env.PERSONAL_AGENT_VAULT_ROOT = join(stateRoot, 'sync');
-    process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'config.json');
-
-    await runCli(['profile', 'use', 'shared']);
-    await runCli(['tui', '-p', 'test']);
-
-    const runtimeAgentsPath = join(stateRoot, 'pi-agent-runtime', 'AGENTS.md');
-    expect(existsSync(runtimeAgentsPath)).toBe(true);
-    let agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
-    expect(agentsContent).toContain('Shared Content');
-
-    await runCli(['profile', 'use', 'datadog']);
-    await runCli(['tui', '-p', 'test2']);
-
-    agentsContent = readFileSync(runtimeAgentsPath, 'utf-8');
-    expect(agentsContent).toContain('Shared Content');
-    expect(agentsContent).toContain('Datadog Content');
   });
 
   it('daemon event emission is non-fatal when daemon unavailable', async () => {
