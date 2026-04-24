@@ -238,6 +238,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
 
+    func testCompanionTranscriptImageAssetPathRewritesSessionAssetUrls() {
+        XCTAssertEqual(
+            companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image"),
+            "/companion/v1/conversations/conv-1/blocks/block-1/image"
+        )
+        XCTAssertEqual(
+            companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/images/2"),
+            "/companion/v1/conversations/conv-1/blocks/block-1/images/2"
+        )
+        XCTAssertEqual(
+            companionTranscriptImageAssetPath("/companion/v1/conversations/conv-1/blocks/block-1/image"),
+            "/companion/v1/conversations/conv-1/blocks/block-1/image"
+        )
+        XCTAssertNil(companionTranscriptImageAssetPath("https://example.com/image.png"))
+    }
+
     func testConversationComposerDraftRestoresAcrossViewModels() {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

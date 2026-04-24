@@ -1162,7 +1162,7 @@ private struct ConversationBlockView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(images) { image in
-                            DataURLImageView(dataURL: image.src)
+                            TranscriptImageView(src: image.src, viewModel: viewModel)
                                 .frame(width: 140, height: 100)
                                 .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
@@ -1210,7 +1210,7 @@ private struct ConversationBlockView: View {
                     .foregroundStyle(CompanionTheme.textSecondary)
             }
         case "image":
-            DataURLImageView(dataURL: block.src)
+            TranscriptImageView(src: block.src, viewModel: viewModel)
                 .frame(maxWidth: .infinity)
                 .frame(height: 220)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
@@ -1759,12 +1759,15 @@ private struct MarkdownText: View {
     }
 }
 
-private struct DataURLImageView: View {
-    let dataURL: String?
+private struct TranscriptImageView: View {
+    let src: String?
+    let viewModel: ConversationViewModel?
+
+    @State private var data: Data?
 
     var body: some View {
         Group {
-            if let data = dataURLData(dataURL), let image = UIImage(data: data) {
+            if let data, let image = UIImage(data: data) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -1776,6 +1779,9 @@ private struct DataURLImageView: View {
                             .foregroundStyle(.secondary)
                     }
             }
+        }
+        .task(id: src) {
+            data = await viewModel?.loadTranscriptImageData(src: src) ?? dataURLData(src)
         }
     }
 }

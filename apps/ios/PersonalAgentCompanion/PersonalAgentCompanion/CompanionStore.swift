@@ -1764,6 +1764,7 @@ final class ConversationViewModel: ObservableObject {
     private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
     private var lastStreamingThinkingBlockId: String?
+    private var transcriptImageCache: [String: Data] = [:]
 
     init(
         client: CompanionClientProtocol,
@@ -1797,7 +1798,7 @@ final class ConversationViewModel: ObservableObject {
         restoreComposerDraftIfNeeded()
         loadBootstrap()
         refreshModelState()
-        subscribeConversationEvents()
+        updateConversationSubscription(isLive: sessionMeta?.isLive == true)
     }
 
     func stop() {
@@ -1807,6 +1808,7 @@ final class ConversationViewModel: ObservableObject {
         streamTask = nil
         composerNoticeTask?.cancel()
         composerNoticeTask = nil
+        transcriptImageCache.removeAll()
     }
 
     func loadBootstrap() {
@@ -2240,6 +2242,25 @@ final class ConversationViewModel: ObservableObject {
         promptImages.removeAll { $0.id == id }
     }
 
+    func loadTranscriptImageData(src: String?) async -> Data? {
+        if let data = dataURLData(src) {
+            return data
+        }
+        guard let assetPath = companionTranscriptImageAssetPath(src) else {
+            return nil
+        }
+        if let cached = transcriptImageCache[assetPath] {
+            return cached
+        }
+        do {
+            let asset = try await client.downloadCompanionAsset(path: assetPath)
+            transcriptImageCache[assetPath] = asset.data
+            return asset.data
+        } catch {
+            return nil
+        }
+    }
+
     private func showComposerNotice(_ message: String) {
         composerNoticeTask?.cancel()
         composerNotice = message
@@ -2319,6 +2340,18 @@ final class ConversationViewModel: ObservableObject {
         composerDraftStore.remove(draftKey: composerDraftKey)
     }
 
+    private func updateConversationSubscription(isLive: Bool) {
+        if isLive {
+            if streamTask == nil {
+                subscribeConversationEvents()
+            }
+            return
+        }
+
+        streamTask?.cancel()
+        streamTask = nil
+    }
+
     private func subscribeConversationEvents() {
         streamTask?.cancel()
         streamTask = Task {
@@ -2331,6 +2364,7 @@ final class ConversationViewModel: ObservableObject {
             } catch {
                 if !Task.isCancelled {
                     errorMessage = error.localizedDescription
+                    streamTask = nil
                 }
             }
         }
@@ -2359,6 +2393,8 @@ final class ConversationViewModel: ObservableObject {
             blocks.append(contentsOf: appendOnly.blocks)
         }
 
+        let isLiveConversation = envelope.bootstrap.liveSession.live || sessionMeta?.isLive == true
+        updateConversationSubscription(isLive: isLiveConversation)
         maybeAutoStartRunningSimulation()
     }
 

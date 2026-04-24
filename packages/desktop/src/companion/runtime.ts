@@ -6,6 +6,7 @@ import type {
   CompanionAttachmentUpdateInput,
   CompanionBinaryAsset,
   CompanionConversationAbortInput,
+  CompanionConversationBlockImageInput,
   CompanionConversationBootstrapInput,
   CompanionConversationCheckpointCreateInput,
   CompanionConversationCreateInput,
@@ -106,6 +107,12 @@ async function subscribeDesktopApiStream(
   return hostManager.getHostController('local').subscribeApiStream(path, onEvent);
 }
 
+const DEFAULT_COMPANION_TAIL_BLOCKS = 120;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
   const candidate = input && typeof input === 'object'
     ? input as { dataUrl?: unknown; mimeType?: unknown; fileName?: unknown }
@@ -129,6 +136,100 @@ function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
     ...(fileName ? { fileName } : {}),
     disposition: mimeType.startsWith('image/') ? 'inline' : 'attachment',
   };
+}
+
+function buildCompanionConversationBlockImagePath(conversationId: string, blockId: string, imageIndex?: number): string {
+  const encodedConversationId = encodeURIComponent(conversationId);
+  const encodedBlockId = encodeURIComponent(blockId);
+  return typeof imageIndex === 'number'
+    ? `/companion/v1/conversations/${encodedConversationId}/blocks/${encodedBlockId}/images/${String(imageIndex)}`
+    : `/companion/v1/conversations/${encodedConversationId}/blocks/${encodedBlockId}/image`;
+}
+
+function normalizeConversationBlockForCompanion(conversationId: string, block: unknown): unknown {
+  if (!isRecord(block)) {
+    return block;
+  }
+
+  const blockType = typeof block.type === 'string' ? block.type : '';
+  const blockId = typeof block.id === 'string' ? block.id.trim() : '';
+
+  if (blockType === 'user' && Array.isArray(block.images) && blockId) {
+    return {
+      ...block,
+      images: block.images.map((image, imageIndex) => isRecord(image)
+        ? { ...image, src: buildCompanionConversationBlockImagePath(conversationId, blockId, imageIndex) }
+        : image),
+    };
+  }
+
+  if (blockType === 'image' && blockId) {
+    return {
+      ...block,
+      src: buildCompanionConversationBlockImagePath(conversationId, blockId),
+    };
+  }
+
+  return block;
+}
+
+function normalizeConversationBlocksForCompanion(conversationId: string, blocks: unknown): unknown {
+  if (!Array.isArray(blocks)) {
+    return blocks;
+  }
+
+  return blocks.map((block) => normalizeConversationBlockForCompanion(conversationId, block));
+}
+
+function normalizeConversationBootstrapForCompanion(conversationId: string, envelope: unknown): unknown {
+  if (!isRecord(envelope) || !isRecord(envelope.bootstrap)) {
+    return envelope;
+  }
+
+  const bootstrap = envelope.bootstrap;
+  const sessionDetail = isRecord(bootstrap.sessionDetail)
+    ? {
+        ...bootstrap.sessionDetail,
+        blocks: normalizeConversationBlocksForCompanion(conversationId, bootstrap.sessionDetail.blocks),
+      }
+    : bootstrap.sessionDetail;
+  const sessionDetailAppendOnly = isRecord(bootstrap.sessionDetailAppendOnly)
+    ? {
+        ...bootstrap.sessionDetailAppendOnly,
+        blocks: normalizeConversationBlocksForCompanion(conversationId, bootstrap.sessionDetailAppendOnly.blocks),
+      }
+    : bootstrap.sessionDetailAppendOnly;
+
+  return {
+    ...envelope,
+    bootstrap: {
+      ...bootstrap,
+      sessionDetail,
+      sessionDetailAppendOnly,
+    },
+  };
+}
+
+function normalizeConversationEventForCompanion(conversationId: string, event: unknown): unknown {
+  if (!isRecord(event)) {
+    return event;
+  }
+
+  if (event.type === 'snapshot') {
+    return {
+      ...event,
+      blocks: normalizeConversationBlocksForCompanion(conversationId, event.blocks),
+    };
+  }
+
+  if (event.type === 'user_message' && isRecord(event.block)) {
+    return {
+      ...event,
+      block: normalizeConversationBlockForCompanion(conversationId, event.block),
+    };
+  }
+
+  return event;
 }
 
 function buildExecutionTargets(hostManager: HostManager) {
@@ -255,12 +356,12 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         Promise.resolve(buildExecutionTargets(hostManager)),
       ]);
 
-      return {
+      return normalizeConversationBootstrapForCompanion(input.conversationId, {
         bootstrap,
         sessionMeta,
         attachments,
         executionTargets,
-      };
+      });
     },
 
     async createConversation(input: CompanionConversationCreateInput) {
@@ -296,7 +397,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         });
       }
 
-      return this.readConversationBootstrap({ conversationId });
+      return this.readConversationBootstrap({ conversationId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },
 
     async resumeConversation(input: CompanionConversationResumeInput) {
@@ -317,7 +418,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         });
       }
 
-      return this.readConversationBootstrap({ conversationId: resumed.id });
+      return this.readConversationBootstrap({ conversationId: resumed.id, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },
 
     async promptConversation(input: CompanionConversationPromptInput) {
@@ -534,7 +635,29 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         hostId: input.executionTargetId,
         ...(input.cwd !== undefined ? { cwd: input.cwd } : {}),
       });
-      return this.readConversationBootstrap({ conversationId: input.conversationId });
+      return this.readConversationBootstrap({ conversationId: input.conversationId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
+    },
+
+    async readConversationBlockImage(input: CompanionConversationBlockImageInput): Promise<CompanionBinaryAsset> {
+      const response = await dispatchDesktopApi(hostManager, {
+        method: 'GET',
+        path: typeof input.imageIndex === 'number'
+          ? `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/images/${String(input.imageIndex)}`
+          : `/api/sessions/${encodeURIComponent(input.conversationId)}/blocks/${encodeURIComponent(input.blockId)}/image`,
+      });
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        throw new Error(readApiDispatchError(response));
+      }
+
+      const mimeType = typeof response.headers['content-type'] === 'string' && response.headers['content-type'].trim().length > 0
+        ? response.headers['content-type'].trim().split(';')[0] ?? 'application/octet-stream'
+        : 'application/octet-stream';
+
+      return {
+        data: response.body,
+        mimeType,
+        disposition: 'inline',
+      };
     },
 
     async listConversationAttachments(conversationId: string) {
@@ -808,7 +931,8 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         (event) => {
           if (event.type === 'message') {
             try {
-              onEvent(JSON.parse(event.data || 'null') as unknown);
+              const payload = JSON.parse(event.data || 'null') as unknown;
+              onEvent(normalizeConversationEventForCompanion(input.conversationId, payload));
             } catch (error) {
               onEvent({ type: 'error', message: error instanceof Error ? error.message : String(error) });
             }

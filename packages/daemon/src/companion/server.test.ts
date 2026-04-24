@@ -115,6 +115,11 @@ describe('daemon companion server', () => {
       listConversationCheckpoints: async (conversationId) => ({ conversationId, checkpoints: [] }),
       readConversationCheckpoint: async ({ conversationId, checkpointId }) => ({ conversationId, checkpoint: { id: checkpointId } }),
       changeConversationExecutionTarget: async (input) => ({ ok: true, executionTargetId: input.executionTargetId }),
+      readConversationBlockImage: async ({ imageIndex }) => ({
+        data: Buffer.from(typeof imageIndex === 'number' ? `image-${String(imageIndex)}` : 'image-block', 'utf-8'),
+        mimeType: 'image/png',
+        disposition: 'inline',
+      }),
       listConversationAttachments: async (conversationId) => ({ conversationId, attachments: [{ id: 'att-1', title: 'Sketch' }] }),
       readConversationAttachment: async ({ conversationId, attachmentId }) => ({ conversationId, attachment: { id: attachmentId, title: 'Sketch' } }),
       createConversationAttachment: async (input) => ({ conversationId: input.conversationId, attachment: { id: 'att-new' } }),
@@ -223,6 +228,20 @@ describe('daemon companion server', () => {
     expect(attachmentsResponse.status).toBe(200);
     const attachments = await readJson(attachmentsResponse) as { attachments: Array<{ id: string }> };
     expect(attachments.attachments[0]?.id).toBe('att-1');
+
+    const blockImageResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/blocks/block-1/image`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(blockImageResponse.status).toBe(200);
+    expect(blockImageResponse.headers.get('content-type')).toBe('image/png');
+    expect(await blockImageResponse.text()).toBe('image-block');
+
+    const indexedBlockImageResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/blocks/block-1/images/2`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(indexedBlockImageResponse.status).toBe(200);
+    expect(indexedBlockImageResponse.headers.get('content-type')).toBe('image/png');
+    expect(await indexedBlockImageResponse.text()).toBe('image-2');
 
     const assetResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
@@ -479,6 +498,7 @@ describe('daemon companion server', () => {
       testSshTarget: async () => ({ ok: true, sshTarget: 'patrick@host', os: 'linux', arch: 'arm64', platformKey: 'linux-arm64', homeDirectory: '/home/patrick', tempDirectory: '/tmp', cacheDirectory: '/tmp/.cache', message: 'reachable' }),
       readRemoteDirectory: async () => ({ path: '/repo', entries: [] }),
       readConversationBootstrap: async (input: any) => ({ conversationId: input.conversationId, bootstrap: true }),
+      readConversationBlockImage: async () => ({ data: Buffer.from('image-block', 'utf-8'), mimeType: 'image/png', disposition: 'inline' }),
       createConversation: async () => ({ conversationId: 'created-1' }),
       resumeConversation: async () => ({ conversationId: 'resumed-1' }),
       promptConversation: async (input: any) => ({ ok: true, conversationId: input.conversationId }),

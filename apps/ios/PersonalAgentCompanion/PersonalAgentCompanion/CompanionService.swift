@@ -43,6 +43,7 @@ protocol CompanionClientProtocol: AnyObject {
     func listAttachments(conversationId: String) async throws -> ConversationAttachmentListResponse
     func readAttachment(conversationId: String, attachmentId: String) async throws -> ConversationAttachmentDetailResponse
     func downloadAttachmentAsset(conversationId: String, attachmentId: String, asset: String, revision: Int?) async throws -> AttachmentAssetDownload
+    func downloadCompanionAsset(path: String) async throws -> AttachmentAssetDownload
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse
     func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse
@@ -601,13 +602,15 @@ final class LiveCompanionClient: CompanionClientProtocol {
     }
 
     func downloadAttachmentAsset(conversationId: String, attachmentId: String, asset: String, revision: Int?) async throws -> AttachmentAssetDownload {
-        guard let baseURL = host.normalizedBaseURL else {
-            throw CompanionClientError.invalidHostURL
-        }
-        var url = baseURL.appending(path: "/companion/v1/conversations/\(conversationId)/attachments/\(attachmentId)/assets/\(asset)")
+        var path = "/companion/v1/conversations/\(conversationId)/attachments/\(attachmentId)/assets/\(asset)"
         if let revision {
-            url.append(queryItems: [URLQueryItem(name: "revision", value: String(revision))])
+            path += "?revision=\(revision)"
         }
+        return try await downloadCompanionAsset(path: path)
+    }
+
+    func downloadCompanionAsset(path: String) async throws -> AttachmentAssetDownload {
+        let url = try authorizedURL(path: path)
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -2786,6 +2789,14 @@ final class MockCompanionClient: CompanionClientProtocol {
         }
         let json = "{\"type\":\"excalidraw\",\"version\":2,\"source\":\"https://personal-agent.invalid\",\"elements\":[],\"appState\":{},\"files\":{}}"
         return AttachmentAssetDownload(data: Data(json.utf8), mimeType: "application/vnd.excalidraw+json", fileName: "Whiteboard.excalidraw")
+    }
+
+    func downloadCompanionAsset(path: String) async throws -> AttachmentAssetDownload {
+        if let data = dataURLData(path) {
+            return AttachmentAssetDownload(data: data, mimeType: "image/png", fileName: nil)
+        }
+        let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9W2KIiQAAAAASUVORK5CYII="
+        return AttachmentAssetDownload(data: Data(base64Encoded: pngBase64) ?? Data(), mimeType: "image/png", fileName: "Image.png")
     }
 
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {

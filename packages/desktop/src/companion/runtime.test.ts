@@ -194,7 +194,7 @@ describe('desktop companion runtime', () => {
     });
     expect(localController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
       method: 'GET',
-      path: '/api/conversations/conv-1/bootstrap',
+      path: '/api/conversations/conv-1/bootstrap?tailBlocks=120',
     }));
   });
 
@@ -304,6 +304,26 @@ describe('desktop companion runtime', () => {
     const unsubscribe = vi.fn();
     const localController = {
       subscribeApiStream: vi.fn().mockImplementation(async (_path: string, onEvent: (event: { type: 'message'; data?: string }) => void) => {
+        onEvent({
+          type: 'message',
+          data: JSON.stringify({
+            type: 'snapshot',
+            blocks: [
+              {
+                type: 'user',
+                id: 'block-user-1',
+                images: [{ alt: 'Attached image', src: 'data:image/png;base64,AAAA' }],
+              },
+              {
+                type: 'image',
+                id: 'block-image-1',
+                src: 'data:image/png;base64,BBBB',
+              },
+            ],
+            blockOffset: 0,
+            totalBlocks: 2,
+          }),
+        });
         onEvent({ type: 'message', data: JSON.stringify({ type: 'text_delta', delta: 'hello' }) });
         return unsubscribe;
       }),
@@ -331,7 +351,26 @@ describe('desktop companion runtime', () => {
       '/api/live-sessions/conv-1/events?surfaceId=ios-surface-1&surfaceType=mobile_web&tailBlocks=5',
       expect.any(Function),
     );
-    expect(events).toEqual([{ type: 'text_delta', delta: 'hello' }]);
+    expect(events).toEqual([
+      {
+        type: 'snapshot',
+        blocks: [
+          {
+            type: 'user',
+            id: 'block-user-1',
+            images: [{ alt: 'Attached image', src: '/companion/v1/conversations/conv-1/blocks/block-user-1/images/0' }],
+          },
+          {
+            type: 'image',
+            id: 'block-image-1',
+            src: '/companion/v1/conversations/conv-1/blocks/block-image-1/image',
+          },
+        ],
+        blockOffset: 0,
+        totalBlocks: 2,
+      },
+      { type: 'text_delta', delta: 'hello' },
+    ]);
     stop();
     expect(unsubscribe).toHaveBeenCalled();
   });

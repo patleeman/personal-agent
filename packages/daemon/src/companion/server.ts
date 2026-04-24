@@ -18,6 +18,7 @@ import {
   type CompanionClientSocketMessage,
   type CompanionCommandMessage,
   type CompanionConversationAbortInput,
+  type CompanionConversationBlockImageInput,
   type CompanionConversationBootstrapInput,
   type CompanionConversationCheckpointCreateInput,
   type CompanionConversationCreateInput,
@@ -1061,6 +1062,60 @@ export class DaemonCompanionServer {
         conversationId: decodeURIComponent(checkpointMatch[1] || ''),
         checkpointId: decodeURIComponent(checkpointMatch[2] || ''),
       }));
+      return;
+    }
+
+    const conversationBlockImageMatch = /^\/companion\/v1\/conversations\/([^/]+)\/blocks\/([^/]+)\/image$/.exec(pathname);
+    if (conversationBlockImageMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const input: CompanionConversationBlockImageInput = {
+        conversationId: decodeURIComponent(conversationBlockImageMatch[1] || ''),
+        blockId: decodeURIComponent(conversationBlockImageMatch[2] || ''),
+      };
+      const asset = await runtime.readConversationBlockImage(input);
+      response.writeHead(200, {
+        'Content-Type': asset.mimeType,
+        'Content-Length': String(asset.data.byteLength),
+        'Cache-Control': 'no-store',
+        ...(asset.fileName
+          ? { 'Content-Disposition': `${asset.disposition ?? 'inline'}; filename="${asset.fileName.replace(/"/g, '')}"` }
+          : {}),
+      });
+      response.end(Buffer.from(asset.data));
+      return;
+    }
+
+    const conversationBlockIndexedImageMatch = /^\/companion\/v1\/conversations\/([^/]+)\/blocks\/([^/]+)\/images\/([^/]+)$/.exec(pathname);
+    if (conversationBlockIndexedImageMatch && request.method === 'GET') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const imageIndex = readOptionalNonNegativeInteger(decodeURIComponent(conversationBlockIndexedImageMatch[3] || ''), 'imageIndex');
+      if (typeof imageIndex !== 'number') {
+        sendError(response, 400, 'imageIndex must be a non-negative integer.');
+        return;
+      }
+      const input: CompanionConversationBlockImageInput = {
+        conversationId: decodeURIComponent(conversationBlockIndexedImageMatch[1] || ''),
+        blockId: decodeURIComponent(conversationBlockIndexedImageMatch[2] || ''),
+        imageIndex,
+      };
+      const asset = await runtime.readConversationBlockImage(input);
+      response.writeHead(200, {
+        'Content-Type': asset.mimeType,
+        'Content-Length': String(asset.data.byteLength),
+        'Cache-Control': 'no-store',
+        ...(asset.fileName
+          ? { 'Content-Disposition': `${asset.disposition ?? 'inline'}; filename="${asset.fileName.replace(/"/g, '')}"` }
+          : {}),
+      });
+      response.end(Buffer.from(asset.data));
       return;
     }
 

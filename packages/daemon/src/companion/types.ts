@@ -83,6 +83,12 @@ export interface CompanionConversationBootstrapInput {
   knownLastBlockId?: string;
 }
 
+export interface CompanionConversationBlockImageInput {
+  conversationId: string;
+  blockId: string;
+  imageIndex?: number;
+}
+
 export interface CompanionConversationCreateInput {
   cwd?: string;
   model?: string | null;
@@ -301,6 +307,7 @@ export interface CompanionRuntime {
   testSshTarget(input: CompanionSshTargetTestInput): Promise<unknown>;
   readRemoteDirectory(input: CompanionRemoteDirectoryInput): Promise<unknown>;
   readConversationBootstrap(input: CompanionConversationBootstrapInput): Promise<unknown>;
+  readConversationBlockImage(input: CompanionConversationBlockImageInput): Promise<CompanionBinaryAsset>;
   createConversation(input: CompanionConversationCreateInput): Promise<unknown>;
   resumeConversation(input: CompanionConversationResumeInput): Promise<unknown>;
   promptConversation(input: CompanionConversationPromptInput): Promise<unknown>;

@@ -1267,6 +1267,42 @@ func makeDataURL(mimeType: String, base64Data: String) -> String {
     "data:\(mimeType);base64,\(base64Data)"
 }
 
+func companionTranscriptImageAssetPath(_ src: String?) -> String? {
+    guard let normalized = src?.trimmed.nilIfBlank else {
+        return nil
+    }
+    if normalized.hasPrefix("/companion/v1/") {
+        return normalized
+    }
+
+    func captureGroups(_ pattern: String, in value: String) -> [String]? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        let range = NSRange(value.startIndex..<value.endIndex, in: value)
+        guard let match = regex.firstMatch(in: value, options: [], range: range), match.numberOfRanges > 1 else {
+            return nil
+        }
+        return (1..<match.numberOfRanges).compactMap { index in
+            let captureRange = match.range(at: index)
+            guard captureRange.location != NSNotFound, let swiftRange = Range(captureRange, in: value) else {
+                return nil
+            }
+            return String(value[swiftRange])
+        }
+    }
+
+    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/image$"#, in: normalized), captures.count == 2 {
+        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/image"
+    }
+
+    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/images/(\d+)$"#, in: normalized), captures.count == 3 {
+        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/images/\(captures[2])"
+    }
+
+    return nil
+}
+
 func parseCompanionDate(_ string: String?) -> Date? {
     guard let value = string?.trimmed, !value.isEmpty else {
         return nil
