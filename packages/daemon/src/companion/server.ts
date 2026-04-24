@@ -916,6 +916,34 @@ export class DaemonCompanionServer {
       return;
     }
 
+    const conversationDeferredResumeMatch = /^\/companion\/v1\/conversations\/([^/]+)\/deferred-resumes\/([^/]+)$/.exec(pathname);
+    if (conversationDeferredResumeMatch && request.method === 'DELETE') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.cancelConversationDeferredResume({
+        conversationId: decodeURIComponent(conversationDeferredResumeMatch[1] || ''),
+        resumeId: decodeURIComponent(conversationDeferredResumeMatch[2] || ''),
+      }));
+      return;
+    }
+
+    const conversationDeferredResumeFireMatch = /^\/companion\/v1\/conversations\/([^/]+)\/deferred-resumes\/([^/]+)\/fire$/.exec(pathname);
+    if (conversationDeferredResumeFireMatch && request.method === 'POST') {
+      if (!await this.requireBearer(request, response)) {
+        return;
+      }
+
+      const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      sendJson(response, 200, await runtime.fireConversationDeferredResume({
+        conversationId: decodeURIComponent(conversationDeferredResumeFireMatch[1] || ''),
+        resumeId: decodeURIComponent(conversationDeferredResumeFireMatch[2] || ''),
+      }));
+      return;
+    }
+
     const conversationCwdMatch = /^\/companion\/v1\/conversations\/([^/]+)\/cwd$/.exec(pathname);
     if (conversationCwdMatch && request.method === 'POST') {
       if (!await this.requireBearer(request, response)) {

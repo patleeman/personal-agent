@@ -550,6 +550,14 @@ async function createHeadlessCompanionRuntime(localApi) {
       return parseDataUrlAsset(await localApi.readDesktopConversationAttachmentAsset(input));
     },
 
+    async cancelConversationDeferredResume(input) {
+      return localApi.cancelDesktopConversationDeferredResume(input);
+    },
+
+    async fireConversationDeferredResume(input) {
+      return localApi.fireDesktopConversationDeferredResume(input);
+    },
+
     async subscribeApp(onEvent) {
       onEvent({ type: 'open' });
       return localApi.subscribeDesktopAppEvents((event) => {
