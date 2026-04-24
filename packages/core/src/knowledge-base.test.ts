@@ -77,7 +77,7 @@ function writeSyncLock(stateRoot: string, metadata: { pid: number; acquiredAt: s
 }
 
 describe('KnowledgeBaseManager', () => {
-  it('bootstraps and pushes a managed knowledge base into an empty remote repo', () => {
+  it('leaves an empty managed knowledge base empty instead of inventing files', () => {
     const remoteRepo = initBareRepo();
     const stateRoot = createTempDir('pa-kb-state-');
     const configRoot = createTempDir('pa-kb-config-');
@@ -87,15 +87,15 @@ describe('KnowledgeBaseManager', () => {
 
     expect(state.configured).toBe(true);
     expect(state.repoUrl).toBe(remoteRepo);
-    expect(readFileSync(join(state.managedRoot, '.gitignore'), 'utf-8')).toContain('.obsidian/');
-    expect(readFileSync(join(state.managedRoot, 'skills', '.gitkeep'), 'utf-8')).toBe('');
-    expect(readFileSync(join(state.managedRoot, 'notes', '.gitkeep'), 'utf-8')).toBe('');
+    expect(existsSync(join(state.managedRoot, '.gitignore'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'skills', '.gitkeep'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'notes', '.gitkeep'))).toBe(false);
 
     const remoteClone = createTempDir('pa-kb-verify-');
     runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
-    expect(readFileSync(join(remoteClone, '.gitignore'), 'utf-8')).toContain('.DS_Store');
-    expect(readFileSync(join(remoteClone, 'skills', '.gitkeep'), 'utf-8')).toBe('');
-    expect(readFileSync(join(remoteClone, 'notes', '.gitkeep'), 'utf-8')).toBe('');
+    expect(existsSync(join(remoteClone, '.gitignore'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'skills', '.gitkeep'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'notes', '.gitkeep'))).toBe(false);
 
     const storedState = readKnowledgeBaseStateFile(stateRoot);
     expect(typeof storedState.lastMaintenanceAt).toBe('string');

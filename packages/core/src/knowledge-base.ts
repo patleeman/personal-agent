@@ -3,7 +3,6 @@ import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
-  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -464,34 +463,6 @@ function deleteFileIfExists(filePath: string, root: string): void {
 
   unlinkSync(filePath);
   removeEmptyParentDirectories(root, filePath);
-}
-
-function directoryIsEmpty(path: string): boolean {
-  try {
-    return readdirSync(path).length === 0;
-  } catch {
-    return false;
-  }
-}
-
-function ensureBootstrapFiles(root: string): void {
-  mkdirSync(join(root, 'skills'), { recursive: true });
-  mkdirSync(join(root, 'notes'), { recursive: true });
-
-  const gitignorePath = join(root, '.gitignore');
-  if (!existsSync(gitignorePath)) {
-    writeFileSync(gitignorePath, ['.DS_Store', '.obsidian/'].join('\n') + '\n');
-  }
-
-  const skillKeepPath = join(root, 'skills', '.gitkeep');
-  if (!existsSync(skillKeepPath) && directoryIsEmpty(join(root, 'skills'))) {
-    writeFileSync(skillKeepPath, '');
-  }
-
-  const notesKeepPath = join(root, 'notes', '.gitkeep');
-  if (!existsSync(notesKeepPath) && directoryIsEmpty(join(root, 'notes'))) {
-    writeFileSync(notesKeepPath, '');
-  }
 }
 
 function readRemoteFileBuffer(cwd: string, branch: string, relativePath: string): Buffer | null {
@@ -987,7 +958,6 @@ export class KnowledgeBaseManager {
 
       if (!remoteExists) {
         this.checkoutRemoteBase(root, config.branch, false);
-        ensureBootstrapFiles(root);
         this.stageAndCommitIfNeeded(root, config.branch, syncTimestamp);
         const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, syncTimestamp);
         const snapshot = listWorkingSnapshot(root);
