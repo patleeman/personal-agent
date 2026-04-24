@@ -943,7 +943,7 @@ struct ScheduledTaskEditorDraft: Equatable {
     var title: String = ""
     var enabled: Bool = true
     var scheduleMode: String = "cron"
-    var cron: String = ""
+    var cron: String = "0 9 * * 1-5"
     var at: String = ""
     var model: String = ""
     var thinkingLevel: String = ""

@@ -2451,9 +2451,7 @@ private struct AutomationEditorView: View {
                         Text("At").tag("at")
                     }
                     if draft.scheduleMode == "cron" {
-                        TextField("0 9 * * 1-5", text: $draft.cron)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                        AutomationCronScheduleEditor(cron: $draft.cron)
                     } else {
                         TextField("2026-04-20T09:00:00-04:00", text: $draft.at)
                             .textInputAutocapitalization(.never)
@@ -2943,6 +2941,236 @@ private struct QRCodeView: View {
             return nil
         }
         return UIImage(cgImage: cgImage)
+    }
+}
+
+private enum AutomationCronScheduleKind: String, CaseIterable, Identifiable {
+    case hourly
+    case daily
+    case weekdays
+    case weekly
+    case monthly
+    case custom
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .hourly: "Hourly"
+        case .daily: "Daily"
+        case .weekdays: "Weekdays"
+        case .weekly: "Weekly"
+        case .monthly: "Monthly"
+        case .custom: "Custom cron"
+        }
+    }
+}
+
+private struct AutomationCronScheduleEditor: View {
+    @Binding var cron: String
+
+    private var selection: Binding<AutomationCronScheduleKind> {
+        Binding(
+            get: { Self.kind(for: cron) },
+            set: { kind in
+                cron = Self.defaultCron(for: kind, currentCron: cron)
+            }
+        )
+    }
+
+    private var time: Binding<Date> {
+        Binding(
+            get: { Self.date(hour: Self.cronParts(cron)?.hour ?? 9, minute: Self.cronParts(cron)?.minute ?? 0) },
+            set: { date in
+                let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+                updateCron(hour: components.hour ?? 9, minute: components.minute ?? 0)
+            }
+        )
+    }
+
+    private var minute: Binding<Int> {
+        Binding(
+            get: { Self.cronParts(cron)?.minute ?? 0 },
+            set: { updateCron(minute: $0) }
+        )
+    }
+
+    private var weekday: Binding<Int> {
+        Binding(
+            get: { Self.cronParts(cron)?.weekday ?? 1 },
+            set: { updateCron(weekday: $0) }
+        )
+    }
+
+    private var dayOfMonth: Binding<Int> {
+        Binding(
+            get: { Self.cronParts(cron)?.dayOfMonth ?? 1 },
+            set: { updateCron(dayOfMonth: $0) }
+        )
+    }
+
+    var body: some View {
+        Picker("Repeats", selection: selection) {
+            ForEach(AutomationCronScheduleKind.allCases) { kind in
+                Text(kind.label).tag(kind)
+            }
+        }
+
+        switch selection.wrappedValue {
+        case .hourly:
+            Picker("Minute", selection: minute) {
+                ForEach([0, 15, 30, 45], id: \.self) { value in
+                    Text(":\(String(format: "%02d", value))").tag(value)
+                }
+            }
+        case .daily, .weekdays:
+            DatePicker("Time", selection: time, displayedComponents: .hourAndMinute)
+        case .weekly:
+            Picker("Day", selection: weekday) {
+                ForEach(Self.weekdayOptions, id: \.value) { option in
+                    Text(option.label).tag(option.value)
+                }
+            }
+            DatePicker("Time", selection: time, displayedComponents: .hourAndMinute)
+        case .monthly:
+            Picker("Day", selection: dayOfMonth) {
+                ForEach(1...28, id: \.self) { value in
+                    Text("Day \(value)").tag(value)
+                }
+            }
+            DatePicker("Time", selection: time, displayedComponents: .hourAndMinute)
+        case .custom:
+            TextField("0 9 * * 1-5", text: $cron)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.system(.body, design: .monospaced))
+            Text("Use custom only for schedules the simple editor cannot describe.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+
+        Text("Runs \(Self.summary(for: cron))")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+    }
+
+    private func updateCron(hour: Int? = nil, minute: Int? = nil, weekday: Int? = nil, dayOfMonth: Int? = nil) {
+        let parts = Self.cronParts(cron)
+        let resolvedHour = hour ?? parts?.hour ?? 9
+        let resolvedMinute = minute ?? parts?.minute ?? 0
+        let resolvedWeekday = weekday ?? parts?.weekday ?? 1
+        let resolvedDayOfMonth = dayOfMonth ?? parts?.dayOfMonth ?? 1
+
+        switch selection.wrappedValue {
+        case .hourly:
+            cron = "\(resolvedMinute) * * * *"
+        case .daily:
+            cron = "\(resolvedMinute) \(resolvedHour) * * *"
+        case .weekdays:
+            cron = "\(resolvedMinute) \(resolvedHour) * * 1-5"
+        case .weekly:
+            cron = "\(resolvedMinute) \(resolvedHour) * * \(resolvedWeekday)"
+        case .monthly:
+            cron = "\(resolvedMinute) \(resolvedHour) \(resolvedDayOfMonth) * *"
+        case .custom:
+            break
+        }
+    }
+
+    private static let weekdayOptions: [(value: Int, label: String)] = [
+        (0, "Sunday"),
+        (1, "Monday"),
+        (2, "Tuesday"),
+        (3, "Wednesday"),
+        (4, "Thursday"),
+        (5, "Friday"),
+        (6, "Saturday")
+    ]
+
+    private static func kind(for cron: String) -> AutomationCronScheduleKind {
+        guard let parts = cronParts(cron) else {
+            return .custom
+        }
+        if parts.hourText == "*", parts.dayOfMonthText == "*", parts.monthText == "*", parts.weekdayText == "*" {
+            return .hourly
+        }
+        if parts.dayOfMonthText == "*", parts.monthText == "*", parts.weekdayText == "*" {
+            return .daily
+        }
+        if parts.dayOfMonthText == "*", parts.monthText == "*", parts.weekdayText == "1-5" {
+            return .weekdays
+        }
+        if parts.dayOfMonthText == "*", parts.monthText == "*", parts.weekday != nil {
+            return .weekly
+        }
+        if parts.dayOfMonth != nil, parts.monthText == "*", parts.weekdayText == "*" {
+            return .monthly
+        }
+        return .custom
+    }
+
+    private static func defaultCron(for kind: AutomationCronScheduleKind, currentCron: String) -> String {
+        let parts = cronParts(currentCron)
+        let minute = parts?.minute ?? 0
+        let hour = parts?.hour ?? 9
+        switch kind {
+        case .hourly:
+            return "\(minute) * * * *"
+        case .daily:
+            return "\(minute) \(hour) * * *"
+        case .weekdays:
+            return "\(minute) \(hour) * * 1-5"
+        case .weekly:
+            return "\(minute) \(hour) * * \(parts?.weekday ?? 1)"
+        case .monthly:
+            return "\(minute) \(hour) \(parts?.dayOfMonth ?? 1) * *"
+        case .custom:
+            return currentCron.nilIfBlank ?? "0 9 * * 1-5"
+        }
+    }
+
+    private static func summary(for cron: String) -> String {
+        guard let parts = cronParts(cron) else {
+            return "on the custom cron schedule"
+        }
+        let time = String(format: "%02d:%02d", parts.hour ?? 9, parts.minute ?? 0)
+        switch kind(for: cron) {
+        case .hourly:
+            return String(format: "hourly at :%02d", parts.minute ?? 0)
+        case .daily:
+            return "daily at \(time)"
+        case .weekdays:
+            return "weekdays at \(time)"
+        case .weekly:
+            let label = weekdayOptions.first(where: { $0.value == parts.weekday })?.label ?? "weekly"
+            return "every \(label) at \(time)"
+        case .monthly:
+            return "monthly on day \(parts.dayOfMonth ?? 1) at \(time)"
+        case .custom:
+            return "on \(cron)"
+        }
+    }
+
+    private static func date(hour: Int, minute: Int) -> Date {
+        Calendar.current.date(from: DateComponents(hour: hour, minute: minute)) ?? Date()
+    }
+
+    private static func cronParts(_ cron: String) -> (minuteText: String, hourText: String, dayOfMonthText: String, monthText: String, weekdayText: String, minute: Int?, hour: Int?, dayOfMonth: Int?, weekday: Int?)? {
+        let fields = cron.trimmingCharacters(in: .whitespacesAndNewlines).split(separator: " ").map(String.init)
+        guard fields.count == 5 else {
+            return nil
+        }
+        return (
+            minuteText: fields[0],
+            hourText: fields[1],
+            dayOfMonthText: fields[2],
+            monthText: fields[3],
+            weekdayText: fields[4],
+            minute: Int(fields[0]),
+            hour: Int(fields[1]),
+            dayOfMonth: Int(fields[2]),
+            weekday: Int(fields[4])
+        )
     }
 }
 
