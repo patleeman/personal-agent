@@ -1112,7 +1112,8 @@ final class LiveCompanionClient: CompanionClientProtocol {
             return .snapshot(
                 blocks: blocks,
                 blockOffset: event["blockOffset"] as? Int ?? 0,
-                totalBlocks: event["totalBlocks"] as? Int ?? blocks.count
+                totalBlocks: event["totalBlocks"] as? Int ?? blocks.count,
+                isStreaming: event["isStreaming"] as? Bool
             )
         case "agent_start":
             return .agentStart
@@ -3210,10 +3211,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     private func emitConversationSnapshot(_ conversationId: String) {
-        guard let detail = conversations[conversationId]?.bootstrap.sessionDetail else {
+        guard let envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
             return
         }
-        emitConversation(conversationId, .snapshot(blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks))
+        emitConversation(conversationId, .snapshot(blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks, isStreaming: envelope.bootstrap.liveSession.isStreaming))
     }
 
     private func mutateConversation(conversationId: String, isStreaming: Bool? = nil, mutateBlocks: (inout [DisplayBlock]) -> Void) {

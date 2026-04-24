@@ -1162,7 +1162,7 @@ struct ParallelPromptPreview: Codable, Equatable, Identifiable {
 }
 
 enum CompanionConversationEvent: Equatable {
-    case snapshot(blocks: [DisplayBlock], blockOffset: Int, totalBlocks: Int)
+    case snapshot(blocks: [DisplayBlock], blockOffset: Int, totalBlocks: Int, isStreaming: Bool?)
     case agentStart
     case agentEnd
     case turnEnd

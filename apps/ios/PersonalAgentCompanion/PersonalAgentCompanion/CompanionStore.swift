@@ -1769,6 +1769,7 @@ final class ConversationViewModel: ObservableObject {
     private var lastStreamingThinkingBlockId: String?
     private var transcriptImageCache: [String: Data] = [:]
     private var liveConversationId: String?
+    private var liveEventRevision = 0
 
     init(
         client: CompanionClientProtocol,
@@ -1819,13 +1820,14 @@ final class ConversationViewModel: ObservableObject {
         Task {
             isLoading = true
             defer { isLoading = false }
+            let eventRevisionAtRequest = liveEventRevision
             do {
                 let envelope = try await client.conversationBootstrap(
                     conversationId: conversationId,
                     options: ConversationBootstrapRequestOptions(tailBlocks: Self.bootstrapTailBlocks)
                 )
                 errorMessage = nil
-                applyBootstrap(envelope)
+                applyBootstrap(envelope, eventRevisionAtRequest: eventRevisionAtRequest)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -2396,7 +2398,7 @@ final class ConversationViewModel: ObservableObject {
         }
     }
 
-    private func applyBootstrap(_ envelope: ConversationBootstrapEnvelope) {
+    private func applyBootstrap(_ envelope: ConversationBootstrapEnvelope, eventRevisionAtRequest: Int? = nil) {
         errorMessage = nil
         liveConversationId = envelope.bootstrap.conversationId
         sessionMeta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta ?? sessionMeta
@@ -2404,7 +2406,9 @@ final class ConversationViewModel: ObservableObject {
         executionTargets = envelope.executionTargets
         currentExecutionTargetId = sessionMeta?.remoteHostId ?? envelope.bootstrap.sessionDetail?.meta.remoteHostId ?? "local"
         savedAttachments = envelope.attachments?.attachments ?? savedAttachments
-        isStreaming = envelope.bootstrap.liveSession.isStreaming ?? false
+        if eventRevisionAtRequest == nil || liveEventRevision == eventRevisionAtRequest {
+            isStreaming = envelope.bootstrap.liveSession.isStreaming ?? false
+        }
         if let currentModel = sessionMeta?.model, let existingModelState = modelState {
             modelState = CompanionModelState(
                 currentModel: currentModel,
@@ -2438,14 +2442,20 @@ final class ConversationViewModel: ObservableObject {
 
     private func applyEvent(_ event: CompanionConversationEvent) {
         switch event {
-        case .snapshot(let snapshotBlocks, _, _):
+        case .snapshot(let snapshotBlocks, _, _, let snapshotIsStreaming):
             errorMessage = nil
             blocks = snapshotBlocks
+            if let snapshotIsStreaming {
+                liveEventRevision += 1
+                isStreaming = snapshotIsStreaming
+            }
             lastStreamingTextBlockId = nil
             lastStreamingThinkingBlockId = nil
         case .agentStart:
+            liveEventRevision += 1
             isStreaming = true
         case .agentEnd, .turnEnd:
+            liveEventRevision += 1
             isStreaming = false
             lastStreamingTextBlockId = nil
             lastStreamingThinkingBlockId = nil
@@ -2526,12 +2536,13 @@ final class ConversationViewModel: ObservableObject {
         case .presenceState(let nextState):
             presenceState = nextState
         case .error(let message):
+            liveEventRevision += 1
             errorMessage = message
             isStreaming = false
         case .open:
             errorMessage = nil
         case .close:
-            isStreaming = false
+            break
         case .unknown:
             break
         }

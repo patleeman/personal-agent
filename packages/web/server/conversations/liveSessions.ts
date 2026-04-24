@@ -199,7 +199,7 @@ export class LiveSessionControlError extends Error {
 }
 
 export type SseEvent =
-  | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number }
+  | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
   | { type: 'turn_end' }
@@ -1873,6 +1873,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   blocks: DisplayBlock[];
   blockOffset: number;
   totalBlocks: number;
+  isStreaming: boolean;
 } {
   ensureHiddenTurnState(entry);
   const liveBlocks = buildLiveStateBlocks(entry.session, {
@@ -1884,6 +1885,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
       blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
       blockOffset: 0,
       totalBlocks: liveBlocks.length,
+      isStreaming: entry.session.isStreaming,
     };
   }
 
@@ -1893,6 +1895,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
       blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
       blockOffset: 0,
       totalBlocks: liveBlocks.length,
+      isStreaming: entry.session.isStreaming,
     };
   }
 
@@ -1904,6 +1907,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
       blocks: applyLatestCompactionSummaryTitle(persisted.blocks, entry.lastCompactionSummaryTitle),
       blockOffset: persisted.blockOffset,
       totalBlocks: persisted.totalBlocks,
+      isStreaming: entry.session.isStreaming,
     };
   }
 
@@ -1912,6 +1916,7 @@ function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
     blocks: applyLatestCompactionSummaryTitle(blocks, entry.lastCompactionSummaryTitle),
     blockOffset: persisted.blockOffset,
     totalBlocks: persisted.blockOffset + blocks.length,
+    isStreaming: entry.session.isStreaming,
   };
 }
 

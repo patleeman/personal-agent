@@ -996,6 +996,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 3,
+      isStreaming: true,
       blocks: [
         {
           type: 'user',
@@ -1372,6 +1373,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 5,
+      isStreaming: true,
       blocks: [
         {
           type: 'user',
@@ -1859,6 +1861,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 2,
+      isStreaming: false,
       blocks: [
         {
           type: 'summary',
@@ -1931,6 +1934,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 2,
+      isStreaming: false,
       blocks: [
         {
           type: 'summary',
@@ -1997,6 +2001,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 2,
+      isStreaming: false,
       blocks: [
         {
           type: 'summary',
@@ -2059,6 +2064,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 1,
+      isStreaming: false,
       blocks: [
         {
           type: 'summary',
@@ -2148,6 +2154,7 @@ describe('live session subscriptions', () => {
       type: 'snapshot',
       blockOffset: 0,
       totalBlocks: 4,
+      isStreaming: false,
       blocks: [
         {
           type: 'user',
