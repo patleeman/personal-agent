@@ -175,76 +175,56 @@ struct ConversationListView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            List {
-                ForEach(session.chatSections) { section in
-                    Section(section.title) {
-                        ForEach(section.sessions) { item in
-                            NavigationLink(value: item.id) {
-                                ConversationRow(session: item)
-                            }
-                            .listRowBackground(CompanionTheme.panel)
-                            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                Button {
-                                    Task { await session.togglePinned(item.id) }
-                                } label: {
-                                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
-                                }
-                                .tint(.accentColor)
-                            }
-                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button {
-                                    Task { await session.toggleArchived(item.id) }
-                                } label: {
-                                    Label("Archive", systemImage: "archivebox")
-                                }
-                                .tint(.orange)
-                            }
-                            .contextMenu {
-                                Button {
-                                    Task { await session.togglePinned(item.id) }
-                                } label: {
-                                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
-                                }
-                                Button {
-                                    Task { await session.toggleArchived(item.id) }
-                                } label: {
-                                    Label("Archive", systemImage: "archivebox")
-                                }
-                                Button {
-                                    Task {
-                                        if let duplicated = await session.duplicateConversation(item.id) {
-                                            path.append(duplicated)
+            GeometryReader { proxy in
+                VStack(spacing: 0) {
+                    conversationListHeader()
+
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 24) {
+                            if session.isLoading && session.chatSections.isEmpty {
+                                ProgressView()
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.top, 48)
+                            } else if session.chatSections.isEmpty {
+                                ContentUnavailableView(
+                                    session.archivedSessions.isEmpty ? "No conversations" : "No open conversations",
+                                    systemImage: "message",
+                                    description: Text(
+                                        session.archivedSessions.isEmpty
+                                            ? "Create a new conversation on \(session.host.hostLabel)."
+                                            : "Create a new conversation on \(session.host.hostLabel), or open Archived to restore an older thread."
+                                    )
+                                )
+                                .foregroundStyle(CompanionTheme.textSecondary)
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 48)
+                            } else {
+                                ForEach(session.chatSections) { section in
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        Text(section.title)
+                                            .font(.title.weight(.semibold))
+                                            .foregroundStyle(CompanionTheme.textSecondary)
+
+                                        VStack(spacing: 12) {
+                                            ForEach(section.sessions) { item in
+                                                conversationListCard(item, in: section)
+                                            }
                                         }
                                     }
-                                } label: {
-                                    Label("Duplicate", systemImage: "plus.square.on.square")
                                 }
                             }
                         }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 16)
+                        .padding(.bottom, 140)
+                    }
+                    .refreshable {
+                        session.refresh()
                     }
                 }
-
-                if session.chatSections.isEmpty && !session.isLoading {
-                    Section {
-                        ContentUnavailableView(
-                            session.archivedSessions.isEmpty ? "No conversations" : "No open conversations",
-                            systemImage: "message",
-                            description: Text(
-                                session.archivedSessions.isEmpty
-                                    ? "Create a new conversation on \(session.host.hostLabel)."
-                                    : "Create a new conversation on \(session.host.hostLabel), or open Archived to restore an older thread."
-                            )
-                        )
-                        .foregroundStyle(CompanionTheme.textSecondary)
-                    }
-                }
+                .background(CompanionTheme.canvas)
             }
-            .scrollContentBackground(.hidden)
-            .background(CompanionTheme.canvas)
-            .listStyle(.insetGrouped)
-            .navigationTitle("Chat")
-            .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { conversationId in
                 ConversationScreen(
                     viewModel: session.makeConversationModel(conversationId: conversationId, initialSession: session.sessions[conversationId]),
@@ -254,45 +234,11 @@ struct ConversationListView: View {
                     }
                 )
             }
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingHostSelection = true
-                    } label: {
-                        Label("Hosts", systemImage: "server.rack")
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        guard !isCreatingConversation else {
-                            return
-                        }
-                        Task {
-                            isCreatingConversation = true
-                            defer { isCreatingConversation = false }
-                            if let id = await session.createConversation(NewConversationRequest()) {
-                                path.append(id)
-                            }
-                        }
-                    } label: {
-                        if isCreatingConversation {
-                            ProgressView()
-                        } else {
-                            Image(systemName: "square.and.pencil")
-                        }
-                    }
-                    .disabled(isCreatingConversation)
-                    .accessibilityLabel("New conversation")
-                }
-            }
             .overlay(alignment: .bottom) {
                 if let message = session.errorMessage {
                     ErrorBanner(message: message)
                         .padding()
                 }
-            }
-            .refreshable {
-                session.refresh()
             }
             .sheet(isPresented: $showingHostSelection) {
                 HostSelectionView(appModel: appModel)
@@ -302,6 +248,127 @@ struct ConversationListView: View {
             }
             .onChange(of: session.chatSections) { _, _ in
                 autoOpenFirstConversationIfNeeded()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func conversationListCard(_ item: SessionMeta, in section: ConversationListSection) -> some View {
+        NavigationLink(value: item.id) {
+            HStack(spacing: 14) {
+                ConversationRow(session: item)
+                Spacer(minLength: 12)
+                Image(systemName: "chevron.right")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(CompanionTheme.textDim)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                Task { await session.togglePinned(item.id) }
+            } label: {
+                Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+            }
+            .tint(.accentColor)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button {
+                Task { await session.toggleArchived(item.id) }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+            .tint(.orange)
+        }
+        .contextMenu {
+            Button {
+                Task { await session.togglePinned(item.id) }
+            } label: {
+                Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+            }
+            Button {
+                Task { await session.toggleArchived(item.id) }
+            } label: {
+                Label("Archive", systemImage: "archivebox")
+            }
+            Button {
+                Task {
+                    if let duplicated = await session.duplicateConversation(item.id) {
+                        path.append(duplicated)
+                    }
+                }
+            } label: {
+                Label("Duplicate", systemImage: "plus.square.on.square")
+            }
+        }
+    }
+
+    private func conversationListHeader() -> some View {
+        HStack {
+            Button {
+                showingHostSelection = true
+            } label: {
+                Image(systemName: "server.rack")
+                    .font(.title2.weight(.medium))
+                    .frame(width: 56, height: 56)
+                    .background(CompanionTheme.panelRaised, in: Circle())
+                    .overlay {
+                        Circle()
+                            .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(CompanionTheme.accent)
+            .accessibilityLabel("Hosts")
+
+            Spacer(minLength: 16)
+
+            Button {
+                startConversationCreation()
+            } label: {
+                Group {
+                    if isCreatingConversation {
+                        ProgressView()
+                            .tint(CompanionTheme.accent)
+                    } else {
+                        Image(systemName: "square.and.pencil")
+                            .font(.title2.weight(.medium))
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .background(CompanionTheme.panelRaised, in: Circle())
+                .overlay {
+                    Circle()
+                        .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+                }
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(CompanionTheme.accent)
+            .disabled(isCreatingConversation)
+            .accessibilityLabel("New conversation")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .background(CompanionTheme.canvas)
+    }
+
+    private func startConversationCreation() {
+        guard !isCreatingConversation else {
+            return
+        }
+        Task {
+            isCreatingConversation = true
+            defer { isCreatingConversation = false }
+            if let id = await session.createConversation(NewConversationRequest()) {
+                path.append(id)
             }
         }
     }
@@ -1958,7 +2025,7 @@ struct ConversationRowPresentation {
 
     var subtitle: String? {
         let fragments = [
-            session.cwdSlug.nilIfBlank,
+            session.cwdDisplayName,
             session.remoteHostLabel?.nilIfBlank,
             session.automationTitle?.nilIfBlank.map { "Auto: \($0)" },
         ].compactMap { $0 }

@@ -386,8 +386,8 @@ struct ConversationScreen: View {
                     }
                 }
 
-                HStack(alignment: .bottom, spacing: 12) {
-                    HStack(alignment: .bottom, spacing: 10) {
+                HStack(alignment: .center, spacing: 12) {
+                    HStack(alignment: .center, spacing: 10) {
                         Menu {
                             Button {
                                 showingPhotoLibraryPicker = true
@@ -481,12 +481,14 @@ struct ConversationScreen: View {
     }
 
     private func promptSendButton(defaultMode: ConversationPromptSubmissionMode, showStreamingOptions: Bool) -> some View {
-        Group {
+        let buttonMode: ConversationPromptSubmissionMode = showStreamingOptions ? .submit : defaultMode
+
+        return Group {
             if showStreamingOptions {
                 Menu {
                     queuedPromptActions
                 } label: {
-                    sendButtonLabel(defaultMode: defaultMode)
+                    sendButtonLabel(defaultMode: buttonMode)
                 } primaryAction: {
                     viewModel.sendPrompt(mode: defaultMode)
                 }
@@ -494,7 +496,7 @@ struct ConversationScreen: View {
                 Button {
                     viewModel.sendPrompt(mode: defaultMode)
                 } label: {
-                    sendButtonLabel(defaultMode: defaultMode)
+                    sendButtonLabel(defaultMode: buttonMode)
                 }
             }
         }

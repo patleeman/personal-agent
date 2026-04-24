@@ -357,13 +357,13 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(persistedState.enabled)
     }
 
-    func testConversationRowPresentationUsesUnreadAndRunningIndicators() {
+    func testConversationRowPresentationUsesCwdFolderForSubtitleUnreadAndRunningIndicators() {
         let session = SessionMeta(
             id: "conversation-1",
             file: "/tmp/conversation-1.jsonl",
             timestamp: ISO8601DateFormatter.flexible.string(from: .now),
             cwd: "/Users/patrick/workingdir/personal-agent",
-            cwdSlug: "personal-agent",
+            cwdSlug: "--Users-patrick-working--",
             model: "gpt-5.4",
             title: "Unread running thread",
             messageCount: 5,

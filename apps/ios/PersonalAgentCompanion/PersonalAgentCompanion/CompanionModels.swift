@@ -277,6 +277,10 @@ struct SessionMeta: Codable, Equatable, Identifiable {
     var effectiveActivityDate: Date? {
         ISO8601DateFormatter.flexible.date(from: lastActivityAt ?? timestamp)
     }
+
+    var cwdDisplayName: String? {
+        companionPathLeafName(cwd) ?? cwdSlug.nilIfBlank
+    }
 }
 
 struct MessageImage: Codable, Equatable, Identifiable {
@@ -1268,6 +1272,22 @@ func parseCompanionDate(_ string: String?) -> Date? {
         return nil
     }
     return ISO8601DateFormatter.flexible.date(from: value) ?? ISO8601DateFormatter.fallback.date(from: value)
+}
+
+func companionPathLeafName(_ rawPath: String?) -> String? {
+    guard let trimmed = rawPath?.trimmed.nilIfBlank else {
+        return nil
+    }
+
+    let normalized = trimmed.replacingOccurrences(of: #"[\\/]+$"#, with: "", options: .regularExpression)
+    if normalized.isEmpty {
+        return trimmed
+    }
+    if normalized == "/" || normalized.range(of: #"^[A-Za-z]:$"#, options: .regularExpression) != nil {
+        return normalized
+    }
+
+    return normalized.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? normalized
 }
 
 func formatCompanionDate(_ string: String?) -> String {
