@@ -41,8 +41,6 @@ Example:
 }
 ```
 
-The old `webUi.port` and `webUi.useTailscaleServe` settings are ignored by current desktop-only builds.
-
 If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` becomes the managed mirror at `<state-root>/knowledge-base/repo` unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
 
 ## Other important config locations

@@ -72,7 +72,7 @@ Then inspect the automation detail page and owned run history in the desktop app
 
 Use the owning conversation or automation detail first, then check daemon logs.
 
-Use the built-in `run` tool to rerun, follow up, or cancel. Do not reach for an old `pa runs` workflow.
+Use the built-in `run` tool to rerun, follow up, or cancel.
 
 ## Vault root looks wrong
 

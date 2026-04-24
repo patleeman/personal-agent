@@ -1870,12 +1870,6 @@ async function updateCommand(args: string[]): Promise<number> {
   }
 }
 
-async function uiCommand(args: string[]): Promise<number> {
-  ensureNoExtraCommandArgs(args, 'pa ui');
-  console.error(uiError('CLI error', 'The standalone web UI has been removed. Use the Personal Agent desktop app.'));
-  return 1;
-}
-
 type CommandHandler = (args: string[]) => Promise<number>;
 
 type CliCommandCategory = 'chat' | 'system' | 'automation' | 'data' | 'configuration';
@@ -1958,14 +1952,6 @@ function buildCommandDefinitions(): CliCommandDefinition[] {
       helpText: DAEMON_HELP_TEXT,
       disableBuiltInHelp: true,
       run: daemonCommand,
-    },
-    {
-      name: 'ui',
-      category: 'system',
-      usage: 'ui',
-      description: 'Removed standalone web UI command',
-      disableBuiltInHelp: true,
-      run: uiCommand,
     },
     {
       name: 'mcp',
@@ -2111,17 +2097,11 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
     }
 
     const [firstArg, ...restArgs] = parsedFlags.argv;
-    const toolOnlyCommands = new Set(['tasks', 'runs']);
     const isHelpRequest = firstArg === '--help' || firstArg === '-h' || firstArg === 'help';
 
     if (isHelpRequest) {
       if (firstArg === 'help' && restArgs.length > 0) {
         const targetCommand = restArgs[0] as string;
-
-        if (toolOnlyCommands.has(targetCommand)) {
-          console.error(uiError('CLI error', `pa ${targetCommand} is no longer a public CLI workflow. Use the built-in ${targetCommand === 'runs' ? 'run' : 'scheduled_task'} tool or the desktop app instead.`));
-          return 1;
-        }
 
         if (!knownCommands.has(targetCommand)) {
           console.error(uiError('CLI error', `Unknown top-level command: ${targetCommand}`));
@@ -2134,11 +2114,6 @@ export async function runCli(argv: string[] = process.argv.slice(2)): Promise<nu
 
       printRootHelp(definitions);
       return 0;
-    }
-
-    if (toolOnlyCommands.has(firstArg)) {
-      console.error(uiError('CLI error', `pa ${firstArg} is no longer a public CLI workflow. Use the built-in ${firstArg === 'runs' ? 'run' : 'scheduled_task'} tool or the desktop app instead.`));
-      return 1;
     }
 
     if (!knownCommands.has(firstArg)) {

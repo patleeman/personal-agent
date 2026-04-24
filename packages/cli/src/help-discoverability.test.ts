@@ -70,7 +70,7 @@ describe('subcommand help discoverability', () => {
     }
   });
 
-  it('reports tool-first guidance for removed tasks and runs CLI entrypoints', async () => {
+  it('treats unsupported task and run CLI entrypoints like unknown commands', async () => {
     const errors: string[] = [];
 
     vi.spyOn(console, 'error').mockImplementation((...parts: unknown[]) => {
@@ -80,10 +80,8 @@ describe('subcommand help discoverability', () => {
     await expect(runCli(['tasks'])).resolves.toBe(1);
     await expect(runCli(['help', 'runs'])).resolves.toBe(1);
 
-    expect(errors.join('\n')).toContain('pa tasks is no longer a public CLI workflow');
-    expect(errors.join('\n')).toContain('Use the built-in scheduled_task tool');
-    expect(errors.join('\n')).toContain('pa runs is no longer a public CLI workflow');
-    expect(errors.join('\n')).toContain('Use the built-in run tool');
+    expect(errors.join('\n')).toContain('Unknown top-level command or option: tasks');
+    expect(errors.join('\n')).toContain('Unknown top-level command: runs');
   });
 
 

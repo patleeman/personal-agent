@@ -60,13 +60,9 @@ pa profile show
 pa profile use <name>
 ```
 
-## Removed standalone UI command
+## Desktop app
 
-```bash
-pa ui
-```
-
-`pa ui` now exits with an error. The standalone browser UI and managed web UI service were removed. Use the Electron desktop app instead:
+The desktop app is the UI. Start it directly during development:
 
 ```bash
 npm run desktop:start
@@ -97,22 +93,6 @@ pa mcp call <server> <tool> '{}'
 pa mcp auth <server>
 pa mcp logout <server>
 ```
-
-## What no longer has a public CLI workflow
-
-Do not expect these as primary public commands:
-
-- `pa runs`
-- `pa tasks`
-
-Use the built-in runtime tools instead:
-
-- `run`
-- `scheduled_task`
-- `conversation_queue`
-- `reminder`
-
-Use the desktop app for visual inspection of automations and owned run history.
 
 ## Practical flows
 

@@ -57,7 +57,7 @@ pa tui
 npm run desktop:start
 ```
 
-The old standalone browser UI / `pa ui` service has been removed; Electron serves the renderer through `personal-agent://app/`.
+Electron serves the renderer through `personal-agent://app/`; there is no standalone browser UI service.
 
 ## Core mental model
 

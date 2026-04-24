@@ -272,14 +272,14 @@ describe('CLI command flows', () => {
     logSpy.mockRestore();
   });
 
-  it('reports tool-first guidance when the removed tasks CLI is invoked', async () => {
+  it('treats unsupported tasks CLI as an unknown command', async () => {
     const errors: string[] = [];
     const errorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown) => {
       errors.push(String(message ?? ''));
     });
 
     expect(await runCli(['tasks', 'list'])).toBe(1);
-    expect(errors.some((line) => line.includes('pa tasks is no longer a public CLI workflow'))).toBe(true);
+    expect(errors.some((line) => line.includes('Unknown top-level command or option: tasks'))).toBe(true);
 
     errorSpy.mockRestore();
   });
