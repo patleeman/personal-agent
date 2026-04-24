@@ -17,6 +17,7 @@ import {
   shouldFetchConversationAttachments,
   shouldRenderConversationRail,
   constrainPromptImageDimensions,
+  replaceConversationMetaInSessionList,
 } from './ConversationPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -49,6 +50,53 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
 }
 
 describe('desktop conversation state fallback', () => {
+  it('syncs active conversation meta back into the session list', () => {
+    const sessions = [{
+      id: 'conv-123',
+      file: '/tmp/conv-123.jsonl',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: '-repo',
+      model: 'model-a',
+      title: 'Old title',
+      messageCount: 4,
+      isRunning: false,
+      needsAttention: true,
+    }];
+
+    const next = replaceConversationMetaInSessionList(sessions, 'conv-123', {
+      ...sessions[0]!,
+      title: 'Fresh title',
+      messageCount: 5,
+      isRunning: true,
+    });
+
+    expect(next).not.toBe(sessions);
+    expect(next?.[0]).toMatchObject({
+      title: 'Fresh title',
+      messageCount: 5,
+      isRunning: true,
+      needsAttention: true,
+    });
+  });
+
+  it('does not rewrite sessions when active conversation meta is unchanged', () => {
+    const sessions = [{
+      id: 'conv-123',
+      file: '/tmp/conv-123.jsonl',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: '-repo',
+      model: 'model-a',
+      title: 'Stable title',
+      messageCount: 4,
+      isRunning: true,
+      needsAttention: true,
+    }];
+
+    expect(replaceConversationMetaInSessionList(sessions, 'conv-123', sessions[0]!)).toBe(sessions);
+  });
+
   it('uses the dedicated desktop state only while the local subscription is healthy', () => {
     expect(shouldUseHealthyDesktopConversationState({
       draft: false,

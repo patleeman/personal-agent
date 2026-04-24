@@ -512,6 +512,51 @@ function replaceConversationTitleInSessionList<T extends { id: string; title: st
   return changed ? updatedSessions : sessions;
 }
 
+export function replaceConversationMetaInSessionList(
+  sessions: SessionMeta[] | null,
+  conversationId: string | null | undefined,
+  nextMeta: SessionMeta | null | undefined,
+): SessionMeta[] | null {
+  if (!sessions || !conversationId || !nextMeta || nextMeta.id !== conversationId) {
+    return sessions;
+  }
+
+  let changed = false;
+  const updatedSessions = sessions.map((session) => {
+    if (session.id !== conversationId) {
+      return session;
+    }
+
+    const updated = {
+      ...session,
+      ...nextMeta,
+      title: normalizeConversationTitle(nextMeta.title) ?? session.title,
+      isRunning: nextMeta.isRunning ?? session.isRunning,
+      isLive: nextMeta.isLive ?? session.isLive,
+      lastActivityAt: nextMeta.lastActivityAt ?? session.lastActivityAt,
+      needsAttention: nextMeta.needsAttention ?? session.needsAttention,
+      attentionUpdatedAt: nextMeta.attentionUpdatedAt ?? session.attentionUpdatedAt,
+      attentionUnreadMessageCount: nextMeta.attentionUnreadMessageCount ?? session.attentionUnreadMessageCount,
+      attentionUnreadActivityCount: nextMeta.attentionUnreadActivityCount ?? session.attentionUnreadActivityCount,
+      attentionActivityIds: nextMeta.attentionActivityIds ?? session.attentionActivityIds,
+      deferredResumes: nextMeta.deferredResumes ?? session.deferredResumes,
+      attachedContextDocs: nextMeta.attachedContextDocs ?? session.attachedContextDocs,
+    };
+
+    const didChange = Object.keys(updated).some((key) => (
+      updated[key as keyof SessionMeta] !== session[key as keyof SessionMeta]
+    ));
+    if (didChange) {
+      changed = true;
+      return updated;
+    }
+
+    return session;
+  });
+
+  return changed ? updatedSessions : sessions;
+}
+
 function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
   draft: boolean;
   conversationId: string | null | undefined;
@@ -3955,11 +4000,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || (!draft && (Boolean(branchLabel) || hasGitSummary));
 
   useEffect(() => {
-    const nextSessions = replaceConversationTitleInSessionList(sessions, id, visibleSessionDetail?.meta.title);
+    const nextSessions = replaceConversationMetaInSessionList(sessions, id, currentSessionMeta);
     if (nextSessions && nextSessions !== sessions) {
       setSessions(nextSessions);
     }
-  }, [id, sessions, setSessions, visibleSessionDetail?.meta.title]);
+  }, [currentSessionMeta, id, sessions, setSessions]);
 
   useEffect(() => {
     if (!id) {
