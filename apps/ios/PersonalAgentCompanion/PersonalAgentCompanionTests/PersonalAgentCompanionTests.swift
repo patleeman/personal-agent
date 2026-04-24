@@ -452,10 +452,14 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(labels[normalizeCompanionConversationGroupCwd(beta)], "Documents/personal-agent")
     }
 
-    func testTranscriptMarkdownVerbatimFallbackKeepsOrderedLists() {
-        XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("1. First\n2. Second\n3. Third"))
-        XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("- First\n- Second"))
-        XCTAssertFalse(shouldRenderTranscriptMarkdownVerbatim("**Bold** inline text only"))
+    func testTranscriptMarkdownRendererAcceptsInlineAndBlockMarkdown() throws {
+        XCTAssertNotNil(renderTranscriptMarkdown("**Bold** inline text only"))
+
+        let orderedList = try XCTUnwrap(renderTranscriptMarkdown("1. First\n2. Second\n3. Third"))
+        XCTAssertEqual(String(orderedList.characters), "FirstSecondThird")
+
+        let bulletList = try XCTUnwrap(renderTranscriptMarkdown("- First\n- Second"))
+        XCTAssertEqual(String(bulletList.characters), "FirstSecond")
     }
 
     func testPromptSendClearsComposerAndAddsBlocks() async throws {
