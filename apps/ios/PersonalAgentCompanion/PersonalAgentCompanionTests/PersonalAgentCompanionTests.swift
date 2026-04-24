@@ -537,18 +537,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         _ = try await client.createKnowledgeFolder(folderId: "notes/archive")
         _ = try await client.writeKnowledgeFile(fileId: "notes/archive/mobile-kb.md", content: "# Mobile KB\n")
 
-        let renamedFile = try await client.renameKnowledgeEntry(id: "notes/archive/mobile-kb.md", newName: "kb-v2.md")
+        let renamedFile = try await client.renameKnowledgeEntry(id: "notes/archive/mobile-kb.md", newName: "kb-v2.md", parentId: nil)
         XCTAssertEqual(renamedFile.id, "notes/archive/kb-v2.md")
 
-        let renamedFolder = try await client.renameKnowledgeEntry(id: "notes/archive/", newName: "history")
+        let renamedFolder = try await client.renameKnowledgeEntry(id: "notes/archive/", newName: "history", parentId: nil)
         XCTAssertEqual(renamedFolder.id, "notes/history/")
 
         let nested = try await client.listKnowledgeEntries(directoryId: "notes/history")
         XCTAssertTrue(nested.entries.contains(where: { $0.id == "notes/history/kb-v2.md" }))
 
+        let movedFile = try await client.renameKnowledgeEntry(id: "notes/history/kb-v2.md", newName: "kb-v2.md", parentId: "")
+        XCTAssertEqual(movedFile.id, "kb-v2.md")
+
+        let root = try await client.listKnowledgeEntries(directoryId: nil)
+        XCTAssertTrue(root.entries.contains(where: { $0.id == "kb-v2.md" }))
+
         try await client.deleteKnowledgeEntry(id: "notes/history/")
-        let root = try await client.listKnowledgeEntries(directoryId: "notes")
-        XCTAssertFalse(root.entries.contains(where: { $0.id == "notes/history/" }))
+        let notesRoot = try await client.listKnowledgeEntries(directoryId: "notes")
+        XCTAssertFalse(notesRoot.entries.contains(where: { $0.id == "notes/history/" }))
     }
 
     func testMockKnowledgeSearchAndImageAssetUpload() async throws {

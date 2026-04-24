@@ -600,6 +600,7 @@ private struct KnowledgeDirectoryScreen: View {
     @StateObject private var viewModel: KnowledgeDirectoryViewModel
     @State private var creationKind: KnowledgeCreationKind?
     @State private var renameEntry: CompanionKnowledgeEntry?
+    @State private var moveEntry: CompanionKnowledgeEntry?
     @State private var deleteEntry: CompanionKnowledgeEntry?
 
     init(appModel: CompanionAppModel, session: HostSessionModel, directoryId: String?, onOpenRoute: @escaping (KnowledgeRoute) -> Void) {
@@ -662,6 +663,13 @@ private struct KnowledgeDirectoryScreen: View {
                         }
                         .tint(.accentColor)
 
+                        Button {
+                            moveEntry = entry
+                        } label: {
+                            Label("Move", systemImage: "folder")
+                        }
+                        .tint(.blue)
+
                         Button(role: .destructive) {
                             deleteEntry = entry
                         } label: {
@@ -673,6 +681,11 @@ private struct KnowledgeDirectoryScreen: View {
                             renameEntry = entry
                         } label: {
                             Label("Rename", systemImage: "pencil")
+                        }
+                        Button {
+                            moveEntry = entry
+                        } label: {
+                            Label("Move", systemImage: "folder")
                         }
                         Button(role: .destructive) {
                             deleteEntry = entry
@@ -753,6 +766,11 @@ private struct KnowledgeDirectoryScreen: View {
                 await viewModel.rename(entry: entry, to: name) != nil
             }
         }
+        .sheet(item: $moveEntry) { entry in
+            KnowledgeMoveSheet(entry: entry) { destinationFolder in
+                await viewModel.move(entry: entry, to: destinationFolder) != nil
+            }
+        }
         .alert(
             deleteEntry?.isDirectory == true ? "Delete folder?" : "Delete note?",
             isPresented: Binding(get: { deleteEntry != nil }, set: { if !$0 { deleteEntry = nil } })
@@ -774,6 +792,51 @@ private struct KnowledgeDirectoryScreen: View {
         }
         .onAppear {
             viewModel.load()
+        }
+    }
+}
+
+private struct KnowledgeMoveSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let entry: CompanionKnowledgeEntry
+    let onMove: (String) async -> Bool
+
+    @State private var destinationFolder = ""
+    @State private var isMoving = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Destination folder") {
+                    TextField("Inbox", text: $destinationFolder)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                Section {
+                    Text("Leave blank to move \(entry.isDirectory ? "this folder" : "this note") to the Knowledge root. Use paths like Inbox or notes/research.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Move \(editableKnowledgeName(for: entry))")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isMoving ? "Moving…" : "Move") {
+                        Task {
+                            isMoving = true
+                            let moved = await onMove(destinationFolder)
+                            isMoving = false
+                            if moved {
+                                dismiss()
+                            }
+                        }
+                    }
+                    .disabled(isMoving)
+                }
+            }
         }
     }
 }

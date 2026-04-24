@@ -137,7 +137,7 @@ describe('daemon companion server', () => {
       readKnowledgeFile: async (fileId) => ({ id: fileId, content: '# Demo', updatedAt: '2026-04-19T00:00:00.000Z' }),
       writeKnowledgeFile: async ({ fileId, content }) => ({ id: fileId, kind: 'file', name: fileId.split('/').pop(), sizeBytes: content.length, updatedAt: '2026-04-19T00:00:00.000Z' }),
       createKnowledgeFolder: async (folderId) => ({ id: `${folderId}/`, kind: 'folder', name: folderId.split('/').pop(), sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
-      renameKnowledgeEntry: async ({ id, newName }) => ({ id: `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`, kind: id.endsWith('/') ? 'folder' : 'file', name: newName, sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
+      renameKnowledgeEntry: async ({ id, newName, parentId }) => ({ id: parentId !== undefined && parentId !== null ? `${parentId}${parentId ? '/' : ''}${newName}` : `${id.split('/').slice(0, -1).join('/')}${id.includes('/') ? '/' : ''}${newName}`, kind: id.endsWith('/') ? 'folder' : 'file', name: newName, sizeBytes: 0, updatedAt: '2026-04-19T00:00:00.000Z' }),
       deleteKnowledgeEntry: async () => ({ ok: true }),
       createKnowledgeImageAsset: async ({ fileName }) => ({ id: `_attachments/${fileName ?? 'image.png'}`, url: '/api/vault/asset?id=_attachments%2Fimage.png' }),
       importKnowledge: async (input) => ({ note: { id: 'Inbox/shared-link.md', kind: 'file', name: 'shared-link.md', sizeBytes: JSON.stringify(input).length, updatedAt: '2026-04-19T00:00:00.000Z' }, sourceKind: input.kind, title: input.title ?? 'Shared link' }),
@@ -357,6 +357,23 @@ describe('daemon companion server', () => {
     expect(knowledgeRenameResponse.status).toBe(200);
     expect(await readJson(knowledgeRenameResponse)).toEqual({
       id: 'notes/renamed-note.md',
+      kind: 'file',
+      name: 'renamed-note.md',
+      sizeBytes: 0,
+      updatedAt: '2026-04-19T00:00:00.000Z',
+    });
+
+    const knowledgeMoveResponse = await fetch(`${baseUrl}/companion/v1/knowledge/rename`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id: 'notes/renamed-note.md', newName: 'renamed-note.md', parentId: 'Inbox' }),
+    });
+    expect(knowledgeMoveResponse.status).toBe(200);
+    expect(await readJson(knowledgeMoveResponse)).toEqual({
+      id: 'Inbox/renamed-note.md',
       kind: 'file',
       name: 'renamed-note.md',
       sizeBytes: 0,

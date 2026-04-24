@@ -771,6 +771,11 @@ export class DaemonCompanionServer {
       const input: CompanionKnowledgeRenameInput = {
         id: readRequiredString(payload.id, 'id'),
         newName: readRequiredString(payload.newName, 'newName'),
+        ...(payload.parentId !== undefined ? {
+          parentId: payload.parentId === null
+            ? null
+            : (typeof payload.parentId === 'string' && payload.parentId.trim().length === 0 ? null : readOptionalString(payload.parentId)),
+        } : {}),
       };
       sendJson(response, 200, await runtime.renameKnowledgeEntry(input));
       return;

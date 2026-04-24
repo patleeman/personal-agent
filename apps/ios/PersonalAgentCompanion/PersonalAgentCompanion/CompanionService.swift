@@ -53,7 +53,7 @@ protocol CompanionClientProtocol: AnyObject {
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry
     func createKnowledgeFolder(folderId: String) async throws -> CompanionKnowledgeEntry
-    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry
+    func renameKnowledgeEntry(id: String, newName: String, parentId: String?) async throws -> CompanionKnowledgeEntry
     func deleteKnowledgeEntry(id: String) async throws
     func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse
     func importKnowledge(_ input: CompanionKnowledgeImportRequest) async throws -> CompanionKnowledgeImportResponse
@@ -679,8 +679,12 @@ final class LiveCompanionClient: CompanionClientProtocol {
         try await authorizedJSON(path: "/companion/v1/knowledge/folder", method: "POST", body: ["id": folderId], decode: CompanionKnowledgeEntry.self)
     }
 
-    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry {
-        try await authorizedJSON(path: "/companion/v1/knowledge/rename", method: "POST", body: ["id": id, "newName": newName], decode: CompanionKnowledgeEntry.self)
+    func renameKnowledgeEntry(id: String, newName: String, parentId: String?) async throws -> CompanionKnowledgeEntry {
+        var body: [String: Any] = ["id": id, "newName": newName]
+        if let parentId {
+            body["parentId"] = parentId.trimmed
+        }
+        return try await authorizedJSON(path: "/companion/v1/knowledge/rename", method: "POST", body: body, decode: CompanionKnowledgeEntry.self)
     }
 
     func deleteKnowledgeEntry(id: String) async throws {
@@ -2912,7 +2916,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         return makeKnowledgeEntry(id: normalizedFolderId, kind: "folder", sizeBytes: 0)
     }
 
-    func renameKnowledgeEntry(id: String, newName: String) async throws -> CompanionKnowledgeEntry {
+    func renameKnowledgeEntry(id: String, newName: String, parentId: String?) async throws -> CompanionKnowledgeEntry {
         guard let normalizedId = normalizeKnowledgeId(id) else {
             throw CompanionClientError.requestFailed("Knowledge entry id is required.")
         }
@@ -2920,15 +2924,18 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard !trimmedName.isEmpty, !trimmedName.contains("/"), !trimmedName.contains("\\") else {
             throw CompanionClientError.requestFailed("Knowledge entry names cannot contain path separators.")
         }
-        let parentDirectory = knowledgeParentDirectory(for: normalizedId)
+        let parentDirectory = parentId == nil ? knowledgeParentDirectory(for: normalizedId) : normalizeKnowledgeId(parentId)
         let destinationId = [parentDirectory, trimmedName].compactMap { $0 }.joined(separator: "/")
+        let isDirectory = knowledgeFolders.contains(normalizedId)
+        if isDirectory, let parentDirectory, (parentDirectory == normalizedId || parentDirectory.hasPrefix("\(normalizedId)/")) {
+            throw CompanionClientError.requestFailed("A folder cannot be moved into itself.")
+        }
         guard destinationId != normalizedId else {
             if knowledgeFiles[normalizedId] != nil {
                 return makeKnowledgeEntry(id: normalizedId, kind: "file", sizeBytes: knowledgeFiles[normalizedId]?.utf8.count ?? 0)
             }
             return makeKnowledgeEntry(id: normalizedId, kind: "folder", sizeBytes: 0)
         }
-        let isDirectory = knowledgeFolders.contains(normalizedId)
         if knowledgeFiles[destinationId] != nil || knowledgeFolders.contains(destinationId) {
             throw CompanionClientError.requestFailed("A file or folder with that name already exists.")
         }

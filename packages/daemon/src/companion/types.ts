@@ -282,6 +282,7 @@ export interface CompanionKnowledgeImportInput {
 export interface CompanionKnowledgeRenameInput {
   id: string;
   newName: string;
+  parentId?: string | null;
 }
 
 export interface CompanionKnowledgeSearchInput {

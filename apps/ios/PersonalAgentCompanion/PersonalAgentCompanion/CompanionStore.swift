@@ -1027,10 +1027,28 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             return nil
         }
         do {
-            let renamed = try await client.renameKnowledgeEntry(id: entry.id, newName: finalName)
+            let renamed = try await client.renameKnowledgeEntry(id: entry.id, newName: finalName, parentId: nil)
             errorMessage = nil
             load()
             return renamed
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
+    }
+
+    func move(entry: CompanionKnowledgeEntry, to rawDestinationFolder: String) async -> CompanionKnowledgeEntry? {
+        let destinationFolder = rawDestinationFolder.trimmed.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+        let normalizedEntryId = entry.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+        if entry.isDirectory, !destinationFolder.isEmpty, (destinationFolder == normalizedEntryId || destinationFolder.hasPrefix("\(normalizedEntryId)/")) {
+            errorMessage = "A folder cannot be moved into itself. Physics remains undefeated."
+            return nil
+        }
+        do {
+            let moved = try await client.renameKnowledgeEntry(id: entry.id, newName: entry.name, parentId: destinationFolder)
+            errorMessage = nil
+            load()
+            return moved
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -1322,7 +1340,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
         let finalName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
         do {
             let oldFileId = fileId
-            let renamed = try await client.renameKnowledgeEntry(id: fileId, newName: finalName)
+            let renamed = try await client.renameKnowledgeEntry(id: fileId, newName: finalName, parentId: nil)
             fileId = renamed.id
             updatedAt = renamed.updatedAt
             baseUpdatedAt = renamed.updatedAt

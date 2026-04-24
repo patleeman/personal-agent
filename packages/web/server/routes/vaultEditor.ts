@@ -326,10 +326,10 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   });
 
   // POST /api/vault/rename  — rename / move within the vault
-  // body: { id: string, newName: string }  (newName is just the basename)
+  // body: { id: string, newName: string, parentId?: string }  (newName is just the basename)
   router.post('/api/vault/rename', (req, res) => {
     try {
-      const { id, newName } = req.body as { id?: unknown; newName?: unknown };
+      const { id, newName, parentId } = req.body as { id?: unknown; newName?: unknown; parentId?: unknown };
       if (typeof id !== 'string' || !id.trim()) {
         res.status(400).json({ error: 'id is required' });
         return;
@@ -347,10 +347,23 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      const newAbs = join(dirname(abs), newName.trim());
       const root = getRoot();
+      const parentAbs = parentId === null
+        ? root
+        : typeof parentId === 'string'
+        ? (parentId.trim() ? safePath(parentId.trim().replace(/^\/+|\/+$/g, '')) : root)
+        : dirname(abs);
+      if (!parentAbs || !existsSync(parentAbs) || !statSync(parentAbs).isDirectory()) {
+        res.status(400).json({ error: 'Target folder does not exist' });
+        return;
+      }
+      const newAbs = join(parentAbs, newName.trim());
       if (!isInsideRoot(root, newAbs)) {
         res.status(400).json({ error: 'Target path is outside vault' });
+        return;
+      }
+      if (statSync(abs).isDirectory() && (newAbs === abs || newAbs.startsWith(`${abs}/`))) {
+        res.status(400).json({ error: 'Cannot move a folder into itself' });
         return;
       }
       if (existsSync(newAbs)) {

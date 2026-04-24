@@ -803,7 +803,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
-    async renameKnowledgeEntry(input: { id: string; newName: string }) {
+    async renameKnowledgeEntry(input: { id: string; newName: string; parentId?: string | null }) {
       return invokeDesktopApi(hostManager, {
         method: 'POST',
         path: '/api/vault/rename',
