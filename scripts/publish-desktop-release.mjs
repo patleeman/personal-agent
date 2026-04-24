@@ -35,6 +35,10 @@ function run(command, args, options = {}) {
   }
 }
 
+function isTruthyEnv(value) {
+  return ['1', 'true', 'yes'].includes(String(value ?? '').trim().toLowerCase());
+}
+
 function capture(command, args, options = {}) {
   const result = spawnSync(command, args, {
     cwd: options.cwd ?? repoRoot,
@@ -538,6 +542,30 @@ function notarizeDistributionContainers(env, files) {
   }
 }
 
+function requireSmokeTestApproval(env, releaseDir) {
+  if (isTruthyEnv(env.PERSONAL_AGENT_RELEASE_SMOKE_TESTED)) {
+    console.log('Release smoke test gate acknowledged via PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1.');
+    return;
+  }
+
+  const appPath = resolve(releaseDir, 'mac-arm64', 'Personal Agent.app');
+
+  if (!process.stdin.isTTY) {
+    fail([
+      'Release smoke test is required before pushing/uploading artifacts.',
+      `Test the built app at: ${appPath}`,
+      'Then rerun with PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 once startup and core app flows pass.',
+    ].join('\n'));
+  }
+
+  console.log('');
+  console.log('Release smoke test required before publishing.');
+  console.log(`Built app: ${appPath}`);
+  console.log('Suggested check: launch the app, verify it starts, and smoke test one conversation and one knowledge route.');
+  console.log('Press Enter only after the built binary passes the smoke test, or Ctrl-C to abort.');
+  run('bash', ['-lc', 'read -r _ < /dev/tty']);
+}
+
 const packageJson = readJsonFile(packageJsonPath);
 const version = packageJson.version;
 const tag = `v${version}`;
@@ -563,6 +591,7 @@ validatePackagedRuntimeDependencies(buildRoot, releaseDir);
 
 const files = collectReleaseFiles(releaseDir, version);
 notarizeDistributionContainers(env, files);
+requireSmokeTestApproval(env, releaseDir);
 
 console.log(`Pushing ${tag} to GitHub...`);
 pushReleaseRef(tag);

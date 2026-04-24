@@ -21,8 +21,9 @@ Those commands:
 3. sync workspace package versions and refresh `package-lock.json`
 4. build signed desktop artifacts locally
 5. notarize the artifacts
-6. push the commit and tag
-7. create or update the matching GitHub release in `patleeman/personal-agent-releases`
+6. require a smoke test of the built `.app` binary
+7. push the commit and tag
+8. create or update the matching GitHub release in `patleeman/personal-agent-releases`
 
 Pi is now updated automatically by the `npm version` step used by the desktop release commands. If Pi is already current, the step is a no-op.
 
@@ -30,6 +31,27 @@ If the version bump already happened and you only need to retry publish:
 
 ```bash
 npm run release:publish
+```
+
+## Built binary smoke test
+
+`npm run release:publish` stops after signing/notarization and before pushing the tag or uploading release assets. At that gate, test the built app from the release output, usually:
+
+```bash
+open -n "<release-snapshot>/dist/release/mac-arm64/Personal Agent.app"
+```
+
+Minimum smoke test:
+
+1. launch the built app successfully
+2. verify the shell loads without startup/beachball regressions
+3. open one conversation route
+4. open the Knowledge page and switch at least one file
+
+Only continue the publish prompt after the built binary passes. For non-interactive reruns where the exact built binary was already tested, set:
+
+```bash
+PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 npm run release:publish
 ```
 
 ## Signing and notarization inputs
@@ -74,7 +96,7 @@ Artifacts are uploaded to the public release-only repo, not to the private sourc
 
 ## Practical rule
 
-If the goal is a downloadable macOS app on GitHub Releases, use the local signed release flow and then verify the uploaded assets.
+If the goal is a downloadable macOS app on GitHub Releases, use the local signed release flow, smoke test the built binary before publishing, and then verify the uploaded assets.
 
 ## Related docs
 
