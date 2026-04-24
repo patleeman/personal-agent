@@ -381,7 +381,7 @@ export async function importLocalApiModuleWithFallback(input: {
   }
 }
 
-export function loadLocalApiModule(): Promise<LocalApiModule> {
+export function loadRawLocalApiModule(): Promise<LocalApiModule> {
   if (!localApiModulePromise) {
     localApiModulePromise = importLocalApiModuleWithFallback({
       primaryUrl: resolveLocalApiModuleUrl(),
@@ -391,4 +391,8 @@ export function loadLocalApiModule(): Promise<LocalApiModule> {
   }
 
   return localApiModulePromise;
+}
+
+export function loadLocalApiModule(): Promise<LocalApiModule> {
+  return loadRawLocalApiModule();
 }

@@ -251,6 +251,38 @@ describe('createDesktopProtocolHandler', () => {
     expect(await response.json()).toEqual({ ok: true });
   });
 
+  it('routes readonly knowledge api reads through the worker dispatcher on the local host', async () => {
+    const dispatchReadonlyLocalApiRequest = vi.fn().mockResolvedValue({
+      statusCode: 200,
+      headers: {
+        'content-type': 'application/json; charset=utf-8',
+      },
+      body: Buffer.from(JSON.stringify({ root: '/vault', files: [] }), 'utf-8'),
+    });
+    const dispatchApiRequest = vi.fn();
+    const handler = createDesktopProtocolHandler({
+      dispatchReadonlyLocalApiRequest,
+      hostManager: {
+        getHostController: () => ({
+          dispatchApiRequest,
+          subscribeApiStream: vi.fn(),
+        }),
+      } as never,
+      hostId: 'local',
+    });
+
+    const response = await handler(new Request('personal-agent://app/api/vault-files'));
+
+    expect(dispatchReadonlyLocalApiRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      path: '/api/vault-files',
+      body: undefined,
+      headers: {},
+    });
+    expect(dispatchApiRequest).not.toHaveBeenCalled();
+    expect(await response.json()).toEqual({ root: '/vault', files: [] });
+  });
+
   it('allows PUT requests for local knowledge workspace writes', async () => {
     const dispatchDesktopLocalApiRequest = vi.fn().mockResolvedValue({
       statusCode: 200,

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { app, protocol, session, type Session as ElectronSession } from 'electron';
 import { getDaemonClientTransportOverride, loadDaemonConfig } from '@personal-agent/daemon';
 import { loadLocalApiModule, type LocalApiModuleLoader } from './local-api-module.js';
+import { dispatchReadonlyLocalApiRequest, shouldDispatchReadonlyLocalApiInWorker } from './readonly-local-api.js';
 import { getHostBrowserPartition } from './state/browser-partitions.js';
 import type { DesktopApiStreamEvent } from './hosts/types.js';
 import type { HostManager } from './hosts/host-manager.js';
@@ -257,10 +258,12 @@ function createSseProtocolResponse(subscribe: (onEvent: (event: DesktopApiStream
 
 export function createDesktopProtocolHandler(options?: {
   loadLocalApiModule?: LocalApiModuleLoader;
+  dispatchReadonlyLocalApiRequest?: typeof dispatchReadonlyLocalApiRequest;
   hostManager?: HostManager;
   hostId?: string;
 }) {
   const loadLocalApi = options?.loadLocalApiModule ?? loadLocalApiModule;
+  const dispatchReadonlyRequest = options?.dispatchReadonlyLocalApiRequest ?? dispatchReadonlyLocalApiRequest;
 
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
@@ -307,10 +310,25 @@ export function createDesktopProtocolHandler(options?: {
           );
         }
 
+        const requestPath = `${url.pathname}${url.search}`;
+        const requestBody = await readDesktopProtocolRequestBody(request);
+        const requestHeaders = Object.fromEntries(request.headers.entries());
+
+        if (shouldDispatchReadonlyLocalApiInWorker({
+          method: request.method,
+          path: requestPath,
+          hostId: options?.hostId ?? (options?.hostManager ? 'local' : null),
+        })) {
+          const response = await dispatchReadonlyRequest({
+            method: request.method,
+            path: requestPath,
+            body: requestBody,
+            headers: requestHeaders,
+          });
+          return createBinaryProtocolResponse(response);
+        }
+
         if (options?.hostManager) {
-          const requestPath = `${url.pathname}${url.search}`;
-          const requestBody = await readDesktopProtocolRequestBody(request);
-          const requestHeaders = Object.fromEntries(request.headers.entries());
           const targetedResponse = await dispatchConversationExecutionRequest(options.hostManager, {
             method: request.method,
             path: requestPath,
@@ -330,9 +348,9 @@ export function createDesktopProtocolHandler(options?: {
         const module = await loadLocalApi();
         const response = await module.dispatchDesktopLocalApiRequest({
           method: request.method,
-          path: `${url.pathname}${url.search}`,
-          body: await readDesktopProtocolRequestBody(request),
-          headers: Object.fromEntries(request.headers.entries()),
+          path: requestPath,
+          body: requestBody,
+          headers: requestHeaders,
         });
 
         return createBinaryProtocolResponse(response);

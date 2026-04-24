@@ -390,11 +390,6 @@ export const api = {
     return getKnowledgeBaseState();
   },
   vaultFiles: async () => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.readVaultFiles();
-    }
-
     return get<VaultFileListResult>('/vault-files');
   },
   tools: async (options?: { profile?: string }) => {

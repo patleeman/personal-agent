@@ -720,10 +720,6 @@ describe('api desktop transport', () => {
     const readDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
     const readVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
-    const readVaultFiles = vi.fn().mockResolvedValue({
-      root: '/vault',
-      files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
-    });
     const updateVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     const readConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
@@ -740,7 +736,6 @@ describe('api desktop transport', () => {
         readDefaultCwd,
         updateDefaultCwd,
         readVaultRoot,
-        readVaultFiles,
         updateVaultRoot,
         pickFolder,
         readConversationTitleSettings,
@@ -771,13 +766,13 @@ describe('api desktop transport', () => {
     expect(savedConversationTitleSettings).toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
   });
 
-  it('uses dedicated desktop vault-file and folder-picker bridges on the local Electron host', async () => {
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-    const readVaultFiles = vi.fn().mockResolvedValue({
+  it('uses HTTP for vault files and the desktop bridge for folder picking on the local Electron host', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({
       root: '/vault',
       files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
-    });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const readVaultFiles = vi.fn();
     const pickFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     Object.assign(window as { personalAgentDesktop?: unknown }, {
       personalAgentDesktop: {
@@ -797,9 +792,9 @@ describe('api desktop transport', () => {
     const vaultFiles = await api.vaultFiles();
     const pickedFolder = await api.pickFolder('/repo');
 
-    expect(readVaultFiles).toHaveBeenCalledTimes(1);
+    expect(readVaultFiles).not.toHaveBeenCalled();
     expect(pickFolder).toHaveBeenCalledWith({ cwd: '/repo' });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/vault-files', { method: 'GET', cache: 'no-store' });
     expect(vaultFiles).toEqual({
       root: '/vault',
       files: [{ id: 'notes/a.md', kind: 'file', name: 'a.md', path: '/vault/notes/a.md', sizeBytes: 12, updatedAt: '2026-04-18T12:00:00.000Z' }],
