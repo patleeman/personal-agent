@@ -210,7 +210,7 @@ final class CompanionAppModel: ObservableObject {
         return activeSession?.client
     }
 
-    private func processPendingKnowledgeSharesIfPossible(forceHostSelection: Bool = false) async {
+    func processPendingKnowledgeSharesIfPossible(forceHostSelection: Bool = false) async {
         guard !isImportingKnowledgeShares else {
             return
         }
@@ -938,23 +938,27 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
 
     func load() {
         Task {
-            isLoading = true
-            defer { isLoading = false }
-            do {
-                let result = try await client.listKnowledgeEntries(directoryId: directoryId)
-                rootPath = result.root
-                entries = result.entries
-                    .filter { $0.isDirectory || $0.isMarkdownFile }
-                    .sorted { lhs, rhs in
-                        if lhs.kind != rhs.kind {
-                            return lhs.isDirectory
-                        }
-                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            await reload()
+        }
+    }
+
+    func reload() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let result = try await client.listKnowledgeEntries(directoryId: directoryId)
+            rootPath = result.root
+            entries = result.entries
+                .filter { $0.isDirectory || $0.isMarkdownFile }
+                .sorted { lhs, rhs in
+                    if lhs.kind != rhs.kind {
+                        return lhs.isDirectory
                     }
-                errorMessage = nil
-            } catch {
-                errorMessage = error.localizedDescription
-            }
+                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+                }
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -686,6 +686,9 @@ private struct KnowledgeDirectoryScreen: View {
         .scrollContentBackground(.hidden)
         .background(CompanionTheme.canvas)
         .listStyle(.insetGrouped)
+        .refreshable {
+            await viewModel.reload()
+        }
         .navigationTitle(viewModel.title)
         .toolbarBackground(CompanionTheme.canvas, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
