@@ -454,7 +454,7 @@
   }
 
   .ui-app-page-title {
-    @apply text-[32px] font-semibold tracking-[-0.04em] text-primary sm:text-[34px];
+    @apply text-[32px] font-semibold leading-[1.05] tracking-[-0.04em] text-primary sm:text-[34px];
   }
 
   .ui-app-page-summary {
