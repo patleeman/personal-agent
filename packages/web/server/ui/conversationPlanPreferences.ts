@@ -107,8 +107,8 @@ function normalizeConversationPlanItem(value: unknown, index: number): Conversat
 
 export function readConversationPlanDefaults(settingsFile: string): ConversationPlanDefaultsState {
   const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+  const ui = isRecord(settings.ui) ? settings.ui : {};
+  const conversationAutomation = isRecord(ui.conversationAutomation) ? ui.conversationAutomation : {};
 
   return {
     defaultEnabled: conversationAutomation.defaultEnabled === true,
@@ -120,23 +120,23 @@ export function writeConversationPlanDefaults(
   settingsFile: string,
 ): ConversationPlanDefaultsState {
   const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+  const ui = isRecord(settings.ui) ? { ...settings.ui } : {};
+  const conversationAutomation = isRecord(ui.conversationAutomation) ? { ...ui.conversationAutomation } : {};
 
   if (typeof input.defaultEnabled === 'boolean') {
     conversationAutomation.defaultEnabled = input.defaultEnabled;
   }
 
-  webUi.conversationAutomation = conversationAutomation;
-  settings.webUi = webUi;
+  ui.conversationAutomation = conversationAutomation;
+  settings.ui = ui;
   writeSettingsObject(settingsFile, settings);
   return readConversationPlanDefaults(settingsFile);
 }
 
 export function readConversationPlanLibrary(settingsFile: string): ConversationPlanLibraryState {
   const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? settings.webUi : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? webUi.conversationAutomation : {};
+  const ui = isRecord(settings.ui) ? settings.ui : {};
+  const conversationAutomation = isRecord(ui.conversationAutomation) ? ui.conversationAutomation : {};
   const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? conversationAutomation.workflowPresets : {};
 
   const presets = Array.isArray(workflowPresets.presets)
@@ -183,8 +183,8 @@ export function writeConversationPlanLibrary(
   settingsFile: string,
 ): ConversationPlanLibraryState {
   const settings = readSettingsObject(settingsFile);
-  const webUi = isRecord(settings.webUi) ? { ...settings.webUi } : {};
-  const conversationAutomation = isRecord(webUi.conversationAutomation) ? { ...webUi.conversationAutomation } : {};
+  const ui = isRecord(settings.ui) ? { ...settings.ui } : {};
+  const conversationAutomation = isRecord(ui.conversationAutomation) ? { ...ui.conversationAutomation } : {};
   const workflowPresets = isRecord(conversationAutomation.workflowPresets) ? { ...conversationAutomation.workflowPresets } : {};
 
   if (input.presets !== undefined) {
@@ -240,8 +240,8 @@ export function writeConversationPlanLibrary(
   }
 
   conversationAutomation.workflowPresets = workflowPresets;
-  webUi.conversationAutomation = conversationAutomation;
-  settings.webUi = webUi;
+  ui.conversationAutomation = conversationAutomation;
+  settings.ui = ui;
   writeSettingsObject(settingsFile, settings);
   return readConversationPlanLibrary(settingsFile);
 }

@@ -69,7 +69,7 @@ describe('readConversationAutoTitleSettings', () => {
     const dir = createTempDir('pa-conversation-title-');
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      webUi: {
+      ui: {
         conversationTitles: {
           enabled: false,
           model: 'openrouter/openai/gpt-5-mini',

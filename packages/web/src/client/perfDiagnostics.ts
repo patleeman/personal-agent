@@ -42,12 +42,12 @@ function appendSample<T>(samples: T[], sample: T): void {
   }
 }
 
-function getGlobalPerfTarget(): { __PA_WEB_PERF__?: PerfStore } {
-  return globalThis as { __PA_WEB_PERF__?: PerfStore };
+function getGlobalPerfTarget(): { __PA_APP_PERF__?: PerfStore } {
+  return globalThis as { __PA_APP_PERF__?: PerfStore };
 }
 
 function publishPerfStore(): void {
-  getGlobalPerfTarget().__PA_WEB_PERF__ = perfStore;
+  getGlobalPerfTarget().__PA_APP_PERF__ = perfStore;
 }
 
 function shouldLogPerfSamples(): boolean {

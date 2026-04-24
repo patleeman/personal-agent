@@ -406,14 +406,6 @@ export interface DaemonState {
   log: LogTail;
 }
 
-interface WebUiReleaseSummary {
-  distDir: string;
-  serverDir: string;
-  serverEntryFile: string;
-  sourceRepoRoot: string;
-  revision?: string;
-}
-
 // ── Sessions ──────────────────────────────────────────────────────────────────
 
 export interface ConversationContextDocRef {
@@ -898,7 +890,7 @@ export interface AppStatus {
   profile: string;
   repoRoot: string;
   projectCount: number;
-  webUiRevision?: string;
+  appRevision?: string;
 }
 
 type ModelServiceTier = 'auto' | 'default' | 'flex' | 'priority' | 'scale';

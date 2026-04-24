@@ -678,7 +678,7 @@ describe('model routes', () => {
     const { files, getHandler } = createDesktopHarness(allocateFiles());
 
     writeFileSync(files.settingsFile, JSON.stringify({
-      webUi: {
+      ui: {
         conversationAutomation: {
           defaultEnabled: true,
           workflowPresets: {

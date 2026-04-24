@@ -254,7 +254,7 @@ describe('SettingsPage', () => {
           profile: 'assistant',
           repoRoot: '/Users/patrick/workingdir/personal-agent',
           projectCount: 5,
-          webUiRevision: 'abc123',
+          appRevision: 'abc123',
         });
       }
 

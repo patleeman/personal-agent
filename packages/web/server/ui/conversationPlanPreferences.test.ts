@@ -40,7 +40,7 @@ describe('readConversationPlanDefaults', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      webUi: {
+      ui: {
         conversationAutomation: {
           defaultEnabled: true,
           workflowPresets: {
@@ -106,7 +106,7 @@ describe('writeConversationPlanDefaults', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
       },
     }));
@@ -114,7 +114,7 @@ describe('writeConversationPlanDefaults', () => {
     expect(writeConversationPlanDefaults({ defaultEnabled: true }, file)).toEqual({ defaultEnabled: true });
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         conversationAutomation: {
           defaultEnabled: true,
@@ -130,7 +130,7 @@ describe('writeConversationPlanLibrary', () => {
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         conversationAutomation: {
           defaultEnabled: true,
@@ -170,7 +170,7 @@ describe('writeConversationPlanLibrary', () => {
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         conversationAutomation: {
           defaultEnabled: true,

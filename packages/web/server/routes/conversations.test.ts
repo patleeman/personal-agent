@@ -230,7 +230,7 @@ function createDesktopHarness(options?: {
     flushLiveDeferredResumes: options?.flushLiveDeferredResumes ?? (async () => {}),
     getCurrentProfile: () => 'assistant',
     getRepoRoot: () => '/repo',
-    getSavedWebUiPreferences: () => ({ compactConversations: false }),
+    getSavedUiPreferences: () => ({ compactConversations: false }),
   });
 
   return {
@@ -332,7 +332,7 @@ describe('conversation routes', () => {
     expect(setConversationServiceContextMock).toHaveBeenCalledWith({
       getCurrentProfile: expect.any(Function),
       getRepoRoot: expect.any(Function),
-      getSavedWebUiPreferences: expect.any(Function),
+      getSavedUiPreferences: expect.any(Function),
     });
 
     const metaRes = createResponse();

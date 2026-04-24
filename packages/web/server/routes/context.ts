@@ -1,6 +1,6 @@
 import type { Express } from 'express';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
-import type { SavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import type { SavedUiPreferences } from '../ui/uiPreferences.js';
 
 export interface LiveSessionResourceOptions extends Record<string, unknown> {
   additionalExtensionPaths: string[];
@@ -64,7 +64,7 @@ export interface ServerRouteContext {
   buildLiveSessionResourceOptions: (profile?: string) => LiveSessionResourceOptions;
   buildLiveSessionExtensionFactories: () => ExtensionFactory[];
   flushLiveDeferredResumes: () => Promise<void>;
-  getSavedWebUiPreferences: () => SavedWebUiPreferences;
+  getSavedUiPreferences: () => SavedUiPreferences;
   listTasksForCurrentProfile: () => CurrentProfileTaskSummary[];
   listMemoryDocs: () => MemoryDocSummary[];
   listSkillsForCurrentProfile: () => SkillSummary[];

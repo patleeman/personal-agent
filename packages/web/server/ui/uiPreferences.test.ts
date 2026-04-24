@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from './webUiPreferences.js';
+import { readSavedUiPreferences, writeSavedUiPreferences } from './uiPreferences.js';
 
 const tempDirs: string[] = [];
 
@@ -12,15 +12,15 @@ afterEach(async () => {
 });
 
 function createTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'pa-web-ui-prefs-'));
+  const dir = mkdtempSync(join(tmpdir(), 'pa-ui-prefs-'));
   tempDirs.push(dir);
   return dir;
 }
 
-describe('readSavedWebUiPreferences', () => {
+describe('readSavedUiPreferences', () => {
   it('returns empty ids when the settings file is missing', () => {
     const dir = createTempDir();
-    expect(readSavedWebUiPreferences(join(dir, 'settings.json'))).toEqual({
+    expect(readSavedUiPreferences(join(dir, 'settings.json'))).toEqual({
       openConversationIds: [],
       pinnedConversationIds: [],
       archivedConversationIds: [],
@@ -33,7 +33,7 @@ describe('readSavedWebUiPreferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      webUi: {
+      ui: {
         openConversationIds: [' session-1 ', '', 'session-2', null, 'session-1'],
         pinnedConversationIds: ['session-2', ' session-3 ', 'session-3'],
         archivedConversationIds: ['session-3', ' session-4 ', '', 'session-1', 'session-4'],
@@ -41,7 +41,7 @@ describe('readSavedWebUiPreferences', () => {
       },
     }));
 
-    expect(readSavedWebUiPreferences(file)).toEqual({
+    expect(readSavedUiPreferences(file)).toEqual({
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-2', 'session-3'],
       archivedConversationIds: ['session-4'],
@@ -51,18 +51,18 @@ describe('readSavedWebUiPreferences', () => {
   });
 });
 
-describe('writeSavedWebUiPreferences', () => {
+describe('writeSavedUiPreferences', () => {
   it('writes the workspace and archived conversation ids while preserving unrelated settings', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         sidebarCollapsed: true,
       },
     }));
 
-    writeSavedWebUiPreferences({
+    writeSavedUiPreferences({
       openConversationIds: ['session-1', ' session-2 ', 'session-3'],
       pinnedConversationIds: ['session-3', 'session-4', 'session-4'],
       archivedConversationIds: ['session-2', 'session-5', ' session-6 '],
@@ -71,7 +71,7 @@ describe('writeSavedWebUiPreferences', () => {
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         sidebarCollapsed: true,
         openConversationIds: ['session-1', 'session-2'],
         pinnedConversationIds: ['session-3', 'session-4'],
@@ -85,7 +85,7 @@ describe('writeSavedWebUiPreferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
         archivedConversationIds: ['session-3'],
@@ -93,9 +93,9 @@ describe('writeSavedWebUiPreferences', () => {
       },
     }));
 
-    writeSavedWebUiPreferences({ pinnedConversationIds: ['session-4'] }, file);
+    writeSavedUiPreferences({ pinnedConversationIds: ['session-4'] }, file);
 
-    expect(readSavedWebUiPreferences(file)).toEqual({
+    expect(readSavedUiPreferences(file)).toEqual({
       openConversationIds: ['session-1'],
       pinnedConversationIds: ['session-4'],
       archivedConversationIds: ['session-3'],
@@ -108,14 +108,14 @@ describe('writeSavedWebUiPreferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
 
-    writeSavedWebUiPreferences({
+    writeSavedUiPreferences({
       nodeBrowserViews: [
         { id: ' shared-skills ', name: ' Shared skills ', search: '?q=type:skill', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:01:00.000Z' },
         { id: '', name: 'broken', search: '', createdAt: '', updatedAt: '' },
       ],
     }, file);
 
-    expect(readSavedWebUiPreferences(file)).toEqual({
+    expect(readSavedUiPreferences(file)).toEqual({
       openConversationIds: [],
       pinnedConversationIds: [],
       archivedConversationIds: [],
@@ -130,7 +130,7 @@ describe('writeSavedWebUiPreferences', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
     writeFileSync(file, JSON.stringify({
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         pinnedConversationIds: ['session-2'],
         archivedConversationIds: ['session-3'],
@@ -138,7 +138,7 @@ describe('writeSavedWebUiPreferences', () => {
       },
     }));
 
-    writeSavedWebUiPreferences({ openConversationIds: [], pinnedConversationIds: [], archivedConversationIds: [], workspacePaths: [] }, file);
+    writeSavedUiPreferences({ openConversationIds: [], pinnedConversationIds: [], archivedConversationIds: [], workspacePaths: [] }, file);
 
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({});
   });

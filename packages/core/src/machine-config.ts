@@ -3,11 +3,10 @@ import { basename, dirname, join, resolve } from 'path';
 import { getConfigRoot } from './runtime/paths.js';
 
 export const DEFAULT_MACHINE_DEFAULT_PROFILE = 'shared';
-export const DEFAULT_WEB_UI_PORT = 3741;
 export const DEFAULT_RESUME_FALLBACK_PROMPT = 'Continue from where you left off.';
 export const DEFAULT_MACHINE_KNOWLEDGE_BASE_BRANCH = 'main';
 
-export type MachineConfigSectionKey = 'daemon' | 'webUi';
+export type MachineConfigSectionKey = 'daemon' | 'ui';
 
 export interface MachineConfigDocument {
   defaultProfile?: string;
@@ -17,7 +16,7 @@ export interface MachineConfigDocument {
   instructionFiles?: string[];
   skillDirs?: string[];
   daemon?: Record<string, unknown>;
-  webUi?: Record<string, unknown>;
+  ui?: Record<string, unknown>;
 }
 
 export interface MachineConfigOptions {
@@ -25,9 +24,7 @@ export interface MachineConfigOptions {
   filePath?: string;
 }
 
-export interface MachineWebUiConfigState {
-  port: number;
-  useTailscaleServe: boolean;
+export interface MachineUiConfigState {
   resumeFallbackPrompt: string;
 }
 
@@ -42,9 +39,7 @@ export interface MachineKnowledgeBaseState {
   branch: string;
 }
 
-export interface WriteMachineWebUiConfigInput {
-  port?: number;
-  useTailscaleServe?: boolean;
+export interface WriteMachineUiConfigInput {
   resumeFallbackPrompt?: string;
 }
 
@@ -131,7 +126,7 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
   const instructionFiles = normalizeStringArray(document.instructionFiles);
   const skillDirs = normalizeStringArray(document.skillDirs);
   const daemon = normalizeSection(document.daemon);
-  const webUi = normalizeSection(document.webUi);
+  const ui = normalizeSection(document.ui);
 
   return {
     ...(defaultProfile ? { defaultProfile } : {}),
@@ -141,7 +136,7 @@ function normalizeMachineConfig(value: unknown): MachineConfigDocument {
     ...(instructionFiles ? { instructionFiles } : {}),
     ...(skillDirs ? { skillDirs } : {}),
     ...(daemon ? { daemon } : {}),
-    ...(webUi ? { webUi } : {}),
+    ...(ui ? { ui } : {}),
   };
 }
 
@@ -162,11 +157,6 @@ function readLegacyMachineConfigSections(options: MachineConfigOptions = {}): Re
     legacySections.daemon = daemon;
   }
 
-  const webUi = readJsonObjectFile(join(configDir, 'web.json'), 'legacy web UI config');
-  if (webUi) {
-    legacySections.webUi = webUi;
-  }
-
   return legacySections;
 }
 
@@ -174,7 +164,7 @@ function removeLegacyMachineConfigFiles(options: MachineConfigOptions = {}): voi
   const configDir = resolveConfigDirectory(options);
   const currentFilePath = getMachineConfigFilePath(options);
 
-  for (const fileName of ['daemon.json', 'web.json']) {
+  for (const fileName of ['daemon.json']) {
     const legacyPath = join(configDir, fileName);
     if (legacyPath === currentFilePath) {
       continue;
@@ -213,13 +203,6 @@ function resolveSectionOptions(section: MachineConfigSectionKey, options: Machin
     }
   }
 
-  if (section === 'webUi') {
-    const explicit = process.env.PERSONAL_AGENT_WEB_CONFIG_FILE;
-    if (explicit && explicit.trim().length > 0) {
-      return { filePath: explicit.trim() };
-    }
-  }
-
   return options;
 }
 
@@ -232,10 +215,6 @@ function getLegacySingleSection(options: MachineConfigOptions = {}): {
 
   if (fileName === 'daemon.json') {
     return { section: 'daemon', filePath };
-  }
-
-  if (fileName === 'web.json') {
-    return { section: 'webUi', filePath };
   }
 
   return null;
@@ -429,29 +408,8 @@ export function writeMachineKnowledgeBase(input: {
   }, options);
 }
 
-function normalizeWebUiConfigPort(value: unknown, fallback = DEFAULT_WEB_UI_PORT): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return fallback;
-  }
-
-  const parsed = Math.floor(value);
-  return parsed > 0 && parsed <= 65535 ? parsed : fallback;
-}
-
-export function finalizeMachineWebUiConfigState(config: MachineWebUiConfigState): MachineWebUiConfigState {
+export function finalizeMachineUiConfigState(config: MachineUiConfigState): MachineUiConfigState {
   return config;
-}
-
-function parseWebUiConfigBool(value: unknown): boolean | undefined {
-  if (value === true || value === 'true') {
-    return true;
-  }
-
-  if (value === false || value === 'false') {
-    return false;
-  }
-
-  return undefined;
 }
 
 function normalizeResumeFallbackPrompt(value: unknown): string {
@@ -463,36 +421,29 @@ function normalizeResumeFallbackPrompt(value: unknown): string {
   return normalized.length > 0 ? normalized : DEFAULT_RESUME_FALLBACK_PROMPT;
 }
 
-export function readMachineWebUiConfig(options: MachineConfigOptions = {}): MachineWebUiConfigState {
-  const fromEnv = parseWebUiConfigBool(process.env.PERSONAL_AGENT_WEB_TAILSCALE_SERVE);
-  const section = readMachineConfigSection('webUi', options) ?? {};
+export function readMachineUiConfig(options: MachineConfigOptions = {}): MachineUiConfigState {
+  const section = readMachineConfigSection('ui', options) ?? {};
 
-  return finalizeMachineWebUiConfigState({
-    port: normalizeWebUiConfigPort(section.port),
-    useTailscaleServe: fromEnv ?? parseWebUiConfigBool(section.useTailscaleServe) ?? false,
+  return finalizeMachineUiConfigState({
     resumeFallbackPrompt: normalizeResumeFallbackPrompt(section.resumeFallbackPrompt),
   });
 }
 
-export function writeMachineWebUiConfig(
-  input: WriteMachineWebUiConfigInput,
+export function writeMachineUiConfig(
+  input: WriteMachineUiConfigInput,
   options: MachineConfigOptions = {},
-): MachineWebUiConfigState {
-  const currentState = readMachineWebUiConfig(options);
-  const currentSection = readMachineConfigSection('webUi', options) ?? {};
+): MachineUiConfigState {
+  const currentState = readMachineUiConfig(options);
+  const currentSection = readMachineConfigSection('ui', options) ?? {};
 
-  const updated = finalizeMachineWebUiConfigState({
-    port: input.port === undefined ? currentState.port : normalizeWebUiConfigPort(input.port, currentState.port),
-    useTailscaleServe: input.useTailscaleServe === undefined ? currentState.useTailscaleServe : input.useTailscaleServe,
+  const updated = finalizeMachineUiConfigState({
     resumeFallbackPrompt: input.resumeFallbackPrompt === undefined
       ? currentState.resumeFallbackPrompt
       : normalizeResumeFallbackPrompt(input.resumeFallbackPrompt),
   });
 
-  updateMachineConfigSection('webUi', () => ({
+  updateMachineConfigSection('ui', () => ({
     ...currentSection,
-    port: updated.port,
-    useTailscaleServe: updated.useTailscaleServe,
     resumeFallbackPrompt: updated.resumeFallbackPrompt,
   }), options);
 

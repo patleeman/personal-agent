@@ -1,24 +1,24 @@
 import type { Express, Request, Response } from 'express';
 import type { ServerRouteContext } from './context.js';
-import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
 import { logError } from '../middleware/index.js';
 import { persistSettingsWrite } from '../ui/settingsPersistence.js';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 
 
-let getWebUiSettingsFileFn: () => string = () => {
-  throw new Error('getWebUiSettingsFile not initialized for web-ui routes');
+let getUiSettingsFileFn: () => string = () => {
+  throw new Error('getUiSettingsFile not initialized for UI preference routes');
 };
 
-function initializeWebUiRoutesContext(
+function initializeUiPreferenceRoutesContext(
   context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
-  getWebUiSettingsFileFn = context.getSettingsFile;
+  getUiSettingsFileFn = context.getSettingsFile;
 }
 
 function handleOpenConversationLayoutReadRequest(_req: Request, res: Response): void {
   try {
-    const saved = readSavedWebUiPreferences(getWebUiSettingsFileFn());
+    const saved = readSavedUiPreferences(getUiSettingsFileFn());
     res.json({
       sessionIds: saved.openConversationIds,
       pinnedSessionIds: saved.pinnedConversationIds,
@@ -81,13 +81,13 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
     }
 
     const saved = persistSettingsWrite(
-      (settingsFile) => writeSavedWebUiPreferences({
+      (settingsFile) => writeSavedUiPreferences({
         openConversationIds: sessionIds as string[] | null | undefined,
         pinnedConversationIds: pinnedSessionIds as string[] | null | undefined,
         archivedConversationIds: (archivedConversationIds ?? archivedSessionIds) as string[] | null | undefined,
         workspacePaths: workspacePaths as string[] | null | undefined,
       }, settingsFile),
-      { runtimeSettingsFile: getWebUiSettingsFileFn() },
+      { runtimeSettingsFile: getUiSettingsFileFn() },
     );
 
     if (sessionIds !== undefined || pinnedSessionIds !== undefined || archivedConversationIds !== undefined || archivedSessionIds !== undefined) {
@@ -113,12 +113,12 @@ async function handleOpenConversationLayoutWriteRequest(req: Request, res: Respo
   }
 }
 
-export function registerWebUiRoutes(
+export function registerUiPreferenceRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch'>,
   context: Pick<ServerRouteContext, 'getSettingsFile'>,
 ): void {
-  initializeWebUiRoutesContext(context);
-  router.get('/api/web-ui/open-conversations', handleOpenConversationLayoutReadRequest);
-  router.patch('/api/web-ui/open-conversations', handleOpenConversationLayoutWriteRequest);
+  initializeUiPreferenceRoutesContext(context);
+  router.get('/api/ui/open-conversations', handleOpenConversationLayoutReadRequest);
+  router.patch('/api/ui/open-conversations', handleOpenConversationLayoutWriteRequest);
 }
 

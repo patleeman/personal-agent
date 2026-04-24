@@ -394,7 +394,7 @@ export const api = {
 
     return patch<ConversationTitleSettingsState>('/conversation-titles/settings', input);
   },
-  openConversationTabs: async () => get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/web-ui/open-conversations'),
+  openConversationTabs: async () => get<{ sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/ui/open-conversations'),
   setOpenConversationTabs: async (
     sessionIds?: string[] | null,
     pinnedSessionIds?: string[] | null,
@@ -412,7 +412,7 @@ export const api = {
       return desktopBridge.updateOpenConversationTabs(request);
     }
 
-    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/web-ui/open-conversations', request);
+    return patch<{ ok: boolean; sessionIds: string[]; pinnedSessionIds: string[]; archivedSessionIds: string[]; workspacePaths: string[] }>('/ui/open-conversations', request);
   },
   savedWorkspacePaths: async () => {
     const { workspacePaths } = await api.openConversationTabs();

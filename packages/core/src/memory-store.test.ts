@@ -65,15 +65,15 @@ Hub doc.
     );
 
     writeFile(
-      join(vaultRoot, 'notes', 'personal-agent', 'references', 'web-ui.md'),
+      join(vaultRoot, 'notes', 'personal-agent', 'references', 'desktop-ui.md'),
       `---
-name: web-ui
+name: desktop-ui
 description: Durable UI notes.
 metadata:
-  title: Web UI preferences
+  title: Desktop UI preferences
   updated: 2026-03-18
 ---
-# Web UI preferences
+# Desktop UI preferences
 
 Keep the right rail visible and resizable.
 `,
@@ -103,9 +103,9 @@ Keep planning state durable.
     expect(hub?.referencePaths).toHaveLength(2);
 
     const references = loadMemoryPackageReferences(join(vaultRoot, 'notes', 'personal-agent'));
-    expect(references.map((reference) => reference.title)).toEqual(['Project state model', 'web-ui']);
-    expect(references[1]).toMatchObject({
-      relativePath: 'references/web-ui.md',
+    expect(references.map((reference) => reference.title)).toEqual(['desktop-ui', 'Project state model']);
+    expect(references[0]).toMatchObject({
+      relativePath: 'references/desktop-ui.md',
       summary: 'Durable UI notes.',
     });
 

@@ -62,13 +62,13 @@ describe('promptReferences', () => {
 
   it('resolves project, task, and note node mentions independently', () => {
     expect(resolvePromptReferences({
-      text: 'Use @web-ui with @memory-maintenance and @project-state-model.',
-      availableProjectIds: ['web-ui', 'artifact-model'],
+      text: 'Use @desktop-ui with @memory-maintenance and @project-state-model.',
+      availableProjectIds: ['desktop-ui', 'artifact-model'],
       tasks: TASKS,
       memoryDocs: MEMORY_DOCS,
       skills: [],
     })).toEqual({
-      projectIds: ['web-ui'],
+      projectIds: ['desktop-ui'],
       taskIds: ['memory-maintenance'],
       memoryDocIds: ['project-state-model'],
       skillNames: [],

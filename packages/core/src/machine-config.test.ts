@@ -40,13 +40,10 @@ describe('machine config', () => {
   it('uses only PERSONAL_AGENT_CONFIG_FILE for the shared machine config path', () => {
     const configDir = createTempDir('pa-machine-config-');
     const daemonConfigPath = join(configDir, 'daemon.json');
-    const webConfigPath = join(configDir, 'web.json');
     process.env.PERSONAL_AGENT_DAEMON_CONFIG = daemonConfigPath;
-    process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = webConfigPath;
 
     const resolvedPath = getMachineConfigFilePath();
     expect(resolvedPath).not.toBe(daemonConfigPath);
-    expect(resolvedPath).not.toBe(webConfigPath);
     expect(resolvedPath.endsWith('/config.json')).toBe(true);
 
     process.env.PERSONAL_AGENT_CONFIG_FILE = join(configDir, 'custom-config.json');
@@ -64,10 +61,9 @@ describe('machine config', () => {
     expect(JSON.parse(readFileSync(daemonConfigPath, 'utf-8'))).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
   });
 
-  it('writes generic machine config to config.json even when legacy section env vars are set', () => {
+  it('writes generic machine config to config.json even when daemon section env vars are set', () => {
     const configDir = createTempDir('pa-machine-config-');
     process.env.PERSONAL_AGENT_DAEMON_CONFIG = join(configDir, 'daemon.json');
-    process.env.PERSONAL_AGENT_WEB_CONFIG_FILE = join(configDir, 'web.json');
 
     writeMachineDefaultProfile('assistant', { configRoot: configDir });
 

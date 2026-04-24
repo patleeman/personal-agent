@@ -13,7 +13,7 @@ const {
   queuePromptContextMock,
   readConversationAutoModeStateFromSessionManagerMock,
   readSessionBlocksMock,
-  readWebUiConfigMock,
+  readMachineUiConfigMock,
   repairLiveSessionTranscriptTailMock,
   requestConversationAutoModeTurnMock,
   resumeSessionMock,
@@ -31,7 +31,7 @@ const {
   queuePromptContextMock: vi.fn(),
   readConversationAutoModeStateFromSessionManagerMock: vi.fn(),
   readSessionBlocksMock: vi.fn(),
-  readWebUiConfigMock: vi.fn(),
+  readMachineUiConfigMock: vi.fn(),
   repairLiveSessionTranscriptTailMock: vi.fn(),
   requestConversationAutoModeTurnMock: vi.fn(),
   resumeSessionMock: vi.fn(),
@@ -58,9 +58,13 @@ vi.mock('./conversationAutoMode.js', () => ({
   readConversationAutoModeStateFromSessionManager: readConversationAutoModeStateFromSessionManagerMock,
 }));
 
-vi.mock('../ui/webUi.js', () => ({
-  readWebUiConfig: readWebUiConfigMock,
-}));
+vi.mock('@personal-agent/core', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@personal-agent/core')>();
+  return {
+    ...actual,
+    readMachineUiConfig: readMachineUiConfigMock,
+  };
+});
 
 vi.mock('./conversationRuns.js', () => ({
   createWebLiveConversationRunId: createWebLiveConversationRunIdMock,
@@ -113,14 +117,14 @@ describe('recoverConversationCapability', () => {
     queuePromptContextMock.mockReset();
     readConversationAutoModeStateFromSessionManagerMock.mockReset();
     readSessionBlocksMock.mockReset();
-    readWebUiConfigMock.mockReset();
+    readMachineUiConfigMock.mockReset();
     repairLiveSessionTranscriptTailMock.mockReset();
     requestConversationAutoModeTurnMock.mockReset();
     resumeSessionMock.mockReset();
     syncWebLiveConversationRunMock.mockReset();
     createWebLiveConversationRunIdMock.mockReset();
 
-    readWebUiConfigMock.mockReturnValue({ resumeFallbackPrompt: 'Continue from where you left off.' });
+    readMachineUiConfigMock.mockReturnValue({ resumeFallbackPrompt: 'Continue from where you left off.' });
     syncWebLiveConversationRunMock.mockResolvedValue({ runId: 'run-1' });
     promptSessionMock.mockResolvedValue(undefined);
     requestConversationAutoModeTurnMock.mockResolvedValue(undefined);

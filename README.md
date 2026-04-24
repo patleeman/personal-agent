@@ -57,7 +57,7 @@ pa tui
 npm run desktop:start
 ```
 
-Electron serves the renderer through `personal-agent://app/`; there is no standalone browser UI service.
+Electron serves the renderer through `personal-agent://app/`.
 
 ## Core mental model
 

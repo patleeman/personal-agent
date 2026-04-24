@@ -52,7 +52,7 @@ describe('conversation project links', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedProjectIds: ['web-ui', 'artifact-model'],
+      relatedProjectIds: ['desktop-ui', 'artifact-model'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
 
@@ -65,15 +65,15 @@ describe('conversation project links', () => {
     expect(stored).toEqual({
       conversationId: 'conv-123',
       updatedAt: '2026-03-10T20:00:00.000Z',
-      relatedProjectIds: ['web-ui', 'artifact-model'],
+      relatedProjectIds: ['desktop-ui', 'artifact-model'],
     });
   });
 
   it('adds links idempotently and keeps the file on disk', () => {
     const stateRoot = createTempDir('personal-agent-conversation-links-state-');
 
-    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
-    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'web-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
+    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'desktop-ui', updatedAt: '2026-03-10T20:00:00.000Z' });
+    addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'desktop-ui', updatedAt: '2026-03-10T20:01:00.000Z' });
     addConversationProjectLink({ stateRoot, profile: 'assistant', conversationId: 'conv-123', projectId: 'artifact-model', updatedAt: '2026-03-10T20:02:00.000Z' });
 
     const path = resolveConversationLinkPath({ stateRoot, profile: 'assistant', conversationId: 'conv-123' });
@@ -82,7 +82,7 @@ describe('conversation project links', () => {
       .toEqual({
         conversationId: 'conv-123',
         updatedAt: '2026-03-10T20:02:00.000Z',
-        relatedProjectIds: ['web-ui', 'artifact-model'],
+        relatedProjectIds: ['desktop-ui', 'artifact-model'],
       });
   });
 
@@ -93,7 +93,7 @@ describe('conversation project links', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedProjectIds: ['web-ui'],
+      relatedProjectIds: ['desktop-ui'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
 
@@ -101,7 +101,7 @@ describe('conversation project links', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      projectId: 'web-ui',
+      projectId: 'desktop-ui',
       updatedAt: '2026-03-10T20:05:00.000Z',
     });
 
@@ -121,7 +121,7 @@ describe('conversation project links', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedProjectIds: ['web-ui'],
+      relatedProjectIds: ['desktop-ui'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
 
@@ -140,7 +140,7 @@ describe('conversation project links', () => {
       stateRoot,
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedProjectIds: ['web-ui'],
+      relatedProjectIds: ['desktop-ui'],
       updatedAt: '2026-03-10T20:00:00.000Z',
     });
     writeFileSync(
@@ -152,7 +152,7 @@ describe('conversation project links', () => {
       {
         conversationId: 'conv-123',
         updatedAt: '2026-03-10T20:00:00.000Z',
-        relatedProjectIds: ['web-ui'],
+        relatedProjectIds: ['desktop-ui'],
       },
     ]);
   });

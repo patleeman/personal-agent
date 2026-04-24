@@ -80,7 +80,7 @@ describe('api desktop transport', () => {
     const readAppStatus = vi.fn().mockResolvedValue({
       profile: 'assistant',
       repoRoot: '/repo',
-      webUiRevision: 'rev-1',
+      appRevision: 'rev-1',
     });
     const readDaemonState = vi.fn().mockResolvedValue({
       warnings: [],
@@ -410,7 +410,7 @@ describe('api desktop transport', () => {
     expect(status).toEqual({
       profile: 'assistant',
       repoRoot: '/repo',
-      webUiRevision: 'rev-1',
+      appRevision: 'rev-1',
     });
     expect(daemon).toEqual({
       warnings: [],
@@ -1059,8 +1059,8 @@ describe('api desktop transport', () => {
 
     expect(readOpenConversationTabs).not.toHaveBeenCalled();
     expect(updateOpenConversationTabs).not.toHaveBeenCalled();
-    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/web-ui/open-conversations', { method: 'GET', cache: 'no-store' });
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/web-ui/open-conversations', {
+    expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/ui/open-conversations', { method: 'GET', cache: 'no-store' });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/ui/open-conversations', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -1086,7 +1086,7 @@ describe('api desktop transport', () => {
 
   it('falls back to HTTP for desktop runtime status bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' }))
+      .mockResolvedValueOnce(createJsonResponse({ profile: 'assistant', repoRoot: '/remote-repo', appRevision: 'rev-2' }))
       .mockResolvedValueOnce(createJsonResponse({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } }));
     vi.stubGlobal('fetch', fetchMock);
     const readAppStatus = vi.fn();
@@ -1113,7 +1113,7 @@ describe('api desktop transport', () => {
     expect(readDaemonState).not.toHaveBeenCalled();
     expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/status', { method: 'GET', cache: 'no-store' });
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/daemon', { method: 'GET', cache: 'no-store' });
-    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', webUiRevision: 'rev-2' });
+    expect(status).toEqual({ profile: 'assistant', repoRoot: '/remote-repo', appRevision: 'rev-2' });
     expect(daemon).toEqual({ warnings: [], service: { running: true }, runtime: { running: true }, log: { lines: [] } });
   });
 

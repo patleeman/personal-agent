@@ -73,7 +73,7 @@ describe('registerServerRoutes smoke test', () => {
       }),
       buildLiveSessionExtensionFactories: () => [],
       flushLiveDeferredResumes: async () => {},
-      getSavedWebUiPreferences: () => ({
+      getSavedUiPreferences: () => ({
         openConversationIds: [],
         pinnedConversationIds: [],
         archivedConversationIds: [],

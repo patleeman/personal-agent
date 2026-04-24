@@ -33,7 +33,7 @@ import {
   readConversationModelPreferenceSnapshot,
 } from './conversationModelPreferences.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import { type SavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { type SavedUiPreferences } from '../ui/uiPreferences.js';
 import { readConversationContextDocs } from './conversationContextDocs.js';
 
 let getCurrentProfileFn: () => string = () => {
@@ -49,7 +49,7 @@ export function getCurrentProfile(): string {
 export function setConversationServiceContext(input: {
   getCurrentProfile: () => string;
   getRepoRoot: () => string;
-  getSavedWebUiPreferences: () => SavedWebUiPreferences;
+  getSavedUiPreferences: () => SavedUiPreferences;
 }): void {
   getCurrentProfileFn = input.getCurrentProfile;
   getRepoRootFn = input.getRepoRoot;

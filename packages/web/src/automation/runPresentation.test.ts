@@ -435,13 +435,13 @@ describe('runPresentation', () => {
     const run = createRun({
       manifest: {
         version: 1,
-        id: 'run-web-ui-123',
+        id: 'run-ui-123',
         kind: 'background-run',
         resumePolicy: 'manual',
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
-          taskSlug: 'web-ui-smoke',
-          shellCommand: 'PA_WEB_PORT=4232 npm --prefix packages/web run dev',
+          taskSlug: 'ui-smoke',
+          shellCommand: 'npm --prefix packages/web run dev:client -- --port 4232',
         },
         source: {
           type: 'tool',
@@ -452,7 +452,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/web run dev',
-      summary: 'Background run · web-ui-smoke',
+      summary: 'Background run · ui-smoke',
     });
   });
 
@@ -465,11 +465,11 @@ describe('runPresentation', () => {
         resumePolicy: 'manual',
         createdAt: '2026-03-12T20:30:00.000Z',
         spec: {
-          shellCommand: 'env -u PA_WEB_DIST -u PERSONAL_AGENT_WEB_REVISION npm --prefix packages/web run dev',
+          shellCommand: 'env -u PERSONAL_AGENT_APP_REVISION npm --prefix packages/web run dev:client',
         },
         source: {
           type: 'cli',
-          id: 'web-ui-dev-server',
+          id: 'ui-dev-server',
         },
       },
     });

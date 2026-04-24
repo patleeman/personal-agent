@@ -12,9 +12,8 @@ import { dirname, join, resolve } from 'node:path';
 import { getStateRoot } from '@personal-agent/core';
 
 const RESTART_LOCK_MAX_AGE_MS = 30 * 60 * 1000;
-const REMOVED_WEB_UI_RESTART_MESSAGE = 'Managed web UI restart has been removed. Use the Personal Agent desktop app.';
 
-type ApplicationCommand = 'restart' | 'update' | 'web-ui-service-restart';
+type ApplicationCommand = 'restart' | 'update';
 
 interface ApplicationCommandLock {
   action?: ApplicationCommand;
@@ -35,7 +34,6 @@ export interface ApplicationCommandRequestResult {
 }
 
 export type ApplicationRestartRequestResult = ApplicationCommandRequestResult;
-export type WebUiServiceRestartRequestResult = ApplicationCommandRequestResult;
 
 function resolveApplicationCommandLockFile(): string {
   return join(getStateRoot(), 'web', 'app-restart.lock.json');
@@ -79,10 +77,6 @@ function commandLabel(action: ApplicationCommand): string {
     return 'update';
   }
 
-  if (action === 'web-ui-service-restart') {
-    return 'web UI service restart';
-  }
-
   return 'restart';
 }
 
@@ -91,20 +85,12 @@ function buildCliCommand(action: ApplicationCommand, cliEntryFile: string): stri
     return [process.execPath, cliEntryFile, 'update'];
   }
 
-  if (action === 'web-ui-service-restart') {
-    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
-  }
-
   return [process.execPath, cliEntryFile, 'restart', '--rebuild'];
 }
 
 function buildRequestMessage(action: ApplicationCommand): string {
   if (action === 'update') {
     return 'Application update requested. Pulling latest changes, rebuilding packages, and restarting background services.';
-  }
-
-  if (action === 'web-ui-service-restart') {
-    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
   }
 
   return 'Application restart requested. Rebuilding packages and restarting background services.';
@@ -144,10 +130,6 @@ function buildNotificationEnv(input: {
 function buildAlreadyRunningMessage(action: ApplicationCommand, requestedAt?: string): string {
   const suffix = requestedAt ? ` (${requestedAt})` : '';
 
-  if (action === 'web-ui-service-restart') {
-    return `Managed web UI restart already in progress${suffix}.`;
-  }
-
   return `Application ${commandLabel(action)} already in progress${suffix}.`;
 }
 
@@ -182,9 +164,6 @@ function requestApplicationCommand(input: {
 }): ApplicationCommandRequestResult {
   const repoRoot = resolve(input.repoRoot);
   const profile = input.profile?.trim() ?? '';
-  if (input.action === 'web-ui-service-restart') {
-    throw new Error(REMOVED_WEB_UI_RESTART_MESSAGE);
-  }
   if (profile.length === 0) {
     throw new Error(`Application ${commandLabel(input.action)} requires a profile.`);
   }
@@ -284,14 +263,5 @@ export function requestApplicationUpdate(input: {
   return requestApplicationCommand({
     ...input,
     action: 'update',
-  });
-}
-
-export function requestWebUiServiceRestart(input: {
-  repoRoot: string;
-}): WebUiServiceRestartRequestResult {
-  return requestApplicationCommand({
-    ...input,
-    action: 'web-ui-service-restart',
   });
 }

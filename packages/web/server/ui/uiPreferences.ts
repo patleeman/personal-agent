@@ -9,7 +9,7 @@ export interface SavedNodeBrowserViewPreference {
   updatedAt: string;
 }
 
-export interface SavedWebUiPreferences {
+export interface SavedUiPreferences {
   openConversationIds: string[];
   pinnedConversationIds: string[];
   archivedConversationIds: string[];
@@ -125,13 +125,13 @@ function normalizeNodeBrowserViews(value: unknown): SavedNodeBrowserViewPreferen
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 }
 
-function normalizeSavedWebUiPreferences(input: {
+function normalizeSavedUiPreferences(input: {
   openConversationIds?: unknown;
   pinnedConversationIds?: unknown;
   archivedConversationIds?: unknown;
   workspacePaths?: unknown;
   nodeBrowserViews?: unknown;
-}): SavedWebUiPreferences {
+}): SavedUiPreferences {
   const pinnedConversationIds = normalizeConversationIds(input.pinnedConversationIds);
   const pinnedIdSet = new Set(pinnedConversationIds);
   const openConversationIds = normalizeConversationIds(input.openConversationIds)
@@ -148,24 +148,24 @@ function normalizeSavedWebUiPreferences(input: {
   };
 }
 
-function readWebUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  return isRecord(settings.webUi) ? { ...settings.webUi } : {};
+function readUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  return isRecord(settings.ui) ? { ...settings.ui } : {};
 }
 
-export function readSavedWebUiPreferences(settingsFile: string): SavedWebUiPreferences {
+export function readSavedUiPreferences(settingsFile: string): SavedUiPreferences {
   const settings = readSettingsObject(settingsFile);
-  const webUi = readWebUiSettings(settings);
+  const ui = readUiSettings(settings);
 
-  return normalizeSavedWebUiPreferences({
-    openConversationIds: webUi.openConversationIds,
-    pinnedConversationIds: webUi.pinnedConversationIds,
-    archivedConversationIds: webUi.archivedConversationIds,
-    workspacePaths: webUi.workspacePaths,
-    nodeBrowserViews: webUi.nodeBrowserViews,
+  return normalizeSavedUiPreferences({
+    openConversationIds: ui.openConversationIds,
+    pinnedConversationIds: ui.pinnedConversationIds,
+    archivedConversationIds: ui.archivedConversationIds,
+    workspacePaths: ui.workspacePaths,
+    nodeBrowserViews: ui.nodeBrowserViews,
   });
 }
 
-export function writeSavedWebUiPreferences(
+export function writeSavedUiPreferences(
   input: {
     openConversationIds?: string[] | null;
     pinnedConversationIds?: string[] | null;
@@ -174,18 +174,18 @@ export function writeSavedWebUiPreferences(
     nodeBrowserViews?: SavedNodeBrowserViewPreference[] | null;
   },
   settingsFile: string,
-): SavedWebUiPreferences {
+): SavedUiPreferences {
   const settings = readSettingsObject(settingsFile);
-  const webUi = readWebUiSettings(settings);
-  const current = normalizeSavedWebUiPreferences({
-    openConversationIds: webUi.openConversationIds,
-    pinnedConversationIds: webUi.pinnedConversationIds,
-    archivedConversationIds: webUi.archivedConversationIds,
-    workspacePaths: webUi.workspacePaths,
-    nodeBrowserViews: webUi.nodeBrowserViews,
+  const ui = readUiSettings(settings);
+  const current = normalizeSavedUiPreferences({
+    openConversationIds: ui.openConversationIds,
+    pinnedConversationIds: ui.pinnedConversationIds,
+    archivedConversationIds: ui.archivedConversationIds,
+    workspacePaths: ui.workspacePaths,
+    nodeBrowserViews: ui.nodeBrowserViews,
   });
 
-  const next = normalizeSavedWebUiPreferences({
+  const next = normalizeSavedUiPreferences({
     openConversationIds: input.openConversationIds !== undefined ? (input.openConversationIds ?? []) : current.openConversationIds,
     pinnedConversationIds: input.pinnedConversationIds !== undefined ? (input.pinnedConversationIds ?? []) : current.pinnedConversationIds,
     archivedConversationIds: input.archivedConversationIds !== undefined ? (input.archivedConversationIds ?? []) : current.archivedConversationIds,
@@ -194,43 +194,43 @@ export function writeSavedWebUiPreferences(
   });
 
   if (next.openConversationIds.length > 0) {
-    webUi.openConversationIds = next.openConversationIds;
+    ui.openConversationIds = next.openConversationIds;
   } else {
-    delete webUi.openConversationIds;
+    delete ui.openConversationIds;
   }
 
   if (next.pinnedConversationIds.length > 0) {
-    webUi.pinnedConversationIds = next.pinnedConversationIds;
+    ui.pinnedConversationIds = next.pinnedConversationIds;
   } else {
-    delete webUi.pinnedConversationIds;
+    delete ui.pinnedConversationIds;
   }
 
   if (next.archivedConversationIds.length > 0) {
-    webUi.archivedConversationIds = next.archivedConversationIds;
+    ui.archivedConversationIds = next.archivedConversationIds;
   } else {
-    delete webUi.archivedConversationIds;
+    delete ui.archivedConversationIds;
   }
 
   if (next.workspacePaths.length > 0) {
-    webUi.workspacePaths = next.workspacePaths;
+    ui.workspacePaths = next.workspacePaths;
   } else {
-    delete webUi.workspacePaths;
+    delete ui.workspacePaths;
   }
 
   if (next.nodeBrowserViews.length > 0) {
-    webUi.nodeBrowserViews = next.nodeBrowserViews;
+    ui.nodeBrowserViews = next.nodeBrowserViews;
   } else {
-    delete webUi.nodeBrowserViews;
+    delete ui.nodeBrowserViews;
   }
 
-  if (Object.keys(webUi).length > 0) {
-    settings.webUi = webUi;
+  if (Object.keys(ui).length > 0) {
+    settings.ui = ui;
   } else {
-    delete settings.webUi;
+    delete settings.ui;
   }
 
   mkdirSync(dirname(settingsFile), { recursive: true });
   writeFileSync(settingsFile, JSON.stringify(settings, null, 2) + '\n');
 
-  return readSavedWebUiPreferences(settingsFile);
+  return readSavedUiPreferences(settingsFile);
 }

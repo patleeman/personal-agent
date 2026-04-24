@@ -33,13 +33,13 @@ function readSettingsObject(settingsFile: string): Record<string, unknown> {
   }
 }
 
-function readWebUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  return isRecord(settings.webUi) ? { ...settings.webUi } : {};
+function readUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  return isRecord(settings.ui) ? { ...settings.ui } : {};
 }
 
 function readConversationTitleSettingsObject(settings: Record<string, unknown>): Record<string, unknown> {
-  const webUi = readWebUiSettings(settings);
-  return isRecord(webUi.conversationTitles) ? { ...webUi.conversationTitles } : {};
+  const ui = readUiSettings(settings);
+  return isRecord(ui.conversationTitles) ? { ...ui.conversationTitles } : {};
 }
 
 function normalizeConversationTitleModel(value: unknown, provider: unknown): string {
@@ -77,7 +77,7 @@ export function writeSavedConversationTitlePreferences(
   settingsFile: string,
 ): SavedConversationTitlePreferences {
   const settings = readSettingsObject(settingsFile);
-  const webUi = readWebUiSettings(settings);
+  const ui = readUiSettings(settings);
   const conversationTitles = readConversationTitleSettingsObject(settings);
 
   if (input.enabled !== undefined) {
@@ -100,15 +100,15 @@ export function writeSavedConversationTitlePreferences(
   }
 
   if (Object.keys(conversationTitles).length > 0) {
-    webUi.conversationTitles = conversationTitles;
+    ui.conversationTitles = conversationTitles;
   } else {
-    delete webUi.conversationTitles;
+    delete ui.conversationTitles;
   }
 
-  if (Object.keys(webUi).length > 0) {
-    settings.webUi = webUi;
+  if (Object.keys(ui).length > 0) {
+    settings.ui = ui;
   } else {
-    delete settings.webUi;
+    delete settings.ui;
   }
 
   mkdirSync(dirname(settingsFile), { recursive: true });

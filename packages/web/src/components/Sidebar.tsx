@@ -96,7 +96,7 @@ const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey(
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
-const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations', '/scheduled'] as const;
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/automations'] as const;
 
 type DesktopConversationShortcutAction =
   | 'close-conversation'
@@ -3170,7 +3170,7 @@ export function Sidebar() {
               <span className="flex-1 text-left">Chat</span>
             </button>
           </div>
-          <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations') || location.pathname.startsWith('/scheduled')} />
+          <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations')} />
           <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
         </div>
 

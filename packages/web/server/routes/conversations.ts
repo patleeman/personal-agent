@@ -64,7 +64,7 @@ let getRepoRootFn: () => string = () => {
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 function initializeConversationRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
   getRepoRootFn = context.getRepoRoot;
@@ -73,7 +73,7 @@ function initializeConversationRoutesContext(
   setConversationServiceContext({
     getCurrentProfile: context.getCurrentProfile,
     getRepoRoot: context.getRepoRoot,
-    getSavedWebUiPreferences: context.getSavedWebUiPreferences,
+    getSavedUiPreferences: context.getSavedUiPreferences,
   });
 }
 
@@ -311,7 +311,7 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
 
 export function registerConversationRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedWebUiPreferences' | 'flushLiveDeferredResumes'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
   initializeConversationRoutesContext(context);
   router.get('/api/sessions', (_req, res) => {

@@ -39,7 +39,7 @@ describe('api desktop reads', () => {
 
   it('uses app-protocol fetches for desktop reads instead of bridge fast paths', async () => {
     const fetchMock = createFetchRouter({
-      '/api/status': createJsonResponse({ profile: 'assistant', repoRoot: '/repo', webUiRevision: 'rev-1' }),
+      '/api/status': createJsonResponse({ profile: 'assistant', repoRoot: '/repo', appRevision: 'rev-1' }),
       '/api/sessions': createJsonResponse([{ id: 'conversation-1', title: 'Conversation 1' }]),
       '/api/conversations/conversation-1/bootstrap?tailBlocks=12': createJsonResponse({
         conversationId: 'conversation-1',
@@ -51,7 +51,7 @@ describe('api desktop reads', () => {
         attachments: [{ id: 'attachment-1', kind: 'excalidraw' }],
       }),
       '/api/live-sessions/live-1/context': createJsonResponse({ cwd: '/repo', branch: 'main', git: null }),
-      '/api/web-ui/open-conversations': createJsonResponse({
+      '/api/ui/open-conversations': createJsonResponse({
         sessionIds: ['conversation-1'],
         pinnedSessionIds: [],
         archivedSessionIds: [],
@@ -104,7 +104,7 @@ describe('api desktop reads', () => {
       '/api/conversations/conversation-1/bootstrap?tailBlocks=12',
       '/api/conversations/conversation-1/attachments',
       '/api/live-sessions/live-1/context',
-      '/api/web-ui/open-conversations',
+      '/api/ui/open-conversations',
     ]);
   });
 

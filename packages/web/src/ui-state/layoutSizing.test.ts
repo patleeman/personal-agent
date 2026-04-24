@@ -15,39 +15,9 @@ describe('layout sizing helpers', () => {
       initialWidth: 380,
     });
 
-    expect(getRailLayoutPrefs('/runs/task-123')).toEqual({
-      storageKey: 'pa:rail-width:runs',
-      initialWidth: 420,
-    });
-
-    expect(getRailLayoutPrefs('/tasks/daily-review')).toEqual({
-      storageKey: 'pa:rail-width:scheduled',
+    expect(getRailLayoutPrefs('/automations/daily-review')).toEqual({
+      storageKey: 'pa:rail-width:automations',
       initialWidth: 380,
-    });
-
-    expect(getRailLayoutPrefs('/notes')).toEqual({
-      storageKey: 'pa:rail-width:notes',
-      initialMainWidthRatio: 0.7,
-    });
-
-    expect(getRailLayoutPrefs('/nodes')).toEqual({
-      storageKey: 'pa:rail-width:nodes',
-      initialMainWidthRatio: 0.7,
-    });
-
-    expect(getRailLayoutPrefs('/skills')).toEqual({
-      storageKey: 'pa:rail-width:skills',
-      initialWidth: 460,
-    });
-
-    expect(getRailLayoutPrefs('/instructions')).toEqual({
-      storageKey: 'pa:rail-width:instructions',
-      initialWidth: 460,
-    });
-
-    expect(getRailLayoutPrefs('/tools')).toEqual({
-      storageKey: 'pa:rail-width:tools',
-      initialMainWidthRatio: 0.7,
     });
 
     expect(getRailLayoutPrefs('/settings')).toEqual({
@@ -56,30 +26,14 @@ describe('layout sizing helpers', () => {
     });
   });
 
-  it('derives 70% initial rails for tools and managed notes', () => {
+  it('falls back to the default rail width for unknown routes', () => {
     expect(getRailInitialWidth({
-      pathname: '/tools',
+      pathname: '/unknown',
       viewportWidth: 1600,
       sidebarWidth: 224,
       railMinWidth: 160,
       railMaxWidth: 1046,
-    })).toBe(956);
-
-    expect(getRailInitialWidth({
-      pathname: '/notes',
-      viewportWidth: 700,
-      sidebarWidth: 224,
-      railMinWidth: 160,
-      railMaxWidth: 160,
-    })).toBe(160);
-
-    expect(getRailInitialWidth({
-      pathname: '/nodes',
-      viewportWidth: 700,
-      sidebarWidth: 224,
-      railMinWidth: 160,
-      railMaxWidth: 160,
-    })).toBe(160);
+    })).toBe(380);
   });
 
 

@@ -78,13 +78,13 @@ function normalizeThinkingLevel(value: unknown): ThinkingLevel {
   }
 }
 
-function readWebUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  return isRecord(settings.webUi) ? { ...settings.webUi } : {};
+function readUiSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  return isRecord(settings.ui) ? { ...settings.ui } : {};
 }
 
 function readConversationTitleSettingsObject(settings: Record<string, unknown>): Record<string, unknown> {
-  const webUi = readWebUiSettings(settings);
-  return isRecord(webUi.conversationTitles) ? { ...webUi.conversationTitles } : {};
+  const ui = readUiSettings(settings);
+  return isRecord(ui.conversationTitles) ? { ...ui.conversationTitles } : {};
 }
 
 export function readConversationAutoTitleSettings(settingsFile: string): ConversationAutoTitleSettings {

@@ -1,10 +1,10 @@
 import { existsSync } from 'node:fs';
 import type { ExtensionFactory } from '@mariozechner/pi-coding-agent';
 import { parsePendingOperation } from '@personal-agent/daemon';
+import { readMachineUiConfig } from '@personal-agent/core';
 import { getDurableRun } from '../automation/durableRuns.js';
 import { logError } from '../middleware/index.js';
 import { readConversationAutoModeStateFromSessionManager } from './conversationAutoMode.js';
-import { readWebUiConfig } from '../ui/webUi.js';
 import {
   createWebLiveConversationRunId,
   listRecoverableWebLiveConversationRuns,
@@ -145,7 +145,7 @@ async function continueRecoveredConversation(input: {
     && readConversationAutoModeStateFromSessionManager(liveEntry.session.sessionManager).enabled,
   );
 
-  const fallbackPrompt = readWebUiConfig().resumeFallbackPrompt.trim();
+  const fallbackPrompt = readMachineUiConfig().resumeFallbackPrompt.trim();
   const shouldUseFallbackPrompt = !input.recoveryOperation
     && !autoModeEnabled
     && fallbackPrompt.length > 0
@@ -312,7 +312,7 @@ export async function recoverDurableLiveConversations(
 ): Promise<RecoverDurableLiveConversationsResult> {
   const recovered: RecoverDurableLiveConversationsResult['recovered'] = [];
   const runs = await listRecoverableWebLiveConversationRuns();
-  const resumeFallbackPrompt = readWebUiConfig().resumeFallbackPrompt;
+  const resumeFallbackPrompt = readMachineUiConfig().resumeFallbackPrompt;
 
   for (const run of runs) {
     if (dependencies.isLive(run.conversationId)) {

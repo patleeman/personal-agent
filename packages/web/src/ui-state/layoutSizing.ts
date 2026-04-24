@@ -14,26 +14,11 @@ function getRailPageKey(pathname: string): string {
   const section = parts[0] ?? 'default';
 
   switch (section) {
-    case 'scheduled':
-    case 'runs':
     case 'conversations':
-    case 'system':
-    case 'skills':
-    case 'nodes':
-    case 'pages':
-    case 'instructions':
-    case 'tools':
     case 'settings':
-    case 'memory':
     case 'knowledge':
-    case 'capabilities':
-      return section === 'pages' ? 'nodes' : section;
-    case 'notes':
-    case 'memories':
-      return 'notes';
     case 'automations':
-    case 'tasks':
-      return 'scheduled';
+      return section;
     default:
       return 'default';
   }
@@ -57,39 +42,18 @@ export function getRailLayoutPrefs(pathname: string): RailLayoutPrefs {
   const pageKey = getRailPageKey(pathname);
 
   switch (pageKey) {
-    case 'scheduled':
+    case 'automations':
       return {
         storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
       };
-    case 'runs':
-    case 'capabilities':
-      return {
-        storageKey: buildRailWidthStorageKey(pageKey),
-        initialWidth: 420,
-      };
     case 'conversations':
-    case 'memory':
     case 'knowledge':
-    case 'system':
     case 'settings':
     case 'default':
       return {
         storageKey: buildRailWidthStorageKey(pageKey),
         initialWidth: 380,
-      };
-    case 'notes':
-    case 'nodes':
-    case 'tools':
-      return {
-        storageKey: buildRailWidthStorageKey(pageKey),
-        initialMainWidthRatio: 0.7,
-      };
-    case 'skills':
-    case 'instructions':
-      return {
-        storageKey: buildRailWidthStorageKey(pageKey),
-        initialWidth: 460,
       };
     default:
       return {

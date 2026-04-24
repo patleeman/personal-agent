@@ -23,7 +23,7 @@ interface CreateServerRouteContextOptions {
   buildLiveSessionResourceOptions: ServerRouteContext['buildLiveSessionResourceOptions'];
   buildLiveSessionExtensionFactories: ServerRouteContext['buildLiveSessionExtensionFactories'];
   flushLiveDeferredResumes: () => Promise<void>;
-  getSavedWebUiPreferences: ServerRouteContext['getSavedWebUiPreferences'];
+  getSavedUiPreferences: ServerRouteContext['getSavedUiPreferences'];
   listTasksForCurrentProfile: () => CurrentProfileTaskSummary[];
   listMemoryDocs: () => MemoryDocSummary[];
   listSkillsForCurrentProfile: () => SkillSummary[];
@@ -51,7 +51,7 @@ export function createServerRouteContext(options: CreateServerRouteContextOption
     buildLiveSessionResourceOptions: options.buildLiveSessionResourceOptions,
     buildLiveSessionExtensionFactories: options.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes: options.flushLiveDeferredResumes,
-    getSavedWebUiPreferences: options.getSavedWebUiPreferences,
+    getSavedUiPreferences: options.getSavedUiPreferences,
     listTasksForCurrentProfile: options.listTasksForCurrentProfile,
     listMemoryDocs: options.listMemoryDocs,
     listSkillsForCurrentProfile: options.listSkillsForCurrentProfile,

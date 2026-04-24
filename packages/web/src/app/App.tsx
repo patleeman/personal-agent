@@ -1,6 +1,5 @@
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
-import { resolveWebRouteRedirect } from '../navigation/routes';
+import { BrowserRouter, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { api } from '../client/api';
 import { subscribeDesktopAppEvents } from '../desktop/desktopAppEvents';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
@@ -41,19 +40,6 @@ import type {
   ScheduledTaskSummary,
   SessionMeta,
 } from '../shared/types';
-import { setConversationRunIdInSearch } from '../conversation/conversationRuns';
-import { getRunPrimaryConnection, type RunPresentationLookups } from '../automation/runPresentation';
-
-function LegacyTaskRoutesRedirect() {
-  const { id } = useParams<{ id?: string }>();
-  return <Navigate to={id ? `/automations/${id}` : '/automations'} replace />;
-}
-
-function LegacyWebRouteRedirect() {
-  const location = useLocation();
-  const redirectPath = resolveWebRouteRedirect(location.pathname, location.search) ?? '/conversations/new';
-  return <Navigate to={redirectPath} replace />;
-}
 
 function ConversationsRouteRedirect() {
   const { openIds, pinnedIds } = useConversations();
@@ -69,68 +55,8 @@ function ConversationsRouteRedirect() {
   return <Navigate to={redirectPath} replace />;
 }
 
-function DeletedStandaloneRunsRedirect() {
-  const { id } = useParams<{ id?: string }>();
-  const { runs, tasks, sessions } = useAppData();
-  const [target, setTarget] = useState<string | null>(null);
-  const lookups = useMemo<RunPresentationLookups>(() => ({ tasks, sessions }), [sessions, tasks]);
-
-  const buildRunRedirectTarget = useCallback((route: string | undefined, runId: string): string => {
-    if (!route) {
-      return '/automations';
-    }
-
-    if (route.startsWith('/automations')) {
-      return `${route}${setConversationRunIdInSearch('', runId)}`;
-    }
-
-    return route;
-  }, []);
-
-  if (!id) {
-    return <Navigate to="/automations" replace />;
-  }
-
-  useEffect(() => {
-
-    const cached = runs?.runs.find((run) => run.runId === id);
-    if (cached) {
-      const connection = getRunPrimaryConnection(cached, lookups);
-      setTarget(buildRunRedirectTarget(connection?.to, cached.runId));
-      return;
-    }
-
-    let cancelled = false;
-    void api.durableRun(id)
-      .then((detail) => {
-        if (cancelled) {
-          return;
-        }
-
-        const connection = getRunPrimaryConnection(detail.run, lookups);
-        setTarget(buildRunRedirectTarget(connection?.to, detail.run.runId));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setTarget('/automations');
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [buildRunRedirectTarget, id, lookups, runs?.runs]);
-
-  return target ? <Navigate to={target} replace /> : null;
-}
-
-function DeletedStandaloneAdminRedirect() {
-  return <Navigate to="/settings" replace />;
-}
-
 const TasksPage = lazyRouteWithRecovery('tasks-page', () => import('../pages/TasksPage').then((module) => ({ default: module.TasksPage })));
 const ConversationPage = lazyRouteWithRecovery('conversation-page', () => import('../pages/ConversationPage').then((module) => ({ default: module.ConversationPage })));
-const SystemPage = lazyRouteWithRecovery('system-page', () => import('../pages/SystemPage').then((module) => ({ default: module.SystemPage })));
 const SettingsPage = lazyRouteWithRecovery('settings-page', () => import('../pages/SettingsPage').then((module) => ({ default: module.SettingsPage })));
 const KnowledgePage = lazyRouteWithRecovery('knowledge-page', () => import('../pages/KnowledgePage').then((module) => ({ default: module.KnowledgePage })));
 
@@ -395,29 +321,10 @@ export function App() {
                       <Route path="conversations" element={<ConversationsRouteRedirect />} />
                       <Route path="conversations/new" element={<DraftConversationRoute />} />
                       <Route path="conversations/:id" element={<SavedConversationRoute />} />
-                      <Route path="workspace" element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="workspace/*" element={<Navigate to="/conversations/new" replace />} />
-                      <Route path="system" element={suspendRoute(<SystemPage />)} />
-                      <Route path="runs" element={<DeletedStandaloneRunsRedirect />} />
-                      <Route path="runs/:id" element={<DeletedStandaloneRunsRedirect />} />
                       <Route path="knowledge" element={suspendRoute(<KnowledgePage />)} />
                       <Route path="knowledge/*" element={suspendRoute(<KnowledgePage />)} />
-                      <Route path="notes" element={<LegacyWebRouteRedirect />} />
-                      <Route path="notes/*" element={<LegacyWebRouteRedirect />} />
-                      <Route path="memories" element={<LegacyWebRouteRedirect />} />
-                      <Route path="memories/*" element={<LegacyWebRouteRedirect />} />
-                      <Route path="skills" element={<LegacyWebRouteRedirect />} />
-                      <Route path="skills/*" element={<LegacyWebRouteRedirect />} />
-                      <Route path="nodes" element={<LegacyWebRouteRedirect />} />
-                      <Route path="nodes/*" element={<LegacyWebRouteRedirect />} />
                       <Route path="automations" element={suspendRoute(<TasksPage />)} />
                       <Route path="automations/:id" element={suspendRoute(<TasksPage />)} />
-                      <Route path="scheduled" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="scheduled/:id" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="tasks" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="tasks/:id" element={<LegacyTaskRoutesRedirect />} />
-                      <Route path="tools" element={<DeletedStandaloneAdminRedirect />} />
-                      <Route path="instructions" element={<DeletedStandaloneAdminRedirect />} />
                       <Route path="settings" element={suspendRoute(<SettingsPage />)} />
                     </Route>
                   </Routes>

@@ -201,15 +201,15 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('renders project mentions as pills inside markdown text', () => {
-    const html = renderAssistantText('Check @web-ui before touching @projects.');
+    const html = renderAssistantText('Check @desktop-ui before touching @projects.');
 
-    expect(html).toContain('@web-ui');
+    expect(html).toContain('@desktop-ui');
     expect(html).toContain('@projects');
     expect(html).toContain('ui-markdown-mention');
   });
 
   it('does not turn email addresses into mention pills', () => {
-    const html = renderAssistantText('Email patrick@example.com and ping @web-ui for follow-up.');
+    const html = renderAssistantText('Email patrick@example.com and ping @desktop-ui for follow-up.');
 
     expect(html).toContain('patrick@example.com');
     expect(html.match(/ui-markdown-mention/g)).toHaveLength(1);
@@ -1075,7 +1075,7 @@ describe('chat view streaming disclosure', () => {
   });
 
   it('preserves inline code content without stringifying React nodes', () => {
-    const html = renderAssistantText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @web-ui.');
+    const html = renderAssistantText('Use `artifact` in `packages/web/src/pages/ConversationPage.tsx` before pinging @desktop-ui.');
 
     expect(html).toContain('artifact');
     expect(html).toContain('packages/web/src/pages/ConversationPage.tsx');

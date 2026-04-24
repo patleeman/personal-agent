@@ -19,7 +19,7 @@ Common top-level keys:
 - `instructionFiles`
 - `skillDirs`
 - `daemon`
-- `webUi` — legacy name for UI preferences still stored in machine config
+- `ui`
 
 Example:
 
@@ -35,7 +35,7 @@ Example:
   "skillDirs": [
     "~/Documents/personal-agent/skills"
   ],
-  "webUi": {
+  "ui": {
     "resumeFallbackPrompt": "Continue from where you left off."
   }
 }
@@ -83,7 +83,6 @@ Resolution order:
 - `PERSONAL_AGENT_CONFIG_FILE`
 - `PERSONAL_AGENT_VAULT_ROOT`
 - `PERSONAL_AGENT_DAEMON_SOCKET_PATH`
-- `PERSONAL_AGENT_WEB_TAILSCALE_SERVE`
 - `PERSONAL_AGENT_PI_TIMEOUT_MS`
 - `PI_OPENAI_NATIVE_COMPACTION`
 - `PI_OPENAI_NATIVE_COMPACTION_NOTIFY`

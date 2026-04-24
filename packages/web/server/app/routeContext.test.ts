@@ -28,7 +28,7 @@ describe('createServerRouteContext', () => {
       }),
       buildLiveSessionExtensionFactories: () => [],
       flushLiveDeferredResumes: async () => undefined,
-      getSavedWebUiPreferences: () => ({ sidebarExpanded: true }),
+      getSavedUiPreferences: () => ({ sidebarExpanded: true }),
       listTasksForCurrentProfile: () => [{ id: 'daily', title: 'Daily', prompt: 'Run daily', enabled: true, running: false }],
       listMemoryDocs: () => [{ id: 'desktop', title: 'Desktop', path: '/vault/notes/Desktop.md' }],
       listSkillsForCurrentProfile: () => [{ name: 'agent-browser', source: 'shared', description: 'Browser automation', path: '/vault/_skills/agent-browser/SKILL.md' }],
@@ -59,7 +59,7 @@ describe('createServerRouteContext', () => {
     });
     expect(context.buildLiveSessionExtensionFactories()).toEqual([]);
     await expect(context.flushLiveDeferredResumes()).resolves.toBeUndefined();
-    expect(context.getSavedWebUiPreferences()).toEqual({ sidebarExpanded: true });
+    expect(context.getSavedUiPreferences()).toEqual({ sidebarExpanded: true });
     expect(context.listTasksForCurrentProfile()).toHaveLength(1);
     expect(context.listMemoryDocs()).toHaveLength(1);
     expect(context.listSkillsForCurrentProfile()).toHaveLength(1);

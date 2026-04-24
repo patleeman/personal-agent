@@ -56,7 +56,7 @@ function handleStatus(_req: Request, res: Response): void {
     res.json({
       profile,
       repoRoot: getRepoRootFn(),
-      webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
+      appRevision: process.env.PERSONAL_AGENT_APP_REVISION,
     });
   } catch (err) {
     logError('request handler error', {

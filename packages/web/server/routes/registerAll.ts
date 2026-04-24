@@ -14,7 +14,7 @@ import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
-import { registerWebUiRoutes } from './webUi.js';
+import { registerUiPreferenceRoutes } from './uiPreferences.js';
 
 export function registerServerRoutes({ app, context }: RegisterServerRoutesInput): void {
   registerDaemonRoutes(app);
@@ -27,7 +27,7 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
 
   registerSystemRoutes(app, context);
 
-  registerWebUiRoutes(app, context);
+  registerUiPreferenceRoutes(app, context);
 
   registerConversationRoutes(app, context);
 

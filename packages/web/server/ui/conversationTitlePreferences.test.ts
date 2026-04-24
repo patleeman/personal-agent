@@ -33,7 +33,7 @@ describe('readSavedConversationTitlePreferences', () => {
     writeFileSync(file, JSON.stringify({
       defaultProvider: 'anthropic',
       defaultModel: 'claude-sonnet-4-6',
-      webUi: {
+      ui: {
         conversationTitles: {
           enabled: false,
           provider: 'openai-codex',
@@ -57,7 +57,7 @@ describe('writeSavedConversationTitlePreferences', () => {
     writeFileSync(file, JSON.stringify({
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         conversationTitles: {
           maxMessages: 4,
@@ -75,7 +75,7 @@ describe('writeSavedConversationTitlePreferences', () => {
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         openConversationIds: ['session-1'],
         conversationTitles: {
           enabled: false,
@@ -92,7 +92,7 @@ describe('writeSavedConversationTitlePreferences', () => {
     writeFileSync(file, JSON.stringify({
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         conversationTitles: {
           enabled: false,
           model: 'openai-codex/gpt-5.4',
@@ -111,7 +111,7 @@ describe('writeSavedConversationTitlePreferences', () => {
     expect(JSON.parse(readFileSync(file, 'utf-8'))).toEqual({
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
-      webUi: {
+      ui: {
         conversationTitles: {
           enabled: false,
           reasoning: 'low',

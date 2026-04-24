@@ -261,7 +261,7 @@ describe('SettingsPage provider model editor', () => {
       profile: 'assistant',
       repoRoot: '/Users/patrick/workingdir/personal-agent',
       projectCount: 5,
-      webUiRevision: 'abc123',
+      appRevision: 'abc123',
     });
     const providerAuthResult = buildUseApiResult({
       authFile: '/tmp/auth.json',

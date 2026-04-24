@@ -135,7 +135,7 @@ describe('deferred resume daemon module', () => {
     setConversationProjectLinks({
       profile: 'assistant',
       conversationId: 'conv-123',
-      relatedProjectIds: ['web-ui'],
+      relatedProjectIds: ['desktop-ui'],
       updatedAt: '2026-03-10T12:00:00.000Z',
     });
 
@@ -167,7 +167,7 @@ describe('deferred resume daemon module', () => {
     const activity = listProfileActivityEntries({ stateRoot, profile: 'assistant' });
     expect(activity).toHaveLength(1);
     expect(activity[0]?.entry.summary).toBe('Deferred resume fired. Open the conversation to continue.');
-    expect(activity[0]?.entry.relatedProjectIds).toEqual(['web-ui']);
+    expect(activity[0]?.entry.relatedProjectIds).toEqual(['desktop-ui']);
     expect(getActivityConversationLink({
       stateRoot,
       profile: 'assistant',

@@ -200,7 +200,7 @@ describe('conversationService', () => {
     setConversationServiceContext({
       getCurrentProfile: () => 'assistant',
       getRepoRoot: () => '/repo',
-      getSavedWebUiPreferences: () => defaultPreferences,
+      getSavedUiPreferences: () => defaultPreferences,
     });
   });
 
@@ -239,7 +239,7 @@ describe('conversationService', () => {
     setConversationServiceContext({
       getCurrentProfile: () => 'reviewer',
       getRepoRoot: () => '/alt-repo',
-      getSavedWebUiPreferences: () => defaultPreferences,
+      getSavedUiPreferences: () => defaultPreferences,
     });
 
     expect(getCurrentProfile()).toBe('reviewer');
@@ -328,7 +328,7 @@ describe('conversationService', () => {
     setConversationServiceContext({
       getCurrentProfile: () => 'assistant',
       getRepoRoot: () => '/repo',
-      getSavedWebUiPreferences: () => ({
+      getSavedUiPreferences: () => ({
         openConversationIds: ['workspace-1'],
         pinnedConversationIds: ['pinned-1'],
         archivedConversationIds: ['archived-1'],

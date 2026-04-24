@@ -121,7 +121,7 @@ import {
   writeSavedDefaultCwdPreference,
 } from '../ui/defaultCwdPreferences.js';
 import { DEFAULT_RUNTIME_SETTINGS_FILE, persistSettingsWrite } from '../ui/settingsPersistence.js';
-import { readSavedWebUiPreferences, writeSavedWebUiPreferences } from '../ui/webUiPreferences.js';
+import { readSavedUiPreferences, writeSavedUiPreferences } from '../ui/uiPreferences.js';
 import { readSavedModelPreferences, writeSavedModelPreferences } from '../models/modelPreferences.js';
 import {
   abortLiveSessionCapability,
@@ -481,7 +481,7 @@ async function buildLocalRoutes(): Promise<RegisteredRoute[]> {
     buildLiveSessionResourceOptions: profileState.buildLiveSessionResourceOptions,
     buildLiveSessionExtensionFactories: profileState.buildLiveSessionExtensionFactories,
     flushLiveDeferredResumes,
-    getSavedWebUiPreferences: () => readSavedWebUiPreferences(settingsFile),
+    getSavedUiPreferences: () => readSavedUiPreferences(settingsFile),
     listTasksForCurrentProfile: () => {
       const loaded = loadScheduledTasksForProfile(profileState.getCurrentProfile());
       const runtimeById = new Map(
@@ -1396,7 +1396,7 @@ export async function readDesktopAppStatus() {
   return {
     profile: context.getCurrentProfile(),
     repoRoot: context.getRepoRoot(),
-    webUiRevision: process.env.PERSONAL_AGENT_WEB_REVISION,
+    appRevision: process.env.PERSONAL_AGENT_APP_REVISION,
   };
 }
 
@@ -1600,7 +1600,7 @@ export async function readDesktopConversationPlansWorkspace() {
 
 export async function readDesktopOpenConversationTabs() {
   const context = await getLocalServerRouteContext();
-  const saved = readSavedWebUiPreferences(context.getSettingsFile());
+  const saved = readSavedUiPreferences(context.getSettingsFile());
   return {
     sessionIds: saved.openConversationIds,
     pinnedSessionIds: saved.pinnedConversationIds,
@@ -1639,7 +1639,7 @@ export async function updateDesktopOpenConversationTabs(input: {
 
   const context = await getLocalServerRouteContext();
   const saved = persistSettingsWrite(
-    (settingsFile) => writeSavedWebUiPreferences({
+    (settingsFile) => writeSavedUiPreferences({
       openConversationIds: sessionIds,
       pinnedConversationIds: pinnedSessionIds,
       archivedConversationIds: archivedSessionIds,
