@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 60;
+	objectVersion = 56;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -18,7 +18,7 @@
 		B10000010000000000000001 /* KnowledgeShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* KnowledgeShareInbox.swift */; };
 		B10000010000000000000002 /* KnowledgeShareInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* KnowledgeShareInbox.swift */; };
 		B10000010000000000000003 /* KnowledgeShareExtensionViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* KnowledgeShareExtensionViewController.swift */; };
-		B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in CopyFiles */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* PersonalAgentCompanionShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -39,13 +39,13 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		B40000010000000000000001 /* Embed App Extensions */ = {
+		B40000010000000000000001 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in Embed App Extensions */,
+				B10000010000000000000004 /* PersonalAgentCompanionShareExtension.appex in CopyFiles */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -146,14 +146,14 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A50000010000000000000001 = {
+		A50000010000000000000001 /* PersonalAgentCompanion */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A90000010000000000000001 /* Build configuration list for PBXNativeTarget "PersonalAgentCompanion" */;
 			buildPhases = (
 				A80000010000000000000001 /* Sources */,
 				A60000010000000000000001 /* Frameworks */,
 				A80000010000000000000002 /* Resources */,
-				B40000010000000000000001 /* Embed App Extensions */,
+				B40000010000000000000001 /* CopyFiles */,
 			);
 			buildRules = (
 			);
@@ -165,7 +165,7 @@
 			productReference = A20000010000000000000010 /* PersonalAgentCompanion.app */;
 			productType = "com.apple.product-type.application";
 		};
-		A50000010000000000000002 = {
+		A50000010000000000000002 /* PersonalAgentCompanionTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = A90000010000000000000002 /* Build configuration list for PBXNativeTarget "PersonalAgentCompanionTests" */;
 			buildPhases = (
@@ -182,7 +182,7 @@
 			productReference = A20000010000000000000011 /* PersonalAgentCompanionTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		B50000010000000000000001 = {
+		B50000010000000000000001 /* PersonalAgentCompanionShareExtension */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = B90000010000000000000001 /* Build configuration list for PBXNativeTarget "PersonalAgentCompanionShareExtension" */;
 			buildPhases = (
@@ -234,9 +234,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A50000010000000000000001,
-				B50000010000000000000001,
-				A50000010000000000000002,
+				A50000010000000000000001 /* PersonalAgentCompanion */,
+				B50000010000000000000001 /* PersonalAgentCompanionShareExtension */,
+				A50000010000000000000002 /* PersonalAgentCompanionTests */,
 			);
 		};
 /* End PBXProject section */
@@ -323,8 +323,8 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.10;
 				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.10;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -346,8 +346,8 @@
 				GCC_NO_COMMON_BLOCKS = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.10;
 				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.10;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -360,7 +360,7 @@
 				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/PersonalAgentCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PersonalAgentCompanion/Info.plist;
@@ -385,7 +385,7 @@
 				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/PersonalAgentCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = PersonalAgentCompanion/Info.plist;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -407,7 +407,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -428,7 +428,7 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				GENERATE_INFOPLIST_FILE = YES;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -450,9 +450,9 @@
 				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/KnowledgeShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = PersonalAgentCompanion/KnowledgeShareExtension-Info.plist;
+				INFOPLIST_FILE = "PersonalAgentCompanion/KnowledgeShareExtension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -474,9 +474,9 @@
 				CODE_SIGN_ENTITLEMENTS = PersonalAgentCompanion/KnowledgeShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 3753DAN98U;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = PersonalAgentCompanion/KnowledgeShareExtension-Info.plist;
+				INFOPLIST_FILE = "PersonalAgentCompanion/KnowledgeShareExtension-Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
