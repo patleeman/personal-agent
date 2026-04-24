@@ -249,6 +249,7 @@ export type {
   CompanionClientSocketMessage,
   CompanionCommandMessage,
   CompanionConversationAbortInput,
+  CompanionConversationBlockImageInput,
   CompanionConversationBootstrapInput,
   CompanionConversationCheckpointCreateInput,
   CompanionConversationCreateInput,
