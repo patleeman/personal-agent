@@ -64,8 +64,9 @@ final class KnowledgeShareExtensionViewController: UIViewController {
             try KnowledgeShareInboxStore.save(envelope)
             updateStatus("Opening Personal Agent…")
             let opened = await openPersonalAgent()
-            guard opened else {
-                throw NSError(domain: "KnowledgeShareExtension", code: 2, userInfo: [NSLocalizedDescriptionKey: "Personal Agent could not be opened."])
+            if !opened {
+                updateStatus("Saved. Open Personal Agent to finish importing.")
+                try? await Task.sleep(for: .milliseconds(700))
             }
             extensionContext?.completeRequest(returningItems: nil)
         } catch {
