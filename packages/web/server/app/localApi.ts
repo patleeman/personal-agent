@@ -624,7 +624,15 @@ function readConfiguredKnowledgeBase() {
 subscribeKnowledgeBaseState(() => {
   invalidateAppTopics('knowledgeBase');
 });
-startKnowledgeBaseSyncLoop();
+
+// The desktop shell serves local API routes directly inside Electron. Running the
+// managed knowledge-base sync loop there shells out to git on a timer and can
+// block the app while the user is clicking around. Keep the loop in the managed
+// web service, but skip it for the embedded desktop runtime and its worker
+// helpers.
+if (process.env.PERSONAL_AGENT_DESKTOP_RUNTIME !== '1') {
+  startKnowledgeBaseSyncLoop();
+}
 
 function renderStatusText(statusCode: number): string {
   switch (statusCode) {
