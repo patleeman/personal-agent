@@ -938,6 +938,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
         defer { client.disconnect() }
 
         try await client.connect()
+
+        let modelState = try await client.readModels()
+        XCTAssertNotNil(modelState.currentModel)
+
+        _ = try await client.listSshTargets()
+
+        let tasks = try await client.listTasks()
+        XCTAssertNotNil(tasks)
+
+        let runs = try await client.listRuns()
+        XCTAssertNotNil(runs)
+
+        let deviceState = try await client.readDeviceAdminState()
+        XCTAssertTrue(deviceState.devices.contains(where: { $0.id == paired.device.id }))
+
         let listState = try await client.listConversations()
         XCTAssertNotNil(listState.ordering)
 

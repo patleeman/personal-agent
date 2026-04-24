@@ -382,6 +382,50 @@ async function createHeadlessCompanionRuntime(localApi) {
       return { hosts: [] };
     },
 
+    async listScheduledTasks() {
+      return localApi.readDesktopScheduledTasks();
+    },
+
+    async readScheduledTask(taskId) {
+      return localApi.readDesktopScheduledTaskDetail(taskId);
+    },
+
+    async readScheduledTaskLog(taskId) {
+      return localApi.readDesktopScheduledTaskLog(taskId);
+    },
+
+    async createScheduledTask(input) {
+      return localApi.createDesktopScheduledTask(input);
+    },
+
+    async updateScheduledTask(input) {
+      return localApi.updateDesktopScheduledTask(input);
+    },
+
+    async deleteScheduledTask(taskId) {
+      return localApi.deleteDesktopScheduledTask(taskId);
+    },
+
+    async runScheduledTask(taskId) {
+      return localApi.runDesktopScheduledTask(taskId);
+    },
+
+    async listDurableRuns() {
+      return localApi.readDesktopDurableRuns();
+    },
+
+    async readDurableRun(runId) {
+      return localApi.readDesktopDurableRun(runId);
+    },
+
+    async readDurableRunLog(input) {
+      return localApi.readDesktopDurableRunLog(input);
+    },
+
+    async cancelDurableRun(runId) {
+      return localApi.cancelDesktopDurableRun(runId);
+    },
+
     async readConversationBootstrap(input) {
       const query = toQuery({
         ...(typeof input.tailBlocks === 'number' ? { tailBlocks: String(input.tailBlocks) } : {}),
