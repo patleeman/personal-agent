@@ -176,11 +176,6 @@ struct ConversationScreen: View {
                         .font(.subheadline.weight(.medium))
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
-                        .background(CompanionTheme.panelRaised, in: Capsule())
-                        .overlay {
-                            Capsule()
-                                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
-                        }
                         .foregroundStyle(CompanionTheme.textPrimary)
                     }
                 }
