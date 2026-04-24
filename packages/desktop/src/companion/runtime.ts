@@ -522,6 +522,30 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
       });
     },
 
+    async cancelConversationDeferredResume(input: { conversationId: string; resumeId: string }) {
+      const localController = hostManager.getHostController('local');
+      if (localController.cancelConversationDeferredResume) {
+        return localController.cancelConversationDeferredResume(input);
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'DELETE',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/deferred-resumes/${encodeURIComponent(input.resumeId)}`,
+      });
+    },
+
+    async fireConversationDeferredResume(input: { conversationId: string; resumeId: string }) {
+      const localController = hostManager.getHostController('local');
+      if (localController.fireConversationDeferredResume) {
+        return localController.fireConversationDeferredResume(input);
+      }
+
+      return invokeDesktopApi(hostManager, {
+        method: 'POST',
+        path: `/api/conversations/${encodeURIComponent(input.conversationId)}/deferred-resumes/${encodeURIComponent(input.resumeId)}/fire`,
+      });
+    },
+
     async abortConversation(input: CompanionConversationAbortInput) {
       return invokeDesktopApi(hostManager, {
         method: 'POST',
