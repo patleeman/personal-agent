@@ -2837,16 +2837,17 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         }
 
         func updateHeight(for textView: UITextView) {
-            let targetWidth = max(textView.bounds.width, UIScreen.main.bounds.width - 120)
-            let measuredHeight = textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height
+            let measuredWidth = textView.bounds.width > 1 ? textView.bounds.width : UIScreen.main.bounds.width - 120
+            let targetWidth = max(1, measuredWidth)
+            textView.textContainer.size = CGSize(width: targetWidth, height: .greatestFiniteMagnitude)
+            textView.layoutManager.ensureLayout(for: textView.textContainer)
+            let measuredHeight = ceil(textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height)
             let clampedHeight = min(ConversationComposerTextEditor.maxHeight, max(ConversationComposerTextEditor.minHeight, measuredHeight))
             textView.isScrollEnabled = measuredHeight > ConversationComposerTextEditor.maxHeight
             guard abs(parent.height - clampedHeight) > 0.5 else {
                 return
             }
-            DispatchQueue.main.async {
-                self.parent.height = clampedHeight
-            }
+            parent.height = clampedHeight
         }
     }
 }
