@@ -392,6 +392,50 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(presentation.subtitle, "personal-agent")
     }
 
+    func testConversationRowPresentationCanHideCwdWhenListIsGroupedByWorkspace() {
+        let session = SessionMeta(
+            id: "conversation-1",
+            file: "/tmp/conversation-1.jsonl",
+            timestamp: ISO8601DateFormatter.flexible.string(from: .now),
+            cwd: "/Users/patrick/workingdir/personal-agent",
+            cwdSlug: "personal-agent",
+            model: "gpt-5.4",
+            title: "Remote thread",
+            messageCount: 3,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: nil,
+            parentSessionFile: nil,
+            parentSessionId: nil,
+            sourceRunId: nil,
+            remoteHostId: nil,
+            remoteHostLabel: "Buildbox",
+            remoteConversationId: nil,
+            automationTaskId: nil,
+            automationTitle: nil,
+            needsAttention: false,
+            attentionUpdatedAt: nil,
+            attentionUnreadMessageCount: nil,
+            attentionUnreadActivityCount: nil,
+            attentionActivityIds: nil
+        )
+
+        let presentation = ConversationRowPresentation(session: session, includeCwdInSubtitle: false)
+
+        XCTAssertEqual(presentation.subtitle, "Buildbox")
+    }
+
+    func testConversationGroupLabelsDisambiguateSharedFolderNamesAndNormalizePaths() {
+        let alpha = "/Users/patrick/personal/personal-agent/"
+        let beta = "/Users/patrick/Documents/personal-agent"
+
+        let labels = buildCompanionConversationGroupLabels([alpha, beta])
+
+        XCTAssertEqual(normalizeCompanionConversationGroupCwd(alpha), "/Users/patrick/personal/personal-agent")
+        XCTAssertEqual(labels[normalizeCompanionConversationGroupCwd(alpha)], "personal/personal-agent")
+        XCTAssertEqual(labels[normalizeCompanionConversationGroupCwd(beta)], "Documents/personal-agent")
+    }
+
     func testTranscriptMarkdownVerbatimFallbackKeepsOrderedLists() {
         XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("1. First\n2. Second\n3. Third"))
         XCTAssertTrue(shouldRenderTranscriptMarkdownVerbatim("- First\n- Second"))

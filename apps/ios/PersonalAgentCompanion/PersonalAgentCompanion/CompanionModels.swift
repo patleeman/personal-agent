@@ -1290,6 +1290,96 @@ func companionPathLeafName(_ rawPath: String?) -> String? {
     return normalized.split(whereSeparator: { $0 == "/" || $0 == "\\" }).last.map(String.init) ?? normalized
 }
 
+func normalizeCompanionConversationGroupCwd(_ cwd: String?) -> String {
+    guard let trimmed = cwd?.trimmed.nilIfBlank else {
+        return ""
+    }
+
+    let normalized = trimmed.replacingOccurrences(of: "\\", with: "/")
+    if normalized == "/" || normalized.range(of: #"^[A-Za-z]:/$"#, options: .regularExpression) != nil {
+        return normalized
+    }
+
+    let withoutTrailingSeparators = normalized.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+    return withoutTrailingSeparators.isEmpty ? normalized : withoutTrailingSeparators
+}
+
+func buildCompanionConversationGroupLabels(_ cwds: [String?]) -> [String: String] {
+    struct Entry {
+        let cwd: String
+        let parts: [String]
+        let baseLabel: String
+    }
+
+    var entries: [Entry] = []
+    var seen = Set<String>()
+
+    for cwd in cwds {
+        let normalized = normalizeCompanionConversationGroupCwd(cwd)
+        guard !normalized.isEmpty, seen.insert(normalized).inserted else {
+            continue
+        }
+
+        let parts = normalized
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+        entries.append(Entry(
+            cwd: normalized,
+            parts: parts,
+            baseLabel: companionPathLeafName(normalized) ?? normalized
+        ))
+    }
+
+    var labels: [String: String] = [:]
+    let groupedEntries = Dictionary(grouping: entries, by: \ .baseLabel)
+
+    for (baseLabel, matchingEntries) in groupedEntries {
+        guard matchingEntries.count > 1 else {
+            if let entry = matchingEntries.first {
+                labels[entry.cwd] = baseLabel
+            }
+            continue
+        }
+
+        var unresolved = matchingEntries
+        let maxSegmentCount = matchingEntries.map { max($0.parts.count, 1) }.max() ?? 1
+
+        for segmentCount in 2 ... maxSegmentCount where !unresolved.isEmpty {
+            var candidateCounts: [String: Int] = [:]
+            for entry in unresolved {
+                let candidate = entry.parts.suffix(min(segmentCount, entry.parts.count)).joined(separator: "/")
+                let resolvedCandidate = candidate.isEmpty ? entry.cwd : candidate
+                candidateCounts[resolvedCandidate, default: 0] += 1
+            }
+
+            unresolved.removeAll { entry in
+                let candidate = entry.parts.suffix(min(segmentCount, entry.parts.count)).joined(separator: "/")
+                let resolvedCandidate = candidate.isEmpty ? entry.cwd : candidate
+                guard candidateCounts[resolvedCandidate] == 1 else {
+                    return false
+                }
+                labels[entry.cwd] = resolvedCandidate
+                return true
+            }
+        }
+
+        for entry in unresolved {
+            labels[entry.cwd] = entry.cwd
+        }
+    }
+
+    return labels
+}
+
+func companionConversationGroupLabel(_ cwd: String?, labelsByCwd: [String: String] = [:]) -> String {
+    let normalized = normalizeCompanionConversationGroupCwd(cwd)
+    guard !normalized.isEmpty else {
+        return "No working directory"
+    }
+
+    return labelsByCwd[normalized] ?? companionPathLeafName(normalized) ?? normalized
+}
+
 func formatCompanionDate(_ string: String?) -> String {
     guard let date = parseCompanionDate(string) else {
         return string ?? "—"

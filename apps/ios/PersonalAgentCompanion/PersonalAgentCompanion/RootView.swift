@@ -165,6 +165,21 @@ struct HostDashboardView: View {
     }
 }
 
+private struct ConversationListCwdGroup: Identifiable {
+    let key: String
+    let cwd: String?
+    let label: String
+    let sessions: [SessionMeta]
+
+    var id: String { key }
+}
+
+private struct ConversationListSectionGroup: Identifiable {
+    let id: String
+    let title: String
+    let cwdGroups: [ConversationListCwdGroup]
+}
+
 struct ConversationListView: View {
     @ObservedObject var appModel: CompanionAppModel
     @ObservedObject var session: HostSessionModel
@@ -173,57 +188,99 @@ struct ConversationListView: View {
     @State private var isCreatingConversation = false
     @State private var autoOpenedDemoConversation = false
 
+    private var groupedChatSections: [ConversationListSectionGroup] {
+        let labelsByCwd = buildCompanionConversationGroupLabels(
+            session.chatSections.flatMap { $0.sessions.map(\.cwd) }
+        )
+
+        return session.chatSections.map { section in
+            var sessionsByGroupKey: [String: [SessionMeta]] = [:]
+            var orderedGroupKeys: [String] = []
+
+            for item in section.sessions {
+                let normalizedCwd = normalizeCompanionConversationGroupCwd(item.cwd)
+                let groupKey = normalizedCwd.isEmpty ? "__no-cwd__" : normalizedCwd
+                if sessionsByGroupKey[groupKey] == nil {
+                    orderedGroupKeys.append(groupKey)
+                }
+                sessionsByGroupKey[groupKey, default: []].append(item)
+            }
+
+            return ConversationListSectionGroup(
+                id: section.id,
+                title: section.title,
+                cwdGroups: orderedGroupKeys.map { groupKey in
+                    let normalizedCwd = groupKey == "__no-cwd__" ? nil : groupKey
+                    return ConversationListCwdGroup(
+                        key: groupKey,
+                        cwd: normalizedCwd,
+                        label: companionConversationGroupLabel(normalizedCwd, labelsByCwd: labelsByCwd),
+                        sessions: sessionsByGroupKey[groupKey] ?? []
+                    )
+                }
+            )
+        }
+    }
+
     var body: some View {
         NavigationStack(path: $path) {
-            GeometryReader { proxy in
-                VStack(spacing: 0) {
-                    conversationListHeader()
+            VStack(spacing: 0) {
+                conversationListHeader()
 
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 24) {
-                            if session.isLoading && session.chatSections.isEmpty {
-                                ProgressView()
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.top, 48)
-                            } else if session.chatSections.isEmpty {
-                                ContentUnavailableView(
-                                    session.archivedSessions.isEmpty ? "No conversations" : "No open conversations",
-                                    systemImage: "message",
-                                    description: Text(
-                                        session.archivedSessions.isEmpty
-                                            ? "Create a new conversation on \(session.host.hostLabel)."
-                                            : "Create a new conversation on \(session.host.hostLabel), or open Archived to restore an older thread."
-                                    )
-                                )
-                                .foregroundStyle(CompanionTheme.textSecondary)
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 24) {
+                        if session.isLoading && session.chatSections.isEmpty {
+                            ProgressView()
                                 .frame(maxWidth: .infinity)
                                 .padding(.top, 48)
-                            } else {
-                                ForEach(session.chatSections) { section in
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        Text(section.title)
-                                            .font(.title.weight(.semibold))
-                                            .foregroundStyle(CompanionTheme.textSecondary)
+                        } else if session.chatSections.isEmpty {
+                            ContentUnavailableView(
+                                session.archivedSessions.isEmpty ? "No conversations" : "No open conversations",
+                                systemImage: "message",
+                                description: Text(
+                                    session.archivedSessions.isEmpty
+                                        ? "Create a new conversation on \(session.host.hostLabel)."
+                                        : "Create a new conversation on \(session.host.hostLabel), or open Archived to restore an older thread."
+                                )
+                            )
+                            .foregroundStyle(CompanionTheme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 48)
+                        } else {
+                            ForEach(groupedChatSections) { section in
+                                VStack(alignment: .leading, spacing: 12) {
+                                    Text(section.title)
+                                        .font(.title.weight(.semibold))
+                                        .foregroundStyle(CompanionTheme.textSecondary)
 
-                                        VStack(spacing: 12) {
-                                            ForEach(section.sessions) { item in
-                                                conversationListCard(item, in: section)
+                                    VStack(alignment: .leading, spacing: 18) {
+                                        ForEach(section.cwdGroups) { group in
+                                            VStack(alignment: .leading, spacing: 10) {
+                                                Text(group.label)
+                                                    .font(.subheadline.weight(.semibold))
+                                                    .foregroundStyle(CompanionTheme.textSecondary)
+
+                                                VStack(spacing: 12) {
+                                                    ForEach(group.sessions) { item in
+                                                        conversationListCard(item, in: section, includeCwdInSubtitle: false)
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 16)
-                        .padding(.bottom, 140)
                     }
-                    .refreshable {
-                        session.refresh()
-                    }
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 140)
                 }
-                .background(CompanionTheme.canvas)
+                .refreshable {
+                    session.refresh()
+                }
             }
+            .background(CompanionTheme.canvas)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: String.self) { conversationId in
                 ConversationScreen(
@@ -253,10 +310,10 @@ struct ConversationListView: View {
     }
 
     @ViewBuilder
-    private func conversationListCard(_ item: SessionMeta, in section: ConversationListSection) -> some View {
+    private func conversationListCard(_ item: SessionMeta, in section: ConversationListSectionGroup, includeCwdInSubtitle: Bool) -> some View {
         NavigationLink(value: item.id) {
             HStack(spacing: 14) {
-                ConversationRow(session: item)
+                ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
                 Spacer(minLength: 12)
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
@@ -2013,6 +2070,7 @@ func knowledgeSmartReturnMutation(text: String, selectedRange: NSRange) -> Knowl
 
 struct ConversationRowPresentation {
     let session: SessionMeta
+    var includeCwdInSubtitle = true
 
     var hasUnreadMessages: Bool {
         let unreadCount = max(session.attentionUnreadMessageCount ?? 0, session.attentionUnreadActivityCount ?? 0)
@@ -2025,7 +2083,7 @@ struct ConversationRowPresentation {
 
     var subtitle: String? {
         let fragments = [
-            session.cwdDisplayName,
+            includeCwdInSubtitle ? session.cwdDisplayName : nil,
             session.remoteHostLabel?.nilIfBlank,
             session.automationTitle?.nilIfBlank.map { "Auto: \($0)" },
         ].compactMap { $0 }
@@ -2035,9 +2093,10 @@ struct ConversationRowPresentation {
 
 private struct ConversationRow: View {
     let session: SessionMeta
+    var includeCwdInSubtitle = true
 
     private var presentation: ConversationRowPresentation {
-        ConversationRowPresentation(session: session)
+        ConversationRowPresentation(session: session, includeCwdInSubtitle: includeCwdInSubtitle)
     }
 
     var body: some View {
