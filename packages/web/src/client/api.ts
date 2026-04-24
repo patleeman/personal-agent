@@ -112,7 +112,10 @@ function withViewProfile(path: string, profile?: string): string {
 }
 
 const pendingMemoryRequests = new Map<string, Promise<MemoryData>>();
+const KNOWLEDGE_BASE_CACHE_TTL_MS = 3_000;
 let pendingKnowledgeBaseRequest: Promise<KnowledgeBaseState> | null = null;
+let cachedKnowledgeBaseState: KnowledgeBaseState | null = null;
+let cachedKnowledgeBaseReadAtMs = 0;
 let desktopEnvironmentPromise: Promise<DesktopEnvironmentState | null> | null = null;
 
 function buildMemoryRequestKey(options?: { profile?: string }): string {
@@ -138,11 +141,21 @@ async function getKnowledgeBaseState(): Promise<KnowledgeBaseState> {
     return pendingKnowledgeBaseRequest;
   }
 
-  const request = get<KnowledgeBaseState>('/knowledge-base').finally(() => {
-    if (pendingKnowledgeBaseRequest === request) {
-      pendingKnowledgeBaseRequest = null;
-    }
-  });
+  if (cachedKnowledgeBaseState && Date.now() - cachedKnowledgeBaseReadAtMs < KNOWLEDGE_BASE_CACHE_TTL_MS) {
+    return cachedKnowledgeBaseState;
+  }
+
+  const request = get<KnowledgeBaseState>('/knowledge-base')
+    .then((state) => {
+      cachedKnowledgeBaseState = state;
+      cachedKnowledgeBaseReadAtMs = Date.now();
+      return state;
+    })
+    .finally(() => {
+      if (pendingKnowledgeBaseRequest === request) {
+        pendingKnowledgeBaseRequest = null;
+      }
+    });
   pendingKnowledgeBaseRequest = request;
   return request;
 }
@@ -320,10 +333,14 @@ export const api = {
   },
   updateKnowledgeBase: async (input: { repoUrl?: string | null; branch?: string | null }) => {
     pendingKnowledgeBaseRequest = null;
+    cachedKnowledgeBaseState = null;
+    cachedKnowledgeBaseReadAtMs = 0;
     return patch<KnowledgeBaseState>('/knowledge-base', input);
   },
   syncKnowledgeBase: async () => {
     pendingKnowledgeBaseRequest = null;
+    cachedKnowledgeBaseState = null;
+    cachedKnowledgeBaseReadAtMs = 0;
     return post<KnowledgeBaseState>('/knowledge-base/sync', {});
   },
   providerAuth: async () => get<ProviderAuthState>('/provider-auth'),

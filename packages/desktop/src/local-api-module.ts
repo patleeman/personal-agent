@@ -1,7 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { existsSync } from 'node:fs';
-import { app } from 'electron';
 import type {
   DesktopApiStreamEvent,
   DesktopConversationStateBridgeEvent,
@@ -336,33 +335,66 @@ export type LocalApiModuleLoader = () => Promise<LocalApiModule>;
 
 let localApiModulePromise: Promise<LocalApiModule> | null = null;
 
+function resolveDevLocalApiModuleFilePath(currentDir: string): string {
+  return resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js');
+}
+
+function resolvePackagedLocalApiModuleFilePath(currentDir: string, appPath?: string | null): string {
+  const resolvedAppPath = appPath?.trim();
+  if (resolvedAppPath) {
+    return resolve(resolvedAppPath, 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js');
+  }
+
+  return resolve(currentDir, '..', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js');
+}
+
+function resolveRepoLocalApiModuleFilePath(repoRoot?: string | null): string | null {
+  const resolvedRepoRoot = repoRoot?.trim();
+  if (!resolvedRepoRoot) {
+    return null;
+  }
+
+  return resolve(resolvedRepoRoot, 'packages', 'web', 'dist-server', 'app', 'localApi.js');
+}
+
 export function resolveLocalApiModuleUrl(input: {
   currentDir?: string;
   isPackaged?: boolean;
   appPath?: string;
+  repoRoot?: string;
 } = {}): string {
-  const isPackaged = input.isPackaged ?? app.isPackaged;
-  if (isPackaged) {
-    const appPath = input.appPath ?? app.getAppPath();
-    return pathToFileURL(resolve(appPath, 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href;
+  const currentDir = input.currentDir ?? dirname(fileURLToPath(import.meta.url));
+  const envRepoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
+  const envAppPath = process.env.PERSONAL_AGENT_DESKTOP_APP_PATH?.trim();
+  const devPath = resolveDevLocalApiModuleFilePath(currentDir);
+  const packagedPath = resolvePackagedLocalApiModuleFilePath(currentDir, input.appPath ?? envAppPath ?? null);
+  const repoPath = resolveRepoLocalApiModuleFilePath(input.repoRoot ?? envRepoRoot ?? null);
+
+  if (input.isPackaged === true) {
+    return pathToFileURL(packagedPath).href;
   }
 
-  const currentDir = input.currentDir ?? dirname(fileURLToPath(import.meta.url));
-  return pathToFileURL(resolve(currentDir, '..', '..', 'web', 'dist-server', 'app', 'localApi.js')).href;
+  if (input.isPackaged === false) {
+    return pathToFileURL(devPath).href;
+  }
+
+  const existingPath = [packagedPath, devPath, repoPath]
+    .filter((value): value is string => typeof value === 'string' && value.length > 0)
+    .find((filePath) => existsSync(filePath));
+  const fallbackPath = (input.appPath ?? envAppPath)
+    ? packagedPath
+    : devPath;
+
+  return pathToFileURL(existingPath ?? fallbackPath).href;
 }
 
 function resolveFallbackLocalApiModuleUrl(): string | null {
-  const repoRoot = process.env.PERSONAL_AGENT_REPO_ROOT?.trim();
-  if (!repoRoot) {
+  const repoPath = resolveRepoLocalApiModuleFilePath(process.env.PERSONAL_AGENT_REPO_ROOT?.trim());
+  if (!repoPath || !existsSync(repoPath)) {
     return null;
   }
 
-  const filePath = resolve(repoRoot, 'packages', 'web', 'dist-server', 'app', 'localApi.js');
-  if (!existsSync(filePath)) {
-    return null;
-  }
-
-  return pathToFileURL(filePath).href;
+  return pathToFileURL(repoPath).href;
 }
 
 export async function importLocalApiModuleWithFallback(input: {

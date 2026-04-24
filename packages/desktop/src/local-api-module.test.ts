@@ -2,13 +2,6 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('electron', () => ({
-  app: {
-    isPackaged: false,
-    getAppPath: vi.fn(() => '/ignored/app.asar'),
-  },
-}));
-
 import { importLocalApiModuleWithFallback, resolveLocalApiModuleUrl } from './local-api-module.js';
 
 describe('resolveLocalApiModuleUrl', () => {
@@ -21,7 +14,15 @@ describe('resolveLocalApiModuleUrl', () => {
 
   it('resolves the packaged local API module from the bundled web package', () => {
     expect(resolveLocalApiModuleUrl({
+      currentDir: '/Applications/Personal Agent.app/Contents/Resources/app.asar/dist',
       isPackaged: true,
+      appPath: '/Applications/Personal Agent.app/Contents/Resources/app.asar',
+    })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href);
+  });
+
+  it('can auto-resolve the packaged bundle path without importing electron', () => {
+    expect(resolveLocalApiModuleUrl({
+      currentDir: '/Applications/Personal Agent.app/Contents/Resources/app.asar/dist',
       appPath: '/Applications/Personal Agent.app/Contents/Resources/app.asar',
     })).toBe(pathToFileURL(resolve('/Applications/Personal Agent.app/Contents/Resources/app.asar', 'node_modules', '@personal-agent', 'web', 'dist-server', 'app', 'localApi.js')).href);
   });
