@@ -763,6 +763,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(session.chatSections.contains(where: { $0.id == "pinned" && $0.sessions.contains(where: { $0.id == "conv-2" }) }))
     }
 
+    func testHostSessionCanCreateConversation() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+        session.refresh()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !session.chatSections.isEmpty
+        }
+
+        let createdId = try XCTUnwrap(await session.createConversation(NewConversationRequest(cwd: "/tmp/ios-create")))
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            session.chatSections
+                .flatMap(\.sessions)
+                .contains(where: { $0.id == createdId })
+        }
+
+        XCTAssertEqual(session.sessions[createdId]?.cwd, "/tmp/ios-create")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testConversationLoadsArtifactsAndCheckpoints() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

@@ -356,7 +356,7 @@ struct ConversationListView: View {
                 Label("Archive", systemImage: "archivebox")
             }
             Button {
-                Task {
+                Task { @MainActor in
                     if let duplicated = await session.duplicateConversation(item.id) {
                         path.append(duplicated)
                     }
@@ -421,7 +421,7 @@ struct ConversationListView: View {
         guard !isCreatingConversation else {
             return
         }
-        Task {
+        Task { @MainActor in
             isCreatingConversation = true
             defer { isCreatingConversation = false }
             if let id = await session.createConversation(NewConversationRequest()) {
@@ -437,7 +437,7 @@ struct ConversationListView: View {
             return
         }
         autoOpenedDemoConversation = true
-        Task {
+        Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
             guard path.isEmpty else {
                 return
