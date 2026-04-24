@@ -4162,13 +4162,20 @@ export async function submitPromptSession(
   });
 
   const completion = runPromptOnLiveEntry(entry, text, normalizedBehavior, images);
-  void completion.finally(() => {
-    if (!settled) {
-      settled = true;
-      unsubscribe?.();
-      unsubscribe = null;
-    }
-  });
+  void completion
+    .finally(() => {
+      if (!settled) {
+        settled = true;
+        unsubscribe?.();
+        unsubscribe = null;
+      }
+    })
+    .catch(() => {
+      // The caller observes prompt-start failures through the race below, and
+      // accepted prompts expose their eventual failure through the transcript.
+      // Do not let the detached completion cleanup promise become an unhandled
+      // rejection and take down the companion dev host.
+    });
 
   await Promise.race([accepted, completion]);
   return {

@@ -770,7 +770,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
             !session.chatSections.isEmpty
         }
 
-        let createdId = try XCTUnwrap(await session.createConversation(NewConversationRequest(cwd: "/tmp/ios-create")))
+        let createdConversationId = await session.createConversation(NewConversationRequest(cwd: "/tmp/ios-create"))
+        let createdId = try XCTUnwrap(createdConversationId)
 
         try await waitForCondition(timeout: .seconds(2)) {
             session.chatSections

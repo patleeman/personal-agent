@@ -374,6 +374,14 @@ async function createHeadlessCompanionRuntime(localApi) {
       return { executionTargets: [localExecutionTarget] };
     },
 
+    async readModels() {
+      return localApi.readDesktopModels();
+    },
+
+    async listSshTargets() {
+      return { hosts: [] };
+    },
+
     async readConversationBootstrap(input) {
       const query = toQuery({
         ...(typeof input.tailBlocks === 'number' ? { tailBlocks: String(input.tailBlocks) } : {}),
