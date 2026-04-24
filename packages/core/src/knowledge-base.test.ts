@@ -185,6 +185,63 @@ describe('KnowledgeBaseManager', () => {
     expect(readFileSync(join(remoteClone, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
   });
 
+  it('does not invent placeholder gitkeep files in an existing remote repo', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      'notes/remote.md': '# Remote\n',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const state = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    expect(existsSync(join(state.managedRoot, 'notes', '.gitkeep'))).toBe(false);
+    expect(existsSync(join(state.managedRoot, 'skills', '.gitkeep'))).toBe(false);
+
+    const remoteClone = createTempDir('pa-kb-verify-');
+    runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
+    expect(existsSync(join(remoteClone, 'notes', '.gitkeep'))).toBe(false);
+    expect(existsSync(join(remoteClone, 'skills', '.gitkeep'))).toBe(false);
+  });
+
+  it('honors remote deletion of a placeholder gitkeep instead of recreating it', () => {
+    const remoteRepo = initBareRepo();
+    seedRemoteRepo(remoteRepo, {
+      '.gitignore': '.DS_Store\n.obsidian/\n',
+      'skills/.gitkeep': '',
+      'notes/.gitkeep': '',
+    }, '2025-01-01T00:00:00Z');
+
+    const stateRoot = createTempDir('pa-kb-state-');
+    const configRoot = createTempDir('pa-kb-config-');
+    const manager = new KnowledgeBaseManager({ stateRoot, configRoot });
+    const initialState = manager.updateKnowledgeBase({ repoUrl: remoteRepo, branch: 'main' });
+
+    const remoteEditor = createTempDir('pa-kb-editor-');
+    runGit(['clone', remoteRepo, remoteEditor], dirname(remoteEditor));
+    runGit(['config', 'user.email', 'patrick@example.com'], remoteEditor);
+    runGit(['config', 'user.name', 'Patrick Lee'], remoteEditor);
+    rmSync(join(remoteEditor, 'notes', '.gitkeep'), { force: true });
+    writeFileSync(join(remoteEditor, 'notes', 'remote.md'), '# Remote\n');
+    runGit(['add', '--all'], remoteEditor);
+    runGit(['commit', '-m', 'replace notes placeholder'], remoteEditor, {
+      GIT_AUTHOR_DATE: '2026-03-01T00:00:00Z',
+      GIT_COMMITTER_DATE: '2026-03-01T00:00:00Z',
+    });
+    runGit(['push', 'origin', 'main'], remoteEditor);
+
+    manager.syncNow();
+
+    expect(existsSync(join(initialState.managedRoot, 'notes', '.gitkeep'))).toBe(false);
+    expect(readFileSync(join(initialState.managedRoot, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
+
+    const remoteClone = createTempDir('pa-kb-verify-');
+    runGit(['clone', remoteRepo, remoteClone], dirname(remoteClone));
+    expect(existsSync(join(remoteClone, 'notes', '.gitkeep'))).toBe(false);
+    expect(readFileSync(join(remoteClone, 'notes', 'remote.md'), 'utf-8')).toBe('# Remote\n');
+  });
+
   it('normalizes duplicated upstream tracking config during sync', () => {
     const remoteRepo = initBareRepo();
     seedRemoteRepo(remoteRepo, {

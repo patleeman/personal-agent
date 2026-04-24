@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   renameSync,
   rmSync,
@@ -465,6 +466,14 @@ function deleteFileIfExists(filePath: string, root: string): void {
   removeEmptyParentDirectories(root, filePath);
 }
 
+function directoryIsEmpty(path: string): boolean {
+  try {
+    return readdirSync(path).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 function ensureBootstrapFiles(root: string): void {
   mkdirSync(join(root, 'skills'), { recursive: true });
   mkdirSync(join(root, 'notes'), { recursive: true });
@@ -475,12 +484,12 @@ function ensureBootstrapFiles(root: string): void {
   }
 
   const skillKeepPath = join(root, 'skills', '.gitkeep');
-  if (!existsSync(skillKeepPath)) {
+  if (!existsSync(skillKeepPath) && directoryIsEmpty(join(root, 'skills'))) {
     writeFileSync(skillKeepPath, '');
   }
 
   const notesKeepPath = join(root, 'notes', '.gitkeep');
-  if (!existsSync(notesKeepPath)) {
+  if (!existsSync(notesKeepPath) && directoryIsEmpty(join(root, 'notes'))) {
     writeFileSync(notesKeepPath, '');
   }
 }
@@ -708,7 +717,6 @@ export class KnowledgeBaseManager {
       runGitText(root, ['remote', 'set-url', 'origin', config.repoUrl]);
     }
 
-    ensureBootstrapFiles(root);
     return root;
   }
 
@@ -971,7 +979,6 @@ export class KnowledgeBaseManager {
     try {
       const root = this.ensureRepoCheckout(config);
       runGitText(root, ['fetch', 'origin'], { allowFailure: true });
-      ensureBootstrapFiles(root);
 
       const remoteSnapshot = listRemoteSnapshot(root, config.branch);
       const remoteExists = Object.keys(remoteSnapshot).length > 0 || refExists(root, getRemoteRef(config.branch));
@@ -1065,7 +1072,6 @@ export class KnowledgeBaseManager {
         }
       }
 
-      ensureBootstrapFiles(root);
       this.stageAndCommitIfNeeded(root, config.branch, syncTimestamp);
 
       const maintenanceMetadata = maybeRunRepositoryMaintenance(root, storedState, syncTimestamp);
