@@ -263,6 +263,28 @@ async function buildConversationListState(hostManager: HostManager) {
   };
 }
 
+async function restoreConversationToSharedLayout(
+  localController: Pick<ReturnType<HostManager['getHostController']>, 'readOpenConversationTabs' | 'updateOpenConversationTabs'>,
+  conversationId: string,
+): Promise<void> {
+  const currentLayout = await localController.readOpenConversationTabs?.().catch(() => null);
+  if (!localController.updateOpenConversationTabs || !isRecord(currentLayout)) {
+    return;
+  }
+
+  const sessionIds = Array.isArray(currentLayout.sessionIds) ? currentLayout.sessionIds.filter((id): id is string => typeof id === 'string') : [];
+  const pinnedSessionIds = Array.isArray(currentLayout.pinnedSessionIds) ? currentLayout.pinnedSessionIds.filter((id): id is string => typeof id === 'string') : [];
+  const archivedSessionIds = Array.isArray(currentLayout.archivedSessionIds) ? currentLayout.archivedSessionIds.filter((id): id is string => typeof id === 'string' && id !== conversationId) : [];
+  const workspacePaths = Array.isArray(currentLayout.workspacePaths) ? currentLayout.workspacePaths.filter((path): path is string => typeof path === 'string') : [];
+
+  await localController.updateOpenConversationTabs({
+    sessionIds: [conversationId, ...sessionIds.filter((id) => id !== conversationId)],
+    pinnedSessionIds,
+    archivedSessionIds,
+    workspacePaths,
+  }).catch(() => undefined);
+}
+
 export function createDesktopCompanionRuntime(hostManager: HostManager): CompanionRuntime {
   return {
     async listConversations() {
@@ -397,6 +419,8 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
         });
       }
 
+      await restoreConversationToSharedLayout(localController, conversationId);
+
       return this.readConversationBootstrap({ conversationId, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },
 
@@ -417,6 +441,8 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
           hostId: input.executionTargetId,
         });
       }
+
+      await restoreConversationToSharedLayout(localController, resumed.id);
 
       return this.readConversationBootstrap({ conversationId: resumed.id, tailBlocks: DEFAULT_COMPANION_TAIL_BLOCKS });
     },

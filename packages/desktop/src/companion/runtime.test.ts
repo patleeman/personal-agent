@@ -84,6 +84,68 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('opens newly created companion conversations in the shared layout', async () => {
+    const localController = {
+      createLiveSession: vi.fn().mockResolvedValue({ id: 'conv-new', sessionFile: '/sessions/conv-new.jsonl' }),
+      readOpenConversationTabs: vi.fn().mockResolvedValue({
+        sessionIds: ['conv-old'],
+        pinnedSessionIds: [],
+        archivedSessionIds: ['conv-new', 'conv-archived'],
+        workspacePaths: ['/repo'],
+      }),
+      updateOpenConversationTabs: vi.fn().mockResolvedValue({ ok: true }),
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ conversationId: 'conv-new' })),
+      readSessionMeta: vi.fn().mockResolvedValue({ id: 'conv-new', file: '/sessions/conv-new.jsonl' }),
+      readConversationAttachments: vi.fn().mockResolvedValue({ attachments: [] }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await runtime.createConversation({ executionTargetId: 'local' });
+
+    expect(localController.updateOpenConversationTabs).toHaveBeenCalledWith({
+      sessionIds: ['conv-new', 'conv-old'],
+      pinnedSessionIds: [],
+      archivedSessionIds: ['conv-archived'],
+      workspacePaths: ['/repo'],
+    });
+  });
+
+  it('restores resumed companion conversations into the shared layout', async () => {
+    const localController = {
+      resumeLiveSession: vi.fn().mockResolvedValue({ id: 'conv-resumed' }),
+      readOpenConversationTabs: vi.fn().mockResolvedValue({
+        sessionIds: ['conv-old'],
+        pinnedSessionIds: [],
+        archivedSessionIds: ['conv-resumed'],
+        workspacePaths: ['/repo'],
+      }),
+      updateOpenConversationTabs: vi.fn().mockResolvedValue({ ok: true }),
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ conversationId: 'conv-resumed' })),
+      readSessionMeta: vi.fn().mockResolvedValue({ id: 'conv-resumed', file: '/sessions/conv-resumed.jsonl' }),
+      readConversationAttachments: vi.fn().mockResolvedValue({ attachments: [] }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await runtime.resumeConversation({ sessionFile: '/sessions/conv-resumed.jsonl', executionTargetId: 'local' });
+
+    expect(localController.updateOpenConversationTabs).toHaveBeenCalledWith({
+      sessionIds: ['conv-resumed', 'conv-old'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: ['/repo'],
+    });
+  });
+
   it('routes knowledge search, rename, delete, image upload, and import calls to vault endpoints', async () => {
     const localController = {
       dispatchApiRequest: vi

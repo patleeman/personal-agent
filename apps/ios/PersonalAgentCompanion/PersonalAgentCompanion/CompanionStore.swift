@@ -499,6 +499,9 @@ final class HostSessionModel: ObservableObject {
         sections
             .filter { $0.id == "archived" || $0.id == "recent" }
             .flatMap(\.sessions)
+            .sorted { lhs, rhs in
+                (lhs.effectiveActivityDate ?? .distantPast) > (rhs.effectiveActivityDate ?? .distantPast)
+            }
     }
 
     init(client: CompanionClientProtocol, installationSurfaceId: String) {
@@ -1765,6 +1768,7 @@ final class ConversationViewModel: ObservableObject {
     private var lastStreamingTextBlockId: String?
     private var lastStreamingThinkingBlockId: String?
     private var transcriptImageCache: [String: Data] = [:]
+    private var liveConversationId: String?
 
     init(
         client: CompanionClientProtocol,
@@ -1859,8 +1863,9 @@ final class ConversationViewModel: ObservableObject {
         let resolvedMode = requestedMode ?? (isStreaming ? .steer : .submit)
         Task {
             do {
+                let targetConversationId = try await ensureLiveConversationForPrompt()
                 try await client.promptConversation(
-                    conversationId: conversationId,
+                    conversationId: targetConversationId,
                     text: currentText,
                     images: currentImages,
                     attachmentRefs: currentRefs,
@@ -1883,8 +1888,9 @@ final class ConversationViewModel: ObservableObject {
         }
         Task {
             do {
+                let targetConversationId = try await ensureLiveConversationForPrompt()
                 try await client.promptConversation(
-                    conversationId: conversationId,
+                    conversationId: targetConversationId,
                     text: trimmed,
                     images: [],
                     attachmentRefs: [],
@@ -1895,6 +1901,26 @@ final class ConversationViewModel: ObservableObject {
                 errorMessage = error.localizedDescription
             }
         }
+    }
+
+    private func ensureLiveConversationForPrompt() async throws -> String {
+        if sessionMeta?.isLive == true {
+            return liveConversationId ?? conversationId
+        }
+
+        guard let meta = sessionMeta else {
+            return liveConversationId ?? conversationId
+        }
+
+        let envelope = try await client.resumeConversation(
+            ResumeConversationRequest(
+                sessionFile: meta.file,
+                cwd: meta.cwd,
+                executionTargetId: meta.remoteHostId ?? "local"
+            )
+        )
+        applyBootstrap(envelope)
+        return envelope.bootstrap.conversationId
     }
 
     func restoreQueuedPrompt(behavior: String, index: Int, previewId: String?) {
@@ -2356,7 +2382,7 @@ final class ConversationViewModel: ObservableObject {
         streamTask?.cancel()
         streamTask = Task {
             do {
-                let stream = try await client.subscribeConversationEvents(conversationId: conversationId, surfaceId: installationSurfaceId)
+                let stream = try await client.subscribeConversationEvents(conversationId: liveConversationId ?? conversationId, surfaceId: installationSurfaceId)
                 for await event in stream {
                     if Task.isCancelled { break }
                     applyEvent(event)
@@ -2372,6 +2398,7 @@ final class ConversationViewModel: ObservableObject {
 
     private func applyBootstrap(_ envelope: ConversationBootstrapEnvelope) {
         errorMessage = nil
+        liveConversationId = envelope.bootstrap.conversationId
         sessionMeta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta ?? sessionMeta
         title = sessionMeta?.title ?? envelope.bootstrap.liveSession.title ?? title
         executionTargets = envelope.executionTargets
