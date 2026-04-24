@@ -314,6 +314,8 @@ export interface CompanionRuntime {
   parallelPromptConversation(input: CompanionConversationPromptInput): Promise<unknown>;
   restoreConversationQueuePrompt(input: CompanionConversationQueueRestoreInput): Promise<unknown>;
   manageConversationParallelJob(input: CompanionConversationParallelJobInput): Promise<unknown>;
+  cancelConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<unknown>;
+  fireConversationDeferredResume(input: { conversationId: string; resumeId: string }): Promise<unknown>;
   abortConversation(input: CompanionConversationAbortInput): Promise<unknown>;
   takeOverConversation(input: CompanionConversationTakeoverInput): Promise<unknown>;
   renameConversation(input: CompanionConversationRenameInput): Promise<unknown>;

@@ -101,6 +101,8 @@ describe('daemon companion server', () => {
       parallelPromptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       restoreConversationQueuePrompt: async (input) => ({ ok: true, behavior: input.behavior, index: input.index, text: 'queued hello', images: [] }),
       manageConversationParallelJob: async (input) => ({ ok: true, status: input.action === 'cancel' ? 'cancelled' : input.action === 'skip' ? 'skipped' : 'imported' }),
+      cancelConversationDeferredResume: async (input) => ({ ok: true, conversationId: input.conversationId, resumeId: input.resumeId, status: 'cancelled' }),
+      fireConversationDeferredResume: async (input) => ({ ok: true, conversationId: input.conversationId, resumeId: input.resumeId, status: 'fired' }),
       abortConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
       takeOverConversation: async (input) => ({ ok: true, surfaceId: input.surfaceId }),
       renameConversation: async (input) => ({ ok: true, title: input.name }),
