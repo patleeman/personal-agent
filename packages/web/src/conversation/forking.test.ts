@@ -112,14 +112,29 @@ describe('resolveRewindTargetForMessage', () => {
       { type: 'user', ts: '2026-03-11T18:00:00.000Z', text: 'First prompt' },
       { type: 'text', ts: '2026-03-11T18:00:01.000Z', text: 'First reply' },
       { type: 'user', ts: '2026-03-11T18:00:02.000Z', text: 'Second prompt' },
-      { type: 'text', ts: '2026-03-11T18:00:03.000Z', text: 'Second reply' },
+      { type: 'text', id: 'assistant-entry-x4', ts: '2026-03-11T18:00:03.000Z', text: 'Second reply' },
     ];
 
     expect(resolveRewindTargetForMessage(messages, 3, [
       { entryId: 'entry-1', text: 'First prompt' },
       { entryId: 'entry-2', text: 'Second prompt' },
     ])).toEqual({
-      entryId: 'entry-2',
+      entryId: 'assistant-entry',
+      beforeEntry: false,
+      promptDraft: null,
+    });
+  });
+
+  it('falls back to the selected prompt when an assistant reply has no session entry id', () => {
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-11T18:00:00.000Z', text: 'Prompt' },
+      { type: 'text', ts: '2026-03-11T18:00:01.000Z', text: 'Reply' },
+    ];
+
+    expect(resolveRewindTargetForMessage(messages, 1, [
+      { entryId: 'entry-1', text: 'Prompt' },
+    ])).toEqual({
+      entryId: 'entry-1',
       beforeEntry: false,
       promptDraft: null,
     });

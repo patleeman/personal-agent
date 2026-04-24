@@ -5206,8 +5206,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     try {
       const liveConversationId = await ensureConversationIsLive('be rewound');
-      const entries = await api.forkEntries(liveConversationId);
-      const target = resolveRewindTargetForMessage(realMessages, localMessageIndex, entries);
+      const clickedBlock = realMessages[localMessageIndex];
+      let target: { entryId: string; beforeEntry: boolean; promptDraft: string | null } | null = null;
+
+      if (clickedBlock?.type === 'text') {
+        let entryId = resolveSessionEntryIdFromBlockId(clickedBlock.id);
+        if (!entryId) {
+          const detail = await api.sessionDetail(liveConversationId, {
+            tailBlocks: Math.max(realMessages.length, 1),
+          });
+          entryId = resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail);
+        }
+        if (entryId) {
+          target = { entryId, beforeEntry: false, promptDraft: null };
+        }
+      }
+
+      if (!target) {
+        const entries = await api.forkEntries(liveConversationId);
+        target = resolveRewindTargetForMessage(realMessages, localMessageIndex, entries);
+      }
       if (!target) {
         throw new Error('No forkable message found for that point in the conversation.');
       }
