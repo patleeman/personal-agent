@@ -767,7 +767,7 @@ private struct KnowledgeDirectoryScreen: View {
             }
         }
         .sheet(item: $moveEntry) { entry in
-            KnowledgeMoveSheet(entry: entry) { destinationFolder in
+            KnowledgeMoveSheet(entry: entry, session: session) { destinationFolder in
                 await viewModel.move(entry: entry, to: destinationFolder) != nil
             }
         }
@@ -799,44 +799,156 @@ private struct KnowledgeDirectoryScreen: View {
 private struct KnowledgeMoveSheet: View {
     @Environment(\.dismiss) private var dismiss
     let entry: CompanionKnowledgeEntry
+    let session: HostSessionModel
     let onMove: (String) async -> Bool
 
-    @State private var destinationFolder = ""
+    @State private var path: [String] = []
     @State private var isMoving = false
 
+    private var excludedFolderId: String? {
+        guard entry.isDirectory else {
+            return nil
+        }
+        return entry.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+    }
+
     var body: some View {
-        NavigationStack {
-            Form {
-                Section("Destination folder") {
-                    TextField("Inbox", text: $destinationFolder)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                }
-                Section {
-                    Text("Leave blank to move \(entry.isDirectory ? "this folder" : "this note") to the Knowledge root. Use paths like Inbox or notes/research.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
+        NavigationStack(path: $path) {
+            KnowledgeMoveFolderScreen(
+                session: session,
+                directoryId: nil,
+                excludedFolderId: excludedFolderId,
+                isMoving: isMoving,
+                onOpenFolder: { folderId in path.append(folderId) },
+                onMoveHere: { move(to: "") }
+            )
+            .navigationDestination(for: String.self) { folderId in
+                KnowledgeMoveFolderScreen(
+                    session: session,
+                    directoryId: folderId,
+                    excludedFolderId: excludedFolderId,
+                    isMoving: isMoving,
+                    onOpenFolder: { nextFolderId in path.append(nextFolderId) },
+                    onMoveHere: { move(to: folderId) }
+                )
             }
             .navigationTitle("Move \(editableKnowledgeName(for: entry))")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(isMoving ? "Moving…" : "Move") {
-                        Task {
-                            isMoving = true
-                            let moved = await onMove(destinationFolder)
-                            isMoving = false
-                            if moved {
-                                dismiss()
-                            }
+            }
+        }
+    }
+
+    private func move(to destinationFolder: String) {
+        guard !isMoving else {
+            return
+        }
+        Task {
+            isMoving = true
+            let moved = await onMove(destinationFolder)
+            isMoving = false
+            if moved {
+                dismiss()
+            }
+        }
+    }
+}
+
+private struct KnowledgeMoveFolderScreen: View {
+    @ObservedObject var session: HostSessionModel
+    let directoryId: String?
+    let excludedFolderId: String?
+    let isMoving: Bool
+    let onOpenFolder: (String) -> Void
+    let onMoveHere: () -> Void
+
+    @StateObject private var viewModel: KnowledgeFolderPickerViewModel
+
+    init(
+        session: HostSessionModel,
+        directoryId: String?,
+        excludedFolderId: String?,
+        isMoving: Bool,
+        onOpenFolder: @escaping (String) -> Void,
+        onMoveHere: @escaping () -> Void
+    ) {
+        self.session = session
+        self.directoryId = directoryId
+        self.excludedFolderId = excludedFolderId
+        self.isMoving = isMoving
+        self.onOpenFolder = onOpenFolder
+        self.onMoveHere = onMoveHere
+        _viewModel = StateObject(wrappedValue: session.makeKnowledgeFolderPickerModel(directoryId: directoryId, excludedFolderId: excludedFolderId))
+    }
+
+    var body: some View {
+        List {
+            Section {
+                Button {
+                    onMoveHere()
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "arrow.down.folder")
+                            .foregroundStyle(CompanionTheme.accent)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Move here")
+                                .foregroundStyle(CompanionTheme.textPrimary)
+                            Text(directoryId?.nilIfBlank ?? "Knowledge root")
+                                .font(.caption)
+                                .foregroundStyle(CompanionTheme.textSecondary)
                         }
                     }
-                    .disabled(isMoving)
+                    .padding(.vertical, 4)
+                }
+                .disabled(isMoving)
+            }
+
+            Section("Folders") {
+                if viewModel.isLoading && viewModel.folders.isEmpty {
+                    ProgressView()
+                } else if viewModel.folders.isEmpty {
+                    Text("No folders here")
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                } else {
+                    ForEach(viewModel.folders) { folder in
+                        Button {
+                            onOpenFolder(folder.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression))
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "folder")
+                                    .foregroundStyle(CompanionTheme.accent)
+                                    .frame(width: 20)
+                                Text(folder.name)
+                                    .foregroundStyle(CompanionTheme.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(CompanionTheme.textDim)
+                            }
+                            .padding(.vertical, 4)
+                        }
+                    }
                 }
             }
+        }
+        .scrollContentBackground(.hidden)
+        .background(CompanionTheme.canvas)
+        .listStyle(.insetGrouped)
+        .refreshable {
+            await viewModel.reload()
+        }
+        .navigationTitle(viewModel.title)
+        .overlay(alignment: .bottom) {
+            if let message = viewModel.errorMessage {
+                ErrorBanner(message: message)
+                    .padding()
+            }
+        }
+        .onAppear {
+            viewModel.load()
         }
     }
 }

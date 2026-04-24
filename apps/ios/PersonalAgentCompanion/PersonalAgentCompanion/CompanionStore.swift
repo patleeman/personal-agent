@@ -559,6 +559,10 @@ final class HostSessionModel: ObservableObject {
         KnowledgeDirectoryViewModel(client: client, directoryId: directoryId)
     }
 
+    func makeKnowledgeFolderPickerModel(directoryId: String?, excludedFolderId: String?) -> KnowledgeFolderPickerViewModel {
+        KnowledgeFolderPickerViewModel(client: client, directoryId: directoryId, excludedFolderId: excludedFolderId)
+    }
+
     func makeKnowledgeNoteModel(fileId: String) -> KnowledgeNoteViewModel {
         KnowledgeNoteViewModel(client: client, fileId: fileId)
     }
@@ -902,6 +906,64 @@ final class HostSessionModel: ObservableObject {
             try await client.updateConversationTabs(ordering: ordering)
             currentOrdering = ordering
             refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+@MainActor
+final class KnowledgeFolderPickerViewModel: ObservableObject {
+    @Published private(set) var folders: [CompanionKnowledgeEntry] = []
+    @Published private(set) var isLoading = false
+    @Published var errorMessage: String?
+
+    let directoryId: String?
+    private let client: CompanionClientProtocol
+    private let excludedFolderId: String?
+
+    init(client: CompanionClientProtocol, directoryId: String?, excludedFolderId: String?) {
+        self.client = client
+        self.directoryId = directoryId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+        self.excludedFolderId = excludedFolderId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+    }
+
+    var title: String {
+        guard let directoryId, !directoryId.isEmpty else {
+            return "Knowledge"
+        }
+        return directoryId
+            .replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+            .split(separator: "/")
+            .last
+            .map(String.init)
+            ?? "Knowledge"
+    }
+
+    func load() {
+        Task {
+            await reload()
+        }
+    }
+
+    func reload() async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            let result = try await client.listKnowledgeEntries(directoryId: directoryId)
+            folders = result.entries
+                .filter { entry in
+                    guard entry.isDirectory else {
+                        return false
+                    }
+                    guard let excludedFolderId else {
+                        return true
+                    }
+                    let folderId = entry.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+                    return folderId != excludedFolderId && !folderId.hasPrefix("\(excludedFolderId)/")
+                }
+                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }
