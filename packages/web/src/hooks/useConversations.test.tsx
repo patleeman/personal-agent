@@ -19,6 +19,7 @@ vi.mock('../client/api', () => ({
 }));
 
 const mountedRoots: Root[] = [];
+let latestHookResult: ReturnType<typeof useConversations> | null = null;
 
 function createStorage() {
   const map = new Map<string, string>();
@@ -64,7 +65,7 @@ function createTask(overrides: Partial<ScheduledTaskSummary> = {}): ScheduledTas
 }
 
 function HookProbe() {
-  useConversations();
+  latestHookResult = useConversations();
   return null;
 }
 
@@ -115,6 +116,7 @@ describe('useConversations', () => {
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
+    latestHookResult = null;
   });
 
   afterEach(() => {
@@ -139,5 +141,20 @@ describe('useConversations', () => {
 
     expect(JSON.parse(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-auto']);
     expect(apiMocks.setOpenConversationTabs).toHaveBeenCalled();
+  });
+
+  it('sorts archived conversations by latest activity', async () => {
+    renderProbe({
+      sessions: [
+        createSession({ id: 'older', timestamp: '2026-03-16T09:30:00.000Z', lastActivityAt: '2026-03-16T09:55:00.000Z' }),
+        createSession({ id: 'newest', timestamp: '2026-03-15T09:30:00.000Z', lastActivityAt: '2026-03-16T10:05:00.000Z' }),
+        createSession({ id: 'middle', timestamp: '2026-03-16T10:00:00.000Z' }),
+      ],
+      tasks: null,
+    });
+
+    await flushAsyncWork();
+
+    expect(latestHookResult?.archivedSessions.map((session) => session.id)).toEqual(['newest', 'middle', 'older']);
   });
 });

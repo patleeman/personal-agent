@@ -35,6 +35,10 @@ import {
 } from '../session/sessionTabs';
 import type { SessionMeta } from '../shared/types';
 
+function compareSessionsByRecentActivity(left: SessionMeta, right: SessionMeta): number {
+  return (right.lastActivityAt ?? right.timestamp).localeCompare(left.lastActivityAt ?? left.timestamp);
+}
+
 function applyLayoutState(layout: ConversationLayout, setters: {
   setOpenIds: (ids: string[]) => void;
   setPinnedIds: (ids: string[]) => void;
@@ -252,7 +256,9 @@ export function useConversations() {
     [automationThreadTitleBySessionId, liveTitles, openIds, sessionsById],
   );
   const archivedSessions = useMemo(
-    () => withTitles.filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id)),
+    () => withTitles
+      .filter((session) => !openIdSet.has(session.id) && !pinnedIdSet.has(session.id))
+      .sort(compareSessionsByRecentActivity),
     [openIdSet, pinnedIdSet, withTitles],
   );
   const loading = sessions === null && (sseStatus === 'connecting' || sseStatus === 'reconnecting');
