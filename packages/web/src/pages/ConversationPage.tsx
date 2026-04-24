@@ -134,7 +134,6 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
-const CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX = 56;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
@@ -7157,6 +7156,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 />
               )}
             </div>
+            {visibleTranscriptHasOlderBlocks && (
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-subtle/30 pt-3">
+                <div className="min-w-0 text-[11px] text-secondary/80">
+                  Showing latest <span className="font-medium text-primary/85">{realMessages?.length ?? visibleTranscriptMessages.length}</span> of{' '}
+                  <span className="font-medium text-primary/85">{historicalTotalBlocks}</span> blocks.
+                </div>
+                <button
+                  type="button"
+                  onClick={() => loadOlderMessages()}
+                  disabled={sessionLoading}
+                  className="ui-toolbar-button shrink-0 text-[11px] text-secondary/90 hover:text-primary"
+                >
+                  {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older`}
+                </button>
+              </div>
+            )}
           </div>
         </div>
         {showBlockingConversationLoadingState ? (
@@ -7166,25 +7181,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           />
         ) : visibleTranscriptMessages ? (
           <>
-            {visibleTranscriptHasOlderBlocks && (
-              <div
-                className="sticky z-20 flex items-center justify-between gap-3 border-b border-border-subtle bg-surface/90 px-6 py-3 backdrop-blur"
-                style={{ top: `${conversationHeaderOffset}px` }}
-              >
-                <div className="min-w-0 text-[11px] text-secondary">
-                  Showing the latest <span className="font-medium text-primary">{realMessages?.length ?? visibleTranscriptMessages.length}</span> of{' '}
-                  <span className="font-medium text-primary">{historicalTotalBlocks}</span> blocks.
-                </div>
-                <button
-                  type="button"
-                  onClick={() => loadOlderMessages()}
-                  disabled={sessionLoading}
-                  className="ui-action-button shrink-0 text-[11px]"
-                >
-                  {sessionLoading ? 'Loading older…' : `Load ${Math.min(HISTORICAL_TAIL_BLOCKS_STEP, historicalBlockOffset)} older blocks`}
-                </button>
-              </div>
-            )}
             <ChatView
               key={visibleTranscriptState?.conversationId ?? id ?? 'draft-conversation'}
               messages={visibleTranscriptMessages}
@@ -7210,7 +7206,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
               resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
-              windowingBadgeTopOffset={conversationHeaderOffset + (visibleTranscriptHasOlderBlocks ? CONVERSATION_WINDOWING_BADGE_WITH_HISTORY_TOP_OFFSET_PX : 12)}
+              windowingBadgeTopOffset={conversationHeaderOffset + 12}
             />
           </>
         ) : (
