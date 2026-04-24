@@ -12,7 +12,6 @@ Top-level commands:
 pa status
 pa tui
 pa install
-pa profile
 pa doctor
 pa restart
 pa update
@@ -46,19 +45,10 @@ Use these before debugging anything more specific.
 ```bash
 pa install https://github.com/user/pi-package
 pa install npm:@scope/package@1.2.3
-pa install --profile assistant ./my-package
 pa install --local ./my-package
 ```
 
-`--profile` writes into that profile's durable settings. `--local` writes into the machine-local overlay.
-
-## Profile commands
-
-```bash
-pa profile list
-pa profile show
-pa profile use <name>
-```
+`--local` writes into the machine-local overlay. Profiles have been collapsed to the shared runtime; prefer local config plus selected instruction/skill folders.
 
 ## Desktop app
 

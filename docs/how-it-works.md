@@ -36,7 +36,7 @@ This is where reusable knowledge belongs.
 Important subtrees:
 
 - `<config-root>/config.json` — machine config
-- `<config-root>/profiles/<profile>/` — per-profile mutable config
+- `<config-root>/local/` — machine-local settings/model/provider overrides
 - `<state-root>/daemon/` — daemon socket, runtime DB, run logs
 - `<state-root>/web/` — web runtime state and pairing state
 - `<state-root>/desktop/` — desktop state and logs
@@ -50,7 +50,7 @@ When `pa` launches Pi or the desktop app creates a live session, the runtime is 
 1. repo defaults
 2. selected instruction files and skill directories
 3. the effective vault root and any managed KB mirror
-4. machine-local config and profile overrides
+4. machine-local config and local overrides
 5. built-in extensions and installed package sources
 6. conversation-specific context such as cwd, attachments, and attached docs
 

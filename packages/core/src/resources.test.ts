@@ -44,14 +44,14 @@ function writeFile(path: string, content: string): void {
 }
 
 describe('resources profile loader', () => {
-  it('lists available profiles from durable profile definitions', () => {
+  it('exposes a single shared profile', () => {
     const repo = createTempRepo();
     const profilesRoot = createTempProfilesRoot();
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
     writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({}));
 
     const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-    expect(profiles).toEqual(['datadog', 'shared']);
+    expect(profiles).toEqual(['shared']);
   });
 
   it('resolves durable resources plus local overlays', () => {
@@ -87,11 +87,9 @@ describe('resources profile loader', () => {
     expect(resolved.settingsFiles).toEqual([
       join(repo, 'defaults/agent/settings.json'),
       join(profilesRoot, 'shared', 'settings.json'),
-      join(profilesRoot, 'datadog', 'settings.json'),
       join(local, 'agent', 'settings.json'),
     ]);
     expect(resolved.skillDirs).toEqual([
-      join(syncRoot, 'skills', 'datadog-skill'),
       join(syncRoot, 'skills', 'shared-skill'),
     ]);
     expect(resolved.extensionEntries).toEqual([join(repo, 'extensions', 'index.ts')]);
@@ -206,7 +204,7 @@ describe('resources profile loader', () => {
     writeFile(join(repo, 'defaults/agent/models.json'), JSON.stringify({ providers: { a: {} } }));
     writeFile(join(repo, 'prompt-catalog/system/00-role.md'), 'catalog role\n');
     writeFile(join(syncRoot, 'AGENTS.md'), '# Durable shared\n');
-    writeFile(join(profilesRoot, 'datadog', 'settings.json'), JSON.stringify({
+    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({
       datadog: true,
       defaultProvider: 'openai-codex',
       defaultModel: 'gpt-5.4',
@@ -215,8 +213,6 @@ describe('resources profile loader', () => {
     writeFile(join(syncRoot, 'skills', 'checkpoint', 'SKILL.md'), `---
 name: checkpoint
 description: Commit and push the agent's current work.
-profiles:
-  - datadog
 ---
 # Checkpoint
 `);
@@ -335,7 +331,7 @@ profiles:
     expect(args).toContain(join(repo, 'themes/theme.json'));
   });
 
-  it('loads profiles and skills from canonical underscored durable directories', () => {
+  it('loads shared resources from canonical underscored durable directories', () => {
     const repo = createTempRepo();
     const root = mkdtempSync(join(tmpdir(), 'personal-agent-legacy-sync-'));
     const syncRoot = join(root, 'sync');
@@ -343,18 +339,16 @@ profiles:
     tempDirs.push(root);
 
     writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
-    writeFile(join(profilesRoot, 'default', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
+    writeFile(join(profilesRoot, 'shared', 'settings.json'), JSON.stringify({ defaultModel: 'gpt-5.4' }));
     writeFile(join(syncRoot, '_skills', 'checkpoint', 'SKILL.md'), `---
 name: checkpoint
 description: Commit your work.
-profiles:
-  - default
 ---
 # Checkpoint
 `);
 
     const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-    expect(profiles).toEqual(['default', 'shared']);
+    expect(profiles).toEqual(['shared']);
 
     const resolved = resolveResourceProfile('default', {
       repoRoot: repo,
@@ -366,7 +360,7 @@ profiles:
     expect(resolved.agentsFiles).toEqual([
       join(repo, 'defaults/agent/AGENTS.md'),
     ]);
-    expect(resolved.settingsFiles).toContain(join(profilesRoot, 'default', 'settings.json'));
+    expect(resolved.settingsFiles).toContain(join(profilesRoot, 'shared', 'settings.json'));
     expect(resolved.skillDirs).toEqual([join(syncRoot, '_skills', 'checkpoint')]);
   });
 });

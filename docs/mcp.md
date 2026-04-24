@@ -12,7 +12,7 @@ Without an explicit `--config`, MCP config is resolved in this order:
 2. `~/.mcp_servers.json`
 3. `~/.config/mcp/mcp_servers.json`
 
-When `pa` materializes a profile, it also merges any skill-bundled `mcp.json` manifests from the active skill directories. Explicit user config wins on name conflicts.
+When `pa` materializes the runtime, it also merges any skill-bundled `mcp.json` manifests from the active skill directories. Explicit user config wins on name conflicts.
 
 ## Server types
 

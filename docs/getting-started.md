@@ -97,7 +97,6 @@ pa tui
 npm run desktop:start
 pa daemon status
 pa mcp list --probe
-pa profile list
 ```
 
 ## First useful UI flows
@@ -105,7 +104,7 @@ pa profile list
 - open **Conversations** for live work
 - open **Knowledge** to edit files under `<vault-root>`
 - open **Automations** to inspect scheduled background work
-- open **Settings** to set the default profile, instruction files, skill folders, and provider auth
+- open **Settings** to set defaults, instruction files, skill folders, and provider auth
 
 ## If the vault root looks wrong
 

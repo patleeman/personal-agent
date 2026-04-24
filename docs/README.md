@@ -2,7 +2,7 @@
 
 Use this folder for product semantics and current behavior.
 
-Use the live tool schemas for exact tool arguments. Use `internal-skills/` for built-in feature behavior. Use repo and profile `AGENTS.md` files for runtime policy.
+Use the live tool schemas for exact tool arguments. Use `internal-skills/` for built-in feature behavior. Use repo, vault, and local `AGENTS.md` files for runtime policy.
 
 ## Path vocabulary
 

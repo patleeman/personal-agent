@@ -1394,7 +1394,7 @@ export async function invokeDesktopLocalApi<T = unknown>(input: {
 export async function readDesktopAppStatus() {
   const context = await getLocalServerRouteContext();
   return {
-    profile: context.getCurrentProfile(),
+    profile: 'shared',
     repoRoot: context.getRepoRoot(),
     appRevision: process.env.PERSONAL_AGENT_APP_REVISION,
   };
@@ -1426,15 +1426,13 @@ export async function readDesktopSessionSearchIndex(sessionIds: string[]) {
 }
 
 export async function readDesktopProfiles() {
-  const context = await getLocalServerRouteContext();
   return {
-    currentProfile: context.getCurrentProfile(),
-    profiles: context.listAvailableProfiles(),
+    currentProfile: 'shared',
+    profiles: ['shared'],
   };
 }
 
 export async function setDesktopCurrentProfile(profileInput: string) {
-  const context = await getLocalServerRouteContext();
   const profile = profileInput.trim();
   if (!profile) {
     throw new Error('profile required');
@@ -1442,7 +1440,7 @@ export async function setDesktopCurrentProfile(profileInput: string) {
 
   return {
     ok: true as const,
-    currentProfile: await context.setCurrentProfile(profile),
+    currentProfile: 'shared',
   };
 }
 
@@ -1459,7 +1457,6 @@ export async function updateDesktopModelPreferences(input: {
     throw new Error('model, thinkingLevel, or serviceTier required');
   }
 
-  const context = await getLocalServerRouteContext();
   const models = readModelState(DEFAULT_RUNTIME_SETTINGS_FILE).models;
   persistSettingsWrite((settingsFile) => {
     writeSavedModelPreferences({
@@ -1468,11 +1465,8 @@ export async function updateDesktopModelPreferences(input: {
       serviceTier: input.serviceTier,
     }, settingsFile, models);
   }, {
-    localSettingsFile: context.getCurrentProfileSettingsFile(),
     runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
   });
-
-  context.materializeWebProfile(context.getCurrentProfile());
   return { ok: true as const };
 }
 
@@ -1481,17 +1475,13 @@ export async function readDesktopDefaultCwd() {
 }
 
 export async function updateDesktopDefaultCwd(cwd: string | null) {
-  const context = await getLocalServerRouteContext();
   const state = persistSettingsWrite((settingsFile) => writeSavedDefaultCwdPreference(
     { cwd },
     settingsFile,
     { baseDir: process.cwd(), validate: true },
   ), {
-    localSettingsFile: context.getCurrentProfileSettingsFile(),
     runtimeSettingsFile: DEFAULT_RUNTIME_SETTINGS_FILE,
   });
-
-  context.materializeWebProfile(context.getCurrentProfile());
   return state;
 }
 

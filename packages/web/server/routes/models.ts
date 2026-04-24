@@ -55,15 +55,8 @@ import {
   refreshAllLiveSessionModelRegistries,
 } from '../middleware/index.js';
 
-/**
- * Gets the current profile getter for use in route handlers.
- */
 let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for model routes');
-};
-
-let getCurrentProfileSettingsFileFn: () => string = () => {
-  throw new Error('getCurrentProfileSettingsFile not initialized for model routes');
 };
 
 let materializeWebProfileFn: (profile: string) => void = () => {
@@ -110,10 +103,9 @@ function readSkillFoldersState() {
 }
 
 function initializeModelRoutesContext(
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
-  getCurrentProfileSettingsFileFn = context.getCurrentProfileSettingsFile;
   materializeWebProfileFn = context.materializeWebProfile;
   AUTH_FILE = context.getAuthFile();
   SETTINGS_FILE = context.getSettingsFile();
@@ -124,7 +116,7 @@ function initializeModelRoutesContext(
  */
 export function registerModelRoutes(
   router: Pick<Express, 'get' | 'post' | 'patch' | 'delete'>,
-  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getCurrentProfileSettingsFile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
+  context: Pick<ServerRouteContext, 'getCurrentProfile' | 'materializeWebProfile' | 'getAuthFile' | 'getSettingsFile'>,
 ): void {
   initializeModelRoutesContext(context);
   // ── Models ────────────────────────────────────────────────────────────────
@@ -153,11 +145,8 @@ export function registerModelRoutes(
       persistSettingsWrite((settingsFile) => {
         writeSavedModelPreferences({ model, thinkingLevel, serviceTier }, settingsFile, models);
       }, {
-        localSettingsFile: getCurrentProfileSettingsFileFn(),
         runtimeSettingsFile: SETTINGS_FILE,
       });
-
-      materializeWebProfileFn(getCurrentProfileFn());
 
       res.json({ ok: true });
     } catch (err) {
@@ -414,11 +403,8 @@ export function registerModelRoutes(
         settingsFile,
         { baseDir: process.cwd(), validate: true },
       ), {
-        localSettingsFile: getCurrentProfileSettingsFileFn(),
         runtimeSettingsFile: SETTINGS_FILE,
       });
-
-      materializeWebProfileFn(getCurrentProfileFn());
       res.json(state);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

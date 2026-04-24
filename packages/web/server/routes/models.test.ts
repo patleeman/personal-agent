@@ -436,7 +436,7 @@ describe('model routes', () => {
   });
 
   it('updates the current model, validates default cwd changes, and maps write failures', () => {
-    const { materializeWebProfile, getHandler, patchHandler } = createDesktopHarness(allocateFiles());
+    const { getHandler, patchHandler } = createDesktopHarness(allocateFiles());
 
     const invalidModelRes = createResponse();
     patchHandler('/api/models/current')(createRequest({ body: {} }), invalidModelRes);
@@ -450,7 +450,6 @@ describe('model routes', () => {
       expect.any(String),
       [{ id: 'model-a', provider: 'provider-a', name: 'Model A', context: 128_000, supportedServiceTiers: [] }],
     );
-    expect(materializeWebProfile).toHaveBeenCalledWith('assistant');
     expect(modelRes.json).toHaveBeenCalledWith({ ok: true });
 
     const getDefaultCwdRes = createResponse();

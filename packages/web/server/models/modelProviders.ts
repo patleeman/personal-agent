@@ -82,7 +82,7 @@ function normalizeProfile(profile: string): string {
   if (!normalized) {
     throw new Error('profile is required');
   }
-  return normalized;
+  return 'shared';
 }
 
 function normalizeProviderId(providerId: string): string {

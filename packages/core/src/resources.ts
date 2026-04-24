@@ -454,29 +454,9 @@ function getProfileDir(profileName: string, options: ResolveProfileOptions = {})
   return getDurableProfileDir(profileName || 'shared', resolveProfilesRoot(options));
 }
 
-function listProfilesInRoot(root: string): string[] {
-  if (!existsSync(root)) {
-    return [];
-  }
-
-  const profiles = new Set<string>();
-
-  for (const entry of readdirSync(root, { withFileTypes: true })) {
-    if (entry.isDirectory() && /^[a-zA-Z0-9][a-zA-Z0-9-_]*$/.test(entry.name)) {
-      profiles.add(entry.name);
-    }
-  }
-
-  return [...profiles].sort((left, right) => left.localeCompare(right));
-}
-
 export function listProfiles(options: ResolveProfileOptions = {}): string[] {
-  const profiles = new Set<string>([
-    'shared',
-    ...listProfilesInRoot(resolveProfilesRoot(options)),
-  ]);
-
-  return [...profiles].sort((left, right) => left.localeCompare(right));
+  void options;
+  return ['shared'];
 }
 
 function collectLayerDirs(layers: ProfileLayer[], relativePath: string): string[] {
@@ -629,43 +609,23 @@ function resolveDurableAgentFiles(_profileName: string, options: ResolveProfileO
   return sharedAgent ? [sharedAgent] : [];
 }
 
-function resolveDurableSettingsFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableSettingsFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
   const output: string[] = [];
   const sharedSettings = existingFile(resolveProfileSettingsFilePath('shared', options));
-  const profileSettings = existingFile(resolveProfileSettingsFilePath(profileName, options));
 
-  if (profileName === 'shared') {
-    if (sharedSettings) {
-      output.push(sharedSettings);
-    }
-  } else {
-    if (sharedSettings) {
-      output.push(sharedSettings);
-    }
-    if (profileSettings) {
-      output.push(profileSettings);
-    }
+  if (sharedSettings) {
+    output.push(sharedSettings);
   }
 
   return dedupe(output);
 }
 
-function resolveDurableModelsFiles(profileName: string, options: ResolveProfileOptions = {}): string[] {
+function resolveDurableModelsFiles(_profileName: string, options: ResolveProfileOptions = {}): string[] {
   const output: string[] = [];
   const sharedModels = existingFile(resolveProfileModelsFilePath('shared', options));
-  const profileModels = existingFile(resolveProfileModelsFilePath(profileName, options));
 
-  if (profileName === 'shared') {
-    if (sharedModels) {
-      output.push(sharedModels);
-    }
-  } else {
-    if (sharedModels) {
-      output.push(sharedModels);
-    }
-    if (profileModels) {
-      output.push(profileModels);
-    }
+  if (sharedModels) {
+    output.push(sharedModels);
   }
 
   return dedupe(output);
@@ -675,18 +635,12 @@ export function resolveResourceProfile(
   name: string,
   options: ResolveProfileOptions = {},
 ): ResolvedResourceProfile {
-  const profileName = name || 'shared';
-  validateProfileName(profileName);
+  validateProfileName(name || 'shared');
+  const profileName = 'shared';
 
   const repoRoot = getRepoRoot(options.repoRoot);
   const vaultRoot = resolveVaultRoot(options);
   const profilesRoot = resolveProfilesRoot(options);
-  const declaredProfiles = listProfilesInRoot(profilesRoot);
-  if (profileName !== 'shared' && !declaredProfiles.includes(profileName)) {
-    throw new Error(
-      `Profile not found: ${profileName}. Checked ${join(profilesRoot, profileName)}`,
-    );
-  }
 
   const repoDefaultsAgentDir = existingDir(getRepoDefaultsAgentDir(repoRoot));
   const localBase = resolveLocalProfileDir(options);

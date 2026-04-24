@@ -25,7 +25,6 @@ Example:
 
 ```json
 {
-  "defaultProfile": "shared",
   "vaultRoot": "~/Documents/personal-agent",
   "knowledgeBaseRepoUrl": "https://github.com/you/knowledge-base.git",
   "knowledgeBaseBranch": "main",
@@ -45,8 +44,6 @@ If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` becomes the manag
 
 ## Other important config locations
 
-- `<config-root>/profiles/<profile>/settings.json`
-- `<config-root>/profiles/<profile>/models.json`
 - `<config-root>/local/` — machine-local overlay
 - `<state-root>/desktop/config.json` — desktop-specific state
 
@@ -95,8 +92,8 @@ Resolution order:
 | standing behavior | selected instruction files |
 | durable knowledge | docs, skills, and projects in `<vault-root>` |
 | machine-local runtime settings | `<config-root>/config.json` |
-| profile-local mutable settings | `<config-root>/profiles/<profile>/...` |
-| machine-local one-off overrides | environment variables or `<config-root>/local/` |
+| default model/provider/ui overrides | `<config-root>/local/` |
+| machine-local one-off overrides | environment variables |
 
 ## Related docs
 

@@ -25,11 +25,11 @@ function createTempDir(): string {
 }
 
 describe('resolveModelProvidersFilePath', () => {
-  it('uses per-profile models.json paths', () => {
+  it('uses shared models.json path', () => {
     const dir = createTempDir();
 
     expect(resolveModelProvidersFilePath('shared', { profilesDir: dir })).toBe(join(dir, 'shared', 'models.json'));
-    expect(resolveModelProvidersFilePath('assistant', { profilesDir: dir })).toBe(join(dir, 'assistant', 'models.json'));
+    expect(resolveModelProvidersFilePath('assistant', { profilesDir: dir })).toBe(join(dir, 'shared', 'models.json'));
   });
 });
 
@@ -38,8 +38,8 @@ describe('readModelProvidersState', () => {
     const dir = createTempDir();
 
     expect(readModelProvidersState('assistant', { profilesDir: dir })).toEqual({
-      profile: 'assistant',
-      filePath: join(dir, 'assistant', 'models.json'),
+      profile: 'shared',
+      filePath: join(dir, 'shared', 'models.json'),
       providers: [],
     });
   });
@@ -80,7 +80,7 @@ describe('upsertModelProvider', () => {
       },
     ]);
 
-    expect(JSON.parse(readFileSync(join(dir, 'assistant', 'models.json'), 'utf-8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8'))).toEqual({
       providers: {
         openrouter: {
           baseUrl: 'https://openrouter.ai/api/v1',
@@ -198,7 +198,7 @@ describe('removeModelProvider', () => {
 
     expect(result.removed).toBe(true);
     expect(result.state.providers).toEqual([]);
-    expect(JSON.parse(readFileSync(join(dir, 'assistant', 'models.json'), 'utf-8'))).toEqual({
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8'))).toEqual({
       providers: {},
     });
   });

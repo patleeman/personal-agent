@@ -2754,7 +2754,7 @@ export function SettingsPage() {
                     {toolsState.mcp.bundledSkills.length > 0 ? (
                       <div className="space-y-3">
                         <p className="ui-card-meta">
-                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active for this profile.
+                          {toolsState.mcp.bundledSkills.length} bundled skill wrapper{toolsState.mcp.bundledSkills.length === 1 ? '' : 's'} active.
                         </p>
                         {toolsState.mcp.bundledSkills.map((bundle) => (
                           <div key={bundle.manifestPath} className="space-y-1.5 border-t border-border-subtle/60 pt-3 first:border-t-0 first:pt-0">
@@ -3411,9 +3411,6 @@ export function SettingsPage() {
                       ) : (
                         <p className="ui-card-meta">No custom providers or overrides yet.</p>
                       )}
-                      <p className="ui-card-meta">
-                        Active profile: <span className="font-mono text-[11px]">{modelProviderState.profile}</span>
-                      </p>
                     </>
                   ) : null}
                 </div>
