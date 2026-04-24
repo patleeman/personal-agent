@@ -20,7 +20,7 @@ struct ConversationScreen: View {
     @State private var showingModelPreferences = false
     @State private var showingArtifacts = false
     @State private var showingCheckpoints = false
-    @State private var composerTextHeight: CGFloat = 36
+    @State private var composerTextHeight: CGFloat = 32
 
     private var currentExecutionTargetLabel: String {
         viewModel.executionTargets.first(where: { $0.id == viewModel.currentExecutionTargetId })?.label ?? "Local"
@@ -386,8 +386,8 @@ struct ConversationScreen: View {
                     }
                 }
 
-                HStack(alignment: .center, spacing: 12) {
-                    HStack(alignment: .center, spacing: 10) {
+                HStack(alignment: .center, spacing: 8) {
+                    HStack(alignment: .center, spacing: 8) {
                         Menu {
                             Button {
                                 showingPhotoLibraryPicker = true
@@ -413,16 +413,16 @@ struct ConversationScreen: View {
                             }
                         } label: {
                             Image(systemName: "plus.circle.fill")
-                                .font(.title3)
+                                .font(.system(size: 24, weight: .semibold))
                                 .foregroundStyle(CompanionTheme.accent)
-                                .frame(width: 28, height: 28)
+                                .frame(width: 26, height: 26)
                         }
 
                         ZStack(alignment: .topLeading) {
                             if viewModel.promptText.isEmpty {
                                 Text("Message")
                                     .foregroundStyle(CompanionTheme.textSecondary)
-                                    .padding(.top, 8)
+                                    .padding(.top, 6)
                             }
                             ConversationComposerTextEditor(
                                 text: $viewModel.promptText,
@@ -432,8 +432,8 @@ struct ConversationScreen: View {
                             .frame(height: composerTextHeight)
                         }
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
                     .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay {
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -442,9 +442,9 @@ struct ConversationScreen: View {
 
                     composerActions
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
             }
         }
         .background(CompanionTheme.panel)
@@ -457,7 +457,7 @@ struct ConversationScreen: View {
     @ViewBuilder
     private var composerActions: some View {
         if viewModel.isStreaming {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 stopButton
                 if composerHasContent {
                     promptSendButton(defaultMode: .steer, showStreamingOptions: true)
@@ -474,7 +474,7 @@ struct ConversationScreen: View {
         } label: {
             Image(systemName: "stop.fill")
                 .font(.headline)
-                .frame(width: 42, height: 42)
+                .frame(width: 36, height: 36)
                 .background(.red.opacity(0.9), in: Circle())
                 .foregroundStyle(.white)
         }
@@ -506,7 +506,7 @@ struct ConversationScreen: View {
     private func sendButtonLabel(defaultMode: ConversationPromptSubmissionMode) -> some View {
         Image(systemName: defaultMode.systemImage)
             .font(.headline.weight(.bold))
-            .frame(width: 42, height: 42)
+            .frame(width: 36, height: 36)
             .background(composerHasContent ? CompanionTheme.accent : CompanionTheme.panelBorder, in: Circle())
             .foregroundStyle(.white)
     }
@@ -2780,7 +2780,7 @@ private final class ConversationComposerTextView: UITextView {
 }
 
 private struct ConversationComposerTextEditor: UIViewRepresentable {
-    static let minHeight: CGFloat = 36
+    static let minHeight: CGFloat = 32
     static let maxHeight: CGFloat = 116
 
     @Binding var text: String
@@ -2803,7 +2803,7 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         view.textColor = UIColor(CompanionTheme.textPrimary)
         view.tintColor = UIColor(CompanionTheme.accent)
         view.keyboardDismissMode = .interactive
-        view.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
+        view.textContainerInset = UIEdgeInsets(top: 5, left: 0, bottom: 5, right: 0)
         view.textContainer.lineFragmentPadding = 0
         view.isScrollEnabled = false
         view.onPasteImage = onPasteImage
