@@ -2755,6 +2755,19 @@ private extension ConversationAttachmentRecord {
 
 private final class ConversationComposerTextView: UITextView {
     var onPasteImage: ((Data, String?, String?) -> Void)?
+    var onLayoutWidthChange: ((UITextView) -> Void)?
+    private var lastLayoutWidth: CGFloat = 0
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        let currentWidth = bounds.width
+        guard abs(currentWidth - lastLayoutWidth) > 0.5 else {
+            return
+        }
+        lastLayoutWidth = currentWidth
+        onLayoutWidthChange?(self)
+    }
 
     override func paste(_ sender: Any?) {
         if let image = UIPasteboard.general.image,
@@ -2767,7 +2780,7 @@ private final class ConversationComposerTextView: UITextView {
 }
 
 private struct ConversationComposerTextEditor: UIViewRepresentable {
-    static let minHeight: CGFloat = 24
+    static let minHeight: CGFloat = 36
     static let maxHeight: CGFloat = 116
 
     @Binding var text: String
@@ -2794,6 +2807,9 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         view.textContainer.lineFragmentPadding = 0
         view.isScrollEnabled = false
         view.onPasteImage = onPasteImage
+        view.onLayoutWidthChange = { [weak coordinator = context.coordinator] textView in
+            coordinator?.updateHeight(for: textView)
+        }
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         context.coordinator.apply(text: text, to: view)
         context.coordinator.updateHeight(for: view)
@@ -2805,6 +2821,9 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         uiView.onPasteImage = onPasteImage
         uiView.textColor = UIColor(CompanionTheme.textPrimary)
         uiView.tintColor = UIColor(CompanionTheme.accent)
+        uiView.onLayoutWidthChange = { [weak coordinator = context.coordinator] textView in
+            coordinator?.updateHeight(for: textView)
+        }
         if !context.coordinator.isApplyingProgrammaticChange, uiView.text != text {
             context.coordinator.apply(text: text, to: uiView)
         }
@@ -2825,6 +2844,12 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
             }
             parent.text = textView.text
             updateHeight(for: textView)
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, let textView else {
+                    return
+                }
+                self.updateHeight(for: textView)
+            }
         }
 
         func apply(text: String, to textView: UITextView) {
@@ -2839,9 +2864,11 @@ private struct ConversationComposerTextEditor: UIViewRepresentable {
         func updateHeight(for textView: UITextView) {
             let measuredWidth = textView.bounds.width > 1 ? textView.bounds.width : UIScreen.main.bounds.width - 120
             let targetWidth = max(1, measuredWidth)
-            textView.textContainer.size = CGSize(width: targetWidth, height: .greatestFiniteMagnitude)
+            let textContainerWidth = max(1, targetWidth - textView.textContainerInset.left - textView.textContainerInset.right)
+            textView.textContainer.size = CGSize(width: textContainerWidth, height: .greatestFiniteMagnitude)
             textView.layoutManager.ensureLayout(for: textView.textContainer)
-            let measuredHeight = ceil(textView.sizeThatFits(CGSize(width: targetWidth, height: .greatestFiniteMagnitude)).height)
+            let usedTextRect = textView.layoutManager.usedRect(for: textView.textContainer)
+            let measuredHeight = ceil(usedTextRect.height + textView.textContainerInset.top + textView.textContainerInset.bottom)
             let clampedHeight = min(ConversationComposerTextEditor.maxHeight, max(ConversationComposerTextEditor.minHeight, measuredHeight))
             textView.isScrollEnabled = measuredHeight > ConversationComposerTextEditor.maxHeight
             guard abs(parent.height - clampedHeight) > 0.5 else {
