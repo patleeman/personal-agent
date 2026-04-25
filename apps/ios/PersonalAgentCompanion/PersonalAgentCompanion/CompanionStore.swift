@@ -2493,6 +2493,7 @@ final class ConversationViewModel: ObservableObject {
                 default:
                     break
                 }
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }

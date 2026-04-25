@@ -1429,6 +1429,44 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testParallelJobActionClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Investigate this in parallel"
+        model.sendPrompt(mode: .parallel)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.parallelJobs.count == 1
+        }
+
+        client.manageParallelJobFailureQueueMessages = ["Parallel prompt action temporarily unavailable."]
+        let job = try XCTUnwrap(model.parallelJobs.first)
+        model.manageParallelJob(job.id, action: "cancel")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+        XCTAssertEqual(model.parallelJobs.count, 1)
+
+        model.manageParallelJob(job.id, action: "cancel")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.parallelJobs.isEmpty
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testPromptSendIgnoresDuplicateTapWhileSubmissionIsPending() async throws {
         let client = MockCompanionClient()
         client.promptSubmissionDelayNanoseconds = 150_000_000

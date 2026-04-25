@@ -1403,6 +1403,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptFailureQueueMessages: [String] = []
     var manageParallelJobDelayNanoseconds: UInt64 = 0
+    var manageParallelJobFailureQueueMessages: [String] = []
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointFailureQueueMessages: [String] = []
     var createTaskDelayNanoseconds: UInt64 = 0
@@ -2725,6 +2726,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult {
         if manageParallelJobDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: manageParallelJobDelayNanoseconds)
+        }
+        if !manageParallelJobFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(manageParallelJobFailureQueueMessages.removeFirst())
         }
         var jobs = parallelJobsByConversation[conversationId] ?? []
         guard let index = jobs.firstIndex(where: { $0.id == jobId }) else {
