@@ -1000,6 +1000,30 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(stopped.bootstrap.sessionDetail?.blocks.contains(where: { $0.title == "Simulation stopped" }) == true)
     }
 
+    func testAbortConversationIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.abortConversationDelayNanoseconds = 150_000_000
+        try await client.simulateRunningConversation(conversationId: "conv-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.abort()
+        model.abort()
+        try await Task.sleep(nanoseconds: 220_000_000)
+        let stopped = try await client.conversationBootstrap(conversationId: "conv-1")
+
+        XCTAssertEqual(client.abortConversationCount, 1)
+        XCTAssertEqual(stopped.bootstrap.liveSession.isStreaming, false)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptModesWorkDuringMockSimulation() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

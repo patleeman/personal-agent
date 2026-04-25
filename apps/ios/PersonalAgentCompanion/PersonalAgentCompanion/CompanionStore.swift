@@ -2136,6 +2136,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingParallelJobActionKeys: Set<String> = []
     private var pendingCheckpointCreateKeys: Set<String> = []
     private var pendingDuplicateConversation = false
+    private var pendingAbortConversation = false
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
     private var pendingDeferredResumeCancelIds: Set<String> = []
@@ -2518,7 +2519,12 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func abort() {
+        guard !pendingAbortConversation else {
+            return
+        }
+        pendingAbortConversation = true
         Task {
+            defer { pendingAbortConversation = false }
             do {
                 try await client.abortConversation(conversationId: conversationId)
             } catch {
