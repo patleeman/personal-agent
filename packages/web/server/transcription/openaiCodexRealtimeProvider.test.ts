@@ -3,8 +3,8 @@ import { testExports } from './openaiCodexRealtimeProvider.js';
 
 describe('OpenAI Codex realtime transcription provider helpers', () => {
   it('resolves the ChatGPT Codex realtime websocket URL', () => {
-    expect(testExports.resolveCodexRealtimeWebSocketUrl(undefined)).toBe('wss://chatgpt.com/backend-api/codex/realtime');
-    expect(testExports.resolveCodexRealtimeWebSocketUrl('https://chatgpt.com/backend-api/codex')).toBe('wss://chatgpt.com/backend-api/codex/realtime');
+    expect(testExports.resolveCodexRealtimeWebSocketUrl(undefined)).toBe('wss://chatgpt.com/backend-api/codex');
+    expect(testExports.resolveCodexRealtimeWebSocketUrl('https://chatgpt.com/backend-api/codex')).toBe('wss://chatgpt.com/backend-api/codex');
     expect(testExports.resolveCodexRealtimeWebSocketUrl('wss://example.test/custom/realtime')).toBe('wss://example.test/custom/realtime');
   });
 

@@ -35,14 +35,11 @@ function resolveCodexRealtimeWebSocketUrl(baseUrl: string | undefined): string {
   const normalized = trimTrailingSlashes(baseUrl?.trim() || DEFAULT_CODEX_REALTIME_BASE_URL);
 
   if (normalized.startsWith('ws://') || normalized.startsWith('wss://')) {
-    return normalized.endsWith('/realtime') ? normalized : `${normalized}/realtime`;
+    return normalized;
   }
 
   const url = new URL(normalized);
   url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
-  if (!url.pathname.endsWith('/realtime')) {
-    url.pathname = `${url.pathname.replace(/\/+$/, '')}/realtime`;
-  }
   return url.toString();
 }
 
