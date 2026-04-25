@@ -1376,6 +1376,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testReadRemoteDirectoryClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readRemoteDirectoryFailureQueueMessages = ["Remote directory temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedListing = await session.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        XCTAssertNil(failedListing)
+        XCTAssertNotNil(session.errorMessage)
+
+        let listing = await session.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        XCTAssertEqual(listing?.entries.first?.name, "personal-agent")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testSaveSshTargetIgnoresDuplicateCreateWhilePending() async throws {
         let client = MockCompanionClient()
         client.saveSshTargetDelayNanoseconds = 150_000_000

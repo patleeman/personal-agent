@@ -1400,6 +1400,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var cancelRunDelayNanoseconds: UInt64 = 0
     var listSshTargetsFailureQueueMessages: [String] = []
     var testSshTargetFailureQueueMessages: [String] = []
+    var readRemoteDirectoryFailureQueueMessages: [String] = []
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
@@ -2366,6 +2367,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {
+        if !readRemoteDirectoryFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readRemoteDirectoryFailureQueueMessages.removeFirst())
+        }
         let currentPath = path?.trimmed.nilIfBlank ?? "/Users/patrick/workingdir"
         switch currentPath {
         case "/Users/patrick/workingdir":
