@@ -2771,6 +2771,7 @@ final class ConversationViewModel: ObservableObject {
             let nextModels = try await models
             if modelRefreshRequestId == requestId {
                 modelState = nextModels
+                errorMessage = nil
             }
             return state
         } catch {

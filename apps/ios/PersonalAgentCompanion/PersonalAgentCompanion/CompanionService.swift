@@ -1446,6 +1446,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readConversationAutoModeFailureQueueMessages: [String] = []
     var updateConversationAutoModeDelayNanoseconds: UInt64 = 0
     var updateConversationAutoModeFailureQueueMessages: [String] = []
+    var readConversationModelPreferencesFailureQueueMessages: [String] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     var updateConversationModelPreferencesFailureQueueMessages: [String] = []
@@ -3001,6 +3002,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readConversationModelPreferences(conversationId: String) async throws -> ConversationModelPreferencesState {
+        if !readConversationModelPreferencesFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readConversationModelPreferencesFailureQueueMessages.removeFirst())
+        }
         guard let meta = conversations[conversationId]?.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
