@@ -1309,6 +1309,32 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.connectedRuns.contains(where: { $0.runId == "run-new" }))
     }
 
+    func testStaleExecutionTargetChangeDoesNotOverrideLatestSelection() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.loadBootstrap()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.currentExecutionTargetId == "local"
+        }
+
+        client.changeExecutionTargetDelayQueueNanoseconds = [150_000_000, 0]
+        model.changeExecutionTarget("ssh-1")
+        try await Task.sleep(nanoseconds: 30_000_000)
+        model.changeExecutionTarget("local")
+        try await Task.sleep(nanoseconds: 220_000_000)
+
+        XCTAssertEqual(model.currentExecutionTargetId, "local")
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

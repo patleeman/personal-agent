@@ -1382,6 +1382,8 @@ final class MockCompanionClient: CompanionClientProtocol {
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
+    var changeExecutionTargetDelayNanoseconds: UInt64 = 0
+    var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
     private(set) var promptSubmissionCount = 0
 
     private var listState: ConversationListState
@@ -2809,6 +2811,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func changeExecutionTarget(conversationId: String, executionTargetId: String) async throws -> ConversationBootstrapEnvelope {
+        let delay = changeExecutionTargetDelayQueueNanoseconds.isEmpty ? changeExecutionTargetDelayNanoseconds : changeExecutionTargetDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }

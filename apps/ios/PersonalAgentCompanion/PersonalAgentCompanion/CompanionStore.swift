@@ -1965,6 +1965,7 @@ final class ConversationViewModel: ObservableObject {
     private var streamTask: Task<Void, Never>?
     private var activityRefreshTask: Task<Void, Never>?
     private var activityRunsRefreshTask: Task<Void, Never>?
+    private var executionTargetChangeTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
     private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
@@ -1976,6 +1977,7 @@ final class ConversationViewModel: ObservableObject {
     private var attachmentRefreshRequestId = 0
     private var modelRefreshRequestId = 0
     private var activityRunsRefreshRequestId = 0
+    private var executionTargetChangeRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -2038,6 +2040,8 @@ final class ConversationViewModel: ObservableObject {
         activityRefreshTask = nil
         activityRunsRefreshTask?.cancel()
         activityRunsRefreshTask = nil
+        executionTargetChangeTask?.cancel()
+        executionTargetChangeTask = nil
         composerNoticeTask?.cancel()
         composerNoticeTask = nil
         transcriptImageCache.removeAll()
@@ -2366,13 +2370,28 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func changeExecutionTarget(_ targetId: String) {
-        guard currentExecutionTargetId != targetId else { return }
-        Task {
+        if currentExecutionTargetId == targetId, executionTargetChangeTask == nil {
+            return
+        }
+        executionTargetChangeTask?.cancel()
+        executionTargetChangeRequestId += 1
+        let requestId = executionTargetChangeRequestId
+        if currentExecutionTargetId == targetId {
+            executionTargetChangeTask = nil
+            return
+        }
+        executionTargetChangeTask = Task {
             do {
                 let envelope = try await client.changeExecutionTarget(conversationId: conversationId, executionTargetId: targetId)
-                applyBootstrap(envelope)
+                if !Task.isCancelled, executionTargetChangeRequestId == requestId {
+                    applyBootstrap(envelope)
+                    executionTargetChangeTask = nil
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled, executionTargetChangeRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                    executionTargetChangeTask = nil
+                }
             }
         }
     }
