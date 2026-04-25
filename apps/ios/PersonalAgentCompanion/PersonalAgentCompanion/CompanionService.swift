@@ -1435,6 +1435,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     var updateConversationModelPreferencesFailureQueueMessages: [String] = []
     var listConversationArtifactsFailureQueueMessages: [String] = []
+    var readConversationArtifactFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -3024,6 +3025,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readConversationArtifact(conversationId: String, artifactId: String) async throws -> ConversationArtifactRecord {
+        if !readConversationArtifactFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readConversationArtifactFailureQueueMessages.removeFirst())
+        }
         guard let artifact = artifactsByConversation[conversationId]?.first(where: { $0.id == artifactId }) else {
             throw CompanionClientError.requestFailed("Artifact not found.")
         }

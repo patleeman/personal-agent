@@ -2826,7 +2826,9 @@ final class ConversationViewModel: ObservableObject {
 
     func readArtifact(_ artifactId: String) async -> ConversationArtifactRecord? {
         do {
-            return try await client.readConversationArtifact(conversationId: conversationId, artifactId: artifactId)
+            let artifact = try await client.readConversationArtifact(conversationId: conversationId, artifactId: artifactId)
+            errorMessage = nil
+            return artifact
         } catch {
             errorMessage = error.localizedDescription
             return nil

@@ -1882,6 +1882,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testReadArtifactClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readConversationArtifactFailureQueueMessages = ["Artifact read temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedArtifact = await model.readArtifact("artifact-1")
+        XCTAssertNil(failedArtifact)
+        XCTAssertNotNil(model.errorMessage)
+
+        let artifact = await model.readArtifact("artifact-1")
+        XCTAssertEqual(artifact?.kind, "html")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCreateCheckpointAddsCheckpointRecord() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
