@@ -572,10 +572,11 @@ function OpenFilesSection({
           <button
             type="button"
             aria-label="Close all open files"
-            className="text-[11px] font-medium text-dim transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base"
+            title="Close all open files"
+            className="ui-icon-button ui-icon-button-compact text-dim hover:text-primary"
             onClick={onCloseAll}
           >
-            Close all
+            <Ico d={ICON.x} size={11} />
           </button>
         ) : null}
       </div>
