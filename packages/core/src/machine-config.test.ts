@@ -9,12 +9,10 @@ import {
   readMachineInstructionFiles,
   readMachineKnowledgeBase,
   readMachineSkillDirs,
-  readMachineVaultRoot,
   updateMachineConfigSection,
   writeMachineInstructionFiles,
   writeMachineKnowledgeBase,
   writeMachineSkillDirs,
-  writeMachineVaultRoot,
 } from './machine-config.js';
 
 const originalEnv = process.env;
@@ -58,18 +56,6 @@ describe('machine config', () => {
 
     expect(readMachineConfigSection('daemon')).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
     expect(JSON.parse(readFileSync(daemonConfigPath, 'utf-8'))).toEqual({ modules: { tasks: { pollIntervalMs: 5000 } } });
-  });
-
-  it('reads and writes the machine vault root in config.json', () => {
-    const configDir = createTempDir('pa-machine-config-');
-
-    writeMachineVaultRoot('~/Documents/personal-agent', { configRoot: configDir });
-    expect(readMachineVaultRoot({ configRoot: configDir })).toBe('~/Documents/personal-agent');
-    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({ vaultRoot: '~/Documents/personal-agent' });
-
-    writeMachineVaultRoot('', { configRoot: configDir });
-    expect(readMachineVaultRoot({ configRoot: configDir })).toBe('');
-    expect(JSON.parse(readFileSync(join(configDir, 'config.json'), 'utf-8'))).toEqual({});
   });
 
   it('reads and writes the managed knowledge base repo in config.json', () => {

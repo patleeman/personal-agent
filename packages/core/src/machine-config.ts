@@ -26,12 +26,6 @@ export interface MachineUiConfigState {
   resumeFallbackPrompt: string;
 }
 
-export interface MachineVaultRootState {
-  currentRoot: string;
-  effectiveRoot: string;
-  source: 'env' | 'config' | 'knowledge-base' | 'default';
-}
-
 export interface MachineKnowledgeBaseState {
   repoUrl: string;
   branch: string;
@@ -333,23 +327,6 @@ export function writeMachineSkillDirs(skillDirs: string[], options: MachineConfi
       next.skillDirs = normalizedSkillDirs;
     } else {
       delete next.skillDirs;
-    }
-    return next;
-  }, options);
-}
-
-export function readMachineVaultRoot(options: MachineConfigOptions = {}): string {
-  return readMachineConfig(options).vaultRoot ?? '';
-}
-
-export function writeMachineVaultRoot(vaultRoot: string | null | undefined, options: MachineConfigOptions = {}): MachineConfigDocument {
-  const normalizedVaultRoot = typeof vaultRoot === 'string' ? vaultRoot.trim() : '';
-  return updateMachineConfig((current) => {
-    const next: MachineConfigDocument = { ...current };
-    if (normalizedVaultRoot.length > 0) {
-      next.vaultRoot = normalizedVaultRoot;
-    } else {
-      delete next.vaultRoot;
     }
     return next;
   }, options);
