@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
-import { join } from 'path';
-import { getDurableSessionsDir } from './runtime/paths.js';
+import { join, sep } from 'path';
+import { getDurableSessionsDir, getPiAgentRuntimeDir } from './runtime/paths.js';
 
 export interface StoredSessionMeta {
   id: string;
@@ -118,6 +118,16 @@ function normalizeSessionName(name: unknown): string | null {
 
   const normalized = name.replace(/\s+/g, ' ').trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function isNeutralChatWorkspaceCwd(cwd: string): boolean {
+  const normalized = cwd.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const chatWorkspacesRoot = join(getPiAgentRuntimeDir(), 'chat-workspaces');
+  return normalized === chatWorkspacesRoot || normalized.startsWith(`${chatWorkspacesRoot}${sep}`);
 }
 
 function normalizeWorkspaceCwdValue(value: unknown): string | null | undefined {
@@ -277,13 +287,19 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       : null;
 
     const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
+    const cwd = workspaceMetadata?.cwd ?? headerCwd;
+    const workspaceCwd = workspaceMetadata && 'workspaceCwd' in workspaceMetadata
+      ? workspaceMetadata.workspaceCwd ?? null
+      : isNeutralChatWorkspaceCwd(cwd)
+        ? null
+        : undefined;
 
     return {
       id: sessionRecord.id,
       file: filePath,
       timestamp: fallbackTimestamp,
-      cwd: workspaceMetadata?.cwd ?? headerCwd,
-      ...(workspaceMetadata && 'workspaceCwd' in workspaceMetadata ? { workspaceCwd: workspaceMetadata.workspaceCwd ?? null } : {}),
+      cwd,
+      ...(workspaceCwd !== undefined ? { workspaceCwd } : {}),
       cwdSlug,
       model,
       title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',

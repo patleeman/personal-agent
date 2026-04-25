@@ -965,6 +965,25 @@ describe('sessions', () => {
     ]));
   });
 
+  it('infers neutral chat workspaces as chat conversations without metadata', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+    const stateRoot = join(sessionsDir, 'state');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const chatCwd = join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'shared');
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-chat-fallback',
+      cwd: chatCwd,
+      title: 'Plain chat',
+    });
+
+    const detail = readSessionBlocks('session-chat-fallback');
+    expect(detail?.meta.cwd).toBe(chatCwd);
+    expect(detail?.meta.workspaceCwd).toBeNull();
+  });
+
   it('stores remote execution target metadata in the session header', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

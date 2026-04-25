@@ -15,7 +15,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
-import { basename, dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
 import {
   SessionManager,
@@ -1241,6 +1241,16 @@ function normalizeOptionalPath(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
+function isNeutralChatWorkspaceCwd(cwd: string): boolean {
+  const normalized = cwd.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const chatWorkspacesRoot = join(getPiAgentRuntimeDir(), 'chat-workspaces');
+  return normalized === chatWorkspacesRoot || normalized.startsWith(`${chatWorkspacesRoot}${sep}`);
+}
+
 function normalizeWorkspaceCwdValue(value: unknown): string | null | undefined {
   if (value === null) {
     return null;
@@ -1434,13 +1444,19 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     : null;
 
   const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
+  const cwd = workspaceMetadata?.cwd ?? headerCwd;
+  const workspaceCwd = workspaceMetadata && 'workspaceCwd' in workspaceMetadata
+    ? workspaceMetadata.workspaceCwd ?? null
+    : isNeutralChatWorkspaceCwd(cwd)
+      ? null
+      : undefined;
 
   return {
     id: sessionRecord.id,
     file: filePath,
     timestamp: sessionRecord.timestamp,
-    cwd: workspaceMetadata?.cwd ?? headerCwd,
-    ...(workspaceMetadata && 'workspaceCwd' in workspaceMetadata ? { workspaceCwd: workspaceMetadata.workspaceCwd ?? null } : {}),
+    cwd,
+    ...(workspaceCwd !== undefined ? { workspaceCwd } : {}),
     cwdSlug,
     model,
     title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',
