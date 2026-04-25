@@ -412,7 +412,7 @@ describe('SettingsPage provider model editor', () => {
     click(queryButton(container, 'Continue'));
 
     expect(container.textContent).toContain('Provider · anthropic');
-    expect(container.textContent).toContain('Models available under anthropic. Add any extra model ids you want to use.');
+    expect(container.textContent).toContain('Additional models');
 
     click(queryButton(container, 'Add model'));
     const modelIdInput = queryInput(container, '#settings-provider-model-id');

@@ -298,18 +298,6 @@ function formatProviderAuthStatus(provider: ProviderAuthSummary | null): string 
   }
 }
 
-function formatProviderModelCoverage(provider: ProviderAuthSummary | null): string {
-  if (!provider) {
-    return '';
-  }
-
-  if (provider.modelCount <= 0) {
-    return 'No discovered models currently map to this provider.';
-  }
-
-  return `${provider.modelCount} discovered ${provider.modelCount === 1 ? 'model' : 'models'} mapped to this provider.`;
-}
-
 function formatMcpServerSource(server: McpServerConfig): string {
   if (server.source === 'skill' && server.skillName) {
     return `Bundled with ${server.skillName}`;
@@ -3641,7 +3629,6 @@ export function SettingsPage() {
                           <div className="space-y-3 border-t border-border-subtle pt-4">
                             <div className="space-y-1">
                               <h4 className="text-[13px] font-medium text-primary">Add provider</h4>
-                              <p className="ui-card-meta">Choose a built-in provider to add models, or create a custom provider.</p>
                             </div>
                             <div className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-center">
                               <select
@@ -3692,11 +3679,6 @@ export function SettingsPage() {
                               ? (selectedModelProvider ? `Edit provider · ${selectedModelProvider.id}` : 'Add custom provider')
                               : `Provider · ${editableModelProviderId}`}
                           </h3>
-                          <p className="ui-card-meta">
-                            {modelProviderModalMode === 'custom'
-                              ? 'Define a custom provider, then add its models and credentials.'
-                              : 'Inspect built-in models, add extra models, and manage credentials.'}
-                          </p>
                         </div>
                         <button
                           type="button"
@@ -3874,15 +3856,10 @@ export function SettingsPage() {
                   </div>
                   )}
 
-                  <div className="space-y-4 border-t border-border-subtle pt-6 min-w-0">
+                  <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
                     <div className="flex items-center justify-between gap-3">
-                      <div className="space-y-1">
+                      <div>
                         <h3 className="text-[15px] font-medium text-primary">Models</h3>
-                        <p className="ui-card-meta max-w-3xl">
-                          {editableModelProviderId
-                            ? `Models available under ${editableModelProviderId}. Add any extra model ids you want to use.`
-                            : 'Save the custom provider before adding models.'}
-                        </p>
                       </div>
                       <button
                         type="button"
@@ -3897,33 +3874,31 @@ export function SettingsPage() {
                     {editableModelProviderId ? (
                       <>
                         {builtInProviderModels.length > 0 && (
-                          <div className="space-y-2">
-                            <h4 className="text-[13px] font-medium text-primary">Built-in models</h4>
-                            <div className="space-y-px">
+                          <div className="space-y-1.5">
+                            <h4 className="text-[12px] font-medium text-secondary">Built-in models</h4>
+                            <div className="grid gap-x-6 gap-y-1 md:grid-cols-2">
                               {builtInProviderModels.map((model) => (
-                                <div key={`${model.provider}/${model.id}`} className="ui-list-row justify-between px-3 py-3">
-                                  <div className="min-w-0">
-                                    <p className="truncate text-[13px] font-medium text-primary">{model.id}</p>
-                                    <p className="ui-card-meta truncate">{model.name || model.id} · {formatContextWindowLabel(model.context)} ctx</p>
-                                  </div>
+                                <div key={`${model.provider}/${model.id}`} className="flex min-w-0 items-baseline gap-2 py-0.5 text-[12px]">
+                                  <span className="truncate font-medium text-primary">{model.id}</span>
+                                  <span className="shrink-0 text-dim">{formatContextWindowLabel(model.context)} ctx</span>
                                 </div>
                               ))}
                             </div>
                           </div>
                         )}
 
-                        <div className="space-y-2">
-                          <h4 className="text-[13px] font-medium text-primary">Additional models</h4>
+                        <div className="space-y-1.5">
+                          <h4 className="text-[12px] font-medium text-secondary">Additional models</h4>
                         {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
                           <div className="space-y-px">
                             {selectedModelProvider.models.map((model) => (
                               <div
                                 key={model.id}
-                                className="group ui-list-row ui-list-row-hover justify-between px-3 py-3"
+                                className="group ui-list-row ui-list-row-hover justify-between px-2 py-1.5"
                               >
-                                <div className="min-w-0">
-                                  <p className="truncate text-[13px] font-medium text-primary">{model.id}</p>
-                                  <p className="ui-card-meta truncate">{formatProviderModelSummary(model)}</p>
+                                <div className="flex min-w-0 items-baseline gap-2 text-[12px]">
+                                  <span className="truncate font-medium text-primary">{model.id}</span>
+                                  <span className="truncate text-dim">{formatProviderModelSummary(model)}</span>
                                 </div>
                                 <div className="flex flex-wrap gap-2">
                                   <button
@@ -3946,7 +3921,7 @@ export function SettingsPage() {
                             ))}
                           </div>
                         ) : (
-                          <p className="ui-card-meta">No models configured for this provider yet.</p>
+                          <p className="text-[12px] text-dim">None yet.</p>
                         )}
                         </div>
 
@@ -4205,18 +4180,14 @@ export function SettingsPage() {
                     )}
                   </div>
 
-                  <div className="space-y-4 border-t border-border-subtle pt-6 min-w-0">
-                    <div className="space-y-1">
+                  <div className="space-y-3 border-t border-border-subtle pt-4 min-w-0">
+                    <div>
                       <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
-                      <p className="ui-card-meta max-w-3xl">
-                        API key and OAuth live with the provider. {providerAuthState?.authFile ? `Stored auth writes to ${providerAuthState.authFile}.` : ''}
-                      </p>
                     </div>
 
                     {modalProviderAuth ? (
-                      <div className="space-y-3">
-                        <p className="ui-card-meta">{formatProviderAuthStatus(modalProviderAuth)}</p>
-                        <p className="ui-card-meta">{formatProviderModelCoverage(modalProviderAuth)}</p>
+                      <div className="space-y-2.5">
+                        <p className="text-[12px] text-secondary">{formatProviderAuthStatus(modalProviderAuth)}</p>
 
                         {canProviderUseApiKey(modalProviderAuth) ? (
                           <div className="space-y-2">
@@ -4234,7 +4205,7 @@ export function SettingsPage() {
                             />
                           </div>
                         ) : (
-                          <p className="ui-card-meta">This provider uses OAuth, environment credentials, or provider-specific config instead of auth.json API keys.</p>
+                          null
                         )}
 
                         <div className="flex flex-wrap gap-2">
