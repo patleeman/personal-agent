@@ -238,6 +238,34 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
 
+    func testStaleBootstrapDoesNotOverwriteLiveConversationEvents() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        client.conversationBootstrapDelayNanoseconds = 150_000_000
+        model.loadBootstrap()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        client.emitUserMessage(conversationId: "conv-1", text: "Remote message during refresh")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+        XCTAssertEqual(model.blocks.filter { $0.type == "user" && $0.text == "Remote message during refresh" }.count, 1)
+    }
+
     func testCompanionTranscriptImageAssetPathRewritesSessionAssetUrls() {
         XCTAssertEqual(
             companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image"),
@@ -687,6 +715,36 @@ final class PersonalAgentCompanionTests: XCTestCase {
         try await waitForCondition(timeout: .seconds(2)) {
             !model.parallelJobs.isEmpty
         }
+    }
+
+    func testPromptSendIgnoresDuplicateTapWhileSubmissionIsPending() async throws {
+        let client = MockCompanionClient()
+        client.promptSubmissionDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Only send this once"
+        model.sendPrompt()
+        model.sendPrompt()
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isSubmittingPrompt
+        }
+        XCTAssertEqual(client.promptSubmissionCount, 1)
+        XCTAssertEqual(model.blocks.filter { $0.type == "user" && $0.text == "Only send this once" }.count, 1)
+        XCTAssertTrue(model.promptText.isEmpty)
     }
 
     func testQueuedPromptRestorePrefillsComposer() async throws {

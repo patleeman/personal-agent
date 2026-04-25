@@ -676,7 +676,6 @@ async function buildInstallAndLaunchSimulator(input) {
     '-scheme', scheme,
     '-destination', `id=${deviceId}`,
     '-derivedDataPath', derivedDataPath,
-    'CODE_SIGNING_ALLOWED=NO',
   ]);
 
   await bootSimulator(input.device);
@@ -851,7 +850,17 @@ async function testLiveCommand() {
 }
 
 async function demoRefreshCommand() {
-  const snapshot = await buildDeviceDemoSnapshot();
+  let snapshot;
+  try {
+    snapshot = await buildDeviceDemoSnapshot();
+  } catch (error) {
+    log(`Could not refresh iOS demo transcripts: ${error instanceof Error ? error.message : String(error)}`);
+    if (existsSync(demoSnapshotFile)) {
+      log(`Keeping existing iOS demo transcripts at ${demoSnapshotFile}`);
+      return;
+    }
+    snapshot = { hostLabel: `${readSystemHostLabel()} Demo`, generatedAt: new Date().toISOString(), conversations: [] };
+  }
   writeJson(demoSnapshotFile, snapshot);
   log(`Wrote iOS demo transcripts to ${demoSnapshotFile}`);
   if (!Array.isArray(snapshot.conversations) || snapshot.conversations.length === 0) {

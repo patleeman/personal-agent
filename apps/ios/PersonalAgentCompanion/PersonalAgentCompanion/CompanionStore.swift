@@ -1813,6 +1813,7 @@ final class ConversationViewModel: ObservableObject {
     @Published private(set) var connectedRuns: [DurableRunSummary] = []
     @Published private(set) var isLoading = false
     @Published private(set) var isStreaming = false
+    @Published private(set) var isSubmittingPrompt = false
     @Published var errorMessage: String?
     @Published var composerNotice: String?
     @Published var promptText: String = "" {
@@ -1959,6 +1960,9 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func sendPrompt(mode requestedMode: ConversationPromptSubmissionMode? = nil) {
+        guard !isSubmittingPrompt else {
+            return
+        }
         let currentText = promptText
         let currentImages = promptImages
         let currentRefs = promptAttachmentRefs
@@ -1966,7 +1970,9 @@ final class ConversationViewModel: ObservableObject {
             return
         }
         let resolvedMode = requestedMode ?? (isStreaming ? .steer : .submit)
+        isSubmittingPrompt = true
         Task {
+            defer { isSubmittingPrompt = false }
             do {
                 let targetConversationId = try await ensureLiveConversationForPrompt()
                 try await client.promptConversation(
@@ -1988,10 +1994,15 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func submitPlainPrompt(_ text: String, mode: ConversationPromptSubmissionMode = .submit) {
+        guard !isSubmittingPrompt else {
+            return
+        }
         guard let trimmed = text.trimmed.nilIfBlank else {
             return
         }
+        isSubmittingPrompt = true
         Task {
+            defer { isSubmittingPrompt = false }
             do {
                 let targetConversationId = try await ensureLiveConversationForPrompt()
                 try await client.promptConversation(
@@ -2609,10 +2620,12 @@ final class ConversationViewModel: ObservableObject {
             )
         }
 
-        if let detail = envelope.bootstrap.sessionDetail {
-            blocks = detail.blocks
-        } else if let appendOnly = envelope.bootstrap.sessionDetailAppendOnly {
-            blocks.append(contentsOf: appendOnly.blocks)
+        if eventRevisionAtRequest == nil || liveEventRevision == eventRevisionAtRequest {
+            if let detail = envelope.bootstrap.sessionDetail {
+                blocks = detail.blocks
+            } else if let appendOnly = envelope.bootstrap.sessionDetailAppendOnly {
+                blocks.append(contentsOf: appendOnly.blocks)
+            }
         }
 
         let isLiveConversation = envelope.bootstrap.liveSession.live || sessionMeta?.isLive == true
@@ -2635,9 +2648,9 @@ final class ConversationViewModel: ObservableObject {
         switch event {
         case .snapshot(let snapshotBlocks, _, _, let snapshotIsStreaming):
             errorMessage = nil
+            liveEventRevision += 1
             blocks = snapshotBlocks
             if let snapshotIsStreaming {
-                liveEventRevision += 1
                 isStreaming = snapshotIsStreaming
             }
             lastStreamingTextBlockId = nil
@@ -2651,6 +2664,7 @@ final class ConversationViewModel: ObservableObject {
             lastStreamingTextBlockId = nil
             lastStreamingThinkingBlockId = nil
         case .userMessage(let block):
+            liveEventRevision += 1
             blocks.append(block)
         case .queueState(let steering, let followUp):
             queuedSteeringPrompts = steering
@@ -2658,13 +2672,17 @@ final class ConversationViewModel: ObservableObject {
         case .parallelState(let jobs):
             parallelJobs = jobs
         case .textDelta(let delta):
+            liveEventRevision += 1
             appendStreamingDelta(type: "text", delta: delta)
         case .thinkingDelta(let delta):
+            liveEventRevision += 1
             appendStreamingDelta(type: "thinking", delta: delta)
         case .toolStart(let toolCallId, let toolName, let args):
+            liveEventRevision += 1
             let block = DisplayBlock(type: "tool_use", id: toolCallId, ts: ISO8601DateFormatter.flexible.string(from: .now), tool: toolName, input: args, output: "", toolCallId: toolCallId)
             blocks.append(block)
         case .toolUpdate(let toolCallId, let partialResult):
+            liveEventRevision += 1
             updateToolBlock(toolCallId: toolCallId) { block in
                 DisplayBlock(
                     type: block.type,
@@ -2694,6 +2712,7 @@ final class ConversationViewModel: ObservableObject {
                 )
             }
         case .toolEnd(let toolCallId, let toolName, let isError, let durationMs, let output, let details):
+            liveEventRevision += 1
             updateToolBlock(toolCallId: toolCallId) { block in
                 DisplayBlock(
                     type: "tool_use",

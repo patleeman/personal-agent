@@ -1369,6 +1369,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
     var supportsRunningConversationSimulation: Bool { true }
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
+    var conversationBootstrapDelayNanoseconds: UInt64 = 0
+    var promptSubmissionDelayNanoseconds: UInt64 = 0
+    private(set) var promptSubmissionCount = 0
 
     private var listState: ConversationListState
     private var conversations: [String: ConversationBootstrapEnvelope]
@@ -2173,7 +2176,23 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let value = conversations[conversationId] else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
+        if conversationBootstrapDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: conversationBootstrapDelayNanoseconds)
+        }
         return value
+    }
+
+    func emitUserMessage(conversationId: String, text: String) {
+        let block = DisplayBlock(
+            type: "user",
+            id: "mock-user-\(UUID().uuidString)",
+            ts: ISO8601DateFormatter.flexible.string(from: .now),
+            text: text
+        )
+        mutateConversation(conversationId: conversationId) { blocks in
+            blocks.append(block)
+        }
+        emitConversation(conversationId, .userMessage(block))
     }
 
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope {
@@ -2243,6 +2262,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func promptConversation(conversationId: String, text: String, images: [PromptImageDraft], attachmentRefs: [PromptAttachmentReference], mode: ConversationPromptSubmissionMode, surfaceId: String) async throws {
+        promptSubmissionCount += 1
+        if promptSubmissionDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: promptSubmissionDelayNanoseconds)
+        }
         guard var envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }

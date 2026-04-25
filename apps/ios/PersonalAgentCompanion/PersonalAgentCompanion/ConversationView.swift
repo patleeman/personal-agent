@@ -510,7 +510,7 @@ struct ConversationScreen: View {
                 }
             }
         }
-        .disabled(!composerHasContent)
+        .disabled(!composerHasContent || viewModel.isSubmittingPrompt)
     }
 
     private func sendButtonLabel(defaultMode: ConversationPromptSubmissionMode) -> some View {
