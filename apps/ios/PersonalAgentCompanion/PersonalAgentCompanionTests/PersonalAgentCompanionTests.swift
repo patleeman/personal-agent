@@ -827,6 +827,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testKnowledgeNoteDeleteIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.deleteKnowledgeEntryDelayNanoseconds = 150_000_000
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        async let first = model.delete()
+        async let second = model.delete()
+        let results = await [first, second]
+        let listing = try await client.listKnowledgeEntries(directoryId: "notes")
+
+        XCTAssertEqual(results.filter { $0 }.count, 1)
+        XCTAssertEqual(client.deleteKnowledgeEntryCount, 1)
+        XCTAssertFalse(listing.entries.contains(where: { $0.id == "notes/ios-companion.md" }))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testKnowledgeHelpersParseHeadingsLinksAndRelativePaths() {
         let text = """
         ---

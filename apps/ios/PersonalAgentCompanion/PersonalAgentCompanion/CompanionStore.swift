@@ -1554,6 +1554,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
     private var isApplyingRemoteState = false
     private var pendingImageMarkdownCreateKeys: Set<String> = []
     private var pendingRenameKeys: Set<String> = []
+    private var pendingDeleteIds: Set<String> = []
 
     init(client: CompanionClientProtocol, fileId: String, draftStore: KnowledgeDraftStore = .shared) {
         self.client = client
@@ -1693,10 +1694,15 @@ final class KnowledgeNoteViewModel: ObservableObject {
 
     @discardableResult
     func delete() async -> Bool {
+        let deleteId = fileId
+        guard pendingDeleteIds.insert(deleteId).inserted else {
+            return false
+        }
+        defer { pendingDeleteIds.remove(deleteId) }
         do {
-            try await client.deleteKnowledgeEntry(id: fileId)
+            try await client.deleteKnowledgeEntry(id: deleteId)
             autosaveTask?.cancel()
-            draftStore.remove(fileId: fileId)
+            draftStore.remove(fileId: deleteId)
             errorMessage = nil
             return true
         } catch {
