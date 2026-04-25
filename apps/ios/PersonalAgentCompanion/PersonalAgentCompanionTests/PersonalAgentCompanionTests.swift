@@ -1082,6 +1082,34 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testStaleModelPreferenceSaveDoesNotOverrideLatestModel() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.loadBootstrap()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.model == "gpt-5.4"
+        }
+
+        client.updateConversationModelPreferencesDelayQueueNanoseconds = [150_000_000, 0]
+        let slowSave = Task {
+            await model.saveModelPreferences(model: "old-slow-model", thinkingLevel: nil, serviceTier: nil)
+        }
+        try await Task.sleep(nanoseconds: 30_000_000)
+        _ = await model.saveModelPreferences(model: "new-fast-model", thinkingLevel: nil, serviceTier: nil)
+        _ = await slowSave.value
+
+        XCTAssertEqual(model.sessionMeta?.model, "new-fast-model")
+    }
+
     func testParallelPromptCreatesChildConversationInMockClient() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")

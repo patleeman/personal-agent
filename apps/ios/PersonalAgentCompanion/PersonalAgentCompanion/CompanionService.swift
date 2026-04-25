@@ -1386,6 +1386,8 @@ final class MockCompanionClient: CompanionClientProtocol {
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
     var renameConversationDelayNanoseconds: UInt64 = 0
     var renameConversationDelayQueueNanoseconds: [UInt64] = []
+    var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
+    var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var promptSubmissionCount = 0
 
     private var listState: ConversationListState
@@ -2696,6 +2698,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func updateConversationModelPreferences(conversationId: String, model: String?, thinkingLevel: String?, serviceTier: String?, surfaceId: String) async throws -> ConversationModelPreferencesState {
+        let delay = updateConversationModelPreferencesDelayQueueNanoseconds.isEmpty ? updateConversationModelPreferencesDelayNanoseconds : updateConversationModelPreferencesDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }

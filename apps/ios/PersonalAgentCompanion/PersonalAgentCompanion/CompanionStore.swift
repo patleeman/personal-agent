@@ -2491,6 +2491,7 @@ final class ConversationViewModel: ObservableObject {
 
     func saveModelPreferences(model: String?, thinkingLevel: String?, serviceTier: String?) async -> ConversationModelPreferencesState? {
         modelRefreshRequestId += 1
+        let requestId = modelRefreshRequestId
         do {
             let state = try await client.updateConversationModelPreferences(
                 conversationId: conversationId,
@@ -2499,6 +2500,9 @@ final class ConversationViewModel: ObservableObject {
                 serviceTier: serviceTier?.nilIfBlank,
                 surfaceId: installationSurfaceId
             )
+            guard modelRefreshRequestId == requestId else {
+                return state
+            }
             if let model = model?.nilIfBlank, var meta = sessionMeta {
                 meta = SessionMeta(
                     id: meta.id,
