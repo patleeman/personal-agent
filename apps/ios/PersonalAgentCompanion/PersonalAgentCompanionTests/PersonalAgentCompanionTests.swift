@@ -443,6 +443,50 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(block.images?.first?.src, "/companion/v1/conversations/conv-1/blocks/block-1/images/0")
     }
 
+    func testSessionDetailSkipsMalformedBootstrapBlocks() throws {
+        let meta = SessionMeta(
+            id: "conv-1",
+            file: "/tmp/conv-1.jsonl",
+            timestamp: "2026-04-25T00:00:00Z",
+            cwd: "/tmp/project",
+            cwdSlug: "project",
+            model: "gpt-5.4",
+            title: "Bootstrap",
+            messageCount: 2,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: nil,
+            parentSessionFile: nil,
+            parentSessionId: nil,
+            sourceRunId: nil,
+            remoteHostId: nil,
+            remoteHostLabel: nil,
+            remoteConversationId: nil,
+            automationTaskId: nil,
+            automationTitle: nil,
+            needsAttention: false,
+            attentionUpdatedAt: nil,
+            attentionUnreadMessageCount: nil,
+            attentionUnreadActivityCount: nil,
+            attentionActivityIds: nil
+        )
+        let metaObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(meta))
+        let payload = try JSONSerialization.data(withJSONObject: [
+            "meta": metaObject,
+            "blocks": [
+                ["type": "text", "id": "valid", "ts": "2026-04-25T00:00:00Z", "text": "Keep me"],
+                ["id": "bad", "ts": "2026-04-25T00:00:01Z", "text": "Missing type"],
+            ],
+            "blockOffset": 0,
+            "totalBlocks": 2,
+        ])
+
+        let detail = try JSONDecoder().decode(SessionDetail.self, from: payload)
+
+        XCTAssertEqual(detail.blocks.map(\.id), ["valid"])
+        XCTAssertEqual(detail.totalBlocks, 2)
+    }
+
     func testConversationComposerDraftRestoresAcrossViewModels() {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

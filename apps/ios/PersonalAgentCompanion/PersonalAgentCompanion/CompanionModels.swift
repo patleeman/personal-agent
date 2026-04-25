@@ -468,6 +468,31 @@ struct SessionDetail: Codable, Equatable {
     let blockOffset: Int
     let totalBlocks: Int
     let signature: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case meta
+        case blocks
+        case blockOffset
+        case totalBlocks
+        case signature
+    }
+
+    init(meta: SessionMeta, blocks: [DisplayBlock], blockOffset: Int, totalBlocks: Int, signature: String?) {
+        self.meta = meta
+        self.blocks = blocks
+        self.blockOffset = blockOffset
+        self.totalBlocks = totalBlocks
+        self.signature = signature
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.meta = try container.decode(SessionMeta.self, forKey: .meta)
+        self.blocks = try decodeLossyDisplayBlocks(from: container, forKey: .blocks)
+        self.blockOffset = try container.decode(Int.self, forKey: .blockOffset)
+        self.totalBlocks = try container.decode(Int.self, forKey: .totalBlocks)
+        self.signature = try container.decodeIfPresent(String.self, forKey: .signature)
+    }
 }
 
 struct SessionDetailAppendOnlyResponse: Codable, Equatable {
@@ -477,6 +502,46 @@ struct SessionDetailAppendOnlyResponse: Codable, Equatable {
     let blockOffset: Int
     let totalBlocks: Int
     let signature: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case appendOnly
+        case meta
+        case blocks
+        case blockOffset
+        case totalBlocks
+        case signature
+    }
+
+    init(appendOnly: Bool, meta: SessionMeta, blocks: [DisplayBlock], blockOffset: Int, totalBlocks: Int, signature: String?) {
+        self.appendOnly = appendOnly
+        self.meta = meta
+        self.blocks = blocks
+        self.blockOffset = blockOffset
+        self.totalBlocks = totalBlocks
+        self.signature = signature
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.appendOnly = try container.decode(Bool.self, forKey: .appendOnly)
+        self.meta = try container.decode(SessionMeta.self, forKey: .meta)
+        self.blocks = try decodeLossyDisplayBlocks(from: container, forKey: .blocks)
+        self.blockOffset = try container.decode(Int.self, forKey: .blockOffset)
+        self.totalBlocks = try container.decode(Int.self, forKey: .totalBlocks)
+        self.signature = try container.decodeIfPresent(String.self, forKey: .signature)
+    }
+}
+
+private struct LossyDisplayBlock: Decodable {
+    let value: DisplayBlock?
+
+    init(from decoder: Decoder) throws {
+        self.value = try? DisplayBlock(from: decoder)
+    }
+}
+
+private func decodeLossyDisplayBlocks<Key: CodingKey>(from container: KeyedDecodingContainer<Key>, forKey key: Key) throws -> [DisplayBlock] {
+    try container.decode([LossyDisplayBlock].self, forKey: key).compactMap(\.value)
 }
 
 struct LiveSessionMeta: Codable, Equatable {
