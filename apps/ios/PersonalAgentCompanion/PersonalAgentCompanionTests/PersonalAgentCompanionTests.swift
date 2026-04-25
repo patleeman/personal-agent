@@ -1772,6 +1772,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testCreatePairingCodeIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createPairingCodeDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialPairingCount = await session.readDeviceAdminState()?.pendingPairings.count ?? 0
+
+        async let first = session.createPairingCode()
+        async let second = session.createPairingCode()
+        let codes = await [first, second].compactMap { $0 }
+        let state = await session.readDeviceAdminState()
+
+        XCTAssertEqual(codes.count, 1)
+        XCTAssertEqual(client.createPairingCodeCount, 1)
+        XCTAssertEqual(state?.pendingPairings.count, initialPairingCount + 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testAutomationEditorPersistsCallbackFields() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()

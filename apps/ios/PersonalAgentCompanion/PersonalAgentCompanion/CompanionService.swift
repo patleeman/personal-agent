@@ -1387,6 +1387,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
+    var createPairingCodeDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
@@ -1398,6 +1399,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var createConversationCount = 0
     private(set) var runTaskCount = 0
+    private(set) var createPairingCodeCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
 
@@ -3476,6 +3478,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createPairingCode() async throws -> CompanionPairingCodeRecord {
+        createPairingCodeCount += 1
+        if createPairingCodeDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createPairingCodeDelayNanoseconds)
+        }
         let next = CompanionPairingCodeRecord(id: "pair-\(Int.random(in: 10...999))", code: "WXYZ-QRST-UVWX", createdAt: ISO8601DateFormatter.flexible.string(from: .now), expiresAt: ISO8601DateFormatter.flexible.string(from: .now.addingTimeInterval(600)))
         deviceAdminState = CompanionDeviceAdminState(pendingPairings: [CompanionPendingPairing(id: next.id, createdAt: next.createdAt, expiresAt: next.expiresAt)] + deviceAdminState.pendingPairings, devices: deviceAdminState.devices)
         setupState = CompanionSetupState(pairing: next, links: setupState.links, warnings: setupState.warnings)

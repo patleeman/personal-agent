@@ -486,6 +486,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
+    private var isCreatingPairingCode = false
     private var appEventRevision = 0
     private var refreshRequestId = 0
 
@@ -855,6 +856,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func createPairingCode() async -> CompanionPairingCodeRecord? {
+        guard !isCreatingPairingCode else {
+            return nil
+        }
+        isCreatingPairingCode = true
+        defer { isCreatingPairingCode = false }
         do {
             return try await client.createPairingCode()
         } catch {
