@@ -1371,6 +1371,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listConversationsDelayNanoseconds: UInt64 = 0
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
     var updateConversationTabsDelayNanoseconds: UInt64 = 0
+    var updateConversationTabsFailureQueueMessages: [String] = []
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
@@ -2234,6 +2235,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         updateConversationTabsCount += 1
         if updateConversationTabsDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: updateConversationTabsDelayNanoseconds)
+        }
+        if !updateConversationTabsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(updateConversationTabsFailureQueueMessages.removeFirst())
         }
         listState = ConversationListState(sessions: listState.sessions, ordering: ordering, executionTargets: listState.executionTargets)
         emitApp(.conversationListState(listState))

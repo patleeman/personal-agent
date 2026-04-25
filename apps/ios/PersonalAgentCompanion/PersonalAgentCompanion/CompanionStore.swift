@@ -1109,6 +1109,7 @@ final class HostSessionModel: ObservableObject {
             try await client.updateConversationTabs(ordering: ordering)
             currentOrdering = ordering
             refresh()
+            errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
         }

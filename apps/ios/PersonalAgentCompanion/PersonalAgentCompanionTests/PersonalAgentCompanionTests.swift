@@ -1721,6 +1721,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testPinnedConversationClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.updateConversationTabsFailureQueueMessages = ["Conversation pin temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        await session.togglePinned("conv-1")
+        XCTAssertNotNil(session.errorMessage)
+
+        await session.togglePinned("conv-1")
+        let list = try await client.listConversations()
+        XCTAssertTrue(list.ordering.pinnedSessionIds.contains("conv-1"))
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testResumeConversationIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createConversationDelayNanoseconds = 150_000_000
