@@ -1904,6 +1904,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testListCheckpointsClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listConversationCheckpointsFailureQueueMessages = ["Checkpoint list temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedCheckpoints = await model.listCheckpoints()
+        XCTAssertTrue(failedCheckpoints.isEmpty)
+        XCTAssertNotNil(model.errorMessage)
+
+        let checkpoints = await model.listCheckpoints()
+        XCTAssertEqual(checkpoints.first?.id, "abc1234")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCreateCheckpointAddsCheckpointRecord() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
