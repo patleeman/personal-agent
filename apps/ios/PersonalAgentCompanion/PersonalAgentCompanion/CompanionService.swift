@@ -1399,6 +1399,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var runTaskDelayNanoseconds: UInt64 = 0
     var cancelRunDelayNanoseconds: UInt64 = 0
     var listSshTargetsFailureQueueMessages: [String] = []
+    var testSshTargetFailureQueueMessages: [String] = []
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
@@ -2358,7 +2359,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func testSshTarget(sshTarget: String) async throws -> CompanionSshTargetTestResult {
-        CompanionSshTargetTestResult(ok: true, sshTarget: sshTarget, os: "linux", arch: "arm64", platformKey: "linux-arm64", homeDirectory: "/home/patrick", tempDirectory: "/tmp", cacheDirectory: "/home/patrick/.cache", message: "SSH target reachable.")
+        if !testSshTargetFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(testSshTargetFailureQueueMessages.removeFirst())
+        }
+        return CompanionSshTargetTestResult(ok: true, sshTarget: sshTarget, os: "linux", arch: "arm64", platformKey: "linux-arm64", homeDirectory: "/home/patrick", tempDirectory: "/tmp", cacheDirectory: "/home/patrick/.cache", message: "SSH target reachable.")
     }
 
     func readRemoteDirectory(targetId: String, path: String?) async throws -> CompanionRemoteDirectoryListing {

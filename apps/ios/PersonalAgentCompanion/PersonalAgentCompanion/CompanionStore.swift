@@ -935,7 +935,9 @@ final class HostSessionModel: ObservableObject {
 
     func testSshTarget(_ sshTarget: String) async -> CompanionSshTargetTestResult? {
         do {
-            return try await client.testSshTarget(sshTarget: sshTarget)
+            let result = try await client.testSshTarget(sshTarget: sshTarget)
+            errorMessage = nil
+            return result
         } catch {
             errorMessage = error.localizedDescription
             return nil

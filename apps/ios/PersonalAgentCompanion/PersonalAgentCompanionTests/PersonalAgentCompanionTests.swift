@@ -1362,6 +1362,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testTestSshTargetClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.testSshTargetFailureQueueMessages = ["SSH probe temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedResult = await session.testSshTarget("patrick@buildbox")
+        XCTAssertNil(failedResult)
+        XCTAssertNotNil(session.errorMessage)
+
+        let result = await session.testSshTarget("patrick@buildbox")
+        XCTAssertEqual(result?.sshTarget, "patrick@buildbox")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testSaveSshTargetIgnoresDuplicateCreateWhilePending() async throws {
         let client = MockCompanionClient()
         client.saveSshTargetDelayNanoseconds = 150_000_000
