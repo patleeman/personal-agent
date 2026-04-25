@@ -35,7 +35,7 @@ import {
 } from '../session/sessionTabs';
 import type { SessionMeta } from '../shared/types';
 
-const RUNNING_INDICATOR_GRACE_MS = 15_000;
+const RUNNING_INDICATOR_GRACE_MS = 750;
 
 function compareSessionsByRecentActivity(left: SessionMeta, right: SessionMeta): number {
   return (right.lastActivityAt ?? right.timestamp).localeCompare(left.lastActivityAt ?? left.timestamp);
