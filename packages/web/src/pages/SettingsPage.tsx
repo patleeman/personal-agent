@@ -3423,7 +3423,7 @@ export function SettingsPage() {
             <div className="space-y-0">
               <SettingsPanel
                 title="Transcription provider"
-                description="The composer records 24 kHz PCM and sends it to this provider when dictation stops."
+                description="The composer records browser audio and sends it to this provider when dictation stops."
               >
                 {transcriptionLoading && !transcriptionState ? (
                   <p className="ui-card-meta">Loading dictation settings…</p>

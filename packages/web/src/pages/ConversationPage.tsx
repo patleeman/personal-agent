@@ -1703,51 +1703,8 @@ function bytesToBase64(bytes: Uint8Array): string {
   return window.btoa(binary);
 }
 
-function concatenateFloat32Chunks(chunks: Float32Array[]): Float32Array {
-  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
-  const output = new Float32Array(length);
-  let offset = 0;
-  for (const chunk of chunks) {
-    output.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return output;
-}
-
-function resampleMonoPcm(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {
-  if (sourceRate === targetRate) {
-    return input;
-  }
-
-  const ratio = sourceRate / targetRate;
-  const outputLength = Math.max(1, Math.round(input.length / ratio));
-  const output = new Float32Array(outputLength);
-
-  for (let index = 0; index < outputLength; index += 1) {
-    const sourceIndex = index * ratio;
-    const before = Math.floor(sourceIndex);
-    const after = Math.min(input.length - 1, before + 1);
-    const weight = sourceIndex - before;
-    output[index] = (input[before] ?? 0) * (1 - weight) + (input[after] ?? 0) * weight;
-  }
-
-  return output;
-}
-
-function encodePcm16(samples: Float32Array): Uint8Array {
-  const output = new Uint8Array(samples.length * 2);
-  const view = new DataView(output.buffer);
-
-  for (let index = 0; index < samples.length; index += 1) {
-    const clamped = Math.max(-1, Math.min(1, samples[index] ?? 0));
-    view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
-  }
-
-  return output;
-}
-
 interface ComposerDictationCapture {
-  stop: () => Promise<{ audio: Uint8Array; durationMs: number }>;
+  stop: () => Promise<{ audio: Uint8Array; durationMs: number; mimeType: string; fileName: string }>;
 }
 
 async function startComposerDictationCapture(): Promise<ComposerDictationCapture> {
@@ -1765,60 +1722,51 @@ async function startComposerDictationCapture(): Promise<ComposerDictationCapture
     },
   });
 
-  const AudioContextCtor = window.AudioContext
-    ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-  if (!AudioContextCtor) {
+  if (typeof MediaRecorder === 'undefined') {
     stream.getTracks().forEach((track) => track.stop());
     throw new Error('Audio capture is not available in this browser.');
   }
 
-  const audioContext = new AudioContextCtor();
-  const source = audioContext.createMediaStreamSource(stream);
-  const processor = audioContext.createScriptProcessor(4096, 1, 1);
-  const chunks: Float32Array[] = [];
+  const preferredMimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+    ? 'audio/webm;codecs=opus'
+    : MediaRecorder.isTypeSupported('audio/webm')
+      ? 'audio/webm'
+      : '';
+  const recorder = new MediaRecorder(stream, preferredMimeType ? { mimeType: preferredMimeType } : undefined);
+  const chunks: Blob[] = [];
   const startedAt = performance.now();
   let stopped = false;
 
-  processor.onaudioprocess = (event) => {
-    if (stopped) {
-      return;
+  recorder.addEventListener('dataavailable', (event) => {
+    if (event.data.size > 0) {
+      chunks.push(event.data);
     }
-
-    const inputBuffer = event.inputBuffer;
-    const sampleCount = inputBuffer.length;
-    const mixed = new Float32Array(sampleCount);
-
-    for (let channel = 0; channel < inputBuffer.numberOfChannels; channel += 1) {
-      const channelData = inputBuffer.getChannelData(channel);
-      for (let index = 0; index < sampleCount; index += 1) {
-        mixed[index] += (channelData[index] ?? 0) / inputBuffer.numberOfChannels;
-      }
-    }
-
-    chunks.push(mixed);
-  };
-
-  source.connect(processor);
-  processor.connect(audioContext.destination);
+  });
+  recorder.start();
 
   return {
     stop: async () => {
       if (stopped) {
-        return { audio: new Uint8Array(), durationMs: 0 };
+        return { audio: new Uint8Array(), durationMs: 0, mimeType: preferredMimeType || 'audio/webm', fileName: 'dictation.webm' };
       }
 
       stopped = true;
-      processor.disconnect();
-      source.disconnect();
+      const stoppedPromise = new Promise<void>((resolve) => {
+        recorder.addEventListener('stop', () => resolve(), { once: true });
+      });
+      if (recorder.state !== 'inactive') {
+        recorder.stop();
+      }
+      await stoppedPromise;
       stream.getTracks().forEach((track) => track.stop());
-      const sourceRate = audioContext.sampleRate;
-      await audioContext.close().catch(() => {});
-
-      const mono = concatenateFloat32Chunks(chunks);
-      const resampled = resampleMonoPcm(mono, sourceRate, 24_000);
+      const mimeType = recorder.mimeType || preferredMimeType || chunks[0]?.type || 'audio/webm';
+      const blob = new Blob(chunks, { type: mimeType });
+      const extension = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
       return {
-        audio: encodePcm16(resampled),
+        audio: new Uint8Array(await blob.arrayBuffer()),
         durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+        mimeType,
+        fileName: `dictation.${extension}`,
       };
     },
   };
@@ -4629,7 +4577,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     dictationCaptureRef.current = null;
     setDictationState('transcribing');
     try {
-      const { audio, durationMs } = await capture.stop();
+      const { audio, durationMs, mimeType, fileName } = await capture.stop();
       if (audio.byteLength === 0 || durationMs < 150) {
         setDictationState('idle');
         return;
@@ -4637,8 +4585,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       const result = await api.transcribeFile({
         dataBase64: bytesToBase64(audio),
-        mimeType: 'audio/pcm',
-        fileName: 'dictation.pcm',
+        mimeType,
+        fileName,
       });
       insertTextIntoComposer(result.text);
       showNotice('accent', 'Dictation inserted.', 1800);

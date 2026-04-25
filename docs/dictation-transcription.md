@@ -19,7 +19,7 @@ Supported provider ids:
 
 | Provider | Status | Transports | Notes |
 | --- | --- | --- | --- |
-| `openai-codex-realtime` | implemented | stream, file | Uses configured `openai-codex` auth and the ChatGPT/Codex realtime transcription path. |
+| `openai-codex-realtime` | implemented | file | Historical id. Uses configured `openai-codex` auth and the ChatGPT/Codex `/backend-api/transcribe` endpoint. |
 | `openai-api` | planned | file, stream | Should adapt the official OpenAI audio/realtime APIs. Not implemented yet. |
 | `whisperkit-local` | planned | file, stream | Should call a local Swift/WhisperKit helper on macOS and native WhisperKit on iOS. Not implemented yet. |
 
@@ -36,13 +36,13 @@ POST  /api/transcription/transcribe-file
 ```json
 {
   "dataBase64": "...",
-  "mimeType": "audio/pcm",
-  "fileName": "dictation.pcm",
+  "mimeType": "audio/webm;codecs=opus",
+  "fileName": "dictation.webm",
   "language": "en"
 }
 ```
 
-For Codex realtime, file transcription is implemented by sending the PCM bytes through the streaming provider and collecting transcript events. The first implementation expects 24 kHz 16-bit PCM audio. The UI layer should normalize recorder output before calling this endpoint.
+The web composer records with `MediaRecorder` and prefers `audio/webm;codecs=opus`, matching Codex desktop’s upload-style dictation path. The server forwards the captured file as multipart form-data to the selected provider.
 
 ## Provider abstraction
 
@@ -61,36 +61,26 @@ interface TranscriptionProvider {
 
 This keeps the composer and iOS UI dumb: record audio, pass chunks or a normalized file to the selected provider, insert returned text. New models should add a provider adapter instead of leaking backend-specific protocol into the UI.
 
-## Codex realtime notes
+## Codex transcribe notes
 
-The Codex provider uses `openai-codex` model auth from the existing model registry, then opens a realtime websocket using the Codex realtime model. PA keeps two models separate:
-
-- websocket/session model: `gpt-realtime-1.5`
-- transcription model from Settings: usually `gpt-4o-mini-transcribe`
-
-Default target:
+Codex desktop dictation uses an upload endpoint rather than the realtime websocket endpoint. PA mirrors that shape for the `openai-codex-realtime` provider id:
 
 ```text
-wss://chatgpt.com/backend-api/codex?model=gpt-realtime-1.5
+POST https://chatgpt.com/backend-api/transcribe
+Content-Type: multipart/form-data; boundary=...
+Authorization: Bearer <openai-codex token>
+originator: codex_cli_rs
+
+file=<audio blob>
+language=<optional>
 ```
 
-The normal `openai-codex` provider base URL in PA is often `https://chatgpt.com/backend-api`; the adapter normalizes that to `/backend-api/codex` before converting it to `wss://`. It also sends bearer auth, `originator: codex_cli_rs`, and an `x-session-id` header, matching the Codex realtime websocket handshake shape.
+The normal `openai-codex` provider base URL in PA is often `https://chatgpt.com/backend-api`; the adapter normalizes that to `/backend-api/transcribe`. If a custom base URL ends in `/backend-api/codex`, the adapter also normalizes it back to `/backend-api/transcribe` because this endpoint is not under the `/codex` path.
 
-Session setup mirrors Codex transcription mode:
+The expected response is:
 
 ```json
-{
-  "type": "session.update",
-  "session": {
-    "type": "transcription",
-    "audio": {
-      "input": {
-        "format": { "type": "audio/pcm", "rate": 24000 },
-        "transcription": { "model": "gpt-4o-mini-transcribe" }
-      }
-    }
-  }
-}
+{ "text": "transcribed text" }
 ```
 
-Transcript events are normalized from `conversation.item.input_audio_transcription.delta` and `conversation.item.input_audio_transcription.completed` into PA's provider-neutral event/result shape.
+The Settings “model” field remains provider configuration for future adapters, but Codex’s current `/transcribe` endpoint does not expose a model parameter in the observed desktop-app request shape.

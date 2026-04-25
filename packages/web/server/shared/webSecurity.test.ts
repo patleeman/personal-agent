@@ -126,7 +126,7 @@ describe('applyWebSecurityHeaders', () => {
     expect(res.headers.get('X-Frame-Options')).toBe('DENY');
     expect(res.headers.get('X-Content-Type-Options')).toBe('nosniff');
     expect(res.headers.get('Referrer-Policy')).toBe('no-referrer');
-    expect(res.headers.get('Permissions-Policy')).toBe('camera=(), microphone=(), geolocation=()');
+    expect(res.headers.get('Permissions-Policy')).toBe('camera=(), microphone=(self), geolocation=()');
     expect(res.headers.get('Strict-Transport-Security')).toBe('max-age=31536000; includeSubDomains');
     expect(next).toHaveBeenCalledOnce();
   });

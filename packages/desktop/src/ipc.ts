@@ -8,6 +8,7 @@ import type { DesktopWindowController } from './window.js';
 import { continueConversationInHost, subscribeConversationExecutionApiStream } from './conversation-execution.js';
 import { subscribeDesktopRemoteOperationStatus } from './remote-operation-events.js';
 import { captureDesktopScreenshot } from './screenshot.js';
+import { transcribeWithCodexDesktopNet } from './transcription.js';
 
 const CHANNEL_PREFIX = 'personal-agent-desktop';
 const API_STREAM_CHANNEL = `${CHANNEL_PREFIX}:api-stream`;
@@ -265,6 +266,10 @@ export function registerDesktopIpc(options: {
     }
 
     return controller.readModels();
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:transcribe-file`, async (_event, input) => {
+    return transcribeWithCodexDesktopNet(input);
   });
 
   ipcMain.handle(`${CHANNEL_PREFIX}:update-model-preferences`, async (event, input) => {

@@ -1,19 +1,14 @@
 import { arch, platform } from 'node:os';
-import WebSocket from 'ws';
 import type { Api, Model } from '@mariozechner/pi-ai';
 import type {
-  TranscriptionAudioChunk,
   TranscriptionFileInput,
   TranscriptionOptions,
   TranscriptionProvider,
   TranscriptionResult,
-  TranscriptionStreamEvent,
 } from './types.js';
 
-const DEFAULT_CODEX_REALTIME_BASE_URL = 'https://chatgpt.com/backend-api/codex';
-const DEFAULT_CODEX_REALTIME_MODEL = 'gpt-realtime-1.5';
+const DEFAULT_CODEX_TRANSCRIBE_BASE_URL = 'https://chatgpt.com/backend-api';
 const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
-const DEFAULT_SAMPLE_RATE = 24_000;
 const CODEX_ORIGINATOR = 'codex_cli_rs';
 
 type AuthResult = { ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string };
@@ -26,44 +21,29 @@ type ModelRegistryLike = {
 interface OpenAICodexRealtimeProviderOptions {
   modelRegistry: ModelRegistryLike;
   model?: string;
-  WebSocketCtor?: typeof WebSocket;
+  fetch?: typeof fetch;
 }
 
 function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function normalizeCodexRealtimeBaseUrl(baseUrl: string | undefined): string {
-  const normalized = trimTrailingSlashes(baseUrl?.trim() || DEFAULT_CODEX_REALTIME_BASE_URL);
+function resolveCodexTranscribeUrl(baseUrl: string | undefined): string {
+  const normalized = trimTrailingSlashes(baseUrl?.trim() || DEFAULT_CODEX_TRANSCRIBE_BASE_URL);
   const url = new URL(normalized);
   const path = trimTrailingSlashes(url.pathname);
 
-  if (path === '/backend-api') {
-    url.pathname = '/backend-api/codex';
+  if (path === '' || path === '/') {
+    url.pathname = '/backend-api/transcribe';
+  } else if (path === '/backend-api') {
+    url.pathname = '/backend-api/transcribe';
+  } else if (path === '/backend-api/codex') {
+    url.pathname = '/backend-api/transcribe';
+  } else if (!path.endsWith('/transcribe')) {
+    url.pathname = `${path}/transcribe`;
   }
 
   return url.toString();
-}
-
-function resolveCodexRealtimeWebSocketUrl(baseUrl: string | undefined): string {
-  const normalized = normalizeCodexRealtimeBaseUrl(baseUrl);
-
-  const url = new URL(normalized);
-  if (url.protocol === 'http:') {
-    url.protocol = 'ws:';
-  } else if (url.protocol === 'https:') {
-    url.protocol = 'wss:';
-  }
-
-  if (!url.searchParams.has('model')) {
-    url.searchParams.set('model', DEFAULT_CODEX_REALTIME_MODEL);
-  }
-
-  return url.toString();
-}
-
-function createRealtimeSessionId(): string {
-  return `pa-transcription-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function extractCodexAccountId(token: string): string | undefined {
@@ -83,14 +63,12 @@ function extractCodexAccountId(token: string): string | undefined {
   }
 }
 
-function buildCodexRealtimeHeaders(input: {
+function buildCodexTranscribeHeaders(input: {
   apiKey: string;
-  sessionId: string;
   headers?: Record<string, string>;
 }): Record<string, string> {
   const headers = new Headers(input.headers ?? {});
   headers.set('Authorization', `Bearer ${input.apiKey}`);
-  headers.set('x-session-id', input.sessionId);
   headers.set('originator', CODEX_ORIGINATOR);
   headers.set('user-agent', `personal-agent/transcription (${platform()}; ${arch()})`);
 
@@ -102,97 +80,27 @@ function buildCodexRealtimeHeaders(input: {
   return Object.fromEntries(headers.entries());
 }
 
-function createSessionUpdate(model: string) {
-  return {
-    type: 'session.update',
-    session: {
-      type: 'transcription',
-      audio: {
-        input: {
-          format: { type: 'audio/pcm', rate: DEFAULT_SAMPLE_RATE },
-          transcription: { model },
-        },
-      },
-    },
-  };
-}
-
-function normalizeChunk(chunk: TranscriptionAudioChunk): string {
-  if (chunk.format !== 'pcm16') {
-    throw new Error(`Codex realtime transcription requires pcm16 audio chunks; received ${chunk.format}.`);
-  }
-  if (chunk.sampleRate !== DEFAULT_SAMPLE_RATE) {
-    throw new Error(`Codex realtime transcription requires ${DEFAULT_SAMPLE_RATE} Hz audio; received ${chunk.sampleRate} Hz.`);
-  }
-  return chunk.data.toString('base64');
-}
-
-function parseRealtimeTranscriptEvent(raw: unknown): TranscriptionStreamEvent | null {
+function parseTranscribeResponse(raw: unknown): string {
   if (!raw || typeof raw !== 'object') {
-    return null;
+    return '';
   }
 
-  const event = raw as { type?: unknown; delta?: unknown; transcript?: unknown };
-  if (event.type === 'conversation.item.input_audio_transcription.delta' && typeof event.delta === 'string') {
-    return { type: 'delta', delta: event.delta };
-  }
-
-  if (event.type === 'conversation.item.input_audio_transcription.completed') {
-    const text = typeof event.transcript === 'string' ? event.transcript : '';
-    return {
-      type: 'done',
-      text,
-      result: {
-        text,
-        provider: 'openai-codex-realtime',
-        model: DEFAULT_TRANSCRIPTION_MODEL,
-      },
-    };
-  }
-
-  if (event.type === 'error') {
-    const message = typeof (raw as { error?: { message?: unknown } }).error?.message === 'string'
-      ? String((raw as { error?: { message?: unknown } }).error?.message)
-      : 'Codex realtime transcription failed.';
-    return { type: 'error', error: message };
-  }
-
-  return null;
-}
-
-async function waitForOpen(socket: WebSocket, signal?: AbortSignal): Promise<void> {
-  if (socket.readyState === WebSocket.OPEN) {
-    return;
-  }
-
-  await new Promise<void>((resolve, reject) => {
-    const cleanup = () => {
-      socket.off('open', onOpen);
-      socket.off('error', onError);
-      signal?.removeEventListener('abort', onAbort);
-    };
-    const onOpen = () => { cleanup(); resolve(); };
-    const onError = (error: Error) => { cleanup(); reject(error); };
-    const onAbort = () => { cleanup(); reject(new Error('Transcription aborted.')); };
-
-    socket.once('open', onOpen);
-    socket.once('error', onError);
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
+  const text = (raw as { text?: unknown }).text;
+  return typeof text === 'string' ? text : '';
 }
 
 export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionProvider {
   readonly id = 'openai-codex-realtime' as const;
-  readonly label = 'OpenAI Codex Realtime';
-  readonly transports: Array<'stream' | 'file'> = ['stream', 'file'];
+  readonly label = 'OpenAI Codex Transcribe';
+  readonly transports: Array<'stream' | 'file'> = ['file'];
   private readonly modelRegistry: ModelRegistryLike;
   private readonly modelId: string;
-  private readonly WebSocketCtor: typeof WebSocket;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(options: OpenAICodexRealtimeProviderOptions) {
     this.modelRegistry = options.modelRegistry;
     this.modelId = options.model?.trim() || DEFAULT_TRANSCRIPTION_MODEL;
-    this.WebSocketCtor = options.WebSocketCtor ?? WebSocket;
+    this.fetchImpl = options.fetch ?? fetch;
   }
 
   async isAvailable(): Promise<boolean> {
@@ -201,115 +109,36 @@ export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionPr
   }
 
   async transcribeFile(input: TranscriptionFileInput, options: TranscriptionOptions = {}): Promise<TranscriptionResult> {
-    if (input.mimeType !== 'audio/pcm' && input.mimeType !== 'audio/L16') {
-      throw new Error('Codex realtime file transcription currently expects 24 kHz pcm16 audio. Convert recorded audio before calling this provider.');
-    }
-
-    const events = this.stream((async function* () {
-      yield { data: input.data, format: 'pcm16' as const, sampleRate: DEFAULT_SAMPLE_RATE };
-    })(), options);
-
-    let text = '';
-    for await (const event of events) {
-      if (event.type === 'delta') {
-        text += event.delta;
-      } else if (event.type === 'done') {
-        return { ...event.result, text: event.text || text, model: this.modelId };
-      } else if (event.type === 'error') {
-        throw new Error(event.error);
-      }
-    }
-
-    return { text, provider: this.id, model: this.modelId };
-  }
-
-  async *stream(chunks: AsyncIterable<TranscriptionAudioChunk>, options: TranscriptionOptions = {}): AsyncIterable<TranscriptionStreamEvent> {
     const target = await this.resolveTarget();
     if (!target) {
       throw new Error('OpenAI Codex transcription requires configured openai-codex auth.');
     }
 
-    const socket = new this.WebSocketCtor(target.url, { headers: target.headers });
-    const pendingEvents: TranscriptionStreamEvent[] = [];
-    let done = false;
-    let failure: Error | null = null;
-    let notify: (() => void) | null = null;
-
-    const wake = () => {
-      notify?.();
-      notify = null;
-    };
-
-    socket.on('message', (data) => {
-      try {
-        const parsed = JSON.parse(data.toString()) as unknown;
-        const event = parseRealtimeTranscriptEvent(parsed);
-        if (event) {
-          pendingEvents.push(event);
-          if (event.type === 'done' || event.type === 'error') {
-            done = true;
-          }
-          wake();
-        }
-      } catch (error) {
-        failure = error as Error;
-        done = true;
-        wake();
-      }
-    });
-
-    socket.on('error', (error) => {
-      failure = error;
-      done = true;
-      wake();
-    });
-    socket.on('close', () => {
-      done = true;
-      wake();
-    });
-
-    await waitForOpen(socket, options.signal);
-    socket.send(JSON.stringify(createSessionUpdate(this.modelId)));
-
-    void (async () => {
-      try {
-        for await (const chunk of chunks) {
-          socket.send(JSON.stringify({
-            type: 'input_audio_buffer.append',
-            audio: normalizeChunk(chunk),
-          }));
-        }
-        socket.send(JSON.stringify({ type: 'response.create' }));
-      } catch (error) {
-        failure = error as Error;
-        done = true;
-        wake();
-      }
-    })();
-
-    try {
-      while (!done || pendingEvents.length > 0) {
-        const event = pendingEvents.shift();
-        if (event) {
-          yield event.type === 'done'
-            ? { ...event, result: { ...event.result, model: this.modelId } }
-            : event;
-          continue;
-        }
-
-        if (failure) {
-          throw failure;
-        }
-
-        await new Promise<void>((resolve) => { notify = resolve; });
-      }
-
-      if (failure) {
-        throw failure;
-      }
-    } finally {
-      socket.close();
+    const form = new FormData();
+    const blob = new Blob([new Uint8Array(input.data)], { type: input.mimeType || 'application/octet-stream' });
+    form.append('file', blob, input.fileName || 'dictation.webm');
+    if (options.language) {
+      form.append('language', options.language);
     }
+
+    const response = await this.fetchImpl(target.url, {
+      method: 'POST',
+      headers: target.headers,
+      body: form,
+      signal: options.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Codex transcription failed: ${response.status} ${response.statusText}`);
+    }
+
+    const raw = await response.json() as unknown;
+    return {
+      text: parseTranscribeResponse(raw).trim(),
+      provider: this.id,
+      model: this.modelId,
+      ...(options.language ? { language: options.language } : {}),
+    };
   }
 
   private async resolveTarget(): Promise<{ url: string; headers: Record<string, string> } | null> {
@@ -327,16 +156,14 @@ export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionPr
     }
 
     return {
-      url: resolveCodexRealtimeWebSocketUrl(model.baseUrl),
-      headers: buildCodexRealtimeHeaders({ apiKey: auth.apiKey, sessionId: createRealtimeSessionId(), headers: auth.headers }),
+      url: resolveCodexTranscribeUrl(model.baseUrl),
+      headers: buildCodexTranscribeHeaders({ apiKey: auth.apiKey, headers: auth.headers }),
     };
   }
 }
 
 export const testExports = {
-  DEFAULT_CODEX_REALTIME_MODEL,
-  resolveCodexRealtimeWebSocketUrl,
-  buildCodexRealtimeHeaders,
-  createSessionUpdate,
-  parseRealtimeTranscriptEvent,
+  resolveCodexTranscribeUrl,
+  buildCodexTranscribeHeaders,
+  parseTranscribeResponse,
 };
