@@ -1642,12 +1642,13 @@ final class KnowledgeNoteViewModel: ObservableObject {
         guard isDirty else {
             return true
         }
+        let draftToSave = draft
         isSaving = true
         defer { isSaving = false }
         do {
             let latest = try await client.readKnowledgeFile(fileId: fileId)
             if latest.updatedAt != baseUpdatedAt && latest.content != content {
-                if latest.content == draft {
+                if latest.content == draftToSave {
                     applyRemoteFile(latest)
                     statusMessage = trigger == .autosave ? "Already up to date." : "Loaded latest host version."
                     return true
@@ -1656,22 +1657,28 @@ final class KnowledgeNoteViewModel: ObservableObject {
                     reason: "This note changed on the host while you were editing it.",
                     remoteContent: latest.content,
                     remoteUpdatedAt: latest.updatedAt,
-                    localDraft: draft
+                    localDraft: draftToSave
                 )
                 errorMessage = "This note changed on the host. Choose which version to keep."
                 return false
             }
 
-            let updated = try await client.writeKnowledgeFile(fileId: fileId, content: draft)
-            content = draft
+            let updated = try await client.writeKnowledgeFile(fileId: fileId, content: draftToSave)
+            content = draftToSave
             updatedAt = updated.updatedAt
             baseUpdatedAt = updated.updatedAt
-            draftStore.remove(fileId: fileId)
             errorMessage = nil
-            statusMessage = switch trigger {
-            case .manual: "Saved to the host."
-            case .autosave: "Autosaved."
-            case .background: "Saved before leaving the editor."
+            if draft == draftToSave {
+                draftStore.remove(fileId: fileId)
+                statusMessage = switch trigger {
+                case .manual: "Saved to the host."
+                case .autosave: "Autosaved."
+                case .background: "Saved before leaving the editor."
+                }
+            } else {
+                persistDraftLocally()
+                scheduleAutosave()
+                statusMessage = "Saved previous edit. Still editing…"
             }
             return true
         } catch {

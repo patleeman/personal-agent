@@ -1377,6 +1377,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
     var readKnowledgeFileDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
+    var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     private(set) var promptSubmissionCount = 0
 
@@ -2945,6 +2946,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     func writeKnowledgeFile(fileId: String, content: String) async throws -> CompanionKnowledgeEntry {
         guard let normalizedFileId = normalizeKnowledgeId(fileId) else {
             throw CompanionClientError.requestFailed("Knowledge file id is required.")
+        }
+        if writeKnowledgeFileDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: writeKnowledgeFileDelayNanoseconds)
         }
         ensureKnowledgeParentFolders(for: normalizedFileId)
         knowledgeFiles[normalizedFileId] = content

@@ -725,6 +725,35 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(draftStore.load(fileId: "notes/ios-companion.md"))
     }
 
+    func testKnowledgeNotePreservesNewerDraftEditedDuringSave() async throws {
+        let client = MockCompanionClient()
+        client.writeKnowledgeFileDelayNanoseconds = 150_000_000
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let draftStore = KnowledgeDraftStore(baseURL: tempDraftRoot)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: draftStore)
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading && !model.content.isEmpty
+        }
+
+        model.draft = "# First save\n"
+        let saveTask = Task { await model.save() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isSaving
+        }
+        model.draft = "# Newer local edit\n"
+
+        let saveSucceeded = await saveTask.value
+        XCTAssertTrue(saveSucceeded)
+        let saved = try await client.readKnowledgeFile(fileId: "notes/ios-companion.md")
+        XCTAssertEqual(saved.content, "# First save\n")
+        XCTAssertEqual(model.content, "# First save\n")
+        XCTAssertEqual(model.draft, "# Newer local edit\n")
+        XCTAssertTrue(model.isDirty)
+        XCTAssertEqual(draftStore.load(fileId: "notes/ios-companion.md")?.draft, "# Newer local edit\n")
+    }
+
     func testStoppingKnowledgeNoteCancelsPendingLoad() async throws {
         let client = MockCompanionClient()
         client.readKnowledgeFileDelayNanoseconds = 150_000_000
