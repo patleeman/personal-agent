@@ -2137,6 +2137,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingCheckpointCreateKeys: Set<String> = []
     private var pendingDuplicateConversation = false
     private var pendingAbortConversation = false
+    private var pendingTakeOverConversation = false
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
     private var pendingDeferredResumeCancelIds: Set<String> = []
@@ -2534,7 +2535,12 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func takeOver() {
+        guard !pendingTakeOverConversation else {
+            return
+        }
+        pendingTakeOverConversation = true
         Task {
+            defer { pendingTakeOverConversation = false }
             do {
                 try await client.takeOverConversation(conversationId: conversationId, surfaceId: installationSurfaceId)
             } catch {

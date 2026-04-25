@@ -1024,6 +1024,27 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testTakeOverIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.takeOverConversationDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.takeOver()
+        model.takeOver()
+        try await Task.sleep(nanoseconds: 220_000_000)
+
+        XCTAssertEqual(client.takeOverConversationCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptModesWorkDuringMockSimulation() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

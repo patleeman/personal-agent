@@ -1399,6 +1399,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var abortConversationDelayNanoseconds: UInt64 = 0
+    var takeOverConversationDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
@@ -1425,6 +1426,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
     private(set) var abortConversationCount = 0
+    private(set) var takeOverConversationCount = 0
 
     private var listState: ConversationListState
     private var conversations: [String: ConversationBootstrapEnvelope]
@@ -2757,6 +2759,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func takeOverConversation(conversationId: String, surfaceId: String) async throws {
+        takeOverConversationCount += 1
+        if takeOverConversationDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: takeOverConversationDelayNanoseconds)
+        }
         emitConversation(conversationId, .presenceState(.init(surfaces: [.init(surfaceId: surfaceId, surfaceType: "ios_native", connectedAt: ISO8601DateFormatter.flexible.string(from: .now))], controllerSurfaceId: surfaceId, controllerSurfaceType: "ios_native", controllerAcquiredAt: ISO8601DateFormatter.flexible.string(from: .now))))
     }
 
