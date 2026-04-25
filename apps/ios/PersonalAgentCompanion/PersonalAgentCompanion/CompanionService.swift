@@ -1405,6 +1405,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var createPairingCodeFailureQueueMessages: [String] = []
     var createSetupStateDelayNanoseconds: UInt64 = 0
+    var createSetupStateFailureQueueMessages: [String] = []
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
     var deletePairedDeviceDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
@@ -3620,6 +3621,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         createSetupStateCount += 1
         if createSetupStateDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createSetupStateDelayNanoseconds)
+        }
+        if !createSetupStateFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createSetupStateFailureQueueMessages.removeFirst())
         }
         return setupState
     }

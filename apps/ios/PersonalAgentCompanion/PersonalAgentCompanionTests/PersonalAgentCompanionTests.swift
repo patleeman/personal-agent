@@ -2164,6 +2164,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testCreateSetupStateClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createSetupStateFailureQueueMessages = ["Setup state temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedSetup = await session.createSetupState()
+        XCTAssertNil(failedSetup)
+        XCTAssertNotNil(session.errorMessage)
+
+        let setup = await session.createSetupState()
+        XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testDeletePairedDeviceIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.deletePairedDeviceDelayNanoseconds = 150_000_000

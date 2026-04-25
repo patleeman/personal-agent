@@ -989,7 +989,9 @@ final class HostSessionModel: ObservableObject {
         isCreatingSetupState = true
         defer { isCreatingSetupState = false }
         do {
-            return try await client.createSetupState()
+            let state = try await client.createSetupState()
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil
