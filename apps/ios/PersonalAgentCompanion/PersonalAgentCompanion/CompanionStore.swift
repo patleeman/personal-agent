@@ -2876,7 +2876,9 @@ final class ConversationViewModel: ObservableObject {
 
     func loadAttachment(_ attachmentId: String) async -> ConversationAttachmentRecord? {
         do {
-            return try await client.readAttachment(conversationId: conversationId, attachmentId: attachmentId).attachment
+            let attachment = try await client.readAttachment(conversationId: conversationId, attachmentId: attachmentId).attachment
+            errorMessage = nil
+            return attachment
         } catch {
             errorMessage = error.localizedDescription
             return nil

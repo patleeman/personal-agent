@@ -1706,6 +1706,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(draft.previewAsset?.mimeType, "image/png")
     }
 
+    func testLoadAttachmentClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readAttachmentFailureQueueMessages = ["Attachment read temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedAttachment = await model.loadAttachment("att-1")
+        XCTAssertNil(failedAttachment)
+        XCTAssertNotNil(model.errorMessage)
+
+        let attachment = await model.loadAttachment("att-1")
+        XCTAssertEqual(attachment?.title, "Whiteboard")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testHostSessionCanArchiveRestoreAndPinConversations() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()

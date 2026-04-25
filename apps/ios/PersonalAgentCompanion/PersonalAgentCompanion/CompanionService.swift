@@ -1439,6 +1439,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readConversationArtifactFailureQueueMessages: [String] = []
     var listConversationCheckpointsFailureQueueMessages: [String] = []
     var readConversationCheckpointFailureQueueMessages: [String] = []
+    var readAttachmentFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -3161,6 +3162,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readAttachment(conversationId: String, attachmentId: String) async throws -> ConversationAttachmentDetailResponse {
+        if !readAttachmentFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readAttachmentFailureQueueMessages.removeFirst())
+        }
         guard let attachment = attachmentsByConversation[conversationId]?.first(where: { $0.id == attachmentId }) else {
             throw CompanionClientError.requestFailed("Attachment not found.")
         }
