@@ -14,6 +14,7 @@ import { registerVaultEditorRoutes } from './vaultEditor.js';
 import { registerSystemRoutes } from './system.js';
 import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
+import { registerTranscriptionRoutes } from './transcription.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
 
 export function registerServerRoutes({ app, context }: RegisterServerRoutesInput): void {
@@ -22,6 +23,8 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
   registerTaskRoutes(app, context);
 
   registerModelRoutes(app, context);
+
+  registerTranscriptionRoutes(app, context);
 
   registerToolsRoutes(app, context);
 

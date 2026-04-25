@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultRootState, VaultSearchResponse, VaultShareImportResult, VaultTreeResult } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultRootState, VaultSearchResponse, VaultShareImportResult, VaultTreeResult } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -336,6 +336,13 @@ export const api = {
     cachedKnowledgeBaseState = null;
     cachedKnowledgeBaseReadAtMs = 0;
     return patch<KnowledgeBaseState>('/knowledge-base', input);
+  },
+  transcriptionSettings: async () => get<TranscriptionSettingsState>('/transcription/settings'),
+  updateTranscriptionSettings: async (input: { provider?: TranscriptionProviderId | null; model?: string }) => {
+    return patch<TranscriptionSettingsState>('/transcription/settings', input);
+  },
+  transcribeFile: async (input: { dataBase64: string; mimeType?: string; fileName?: string; language?: string }) => {
+    return post<TranscriptionResult>('/transcription/transcribe-file', input);
   },
   syncKnowledgeBase: async () => {
     pendingKnowledgeBaseRequest = null;

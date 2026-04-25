@@ -1219,3 +1219,36 @@ export interface VaultShareImportResult {
     url: string;
   };
 }
+
+// ── Transcription / dictation ───────────────────────────────────────────────
+
+export type TranscriptionProviderId = 'openai-codex-realtime' | 'openai-api' | 'whisperkit-local';
+
+export interface TranscriptionSettings {
+  provider: TranscriptionProviderId | null;
+  model: string;
+}
+
+export interface TranscriptionSettingsState {
+  settingsFile: string;
+  settings: TranscriptionSettings;
+  providers: Array<{
+    id: TranscriptionProviderId;
+    label: string;
+    status: 'implemented' | 'planned';
+    transports: Array<'stream' | 'file'>;
+  }>;
+}
+
+export interface TranscriptionResult {
+  text: string;
+  provider: TranscriptionProviderId;
+  model?: string;
+  language?: string;
+  durationMs?: number;
+  segments?: Array<{
+    startMs?: number;
+    endMs?: number;
+    text: string;
+  }>;
+}

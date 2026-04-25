@@ -72,6 +72,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 | --- | --- | --- |
 | What durable surface should I use? | [Decision Guide](./decision-guide.md) | feature-specific doc or internal skill |
 | What is the actual state model? | [How personal-agent works](./how-it-works.md) | [Configuration](./configuration.md) |
+| How does dictation transcription plug in? | [Dictation transcription](./dictation-transcription.md) | [Configuration](./configuration.md) |
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
 | How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Desktop App](./desktop-app.md), [Agent Browser in this repo](./agent-browser.md) |
