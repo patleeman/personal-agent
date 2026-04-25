@@ -1394,6 +1394,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var runTaskDelayNanoseconds: UInt64 = 0
     var cancelRunDelayNanoseconds: UInt64 = 0
     var createPairingCodeDelayNanoseconds: UInt64 = 0
+    var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
     var deletePairedDeviceDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
@@ -1425,6 +1426,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var saveSshTargetCount = 0
     private(set) var deleteSshTargetCount = 0
     private(set) var createPairingCodeCount = 0
+    private(set) var createSetupStateCount = 0
     private(set) var updatePairedDeviceCount = 0
     private(set) var deletePairedDeviceCount = 0
     private(set) var promptSubmissionCount = 0
@@ -3567,7 +3569,11 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createSetupState() async throws -> CompanionSetupState {
-        setupState
+        createSetupStateCount += 1
+        if createSetupStateDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createSetupStateDelayNanoseconds)
+        }
+        return setupState
     }
 
     func updatePairedDevice(deviceId: String, deviceLabel: String) async throws -> CompanionDeviceAdminState {

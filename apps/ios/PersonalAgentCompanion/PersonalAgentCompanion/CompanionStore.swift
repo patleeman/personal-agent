@@ -497,6 +497,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingPairedDeviceUpdateKeys: Set<String> = []
     private var pendingPairedDeviceDeleteIds: Set<String> = []
     private var isCreatingPairingCode = false
+    private var isCreatingSetupState = false
     private var appEventRevision = 0
     private var refreshRequestId = 0
 
@@ -961,6 +962,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func createSetupState() async -> CompanionSetupState? {
+        guard !isCreatingSetupState else {
+            return nil
+        }
+        isCreatingSetupState = true
+        defer { isCreatingSetupState = false }
         do {
             return try await client.createSetupState()
         } catch {

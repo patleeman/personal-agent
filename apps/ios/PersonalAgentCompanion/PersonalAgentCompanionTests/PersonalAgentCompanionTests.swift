@@ -1964,6 +1964,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
     }
 
+    func testCreateSetupStateIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createSetupStateDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        async let first = session.createSetupState()
+        async let second = session.createSetupState()
+        let states = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(states.count, 1)
+        XCTAssertEqual(states.first?.pairing.code, "ABCD-EFGH-IJKL")
+        XCTAssertEqual(client.createSetupStateCount, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testDeletePairedDeviceIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.deletePairedDeviceDelayNanoseconds = 150_000_000
