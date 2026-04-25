@@ -1157,6 +1157,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }))
     }
 
+    func testMockDuplicateConversationCopiesTranscript() async throws {
+        let client = MockCompanionClient()
+        let source = try await client.conversationBootstrap(conversationId: "conv-1")
+        let duplicateId = try await client.duplicateConversation(conversationId: "conv-1")
+        let duplicate = try await client.conversationBootstrap(conversationId: duplicateId)
+
+        XCTAssertNotEqual(duplicateId, "conv-1")
+        XCTAssertEqual(duplicate.sessionMeta?.cwd, source.sessionMeta?.cwd)
+        XCTAssertEqual(duplicate.bootstrap.sessionDetail?.blocks.map(\.type), source.bootstrap.sessionDetail?.blocks.map(\.type))
+        XCTAssertEqual(duplicate.bootstrap.sessionDetail?.blocks.map(\.text), source.bootstrap.sessionDetail?.blocks.map(\.text))
+    }
+
     func testAttachmentEditingDraftDownloadsSourceAndPreview() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

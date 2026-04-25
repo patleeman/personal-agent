@@ -2156,9 +2156,70 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func duplicateConversation(conversationId: String) async throws -> String {
-        let source = try await conversationBootstrap(conversationId: conversationId)
-        let duplicated = try await createConversation(.init(promptText: source.sessionMeta?.title ?? "Duplicate", cwd: source.sessionMeta?.cwd ?? "", executionTargetId: source.sessionMeta?.remoteHostId ?? "local", model: source.sessionMeta?.model ?? "", thinkingLevel: "", serviceTier: ""), surfaceId: "ios-mock")
-        return duplicated.bootstrap.conversationId
+        guard let source = conversations[conversationId],
+              let sourceMeta = source.sessionMeta ?? source.bootstrap.sessionDetail?.meta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let duplicateId = "conv-\(Int.random(in: 100...999))"
+        var duplicateMeta = SessionMeta(
+            id: duplicateId,
+            file: "/tmp/\(duplicateId).jsonl",
+            timestamp: now,
+            cwd: sourceMeta.cwd,
+            cwdSlug: sourceMeta.cwdSlug,
+            model: sourceMeta.model,
+            title: sourceMeta.title,
+            messageCount: sourceMeta.messageCount,
+            isRunning: false,
+            isLive: true,
+            lastActivityAt: now,
+            parentSessionFile: sourceMeta.parentSessionFile,
+            parentSessionId: sourceMeta.parentSessionId,
+            sourceRunId: sourceMeta.sourceRunId,
+            remoteHostId: sourceMeta.remoteHostId,
+            remoteHostLabel: sourceMeta.remoteHostLabel,
+            remoteConversationId: sourceMeta.remoteConversationId,
+            automationTaskId: sourceMeta.automationTaskId,
+            automationTitle: sourceMeta.automationTitle,
+            needsAttention: false,
+            attentionUpdatedAt: nil,
+            attentionUnreadMessageCount: nil,
+            attentionUnreadActivityCount: nil,
+            attentionActivityIds: nil
+        )
+        duplicateMeta.deferredResumes = sourceMeta.deferredResumes
+        let blocks = source.bootstrap.sessionDetail?.blocks ?? []
+        let duplicate = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: duplicateId,
+                sessionDetail: SessionDetail(meta: duplicateMeta, blocks: blocks, blockOffset: 0, totalBlocks: blocks.count, signature: UUID().uuidString),
+                sessionDetailSignature: UUID().uuidString,
+                sessionDetailUnchanged: false,
+                sessionDetailAppendOnly: nil,
+                liveSession: ConversationBootstrapLiveSession(live: true, id: duplicateId, cwd: duplicateMeta.cwd, sessionFile: duplicateMeta.file, title: duplicateMeta.title, isStreaming: false, hasPendingHiddenTurn: false)
+            ),
+            sessionMeta: duplicateMeta,
+            attachments: ConversationAttachmentListResponse(conversationId: duplicateId, attachments: source.attachments?.attachments ?? []),
+            executionTargets: source.executionTargets
+        )
+        conversations[duplicateId] = duplicate
+        attachmentsByConversation[duplicateId] = attachmentsByConversation[conversationId] ?? []
+        artifactsByConversation[duplicateId] = artifactsByConversation[conversationId] ?? []
+        checkpointsByConversation[duplicateId] = []
+        autoModeByConversation[duplicateId] = autoModeByConversation[conversationId] ?? ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil)
+        listState = ConversationListState(
+            sessions: [duplicateMeta] + listState.sessions,
+            ordering: ConversationOrdering(
+                sessionIds: [duplicateId] + listState.ordering.sessionIds,
+                pinnedSessionIds: listState.ordering.pinnedSessionIds,
+                archivedSessionIds: listState.ordering.archivedSessionIds,
+                workspacePaths: listState.ordering.workspacePaths
+            ),
+            executionTargets: listState.executionTargets
+        )
+        emitApp(.conversationListState(listState))
+        return duplicateId
     }
 
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] { listState.executionTargets ?? [] }
