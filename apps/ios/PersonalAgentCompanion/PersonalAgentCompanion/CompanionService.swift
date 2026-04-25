@@ -2190,6 +2190,19 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         duplicateMeta.deferredResumes = sourceMeta.deferredResumes
         let blocks = source.bootstrap.sessionDetail?.blocks ?? []
+        let duplicateAttachments = (attachmentsByConversation[conversationId] ?? []).map { attachment in
+            ConversationAttachmentRecord(
+                id: attachment.id,
+                conversationId: duplicateId,
+                kind: attachment.kind,
+                title: attachment.title,
+                createdAt: attachment.createdAt,
+                updatedAt: attachment.updatedAt,
+                currentRevision: attachment.currentRevision,
+                latestRevision: attachment.latestRevision,
+                revisions: attachment.revisions
+            )
+        }
         let duplicate = ConversationBootstrapEnvelope(
             bootstrap: ConversationBootstrapState(
                 conversationId: duplicateId,
@@ -2200,11 +2213,11 @@ final class MockCompanionClient: CompanionClientProtocol {
                 liveSession: ConversationBootstrapLiveSession(live: true, id: duplicateId, cwd: duplicateMeta.cwd, sessionFile: duplicateMeta.file, title: duplicateMeta.title, isStreaming: false, hasPendingHiddenTurn: false)
             ),
             sessionMeta: duplicateMeta,
-            attachments: ConversationAttachmentListResponse(conversationId: duplicateId, attachments: source.attachments?.attachments ?? []),
+            attachments: ConversationAttachmentListResponse(conversationId: duplicateId, attachments: duplicateAttachments.map(\.summary)),
             executionTargets: source.executionTargets
         )
         conversations[duplicateId] = duplicate
-        attachmentsByConversation[duplicateId] = attachmentsByConversation[conversationId] ?? []
+        attachmentsByConversation[duplicateId] = duplicateAttachments
         artifactsByConversation[duplicateId] = artifactsByConversation[conversationId] ?? []
         checkpointsByConversation[duplicateId] = []
         autoModeByConversation[duplicateId] = autoModeByConversation[conversationId] ?? ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil)

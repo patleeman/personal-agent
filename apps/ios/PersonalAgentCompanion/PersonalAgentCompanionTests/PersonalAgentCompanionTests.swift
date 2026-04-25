@@ -1169,6 +1169,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(duplicate.bootstrap.sessionDetail?.blocks.map(\.text), source.bootstrap.sessionDetail?.blocks.map(\.text))
     }
 
+    func testMockDuplicateConversationRehomesAttachments() async throws {
+        let client = MockCompanionClient()
+        let duplicateId = try await client.duplicateConversation(conversationId: "conv-1")
+        let attachments = try await client.listAttachments(conversationId: duplicateId)
+
+        XCTAssertEqual(attachments.conversationId, duplicateId)
+        XCTAssertFalse(attachments.attachments.isEmpty)
+        XCTAssertEqual(attachments.attachments.map(\.conversationId), Array(repeating: duplicateId, count: attachments.attachments.count))
+
+        let detail = try await client.readAttachment(conversationId: duplicateId, attachmentId: attachments.attachments[0].id)
+        XCTAssertEqual(detail.conversationId, duplicateId)
+        XCTAssertEqual(detail.attachment.conversationId, duplicateId)
+    }
+
     func testAttachmentEditingDraftDownloadsSourceAndPreview() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
