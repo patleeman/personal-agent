@@ -781,6 +781,7 @@ final class HostSessionModel: ObservableObject {
             } else {
                 try await client.createTask(draft: draft)
             }
+            errorMessage = nil
             return task
         } catch {
             errorMessage = error.localizedDescription

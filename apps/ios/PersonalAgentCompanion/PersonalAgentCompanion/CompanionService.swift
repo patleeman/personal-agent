@@ -1395,6 +1395,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createTaskDelayNanoseconds: UInt64 = 0
+    var createTaskFailureQueueMessages: [String] = []
     var deleteTaskDelayNanoseconds: UInt64 = 0
     var deleteTaskFailureQueueMessages: [String] = []
     var runTaskDelayNanoseconds: UInt64 = 0
@@ -3444,6 +3445,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         createTaskCount += 1
         if createTaskDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createTaskDelayNanoseconds)
+        }
+        if !createTaskFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createTaskFailureQueueMessages.removeFirst())
         }
         let created = ScheduledTaskDetail(
             id: "task-\(Int.random(in: 10...999))",

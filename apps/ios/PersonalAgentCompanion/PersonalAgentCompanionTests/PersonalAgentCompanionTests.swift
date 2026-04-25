@@ -2391,6 +2391,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testSaveTaskClearsStaleErrorAfterSuccessfulCreateRetry() async throws {
+        let client = MockCompanionClient()
+        client.createTaskFailureQueueMessages = ["Task create temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        var draft = ScheduledTaskEditorDraft()
+        draft.title = "Retry-created task"
+        draft.prompt = "Summarize overnight failures."
+        draft.targetType = "background-agent"
+
+        let failedTask = await session.saveTask(taskId: nil, draft: draft)
+        XCTAssertNil(failedTask)
+        XCTAssertNotNil(session.errorMessage)
+
+        let task = await session.saveTask(taskId: nil, draft: draft)
+        XCTAssertEqual(task?.title, "Retry-created task")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testDeleteTaskIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.deleteTaskDelayNanoseconds = 150_000_000
