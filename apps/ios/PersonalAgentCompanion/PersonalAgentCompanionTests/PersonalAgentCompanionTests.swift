@@ -1356,6 +1356,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testLoadAutoModeClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readConversationAutoModeFailureQueueMessages = ["Auto mode state temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failed = await model.loadAutoModeState()
+        XCTAssertNil(failed)
+        XCTAssertNotNil(model.errorMessage)
+
+        let loaded = await model.loadAutoModeState()
+        XCTAssertEqual(loaded?.enabled, false)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptModesWorkDuringMockSimulation() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

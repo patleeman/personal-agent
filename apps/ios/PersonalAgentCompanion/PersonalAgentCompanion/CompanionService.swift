@@ -1443,6 +1443,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var duplicateConversationFailureQueueMessages: [String] = []
     var changeConversationCwdDelayNanoseconds: UInt64 = 0
     var changeConversationCwdFailureQueueMessages: [String] = []
+    var readConversationAutoModeFailureQueueMessages: [String] = []
     var updateConversationAutoModeDelayNanoseconds: UInt64 = 0
     var updateConversationAutoModeFailureQueueMessages: [String] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
@@ -2970,6 +2971,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readConversationAutoMode(conversationId: String) async throws -> ConversationAutoModeState {
+        if !readConversationAutoModeFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readConversationAutoModeFailureQueueMessages.removeFirst())
+        }
         guard conversations[conversationId] != nil else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }

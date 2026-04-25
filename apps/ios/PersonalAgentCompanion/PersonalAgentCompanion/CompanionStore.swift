@@ -2730,7 +2730,9 @@ final class ConversationViewModel: ObservableObject {
 
     func loadAutoModeState() async -> ConversationAutoModeState? {
         do {
-            return try await client.readConversationAutoMode(conversationId: conversationId)
+            let state = try await client.readConversationAutoMode(conversationId: conversationId)
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil
