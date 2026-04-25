@@ -4350,6 +4350,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, refetchSavedWorkspacePaths]);
 
   useInvalidateOnTopics(['attachments'], refetchConversationAttachments);
+  useInvalidateOnTopics(['sessions'], refetchDeferredResumes);
   useInvalidateOnTopics(['workspace'], refetchLiveSessionContextIfReady);
   useInvalidateOnTopics(['workspace'], refetchSavedWorkspacePaths);
 
