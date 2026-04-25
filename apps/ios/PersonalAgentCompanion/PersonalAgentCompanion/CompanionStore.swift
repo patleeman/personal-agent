@@ -747,7 +747,9 @@ final class HostSessionModel: ObservableObject {
 
     func readTask(_ taskId: String) async -> ScheduledTaskDetail? {
         do {
-            return try await client.readTask(taskId: taskId)
+            let task = try await client.readTask(taskId: taskId)
+            errorMessage = nil
+            return task
         } catch {
             errorMessage = error.localizedDescription
             return nil

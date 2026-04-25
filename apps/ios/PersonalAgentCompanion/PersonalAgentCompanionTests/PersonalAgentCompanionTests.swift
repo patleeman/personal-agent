@@ -2013,6 +2013,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
     }
 
+    func testReadTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+
+        let missing = await session.readTask("missing-task")
+        XCTAssertNil(missing)
+        XCTAssertNotNil(session.errorMessage)
+
+        let task = await session.readTask("task-1")
+        XCTAssertEqual(task?.id, "task-1")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testCreateSetupStateIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createSetupStateDelayNanoseconds = 150_000_000
