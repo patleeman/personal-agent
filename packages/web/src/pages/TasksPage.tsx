@@ -8,7 +8,7 @@ import { AppPageIntro, AppPageLayout, AppPageSection, ErrorState, LoadingState, 
 import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
 import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
-import { formatTaskSchedule } from '../automation/taskSchedule';
+import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt } from '../automation/taskSchedule';
 import type { DurableRunRecord, ScheduledTaskActivityEntry, ScheduledTaskSummary } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 
@@ -67,6 +67,26 @@ function formatCatchUpWindowLabel(seconds: number | undefined): string {
   }
 
   return `${minutes}m`;
+}
+
+function useAutomationClock(): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return nowMs;
+}
+
+function formatNextRunHint(nextRunAt: Date): string {
+  return nextRunAt.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
@@ -330,7 +350,7 @@ function DeleteTaskModal({
   );
 }
 
-function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
+function AutomationListRow({ task, nowMs }: { task: ScheduledTaskSummary; nowMs: number }) {
   const { text, cls } = statusText(task);
   const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
   const targetLabel = automationTargetLabel(task);
@@ -338,6 +358,9 @@ function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
     ? (task.threadTitle ? `Thread · ${task.threadTitle}` : 'Conversation wakeup')
     : (task.model?.split('/').pop() ?? 'Default model');
   const lastRunLabel = task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Never run';
+  const minuteStartMs = Math.floor(nowMs / 60000) * 60000;
+  const nextRunAt = useMemo(() => getNextTaskRunAt(task, nowMs), [minuteStartMs, task]);
+  const nextRunLabel = nextRunAt ? `Next run ${formatTaskNextRunCountdown(nextRunAt, nowMs)}` : (task.enabled ? 'No upcoming run' : 'Disabled');
   const summary = summarizePrompt(task.prompt) || 'No prompt yet.';
 
   return (
@@ -360,6 +383,7 @@ function AutomationListRow({ task }: { task: ScheduledTaskSummary }) {
           </p>
           <p className="mt-1 max-w-3xl text-[14px] leading-6 text-secondary">{summary}</p>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-secondary">
+            <span title={nextRunAt ? formatNextRunHint(nextRunAt) : undefined}>{nextRunLabel}</span>
             <span>{lastRunLabel}</span>
             <span>{modelLabel}</span>
           </div>
@@ -509,6 +533,15 @@ function AutomationDetailView({
     ? 'Not used for thread wakeups'
     : (detail?.model || effectiveSummary?.model || 'Default');
   const definitionLabel = detail?.filePath ? detail.filePath.split('/').slice(-1)[0] : null;
+  const nowMs = useAutomationClock();
+  const minuteStartMs = Math.floor(nowMs / 60000) * 60000;
+  const nextRunAt = useMemo(() => effectiveSummary ? getNextTaskRunAt(effectiveSummary, nowMs) : null, [effectiveSummary, minuteStartMs]);
+  const nextRunLabel = nextRunAt ? formatTaskNextRunCountdown(nextRunAt, nowMs) : '—';
+  const nextRunHint = !effectiveSummary.enabled
+    ? 'schedule disabled'
+    : nextRunAt
+      ? formatNextRunHint(nextRunAt)
+      : 'no upcoming scheduled run';
 
   const setSelectedRun = useCallback((runId: string | null) => {
     navigate({
@@ -658,6 +691,7 @@ function AutomationDetailView({
 
           <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
             <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
+            <DetailMetaBlock label="Next run" value={nextRunLabel} hint={nextRunHint} />
             <DetailMetaBlock label="Target" value={targetLabel} hint={detail?.targetType === 'conversation' ? 'injects the prompt back into a thread' : 'runs the prompt as a background automation'} />
             <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
             <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
@@ -816,6 +850,7 @@ function AutomationsOverview({
   const runningCount = tasks.filter((task) => task.running).length;
   const attentionCount = tasks.filter((task) => task.lastStatus === 'failure').length;
   const enabledCount = tasks.filter((task) => task.enabled).length;
+  const nowMs = useAutomationClock();
 
   const pageMeta = useMemo(() => {
     if (tasks.length === 0) {
@@ -942,7 +977,7 @@ function AutomationsOverview({
             ) : (
               <div>
                 {rows.map((task) => (
-                  <AutomationListRow key={task.id} task={task} />
+                  <AutomationListRow key={task.id} task={task} nowMs={nowMs} />
                 ))}
               </div>
             )}

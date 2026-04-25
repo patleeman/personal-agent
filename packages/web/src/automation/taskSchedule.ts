@@ -332,6 +332,168 @@ export function formatTaskSchedule(task: { cron?: string; at?: string }): string
   return 'unscheduled';
 }
 
+interface ParsedCronField {
+  values: Set<number>;
+  wildcard: boolean;
+}
+
+interface ParsedCronExpression {
+  minute: ParsedCronField;
+  hour: ParsedCronField;
+  dayOfMonth: ParsedCronField;
+  month: ParsedCronField;
+  dayOfWeek: ParsedCronField;
+}
+
+function parseCronFieldForNextRun(raw: string, min: number, max: number, allowSunday7 = false): ParsedCronField | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const values = new Set<number>();
+  for (const token of trimmed.split(',')) {
+    const part = token.trim();
+    if (!part) {
+      return null;
+    }
+
+    const stepParts = part.split('/');
+    if (stepParts.length > 2) {
+      return null;
+    }
+
+    const step = stepParts[1] ? Number.parseInt(stepParts[1], 10) : 1;
+    if (!Number.isInteger(step) || step < 1) {
+      return null;
+    }
+
+    const rangePart = stepParts[0] ?? '';
+    let start: number;
+    let end: number;
+
+    if (rangePart === '*') {
+      start = min;
+      end = max;
+    } else if (rangePart.includes('-')) {
+      const [startRaw, endRaw] = rangePart.split('-', 2);
+      start = Number.parseInt(startRaw ?? '', 10);
+      end = Number.parseInt(endRaw ?? '', 10);
+    } else {
+      start = Number.parseInt(rangePart, 10);
+      end = start;
+    }
+
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < min || end > max || start > end) {
+      if (!allowSunday7 || start !== 7 || end !== 7) {
+        return null;
+      }
+    }
+
+    for (let value = start; value <= end; value += step) {
+      values.add(allowSunday7 && value === 7 ? 0 : value);
+    }
+  }
+
+  return { values, wildcard: trimmed === '*' };
+}
+
+function parseCronForNextRun(cron: string): ParsedCronExpression | null {
+  const fields = cron.trim().split(/\s+/);
+  if (fields.length !== 5) {
+    return null;
+  }
+
+  const minute = parseCronFieldForNextRun(fields[0] ?? '', 0, 59);
+  const hour = parseCronFieldForNextRun(fields[1] ?? '', 0, 23);
+  const dayOfMonth = parseCronFieldForNextRun(fields[2] ?? '', 1, 31);
+  const month = parseCronFieldForNextRun(fields[3] ?? '', 1, 12);
+  const dayOfWeek = parseCronFieldForNextRun(fields[4] ?? '', 0, 7, true);
+
+  if (!minute || !hour || !dayOfMonth || !month || !dayOfWeek) {
+    return null;
+  }
+
+  return { minute, hour, dayOfMonth, month, dayOfWeek };
+}
+
+function cronMatchesNextRun(expression: ParsedCronExpression, at: Date): boolean {
+  if (!expression.minute.values.has(at.getMinutes())) return false;
+  if (!expression.hour.values.has(at.getHours())) return false;
+  if (!expression.month.values.has(at.getMonth() + 1)) return false;
+
+  const domMatch = expression.dayOfMonth.values.has(at.getDate());
+  const dowMatch = expression.dayOfWeek.values.has(at.getDay());
+  if (expression.dayOfMonth.wildcard && expression.dayOfWeek.wildcard) return true;
+  if (expression.dayOfMonth.wildcard) return dowMatch;
+  if (expression.dayOfWeek.wildcard) return domMatch;
+  return domMatch || dowMatch;
+}
+
+function nextMinuteAfter(nowMs: number): Date {
+  const next = new Date(nowMs);
+  next.setSeconds(0, 0);
+  next.setMinutes(next.getMinutes() + 1);
+  return next;
+}
+
+export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: string }, nowMs = Date.now()): Date | null {
+  if (task.enabled === false) {
+    return null;
+  }
+
+  if (task.at) {
+    const atMs = Date.parse(task.at);
+    return Number.isFinite(atMs) && atMs > nowMs ? new Date(atMs) : null;
+  }
+
+  if (!task.cron) {
+    return null;
+  }
+
+  const parsed = parseCronForNextRun(task.cron);
+  if (!parsed) {
+    return null;
+  }
+
+  const cursor = nextMinuteAfter(nowMs);
+  const limitMs = nowMs + 366 * 24 * 60 * 60 * 1000;
+  while (cursor.getTime() <= limitMs) {
+    if (cronMatchesNextRun(parsed, cursor)) {
+      return new Date(cursor);
+    }
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+
+  return null;
+}
+
+export function formatTaskNextRunCountdown(nextRunAt: Date, nowMs = Date.now()): string {
+  const totalSeconds = Math.max(0, Math.ceil((nextRunAt.getTime() - nowMs) / 1000));
+  if (totalSeconds <= 0) {
+    return 'now';
+  }
+  if (totalSeconds < 60) {
+    return totalSeconds === 1 ? 'in 1s' : `in ${totalSeconds}s`;
+  }
+
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (totalMinutes < 60) {
+    return seconds > 0 ? `in ${totalMinutes}m ${seconds}s` : `in ${totalMinutes}m`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) {
+    return minutes > 0 ? `in ${totalHours}h ${minutes}m` : `in ${totalHours}h`;
+  }
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return hours > 0 ? `in ${days}d ${hours}h` : `in ${days}d`;
+}
+
 export function formatTimeInputValue(hour: number, minute: number): string {
   return formatTime(clamp(hour, 0, 23), clamp(minute, 0, 59));
 }
