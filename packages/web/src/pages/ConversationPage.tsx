@@ -1140,47 +1140,6 @@ function ConversationModelSelect({
   );
 }
 
-function ConversationFastModeToggle({
-  enabled,
-  disabled,
-  onToggle,
-}: {
-  enabled: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      aria-label={enabled ? 'Disable fast mode' : 'Enable fast mode'}
-      title={enabled ? 'Disable fast mode' : 'Enable fast mode'}
-      onClick={onToggle}
-      disabled={disabled}
-      className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      <span
-        aria-hidden="true"
-        className={cx(
-          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
-          enabled
-            ? 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]'
-            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
-        )}
-      >
-        <span
-          className={cx(
-            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
-            enabled ? 'translate-x-[14px]' : 'translate-x-0',
-          )}
-        />
-      </span>
-      <span className={cx('leading-none', enabled && 'text-primary')}>Fast</span>
-    </button>
-  );
-}
-
 function ConversationCompactMenuToggle({
   label,
   enabled,
@@ -1316,39 +1275,7 @@ function ConversationPreferencesRow({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <div className="hidden xl:block">
-        <ConversationModelSelect
-          groupedModels={groupedModels}
-          currentModel={currentModel}
-          disabled={savingPreference !== null || models.length === 0}
-          onChange={onSelectModel}
-        />
-      </div>
-
-      <div className="hidden xl:flex items-center gap-2">
-        <ConversationThinkingLevelSelect
-          value={currentThinkingLevel}
-          disabled={savingPreference !== null}
-          onChange={onSelectThinkingLevel}
-        />
-        {supportsFastMode && (
-          <ConversationFastModeToggle
-            enabled={fastModeEnabled}
-            disabled={savingPreference !== null}
-            onToggle={() => { onSelectServiceTier(!fastModeEnabled); }}
-          />
-        )}
-        {showAutoModeToggle && (
-          <ConversationAutoModeToggle
-            enabled={autoModeEnabled}
-            busy={autoModeBusy}
-            disabled={false}
-            onToggle={onToggleAutoMode}
-          />
-        )}
-      </div>
-
-      <div ref={compactMenuRef} className="relative xl:hidden">
+      <div ref={compactMenuRef} className="relative">
         <IconButton
           type="button"
           onClick={() => setCompactMenuOpen((current) => !current)}
@@ -1448,58 +1375,6 @@ function resolveConversationComposerShellStateClassName({
   }
 
   return 'border-border-subtle';
-}
-
-function ConversationAutoModeToggle({
-  enabled,
-  busy,
-  disabled,
-  onToggle,
-}: {
-  enabled: boolean;
-  busy: boolean;
-  disabled: boolean;
-  onToggle: () => void;
-}) {
-  const title = busy
-    ? 'Updating auto mode…'
-    : enabled
-      ? 'Turn off conversation auto mode'
-      : 'Turn on conversation auto mode';
-
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={enabled}
-      aria-busy={busy}
-      aria-label={title}
-      title={title}
-      onClick={onToggle}
-      disabled={disabled || busy}
-      className="group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-warning/25 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40"
-    >
-      <span
-        aria-hidden="true"
-        className={cx(
-          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
-          enabled
-            ? 'border-warning/55 bg-warning/75 shadow-[0_0_8px_rgba(245,158,11,0.16)]'
-            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
-          busy && 'opacity-80',
-        )}
-      >
-        <span
-          className={cx(
-            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
-            enabled ? 'translate-x-[14px]' : 'translate-x-0',
-            busy && 'animate-pulse',
-          )}
-        />
-      </span>
-      <span className={cx('leading-none', enabled && 'text-primary')}>Auto</span>
-    </button>
-  );
 }
 
 // ── SlashMenu ─────────────────────────────────────────────────────────────────
