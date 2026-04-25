@@ -1020,7 +1020,9 @@ final class HostSessionModel: ObservableObject {
         }
         defer { pendingPairedDeviceDeleteIds.remove(deviceId) }
         do {
-            return try await client.deletePairedDevice(deviceId: deviceId)
+            let state = try await client.deletePairedDevice(deviceId: deviceId)
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil
