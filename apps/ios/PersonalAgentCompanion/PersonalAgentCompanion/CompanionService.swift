@@ -2203,6 +2203,18 @@ final class MockCompanionClient: CompanionClientProtocol {
                 revisions: attachment.revisions
             )
         }
+        let duplicateArtifacts = (artifactsByConversation[conversationId] ?? []).map { artifact in
+            ConversationArtifactRecord(
+                id: artifact.id,
+                conversationId: duplicateId,
+                title: artifact.title,
+                kind: artifact.kind,
+                createdAt: artifact.createdAt,
+                updatedAt: artifact.updatedAt,
+                revision: artifact.revision,
+                content: artifact.content
+            )
+        }
         let duplicate = ConversationBootstrapEnvelope(
             bootstrap: ConversationBootstrapState(
                 conversationId: duplicateId,
@@ -2218,7 +2230,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         )
         conversations[duplicateId] = duplicate
         attachmentsByConversation[duplicateId] = duplicateAttachments
-        artifactsByConversation[duplicateId] = artifactsByConversation[conversationId] ?? []
+        artifactsByConversation[duplicateId] = duplicateArtifacts
         checkpointsByConversation[duplicateId] = []
         autoModeByConversation[duplicateId] = autoModeByConversation[conversationId] ?? ConversationAutoModeState(enabled: false, stopReason: nil, updatedAt: nil)
         listState = ConversationListState(
