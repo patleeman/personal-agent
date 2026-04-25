@@ -1427,6 +1427,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var deletePairedDeviceDelayNanoseconds: UInt64 = 0
     var deletePairedDeviceFailureQueueMessages: [String] = []
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
+    var cancelDeferredResumeFailureQueueMessages: [String] = []
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var abortConversationDelayNanoseconds: UInt64 = 0
     var abortConversationFailureQueueMessages: [String] = []
@@ -2804,6 +2805,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         cancelDeferredResumeCount += 1
         if cancelDeferredResumeDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: cancelDeferredResumeDelayNanoseconds)
+        }
+        if !cancelDeferredResumeFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(cancelDeferredResumeFailureQueueMessages.removeFirst())
         }
         guard var meta = conversations[conversationId]?.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")

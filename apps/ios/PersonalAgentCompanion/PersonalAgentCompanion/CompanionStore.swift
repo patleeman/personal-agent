@@ -2521,6 +2521,7 @@ final class ConversationViewModel: ObservableObject {
             do {
                 let result = try await client.cancelDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
                 updateDeferredResumes(result.resumes)
+                errorMessage = nil
                 loadBootstrap()
             } catch {
                 errorMessage = error.localizedDescription
