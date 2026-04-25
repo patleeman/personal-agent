@@ -1589,6 +1589,44 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.promptText.components(separatedBy: "Queue this once").count - 1, 1)
     }
 
+    func testQueuedPromptRestoreClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Restore after retry"
+        model.sendPrompt(mode: .followUp)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.queuedFollowUpPrompts.count == 1
+        }
+
+        client.restoreQueuedPromptFailureQueueMessages = ["Queued prompt restore temporarily unavailable."]
+        let preview = try XCTUnwrap(model.queuedFollowUpPrompts.first)
+        model.restoreQueuedPrompt(behavior: "followUp", index: 0, previewId: preview.id)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+        XCTAssertFalse(model.promptText.contains("Restore after retry"))
+
+        model.restoreQueuedPrompt(behavior: "followUp", index: 0, previewId: preview.id)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.promptText.contains("Restore after retry")
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testHostSessionLoadsModelCatalogAndSshTargets() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()

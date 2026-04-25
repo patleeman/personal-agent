@@ -2459,6 +2459,7 @@ final class ConversationViewModel: ObservableObject {
                     promptImages = restoredImages + promptImages
                 }
                 showComposerNotice("Queued prompt restored.")
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }

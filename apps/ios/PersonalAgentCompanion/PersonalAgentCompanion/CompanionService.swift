@@ -1401,6 +1401,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var deleteSshTargetDelayNanoseconds: UInt64 = 0
     var deleteSshTargetFailureQueueMessages: [String] = []
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
+    var restoreQueuedPromptFailureQueueMessages: [String] = []
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointFailureQueueMessages: [String] = []
@@ -2698,6 +2699,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult {
         if restoreQueuedPromptDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: restoreQueuedPromptDelayNanoseconds)
+        }
+        if !restoreQueuedPromptFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(restoreQueuedPromptFailureQueueMessages.removeFirst())
         }
         var queueState = queuedPromptsByConversation[conversationId] ?? (steering: [], followUp: [])
         let source = behavior == "followUp" ? queueState.followUp : queueState.steering
