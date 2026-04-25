@@ -1045,6 +1045,27 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testChangeWorkingDirectoryIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.changeConversationCwdDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        async let first = model.changeWorkingDirectory("/tmp/one")
+        async let second = model.changeWorkingDirectory("/tmp/one")
+        _ = await (first, second)
+
+        XCTAssertEqual(client.changeConversationCwdCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptModesWorkDuringMockSimulation() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

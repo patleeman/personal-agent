@@ -2138,6 +2138,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingDuplicateConversation = false
     private var pendingAbortConversation = false
     private var pendingTakeOverConversation = false
+    private var pendingWorkingDirectoryChangeKeys: Set<String> = []
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
     private var pendingDeferredResumeCancelIds: Set<String> = []
@@ -2626,6 +2627,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func changeWorkingDirectory(_ cwd: String) async -> ConversationCwdChangeResult? {
+        let changeKey = cwd.trimmed
+        guard pendingWorkingDirectoryChangeKeys.insert(changeKey).inserted else {
+            return nil
+        }
+        defer { pendingWorkingDirectoryChangeKeys.remove(changeKey) }
         do {
             return try await client.changeConversationCwd(conversationId: conversationId, cwd: cwd, surfaceId: installationSurfaceId)
         } catch {

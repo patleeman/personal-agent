@@ -1406,11 +1406,13 @@ final class MockCompanionClient: CompanionClientProtocol {
     var renameConversationDelayNanoseconds: UInt64 = 0
     var renameConversationDelayQueueNanoseconds: [UInt64] = []
     var duplicateConversationDelayNanoseconds: UInt64 = 0
+    var changeConversationCwdDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
+    private(set) var changeConversationCwdCount = 0
     private(set) var updateConversationTabsCount = 0
     private(set) var writeKnowledgeFileCount = 0
     private(set) var deleteKnowledgeEntryCount = 0
@@ -2805,6 +2807,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func changeConversationCwd(conversationId: String, cwd: String, surfaceId: String) async throws -> ConversationCwdChangeResult {
+        changeConversationCwdCount += 1
+        if changeConversationCwdDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: changeConversationCwdDelayNanoseconds)
+        }
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
