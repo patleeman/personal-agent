@@ -2721,7 +2721,9 @@ final class ConversationViewModel: ObservableObject {
 
     func readRemoteDirectory(targetId: String, path: String?) async -> CompanionRemoteDirectoryListing? {
         do {
-            return try await client.readRemoteDirectory(targetId: targetId, path: path)
+            let listing = try await client.readRemoteDirectory(targetId: targetId, path: path)
+            errorMessage = nil
+            return listing
         } catch {
             errorMessage = error.localizedDescription
             return nil

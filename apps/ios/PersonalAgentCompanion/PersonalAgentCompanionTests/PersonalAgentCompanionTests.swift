@@ -1312,6 +1312,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testConversationRemoteDirectoryClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readRemoteDirectoryFailureQueueMessages = ["Remote directory temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedListing = await model.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        XCTAssertNil(failedListing)
+        XCTAssertNotNil(model.errorMessage)
+
+        let listing = await model.readRemoteDirectory(targetId: "local", path: "/Users/patrick/workingdir")
+        XCTAssertEqual(listing?.entries.first?.name, "personal-agent")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSaveAutoModeIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.updateConversationAutoModeDelayNanoseconds = 150_000_000
