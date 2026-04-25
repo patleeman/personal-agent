@@ -843,6 +843,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testKnowledgeDirectoryCreateRejectsPathSeparatorsInNames() async throws {
+        let client = MockCompanionClient()
+        let model = KnowledgeDirectoryViewModel(client: client, directoryId: "notes")
+        await model.reload()
+        let initialListing = try await client.listKnowledgeEntries(directoryId: "notes")
+
+        let note = await model.createNote(named: "Nested/Surprise")
+        XCTAssertNil(note)
+        XCTAssertEqual(model.errorMessage, "Note names cannot contain path separators.")
+
+        let folder = await model.createFolder(named: "Archive\\Later")
+        XCTAssertNil(folder)
+        XCTAssertEqual(model.errorMessage, "Folder names cannot contain path separators.")
+
+        let finalListing = try await client.listKnowledgeEntries(directoryId: "notes")
+        XCTAssertEqual(finalListing.entries.map(\.id).sorted(), initialListing.entries.map(\.id).sorted())
+        XCTAssertEqual(client.writeKnowledgeFileCount, 0)
+    }
+
     func testMockKnowledgeCanRenameAndDeleteEntries() async throws {
         let client = MockCompanionClient()
 

@@ -1284,6 +1284,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             errorMessage = "Note name is required."
             return nil
         }
+        guard !knowledgeNameContainsPathSeparator(trimmed) else {
+            errorMessage = "Note names cannot contain path separators."
+            return nil
+        }
         let fileName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
         guard !entries.contains(where: { $0.name.compare(fileName, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) else {
             errorMessage = "A note with that name already exists here."
@@ -1315,6 +1319,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             errorMessage = "Folder name is required."
             return nil
         }
+        guard !knowledgeNameContainsPathSeparator(trimmed) else {
+            errorMessage = "Folder names cannot contain path separators."
+            return nil
+        }
         guard !entries.contains(where: { $0.name.compare(trimmed, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame }) else {
             errorMessage = "A folder with that name already exists here."
             return nil
@@ -1343,6 +1351,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
         let trimmed = rawName.trimmed
         guard !trimmed.isEmpty else {
             errorMessage = entry.isDirectory ? "Folder name is required." : "Note name is required."
+            return nil
+        }
+        guard !knowledgeNameContainsPathSeparator(trimmed) else {
+            errorMessage = entry.isDirectory ? "Folder names cannot contain path separators." : "Note names cannot contain path separators."
             return nil
         }
         let finalName = entry.isDirectory || trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
@@ -1701,6 +1713,10 @@ final class KnowledgeNoteViewModel: ObservableObject {
             errorMessage = "Note name is required."
             return false
         }
+        guard !knowledgeNameContainsPathSeparator(trimmed) else {
+            errorMessage = "Note names cannot contain path separators."
+            return false
+        }
         let finalName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
         let renameKey = [fileId, finalName].joined(separator: "\u{1f}")
         guard pendingRenameKeys.insert(renameKey).inserted else {
@@ -2020,6 +2036,10 @@ func knowledgeSuggestedFileName(from title: String) -> String {
         .trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         .nilIfBlank ?? "note"
     return "\(slug).md"
+}
+
+func knowledgeNameContainsPathSeparator(_ name: String) -> Bool {
+    name.contains("/") || name.contains("\\")
 }
 
 func knowledgeOutlineHeadings(in text: String) -> [KnowledgeHeadingItem] {
