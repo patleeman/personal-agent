@@ -886,6 +886,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
 }
 
 const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
+const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 560;
 const DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS = 'max-w-[38rem]';
 const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
@@ -1140,6 +1141,68 @@ function ConversationModelSelect({
   );
 }
 
+function ConversationInlinePreferenceToggle({
+  label,
+  enabled,
+  busy = false,
+  disabled,
+  tone,
+  title,
+  onToggle,
+}: {
+  label: string;
+  enabled: boolean;
+  busy?: boolean;
+  disabled: boolean;
+  tone: 'accent' | 'warning';
+  title: string;
+  onToggle: () => void;
+}) {
+  const activeTrackClassName = tone === 'warning'
+    ? 'border-warning/55 bg-warning/75 shadow-[0_0_8px_rgba(245,158,11,0.16)]'
+    : 'border-accent/55 bg-accent/75 shadow-[0_0_8px_rgba(168,85,247,0.16)]';
+  const focusRingClassName = tone === 'warning'
+    ? 'focus-visible:ring-warning/25'
+    : 'focus-visible:ring-accent/25';
+
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-busy={busy}
+      aria-label={title}
+      title={title}
+      onClick={onToggle}
+      disabled={disabled || busy}
+      className={cx(
+        'group inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-1 text-[11px] font-medium text-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-40',
+        focusRingClassName,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cx(
+          'relative inline-flex h-[18px] w-[32px] shrink-0 rounded-full border p-[1px] transition-all',
+          enabled
+            ? activeTrackClassName
+            : 'border-border-default bg-surface/40 group-hover:bg-surface/60',
+          busy && 'opacity-80',
+        )}
+      >
+        <span
+          className={cx(
+            'h-[14px] w-[14px] rounded-full bg-white shadow-sm transition-transform',
+            enabled ? 'translate-x-[14px]' : 'translate-x-0',
+            busy && 'animate-pulse',
+          )}
+        />
+      </span>
+      <span className={cx('leading-none', enabled && 'text-primary')}>{label}</span>
+    </button>
+  );
+}
+
 function ConversationCompactMenuToggle({
   label,
   enabled,
@@ -1215,6 +1278,7 @@ function ConversationPreferencesRow({
   onSelectThinkingLevel,
   onSelectServiceTier,
   onToggleAutoMode,
+  compact,
 }: {
   models: ModelInfo[];
   currentModel: string;
@@ -1228,6 +1292,7 @@ function ConversationPreferencesRow({
   onSelectThinkingLevel: (thinkingLevel: string) => void;
   onSelectServiceTier: (enableFastMode: boolean) => void;
   onToggleAutoMode: () => void;
+  compact: boolean;
 }) {
   const [compactMenuOpen, setCompactMenuOpen] = useState(false);
   const compactMenuRef = useRef<HTMLDivElement | null>(null);
@@ -1275,7 +1340,44 @@ function ConversationPreferencesRow({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <div ref={compactMenuRef} className="relative">
+      {!compact ? (
+        <>
+          <ConversationModelSelect
+            groupedModels={groupedModels}
+            currentModel={currentModel}
+            disabled={savingPreference !== null || models.length === 0}
+            onChange={onSelectModel}
+          />
+          <ConversationThinkingLevelSelect
+            value={currentThinkingLevel}
+            disabled={savingPreference !== null}
+            onChange={onSelectThinkingLevel}
+          />
+          {supportsFastMode ? (
+            <ConversationInlinePreferenceToggle
+              label="Fast"
+              enabled={fastModeEnabled}
+              disabled={savingPreference !== null}
+              tone="accent"
+              title={fastModeEnabled ? 'Disable fast mode' : 'Enable fast mode'}
+              onToggle={() => { onSelectServiceTier(!fastModeEnabled); }}
+            />
+          ) : null}
+          {showAutoModeToggle ? (
+            <ConversationInlinePreferenceToggle
+              label="Auto"
+              enabled={autoModeEnabled}
+              busy={autoModeBusy}
+              disabled={false}
+              tone="warning"
+              title={autoModeBusy ? 'Updating auto mode…' : (autoModeEnabled ? 'Turn off conversation auto mode' : 'Turn on conversation auto mode')}
+              onToggle={onToggleAutoMode}
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {compact ? <div ref={compactMenuRef} className="relative">
         <IconButton
           type="button"
           onClick={() => setCompactMenuOpen((current) => !current)}
@@ -1348,7 +1450,7 @@ function ConversationPreferencesRow({
             </div>
           </div>
         )}
-      </div>
+      </div> : null}
     </div>
   );
 }
@@ -3640,6 +3742,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [shouldLoadVaultFiles]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const composerShellRef = useRef<HTMLDivElement | null>(null);
+  const [composerShellWidth, setComposerShellWidth] = useState<number | null>(null);
   const composerSelectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const composerResizeFrameRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -3657,6 +3761,30 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerActiveQuestion = pendingAskUserQuestion?.presentation.questions[
     Math.max(0, Math.min(composerQuestionIndex, (pendingAskUserQuestion?.presentation.questions.length ?? 1) - 1))
   ] ?? null;
+
+  useLayoutEffect(() => {
+    const element = composerShellRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateWidth = () => {
+      const nextWidth = Math.max(0, Math.floor(element.getBoundingClientRect().width));
+      setComposerShellWidth((current) => current === nextWidth ? current : nextWidth);
+    };
+
+    updateWidth();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
     if (!composerActiveQuestion) {
@@ -7833,7 +7961,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               hasInteractiveOverlay: showModelPicker || showSlash || showMention,
               autoModeEnabled: conversationAutoModeEnabled,
             }),
-          )}>
+          )} ref={composerShellRef}>
 
             {/* Drag overlay hint */}
             {dragOver && (
@@ -8371,6 +8499,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
                         onSelectServiceTier={(enableFastMode) => { void saveServiceTierPreference(enableFastMode); }}
                         onToggleAutoMode={() => { void toggleConversationAutoMode(); }}
+                        compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
                       />
                     </div>
 
