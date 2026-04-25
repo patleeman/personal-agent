@@ -1034,6 +1034,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(orderedMutation?.text, "1. First\n2. ")
     }
 
+    func testKnowledgeChecklistToggleHandlesUppercaseCheckedMarkers() {
+        let mutation = knowledgeToggleChecklistMutation(text: "- [X] Ship it", selectedRange: NSRange(location: 3, length: 0))
+
+        XCTAssertEqual(mutation?.text, "- [ ] Ship it")
+    }
+
     func testKnowledgeNoteAutosavesAfterIdle() async throws {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

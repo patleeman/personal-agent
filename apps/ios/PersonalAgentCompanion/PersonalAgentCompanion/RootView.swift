@@ -2195,7 +2195,7 @@ private func knowledgeOutdentLines(text: String, selectedRange: NSRange, amount:
     return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: NSRange(location: lineRange.location, length: min((replacement as NSString).length, safeRange.length)))
 }
 
-private func knowledgeToggleChecklistMutation(text: String, selectedRange: NSRange) -> KnowledgeTextMutation? {
+func knowledgeToggleChecklistMutation(text: String, selectedRange: NSRange) -> KnowledgeTextMutation? {
     let nsText = text as NSString
     let safeRange = knowledgeSafeRange(selectedRange, length: nsText.length)
     let lineRange = knowledgeCurrentLineContentRange(in: nsText, selectedRange: safeRange)
@@ -2203,7 +2203,9 @@ private func knowledgeToggleChecklistMutation(text: String, selectedRange: NSRan
     if let range = line.range(of: #"^(\s*[-*+] )\[( |x|X)\]"#, options: .regularExpression) {
         let prefix = String(line[..<range.lowerBound])
         let marker = String(line[range])
-        let toggled = marker.lowercased().contains("[x]") ? marker.replacingOccurrences(of: "x", with: " ") : marker.replacingOccurrences(of: "[ ]", with: "[x]")
+        let toggled = marker.lowercased().contains("[x]")
+            ? marker.replacingOccurrences(of: #"\[(x|X)\]"#, with: "[ ]", options: .regularExpression)
+            : marker.replacingOccurrences(of: "[ ]", with: "[x]")
         let suffix = String(line[range.upperBound...])
         let replacement = "\(prefix)\(toggled)\(suffix)"
         return knowledgeReplaceText(in: text, range: lineRange, with: replacement, selectionAfterInsert: NSRange(location: lineRange.location, length: replacement.utf16.count))
