@@ -485,6 +485,7 @@ final class HostSessionModel: ObservableObject {
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
+    private var pendingConversationDuplicateIds: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
     private var pendingTaskSaveKeys: Set<String> = []
     private var pendingTaskDeleteIds: Set<String> = []
@@ -690,6 +691,10 @@ final class HostSessionModel: ObservableObject {
     }
 
     func duplicateConversation(_ conversationId: String) async -> String? {
+        guard pendingConversationDuplicateIds.insert(conversationId).inserted else {
+            return nil
+        }
+        defer { pendingConversationDuplicateIds.remove(conversationId) }
         do {
             let nextId = try await client.duplicateConversation(conversationId: conversationId)
             refresh()
@@ -2100,6 +2105,7 @@ final class ConversationViewModel: ObservableObject {
     private var restoringQueuedPromptKeys: Set<String> = []
     private var pendingParallelJobActionKeys: Set<String> = []
     private var pendingCheckpointCreateKeys: Set<String> = []
+    private var pendingDuplicateConversation = false
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
     private var pendingDeferredResumeCancelIds: Set<String> = []
@@ -2564,6 +2570,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func duplicateConversation() async -> String? {
+        guard !pendingDuplicateConversation else {
+            return nil
+        }
+        pendingDuplicateConversation = true
+        defer { pendingDuplicateConversation = false }
         do {
             return try await client.duplicateConversation(conversationId: conversationId)
         } catch {
