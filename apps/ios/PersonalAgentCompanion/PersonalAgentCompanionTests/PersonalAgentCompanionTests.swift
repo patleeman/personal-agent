@@ -1192,6 +1192,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testDeleteSshTargetIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.deleteSshTargetDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialTargets = await session.listSshTargets()
+        let targetId = try XCTUnwrap(initialTargets.first?.id)
+
+        async let first = session.deleteSshTarget(targetId)
+        async let second = session.deleteSshTarget(targetId)
+        let results = await [first, second]
+        let targets = await session.listSshTargets()
+
+        XCTAssertEqual(results.filter { !$0.contains { $0.id == targetId } }.count, 1)
+        XCTAssertEqual(client.deleteSshTargetCount, 1)
+        XCTAssertFalse(targets.contains { $0.id == targetId })
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testStaleModelRefreshDoesNotOverwriteSavedPreference() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(

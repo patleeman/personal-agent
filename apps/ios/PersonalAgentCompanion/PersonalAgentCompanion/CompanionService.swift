@@ -1384,6 +1384,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var saveSshTargetDelayNanoseconds: UInt64 = 0
+    var deleteSshTargetDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
@@ -1407,6 +1408,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var runTaskCount = 0
     private(set) var cancelRunCount = 0
     private(set) var saveSshTargetCount = 0
+    private(set) var deleteSshTargetCount = 0
     private(set) var createPairingCodeCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
@@ -2300,6 +2302,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func deleteSshTarget(targetId: String) async throws -> CompanionSshTargetState {
+        deleteSshTargetCount += 1
+        if deleteSshTargetDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: deleteSshTargetDelayNanoseconds)
+        }
         sshTargetState = CompanionSshTargetState(hosts: sshTargetState.hosts.filter { $0.id != targetId })
         listState = ConversationListState(
             sessions: listState.sessions,

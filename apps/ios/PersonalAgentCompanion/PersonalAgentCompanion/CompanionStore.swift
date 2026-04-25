@@ -490,6 +490,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingTaskDeleteIds: Set<String> = []
     private var pendingRunCancelIds: Set<String> = []
     private var pendingSshTargetSaveKeys: Set<String> = []
+    private var pendingSshTargetDeleteIds: Set<String> = []
     private var isCreatingPairingCode = false
     private var appEventRevision = 0
     private var refreshRequestId = 0
@@ -866,6 +867,10 @@ final class HostSessionModel: ObservableObject {
     }
 
     func deleteSshTarget(_ targetId: String) async -> [CompanionSshTargetRecord] {
+        guard pendingSshTargetDeleteIds.insert(targetId).inserted else {
+            return sshTargets
+        }
+        defer { pendingSshTargetDeleteIds.remove(targetId) }
         do {
             let state = try await client.deleteSshTarget(targetId: targetId)
             sshTargets = state.hosts
