@@ -2504,6 +2504,7 @@ final class ConversationViewModel: ObservableObject {
         Task {
             do {
                 _ = try await client.cancelRun(runId: runId)
+                errorMessage = nil
                 refreshActivityRuns()
             } catch {
                 errorMessage = error.localizedDescription

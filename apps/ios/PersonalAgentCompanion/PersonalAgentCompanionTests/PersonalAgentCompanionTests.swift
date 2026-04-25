@@ -2476,6 +2476,38 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.connectedRuns.contains(where: { $0.runId == "run-new" }))
     }
 
+    func testCancelConnectedRunClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.cancelRunFailureQueueMessages = ["Run cancel temporarily unavailable."]
+        client.addMockRun(runId: "run-1", sourceId: "conv-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.refreshActivityRuns()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.connectedRuns.contains(where: { $0.runId == "run-1" })
+        }
+
+        model.cancelConnectedRun("run-1")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+        XCTAssertTrue(model.connectedRuns.contains(where: { $0.runId == "run-1" }))
+
+        model.cancelConnectedRun("run-1")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.connectedRuns.isEmpty
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testStaleExecutionTargetChangeDoesNotOverrideLatestSelection() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(
