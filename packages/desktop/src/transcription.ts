@@ -80,9 +80,8 @@ export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFile
       Authorization: `Bearer ${token}`,
       originator: 'Codex Desktop',
       'Content-Type': contentType,
-      'Content-Length': String(body.byteLength),
     },
-    body: new Uint8Array(body),
+    body: body as unknown as BodyInit,
   });
 
   const text = await response.text();
