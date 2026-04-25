@@ -2334,6 +2334,7 @@ final class ConversationViewModel: ObservableObject {
                 let state = try await client.readModels()
                 if !Task.isCancelled, modelRefreshRequestId == requestId {
                     modelState = state
+                    errorMessage = nil
                 }
             } catch {
                 if !Task.isCancelled, modelRefreshRequestId == requestId {

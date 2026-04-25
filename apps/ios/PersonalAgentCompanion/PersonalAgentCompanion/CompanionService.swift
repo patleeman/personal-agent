@@ -1377,6 +1377,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listAttachmentsDelayNanoseconds: UInt64 = 0
     var listAttachmentsFailureQueueMessages: [String] = []
     var readModelsDelayNanoseconds: UInt64 = 0
+    var readModelsFailureQueueMessages: [String] = []
     var listTasksFailureQueueMessages: [String] = []
     var readTaskLogFailureQueueMessages: [String] = []
     var readRunLogFailureQueueMessages: [String] = []
@@ -2351,6 +2352,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         let state = modelState
         if readModelsDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: readModelsDelayNanoseconds)
+        }
+        if !readModelsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readModelsFailureQueueMessages.removeFirst())
         }
         return state
     }

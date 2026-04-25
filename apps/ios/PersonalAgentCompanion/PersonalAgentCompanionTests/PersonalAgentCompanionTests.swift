@@ -1702,6 +1702,31 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testModelRefreshClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readModelsFailureQueueMessages = ["Models temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.refreshModelState()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        model.refreshModelState()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.modelState?.currentModel == "gpt-5.4"
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testStaleModelPreferenceSaveDoesNotOverrideLatestModel() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(
