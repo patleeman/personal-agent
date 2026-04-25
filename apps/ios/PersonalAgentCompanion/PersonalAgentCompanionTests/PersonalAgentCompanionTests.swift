@@ -1813,6 +1813,27 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(task.autoResumeIfOpen, false)
     }
 
+    func testSaveTaskIgnoresDuplicateCreateWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createTaskDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        var draft = ScheduledTaskEditorDraft()
+        draft.title = "Create this task once"
+        draft.prompt = "Summarize overnight failures."
+        draft.targetType = "background-agent"
+
+        async let first = session.saveTask(taskId: nil, draft: draft)
+        async let second = session.saveTask(taskId: nil, draft: draft)
+        let created = await [first, second].compactMap { $0 }
+        let tasks = await session.listTasks()
+
+        XCTAssertEqual(created.count, 1)
+        XCTAssertEqual(client.createTaskCount, 1)
+        XCTAssertEqual(tasks.filter { $0.title == "Create this task once" }.count, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testLiveSetupURLPairsAgainstDesktopHost() async throws {
         let environment = ProcessInfo.processInfo.environment
         let config = try loadLiveCompanionConfig(from: environment)

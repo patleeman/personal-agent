@@ -486,6 +486,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
+    private var pendingTaskSaveKeys: Set<String> = []
     private var isCreatingPairingCode = false
     private var appEventRevision = 0
     private var refreshRequestId = 0
@@ -721,6 +722,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func saveTask(taskId: String?, draft: ScheduledTaskEditorDraft) async -> ScheduledTaskDetail? {
+        let saveKey = taskSaveKey(taskId: taskId, draft: draft)
+        guard pendingTaskSaveKeys.insert(saveKey).inserted else {
+            return nil
+        }
+        defer { pendingTaskSaveKeys.remove(saveKey) }
         do {
             let task = if let taskId {
                 try await client.updateTask(taskId: taskId, draft: draft)
@@ -732,6 +738,33 @@ final class HostSessionModel: ObservableObject {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func taskSaveKey(taskId: String?, draft: ScheduledTaskEditorDraft) -> String {
+        [
+            taskId ?? "",
+            draft.title.trimmed,
+            String(draft.enabled),
+            draft.scheduleMode.trimmed,
+            draft.cron.trimmed,
+            draft.at.trimmed,
+            draft.model.trimmed,
+            draft.thinkingLevel.trimmed,
+            draft.cwd.trimmed,
+            draft.timeoutSeconds.trimmed,
+            draft.prompt.trimmed,
+            draft.targetType.trimmed,
+            draft.conversationBehavior.trimmed,
+            draft.callbackConversationId.trimmed,
+            String(draft.deliverOnSuccess),
+            String(draft.deliverOnFailure),
+            draft.notifyOnSuccess.trimmed,
+            draft.notifyOnFailure.trimmed,
+            String(draft.requireAck),
+            String(draft.autoResumeIfOpen),
+            draft.threadMode.trimmed,
+            draft.threadConversationId.trimmed
+        ].joined(separator: "\u{1f}")
     }
 
     func deleteTask(_ taskId: String) async -> Bool {

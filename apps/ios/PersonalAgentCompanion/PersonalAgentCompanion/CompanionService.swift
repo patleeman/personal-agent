@@ -1386,6 +1386,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
+    var createTaskDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
@@ -1398,6 +1399,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var createConversationCount = 0
+    private(set) var createTaskCount = 0
     private(set) var runTaskCount = 0
     private(set) var createPairingCodeCount = 0
     private(set) var promptSubmissionCount = 0
@@ -3331,6 +3333,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createTask(draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {
+        createTaskCount += 1
+        if createTaskDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createTaskDelayNanoseconds)
+        }
         let created = ScheduledTaskDetail(
             id: "task-\(Int.random(in: 10...999))",
             title: draft.title.nilIfBlank ?? "Mock task",
