@@ -1791,6 +1791,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
     }
 
+    func testDeletePairedDeviceIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.deletePairedDeviceDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let state = await session.readDeviceAdminState()
+        let initialState = try XCTUnwrap(state)
+        let deviceId = try XCTUnwrap(initialState.devices.first?.id)
+
+        async let first = session.deletePairedDevice(deviceId)
+        async let second = session.deletePairedDevice(deviceId)
+        let states = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(states.filter { !$0.devices.contains { $0.id == deviceId } }.count, 1)
+        XCTAssertEqual(client.deletePairedDeviceCount, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testRunTaskIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.runTaskDelayNanoseconds = 150_000_000
