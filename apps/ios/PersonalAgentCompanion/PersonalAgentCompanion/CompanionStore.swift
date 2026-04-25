@@ -952,11 +952,17 @@ final class KnowledgeFolderPickerViewModel: ObservableObject {
     let directoryId: String?
     private let client: CompanionClientProtocol
     private let excludedFolderId: String?
+    private var loadTask: Task<Void, Never>?
+    private var loadRequestId = 0
 
     init(client: CompanionClientProtocol, directoryId: String?, excludedFolderId: String?) {
         self.client = client
         self.directoryId = directoryId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
         self.excludedFolderId = excludedFolderId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+    }
+
+    deinit {
+        loadTask?.cancel()
     }
 
     var title: String {
@@ -972,31 +978,49 @@ final class KnowledgeFolderPickerViewModel: ObservableObject {
     }
 
     func load() {
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
             await reload()
         }
     }
 
+    func stop() {
+        loadRequestId += 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
     func reload() async {
+        loadRequestId += 1
+        let requestId = loadRequestId
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if loadRequestId == requestId {
+                isLoading = false
+            }
+        }
         do {
             let result = try await client.listKnowledgeEntries(directoryId: directoryId)
-            folders = result.entries
-                .filter { entry in
-                    guard entry.isDirectory else {
-                        return false
+            if !Task.isCancelled, loadRequestId == requestId {
+                folders = result.entries
+                    .filter { entry in
+                        guard entry.isDirectory else {
+                            return false
+                        }
+                        guard let excludedFolderId else {
+                            return true
+                        }
+                        let folderId = entry.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
+                        return folderId != excludedFolderId && !folderId.hasPrefix("\(excludedFolderId)/")
                     }
-                    guard let excludedFolderId else {
-                        return true
-                    }
-                    let folderId = entry.id.replacingOccurrences(of: #"/+$"#, with: "", options: .regularExpression)
-                    return folderId != excludedFolderId && !folderId.hasPrefix("\(excludedFolderId)/")
-                }
-                .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            errorMessage = nil
+                    .sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+                errorMessage = nil
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled, loadRequestId == requestId {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 }
@@ -1011,10 +1035,16 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     let directoryId: String?
 
     private let client: CompanionClientProtocol
+    private var loadTask: Task<Void, Never>?
+    private var loadRequestId = 0
 
     init(client: CompanionClientProtocol, directoryId: String?) {
         self.client = client
         self.directoryId = directoryId?.trimmed.nilIfBlank?.replacingOccurrences(of: #"^/+|/+$"#, with: "", options: .regularExpression)
+    }
+
+    deinit {
+        loadTask?.cancel()
     }
 
     var title: String {
@@ -1030,28 +1060,46 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     }
 
     func load() {
-        Task {
+        loadTask?.cancel()
+        loadTask = Task {
             await reload()
         }
     }
 
+    func stop() {
+        loadRequestId += 1
+        loadTask?.cancel()
+        loadTask = nil
+        isLoading = false
+    }
+
     func reload() async {
+        loadRequestId += 1
+        let requestId = loadRequestId
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if loadRequestId == requestId {
+                isLoading = false
+            }
+        }
         do {
             let result = try await client.listKnowledgeEntries(directoryId: directoryId)
-            rootPath = result.root
-            entries = result.entries
-                .filter { $0.isDirectory || $0.isMarkdownFile }
-                .sorted { lhs, rhs in
-                    if lhs.kind != rhs.kind {
-                        return lhs.isDirectory
+            if !Task.isCancelled, loadRequestId == requestId {
+                rootPath = result.root
+                entries = result.entries
+                    .filter { $0.isDirectory || $0.isMarkdownFile }
+                    .sorted { lhs, rhs in
+                        if lhs.kind != rhs.kind {
+                            return lhs.isDirectory
+                        }
+                        return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
                     }
-                    return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
-                }
-            errorMessage = nil
+                errorMessage = nil
+            }
         } catch {
-            errorMessage = error.localizedDescription
+            if !Task.isCancelled, loadRequestId == requestId {
+                errorMessage = error.localizedDescription
+            }
         }
     }
 

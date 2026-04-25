@@ -818,6 +818,9 @@ private struct KnowledgeDirectoryScreen: View {
         .onAppear {
             viewModel.load()
         }
+        .onDisappear {
+            viewModel.stop()
+        }
     }
 }
 
@@ -974,6 +977,9 @@ private struct KnowledgeMoveFolderScreen: View {
         }
         .onAppear {
             viewModel.load()
+        }
+        .onDisappear {
+            viewModel.stop()
         }
     }
 }

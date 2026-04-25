@@ -766,6 +766,62 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testStoppingKnowledgeDirectoryCancelsPendingLoad() async throws {
+        let client = MockCompanionClient()
+        client.listKnowledgeEntriesDelayNanoseconds = 150_000_000
+        let model = KnowledgeDirectoryViewModel(client: client, directoryId: nil)
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.stop()
+        XCTAssertFalse(model.isLoading)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(model.entries.isEmpty)
+        XCTAssertTrue(model.rootPath.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testOlderKnowledgeDirectoryLoadDoesNotClearLoadingForNewerLoad() async throws {
+        let client = MockCompanionClient()
+        client.listKnowledgeEntriesDelayQueueNanoseconds = [120_000_000, 180_000_000]
+        let model = KnowledgeDirectoryViewModel(client: client, directoryId: nil)
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.load()
+
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(model.isLoading)
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+        XCTAssertFalse(model.entries.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testStoppingKnowledgeFolderPickerCancelsPendingLoad() async throws {
+        let client = MockCompanionClient()
+        client.listKnowledgeEntriesDelayNanoseconds = 150_000_000
+        let model = KnowledgeFolderPickerViewModel(client: client, directoryId: nil, excludedFolderId: nil)
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.stop()
+        XCTAssertFalse(model.isLoading)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(model.folders.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testKnowledgeNoteDetectsHostConflictsBeforeOverwrite() async throws {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -1370,6 +1370,8 @@ final class MockCompanionClient: CompanionClientProtocol {
     var supportsRunningConversationSimulation: Bool { true }
     var listConversationsDelayNanoseconds: UInt64 = 0
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
+    var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
+    var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
@@ -2882,7 +2884,11 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse {
-        CompanionKnowledgeTreeResponse(
+        let delay = listKnowledgeEntriesDelayQueueNanoseconds.isEmpty ? listKnowledgeEntriesDelayNanoseconds : listKnowledgeEntriesDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
+        return CompanionKnowledgeTreeResponse(
             root: knowledgeRootPath,
             entries: knowledgeEntries(in: directoryId)
         )
