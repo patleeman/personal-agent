@@ -1150,6 +1150,32 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testAbortClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.abortConversationFailureQueueMessages = ["Abort temporarily unavailable."]
+        try await client.simulateRunningConversation(conversationId: "conv-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.abort()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        model.abort()
+        try await waitForCondition(timeout: .seconds(2)) {
+            client.abortConversationCount == 2
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testTakeOverIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.takeOverConversationDelayNanoseconds = 150_000_000

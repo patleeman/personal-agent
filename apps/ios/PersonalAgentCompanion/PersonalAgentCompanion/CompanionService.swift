@@ -1424,6 +1424,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var abortConversationDelayNanoseconds: UInt64 = 0
+    var abortConversationFailureQueueMessages: [String] = []
     var takeOverConversationDelayNanoseconds: UInt64 = 0
     var takeOverConversationFailureQueueMessages: [String] = []
     var listRunsDelayNanoseconds: UInt64 = 0
@@ -2811,6 +2812,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         abortConversationCount += 1
         if abortConversationDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: abortConversationDelayNanoseconds)
+        }
+        if !abortConversationFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(abortConversationFailureQueueMessages.removeFirst())
         }
         let simulationTask = simulatedConversationTasks.removeValue(forKey: conversationId)
         simulationTask?.cancel()

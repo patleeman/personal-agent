@@ -2594,6 +2594,7 @@ final class ConversationViewModel: ObservableObject {
             defer { pendingAbortConversation = false }
             do {
                 try await client.abortConversation(conversationId: conversationId)
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }
