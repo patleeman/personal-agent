@@ -1772,6 +1772,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testCancelRunIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.cancelRunDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let run = await session.runTask("task-1")
+        let runId = try XCTUnwrap(run?.runId)
+
+        async let first = session.cancelRun(runId)
+        async let second = session.cancelRun(runId)
+        let responses = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(responses.count, 1)
+        XCTAssertEqual(client.cancelRunCount, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testCreatePairingCodeIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createPairingCodeDelayNanoseconds = 150_000_000
@@ -1822,9 +1838,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         draft.title = "Create this task once"
         draft.prompt = "Summarize overnight failures."
         draft.targetType = "background-agent"
+        let submittedDraft = draft
 
-        async let first = session.saveTask(taskId: nil, draft: draft)
-        async let second = session.saveTask(taskId: nil, draft: draft)
+        async let first = session.saveTask(taskId: nil, draft: submittedDraft)
+        async let second = session.saveTask(taskId: nil, draft: submittedDraft)
         let created = await [first, second].compactMap { $0 }
         let tasks = await session.listTasks()
 

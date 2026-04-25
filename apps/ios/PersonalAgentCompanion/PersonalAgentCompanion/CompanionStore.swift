@@ -487,6 +487,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingConversationCreateKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
     private var pendingTaskSaveKeys: Set<String> = []
+    private var pendingRunCancelIds: Set<String> = []
     private var isCreatingPairingCode = false
     private var appEventRevision = 0
     private var refreshRequestId = 0
@@ -818,6 +819,10 @@ final class HostSessionModel: ObservableObject {
     }
 
     func cancelRun(_ runId: String) async -> DurableRunCancelResponse? {
+        guard pendingRunCancelIds.insert(runId).inserted else {
+            return nil
+        }
+        defer { pendingRunCancelIds.remove(runId) }
         do {
             return try await client.cancelRun(runId: runId)
         } catch {

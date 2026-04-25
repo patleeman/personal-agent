@@ -1388,6 +1388,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createTaskDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
+    var cancelRunDelayNanoseconds: UInt64 = 0
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
@@ -1401,6 +1402,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var createConversationCount = 0
     private(set) var createTaskCount = 0
     private(set) var runTaskCount = 0
+    private(set) var cancelRunCount = 0
     private(set) var createPairingCodeCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
@@ -3471,6 +3473,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func cancelRun(runId: String) async throws -> DurableRunCancelResponse {
+        cancelRunCount += 1
+        if cancelRunDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: cancelRunDelayNanoseconds)
+        }
         if let index = runs.firstIndex(where: { $0.runId == runId }) {
             let run = runs[index]
             let updatedStatus = DurableRunStatusRecord(version: run.status?.version, runId: runId, status: "cancelled", createdAt: run.status?.createdAt ?? ISO8601DateFormatter.flexible.string(from: .now), updatedAt: ISO8601DateFormatter.flexible.string(from: .now), activeAttempt: run.status?.activeAttempt ?? 1, startedAt: run.status?.startedAt, completedAt: ISO8601DateFormatter.flexible.string(from: .now), checkpointKey: run.status?.checkpointKey, lastError: run.status?.lastError)
