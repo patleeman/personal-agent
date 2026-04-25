@@ -212,6 +212,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
         try await Task.sleep(for: .milliseconds(50))
 
         XCTAssertEqual(model.activeHostId, second.id)
+        XCTAssertNotNil(model.activeSession)
         XCTAssertEqual(model.hosts.map(\.id), [second.id])
     }
 

@@ -180,8 +180,12 @@ final class CompanionAppModel: ObservableObject {
         KeychainStore.shared.removeToken(for: host.id)
         persistHosts()
         if activeHostId == nil {
-            activeHostId = hosts.first?.id
+            let nextHostId = hosts.first?.id
+            activeHostId = nextHostId
             persistHosts()
+            if let nextHostId {
+                Task { await selectHost(nextHostId) }
+            }
         }
     }
 
