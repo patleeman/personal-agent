@@ -267,6 +267,34 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.blocks.filter { $0.type == "user" && $0.text == "Remote message during refresh" }.count, 1)
     }
 
+    func testStaleBootstrapDoesNotOverwriteLiveTitleUpdate() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.title == "iOS companion app"
+        }
+
+        client.conversationBootstrapDelayNanoseconds = 150_000_000
+        model.loadBootstrap()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        client.emitTitleUpdate(conversationId: "conv-1", title: "Updated remote title")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+        XCTAssertEqual(model.title, "Updated remote title")
+    }
+
     func testCompanionTranscriptImageAssetPathRewritesSessionAssetUrls() {
         XCTAssertEqual(
             companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image"),

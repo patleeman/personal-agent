@@ -2195,6 +2195,10 @@ final class MockCompanionClient: CompanionClientProtocol {
         emitConversation(conversationId, .userMessage(block))
     }
 
+    func emitTitleUpdate(conversationId: String, title: String) {
+        emitConversation(conversationId, .titleUpdate(title))
+    }
+
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope {
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let conversationId = "conv-\(Int.random(in: 100...999))"

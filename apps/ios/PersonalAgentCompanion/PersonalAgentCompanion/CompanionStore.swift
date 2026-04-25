@@ -2606,13 +2606,18 @@ final class ConversationViewModel: ObservableObject {
 
     private func applyBootstrap(_ envelope: ConversationBootstrapEnvelope, eventRevisionAtRequest: Int? = nil) {
         errorMessage = nil
+        let shouldApplyLiveSnapshot = eventRevisionAtRequest == nil || liveEventRevision == eventRevisionAtRequest
         liveConversationId = envelope.bootstrap.conversationId
-        sessionMeta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta ?? sessionMeta
-        title = sessionMeta?.title ?? envelope.bootstrap.liveSession.title ?? title
+        if shouldApplyLiveSnapshot {
+            sessionMeta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta ?? sessionMeta
+            title = sessionMeta?.title ?? envelope.bootstrap.liveSession.title ?? title
+        }
         executionTargets = envelope.executionTargets
-        currentExecutionTargetId = sessionMeta?.remoteHostId ?? envelope.bootstrap.sessionDetail?.meta.remoteHostId ?? "local"
+        if shouldApplyLiveSnapshot {
+            currentExecutionTargetId = sessionMeta?.remoteHostId ?? envelope.bootstrap.sessionDetail?.meta.remoteHostId ?? "local"
+        }
         savedAttachments = envelope.attachments?.attachments ?? savedAttachments
-        if eventRevisionAtRequest == nil || liveEventRevision == eventRevisionAtRequest {
+        if shouldApplyLiveSnapshot {
             isStreaming = envelope.bootstrap.liveSession.isStreaming ?? false
         }
         if let currentModel = sessionMeta?.model, let existingModelState = modelState {
@@ -2624,7 +2629,7 @@ final class ConversationViewModel: ObservableObject {
             )
         }
 
-        if eventRevisionAtRequest == nil || liveEventRevision == eventRevisionAtRequest {
+        if shouldApplyLiveSnapshot {
             if let detail = envelope.bootstrap.sessionDetail {
                 blocks = detail.blocks
             } else if let appendOnly = envelope.bootstrap.sessionDetailAppendOnly {
@@ -2746,6 +2751,7 @@ final class ConversationViewModel: ObservableObject {
                 )
             }
         case .titleUpdate(let nextTitle):
+            liveEventRevision += 1
             title = nextTitle
         case .presenceState(let nextState):
             presenceState = nextState
