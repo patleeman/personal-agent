@@ -96,12 +96,16 @@ enum KnowledgeShareInboxStore {
         let directoryURL = try pendingDirectoryURL(fileManager: fileManager)
         let fileURLs = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles])
         let decoder = JSONDecoder()
-        let envelopes: [PendingKnowledgeShareEnvelope] = try fileURLs.compactMap { fileURL in
+        let envelopes: [PendingKnowledgeShareEnvelope] = fileURLs.compactMap { fileURL in
             guard fileURL.pathExtension.lowercased() == "json" else {
                 return nil
             }
-            let data = try Data(contentsOf: fileURL)
-            return try decoder.decode(PendingKnowledgeShareEnvelope.self, from: data)
+            do {
+                let data = try Data(contentsOf: fileURL)
+                return try decoder.decode(PendingKnowledgeShareEnvelope.self, from: data)
+            } catch {
+                return nil
+            }
         }
         return envelopes.sorted { lhs, rhs in
             if lhs.createdAt == rhs.createdAt {

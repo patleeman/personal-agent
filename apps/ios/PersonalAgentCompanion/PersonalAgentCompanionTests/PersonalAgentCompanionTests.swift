@@ -7,6 +7,19 @@ final class PersonalAgentCompanionTests: XCTestCase {
     private let activeHostStorageKey = "pa.ios.companion.active-host-id"
     private let surfaceInstallationIdKey = "pa.ios.companion.installation-id"
 
+    private final class TestAppGroupFileManager: FileManager {
+        let container: URL
+
+        init(container: URL) {
+            self.container = container
+            super.init()
+        }
+
+        override func containerURL(forSecurityApplicationGroupIdentifier groupIdentifier: String) -> URL? {
+            container
+        }
+    }
+
     override func setUp() {
         super.setUp()
         clearStoredHostState()
@@ -45,6 +58,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
 
     func testCompanionIncomingShareLinkParsesShareURL() {
         XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion://share")!))
+    }
+
+    func testKnowledgeShareInboxSkipsCorruptPendingShareFiles() throws {
+        let container = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let fileManager = TestAppGroupFileManager(container: container)
+        let valid = PendingKnowledgeShareEnvelope(
+            id: "valid-share",
+            createdAt: "2026-04-25T00:00:00Z",
+            items: [PendingKnowledgeShareItem(kind: .text, text: "Keep me")]
+        )
+
+        try KnowledgeShareInboxStore.save(valid, fileManager: fileManager)
+        let pendingDirectory = try KnowledgeShareInboxStore.pendingDirectoryURL(fileManager: fileManager)
+        try Data("{ nope".utf8).write(to: pendingDirectory.appendingPathComponent("corrupt.json"))
+
+        let loaded = try KnowledgeShareInboxStore.loadAll(fileManager: fileManager)
+
+        XCTAssertEqual(loaded, [valid])
     }
 
     func testUpdatingSavedHostNormalizesLocalHostsToHTTP() async throws {
