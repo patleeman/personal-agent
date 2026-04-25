@@ -1115,6 +1115,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testChangeWorkingDirectoryClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.changeConversationCwdFailureQueueMessages = ["Working directory change temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failed = await model.changeWorkingDirectory("/tmp/one")
+        XCTAssertNil(failed)
+        XCTAssertNotNil(model.errorMessage)
+
+        let changed = await model.changeWorkingDirectory("/tmp/one")
+        XCTAssertEqual(changed?.cwd, "/tmp/one")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testSaveAutoModeIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.updateConversationAutoModeDelayNanoseconds = 150_000_000

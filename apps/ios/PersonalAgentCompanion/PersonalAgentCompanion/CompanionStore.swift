@@ -2694,7 +2694,9 @@ final class ConversationViewModel: ObservableObject {
         }
         defer { pendingWorkingDirectoryChangeKeys.remove(changeKey) }
         do {
-            return try await client.changeConversationCwd(conversationId: conversationId, cwd: cwd, surfaceId: installationSurfaceId)
+            let result = try await client.changeConversationCwd(conversationId: conversationId, cwd: cwd, surfaceId: installationSurfaceId)
+            errorMessage = nil
+            return result
         } catch {
             errorMessage = error.localizedDescription
             return nil
