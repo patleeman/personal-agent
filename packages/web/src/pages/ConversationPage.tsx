@@ -1695,6 +1695,135 @@ function base64ToFile(data: string, mimeType: string, name: string): File {
   return new File([bytes], name, { type: mimeType });
 }
 
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + 0x8000));
+  }
+  return window.btoa(binary);
+}
+
+function concatenateFloat32Chunks(chunks: Float32Array[]): Float32Array {
+  const length = chunks.reduce((total, chunk) => total + chunk.length, 0);
+  const output = new Float32Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return output;
+}
+
+function resampleMonoPcm(input: Float32Array, sourceRate: number, targetRate: number): Float32Array {
+  if (sourceRate === targetRate) {
+    return input;
+  }
+
+  const ratio = sourceRate / targetRate;
+  const outputLength = Math.max(1, Math.round(input.length / ratio));
+  const output = new Float32Array(outputLength);
+
+  for (let index = 0; index < outputLength; index += 1) {
+    const sourceIndex = index * ratio;
+    const before = Math.floor(sourceIndex);
+    const after = Math.min(input.length - 1, before + 1);
+    const weight = sourceIndex - before;
+    output[index] = (input[before] ?? 0) * (1 - weight) + (input[after] ?? 0) * weight;
+  }
+
+  return output;
+}
+
+function encodePcm16(samples: Float32Array): Uint8Array {
+  const output = new Uint8Array(samples.length * 2);
+  const view = new DataView(output.buffer);
+
+  for (let index = 0; index < samples.length; index += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[index] ?? 0));
+    view.setInt16(index * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  }
+
+  return output;
+}
+
+interface ComposerDictationCapture {
+  stop: () => Promise<{ audio: Uint8Array; durationMs: number }>;
+}
+
+async function startComposerDictationCapture(): Promise<ComposerDictationCapture> {
+  const mediaDevices = navigator.mediaDevices;
+  if (!mediaDevices?.getUserMedia) {
+    throw new Error('Microphone capture is not available in this browser.');
+  }
+
+  const stream = await mediaDevices.getUserMedia({
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+  });
+
+  const AudioContextCtor = window.AudioContext
+    ?? (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) {
+    stream.getTracks().forEach((track) => track.stop());
+    throw new Error('Audio capture is not available in this browser.');
+  }
+
+  const audioContext = new AudioContextCtor();
+  const source = audioContext.createMediaStreamSource(stream);
+  const processor = audioContext.createScriptProcessor(4096, 1, 1);
+  const chunks: Float32Array[] = [];
+  const startedAt = performance.now();
+  let stopped = false;
+
+  processor.onaudioprocess = (event) => {
+    if (stopped) {
+      return;
+    }
+
+    const inputBuffer = event.inputBuffer;
+    const sampleCount = inputBuffer.length;
+    const mixed = new Float32Array(sampleCount);
+
+    for (let channel = 0; channel < inputBuffer.numberOfChannels; channel += 1) {
+      const channelData = inputBuffer.getChannelData(channel);
+      for (let index = 0; index < sampleCount; index += 1) {
+        mixed[index] += (channelData[index] ?? 0) / inputBuffer.numberOfChannels;
+      }
+    }
+
+    chunks.push(mixed);
+  };
+
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  return {
+    stop: async () => {
+      if (stopped) {
+        return { audio: new Uint8Array(), durationMs: 0 };
+      }
+
+      stopped = true;
+      processor.disconnect();
+      source.disconnect();
+      stream.getTracks().forEach((track) => track.stop());
+      const sourceRate = audioContext.sampleRate;
+      await audioContext.close().catch(() => {});
+
+      const mono = concatenateFloat32Chunks(chunks);
+      const resampled = resampleMonoPcm(mono, sourceRate, 24_000);
+      return {
+        audio: encodePcm16(resampled),
+        durationMs: Math.max(0, Math.round(performance.now() - startedAt)),
+      };
+    },
+  };
+}
+
 function restoreQueuedImageFiles(
   images: PromptImageInput[] | undefined | null,
   behavior: 'steer' | 'followUp',
@@ -3275,6 +3404,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [contextDocsBusy, setContextDocsBusy] = useState(false);
   const [drawingsBusy, setDrawingsBusy] = useState(false);
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
+  const [dictationState, setDictationState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
   const [composerAltHeld, setComposerAltHeld] = useState(false);
   const [composerParallelHeld, setComposerParallelHeld] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -3282,6 +3412,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
   const [composerHistoryIndex, setComposerHistoryIndex] = useState<number | null>(null);
   const composerHistoryDraftRef = useRef('');
+  const dictationCaptureRef = useRef<ComposerDictationCapture | null>(null);
+  const dictationPointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
   const composerAttachmentScopeKey = draft ? 'draft' : (id ? `conversation:${id}` : null);
   const composerAttachmentsHydratedRef = useRef(false);
   const lastComposerAttachmentScopeKeyRef = useRef<string | null>(composerAttachmentScopeKey);
@@ -3311,6 +3443,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setMentionIdx(0);
     composerAttachmentsHydratedRef.current = true;
   }, [draft, id]);
+
+  useEffect(() => () => {
+    const capture = dictationCaptureRef.current;
+    dictationCaptureRef.current = null;
+    if (capture) {
+      void capture.stop().catch(() => {});
+    }
+  }, []);
 
   // Track keyboard open/close via visualViewport (mobile keyboard)
   useEffect(() => {
@@ -3519,6 +3659,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [wholeLineBashRunning, setWholeLineBashRunning] = useState(false);
   const wholeLineBashRunningRef = useRef(false);
   const [showBackgroundRunDetails, setShowBackgroundRunDetails] = useState(false);
+  const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext || wholeLineBashRunning;
 
   useEffect(() => {
     setPendingAssistantStatusLabel(null);
@@ -4447,6 +4588,132 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       composerSelectionRef.current = { start: end, end };
     });
   }, []);
+
+  const insertTextIntoComposer = useCallback((text: string) => {
+    const normalizedText = text.trim();
+    if (!normalizedText) {
+      return;
+    }
+
+    const currentInput = textareaRef.current?.value ?? input;
+    const selection = composerSelectionRef.current;
+    const start = Math.max(0, Math.min(selection.start, currentInput.length));
+    const end = Math.max(start, Math.min(selection.end, currentInput.length));
+    const before = currentInput.slice(0, start);
+    const after = currentInput.slice(end);
+    const leadingSpace = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+    const trailingSpace = after.length > 0 && !/^\s/.test(after) ? ' ' : '';
+    const inserted = `${leadingSpace}${normalizedText}${trailingSpace}`;
+    const nextInput = `${before}${inserted}${after}`;
+    const nextCaret = before.length + inserted.length;
+
+    setInput(nextInput);
+    window.requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) {
+        return;
+      }
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+      composerSelectionRef.current = { start: nextCaret, end: nextCaret };
+      scheduleComposerResize();
+    });
+  }, [input, scheduleComposerResize, setInput]);
+
+  const stopDictation = useCallback(async () => {
+    const capture = dictationCaptureRef.current;
+    if (!capture) {
+      return;
+    }
+
+    dictationCaptureRef.current = null;
+    setDictationState('transcribing');
+    try {
+      const { audio, durationMs } = await capture.stop();
+      if (audio.byteLength === 0 || durationMs < 150) {
+        setDictationState('idle');
+        return;
+      }
+
+      const result = await api.transcribeFile({
+        dataBase64: bytesToBase64(audio),
+        mimeType: 'audio/pcm',
+        fileName: 'dictation.pcm',
+      });
+      insertTextIntoComposer(result.text);
+      showNotice('accent', 'Dictation inserted.', 1800);
+    } catch (error) {
+      showNotice('danger', error instanceof Error ? error.message : String(error), 5000);
+    } finally {
+      setDictationState('idle');
+    }
+  }, [insertTextIntoComposer, showNotice]);
+
+  const startDictation = useCallback(async () => {
+    if (composerDisabled || dictationCaptureRef.current || dictationState === 'transcribing') {
+      return;
+    }
+
+    try {
+      const settings = await api.transcriptionSettings();
+      if (!settings.settings.provider) {
+        showNotice('danger', 'Choose a dictation provider in Settings first.', 5000);
+        return;
+      }
+
+      const capture = await startComposerDictationCapture();
+      dictationCaptureRef.current = capture;
+      setDictationState('recording');
+    } catch (error) {
+      setDictationState('idle');
+      showNotice('danger', error instanceof Error ? error.message : String(error), 5000);
+    }
+  }, [composerDisabled, dictationState, showNotice]);
+
+  const handleDictationPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || composerDisabled || dictationState === 'transcribing') {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const startedExistingRecording = dictationCaptureRef.current !== null;
+    dictationPointerRef.current = {
+      pointerId: event.pointerId,
+      startedAt: performance.now(),
+      startedExistingRecording,
+    };
+
+    if (!startedExistingRecording) {
+      void startDictation();
+    }
+  }, [composerDisabled, dictationState, startDictation]);
+
+  const handleDictationPointerUp = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const pointer = dictationPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    dictationPointerRef.current = null;
+    const heldMs = performance.now() - pointer.startedAt;
+    if (pointer.startedExistingRecording || heldMs >= 300) {
+      void stopDictation();
+    }
+  }, [stopDictation]);
+
+  const handleDictationPointerCancel = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    const pointer = dictationPointerRef.current;
+    if (!pointer || pointer.pointerId !== event.pointerId) {
+      return;
+    }
+
+    dictationPointerRef.current = null;
+    if (!pointer.startedExistingRecording) {
+      void stopDictation();
+    }
+  }, [stopDictation]);
 
   useEffect(() => {
     if (!pendingAskUserQuestion || input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
@@ -7130,7 +7397,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     composerParallelHeld,
   );
   const showScrollToBottomControl = shouldShowScrollToBottomControl(messageCount, atBottom);
-  const composerDisabled = conversationNeedsTakeover || preparingRelatedThreadContext || wholeLineBashRunning;
   const screenshotCaptureAvailable = getDesktopBridge() !== null
     && (typeof navigator === 'undefined' || /Mac/i.test(navigator.userAgent));
   const renameConversationDisabled = conversationNeedsTakeover
@@ -8164,6 +8430,38 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     </div>
 
                     <div className="ml-auto flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onPointerDown={handleDictationPointerDown}
+                        onPointerUp={handleDictationPointerUp}
+                        onPointerCancel={handleDictationPointerCancel}
+                        disabled={composerDisabled || dictationState === 'transcribing'}
+                        className={cx(
+                          'flex h-8 w-8 shrink-0 touch-none items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
+                          dictationState === 'recording'
+                            ? 'bg-danger/15 text-danger hover:bg-danger/25'
+                            : dictationState === 'transcribing'
+                              ? 'bg-elevated text-accent'
+                              : 'text-secondary hover:bg-elevated/60 hover:text-primary',
+                        )}
+                        title={dictationState === 'recording'
+                          ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
+                          : dictationState === 'transcribing'
+                            ? 'Transcribing…'
+                            : 'Dictate. Hold to record while held, or click to toggle.'}
+                        aria-label={dictationState === 'recording' ? 'Stop dictation' : 'Start dictation'}
+                      >
+                        {dictationState === 'transcribing' ? (
+                          <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                        ) : (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                            <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
+                            <path d="M19 11a7 7 0 0 1-14 0" />
+                            <path d="M12 18v3" />
+                            <path d="M8 21h8" />
+                          </svg>
+                        )}
+                      </button>
                       {stream.isStreaming ? (
                         <>
                           {composerHasContent ? (

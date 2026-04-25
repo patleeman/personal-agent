@@ -26,6 +26,7 @@ import type {
   ProviderAuthSummary,
   ProviderOAuthLoginState,
   ProviderOAuthLoginStreamEvent,
+  TranscriptionProviderId,
 } from '../shared/types';
 import { AppPageIntro, AppPageLayout, AppPageSection, AppPageToc, Pill, ToolbarButton, cx } from '../components/ui';
 
@@ -35,6 +36,7 @@ const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accen
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
   { id: 'settings-general', label: 'General', summary: 'Defaults, knowledge base, and roots' },
+  { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
   { id: 'settings-desktop', label: 'Desktop', summary: 'App behavior and SSH remotes' },
@@ -1385,6 +1387,12 @@ export function SettingsPage() {
     refetch: refetchConversationTitleSettings,
   } = useApi(api.conversationTitleSettings);
   const {
+    data: transcriptionState,
+    loading: transcriptionLoading,
+    error: transcriptionError,
+    replaceData: replaceTranscriptionState,
+  } = useApi(api.transcriptionSettings);
+  const {
     data: providerAuthState,
     loading: providerAuthLoading,
     error: providerAuthError,
@@ -1411,6 +1419,10 @@ export function SettingsPage() {
   const [pathPickerTarget, setPathPickerTarget] = useState<'vault-root' | 'default-cwd' | 'skill-folders' | 'instruction-files' | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
+  const [transcriptionProviderDraft, setTranscriptionProviderDraft] = useState<TranscriptionProviderId | ''>('');
+  const [transcriptionModelDraft, setTranscriptionModelDraft] = useState('gpt-4o-mini-transcribe');
+  const [savingTranscription, setSavingTranscription] = useState(false);
+  const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
   const [modelProviderDraft, setModelProviderDraft] = useState<ProviderEditorDraft>(() => createProviderEditorDraft(null));
   const [modelProviderAction, setModelProviderAction] = useState<'save' | 'delete' | null>(null);
@@ -1651,6 +1663,10 @@ export function SettingsPage() {
   const defaultCwdDirty = defaultCwdState
     ? defaultCwdDraft.trim() !== defaultCwdState.currentCwd
     : false;
+  const transcriptionDirty = transcriptionState
+    ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '')
+      || transcriptionModelDraft.trim() !== transcriptionState.settings.model
+    : false;
   const skillFoldersDirty = skillFoldersState
     ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length
       || skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
@@ -1684,6 +1700,13 @@ export function SettingsPage() {
       setDefaultCwdDraft(defaultCwdState.currentCwd);
     }
   }, [defaultCwdState?.currentCwd]);
+
+  useEffect(() => {
+    if (transcriptionState) {
+      setTranscriptionProviderDraft(transcriptionState.settings.provider ?? '');
+      setTranscriptionModelDraft(transcriptionState.settings.model);
+    }
+  }, [transcriptionState?.settings.model, transcriptionState?.settings.provider]);
 
   useEffect(() => {
     if (skillFoldersState) {
@@ -2195,6 +2218,33 @@ export function SettingsPage() {
       setConversationTitleSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingConversationTitle(null);
+    }
+  }
+
+  async function handleTranscriptionSave() {
+    if (!transcriptionState || savingTranscription || !transcriptionDirty) {
+      return;
+    }
+
+    const model = transcriptionModelDraft.trim();
+    if (!model) {
+      setTranscriptionSaveError('Transcription model is required.');
+      return;
+    }
+
+    setTranscriptionSaveError(null);
+    setSavingTranscription(true);
+
+    try {
+      const saved = await api.updateTranscriptionSettings({
+        provider: transcriptionProviderDraft || null,
+        model,
+      });
+      replaceTranscriptionState(saved);
+    } catch (error) {
+      setTranscriptionSaveError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setSavingTranscription(false);
     }
   }
 
@@ -3319,6 +3369,91 @@ export function SettingsPage() {
                 ) : null}
 
                 {conversationTitleSaveError && <p className="text-[12px] text-danger">{conversationTitleSaveError}</p>}
+              </SettingsPanel>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="settings-dictation"
+            label="Dictation"
+            description="Choose the transcription backend used by the composer mic button. No automatic fallback is applied."
+            className="order-3"
+          >
+            <div className="space-y-0">
+              <SettingsPanel
+                title="Transcription provider"
+                description="The composer records 24 kHz PCM and sends it to this provider when dictation stops."
+              >
+                {transcriptionLoading && !transcriptionState ? (
+                  <p className="ui-card-meta">Loading dictation settings…</p>
+                ) : transcriptionError && !transcriptionState ? (
+                  <p className="text-[12px] text-danger">Failed to load dictation settings: {transcriptionError}</p>
+                ) : transcriptionState ? (
+                  <form
+                    className="space-y-3"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleTranscriptionSave();
+                    }}
+                  >
+                    <label className="ui-card-meta" htmlFor="settings-transcription-provider">Provider</label>
+                    <select
+                      id="settings-transcription-provider"
+                      value={transcriptionProviderDraft}
+                      onChange={(event) => {
+                        setTranscriptionProviderDraft(event.target.value as TranscriptionProviderId | '');
+                        setTranscriptionSaveError(null);
+                      }}
+                      disabled={savingTranscription}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">Disabled</option>
+                      {transcriptionState.providers.map((provider) => (
+                        <option key={provider.id} value={provider.id}>
+                          {provider.label}{provider.status === 'planned' ? ' (planned)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="ui-card-meta">
+                      {transcriptionProviderDraft
+                        ? transcriptionState.providers.find((provider) => provider.id === transcriptionProviderDraft)?.status === 'planned'
+                          ? 'This provider is documented but not implemented yet.'
+                          : 'Uses the selected provider only. If it fails, dictation fails visibly.'
+                        : 'Dictation is disabled until a provider is selected.'}
+                    </p>
+
+                    <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">Model</label>
+                    <input
+                      id="settings-transcription-model"
+                      value={transcriptionModelDraft}
+                      onChange={(event) => {
+                        setTranscriptionModelDraft(event.target.value);
+                        setTranscriptionSaveError(null);
+                      }}
+                      disabled={savingTranscription}
+                      className={`${INPUT_CLASS} font-mono text-[13px]`}
+                      placeholder="gpt-4o-mini-transcribe"
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="submit"
+                        disabled={savingTranscription || !transcriptionDirty}
+                        className={ACTION_BUTTON_CLASS}
+                      >
+                        {savingTranscription ? 'Saving…' : 'Save dictation'}
+                      </button>
+                    </div>
+
+                    <p className="ui-card-meta">
+                      Implemented now: OpenAI Codex Realtime. Planned adapters: OpenAI API and WhisperKit local.
+                    </p>
+                  </form>
+                ) : null}
+
+                {transcriptionSaveError && <p className="text-[12px] text-danger">{transcriptionSaveError}</p>}
               </SettingsPanel>
             </div>
           </SettingsSection>

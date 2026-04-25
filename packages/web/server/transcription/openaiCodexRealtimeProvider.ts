@@ -163,7 +163,7 @@ async function waitForOpen(socket: WebSocket, signal?: AbortSignal): Promise<voi
 export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionProvider {
   readonly id = 'openai-codex-realtime' as const;
   readonly label = 'OpenAI Codex Realtime';
-  readonly transports = ['stream', 'file'] as const;
+  readonly transports: Array<'stream' | 'file'> = ['stream', 'file'];
   private readonly modelRegistry: ModelRegistryLike;
   private readonly modelId: string;
   private readonly WebSocketCtor: typeof WebSocket;
