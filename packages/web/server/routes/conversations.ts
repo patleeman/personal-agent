@@ -49,8 +49,8 @@ import {
   readConversationSessionsCapability,
 } from '../conversations/conversationSessionCapability.js';
 import {
-  queueConversationSummaryBackfill,
   readConversationSummaryIndexCapability,
+  startConversationSummaryBackfillLoop,
 } from '../conversations/conversationSummaries.js';
 import {
   readConversationContextDocs,
@@ -318,11 +318,12 @@ export function registerConversationRoutes(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
   initializeConversationRoutesContext(context);
+  startConversationSummaryBackfillLoop({
+    listSessions: readConversationSessionsCapability,
+  });
   router.get('/api/sessions', (_req, res) => {
     try {
-      const sessions = readConversationSessionsCapability();
-      queueConversationSummaryBackfill(sessions);
-      res.json(sessions);
+      res.json(readConversationSessionsCapability());
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

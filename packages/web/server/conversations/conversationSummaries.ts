@@ -13,6 +13,8 @@ const MAX_BACKFILL_PER_CALL = 8;
 const MAX_SOURCE_CHARACTERS = 18_000;
 const MAX_ACTIVE_JOBS = 1;
 const SUMMARY_ATTEMPT_COOLDOWN_MS = 10 * 60 * 1000;
+const DEFAULT_BACKFILL_INITIAL_DELAY_MS = 5_000;
+const DEFAULT_BACKFILL_INTERVAL_MS = 60_000;
 
 export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
 
@@ -58,6 +60,7 @@ const queuedSessionIds = new Set<string>();
 const activeSessionIds = new Set<string>();
 const pendingQueue: SessionMeta[] = [];
 let activeJobs = 0;
+let backfillLoopStarted = false;
 
 function getDb(): SqliteDatabase {
   if (db) {
@@ -543,6 +546,35 @@ export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit 
       break;
     }
   }
+}
+
+export function startConversationSummaryBackfillLoop(input: {
+  listSessions: () => SessionMeta[];
+  initialDelayMs?: number;
+  intervalMs?: number;
+  limit?: number;
+}): void {
+  if (backfillLoopStarted) {
+    return;
+  }
+  backfillLoopStarted = true;
+
+  const runBackfillTick = () => {
+    try {
+      queueConversationSummaryBackfill(input.listSessions(), input.limit ?? MAX_BACKFILL_PER_CALL);
+    } catch (error) {
+      logWarn('conversation summary backfill tick failed', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const initialDelay = Math.max(0, input.initialDelayMs ?? DEFAULT_BACKFILL_INITIAL_DELAY_MS);
+  const intervalMs = Math.max(5_000, input.intervalMs ?? DEFAULT_BACKFILL_INTERVAL_MS);
+  const initialTimer = setTimeout(runBackfillTick, initialDelay);
+  initialTimer.unref?.();
+  const interval = setInterval(runBackfillTick, intervalMs);
+  interval.unref?.();
 }
 
 export function readConversationSummaryIndexCapability(input: { sessionIds?: unknown } = {}) {
