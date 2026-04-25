@@ -73,15 +73,6 @@ function queryButton(container: HTMLElement, label: string, index = 0): HTMLButt
   return button;
 }
 
-function queryButtonContaining(container: HTMLElement, label: string, index = 0): HTMLButtonElement {
-  const matches = Array.from(container.querySelectorAll('button')).filter((node) => node.textContent?.includes(label));
-  const button = matches[index];
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error(`Expected button containing ${label} at index ${index}`);
-  }
-  return button;
-}
-
 function queryInput(container: HTMLElement, selector: string): HTMLInputElement {
   const input = container.querySelector(selector);
   if (!(input instanceof HTMLInputElement)) {
@@ -266,13 +257,6 @@ describe('SettingsPage provider model editor', () => {
       currentModel: '',
       effectiveModel: 'openai-codex/gpt-5.4',
     });
-    const transcriptionSettingsResult = buildUseApiResult({
-      settings: {
-        provider: null,
-        model: 'gpt-4o-mini-transcribe',
-      },
-      providers: [],
-    });
     const statusResult = buildUseApiResult({
       profile: 'assistant',
       repoRoot: '/Users/patrick/workingdir/personal-agent',
@@ -346,10 +330,6 @@ describe('SettingsPage provider model editor', () => {
         return conversationTitleSettingsResult;
       }
 
-      if (fetcher === api.transcriptionSettings) {
-        return transcriptionSettingsResult;
-      }
-
       if (fetcher === api.status) {
         return statusResult;
       }
@@ -417,7 +397,7 @@ describe('SettingsPage provider model editor', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    click(queryButton(container, 'Add provider/model'));
+    click(queryButton(container, 'New provider'));
     updateSelectValue(querySelect(container, '#settings-model-provider-existing'), 'anthropic');
 
     expect(queryInput(container, '#settings-model-provider-id').value).toBe('anthropic');
@@ -441,17 +421,5 @@ describe('SettingsPage provider model editor', () => {
     expect(saveModelProviderModelMock).toHaveBeenCalledWith('anthropic', expect.objectContaining({
       modelId: 'claude-sonnet-4-7',
     }));
-  });
-
-  it('shows known providers as direct add-model targets', async () => {
-    const { container } = renderPage();
-    await flushAsyncWork();
-
-    expect(container.textContent).toContain('Known providers you can add models to');
-
-    click(queryButtonContaining(container, 'anthropic'));
-
-    expect(queryInput(container, '#settings-model-provider-id').value).toBe('anthropic');
-    expect(container.textContent).toContain('Saving a model creates that provider entry in models.json immediately.');
   });
 });
