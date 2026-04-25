@@ -1373,6 +1373,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
+    var readModelsDelayNanoseconds: UInt64 = 0
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
@@ -2133,7 +2134,11 @@ final class MockCompanionClient: CompanionClientProtocol {
     func listExecutionTargets() async throws -> [ExecutionTargetSummary] { listState.executionTargets ?? [] }
 
     func readModels() async throws -> CompanionModelState {
-        modelState
+        let state = modelState
+        if readModelsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: readModelsDelayNanoseconds)
+        }
+        return state
     }
 
     func listSshTargets() async throws -> CompanionSshTargetState {

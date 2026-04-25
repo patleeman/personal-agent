@@ -1055,6 +1055,33 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.sshTargets.first?.label, "Buildbox")
     }
 
+    func testStaleModelRefreshDoesNotOverwriteSavedPreference() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        client.readModelsDelayNanoseconds = 150_000_000
+        model.refreshModelState()
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        let saved = await model.saveModelPreferences(model: "gpt-5.5", thinkingLevel: "high", serviceTier: "priority")
+        XCTAssertEqual(saved?.currentModel, "gpt-5.5")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.modelState?.currentModel == "gpt-5.5"
+        }
+        try await Task.sleep(nanoseconds: 180_000_000)
+        XCTAssertEqual(model.modelState?.currentModel, "gpt-5.5")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testParallelPromptCreatesChildConversationInMockClient() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")

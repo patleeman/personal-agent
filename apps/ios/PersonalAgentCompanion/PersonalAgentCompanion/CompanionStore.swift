@@ -1961,6 +1961,7 @@ final class ConversationViewModel: ObservableObject {
     private var isApplyingComposerDraft = false
     private var bootstrapLoadTask: Task<Void, Never>?
     private var attachmentRefreshTask: Task<Void, Never>?
+    private var modelRefreshTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
     private var activityRefreshTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
@@ -1972,6 +1973,7 @@ final class ConversationViewModel: ObservableObject {
     private var liveEventRevision = 0
     private var bootstrapLoadRequestId = 0
     private var attachmentRefreshRequestId = 0
+    private var modelRefreshRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -2024,6 +2026,8 @@ final class ConversationViewModel: ObservableObject {
         isLoading = false
         attachmentRefreshTask?.cancel()
         attachmentRefreshTask = nil
+        modelRefreshTask?.cancel()
+        modelRefreshTask = nil
         composerDraftSaveTask?.cancel()
         persistComposerDraftIfNeeded()
         streamTask?.cancel()
@@ -2083,11 +2087,19 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func refreshModelState() {
-        Task {
+        modelRefreshTask?.cancel()
+        modelRefreshRequestId += 1
+        let requestId = modelRefreshRequestId
+        modelRefreshTask = Task {
             do {
-                modelState = try await client.readModels()
+                let state = try await client.readModels()
+                if !Task.isCancelled, modelRefreshRequestId == requestId {
+                    modelState = state
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled, modelRefreshRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -2418,11 +2430,16 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func loadModelPreferences() async -> ConversationModelPreferencesState? {
+        modelRefreshRequestId += 1
+        let requestId = modelRefreshRequestId
         do {
             async let preferences = client.readConversationModelPreferences(conversationId: conversationId)
             async let models = client.readModels()
             let state = try await preferences
-            modelState = try await models
+            let nextModels = try await models
+            if modelRefreshRequestId == requestId {
+                modelState = nextModels
+            }
             return state
         } catch {
             errorMessage = error.localizedDescription
@@ -2431,6 +2448,7 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func saveModelPreferences(model: String?, thinkingLevel: String?, serviceTier: String?) async -> ConversationModelPreferencesState? {
+        modelRefreshRequestId += 1
         do {
             let state = try await client.updateConversationModelPreferences(
                 conversationId: conversationId,
