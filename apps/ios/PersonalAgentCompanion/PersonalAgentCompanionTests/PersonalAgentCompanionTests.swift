@@ -1808,6 +1808,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testUpdatePairedDeviceIgnoresDuplicateSaveWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.updatePairedDeviceDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let state = await session.readDeviceAdminState()
+        let initialState = try XCTUnwrap(state)
+        let deviceId = try XCTUnwrap(initialState.devices.first?.id)
+
+        async let first = session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        async let second = session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        let states = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(states.filter { $0.devices.contains { $0.id == deviceId && $0.deviceLabel == "Patrick’s phone" } }.count, 1)
+        XCTAssertEqual(client.updatePairedDeviceCount, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testRunTaskIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.runTaskDelayNanoseconds = 150_000_000

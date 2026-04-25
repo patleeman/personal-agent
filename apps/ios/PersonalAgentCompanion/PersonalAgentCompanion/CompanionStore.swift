@@ -491,6 +491,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingRunCancelIds: Set<String> = []
     private var pendingSshTargetSaveKeys: Set<String> = []
     private var pendingSshTargetDeleteIds: Set<String> = []
+    private var pendingPairedDeviceUpdateKeys: Set<String> = []
     private var pendingPairedDeviceDeleteIds: Set<String> = []
     private var isCreatingPairingCode = false
     private var appEventRevision = 0
@@ -934,6 +935,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func updatePairedDevice(_ deviceId: String, label: String) async -> CompanionDeviceAdminState? {
+        let updateKey = [deviceId, label.trimmed].joined(separator: "\u{1f}")
+        guard pendingPairedDeviceUpdateKeys.insert(updateKey).inserted else {
+            return nil
+        }
+        defer { pendingPairedDeviceUpdateKeys.remove(updateKey) }
         do {
             return try await client.updatePairedDevice(deviceId: deviceId, deviceLabel: label)
         } catch {
