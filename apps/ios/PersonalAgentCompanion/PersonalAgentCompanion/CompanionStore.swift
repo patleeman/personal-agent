@@ -485,6 +485,7 @@ final class HostSessionModel: ObservableObject {
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
+    private var pendingTaskRunIds: Set<String> = []
     private var appEventRevision = 0
     private var refreshRequestId = 0
 
@@ -743,6 +744,10 @@ final class HostSessionModel: ObservableObject {
     }
 
     func runTask(_ taskId: String) async -> ScheduledTaskRunResponse? {
+        guard pendingTaskRunIds.insert(taskId).inserted else {
+            return nil
+        }
+        defer { pendingTaskRunIds.remove(taskId) }
         do {
             return try await client.runTask(taskId: taskId)
         } catch {

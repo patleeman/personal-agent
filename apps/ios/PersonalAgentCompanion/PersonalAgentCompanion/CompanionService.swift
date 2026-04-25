@@ -1386,6 +1386,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
+    var runTaskDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
@@ -1396,6 +1397,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var createConversationCount = 0
+    private(set) var runTaskCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
 
@@ -3401,6 +3403,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func runTask(taskId: String) async throws -> ScheduledTaskRunResponse {
+        runTaskCount += 1
+        if runTaskDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: runTaskDelayNanoseconds)
+        }
         guard let task = tasks.first(where: { $0.id == taskId }) else {
             throw CompanionClientError.requestFailed("Task not found.")
         }

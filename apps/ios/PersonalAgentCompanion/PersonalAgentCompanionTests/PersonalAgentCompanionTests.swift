@@ -1755,6 +1755,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
     }
 
+    func testRunTaskIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.runTaskDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialRunCount = await session.listRuns()?.runs.filter { $0.manifest?.source?.type == "task" && $0.manifest?.source?.id == "task-1" }.count ?? 0
+
+        async let first = session.runTask("task-1")
+        async let second = session.runTask("task-1")
+        let responses = await [first, second].compactMap { $0 }
+        let runs = await session.listRuns()
+
+        XCTAssertEqual(responses.count, 1)
+        XCTAssertEqual(client.runTaskCount, 1)
+        XCTAssertEqual(runs?.runs.filter { $0.manifest?.source?.type == "task" && $0.manifest?.source?.id == "task-1" }.count, initialRunCount + 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testAutomationEditorPersistsCallbackFields() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()
