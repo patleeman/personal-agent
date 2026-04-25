@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/cli",
-  "version": "0.5.8",
+  "version": "0.5.9",
   "description": "Personal agent CLI",
   "type": "module",
   "exports": {
