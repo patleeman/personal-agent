@@ -2887,7 +2887,9 @@ final class ConversationViewModel: ObservableObject {
 
     func downloadAttachmentAsset(attachmentId: String, asset: String, revision: Int?) async -> AttachmentAssetDownload? {
         do {
-            return try await client.downloadAttachmentAsset(conversationId: conversationId, attachmentId: attachmentId, asset: asset, revision: revision)
+            let download = try await client.downloadAttachmentAsset(conversationId: conversationId, attachmentId: attachmentId, asset: asset, revision: revision)
+            errorMessage = nil
+            return download
         } catch {
             errorMessage = error.localizedDescription
             return nil

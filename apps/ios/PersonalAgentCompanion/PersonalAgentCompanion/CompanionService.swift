@@ -1440,6 +1440,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listConversationCheckpointsFailureQueueMessages: [String] = []
     var readConversationCheckpointFailureQueueMessages: [String] = []
     var readAttachmentFailureQueueMessages: [String] = []
+    var downloadAttachmentAssetFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -3172,6 +3173,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func downloadAttachmentAsset(conversationId: String, attachmentId: String, asset: String, revision: Int?) async throws -> AttachmentAssetDownload {
+        if !downloadAttachmentAssetFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(downloadAttachmentAssetFailureQueueMessages.removeFirst())
+        }
         if asset == "preview" {
             let pngBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9W2KIiQAAAAASUVORK5CYII="
             return AttachmentAssetDownload(data: Data(base64Encoded: pngBase64) ?? Data(), mimeType: "image/png", fileName: "Preview.png")

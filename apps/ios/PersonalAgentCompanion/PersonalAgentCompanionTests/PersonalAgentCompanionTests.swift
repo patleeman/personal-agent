@@ -1728,6 +1728,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testDownloadAttachmentAssetClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.downloadAttachmentAssetFailureQueueMessages = ["Attachment asset temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedAsset = await model.downloadAttachmentAsset(attachmentId: "att-1", asset: "preview", revision: 1)
+        XCTAssertNil(failedAsset)
+        XCTAssertNotNil(model.errorMessage)
+
+        let asset = await model.downloadAttachmentAsset(attachmentId: "att-1", asset: "preview", revision: 1)
+        XCTAssertEqual(asset?.mimeType, "image/png")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testHostSessionCanArchiveRestoreAndPinConversations() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()
