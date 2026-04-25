@@ -656,6 +656,29 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testSaveNewAttachmentAndAttachClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createAttachmentFailureQueueMessages = ["Attachment create temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedSave = await model.saveNewAttachmentAndAttach(makeLiveAttachmentDraft())
+        XCTAssertFalse(failedSave)
+        XCTAssertNotNil(model.errorMessage)
+
+        let saved = await model.saveNewAttachmentAndAttach(makeLiveAttachmentDraft())
+        XCTAssertTrue(saved)
+        XCTAssertTrue(model.promptAttachmentRefs.contains(where: { $0.title == "Live test drawing" }))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testEditingAttachmentUpdatesExistingRecordInsteadOfDuplicatingIt() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

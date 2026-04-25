@@ -2955,6 +2955,7 @@ final class ConversationViewModel: ObservableObject {
             attachmentRefreshRequestId += 1
             savedAttachments = result.attachments
             attachDrawingReference(attachment: result.attachment.summary, revision: result.attachment.currentRevision)
+            errorMessage = nil
             return true
         } catch {
             errorMessage = error.localizedDescription
