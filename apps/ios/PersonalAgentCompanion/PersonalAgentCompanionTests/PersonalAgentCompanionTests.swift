@@ -610,6 +610,36 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.savedAttachments.contains(where: { $0.id == model.promptAttachmentRefs.first?.attachmentId }))
     }
 
+    func testStaleAttachmentRefreshDoesNotOverwriteNewlySavedAttachment() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.savedAttachments.contains(where: { $0.id == "att-1" })
+        }
+
+        client.listAttachmentsDelayNanoseconds = 150_000_000
+        model.refreshAttachments()
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        let saved = await model.saveNewAttachment(makeLiveAttachmentDraft())
+        XCTAssertTrue(saved)
+        let savedAttachmentId = try XCTUnwrap(model.savedAttachments.first(where: { $0.title == "Live test drawing" })?.id)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(model.savedAttachments.contains(where: { $0.id == savedAttachmentId }))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testMockKnowledgeListsFoldersAndNotes() async throws {
         let client = MockCompanionClient()
 

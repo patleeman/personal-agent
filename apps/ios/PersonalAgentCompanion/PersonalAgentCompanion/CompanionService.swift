@@ -1372,6 +1372,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
+    var listAttachmentsDelayNanoseconds: UInt64 = 0
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
@@ -2839,7 +2840,11 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listAttachments(conversationId: String) async throws -> ConversationAttachmentListResponse {
-        ConversationAttachmentListResponse(conversationId: conversationId, attachments: (attachmentsByConversation[conversationId] ?? []).map(\.summary))
+        let attachments = (attachmentsByConversation[conversationId] ?? []).map(\.summary)
+        if listAttachmentsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: listAttachmentsDelayNanoseconds)
+        }
+        return ConversationAttachmentListResponse(conversationId: conversationId, attachments: attachments)
     }
 
     func readAttachment(conversationId: String, attachmentId: String) async throws -> ConversationAttachmentDetailResponse {

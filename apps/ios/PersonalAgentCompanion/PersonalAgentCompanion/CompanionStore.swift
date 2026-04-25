@@ -1960,6 +1960,7 @@ final class ConversationViewModel: ObservableObject {
     private var didRestoreComposerDraft = false
     private var isApplyingComposerDraft = false
     private var bootstrapLoadTask: Task<Void, Never>?
+    private var attachmentRefreshTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
     private var activityRefreshTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
@@ -1970,6 +1971,7 @@ final class ConversationViewModel: ObservableObject {
     private var liveConversationId: String?
     private var liveEventRevision = 0
     private var bootstrapLoadRequestId = 0
+    private var attachmentRefreshRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -2020,6 +2022,8 @@ final class ConversationViewModel: ObservableObject {
         bootstrapLoadTask?.cancel()
         bootstrapLoadTask = nil
         isLoading = false
+        attachmentRefreshTask?.cancel()
+        attachmentRefreshTask = nil
         composerDraftSaveTask?.cancel()
         persistComposerDraftIfNeeded()
         streamTask?.cancel()
@@ -2061,12 +2065,19 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func refreshAttachments() {
-        Task {
+        attachmentRefreshTask?.cancel()
+        attachmentRefreshRequestId += 1
+        let requestId = attachmentRefreshRequestId
+        attachmentRefreshTask = Task {
             do {
                 let result = try await client.listAttachments(conversationId: conversationId)
-                savedAttachments = result.attachments
+                if !Task.isCancelled, attachmentRefreshRequestId == requestId {
+                    savedAttachments = result.attachments
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled, attachmentRefreshRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }
@@ -2559,6 +2570,7 @@ final class ConversationViewModel: ObservableObject {
     func saveNewAttachment(_ draft: AttachmentEditorDraft) async -> Bool {
         do {
             let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
+            attachmentRefreshRequestId += 1
             savedAttachments = result.attachments
             return true
         } catch {
@@ -2570,6 +2582,7 @@ final class ConversationViewModel: ObservableObject {
     func saveNewAttachmentAndAttach(_ draft: AttachmentEditorDraft) async -> Bool {
         do {
             let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
+            attachmentRefreshRequestId += 1
             savedAttachments = result.attachments
             attachDrawingReference(attachment: result.attachment.summary, revision: result.attachment.currentRevision)
             return true
@@ -2582,6 +2595,7 @@ final class ConversationViewModel: ObservableObject {
     func saveExistingAttachment(attachmentId: String, draft: AttachmentEditorDraft) async -> Bool {
         do {
             let result = try await client.updateAttachment(conversationId: conversationId, attachmentId: attachmentId, draft: draft)
+            attachmentRefreshRequestId += 1
             savedAttachments = result.attachments
             return true
         } catch {
