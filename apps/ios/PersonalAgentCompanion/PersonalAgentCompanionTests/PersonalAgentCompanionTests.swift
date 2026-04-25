@@ -1738,6 +1738,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testResumeConversationClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createConversationFailureQueueMessages = ["Conversation resume temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let request = ResumeConversationRequest(sessionFile: "/tmp/session.jsonl", cwd: "/tmp", executionTargetId: "local")
+
+        let failedConversationId = await session.resumeConversation(request)
+        XCTAssertNil(failedConversationId)
+        XCTAssertNotNil(session.errorMessage)
+
+        let conversationId = await session.resumeConversation(request)
+        XCTAssertNotNil(conversationId)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testMockDuplicateConversationCopiesTranscript() async throws {
         let client = MockCompanionClient()
         let source = try await client.conversationBootstrap(conversationId: "conv-1")
