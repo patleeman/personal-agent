@@ -1399,6 +1399,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var runTaskDelayNanoseconds: UInt64 = 0
     var runTaskFailureQueueMessages: [String] = []
     var cancelRunDelayNanoseconds: UInt64 = 0
+    var cancelRunFailureQueueMessages: [String] = []
     var listSshTargetsFailureQueueMessages: [String] = []
     var testSshTargetFailureQueueMessages: [String] = []
     var readRemoteDirectoryFailureQueueMessages: [String] = []
@@ -3593,6 +3594,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         cancelRunCount += 1
         if cancelRunDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: cancelRunDelayNanoseconds)
+        }
+        if !cancelRunFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(cancelRunFailureQueueMessages.removeFirst())
         }
         if let index = runs.firstIndex(where: { $0.runId == runId }) {
             let run = runs[index]

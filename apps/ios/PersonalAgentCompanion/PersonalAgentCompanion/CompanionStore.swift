@@ -883,7 +883,9 @@ final class HostSessionModel: ObservableObject {
         }
         defer { pendingRunCancelIds.remove(runId) }
         do {
-            return try await client.cancelRun(runId: runId)
+            let response = try await client.cancelRun(runId: runId)
+            errorMessage = nil
+            return response
         } catch {
             errorMessage = error.localizedDescription
             return nil
