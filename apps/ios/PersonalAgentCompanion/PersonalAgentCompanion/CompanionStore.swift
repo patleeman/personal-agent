@@ -2804,6 +2804,7 @@ final class ConversationViewModel: ObservableObject {
                 meta.deferredResumes = deferredResumes
                 sessionMeta = meta
             }
+            errorMessage = nil
             refreshModelState()
             return state
         } catch {

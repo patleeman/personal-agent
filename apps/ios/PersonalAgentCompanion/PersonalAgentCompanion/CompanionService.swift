@@ -1433,6 +1433,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationAutoModeFailureQueueMessages: [String] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
+    var updateConversationModelPreferencesFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -2961,6 +2962,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         let delay = updateConversationModelPreferencesDelayQueueNanoseconds.isEmpty ? updateConversationModelPreferencesDelayNanoseconds : updateConversationModelPreferencesDelayQueueNanoseconds.removeFirst()
         if delay > 0 {
             try await Task.sleep(nanoseconds: delay)
+        }
+        if !updateConversationModelPreferencesFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(updateConversationModelPreferencesFailureQueueMessages.removeFirst())
         }
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")

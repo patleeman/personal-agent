@@ -1555,6 +1555,30 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.sessionMeta?.model, "new-fast-model")
     }
 
+    func testSaveModelPreferencesClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.updateConversationModelPreferencesFailureQueueMessages = ["Model preferences temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failed = await model.saveModelPreferences(model: "gpt-5.5", thinkingLevel: "high", serviceTier: "priority")
+        XCTAssertNil(failed)
+        XCTAssertNotNil(model.errorMessage)
+
+        let saved = await model.saveModelPreferences(model: "gpt-5.5", thinkingLevel: "high", serviceTier: "priority")
+        XCTAssertEqual(saved?.currentModel, "gpt-5.5")
+        XCTAssertEqual(saved?.currentThinkingLevel, "high")
+        XCTAssertEqual(saved?.currentServiceTier, "priority")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testParallelPromptCreatesChildConversationInMockClient() async throws {
         let client = MockCompanionClient()
         let created = try await client.createConversation(NewConversationRequest(), surfaceId: "ios-test")
