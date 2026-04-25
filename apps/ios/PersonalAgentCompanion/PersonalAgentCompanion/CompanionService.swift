@@ -1434,6 +1434,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     var updateConversationModelPreferencesFailureQueueMessages: [String] = []
+    var listConversationArtifactsFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -3014,7 +3015,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listConversationArtifacts(conversationId: String) async throws -> [ConversationArtifactSummary] {
-        (artifactsByConversation[conversationId] ?? []).map { artifact in
+        if !listConversationArtifactsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(listConversationArtifactsFailureQueueMessages.removeFirst())
+        }
+        return (artifactsByConversation[conversationId] ?? []).map { artifact in
             ConversationArtifactSummary(id: artifact.id, conversationId: artifact.conversationId, title: artifact.title, kind: artifact.kind, createdAt: artifact.createdAt, updatedAt: artifact.updatedAt, revision: artifact.revision)
         }
     }

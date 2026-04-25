@@ -1860,6 +1860,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(checkpoint?.files.count, 1)
     }
 
+    func testListArtifactsClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listConversationArtifactsFailureQueueMessages = ["Artifact list temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedArtifacts = await model.listArtifacts()
+        XCTAssertTrue(failedArtifacts.isEmpty)
+        XCTAssertNotNil(model.errorMessage)
+
+        let artifacts = await model.listArtifacts()
+        XCTAssertEqual(artifacts.first?.id, "artifact-1")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCreateCheckpointAddsCheckpointRecord() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

@@ -2815,7 +2815,9 @@ final class ConversationViewModel: ObservableObject {
 
     func listArtifacts() async -> [ConversationArtifactSummary] {
         do {
-            return try await client.listConversationArtifacts(conversationId: conversationId)
+            let artifacts = try await client.listConversationArtifacts(conversationId: conversationId)
+            errorMessage = nil
+            return artifacts
         } catch {
             errorMessage = error.localizedDescription
             return []
