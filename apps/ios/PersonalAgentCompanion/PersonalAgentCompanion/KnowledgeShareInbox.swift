@@ -130,7 +130,7 @@ struct CompanionIncomingShareLink: Equatable {
     init?(url: URL) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               url.scheme?.lowercased() == Self.scheme,
-              url.host?.lowercased() == "share" || components.path == "/share" else {
+              url.host?.lowercased() == "share" || (url.host == nil && components.path == "/share") else {
             return nil
         }
     }

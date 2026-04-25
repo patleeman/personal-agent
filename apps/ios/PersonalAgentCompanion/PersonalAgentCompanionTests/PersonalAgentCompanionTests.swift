@@ -69,6 +69,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(CompanionIncomingShareLink(url: URL(string: "https://example.com/share")!))
     }
 
+    func testCompanionIncomingShareLinkRejectsNonShareHosts() {
+        XCTAssertNil(CompanionIncomingShareLink(url: URL(string: "pa-companion://example.com/share")!))
+    }
+
     func testKnowledgeShareInboxSkipsCorruptPendingShareFiles() throws {
         let container = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let fileManager = TestAppGroupFileManager(container: container)
