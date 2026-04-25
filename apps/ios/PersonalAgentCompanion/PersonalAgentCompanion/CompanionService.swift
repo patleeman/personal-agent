@@ -2118,6 +2118,29 @@ final class MockCompanionClient: CompanionClientProtocol {
 
     func disconnect() {}
 
+    func addMockDeferredResume(conversationId: String, resumeId: String) {
+        guard var meta = conversations[conversationId]?.sessionMeta else {
+            return
+        }
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let resume = DeferredResumeSummary(
+            id: resumeId,
+            sessionFile: meta.file,
+            prompt: "Continue from the iOS demo deferred resume.",
+            dueAt: now,
+            createdAt: now,
+            attempts: 0,
+            status: "pending",
+            readyAt: nil,
+            kind: "follow-up",
+            title: "iOS demo resume",
+            behavior: "followUp",
+            delivery: DeferredResumeDelivery(alertLevel: "disruptive", autoResumeIfOpen: true, requireAck: false)
+        )
+        meta.deferredResumes = (meta.deferredResumes ?? []).filter { $0.id != resumeId } + [resume]
+        replaceConversationMeta(conversationId: conversationId, meta: meta)
+    }
+
     func listConversations() async throws -> ConversationListState {
         let state = listState
         let delay = listConversationsDelayQueueNanoseconds.isEmpty ? listConversationsDelayNanoseconds : listConversationsDelayQueueNanoseconds.removeFirst()
@@ -2571,7 +2594,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             try await Task.sleep(nanoseconds: delay)
         }
         guard var envelope = conversations[conversationId], let sessionMeta = envelope.sessionMeta else { return }
-        let renamedMeta = SessionMeta(
+        var renamedMeta = SessionMeta(
             id: sessionMeta.id,
             file: sessionMeta.file,
             timestamp: sessionMeta.timestamp,
@@ -2597,9 +2620,8 @@ final class MockCompanionClient: CompanionClientProtocol {
             attentionUnreadActivityCount: sessionMeta.attentionUnreadActivityCount,
             attentionActivityIds: sessionMeta.attentionActivityIds
         )
-        envelope = ConversationBootstrapEnvelope(bootstrap: envelope.bootstrap, sessionMeta: renamedMeta, attachments: envelope.attachments, executionTargets: envelope.executionTargets)
-        conversations[conversationId] = envelope
-        listState = ConversationListState(sessions: listState.sessions.map { $0.id == conversationId ? renamedMeta : $0 }, ordering: listState.ordering, executionTargets: listState.executionTargets)
+        renamedMeta.deferredResumes = sessionMeta.deferredResumes
+        replaceConversationMeta(conversationId: conversationId, meta: renamedMeta)
         emitConversation(conversationId, .titleUpdate(name))
         emitApp(.conversationListState(listState))
     }
@@ -2609,7 +2631,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
         let nextId = conversationId == "conv-1" ? "conv-1-cwd" : conversationId
-        let updatedMeta = SessionMeta(
+        var updatedMeta = SessionMeta(
             id: nextId,
             file: meta.file,
             timestamp: meta.timestamp,
@@ -2635,6 +2657,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
             attentionActivityIds: meta.attentionActivityIds
         )
+        updatedMeta.deferredResumes = meta.deferredResumes
         let updated = ConversationBootstrapEnvelope(
             bootstrap: ConversationBootstrapState(
                 conversationId: nextId,
@@ -2705,7 +2728,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
-        let updatedMeta = SessionMeta(
+        var updatedMeta = SessionMeta(
             id: meta.id,
             file: meta.file,
             timestamp: meta.timestamp,
@@ -2731,6 +2754,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
             attentionActivityIds: meta.attentionActivityIds
         )
+        updatedMeta.deferredResumes = meta.deferredResumes
         conversations[conversationId] = ConversationBootstrapEnvelope(bootstrap: envelope.bootstrap, sessionMeta: updatedMeta, attachments: envelope.attachments, executionTargets: envelope.executionTargets)
         listState = ConversationListState(sessions: listState.sessions.map { $0.id == conversationId ? updatedMeta : $0 }, ordering: listState.ordering, executionTargets: listState.executionTargets)
         emitApp(.conversationListState(listState))
@@ -2830,7 +2854,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let envelope = conversations[conversationId], let meta = envelope.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
-        let updatedMeta = SessionMeta(
+        var updatedMeta = SessionMeta(
             id: meta.id,
             file: meta.file,
             timestamp: meta.timestamp,
@@ -2856,6 +2880,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
             attentionActivityIds: meta.attentionActivityIds
         )
+        updatedMeta.deferredResumes = meta.deferredResumes
         let updated = ConversationBootstrapEnvelope(bootstrap: envelope.bootstrap, sessionMeta: updatedMeta, attachments: envelope.attachments, executionTargets: envelope.executionTargets)
         conversations[conversationId] = updated
         listState = ConversationListState(sessions: listState.sessions.map { $0.id == conversationId ? updatedMeta : $0 }, ordering: listState.ordering, executionTargets: listState.executionTargets)
@@ -3377,6 +3402,32 @@ final class MockCompanionClient: CompanionClientProtocol {
         emitConversation(conversationId, .snapshot(blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks, isStreaming: envelope.bootstrap.liveSession.isStreaming))
     }
 
+    private func replaceConversationMeta(conversationId: String, meta: SessionMeta) {
+        guard let envelope = conversations[conversationId] else {
+            return
+        }
+        conversations[conversationId] = ConversationBootstrapEnvelope(
+            bootstrap: ConversationBootstrapState(
+                conversationId: envelope.bootstrap.conversationId,
+                sessionDetail: envelope.bootstrap.sessionDetail.map { detail in
+                    SessionDetail(meta: meta, blocks: detail.blocks, blockOffset: detail.blockOffset, totalBlocks: detail.totalBlocks, signature: detail.signature)
+                },
+                sessionDetailSignature: envelope.bootstrap.sessionDetailSignature,
+                sessionDetailUnchanged: envelope.bootstrap.sessionDetailUnchanged,
+                sessionDetailAppendOnly: envelope.bootstrap.sessionDetailAppendOnly,
+                liveSession: envelope.bootstrap.liveSession
+            ),
+            sessionMeta: meta,
+            attachments: envelope.attachments,
+            executionTargets: envelope.executionTargets
+        )
+        listState = ConversationListState(
+            sessions: listState.sessions.map { $0.id == conversationId ? meta : $0 },
+            ordering: listState.ordering,
+            executionTargets: listState.executionTargets
+        )
+    }
+
     private func mutateConversation(conversationId: String, isStreaming: Bool? = nil, mutateBlocks: (inout [DisplayBlock]) -> Void) {
         guard let envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
             return
@@ -3385,7 +3436,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         var blocks = detail.blocks
         mutateBlocks(&blocks)
         let updatedAt = ISO8601DateFormatter.flexible.string(from: .now)
-        let nextMeta = SessionMeta(
+        var nextMeta = SessionMeta(
             id: previousMeta.id,
             file: previousMeta.file,
             timestamp: previousMeta.timestamp,
@@ -3411,6 +3462,7 @@ final class MockCompanionClient: CompanionClientProtocol {
             attentionUnreadActivityCount: previousMeta.attentionUnreadActivityCount,
             attentionActivityIds: previousMeta.attentionActivityIds
         )
+        nextMeta.deferredResumes = previousMeta.deferredResumes
         let liveSession = ConversationBootstrapLiveSession(
             live: envelope.bootstrap.liveSession.live,
             id: envelope.bootstrap.liveSession.id,

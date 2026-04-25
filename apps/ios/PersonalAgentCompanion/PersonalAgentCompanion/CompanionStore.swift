@@ -2504,6 +2504,7 @@ final class ConversationViewModel: ObservableObject {
                 return state
             }
             if let model = model?.nilIfBlank, var meta = sessionMeta {
+                let deferredResumes = meta.deferredResumes
                 meta = SessionMeta(
                     id: meta.id,
                     file: meta.file,
@@ -2530,6 +2531,7 @@ final class ConversationViewModel: ObservableObject {
                     attentionUnreadActivityCount: meta.attentionUnreadActivityCount,
                     attentionActivityIds: meta.attentionActivityIds
                 )
+                meta.deferredResumes = deferredResumes
                 sessionMeta = meta
             }
             refreshModelState()
