@@ -2025,6 +2025,18 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testReadRunClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+
+        let missing = await session.readRun("missing-run")
+        XCTAssertNil(missing)
+        XCTAssertNotNil(session.errorMessage)
+
+        let run = await session.readRun("run-1")
+        XCTAssertEqual(run?.run.runId, "run-1")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testCreateSetupStateIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createSetupStateDelayNanoseconds = 150_000_000
