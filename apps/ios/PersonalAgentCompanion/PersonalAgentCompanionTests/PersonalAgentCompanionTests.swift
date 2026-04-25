@@ -388,6 +388,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
             "/companion/v1/conversations/conv-1/blocks/block-1/images/2"
         )
         XCTAssertEqual(
+            companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image?revision=3#preview"),
+            "/companion/v1/conversations/conv-1/blocks/block-1/image?revision=3#preview"
+        )
+        XCTAssertEqual(
             companionTranscriptImageAssetPath("/companion/v1/conversations/conv-1/blocks/block-1/image"),
             "/companion/v1/conversations/conv-1/blocks/block-1/image"
         )

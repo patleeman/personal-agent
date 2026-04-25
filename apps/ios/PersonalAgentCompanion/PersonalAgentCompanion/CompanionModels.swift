@@ -1303,6 +1303,15 @@ func companionTranscriptImageAssetPath(_ src: String?) -> String? {
         return normalized
     }
 
+    let components = URLComponents(string: normalized)
+    let path = components?.path.nilIfBlank ?? normalized
+    let suffix = [
+        components?.percentEncodedQuery.map { "?\($0)" },
+        components?.percentEncodedFragment.map { "#\($0)" },
+    ]
+        .compactMap { $0 }
+        .joined()
+
     func captureGroups(_ pattern: String, in value: String) -> [String]? {
         guard let regex = try? NSRegularExpression(pattern: pattern) else {
             return nil
@@ -1320,12 +1329,12 @@ func companionTranscriptImageAssetPath(_ src: String?) -> String? {
         }
     }
 
-    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/image$"#, in: normalized), captures.count == 2 {
-        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/image"
+    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/image$"#, in: path), captures.count == 2 {
+        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/image\(suffix)"
     }
 
-    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/images/(\d+)$"#, in: normalized), captures.count == 3 {
-        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/images/\(captures[2])"
+    if let captures = captureGroups(#"^/api/sessions/([^/]+)/blocks/([^/]+)/images/(\d+)$"#, in: path), captures.count == 3 {
+        return "/companion/v1/conversations/\(captures[0])/blocks/\(captures[1])/images/\(captures[2])\(suffix)"
     }
 
     return nil
