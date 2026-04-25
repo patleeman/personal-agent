@@ -487,6 +487,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingConversationCreateKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
     private var pendingTaskSaveKeys: Set<String> = []
+    private var pendingTaskDeleteIds: Set<String> = []
     private var pendingRunCancelIds: Set<String> = []
     private var isCreatingPairingCode = false
     private var appEventRevision = 0
@@ -769,6 +770,10 @@ final class HostSessionModel: ObservableObject {
     }
 
     func deleteTask(_ taskId: String) async -> Bool {
+        guard pendingTaskDeleteIds.insert(taskId).inserted else {
+            return false
+        }
+        defer { pendingTaskDeleteIds.remove(taskId) }
         do {
             try await client.deleteTask(taskId: taskId)
             return true

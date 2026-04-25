@@ -1851,6 +1851,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testDeleteTaskIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.deleteTaskDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        async let first = session.deleteTask("task-1")
+        async let second = session.deleteTask("task-1")
+        let results = await [first, second]
+        let tasks = await session.listTasks()
+
+        XCTAssertEqual(results.filter { $0 }.count, 1)
+        XCTAssertEqual(client.deleteTaskCount, 1)
+        XCTAssertFalse(tasks.contains { $0.id == "task-1" })
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testLiveSetupURLPairsAgainstDesktopHost() async throws {
         let environment = ProcessInfo.processInfo.environment
         let config = try loadLiveCompanionConfig(from: environment)

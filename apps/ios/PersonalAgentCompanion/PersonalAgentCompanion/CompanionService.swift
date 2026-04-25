@@ -1387,6 +1387,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createTaskDelayNanoseconds: UInt64 = 0
+    var deleteTaskDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
     var cancelRunDelayNanoseconds: UInt64 = 0
     var createPairingCodeDelayNanoseconds: UInt64 = 0
@@ -1401,6 +1402,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var createConversationCount = 0
     private(set) var createTaskCount = 0
+    private(set) var deleteTaskCount = 0
     private(set) var runTaskCount = 0
     private(set) var cancelRunCount = 0
     private(set) var createPairingCodeCount = 0
@@ -3409,6 +3411,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func deleteTask(taskId: String) async throws {
+        deleteTaskCount += 1
+        if deleteTaskDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: deleteTaskDelayNanoseconds)
+        }
         tasks.removeAll { $0.id == taskId }
     }
 
