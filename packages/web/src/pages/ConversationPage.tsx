@@ -1098,6 +1098,48 @@ function ConversationThinkingLevelSelect({
   );
 }
 
+function ConversationModelSelect({
+  groupedModels,
+  currentModel,
+  disabled,
+  variant = 'inline',
+  onChange,
+}: {
+  groupedModels: Array<[string, ModelInfo[]]>;
+  currentModel: string;
+  disabled: boolean;
+  variant?: 'inline' | 'menu';
+  onChange: (modelId: string) => void;
+}) {
+  const selectClassName = variant === 'menu'
+    ? 'h-9 w-full min-w-0 appearance-none rounded-lg border border-border-subtle bg-surface/45 px-2.5 pr-7 text-[12px] font-medium text-primary outline-none transition-colors hover:bg-surface/65 focus-visible:border-accent/50 focus-visible:bg-surface/65 disabled:cursor-default disabled:opacity-40'
+    : cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[11.5rem] min-w-[8.25rem] appearance-none');
+
+  return (
+    <label className={variant === 'menu' ? 'relative flex min-w-0 items-center' : 'relative inline-flex min-w-0 items-center'}>
+      <span className="sr-only">Conversation model</span>
+      <select
+        value={currentModel}
+        onChange={(event) => { onChange(event.target.value); }}
+        disabled={disabled}
+        className={selectClassName}
+        aria-label="Conversation model"
+      >
+        {groupedModels.map(([provider, providerModels]) => (
+          <optgroup key={provider} label={provider}>
+            {providerModels.map((model) => (
+              <option key={model.id} value={model.id}>{model.name}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </label>
+  );
+}
+
 function ConversationFastModeToggle({
   enabled,
   disabled,
@@ -1274,27 +1316,14 @@ function ConversationPreferencesRow({
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
-      <label className="relative inline-flex min-w-0 items-center">
-        <span className="sr-only">Conversation model</span>
-        <select
-          value={currentModel}
-          onChange={(event) => { onSelectModel(event.target.value); }}
+      <div className="hidden xl:block">
+        <ConversationModelSelect
+          groupedModels={groupedModels}
+          currentModel={currentModel}
           disabled={savingPreference !== null || models.length === 0}
-          className={cx(COMPOSER_PREFERENCE_SELECT_CLASS, 'max-w-[11.5rem] min-w-[8.25rem] appearance-none')}
-          aria-label="Conversation model"
-        >
-          {groupedModels.map(([provider, providerModels]) => (
-            <optgroup key={provider} label={provider}>
-              {providerModels.map((model) => (
-                <option key={model.id} value={model.id}>{model.name}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        <svg aria-hidden="true" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2.5 text-dim/70">
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </label>
+          onChange={onSelectModel}
+        />
+      </div>
 
       <div className="hidden xl:flex items-center gap-2">
         <ConversationThinkingLevelSelect
@@ -1335,8 +1364,21 @@ function ConversationPreferencesRow({
           <MoreHorizontalIcon />
         </IconButton>
         {compactMenuOpen && (
-          <div className="ui-context-menu-shell absolute bottom-full right-0 z-50 mb-2 w-[15rem] p-2.5" role="dialog" aria-label="Composer settings">
+          <div className="ui-context-menu-shell absolute bottom-full left-0 z-50 mb-2 w-[15rem] p-2.5" role="dialog" aria-label="Composer settings">
             <div className="flex flex-col gap-2">
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Model</p>
+                <ConversationModelSelect
+                  groupedModels={groupedModels}
+                  currentModel={currentModel}
+                  disabled={savingPreference !== null || models.length === 0}
+                  variant="menu"
+                  onChange={(modelId) => {
+                    onSelectModel(modelId);
+                    setCompactMenuOpen(false);
+                  }}
+                />
+              </div>
               <div>
                 <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-dim/70">Thinking</p>
                 <ConversationThinkingLevelSelect
@@ -8383,8 +8425,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       disabled={composerDisabled}
                       className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
                       placeholder={pendingAskUserQuestion
-                        ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference notes, tasks, and knowledge files/folders)'}
+                        ? 'Answer 1-9, or type to skip…'
+                        : 'Message… / commands, @ notes'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                         : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
@@ -8392,8 +8434,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     />
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-1.5 px-3 py-0.5">
-                    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <div className="flex flex-nowrap items-center gap-1.5 px-3 py-0.5">
+                    <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5">
                       <button
                         type="button"
                         onClick={openFilePicker}
