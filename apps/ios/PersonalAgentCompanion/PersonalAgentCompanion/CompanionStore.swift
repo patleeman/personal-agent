@@ -2936,6 +2936,7 @@ final class ConversationViewModel: ObservableObject {
             let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
             attachmentRefreshRequestId += 1
             savedAttachments = result.attachments
+            errorMessage = nil
             return true
         } catch {
             errorMessage = error.localizedDescription

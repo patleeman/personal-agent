@@ -1389,6 +1389,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var renameKnowledgeEntryDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
+    var createAttachmentFailureQueueMessages: [String] = []
     var saveSshTargetDelayNanoseconds: UInt64 = 0
     var saveSshTargetFailureQueueMessages: [String] = []
     var deleteSshTargetDelayNanoseconds: UInt64 = 0
@@ -3195,6 +3196,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
         if createAttachmentDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createAttachmentDelayNanoseconds)
+        }
+        if !createAttachmentFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createAttachmentFailureQueueMessages.removeFirst())
         }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let attachmentId = "att-\(Int.random(in: 10...999))"
