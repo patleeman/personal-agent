@@ -6,8 +6,13 @@ import UIKit
 import WebKit
 
 struct ConversationScreen: View {
-    @ObservedObject var viewModel: ConversationViewModel
-    var onOpenConversation: (String) -> Void = { _ in }
+    @StateObject private var viewModel: ConversationViewModel
+    private var onOpenConversation: (String) -> Void
+
+    init(viewModel: ConversationViewModel, onOpenConversation: @escaping (String) -> Void = { _ in }) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+        self.onOpenConversation = onOpenConversation
+    }
 
     @State private var showingAttachments = false
     @State private var showingRename = false

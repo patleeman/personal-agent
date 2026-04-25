@@ -311,23 +311,48 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func conversationListCard(_ item: SessionMeta, in section: ConversationListSectionGroup, includeCwdInSubtitle: Bool) -> some View {
-        NavigationLink(value: item.id) {
-            HStack(spacing: 14) {
-                ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
-                Spacer(minLength: 12)
-                Image(systemName: "chevron.right")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(CompanionTheme.textDim)
+        HStack(spacing: 10) {
+            Button {
+                path.append(item.id)
+            } label: {
+                HStack(spacing: 14) {
+                    ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
+                    Spacer(minLength: 12)
+                    Image(systemName: "chevron.right")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(CompanionTheme.textDim)
+                }
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 16)
-            .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+            .buttonStyle(.plain)
+
+            Menu {
+                Button {
+                    Task { await session.togglePinned(item.id) }
+                } label: {
+                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+                }
+                Button {
+                    Task { await session.toggleArchived(item.id) }
+                } label: {
+                    Label("Archive", systemImage: "archivebox")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(CompanionTheme.textSecondary)
+                    .frame(width: 36, height: 36)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Conversation actions")
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
+        }
         .swipeActions(edge: .leading, allowsFullSwipe: false) {
             Button {
                 Task { await session.togglePinned(item.id) }

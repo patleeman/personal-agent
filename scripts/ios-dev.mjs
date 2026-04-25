@@ -844,6 +844,7 @@ async function testLiveCommand() {
   ], {
     env: {
       ...process.env,
+      PA_IOS_LIVE_COMPANION_TEST: '1',
       PA_IOS_LIVE_COMPANION_CONFIG_FILE: liveConfigFile,
     },
   });

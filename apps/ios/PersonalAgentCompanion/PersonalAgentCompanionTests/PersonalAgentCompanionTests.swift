@@ -812,6 +812,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testCreatedConversationOpensWithReturnedBootstrapImmediately() async throws {
+        let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
+        let createdConversationId = await session.createConversation(NewConversationRequest(promptText: "Start from the returned bootstrap", cwd: "/tmp/ios-create"))
+        let createdId = try XCTUnwrap(createdConversationId)
+
+        let model = session.makeConversationModel(conversationId: createdId, initialSession: session.sessions[createdId])
+        model.start()
+        defer { model.stop() }
+
+        XCTAssertEqual(model.conversationId, createdId)
+        XCTAssertEqual(model.sessionMeta?.cwd, "/tmp/ios-create")
+        XCTAssertEqual(model.blocks.map(\.text).compactMap { $0 }, ["Start from the returned bootstrap"])
+        XCTAssertFalse(model.isLoading)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testConversationLoadsArtifactsAndCheckpoints() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
@@ -900,6 +916,10 @@ final class PersonalAgentCompanionTests: XCTestCase {
         guard config.enabled else {
             throw XCTSkip("Live companion test is disabled.")
         }
+        guard let baseURL = URL(string: config.baseURL) else {
+            throw XCTSkip("The live companion test host URL is invalid.")
+        }
+        _ = try await loadLiveHelloOrSkip(baseURL: baseURL)
         let pairingCode = try await loadLivePairingCode(from: config)
 
         var components = URLComponents()
@@ -954,7 +974,7 @@ final class PersonalAgentCompanionTests: XCTestCase {
 
         let cwd = config.cwd ?? FileManager.default.currentDirectoryPath
         let surfaceId = "ios-live-test"
-        let hello = try await LiveCompanionClient.hello(baseURL: baseURL)
+        let hello = try await loadLiveHelloOrSkip(baseURL: baseURL)
         let paired = try await LiveCompanionClient.pair(baseURL: baseURL, code: pairingCode, deviceLabel: "PersonalAgentCompanion XCTest")
         let host = CompanionHostRecord(
             baseURL: baseURL.absoluteString,
@@ -1066,12 +1086,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
             )
         }
 
-        let configFile = environment["PA_IOS_LIVE_COMPANION_CONFIG_FILE"] ?? "/tmp/personal-agent-ios-live-test-config.json"
+        let configFile = environment["PA_IOS_LIVE_COMPANION_CONFIG_FILE"]?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfBlank
+            ?? "/tmp/personal-agent-ios-live-test-config.json"
         guard FileManager.default.fileExists(atPath: configFile) else {
             return LiveCompanionConfig(enabled: false, baseURL: "", pairingCode: nil, cwd: nil, exercisePrompt: false)
         }
         let data = try Data(contentsOf: URL(fileURLWithPath: configFile))
         return try JSONDecoder().decode(LiveCompanionConfig.self, from: data)
+    }
+
+    private func loadLiveHelloOrSkip(baseURL: URL) async throws -> CompanionHello {
+        do {
+            return try await LiveCompanionClient.hello(baseURL: baseURL)
+        } catch {
+            throw XCTSkip("Live companion host is unavailable at \(baseURL.absoluteString): \(error.localizedDescription)")
+        }
     }
 
     private func loadLivePairingCode(from config: LiveCompanionConfig) async throws -> String {

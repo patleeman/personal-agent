@@ -478,6 +478,7 @@ final class HostSessionModel: ObservableObject {
     fileprivate let client: CompanionClientProtocol
     private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
     private var appEventsTask: Task<Void, Never>?
+    private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
 
     var workspacePathOptions: [String] {
         var seen = Set<String>()
@@ -544,14 +545,16 @@ final class HostSessionModel: ObservableObject {
     }
 
     func makeConversationModel(conversationId: String, initialSession: SessionMeta?) -> ConversationViewModel {
-        ConversationViewModel(
+        let initialBootstrap = pendingConversationBootstraps.removeValue(forKey: conversationId)
+        return ConversationViewModel(
             client: client,
             conversationId: conversationId,
             installationSurfaceId: installationSurfaceId,
             initialSession: initialSession,
             initialExecutionTargets: executionTargets,
             initialWorkspacePaths: workspacePathOptions,
-            initialModelState: modelState
+            initialModelState: modelState,
+            initialBootstrap: initialBootstrap
         )
     }
 
@@ -570,11 +573,13 @@ final class HostSessionModel: ObservableObject {
     func createConversation(_ request: NewConversationRequest) async -> String? {
         do {
             let envelope = try await client.createConversation(request, surfaceId: installationSurfaceId)
-            if let meta = envelope.sessionMeta {
+            let conversationId = envelope.bootstrap.conversationId
+            pendingConversationBootstraps[conversationId] = envelope
+            if let meta = envelope.sessionMeta ?? envelope.bootstrap.sessionDetail?.meta {
                 sessions[meta.id] = meta
             }
             refresh()
-            return envelope.bootstrap.conversationId
+            return conversationId
         } catch {
             errorMessage = error.localizedDescription
             return nil
@@ -1856,6 +1861,7 @@ final class ConversationViewModel: ObservableObject {
     private var transcriptImageCache: [String: Data] = [:]
     private var liveConversationId: String?
     private var liveEventRevision = 0
+    private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
         client: CompanionClientProtocol,
@@ -1865,6 +1871,7 @@ final class ConversationViewModel: ObservableObject {
         initialExecutionTargets: [ExecutionTargetSummary],
         initialWorkspacePaths: [String] = [],
         initialModelState: CompanionModelState? = nil,
+        initialBootstrap: ConversationBootstrapEnvelope? = nil,
         composerDraftStore: ConversationComposerDraftStore = .shared
     ) {
         self.client = client
@@ -1875,6 +1882,7 @@ final class ConversationViewModel: ObservableObject {
         self.executionTargets = initialExecutionTargets
         self.workspacePaths = initialWorkspacePaths
         self.modelState = initialModelState
+        self.initialBootstrap = initialBootstrap
         self.currentExecutionTargetId = initialSession?.remoteHostId ?? "local"
         self.composerDraftStore = composerDraftStore
         self.composerDraftKey = "\(client.host.hostInstanceId)::\(conversationId)"
@@ -1887,7 +1895,12 @@ final class ConversationViewModel: ObservableObject {
 
     func start() {
         restoreComposerDraftIfNeeded()
-        loadBootstrap()
+        if let initialBootstrap {
+            self.initialBootstrap = nil
+            applyBootstrap(initialBootstrap)
+        } else {
+            loadBootstrap()
+        }
         refreshModelState()
         refreshActivityRuns()
         startActivityRefreshLoop()
