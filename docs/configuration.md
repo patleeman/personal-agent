@@ -12,7 +12,6 @@ Primary machine config:
 
 Common top-level keys:
 
-- `vaultRoot`
 - `knowledgeBaseRepoUrl`
 - `knowledgeBaseBranch`
 - `instructionFiles`
@@ -24,7 +23,6 @@ Example:
 
 ```json
 {
-  "vaultRoot": "~/Documents/personal-agent",
   "knowledgeBaseRepoUrl": "https://github.com/you/knowledge-base.git",
   "knowledgeBaseBranch": "main",
   "instructionFiles": [
@@ -39,7 +37,7 @@ Example:
 }
 ```
 
-If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` becomes the managed mirror at `<state-root>/knowledge-base/repo` unless `PERSONAL_AGENT_VAULT_ROOT` overrides it.
+If `knowledgeBaseRepoUrl` is set, the effective `<vault-root>` is the managed mirror at `<state-root>/knowledge-base/repo` unless `PERSONAL_AGENT_VAULT_ROOT` overrides it. Older configs may still contain `vaultRoot`; treat that as legacy fallback, not a user-facing setting.
 
 ## Other important config locations
 
@@ -54,7 +52,7 @@ Resolution order:
 
 1. `PERSONAL_AGENT_VAULT_ROOT`
 2. managed KB mirror when `knowledgeBaseRepoUrl` is configured
-3. `vaultRoot` from `config.json`
+3. legacy `vaultRoot` from `config.json`
 4. default `~/Documents/personal-agent`
 
 ### Config root

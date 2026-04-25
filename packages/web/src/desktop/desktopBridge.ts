@@ -15,7 +15,6 @@ import type {
   ModelState,
   ProviderAuthState,
   ProviderOAuthLoginState,
-  VaultRootState,
   ConversationBootstrapState,
   ConversationCwdChangeResult,
   ConversationRecoveryResult,
@@ -150,11 +149,9 @@ export interface PersonalAgentDesktopBridge {
   updateModelPreferences(input: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<{ ok: true }>;
   readDefaultCwd(): Promise<DefaultCwdState>;
   updateDefaultCwd(cwd: string | null): Promise<DefaultCwdState>;
-  readVaultRoot(): Promise<VaultRootState>;
   readVaultFiles(): Promise<VaultFileListResult>;
   readMemory?(options?: { profile?: string }): Promise<MemoryData>;
   readTools?(options?: { profile?: string }): Promise<ToolsState>;
-  updateVaultRoot(root: string | null): Promise<VaultRootState>;
   pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<FolderPickerResult>;
   captureScreenshot(): Promise<DesktopScreenshotCaptureResult>;
   readConversationTitleSettings(): Promise<ConversationTitleSettingsState>;

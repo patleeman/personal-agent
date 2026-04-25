@@ -68,7 +68,7 @@ describe('vaultFiles', () => {
     expect(file).not.toBeNull();
 
     const context = buildReferencedVaultFilesContext([folder!, file!]);
-    expect(context).toContain('Referenced indexed paths:');
+    expect(context).toContain('Referenced knowledge paths:');
     expect(context).toContain('@notes/');
     expect(context).toContain('kind: folder');
     expect(context).toContain('children (1):');

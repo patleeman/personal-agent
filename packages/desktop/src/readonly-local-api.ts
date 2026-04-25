@@ -19,7 +19,6 @@ const WORKER_SAFE_LOCAL_API_ROUTES: Array<{
   { methods: new Set(['GET']), pattern: /^\/api\/provider-auth$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/provider-auth\/oauth\/[^/]+$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/default-cwd$/ },
-  { methods: new Set(['GET']), pattern: /^\/api\/vault-root$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/knowledge-base$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/vault-files$/ },
   { methods: new Set(['GET']), pattern: /^\/api\/tools$/ },

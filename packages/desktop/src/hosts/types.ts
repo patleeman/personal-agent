@@ -359,9 +359,7 @@ export interface HostController {
   updateModelPreferences?(input: DesktopModelPreferencesUpdateRequest): Promise<{ ok: true }>;
   readDefaultCwd?(): Promise<unknown>;
   updateDefaultCwd?(cwd: string | null): Promise<unknown>;
-  readVaultRoot?(): Promise<unknown>;
   readVaultFiles?(): Promise<unknown>;
-  updateVaultRoot?(root: string | null): Promise<unknown>;
   pickFolder?(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown>;
   readDirectory?(path?: string | null): Promise<DesktopRemoteDirectoryListing>;
   readConversationTitleSettings?(): Promise<unknown>;

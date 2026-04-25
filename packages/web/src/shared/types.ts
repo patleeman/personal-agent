@@ -957,13 +957,6 @@ export interface DefaultCwdState {
   effectiveCwd: string;
 }
 
-export interface VaultRootState {
-  currentRoot: string;
-  effectiveRoot: string;
-  defaultRoot: string;
-  source: 'env' | 'config' | 'knowledge-base' | 'default';
-}
-
 export interface KnowledgeBaseGitStatus {
   localChangeCount: number;
   aheadCount: number;

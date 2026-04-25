@@ -35,7 +35,7 @@ pa status
 - `<config-root>` — machine-local config. Usually `<state-root>/config`
 - `<vault-root>` — effective durable knowledge root
 
-`<vault-root>` usually resolves to the managed clone at `<state-root>/knowledge-base/repo` when KB sync is enabled. Otherwise it falls back to the configured `vaultRoot` or `~/Documents/personal-agent`.
+`<vault-root>` usually resolves to the managed clone at `<state-root>/knowledge-base/repo` when KB sync is enabled. Otherwise it falls back to the legacy `vaultRoot` config value or `~/Documents/personal-agent`.
 
 ## Start an interface
 
@@ -112,9 +112,9 @@ Check these in order:
 
 1. `PERSONAL_AGENT_VAULT_ROOT`
 2. `<config-root>/config.json` → `knowledgeBaseRepoUrl`
-3. `<config-root>/config.json` → `vaultRoot`
+3. legacy `<config-root>/config.json` → `vaultRoot`
 
-The environment variable wins.
+The environment variable wins. New setups should use the built-in Knowledge base repo instead of editing `vaultRoot` directly.
 
 ## Next docs
 

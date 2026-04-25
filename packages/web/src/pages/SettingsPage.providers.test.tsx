@@ -230,12 +230,6 @@ describe('SettingsPage provider model editor', () => {
         },
       ],
     });
-    const vaultRootResult = buildUseApiResult({
-      currentRoot: '~/Documents/personal-agent',
-      effectiveRoot: '/Users/patrick/Documents/personal-agent',
-      defaultRoot: '/Users/patrick/Documents/personal-agent',
-      source: 'config',
-    });
     const knowledgeBaseResult = buildUseApiResult({
       repoUrl: 'https://github.com/patleeman/knowledge-base.git',
       branch: 'main',
@@ -319,10 +313,6 @@ describe('SettingsPage provider model editor', () => {
 
       if (fetcher === api.modelProviders) {
         return modelProvidersResult;
-      }
-
-      if (fetcher === api.vaultRoot) {
-        return vaultRootResult;
       }
 
       if (fetcher === api.knowledgeBase) {

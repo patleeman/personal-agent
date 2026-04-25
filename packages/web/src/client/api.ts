@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultRootState, VaultSearchResponse, VaultShareImportResult, VaultTreeResult } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -225,6 +225,7 @@ export const api = {
   },
   sessionBlock: async (id: string, blockId: string) => get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`),
   sessionSearchIndex: async (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
+  conversationSummaries: async (sessionIds: string[]) => post<{ summaries: Record<string, ConversationSummaryRecord> }>('/conversation-summaries', { sessionIds }),
   skillFolders: async () => get<SkillFoldersState>('/skill-folders'),
   updateSkillFolders: async (skillDirs: string[]) => patch<SkillFoldersState>('/skill-folders', { skillDirs }),
   instructions: async () => get<InstructionFilesState>('/instructions'),
@@ -291,7 +292,6 @@ export const api = {
     return del<ModelProviderState>(`/model-providers/providers/${encodeURIComponent(provider)}/models/${encodeURIComponent(modelId)}`);
   },
   defaultCwd: async () => get<DefaultCwdState>('/default-cwd'),
-  vaultRoot: async () => get<VaultRootState>('/vault-root'),
   knowledgeBase: async () => {
     return getKnowledgeBaseState();
   },
@@ -322,14 +322,6 @@ export const api = {
     }
 
     return patch<DefaultCwdState>('/default-cwd', { cwd });
-  },
-  updateVaultRoot: async (root: string | null) => {
-    const desktopBridge = getDesktopBridge();
-    if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
-      return desktopBridge.updateVaultRoot(root);
-    }
-
-    return patch<VaultRootState>('/vault-root', { root });
   },
   updateKnowledgeBase: async (input: { repoUrl?: string | null; branch?: string | null }) => {
     pendingKnowledgeBaseRequest = null;

@@ -35,7 +35,7 @@ const ACTION_BUTTON_CLASS = 'ui-toolbar-button rounded-lg px-3 py-1.5 text-[12px
 const CHECKBOX_CLASS = 'h-4 w-4 rounded border-border-default bg-base text-accent focus:ring-0 focus:outline-none';
 const SETTINGS_QUICK_LINKS = [
   { id: 'settings-appearance', label: 'Appearance', summary: 'Theme and display behavior' },
-  { id: 'settings-general', label: 'General', summary: 'Defaults, knowledge base, and roots' },
+  { id: 'settings-general', label: 'General', summary: 'Defaults and knowledge base' },
   { id: 'settings-dictation', label: 'Dictation', summary: 'Transcription provider and model' },
   { id: 'settings-skills', label: 'Skills', summary: 'Folders, wrappers, and instructions' },
   { id: 'settings-providers', label: 'Providers', summary: 'Models, overrides, and credentials' },
@@ -1354,12 +1354,6 @@ export function SettingsPage() {
     replaceData: replaceModelProviderState,
   } = useApi(api.modelProviders);
   const {
-    data: vaultRootState,
-    loading: vaultRootLoading,
-    error: vaultRootLoadError,
-    refetch: refetchVaultRoot,
-  } = useApi(api.vaultRoot);
-  const {
     data: knowledgeBaseState,
     loading: knowledgeBaseLoading,
     error: knowledgeBaseLoadError,
@@ -1397,9 +1391,6 @@ export function SettingsPage() {
   const [instructionFilesSaveError, setInstructionFilesSaveError] = useState<string | null>(null);
   const [savingPreference, setSavingPreference] = useState<'model' | 'thinking' | 'serviceTier' | null>(null);
   const [modelError, setModelError] = useState<string | null>(null);
-  const [vaultRootDraft, setVaultRootDraft] = useState('');
-  const [savingVaultRoot, setSavingVaultRoot] = useState(false);
-  const [vaultRootSaveError, setVaultRootSaveError] = useState<string | null>(null);
   const [knowledgeBaseRepoUrlDraft, setKnowledgeBaseRepoUrlDraft] = useState('');
   const [knowledgeBaseBranchDraft, setKnowledgeBaseBranchDraft] = useState('main');
   const [knowledgeBaseAction, setKnowledgeBaseAction] = useState<'save' | 'sync' | null>(null);
@@ -1407,7 +1398,7 @@ export function SettingsPage() {
   const [defaultCwdDraft, setDefaultCwdDraft] = useState('');
   const [savingDefaultCwd, setSavingDefaultCwd] = useState(false);
   const [defaultCwdSaveError, setDefaultCwdSaveError] = useState<string | null>(null);
-  const [pathPickerTarget, setPathPickerTarget] = useState<'vault-root' | 'default-cwd' | 'skill-folders' | 'instruction-files' | null>(null);
+  const [pathPickerTarget, setPathPickerTarget] = useState<'default-cwd' | 'skill-folders' | 'instruction-files' | null>(null);
   const [savingConversationTitle, setSavingConversationTitle] = useState<'enabled' | 'model' | null>(null);
   const [conversationTitleSaveError, setConversationTitleSaveError] = useState<string | null>(null);
   const [transcriptionProviderDraft, setTranscriptionProviderDraft] = useState<TranscriptionProviderId | ''>('');
@@ -1687,14 +1678,10 @@ export function SettingsPage() {
     return providerAuthState.providers.find((provider) => provider.id === editableModelProviderId) ?? null;
   }, [editableModelProviderId, providerAuthState]);
 
-  const vaultRootDirty = vaultRootState
-    ? vaultRootDraft.trim() !== vaultRootState.currentRoot
-    : false;
   const knowledgeBaseDirty = knowledgeBaseState
     ? knowledgeBaseRepoUrlDraft.trim() !== knowledgeBaseState.repoUrl
       || knowledgeBaseBranchDraft.trim() !== knowledgeBaseState.branch
     : false;
-  const vaultRootManagedByKnowledgeBase = vaultRootState?.source === 'knowledge-base';
   const knowledgeBaseSyncPresentation = useMemo(
     () => getKnowledgeBaseSyncPresentation(knowledgeBaseState, { includeLastSyncAt: true }),
     [knowledgeBaseState],
@@ -1717,18 +1704,11 @@ export function SettingsPage() {
     ? instructionFilesDraft.length !== instructionFilesState.instructionFiles.length
       || instructionFilesDraft.some((value, index) => value !== instructionFilesState.instructionFiles[index])
     : false;
-  const pickingVaultRoot = pathPickerTarget === 'vault-root';
   const pickingDefaultCwd = pathPickerTarget === 'default-cwd';
   const pickingSkillFolders = pathPickerTarget === 'skill-folders';
   const pickingInstructionFiles = pathPickerTarget === 'instruction-files';
 
   useInvalidateOnTopics(['knowledgeBase'], refetchKnowledgeBase);
-
-  useEffect(() => {
-    if (vaultRootState) {
-      setVaultRootDraft(vaultRootState.currentRoot);
-    }
-  }, [vaultRootState?.currentRoot]);
 
   useEffect(() => {
     if (knowledgeBaseState) {
@@ -2075,30 +2055,6 @@ export function SettingsPage() {
     }
   }
 
-  async function handleVaultRootSave(nextRoot: string | null = vaultRootDraft) {
-    if (!vaultRootState || savingVaultRoot || vaultRootManagedByKnowledgeBase) {
-      return;
-    }
-
-    const normalizedRoot = (nextRoot ?? '').trim();
-    if (normalizedRoot === vaultRootState.currentRoot) {
-      return;
-    }
-
-    setVaultRootSaveError(null);
-    setSavingVaultRoot(true);
-
-    try {
-      const saved = await api.updateVaultRoot(normalizedRoot || null);
-      setVaultRootDraft(saved.currentRoot);
-      await refetchVaultRoot({ resetLoading: false });
-    } catch (error) {
-      setVaultRootSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setSavingVaultRoot(false);
-    }
-  }
-
   async function handleKnowledgeBaseSave(nextInput?: { repoUrl?: string | null; branch?: string | null }) {
     if (!knowledgeBaseState || knowledgeBaseAction !== null) {
       return;
@@ -2124,10 +2080,7 @@ export function SettingsPage() {
       });
       setKnowledgeBaseRepoUrlDraft(saved.repoUrl);
       setKnowledgeBaseBranchDraft(saved.branch);
-      await Promise.all([
-        refetchKnowledgeBase({ resetLoading: false }),
-        refetchVaultRoot({ resetLoading: false }),
-      ]);
+      await refetchKnowledgeBase({ resetLoading: false });
     } catch (error) {
       setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2147,10 +2100,7 @@ export function SettingsPage() {
       const synced = await api.syncKnowledgeBase();
       setKnowledgeBaseRepoUrlDraft(synced.repoUrl);
       setKnowledgeBaseBranchDraft(synced.branch);
-      await Promise.all([
-        refetchKnowledgeBase({ resetLoading: false }),
-        refetchVaultRoot({ resetLoading: false }),
-      ]);
+      await refetchKnowledgeBase({ resetLoading: false });
     } catch (error) {
       setKnowledgeBaseSaveError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -2179,32 +2129,6 @@ export function SettingsPage() {
       setDefaultCwdSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSavingDefaultCwd(false);
-    }
-  }
-
-  async function handleVaultRootPick() {
-    if (!vaultRootState || savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase) {
-      return;
-    }
-
-    setVaultRootSaveError(null);
-    setPathPickerTarget('vault-root');
-
-    try {
-      const result = await api.pickFolder({
-        cwd: vaultRootDraft.trim() || vaultRootState.effectiveRoot,
-        prompt: 'Choose indexed root',
-      });
-      if (result.cancelled || !result.path) {
-        return;
-      }
-
-      setVaultRootDraft(result.path);
-      await handleVaultRootSave(result.path);
-    } catch (error) {
-      setVaultRootSaveError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setPathPickerTarget((current) => (current === 'vault-root' ? null : current));
     }
   }
 
@@ -3212,89 +3136,6 @@ export function SettingsPage() {
                 ) : null}
 
                 {knowledgeBaseSaveError && <p className="text-[12px] text-danger">{knowledgeBaseSaveError}</p>}
-              </SettingsPanel>
-
-              <SettingsPanel
-                title="Indexed root"
-                description="Base path for notes, skills, root instructions, and folder-aware @ paths."
-              >
-                {vaultRootLoading && !vaultRootState ? (
-                  <p className="ui-card-meta">Loading indexed root…</p>
-                ) : vaultRootLoadError && !vaultRootState ? (
-                  <p className="text-[12px] text-danger">Failed to load indexed root: {vaultRootLoadError}</p>
-                ) : vaultRootState ? (
-                  <form
-                    className="space-y-3"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleVaultRootSave();
-                    }}
-                  >
-                    <label className="ui-card-meta" htmlFor="settings-vault-root">Path</label>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <input
-                        id="settings-vault-root"
-                        value={vaultRootDraft}
-                        onChange={(event) => {
-                          setVaultRootDraft(event.target.value);
-                          if (vaultRootSaveError) {
-                            setVaultRootSaveError(null);
-                          }
-                        }}
-                        className={`${INPUT_CLASS} min-w-0 flex-1 font-mono text-[13px]`}
-                        placeholder="~/Documents/personal-agent"
-                        autoComplete="off"
-                        spellCheck={false}
-                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase}
-                      />
-                      <ToolbarButton
-                        type="button"
-                        onClick={() => { void handleVaultRootPick(); }}
-                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase}
-                        className="shrink-0 text-accent"
-                        title="Choose indexed root"
-                        aria-label="Choose indexed root"
-                      >
-                        {pickingVaultRoot ? 'Choosing…' : 'Choose…'}
-                      </ToolbarButton>
-                    </div>
-                    <p className="ui-card-meta break-all">
-                      {savingVaultRoot
-                        ? 'Saving indexed root…'
-                        : vaultRootState.source === 'env'
-                          ? `Env override active · ${vaultRootState.effectiveRoot}`
-                          : vaultRootManagedByKnowledgeBase
-                            ? `Managed by knowledge base repo · ${vaultRootState.effectiveRoot}`
-                            : vaultRootState.currentRoot
-                              ? `Effective root · ${vaultRootState.effectiveRoot}`
-                              : `Default root · ${vaultRootState.defaultRoot}`}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button
-                        type="submit"
-                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase || !vaultRootDirty}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        {savingVaultRoot ? 'Saving…' : 'Save root'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { void handleVaultRootSave(''); }}
-                        disabled={savingVaultRoot || pickingVaultRoot || vaultRootManagedByKnowledgeBase || vaultRootState.currentRoot.length === 0}
-                        className={ACTION_BUTTON_CLASS}
-                      >
-                        Use default root
-                      </button>
-                    </div>
-                    <p className="ui-card-meta">
-                      {vaultRootManagedByKnowledgeBase
-                        ? <>A managed knowledge base repo is active, so PA uses its local mirror as the indexed root. Clear the repo above to override the root directly.</>
-                        : <>Sets the base path for indexed folders &amp; files. Use an absolute path or <span className="font-mono text-[11px]">~/…</span>. <span className="font-mono text-[11px]">PERSONAL_AGENT_VAULT_ROOT</span> still wins when set.</>}
-                    </p>
-                  </form>
-                ) : null}
-
-                {vaultRootSaveError && <p className="text-[12px] text-danger">{vaultRootSaveError}</p>}
               </SettingsPanel>
 
               <SettingsPanel

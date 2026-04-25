@@ -16,7 +16,7 @@ These aliases are used throughout the docs:
 
 1. `PERSONAL_AGENT_VAULT_ROOT`
 2. `<state-root>/knowledge-base/repo` when `knowledgeBaseRepoUrl` is configured
-3. `vaultRoot` from `<config-root>/config.json`
+3. legacy `vaultRoot` from `<config-root>/config.json`
 4. fallback default `~/Documents/personal-agent`
 
 In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror under `<state-root>/knowledge-base/repo`.

@@ -252,7 +252,7 @@ export function resolveMentionedVaultFiles(text: string, vaultRoot: string = get
 
 export function buildReferencedVaultFilesContext(files: VaultFileSummary[]): string {
   return [
-    'Referenced indexed paths:',
+    'Referenced knowledge paths:',
     ...files.map((file) => {
       if (file.kind === 'folder') {
         const children = readReferencedFolderChildren(file);
@@ -280,6 +280,6 @@ export function buildReferencedVaultFilesContext(files: VaultFileSummary[]): str
         `  updated: ${file.updatedAt}`,
       ].join('\n');
     }),
-    'These are indexed paths under the folder-aware root. Read exact files when the user refers to their contents or wants them changed. When a folder is referenced, inspect the specific child file you need before editing.',
+    'These are knowledge paths from the durable knowledge base. Read exact files when the user refers to their contents or wants them changed. When a folder is referenced, inspect the specific child file you need before editing.',
   ].join('\n');
 }

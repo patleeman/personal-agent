@@ -82,7 +82,7 @@ Folder names can be useful, but they should not carry more product meaning than 
 
 1. `PERSONAL_AGENT_VAULT_ROOT`
 2. managed KB mirror at `<state-root>/knowledge-base/repo` when `knowledgeBaseRepoUrl` is configured
-3. `vaultRoot` from `<config-root>/config.json`
+3. legacy `vaultRoot` from `<config-root>/config.json`
 4. default `~/Documents/personal-agent`
 
 In Patrick's active setup, assume the managed KB mirror unless you know otherwise.

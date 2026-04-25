@@ -4,19 +4,14 @@ import { existsSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'n
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  getDefaultVaultRoot,
   getPiAgentRuntimeDir,
   getStateRoot,
-  getVaultRoot,
   saveConversationCommitCheckpoint,
   readKnowledgeBaseState,
-  readMachineConfig,
-  readMachineKnowledgeBase,
   startKnowledgeBaseSyncLoop,
   subscribeKnowledgeBaseState,
   syncKnowledgeBaseNow,
   updateKnowledgeBase,
-  updateMachineConfig,
 } from '@personal-agent/core';
 import { ensureAutomationThread } from '@personal-agent/daemon';
 import { readDaemonState } from '../automation/daemon.js';
@@ -589,28 +584,6 @@ async function getLocalProviderDesktopCapabilityContext(): Promise<ProviderDeskt
   }
 
   return localProviderDesktopCapabilityContext;
-}
-
-function expandHomePath(value: string): string {
-  if (value === '~') {
-    return process.env.HOME ?? value;
-  }
-
-  if (value.startsWith('~/')) {
-    const home = process.env.HOME;
-    return home ? join(home, value.slice(2)) : value;
-  }
-
-  return value;
-}
-
-function readConfiguredVaultRoot(): string {
-  const config = readMachineConfig() as { vaultRoot?: unknown };
-  return typeof config.vaultRoot === 'string' ? config.vaultRoot : '';
-}
-
-function readConfiguredKnowledgeBase() {
-  return readMachineKnowledgeBase();
 }
 
 subscribeKnowledgeBaseState(() => {
@@ -1458,25 +1431,6 @@ export async function updateDesktopDefaultCwd(cwd: string | null) {
   return state;
 }
 
-export async function readDesktopVaultRoot() {
-  const currentRoot = readConfiguredVaultRoot();
-  const knowledgeBase = readConfiguredKnowledgeBase();
-  const source = process.env.PERSONAL_AGENT_VAULT_ROOT?.trim().length
-    ? 'env'
-    : knowledgeBase.repoUrl.length > 0
-      ? 'knowledge-base'
-      : currentRoot.length > 0
-        ? 'config'
-        : 'default';
-
-  return {
-    currentRoot,
-    effectiveRoot: getVaultRoot(),
-    defaultRoot: getDefaultVaultRoot(),
-    source,
-  };
-}
-
 export async function readDesktopVaultFiles() {
   return readVaultFilesCapability();
 }
@@ -1497,37 +1451,6 @@ export async function syncDesktopKnowledgeBase() {
   const state = syncKnowledgeBaseNow();
   invalidateAppTopics('knowledgeBase');
   return state;
-}
-
-export async function updateDesktopVaultRoot(root: string | null) {
-  if (root !== undefined && root !== null && typeof root !== 'string') {
-    throw new Error('root must be a string or null');
-  }
-
-  const normalizedRoot = typeof root === 'string' ? root.trim() : '';
-  if (normalizedRoot.length > 0) {
-    const resolvedRoot = expandHomePath(normalizedRoot);
-    if (!existsSync(resolvedRoot)) {
-      throw new Error(`Directory does not exist: ${resolvedRoot}`);
-    }
-    if (!statSync(resolvedRoot).isDirectory()) {
-      throw new Error(`Not a directory: ${resolvedRoot}`);
-    }
-  }
-
-  updateMachineConfig((current) => {
-    const next = { ...(current as Record<string, unknown>) };
-    if (normalizedRoot.length > 0) {
-      next.vaultRoot = normalizedRoot;
-    } else {
-      delete next.vaultRoot;
-    }
-    return next as typeof current;
-  });
-
-  const context = await getLocalServerRouteContext();
-  context.materializeWebProfile(context.getCurrentProfile());
-  return readDesktopVaultRoot();
 }
 
 export async function pickDesktopFolder(input: { cwd?: string | null; prompt?: string | null } = {}) {

@@ -210,15 +210,6 @@ describe('SettingsPage', () => {
         });
       }
 
-      if (fetcher === api.vaultRoot) {
-        return buildUseApiResult({
-          currentRoot: '~/Documents/personal-agent',
-          effectiveRoot: '/Users/patrick/Documents/personal-agent',
-          defaultRoot: '/Users/patrick/Documents/personal-agent',
-          source: 'config',
-        });
-      }
-
       if (fetcher === api.knowledgeBase) {
         return buildUseApiResult({
           repoUrl: 'https://github.com/patleeman/knowledge-base.git',
@@ -246,6 +237,13 @@ describe('SettingsPage', () => {
           enabled: true,
           currentModel: '',
           effectiveModel: 'openai-codex/gpt-5.4',
+        });
+      }
+
+      if (fetcher === api.transcriptionSettings) {
+        return buildUseApiResult({
+          settings: { provider: null, model: 'gpt-4o-mini-transcribe' },
+          providers: [],
         });
       }
 
@@ -325,7 +323,8 @@ describe('SettingsPage', () => {
     expect(html).toContain('Load extra skill folders alongside the root skills directory.');
     expect(html).toContain('Append extra AGENTS.md-style files to the runtime prompt.');
     expect(html).toContain('Leave blank to use the runtime process cwd.');
-    expect(html).toContain('aria-label="Choose indexed root"');
+    expect(html).not.toContain('Indexed root');
+    expect(html).not.toContain('aria-label="Choose indexed root"');
     expect(html).toContain('aria-label="Choose default working directory"');
     expect(html).not.toContain('Repo root');
     expect(html).not.toContain('↻ Refresh');
@@ -348,7 +347,7 @@ describe('SettingsPage', () => {
     expect(html).not.toContain('Runtime services');
     expect(html).not.toContain('Operational overview');
     expect(html).not.toContain('Restart daemon');
-    expect(html).toContain('Provider credentials');
+    expect(html).toContain('Provider &amp; model definitions');
     expect(html).not.toContain('Related Views');
   });
 

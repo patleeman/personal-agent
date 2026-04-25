@@ -35,9 +35,7 @@ function createLocalApiModuleMock(overrides: Partial<LocalApiModule> = {}): Loca
     updateDesktopModelPreferences: vi.fn(),
     readDesktopDefaultCwd: vi.fn(),
     updateDesktopDefaultCwd: vi.fn(),
-    readDesktopVaultRoot: vi.fn(),
     readDesktopVaultFiles: vi.fn(),
-    updateDesktopVaultRoot: vi.fn(),
     pickDesktopFolder: vi.fn(),
     readDesktopConversationTitleSettings: vi.fn(),
     updateDesktopConversationTitleSettings: vi.fn(),
@@ -288,18 +286,14 @@ describe('LocalHostController', () => {
   it('routes desktop operator settings through the local API module without loopback proxying', async () => {
     const readDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: '', effectiveCwd: '/repo' });
     const updateDesktopDefaultCwd = vi.fn().mockResolvedValue({ currentCwd: './repo', effectiveCwd: '/repo' });
-    const readDesktopVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
     const readDesktopVaultFiles = vi.fn().mockResolvedValue({ root: '/vault', files: [{ id: 'notes/a.md' }] });
-    const updateDesktopVaultRoot = vi.fn().mockResolvedValue({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     const pickDesktopFolder = vi.fn().mockResolvedValue({ path: '/picked/repo', cancelled: false });
     const readDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     const updateDesktopConversationTitleSettings = vi.fn().mockResolvedValue({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
     const loadLocalApi = vi.fn().mockResolvedValue(createLocalApiModuleMock({
       readDesktopDefaultCwd,
       updateDesktopDefaultCwd,
-      readDesktopVaultRoot,
       readDesktopVaultFiles,
-      updateDesktopVaultRoot,
       pickDesktopFolder,
       readDesktopConversationTitleSettings,
       updateDesktopConversationTitleSettings,
@@ -313,18 +307,14 @@ describe('LocalHostController', () => {
 
     await expect(controller.readDefaultCwd?.()).resolves.toEqual({ currentCwd: '', effectiveCwd: '/repo' });
     await expect(controller.updateDefaultCwd?.('./repo')).resolves.toEqual({ currentCwd: './repo', effectiveCwd: '/repo' });
-    await expect(controller.readVaultRoot?.()).resolves.toEqual({ currentRoot: '', effectiveRoot: '/vault', defaultRoot: '/vault', source: 'default' });
     await expect(controller.readVaultFiles?.()).resolves.toEqual({ root: '/vault', files: [{ id: 'notes/a.md' }] });
-    await expect(controller.updateVaultRoot?.('~/vault')).resolves.toEqual({ currentRoot: '~/vault', effectiveRoot: '/Users/patrick/vault', defaultRoot: '/vault', source: 'config' });
     await expect(controller.pickFolder?.({ cwd: '/repo' })).resolves.toEqual({ path: '/picked/repo', cancelled: false });
     await expect(controller.readConversationTitleSettings?.()).resolves.toEqual({ enabled: true, currentModel: '', effectiveModel: 'openai/gpt-5.4' });
     await expect(controller.updateConversationTitleSettings?.({ enabled: false, model: 'anthropic/claude-sonnet-4-6' })).resolves.toEqual({ enabled: false, currentModel: 'anthropic/claude-sonnet-4-6', effectiveModel: 'anthropic/claude-sonnet-4-6' });
 
     expect(readDesktopDefaultCwd).toHaveBeenCalledTimes(1);
     expect(updateDesktopDefaultCwd).toHaveBeenCalledWith('./repo');
-    expect(readDesktopVaultRoot).toHaveBeenCalledTimes(1);
     expect(readDesktopVaultFiles).toHaveBeenCalledTimes(1);
-    expect(updateDesktopVaultRoot).toHaveBeenCalledWith('~/vault');
     expect(pickDesktopFolder).toHaveBeenCalledWith({ cwd: '/repo' });
     expect(readDesktopConversationTitleSettings).toHaveBeenCalledTimes(1);
     expect(updateDesktopConversationTitleSettings).toHaveBeenCalledWith({ enabled: false, model: 'anthropic/claude-sonnet-4-6' });

@@ -80,9 +80,9 @@ Check in this order:
 
 1. `PERSONAL_AGENT_VAULT_ROOT`
 2. `<config-root>/config.json` → `knowledgeBaseRepoUrl`
-3. `<config-root>/config.json` → `vaultRoot`
+3. legacy `<config-root>/config.json` → `vaultRoot`
 
-Remember: configured `knowledgeBaseRepoUrl` switches the effective root to `<state-root>/knowledge-base/repo` unless the env var overrides it.
+Remember: configured `knowledgeBaseRepoUrl` switches the effective root to `<state-root>/knowledge-base/repo` unless the env var overrides it. New setups should not edit `vaultRoot` directly.
 
 ## Companion pairing fails
 

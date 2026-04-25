@@ -81,11 +81,11 @@ describe('registerFolderPickerRoutes', () => {
     const res = createResponse();
     pickFolderMock.mockReturnValue({ canceled: false, filePaths: ['/workspace/default'] });
 
-    postHandler({ body: { prompt: 'Choose indexed root' } }, res);
+    postHandler({ body: { prompt: 'Choose folder' } }, res);
 
     expect(pickFolderMock).toHaveBeenCalledWith({
       initialDirectory: '/workspace/default',
-      prompt: 'Choose indexed root',
+      prompt: 'Choose folder',
     });
     expect(res.json).toHaveBeenCalledWith({ canceled: false, filePaths: ['/workspace/default'] });
   });

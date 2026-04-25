@@ -8314,7 +8314,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
                       placeholder={pendingAskUserQuestion
                         ? 'Type 1-9 to answer, Tab or ←/→ to move, or write a normal message to skip…'
-                        : 'Message… (/ for commands, @ to reference notes, tasks, and indexed folders/files)'}
+                        : 'Message… (/ for commands, @ to reference notes, tasks, and knowledge files/folders)'}
                       title={pendingAskUserQuestion
                         ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
                         : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}

@@ -144,19 +144,9 @@ export class LocalHostController implements HostController {
     return module.updateDesktopDefaultCwd(cwd);
   }
 
-  async readVaultRoot(): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.readDesktopVaultRoot();
-  }
-
   async readVaultFiles(): Promise<unknown> {
     const module = await this.loadLocalApi();
     return module.readDesktopVaultFiles();
-  }
-
-  async updateVaultRoot(root: string | null): Promise<unknown> {
-    const module = await this.loadLocalApi();
-    return module.updateDesktopVaultRoot(root);
   }
 
   async pickFolder(input?: { cwd?: string | null; prompt?: string | null }): Promise<unknown> {
