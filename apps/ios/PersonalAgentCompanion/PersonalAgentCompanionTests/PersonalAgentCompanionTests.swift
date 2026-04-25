@@ -111,6 +111,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.hosts.first?.hostLabel, "Mac mini")
     }
 
+    func testUpdatingSavedHostDropsPathQueryAndFragmentFromBaseURL() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let original = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "http://127.0.0.1:3843",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        storeHosts([original])
+
+        let model = CompanionAppModel()
+        let saved = await model.updateHost(original, baseURLString: "https://mini.local:4444/setup?code=ABCD#pair", displayName: "Mac mini")
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.hosts.first?.baseURL, "http://mini.local:4444")
+    }
+
     func testUpdatingSavedHostKeepsTailnetHostsOnHTTPS() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
         let original = CompanionHostRecord(

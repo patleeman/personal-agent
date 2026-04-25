@@ -407,6 +407,9 @@ final class CompanionAppModel: ObservableObject {
         }
 
         components.scheme = normalizedScheme
+        components.path = ""
+        components.query = nil
+        components.fragment = nil
         guard let url = components.url else {
             throw CompanionClientError.invalidHostURL
         }
