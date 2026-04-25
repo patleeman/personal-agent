@@ -1442,6 +1442,30 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(checkpoints.contains(where: { $0.id == checkpoint.id }))
     }
 
+    func testCreateCheckpointIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createConversationCheckpointDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let initialCount = await model.listCheckpoints().count
+        async let first = model.createCheckpoint(message: "Save once", paths: ["apps/ios/PersonalAgentCompanion"])
+        async let second = model.createCheckpoint(message: "Save once", paths: ["apps/ios/PersonalAgentCompanion"])
+        let created = await [first, second].compactMap { $0 }
+        let checkpoints = await model.listCheckpoints()
+
+        XCTAssertEqual(created.count, 1)
+        XCTAssertEqual(checkpoints.count, initialCount + 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testStaleActivityRunRefreshDoesNotOverwriteNewerRunList() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(

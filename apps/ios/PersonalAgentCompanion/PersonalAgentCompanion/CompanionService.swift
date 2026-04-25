@@ -1383,6 +1383,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
+    var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
@@ -2924,6 +2925,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createConversationCheckpoint(conversationId: String, message: String, paths: [String]) async throws -> ConversationCommitCheckpointRecord {
+        if createConversationCheckpointDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createConversationCheckpointDelayNanoseconds)
+        }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let normalizedPaths = paths.map { $0.trimmed }.filter { !$0.isEmpty }
         let record = ConversationCommitCheckpointRecord(

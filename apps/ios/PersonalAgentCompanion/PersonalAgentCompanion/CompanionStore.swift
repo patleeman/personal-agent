@@ -1984,6 +1984,7 @@ final class ConversationViewModel: ObservableObject {
     private var firedDeferredResumeIds: Set<String> = []
     private var restoringQueuedPromptKeys: Set<String> = []
     private var pendingParallelJobActionKeys: Set<String> = []
+    private var pendingCheckpointCreateKeys: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2593,6 +2594,12 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func createCheckpoint(message: String, paths: [String]) async -> ConversationCommitCheckpointRecord? {
+        let normalizedPaths = paths.map { $0.trimmed }.sorted().joined(separator: "\u{1f}")
+        let createKey = "\(message.trimmed)::\(normalizedPaths)"
+        guard pendingCheckpointCreateKeys.insert(createKey).inserted else {
+            return nil
+        }
+        defer { pendingCheckpointCreateKeys.remove(createKey) }
         do {
             return try await client.createConversationCheckpoint(conversationId: conversationId, message: message, paths: paths)
         } catch {
