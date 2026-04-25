@@ -2105,7 +2105,11 @@ final class ConversationViewModel: ObservableObject {
                     mode: resolvedMode,
                     surfaceId: installationSurfaceId
                 )
-                clearComposerDraftState()
+                clearComposerDraftState(
+                    ifText: currentText,
+                    images: currentImages,
+                    attachmentRefs: currentRefs
+                )
                 if let notice = resolvedMode.noticeMessage {
                     showComposerNotice(notice)
                 }
@@ -2682,7 +2686,17 @@ final class ConversationViewModel: ObservableObject {
         ))
     }
 
-    private func clearComposerDraftState() {
+    private func clearComposerDraftState(
+        ifText submittedText: String,
+        images submittedImages: [PromptImageDraft],
+        attachmentRefs submittedAttachmentRefs: [PromptAttachmentReference]
+    ) {
+        guard promptText == submittedText,
+              promptImages == submittedImages,
+              promptAttachmentRefs == submittedAttachmentRefs else {
+            persistComposerDraftIfNeeded()
+            return
+        }
         composerDraftSaveTask?.cancel()
         isApplyingComposerDraft = true
         promptText = ""

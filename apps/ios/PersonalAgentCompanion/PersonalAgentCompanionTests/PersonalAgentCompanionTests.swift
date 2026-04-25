@@ -952,6 +952,40 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.promptText.isEmpty)
     }
 
+    func testPromptSendPreservesNewComposerTextEditedDuringSubmission() async throws {
+        let client = MockCompanionClient()
+        client.promptSubmissionDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Send the first prompt"
+        model.sendPrompt()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isSubmittingPrompt
+        }
+        model.promptText = "Keep this newer draft"
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isSubmittingPrompt
+        }
+
+        XCTAssertEqual(client.promptSubmissionCount, 1)
+        XCTAssertTrue(model.blocks.contains(where: { $0.type == "user" && $0.text == "Send the first prompt" }))
+        XCTAssertEqual(model.promptText, "Keep this newer draft")
+    }
+
     func testQueuedPromptRestorePrefillsComposer() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
