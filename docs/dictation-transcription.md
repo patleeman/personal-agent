@@ -63,13 +63,18 @@ This keeps the composer and iOS UI dumb: record audio, pass chunks or a normaliz
 
 ## Codex realtime notes
 
-The Codex provider uses `openai-codex` model auth from the existing model registry, then opens a realtime websocket at the provider base URL.
+The Codex provider uses `openai-codex` model auth from the existing model registry, then opens a realtime websocket using the Codex realtime model. PA keeps two models separate:
+
+- websocket/session model: `gpt-realtime-1.5`
+- transcription model from Settings: usually `gpt-4o-mini-transcribe`
 
 Default target:
 
 ```text
-wss://chatgpt.com/backend-api/codex
+wss://chatgpt.com/backend-api/codex?model=gpt-realtime-1.5
 ```
+
+The normal `openai-codex` provider base URL in PA is often `https://chatgpt.com/backend-api`; the adapter normalizes that to `/backend-api/codex` before converting it to `wss://`. It also sends bearer auth, `originator: codex_cli_rs`, and an `x-session-id` header, matching the Codex realtime websocket handshake shape.
 
 Session setup mirrors Codex transcription mode:
 

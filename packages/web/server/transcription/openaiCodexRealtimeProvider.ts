@@ -11,8 +11,10 @@ import type {
 } from './types.js';
 
 const DEFAULT_CODEX_REALTIME_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+const DEFAULT_CODEX_REALTIME_MODEL = 'gpt-realtime-1.5';
 const DEFAULT_TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
 const DEFAULT_SAMPLE_RATE = 24_000;
+const CODEX_ORIGINATOR = 'codex_cli_rs';
 
 type AuthResult = { ok: true; apiKey?: string; headers?: Record<string, string> } | { ok: false; error: string };
 
@@ -31,16 +33,37 @@ function trimTrailingSlashes(value: string): string {
   return value.replace(/\/+$/, '');
 }
 
-function resolveCodexRealtimeWebSocketUrl(baseUrl: string | undefined): string {
+function normalizeCodexRealtimeBaseUrl(baseUrl: string | undefined): string {
   const normalized = trimTrailingSlashes(baseUrl?.trim() || DEFAULT_CODEX_REALTIME_BASE_URL);
+  const url = new URL(normalized);
+  const path = trimTrailingSlashes(url.pathname);
 
-  if (normalized.startsWith('ws://') || normalized.startsWith('wss://')) {
-    return normalized;
+  if (path === '/backend-api') {
+    url.pathname = '/backend-api/codex';
   }
 
-  const url = new URL(normalized);
-  url.protocol = url.protocol === 'http:' ? 'ws:' : 'wss:';
   return url.toString();
+}
+
+function resolveCodexRealtimeWebSocketUrl(baseUrl: string | undefined): string {
+  const normalized = normalizeCodexRealtimeBaseUrl(baseUrl);
+
+  const url = new URL(normalized);
+  if (url.protocol === 'http:') {
+    url.protocol = 'ws:';
+  } else if (url.protocol === 'https:') {
+    url.protocol = 'wss:';
+  }
+
+  if (!url.searchParams.has('model')) {
+    url.searchParams.set('model', DEFAULT_CODEX_REALTIME_MODEL);
+  }
+
+  return url.toString();
+}
+
+function createRealtimeSessionId(): string {
+  return `pa-transcription-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function extractCodexAccountId(token: string): string | undefined {
@@ -62,12 +85,13 @@ function extractCodexAccountId(token: string): string | undefined {
 
 function buildCodexRealtimeHeaders(input: {
   apiKey: string;
+  sessionId: string;
   headers?: Record<string, string>;
 }): Record<string, string> {
   const headers = new Headers(input.headers ?? {});
   headers.set('Authorization', `Bearer ${input.apiKey}`);
-  headers.set('OpenAI-Beta', 'realtime=v1');
-  headers.set('originator', 'pi');
+  headers.set('x-session-id', input.sessionId);
+  headers.set('originator', CODEX_ORIGINATOR);
   headers.set('user-agent', `personal-agent/transcription (${platform()}; ${arch()})`);
 
   const accountId = extractCodexAccountId(input.apiKey);
@@ -304,12 +328,13 @@ export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionPr
 
     return {
       url: resolveCodexRealtimeWebSocketUrl(model.baseUrl),
-      headers: buildCodexRealtimeHeaders({ apiKey: auth.apiKey, headers: auth.headers }),
+      headers: buildCodexRealtimeHeaders({ apiKey: auth.apiKey, sessionId: createRealtimeSessionId(), headers: auth.headers }),
     };
   }
 }
 
 export const testExports = {
+  DEFAULT_CODEX_REALTIME_MODEL,
   resolveCodexRealtimeWebSocketUrl,
   buildCodexRealtimeHeaders,
   createSessionUpdate,
