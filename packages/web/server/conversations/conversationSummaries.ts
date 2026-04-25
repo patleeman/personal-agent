@@ -8,10 +8,11 @@ import { logWarn } from '../shared/logging.js';
 import { readConversationAutoTitleSettings } from './conversationAutoTitle.js';
 import { readSessionSearchText, type SessionMeta } from './sessions.js';
 
-const SUMMARY_SCHEMA_VERSION = 1;
+const SUMMARY_SCHEMA_VERSION = 2;
 const MAX_BACKFILL_PER_CALL = 8;
 const MAX_SOURCE_CHARACTERS = 18_000;
 const MAX_ACTIVE_JOBS = 1;
+const SUMMARY_ATTEMPT_COOLDOWN_MS = 10 * 60 * 1000;
 
 export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
 
@@ -45,6 +46,13 @@ interface StoredConversationSummaryRow {
   updated_at: string;
 }
 
+interface StoredConversationSummaryAttemptRow {
+  session_id: string;
+  fingerprint: string;
+  attempted_at: string;
+  error: string;
+}
+
 let db: SqliteDatabase | null = null;
 const queuedSessionIds = new Set<string>();
 const activeSessionIds = new Set<string>();
@@ -76,6 +84,13 @@ function getDb(): SqliteDatabase {
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS conversation_summaries_updated_at_idx ON conversation_summaries(updated_at);
+    CREATE TABLE IF NOT EXISTS conversation_summary_attempts (
+      session_id TEXT PRIMARY KEY,
+      fingerprint TEXT NOT NULL,
+      attempted_at TEXT NOT NULL,
+      error TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS conversation_summary_attempts_attempted_at_idx ON conversation_summary_attempts(attempted_at);
     PRAGMA user_version = ${SUMMARY_SCHEMA_VERSION};
   `);
   return db;
@@ -244,6 +259,41 @@ function isSummaryFresh(meta: SessionMeta): boolean {
   return readConversationSummary(meta.id)?.fingerprint === fingerprint;
 }
 
+function readSummaryAttempt(sessionId: string): StoredConversationSummaryAttemptRow | null {
+  const row = getDb().prepare('SELECT * FROM conversation_summary_attempts WHERE session_id = ?').get(sessionId) as StoredConversationSummaryAttemptRow | undefined;
+  return row ?? null;
+}
+
+function recordSummaryAttempt(sessionId: string, fingerprint: string, error = ''): void {
+  getDb().prepare(`
+    INSERT INTO conversation_summary_attempts (session_id, fingerprint, attempted_at, error)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(session_id) DO UPDATE SET
+      fingerprint = excluded.fingerprint,
+      attempted_at = excluded.attempted_at,
+      error = excluded.error
+  `).run(sessionId, fingerprint, new Date().toISOString(), error.slice(0, 1_000));
+}
+
+function clearSummaryAttempt(sessionId: string): void {
+  getDb().prepare('DELETE FROM conversation_summary_attempts WHERE session_id = ?').run(sessionId);
+}
+
+function isSummaryAttemptCoolingDown(meta: SessionMeta, nowMs = Date.now()): boolean {
+  const fingerprint = buildConversationSummaryFingerprint(meta);
+  if (!fingerprint) {
+    return true;
+  }
+
+  const attempt = readSummaryAttempt(meta.id);
+  if (!attempt || attempt.fingerprint !== fingerprint) {
+    return false;
+  }
+
+  const attemptedAtMs = Date.parse(attempt.attempted_at);
+  return Number.isFinite(attemptedAtMs) && nowMs - attemptedAtMs < SUMMARY_ATTEMPT_COOLDOWN_MS;
+}
+
 function resolveSummaryModel(models: Model<Api>[]): Model<Api> | null {
   const settings = readConversationAutoTitleSettings(resolveSettingsFile());
   return models.find((model) => model.provider === settings.provider && model.id === settings.model)
@@ -407,13 +457,26 @@ async function generateConversationSummary(meta: SessionMeta): Promise<Conversat
 }
 
 async function runSummaryJob(meta: SessionMeta): Promise<void> {
-  if (isSummaryFresh(meta)) {
+  if (isSummaryFresh(meta) || isSummaryAttemptCoolingDown(meta)) {
     return;
   }
 
-  const record = await generateConversationSummary(meta);
-  if (record) {
-    saveConversationSummary(record);
+  const fingerprint = buildConversationSummaryFingerprint(meta);
+  if (!fingerprint) {
+    return;
+  }
+
+  recordSummaryAttempt(meta.id, fingerprint);
+
+  try {
+    const record = await generateConversationSummary(meta);
+    if (record) {
+      saveConversationSummary(record);
+      clearSummaryAttempt(meta.id);
+    }
+  } catch (error) {
+    recordSummaryAttempt(meta.id, fingerprint, error instanceof Error ? error.message : String(error));
+    throw error;
   }
 }
 
@@ -449,6 +512,9 @@ export function queueConversationSummaryRefresh(meta: SessionMeta): void {
   if (isSummaryFresh(meta)) {
     return;
   }
+  if (isSummaryAttemptCoolingDown(meta)) {
+    return;
+  }
 
   queuedSessionIds.add(meta.id);
   pendingQueue.push(meta);
@@ -466,6 +532,9 @@ export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit 
       continue;
     }
     if (isSummaryFresh(session)) {
+      continue;
+    }
+    if (isSummaryAttemptCoolingDown(session)) {
       continue;
     }
     queueConversationSummaryRefresh(session);
