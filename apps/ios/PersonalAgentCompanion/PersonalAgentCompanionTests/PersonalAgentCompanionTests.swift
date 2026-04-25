@@ -610,6 +610,33 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.savedAttachments.contains(where: { $0.id == model.promptAttachmentRefs.first?.attachmentId }))
     }
 
+    func testEditingAttachmentUpdatesExistingRecordInsteadOfDuplicatingIt() async throws {
+        let model = ConversationViewModel(
+            client: MockCompanionClient(),
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.savedAttachments.contains(where: { $0.id == "att-1" })
+        }
+
+        var draft = makeLiveAttachmentDraft()
+        draft.title = "Updated whiteboard"
+        draft.note = "Updated note"
+        let saved = await model.saveExistingAttachment(attachmentId: "att-1", draft: draft)
+
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.savedAttachments.count, 1)
+        XCTAssertEqual(model.savedAttachments.first?.id, "att-1")
+        XCTAssertEqual(model.savedAttachments.first?.title, "Updated whiteboard")
+    }
+
     func testStaleAttachmentRefreshDoesNotOverwriteNewlySavedAttachment() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(

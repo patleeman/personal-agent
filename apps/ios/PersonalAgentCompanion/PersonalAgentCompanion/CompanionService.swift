@@ -2909,8 +2909,40 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
-        let created = try await createAttachment(conversationId: conversationId, draft: draft)
-        return ConversationAttachmentMutationResponse(conversationId: conversationId, attachment: created.attachment, attachments: created.attachments)
+        guard let index = attachmentsByConversation[conversationId]?.firstIndex(where: { $0.id == attachmentId }) else {
+            throw CompanionClientError.requestFailed("Attachment not found.")
+        }
+        guard let sourceAsset = draft.sourceAsset, let previewAsset = draft.previewAsset else {
+            throw CompanionClientError.requestFailed("Source and preview assets are required.")
+        }
+        let existing = attachmentsByConversation[conversationId]![index]
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let nextRevision = existing.currentRevision + 1
+        let revision = ConversationAttachmentRevision(
+            revision: nextRevision,
+            createdAt: now,
+            sourceName: sourceAsset.fileName,
+            sourceMimeType: sourceAsset.mimeType,
+            sourceDownloadPath: existing.latestRevision.sourceDownloadPath,
+            previewName: previewAsset.fileName,
+            previewMimeType: previewAsset.mimeType,
+            previewDownloadPath: existing.latestRevision.previewDownloadPath,
+            note: draft.note.nilIfBlank
+        )
+        let updated = ConversationAttachmentRecord(
+            id: existing.id,
+            conversationId: existing.conversationId,
+            kind: existing.kind,
+            title: draft.title.nilIfBlank ?? existing.title,
+            createdAt: existing.createdAt,
+            updatedAt: now,
+            currentRevision: nextRevision,
+            latestRevision: revision,
+            revisions: existing.revisions + [revision]
+        )
+        attachmentsByConversation[conversationId]![index] = updated
+        let attachments = (attachmentsByConversation[conversationId] ?? []).map(\.summary)
+        return ConversationAttachmentMutationResponse(conversationId: conversationId, attachment: updated, attachments: attachments)
     }
 
     func listKnowledgeEntries(directoryId: String?) async throws -> CompanionKnowledgeTreeResponse {
