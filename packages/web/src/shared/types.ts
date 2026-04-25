@@ -705,7 +705,7 @@ export interface DesktopRemoteOperationBridgeEvent {
   event?: DesktopRemoteOperationStatus;
 }
 
-type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
+type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
 
 interface DesktopAppUpdateState {
   supported: boolean;
@@ -713,7 +713,6 @@ interface DesktopAppUpdateState {
   status: DesktopUpdateStatus;
   availableVersion?: string;
   downloadedVersion?: string;
-  waitingForIdleReason?: string;
   lastCheckedAt?: string;
   lastError?: string;
 }

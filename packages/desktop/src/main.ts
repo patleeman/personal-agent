@@ -16,7 +16,7 @@ import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
 import { installDesktopApplicationMenu } from './menu.js';
-import { type DesktopUpdateIdleState, DesktopUpdateManager } from './updates/update-manager.js';
+import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
 import { readDesktopDaemonOwnership } from './backend/daemon-ownership.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
@@ -28,14 +28,6 @@ let updateManager: DesktopUpdateManager | undefined;
 let backendStartupPromise: Promise<boolean> | undefined;
 let quitRequestPromise: Promise<void> | null = null;
 let quitting = false;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isActiveDurableRunStatus(status: unknown): boolean {
-  return status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering';
-}
 
 function readStartOnSystemStartFromSystem(): boolean {
   if (!app.isPackaged) {
@@ -64,46 +56,6 @@ function applyStartOnSystemStart(enabled: boolean): boolean {
   });
 
   return readStartOnSystemStartFromSystem();
-}
-
-async function inspectDesktopIdleState(): Promise<DesktopUpdateIdleState> {
-  if (!hostManager) {
-    return { idle: false, reason: 'The desktop runtime is still starting.' };
-  }
-
-  const localController = hostManager.getHostController('local');
-  const [runsState, sessionsState, daemonState, tasksState] = await Promise.all([
-    localController.readDurableRuns?.(),
-    localController.readSessions?.(),
-    localController.readDaemonState?.(),
-    localController.readScheduledTasks?.(),
-  ]);
-
-  const runs = isRecord(runsState) && Array.isArray(runsState.runs)
-    ? runsState.runs
-    : [];
-  if (runs.some((run) => isRecord(run) && isRecord(run.status) && isActiveDurableRunStatus(run.status.status))) {
-    return { idle: false, reason: 'Durable runs are still active.' };
-  }
-
-  const tasks = Array.isArray(tasksState) ? tasksState : [];
-  if (tasks.some((task) => isRecord(task) && task.running === true)) {
-    return { idle: false, reason: 'Scheduled tasks are still running.' };
-  }
-
-  const sessions = Array.isArray(sessionsState) ? sessionsState : [];
-  if (sessions.some((session) => isRecord(session) && (session.isRunning === true || session.hasPendingHiddenTurn === true))) {
-    return { idle: false, reason: 'A conversation is still active.' };
-  }
-
-  if (isRecord(daemonState) && isRecord(daemonState.runtime)) {
-    const queueDepth = typeof daemonState.runtime.queueDepth === 'number' ? daemonState.runtime.queueDepth : 0;
-    if (queueDepth > 0) {
-      return { idle: false, reason: 'The daemon queue is still busy.' };
-    }
-  }
-
-  return { idle: true };
 }
 
 function buildDesktopAppPreferencesState() {
@@ -351,11 +303,7 @@ async function bootstrapDesktopApp(): Promise<void> {
     onBeforeQuitForUpdate: async () => {
       await prepareForQuit();
     },
-    onShowUpdateStatusUi: async () => {
-      await openMainRoute('/settings');
-    },
     shouldAutoInstallUpdates: () => readDesktopAppPreferences(loadDesktopConfig()).autoInstallUpdates,
-    checkIdleForAutoInstall: () => inspectDesktopIdleState(),
   });
 
   try {

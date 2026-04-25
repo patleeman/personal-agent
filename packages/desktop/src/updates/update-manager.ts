@@ -1,13 +1,12 @@
 import { appendFileSync } from 'node:fs';
-import { Notification, app, dialog } from 'electron';
+import { app, dialog } from 'electron';
 import { type AppUpdater, MacUpdater, type UpdateDownloadedEvent, type UpdateInfo } from 'electron-updater';
 import { resolveDesktopRuntimePaths } from '../desktop-env.js';
 
 const INITIAL_CHECK_DELAY_MS = 10_000;
 const RECHECK_INTERVAL_MS = 6 * 60 * 60 * 1_000;
-const IDLE_RECHECK_INTERVAL_MS = 30_000;
 
-export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'waiting-for-idle' | 'installing' | 'error';
+export type DesktopUpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready' | 'installing' | 'error';
 
 export interface DesktopAppUpdateState {
   supported: boolean;
@@ -15,14 +14,8 @@ export interface DesktopAppUpdateState {
   status: DesktopUpdateStatus;
   availableVersion?: string;
   downloadedVersion?: string;
-  waitingForIdleReason?: string;
   lastCheckedAt?: string;
   lastError?: string;
-}
-
-export interface DesktopUpdateIdleState {
-  idle: boolean;
-  reason?: string;
 }
 
 function logUpdateMessage(message: string): void {
@@ -64,21 +57,17 @@ export class DesktopUpdateManager {
   private readonly state: DesktopAppUpdateState;
   private startupTimeoutHandle: NodeJS.Timeout | null = null;
   private intervalHandle: NodeJS.Timeout | null = null;
-  private idleWaitIntervalHandle: NodeJS.Timeout | null = null;
   private activeCheck: Promise<void> | null = null;
   private currentCheckUserInitiated = false;
   private currentCheckHadError = false;
   private downloadedUpdate: UpdateDownloadedEvent | null = null;
   private promptingForInstall = false;
   private installingDownloadedUpdate = false;
-  private waitingForIdleNoticeVersion: string | null = null;
 
   constructor(
     private readonly options: {
       onBeforeQuitForUpdate?: () => Promise<void> | void;
-      onShowUpdateStatusUi?: () => Promise<void> | void;
       shouldAutoInstallUpdates?: () => boolean;
-      checkIdleForAutoInstall?: () => Promise<DesktopUpdateIdleState> | DesktopUpdateIdleState;
     } = {},
   ) {
     this.state = createDefaultDesktopAppUpdateState(this.currentVersion);
@@ -119,7 +108,6 @@ export class DesktopUpdateManager {
       clearInterval(this.intervalHandle);
       this.intervalHandle = null;
     }
-    this.stopIdleWaitLoop();
   }
 
   preferencesChanged(): void {
@@ -128,11 +116,9 @@ export class DesktopUpdateManager {
     }
 
     if (!this.shouldAutoInstallUpdates()) {
-      this.stopIdleWaitLoop();
       this.setState({
         status: 'ready',
         downloadedVersion: this.downloadedUpdate.version,
-        waitingForIdleReason: undefined,
         lastError: undefined,
       });
       return;
@@ -176,7 +162,6 @@ export class DesktopUpdateManager {
       status: 'checking',
       availableVersion: undefined,
       downloadedVersion: undefined,
-      waitingForIdleReason: undefined,
       lastCheckedAt: new Date().toISOString(),
       lastError: undefined,
     });
@@ -190,7 +175,6 @@ export class DesktopUpdateManager {
         this.setState({
           status: 'error',
           lastCheckedAt: new Date().toISOString(),
-          waitingForIdleReason: undefined,
           lastError: message,
         });
         if (this.currentCheckUserInitiated && !this.currentCheckHadError) {
@@ -226,7 +210,6 @@ export class DesktopUpdateManager {
         status: 'downloading',
         availableVersion: info.version,
         downloadedVersion: undefined,
-        waitingForIdleReason: undefined,
         lastCheckedAt: new Date().toISOString(),
         lastError: undefined,
       });
@@ -246,12 +229,10 @@ export class DesktopUpdateManager {
 
     this.updater.on('update-not-available', (info: UpdateInfo) => {
       logUpdateMessage(`no newer release found; current=${this.currentVersion} latest=${info.version}`);
-      this.stopIdleWaitLoop();
       this.setState({
         status: 'idle',
         availableVersion: undefined,
         downloadedVersion: undefined,
-        waitingForIdleReason: undefined,
         lastCheckedAt: new Date().toISOString(),
         lastError: undefined,
       });
@@ -267,13 +248,11 @@ export class DesktopUpdateManager {
 
     this.updater.on('update-downloaded', (info: UpdateDownloadedEvent) => {
       this.downloadedUpdate = info;
-      this.waitingForIdleNoticeVersion = null;
       logUpdateMessage(`update ${info.version} finished downloading`);
       this.setState({
         status: 'ready',
         availableVersion: info.version,
         downloadedVersion: info.version,
-        waitingForIdleReason: undefined,
         lastCheckedAt: new Date().toISOString(),
         lastError: undefined,
       });
@@ -290,11 +269,9 @@ export class DesktopUpdateManager {
       const message = renderUpdateErrorMessage(error);
       this.currentCheckHadError = true;
       logUpdateMessage(`update error: ${message}`);
-      this.stopIdleWaitLoop();
       this.setState({
         status: 'error',
         lastCheckedAt: new Date().toISOString(),
-        waitingForIdleReason: undefined,
         lastError: message,
       });
       if (this.currentCheckUserInitiated) {
@@ -320,88 +297,14 @@ export class DesktopUpdateManager {
     return this.options.shouldAutoInstallUpdates?.() === true;
   }
 
-  private startIdleWaitLoop(): void {
-    if (this.idleWaitIntervalHandle) {
-      return;
-    }
-
-    this.idleWaitIntervalHandle = setInterval(() => {
-      void this.maybeAutoInstallDownloadedUpdate();
-    }, IDLE_RECHECK_INTERVAL_MS);
-  }
-
-  private stopIdleWaitLoop(): void {
-    if (!this.idleWaitIntervalHandle) {
-      return;
-    }
-
-    clearInterval(this.idleWaitIntervalHandle);
-    this.idleWaitIntervalHandle = null;
-  }
-
-  private showWaitingForIdleNotification(info: UpdateDownloadedEvent, reason: string): void {
-    if (this.waitingForIdleNoticeVersion === info.version) {
-      return;
-    }
-
-    this.waitingForIdleNoticeVersion = info.version;
-
-    try {
-      if (!Notification.isSupported()) {
-        return;
-      }
-
-      const notification = new Notification({
-        title: `Personal Agent ${info.version} is ready to install`,
-        body: `It will install automatically once the desktop goes idle. ${reason}`,
-        icon: resolveDesktopRuntimePaths().colorIconFile,
-      });
-      notification.on('click', () => {
-        void this.options.onShowUpdateStatusUi?.();
-      });
-      notification.show();
-      logUpdateMessage(`showed waiting-for-idle notification for update ${info.version}`);
-    } catch (error) {
-      logUpdateMessage(`could not show waiting-for-idle notification for update ${info.version}: ${renderUpdateErrorMessage(error)}`);
-    }
-  }
-
   private async maybeAutoInstallDownloadedUpdate(): Promise<void> {
     if (!this.updater || !this.downloadedUpdate || this.promptingForInstall || this.installingDownloadedUpdate) {
       return;
     }
 
     if (!this.shouldAutoInstallUpdates()) {
-      this.stopIdleWaitLoop();
       return;
     }
-
-    let idleState: DesktopUpdateIdleState;
-    try {
-      idleState = await this.options.checkIdleForAutoInstall?.() ?? { idle: true };
-    } catch (error) {
-      const message = renderUpdateErrorMessage(error);
-      logUpdateMessage(`could not confirm idle state for auto install: ${message}`);
-      idleState = {
-        idle: false,
-        reason: `Could not confirm whether the desktop is idle: ${message}`,
-      };
-    }
-
-    if (!idleState.idle) {
-      const waitingReason = idleState.reason?.trim() || 'Local runs or conversations are still active.';
-      this.startIdleWaitLoop();
-      this.showWaitingForIdleNotification(this.downloadedUpdate, waitingReason);
-      this.setState({
-        status: 'waiting-for-idle',
-        downloadedVersion: this.downloadedUpdate.version,
-        waitingForIdleReason: waitingReason,
-        lastError: undefined,
-      });
-      return;
-    }
-
-    this.stopIdleWaitLoop();
     await this.installDownloadedUpdate(this.downloadedUpdate);
   }
 
@@ -430,7 +333,6 @@ export class DesktopUpdateManager {
         this.setState({
           status: 'ready',
           downloadedVersion: info.version,
-          waitingForIdleReason: undefined,
         });
         return;
       }
@@ -450,7 +352,6 @@ export class DesktopUpdateManager {
     this.setState({
       status: 'installing',
       downloadedVersion: info.version,
-      waitingForIdleReason: undefined,
       lastError: undefined,
     });
 

@@ -456,14 +456,10 @@ function formatDesktopUpdateSummary(state: DesktopAppPreferencesState | null): s
       return update.availableVersion
         ? `Downloading Personal Agent ${update.availableVersion}…`
         : 'Downloading the latest Personal Agent build…';
-    case 'waiting-for-idle':
-      return update.downloadedVersion
-        ? `Personal Agent ${update.downloadedVersion} is ready. Auto-install will wait until the desktop goes idle.${update.waitingForIdleReason ? ` ${update.waitingForIdleReason}` : ''}`
-        : 'A downloaded update is waiting for the desktop to go idle.';
     case 'ready':
       return update.downloadedVersion
         ? state.autoInstallUpdates
-          ? `Personal Agent ${update.downloadedVersion} is ready. It will install automatically once the desktop goes idle.`
+          ? `Personal Agent ${update.downloadedVersion} is ready and will install automatically.`
           : `Personal Agent ${update.downloadedVersion} is ready. Quit the app to finish installing it.`
         : `Current version: ${update.currentVersion}.`;
     case 'installing':
@@ -1101,7 +1097,7 @@ export function DesktopConnectionsSettingsPanel() {
                 disabled={action !== null || !appPreferencesState.update.supported}
                 className={CHECKBOX_CLASS}
               />
-              <span>Install downloaded updates automatically when the desktop is idle</span>
+              <span>Install downloaded updates automatically</span>
             </label>
             <p className="ui-card-meta break-words">{formatDesktopUpdateSummary(appPreferencesState)}</p>
 
