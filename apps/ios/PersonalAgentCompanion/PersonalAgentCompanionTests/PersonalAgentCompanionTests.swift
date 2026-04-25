@@ -725,6 +725,47 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(draftStore.load(fileId: "notes/ios-companion.md"))
     }
 
+    func testStoppingKnowledgeNoteCancelsPendingLoad() async throws {
+        let client = MockCompanionClient()
+        client.readKnowledgeFileDelayNanoseconds = 150_000_000
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.stop()
+        XCTAssertFalse(model.isLoading)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(model.content.isEmpty)
+        XCTAssertTrue(model.draft.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
+    func testOlderKnowledgeNoteLoadDoesNotClearLoadingForNewerLoad() async throws {
+        let client = MockCompanionClient()
+        client.readKnowledgeFileDelayQueueNanoseconds = [120_000_000, 180_000_000]
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        model.load()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.load()
+
+        try await Task.sleep(nanoseconds: 150_000_000)
+        XCTAssertTrue(model.isLoading)
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+        XCTAssertTrue(model.content.contains("# iOS companion"))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testKnowledgeNoteDetectsHostConflictsBeforeOverwrite() async throws {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)

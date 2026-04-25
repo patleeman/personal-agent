@@ -1491,6 +1491,9 @@ private struct KnowledgeNoteScreen: View {
                 viewModel.load()
             }
         }
+        .onDisappear {
+            viewModel.stop()
+        }
     }
 
     private func refreshFindMatches(selectFirst: Bool) {

@@ -1373,6 +1373,8 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
+    var readKnowledgeFileDelayNanoseconds: UInt64 = 0
+    var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     private(set) var promptSubmissionCount = 0
 
@@ -2922,6 +2924,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     func readKnowledgeFile(fileId: String) async throws -> CompanionKnowledgeFileResponse {
         guard let normalizedFileId = normalizeKnowledgeId(fileId), let content = knowledgeFiles[normalizedFileId] else {
             throw CompanionClientError.requestFailed("Knowledge file not found.")
+        }
+        let delay = readKnowledgeFileDelayQueueNanoseconds.isEmpty ? readKnowledgeFileDelayNanoseconds : readKnowledgeFileDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
         }
         return CompanionKnowledgeFileResponse(
             id: normalizedFileId,

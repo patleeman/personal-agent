@@ -1342,6 +1342,8 @@ final class KnowledgeNoteViewModel: ObservableObject {
     private let client: CompanionClientProtocol
     private let draftStore: KnowledgeDraftStore
     private var baseUpdatedAt: String?
+    private var loadTask: Task<Void, Never>?
+    private var loadRequestId = 0
     private var autosaveTask: Task<Void, Never>?
     private var linkSearchTask: Task<Void, Never>?
     private var currentSelectionRange = NSRange(location: 0, length: 0)
@@ -1354,6 +1356,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
     }
 
     deinit {
+        loadTask?.cancel()
         autosaveTask?.cancel()
         linkSearchTask?.cancel()
     }
@@ -1387,17 +1390,39 @@ final class KnowledgeNoteViewModel: ObservableObject {
     }
 
     func load() {
-        Task {
-            isLoading = true
-            defer { isLoading = false }
+        loadTask?.cancel()
+        loadRequestId += 1
+        let requestId = loadRequestId
+        isLoading = true
+        loadTask = Task {
+            defer {
+                if loadRequestId == requestId {
+                    isLoading = false
+                }
+            }
             do {
                 let result = try await client.readKnowledgeFile(fileId: fileId)
-                applyRemoteFile(result)
-                errorMessage = nil
+                if !Task.isCancelled, loadRequestId == requestId {
+                    applyRemoteFile(result)
+                    errorMessage = nil
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled, loadRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
+    }
+
+    func stop() {
+        loadRequestId += 1
+        loadTask?.cancel()
+        loadTask = nil
+        autosaveTask?.cancel()
+        autosaveTask = nil
+        linkSearchTask?.cancel()
+        linkSearchTask = nil
+        isLoading = false
     }
 
     func reload() {
