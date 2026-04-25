@@ -484,6 +484,7 @@ final class HostSessionModel: ObservableObject {
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var appEventRevision = 0
+    private var refreshRequestId = 0
 
     var workspacePathOptions: [String] {
         var seen = Set<String>()
@@ -528,10 +529,16 @@ final class HostSessionModel: ObservableObject {
     }
 
     func refresh() {
+        refreshRequestId += 1
+        let requestId = refreshRequestId
+        isLoading = true
         Task {
-            isLoading = true
-            defer { isLoading = false }
             let appEventRevisionAtRequest = appEventRevision
+            defer {
+                if refreshRequestId == requestId {
+                    isLoading = false
+                }
+            }
             do {
                 try await client.connect()
                 async let conversationState = client.listConversations()
@@ -540,14 +547,18 @@ final class HostSessionModel: ObservableObject {
                 let state = try await conversationState
                 let nextModels = try await models
                 let nextSshTargets = try await sshTargetState
-                errorMessage = nil
-                modelState = nextModels
-                sshTargets = nextSshTargets.hosts
-                if appEventRevision == appEventRevisionAtRequest {
+                if refreshRequestId == requestId {
+                    errorMessage = nil
+                    modelState = nextModels
+                    sshTargets = nextSshTargets.hosts
+                }
+                if refreshRequestId == requestId && appEventRevision == appEventRevisionAtRequest {
                     applyConversationListState(state)
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                if refreshRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }

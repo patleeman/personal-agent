@@ -922,6 +922,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(session.sessions.keys.contains(created.bootstrap.conversationId))
     }
 
+    func testOlderHostRefreshDoesNotClearLoadingForNewerRefresh() async throws {
+        let client = MockCompanionClient()
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        client.listConversationsDelayQueueNanoseconds = [50_000_000, 150_000_000]
+
+        session.refresh()
+        try await Task.sleep(nanoseconds: 10_000_000)
+        session.refresh()
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertTrue(session.isLoading)
+        try await waitForCondition(timeout: .seconds(2)) {
+            !session.isLoading
+        }
+    }
+
     func testCreatedConversationOpensWithReturnedBootstrapImmediately() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         let createdConversationId = await session.createConversation(NewConversationRequest(promptText: "Start from the returned bootstrap", cwd: "/tmp/ios-create"))
