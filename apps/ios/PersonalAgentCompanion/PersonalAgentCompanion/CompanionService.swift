@@ -1390,6 +1390,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var saveSshTargetDelayNanoseconds: UInt64 = 0
+    var saveSshTargetFailureQueueMessages: [String] = []
     var deleteSshTargetDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
@@ -2340,6 +2341,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         saveSshTargetCount += 1
         if saveSshTargetDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: saveSshTargetDelayNanoseconds)
+        }
+        if !saveSshTargetFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(saveSshTargetFailureQueueMessages.removeFirst())
         }
         let targetId = id?.trimmed.nilIfBlank ?? "ssh-\(Int.random(in: 100...999))"
         let record = CompanionSshTargetRecord(id: targetId, label: label.trimmed, kind: "ssh", sshTarget: sshTarget.trimmed)

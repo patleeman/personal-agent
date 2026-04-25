@@ -1408,6 +1408,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testSaveSshTargetClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.saveSshTargetFailureQueueMessages = ["SSH target save temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedTargets = await session.saveSshTarget(id: nil, label: "Retry box", sshTarget: "agent@retry")
+        XCTAssertFalse(failedTargets.contains { $0.label == "Retry box" })
+        XCTAssertNotNil(session.errorMessage)
+
+        let targets = await session.saveSshTarget(id: nil, label: "Retry box", sshTarget: "agent@retry")
+        XCTAssertTrue(targets.contains { $0.label == "Retry box" && $0.sshTarget == "agent@retry" })
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testDeleteSshTargetIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.deleteSshTargetDelayNanoseconds = 150_000_000
