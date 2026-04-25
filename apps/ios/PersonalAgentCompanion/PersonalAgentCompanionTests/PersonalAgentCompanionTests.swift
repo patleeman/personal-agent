@@ -1066,6 +1066,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testSaveAutoModeIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.updateConversationAutoModeDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        async let first = model.saveAutoMode(enabled: true)
+        async let second = model.saveAutoMode(enabled: true)
+        let results = await [first, second]
+
+        XCTAssertEqual(client.updateConversationAutoModeCount, 1)
+        XCTAssertEqual(results.compactMap { $0 }.count, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptModesWorkDuringMockSimulation() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

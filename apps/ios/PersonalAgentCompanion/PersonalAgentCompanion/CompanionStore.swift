@@ -2139,6 +2139,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingAbortConversation = false
     private var pendingTakeOverConversation = false
     private var pendingWorkingDirectoryChangeKeys: Set<String> = []
+    private var pendingAutoModeSaveKeys: Set<String> = []
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
     private var pendingDeferredResumeCancelIds: Set<String> = []
@@ -2659,6 +2660,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func saveAutoMode(enabled: Bool) async -> ConversationAutoModeState? {
+        let saveKey = enabled ? "enabled" : "disabled"
+        guard pendingAutoModeSaveKeys.insert(saveKey).inserted else {
+            return nil
+        }
+        defer { pendingAutoModeSaveKeys.remove(saveKey) }
         do {
             return try await client.updateConversationAutoMode(
                 conversationId: conversationId,
