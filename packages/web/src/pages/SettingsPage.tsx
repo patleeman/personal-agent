@@ -1617,6 +1617,10 @@ export function SettingsPage() {
     () => listKnownModelProviderIds(modelProviderState, providerAuthState, modelState?.models),
     [modelProviderState, providerAuthState, modelState?.models],
   );
+  const unconfiguredModelProviderIds = useMemo(() => {
+    const configured = new Set((modelProviderState?.providers ?? []).map((provider) => provider.id));
+    return availableModelProviderIds.filter((providerId) => !configured.has(providerId));
+  }, [availableModelProviderIds, modelProviderState?.providers]);
 
   const selectedModelProvider = useMemo(() => {
     if (!modelProviderState || !selectedModelProviderId || selectedModelProviderId === NEW_MODEL_PROVIDER_ID) {
@@ -3517,13 +3521,13 @@ export function SettingsPage() {
                 <div className="space-y-5">
                 <div className="space-y-3 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-[13px] font-medium text-primary">Configured providers</h3>
+                    <h3 className="text-[13px] font-medium text-primary">Providers</h3>
                     <button
                       type="button"
                       onClick={() => { selectModelProvider(NEW_MODEL_PROVIDER_ID); }}
                       className={ACTION_BUTTON_CLASS}
                     >
-                      New provider
+                      Add provider/model
                     </button>
                   </div>
 
@@ -3533,35 +3537,68 @@ export function SettingsPage() {
                     <p className="text-[12px] text-danger">Failed to load provider definitions: {modelProviderError}</p>
                   ) : modelProviderState ? (
                     <>
-                      {modelProviderState.providers.length > 0 ? (
-                        <div className="space-y-px">
-                          {modelProviderState.providers.map((provider) => {
-                            const selected = provider.id === selectedModelProviderId;
-                            return (
-                              <button
-                                key={provider.id}
-                                type="button"
-                                onClick={() => { selectModelProvider(provider.id); }}
-                                className={cx(
-                                  'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                                  selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
-                                )}
-                                aria-pressed={selected}
-                              >
-                                <span className="min-w-0">
-                                  <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
-                                  <span className="ui-card-meta block truncate">{formatModelProviderSummary(provider)}</span>
-                                </span>
-                                {provider.baseUrl && (
-                                  <span className="ui-card-meta hidden truncate text-right xl:block">{provider.baseUrl}</span>
-                                )}
-                              </button>
-                            );
-                          })}
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <p className="ui-card-meta">Configured in models.json</p>
+                          {modelProviderState.providers.length > 0 ? (
+                            <div className="space-y-px">
+                              {modelProviderState.providers.map((provider) => {
+                                const selected = provider.id === selectedModelProviderId;
+                                return (
+                                  <button
+                                    key={provider.id}
+                                    type="button"
+                                    onClick={() => { selectModelProvider(provider.id); }}
+                                    className={cx(
+                                      'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                      selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                                    )}
+                                    aria-pressed={selected}
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
+                                      <span className="ui-card-meta block truncate">{formatModelProviderSummary(provider)}</span>
+                                    </span>
+                                    {provider.baseUrl && (
+                                      <span className="ui-card-meta hidden truncate text-right xl:block">{provider.baseUrl}</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="ui-card-meta">No custom providers or overrides yet.</p>
+                          )}
                         </div>
-                      ) : (
-                        <p className="ui-card-meta">No custom providers or overrides yet.</p>
-                      )}
+
+                        {unconfiguredModelProviderIds.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="ui-card-meta">Known providers you can add models to</p>
+                            <div className="space-y-px">
+                              {unconfiguredModelProviderIds.map((providerId) => {
+                                const selected = selectedModelProviderId === NEW_MODEL_PROVIDER_ID && modelProviderDraft.id.trim() === providerId;
+                                return (
+                                  <button
+                                    key={providerId}
+                                    type="button"
+                                    onClick={() => { startNewModelProvider(providerId); }}
+                                    className={cx(
+                                      'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
+                                      selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
+                                    )}
+                                    aria-pressed={selected}
+                                  >
+                                    <span className="min-w-0">
+                                      <span className="block truncate text-[13px] font-medium text-primary">{providerId}</span>
+                                      <span className="ui-card-meta block truncate">Add a model override or new model</span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </>
                   ) : null}
                 </div>
