@@ -58,6 +58,8 @@ Auto mode means the backend performs a hidden review turn after each visible ass
 
 That hidden controller should keep going while useful work remains and stop only when the task is done, blocked, or needs user input.
 
+For the agent operating discipline around autonomous continuation, validation, durable runs, and tenacious follow-through, read [Auto Mode](../internal-skills/auto-mode/INDEX.md).
+
 ## Cross-thread inspection
 
 Agents can inspect other conversations through the read-only `conversation_inspect` tool.
@@ -95,4 +97,5 @@ Use the owning thread as the default place where async outcomes remain visible.
 - [Knowledge System](./knowledge-system.md)
 - [Projects](./projects.md)
 - [Desktop App](./desktop-app.md)
+- [Auto Mode](../internal-skills/auto-mode/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)

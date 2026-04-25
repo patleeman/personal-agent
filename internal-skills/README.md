@@ -7,6 +7,7 @@ These are built-in runtime guides, not user-authored workflow skills. Use them w
 ## Start here
 
 - [Artifacts and Rendered Outputs](./artifacts/INDEX.md)
+- [Auto Mode](./auto-mode/INDEX.md)
 - [Async Attention and Wakeups](./async-attention/INDEX.md)
 - [Scheduled Tasks](./scheduled-tasks/INDEX.md)
 - [Runs](./runs/INDEX.md)

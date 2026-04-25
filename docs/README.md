@@ -19,7 +19,7 @@ These aliases are used throughout the docs:
 3. `vaultRoot` from `<config-root>/config.json`
 4. fallback default `~/Documents/personal-agent`
 
-In Patrick's normal setup, `<vault-root>` is usually the managed mirror under `<state-root>/knowledge-base/repo`.
+In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror under `<state-root>/knowledge-base/repo`.
 
 ## Start here
 
@@ -60,6 +60,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 
 - [Runs](../internal-skills/runs/INDEX.md)
 - [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md)
+- [Auto Mode](../internal-skills/auto-mode/INDEX.md)
 - [Async Attention and Wakeups](../internal-skills/async-attention/INDEX.md)
 - [Artifacts and Rendered Outputs](../internal-skills/artifacts/INDEX.md)
 - [Reminders and Notification Delivery](../internal-skills/alerts/INDEX.md)
@@ -76,7 +77,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
 | How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Desktop App](./desktop-app.md), [Agent Browser in this repo](./agent-browser.md) |
-| How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md) |
+| How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
 | Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
 | How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |
 | How do I ship the desktop app? | [Release Cycle](./release-cycle.md) | repo `AGENTS.md` release notes |
