@@ -1396,6 +1396,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
+    var createConversationCheckpointFailureQueueMessages: [String] = []
     var createTaskDelayNanoseconds: UInt64 = 0
     var createTaskFailureQueueMessages: [String] = []
     var deleteTaskDelayNanoseconds: UInt64 = 0
@@ -3076,6 +3077,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     func createConversationCheckpoint(conversationId: String, message: String, paths: [String]) async throws -> ConversationCommitCheckpointRecord {
         if createConversationCheckpointDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createConversationCheckpointDelayNanoseconds)
+        }
+        if !createConversationCheckpointFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createConversationCheckpointFailureQueueMessages.removeFirst())
         }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let normalizedPaths = paths.map { $0.trimmed }.filter { !$0.isEmpty }

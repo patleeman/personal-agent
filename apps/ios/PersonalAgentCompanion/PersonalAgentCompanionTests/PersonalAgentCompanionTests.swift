@@ -1967,6 +1967,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(checkpoints.contains(where: { $0.id == checkpoint.id }))
     }
 
+    func testCreateCheckpointClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createConversationCheckpointFailureQueueMessages = ["Checkpoint create temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedCheckpoint = await model.createCheckpoint(message: "Retry checkpoint", paths: ["apps/ios/PersonalAgentCompanion"])
+        XCTAssertNil(failedCheckpoint)
+        XCTAssertNotNil(model.errorMessage)
+
+        let checkpoint = await model.createCheckpoint(message: "Retry checkpoint", paths: ["apps/ios/PersonalAgentCompanion"])
+        XCTAssertEqual(checkpoint?.subject, "Retry checkpoint")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCreateCheckpointIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createConversationCheckpointDelayNanoseconds = 150_000_000

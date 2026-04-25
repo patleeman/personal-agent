@@ -2865,7 +2865,9 @@ final class ConversationViewModel: ObservableObject {
         }
         defer { pendingCheckpointCreateKeys.remove(createKey) }
         do {
-            return try await client.createConversationCheckpoint(conversationId: conversationId, message: message, paths: paths)
+            let checkpoint = try await client.createConversationCheckpoint(conversationId: conversationId, message: message, paths: paths)
+            errorMessage = nil
+            return checkpoint
         } catch {
             errorMessage = error.localizedDescription
             return nil
