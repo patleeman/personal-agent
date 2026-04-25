@@ -1381,6 +1381,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
+    var createAttachmentDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
@@ -3036,6 +3037,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createAttachment(conversationId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
+        if createAttachmentDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createAttachmentDelayNanoseconds)
+        }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let attachmentId = "att-\(Int.random(in: 10...999))"
         guard let sourceAsset = draft.sourceAsset, let previewAsset = draft.previewAsset else {

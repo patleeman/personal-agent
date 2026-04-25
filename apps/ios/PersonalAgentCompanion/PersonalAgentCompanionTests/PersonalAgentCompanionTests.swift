@@ -610,6 +610,29 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(model.savedAttachments.contains(where: { $0.id == model.promptAttachmentRefs.first?.attachmentId }))
     }
 
+    func testSavingDrawingAttachmentIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createAttachmentDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        async let first = model.saveNewAttachmentAndAttach(makeLiveAttachmentDraft())
+        async let second = model.saveNewAttachmentAndAttach(makeLiveAttachmentDraft())
+        let results = await [first, second]
+
+        XCTAssertEqual(results.filter { $0 }.count, 1)
+        XCTAssertEqual(model.savedAttachments.filter { $0.title == "Live test drawing" }.count, 1)
+        XCTAssertEqual(model.promptAttachmentRefs.filter { $0.title == "Live test drawing" }.count, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testEditingAttachmentUpdatesExistingRecordInsteadOfDuplicatingIt() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

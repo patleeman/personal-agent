@@ -1986,6 +1986,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingParallelJobActionKeys: Set<String> = []
     private var pendingCheckpointCreateKeys: Set<String> = []
     private var pendingDeferredResumeFireIds: Set<String> = []
+    private var pendingAttachmentCreateKeys: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2660,6 +2661,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func saveNewAttachment(_ draft: AttachmentEditorDraft) async -> Bool {
+        let createKey = attachmentCreateKey(for: draft)
+        guard pendingAttachmentCreateKeys.insert(createKey).inserted else {
+            return false
+        }
+        defer { pendingAttachmentCreateKeys.remove(createKey) }
         do {
             let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
             attachmentRefreshRequestId += 1
@@ -2672,6 +2678,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func saveNewAttachmentAndAttach(_ draft: AttachmentEditorDraft) async -> Bool {
+        let createKey = attachmentCreateKey(for: draft)
+        guard pendingAttachmentCreateKeys.insert(createKey).inserted else {
+            return false
+        }
+        defer { pendingAttachmentCreateKeys.remove(createKey) }
         do {
             let result = try await client.createAttachment(conversationId: conversationId, draft: draft)
             attachmentRefreshRequestId += 1
@@ -2682,6 +2693,19 @@ final class ConversationViewModel: ObservableObject {
             errorMessage = error.localizedDescription
             return false
         }
+    }
+
+    private func attachmentCreateKey(for draft: AttachmentEditorDraft) -> String {
+        [
+            draft.title.trimmed,
+            draft.note.trimmed,
+            draft.sourceAsset?.fileName ?? "",
+            draft.sourceAsset?.mimeType ?? "",
+            draft.sourceAsset?.base64Data ?? "",
+            draft.previewAsset?.fileName ?? "",
+            draft.previewAsset?.mimeType ?? "",
+            draft.previewAsset?.base64Data ?? ""
+        ].joined(separator: "\u{1f}")
     }
 
     func saveExistingAttachment(attachmentId: String, draft: AttachmentEditorDraft) async -> Bool {
