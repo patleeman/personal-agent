@@ -39,9 +39,9 @@ describe('transcription settings', () => {
 
     expect(state.providers).toContainEqual({
       id: 'openai-codex-realtime',
-      label: 'OpenAI Codex Realtime',
+      label: 'OpenAI Codex Transcribe',
       status: 'implemented',
-      transports: ['stream', 'file'],
+      transports: ['file'],
     });
     expect(state.providers.find((provider) => provider.id === 'openai-api')?.status).toBe('planned');
     expect(state.providers.find((provider) => provider.id === 'whisperkit-local')?.status).toBe('planned');

@@ -77,9 +77,9 @@ export function buildTranscriptionSettingsState(settingsFile: string): Transcrip
     providers: [
       {
         id: 'openai-codex-realtime',
-        label: 'OpenAI Codex Realtime',
+        label: 'OpenAI Codex Transcribe',
         status: 'implemented',
-        transports: ['stream', 'file'],
+        transports: ['file'],
       },
       {
         id: 'openai-api',

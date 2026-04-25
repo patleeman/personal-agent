@@ -7,6 +7,7 @@ import {
   readTranscriptionSettings,
   writeTranscriptionSettings,
 } from '../transcription/index.js';
+import { persistSettingsWrite } from '../ui/settingsPersistence.js';
 
 function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
@@ -53,7 +54,10 @@ export function registerTranscriptionRoutes(
         update.model = model;
       }
 
-      writeTranscriptionSettings(context.getSettingsFile(), update);
+      persistSettingsWrite(
+        (settingsFile) => writeTranscriptionSettings(settingsFile, update),
+        { runtimeSettingsFile: context.getSettingsFile() },
+      );
       res.json(buildTranscriptionSettingsState(context.getSettingsFile()));
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
