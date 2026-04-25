@@ -2315,6 +2315,7 @@ final class ConversationViewModel: ObservableObject {
                 let result = try await client.listAttachments(conversationId: conversationId)
                 if !Task.isCancelled, attachmentRefreshRequestId == requestId {
                     savedAttachments = result.attachments
+                    errorMessage = nil
                 }
             } catch {
                 if !Task.isCancelled, attachmentRefreshRequestId == requestId {

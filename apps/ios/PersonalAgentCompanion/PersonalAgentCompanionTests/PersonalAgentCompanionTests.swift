@@ -767,6 +767,31 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testAttachmentRefreshClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listAttachmentsFailureQueueMessages = ["Attachments temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.refreshAttachments()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        model.refreshAttachments()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.savedAttachments.contains(where: { $0.id == "att-1" })
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testMockKnowledgeListsFoldersAndNotes() async throws {
         let client = MockCompanionClient()
 

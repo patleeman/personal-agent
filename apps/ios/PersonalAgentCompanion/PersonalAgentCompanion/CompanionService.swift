@@ -1375,6 +1375,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
+    var listAttachmentsFailureQueueMessages: [String] = []
     var readModelsDelayNanoseconds: UInt64 = 0
     var listTasksFailureQueueMessages: [String] = []
     var readTaskLogFailureQueueMessages: [String] = []
@@ -3180,6 +3181,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         let attachments = (attachmentsByConversation[conversationId] ?? []).map(\.summary)
         if listAttachmentsDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: listAttachmentsDelayNanoseconds)
+        }
+        if !listAttachmentsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(listAttachmentsFailureQueueMessages.removeFirst())
         }
         return ConversationAttachmentListResponse(conversationId: conversationId, attachments: attachments)
     }
