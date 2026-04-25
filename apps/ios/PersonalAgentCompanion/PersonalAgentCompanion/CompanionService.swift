@@ -1401,6 +1401,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listSshTargetsFailureQueueMessages: [String] = []
     var testSshTargetFailureQueueMessages: [String] = []
     var readRemoteDirectoryFailureQueueMessages: [String] = []
+    var readDeviceAdminStateFailureQueueMessages: [String] = []
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
@@ -3594,7 +3595,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readDeviceAdminState() async throws -> CompanionDeviceAdminState {
-        deviceAdminState
+        if !readDeviceAdminStateFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readDeviceAdminStateFailureQueueMessages.removeFirst())
+        }
+        return deviceAdminState
     }
 
     func createPairingCode() async throws -> CompanionPairingCodeRecord {

@@ -957,7 +957,9 @@ final class HostSessionModel: ObservableObject {
 
     func readDeviceAdminState() async -> CompanionDeviceAdminState? {
         do {
-            return try await client.readDeviceAdminState()
+            let state = try await client.readDeviceAdminState()
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil

@@ -2083,6 +2083,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testReadDeviceAdminStateClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readDeviceAdminStateFailureQueueMessages = ["Device admin state temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedState = await session.readDeviceAdminState()
+        XCTAssertNil(failedState)
+        XCTAssertNotNil(session.errorMessage)
+
+        let state = await session.readDeviceAdminState()
+        XCTAssertEqual(state?.devices.first?.id, "device-demo")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testReadTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 
