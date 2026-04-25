@@ -1437,6 +1437,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listConversationArtifactsFailureQueueMessages: [String] = []
     var readConversationArtifactFailureQueueMessages: [String] = []
     var listConversationCheckpointsFailureQueueMessages: [String] = []
+    var readConversationCheckpointFailureQueueMessages: [String] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
@@ -3063,6 +3064,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readConversationCheckpoint(conversationId: String, checkpointId: String) async throws -> ConversationCommitCheckpointRecord {
+        if !readConversationCheckpointFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readConversationCheckpointFailureQueueMessages.removeFirst())
+        }
         guard let checkpoint = checkpointsByConversation[conversationId]?.first(where: { $0.id == checkpointId }) else {
             throw CompanionClientError.requestFailed("Checkpoint not found.")
         }

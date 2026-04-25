@@ -2848,7 +2848,9 @@ final class ConversationViewModel: ObservableObject {
 
     func readCheckpoint(_ checkpointId: String) async -> ConversationCommitCheckpointRecord? {
         do {
-            return try await client.readConversationCheckpoint(conversationId: conversationId, checkpointId: checkpointId)
+            let checkpoint = try await client.readConversationCheckpoint(conversationId: conversationId, checkpointId: checkpointId)
+            errorMessage = nil
+            return checkpoint
         } catch {
             errorMessage = error.localizedDescription
             return nil

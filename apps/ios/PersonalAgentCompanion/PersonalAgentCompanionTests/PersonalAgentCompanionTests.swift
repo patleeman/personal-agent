@@ -1926,6 +1926,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testReadCheckpointClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readConversationCheckpointFailureQueueMessages = ["Checkpoint read temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedCheckpoint = await model.readCheckpoint("abc1234")
+        XCTAssertNil(failedCheckpoint)
+        XCTAssertNotNil(model.errorMessage)
+
+        let checkpoint = await model.readCheckpoint("abc1234")
+        XCTAssertEqual(checkpoint?.subject, "Add iOS companion parity")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCreateCheckpointAddsCheckpointRecord() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),
