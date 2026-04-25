@@ -319,6 +319,32 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
     }
 
+    func testStoppingConversationCancelsPendingBootstrapLoad() async throws {
+        let client = MockCompanionClient()
+        client.conversationBootstrapDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.loadBootstrap()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.isLoading
+        }
+        model.stop()
+        XCTAssertFalse(model.isLoading)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(model.blocks.isEmpty)
+        XCTAssertEqual(model.title, "Conversation")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testCompanionTranscriptImageAssetPathRewritesSessionAssetUrls() {
         XCTAssertEqual(
             companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image"),

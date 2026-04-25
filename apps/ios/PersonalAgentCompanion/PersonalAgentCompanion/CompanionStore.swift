@@ -1874,6 +1874,7 @@ final class ConversationViewModel: ObservableObject {
     private var didAutoStartRunningSimulation = false
     private var didRestoreComposerDraft = false
     private var isApplyingComposerDraft = false
+    private var bootstrapLoadTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
     private var activityRefreshTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
@@ -1931,6 +1932,9 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func stop() {
+        bootstrapLoadTask?.cancel()
+        bootstrapLoadTask = nil
+        isLoading = false
         composerDraftSaveTask?.cancel()
         persistComposerDraftIfNeeded()
         streamTask?.cancel()
@@ -1943,10 +1947,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func loadBootstrap() {
+        bootstrapLoadTask?.cancel()
         bootstrapLoadRequestId += 1
         let requestId = bootstrapLoadRequestId
         isLoading = true
-        Task {
+        bootstrapLoadTask = Task {
             let eventRevisionAtRequest = liveEventRevision
             defer {
                 if bootstrapLoadRequestId == requestId {
@@ -1958,12 +1963,12 @@ final class ConversationViewModel: ObservableObject {
                     conversationId: conversationId,
                     options: ConversationBootstrapRequestOptions(tailBlocks: Self.bootstrapTailBlocks)
                 )
-                if bootstrapLoadRequestId == requestId {
+                if !Task.isCancelled && bootstrapLoadRequestId == requestId {
                     errorMessage = nil
                     applyBootstrap(envelope, eventRevisionAtRequest: eventRevisionAtRequest)
                 }
             } catch {
-                if bootstrapLoadRequestId == requestId {
+                if !Task.isCancelled && bootstrapLoadRequestId == requestId {
                     errorMessage = error.localizedDescription
                 }
             }
