@@ -548,6 +548,7 @@ function OpenFilesSection({
   activeFileId,
   onSelect,
   onClose,
+  onCloseAll,
   bordered = true,
   className = '',
 }: {
@@ -555,6 +556,7 @@ function OpenFilesSection({
   activeFileId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
+  onCloseAll: () => void;
   bordered?: boolean;
   className?: string;
 }) {
@@ -564,8 +566,18 @@ function OpenFilesSection({
       bordered ? 'border-t border-border-subtle' : '',
       className,
     ].filter(Boolean).join(' ')}>
-      <div className="flex shrink-0 items-center px-1 pb-1">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-1 pb-1">
         <p className="ui-section-label">Open Files</p>
+        {openFileIds.length > 0 ? (
+          <button
+            type="button"
+            aria-label="Close all open files"
+            className="text-[11px] font-medium text-dim transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35 focus-visible:ring-offset-1 focus-visible:ring-offset-base"
+            onClick={onCloseAll}
+          >
+            Close all
+          </button>
+        ) : null}
       </div>
       {openFileIds.length === 0 ? (
         <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
@@ -953,6 +965,21 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     const fallbackIndex = Math.min(Math.max(closedIndex, 0), Math.max(nextOpenFileIds.length - 1, 0));
     onFileSelect(nextOpenFileIds[fallbackIndex] ?? '');
+  }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
+
+  const handleOpenFilesCloseAll = useCallback(() => {
+    const currentOpenFileIds = openFileIdsRef.current;
+    if (currentOpenFileIds.length === 0) {
+      return;
+    }
+
+    const nextRecentlyClosedFileIds = currentOpenFileIds.reduceRight(
+      (recentlyClosedFileIds, fileId) => recordRecentlyClosedFileId(recentlyClosedFileIds, fileId),
+      recentlyClosedFileIdsRef.current,
+    );
+    persistRecentlyClosedFileIds(nextRecentlyClosedFileIds);
+    persistOpenFileIds([]);
+    onFileSelect('');
   }, [onFileSelect, persistOpenFileIds, persistRecentlyClosedFileIds]);
 
   const handleReopenLastClosedFile = useCallback(() => {
@@ -1418,6 +1445,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                   activeFileId={activeFileId}
                   onSelect={onFileSelect}
                   onClose={handleOpenFileClose}
+                  onCloseAll={handleOpenFilesCloseAll}
                   bordered={false}
                   className="h-full"
                 />
@@ -1429,6 +1457,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
               activeFileId={activeFileId}
               onSelect={onFileSelect}
               onClose={handleOpenFileClose}
+              onCloseAll={handleOpenFilesCloseAll}
             />
           )}
         </>

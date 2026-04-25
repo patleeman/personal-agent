@@ -366,6 +366,33 @@ describe('VaultFileTree', () => {
     expect(getButton(container, 'Open file notes/today.md').getAttribute('aria-current')).toBe('true');
   });
 
+  it('closes all open files from the open files section', async () => {
+    const { container } = renderManagedTree();
+    await flushAsyncWork();
+
+    click(getButton(container, 'README.md'));
+    await flushAsyncWork();
+    click(getButton(container, 'notes'));
+    await flushAsyncWork();
+    click(getButton(container, 'today.md'));
+    await flushAsyncWork();
+
+    click(getButton(container, 'Close all open files'));
+    await flushAsyncWork();
+
+    expect(localStorage.getItem(KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY)).toBeNull();
+    expect(queryInShadowRoots(container, 'button[aria-label="Open file notes/today.md"]')).toBeNull();
+    expect(queryInShadowRoots(container, 'button[aria-label="Open file README.md"]')).toBeNull();
+    expect(container.textContent).toContain('No open files.');
+
+    act(() => {
+      emitKBEvent('kb:reopen-closed-file');
+    });
+    await flushAsyncWork();
+
+    expect(getButton(container, 'Open file notes/today.md').getAttribute('aria-current')).toBe('true');
+  });
+
   it('lets the open files section resize taller and persists the new height', async () => {
     const { container } = renderManagedTree();
     await flushAsyncWork();
