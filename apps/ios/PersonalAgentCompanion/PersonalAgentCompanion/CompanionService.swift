@@ -1377,6 +1377,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
+    var createConversationDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
@@ -1394,6 +1395,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var renameConversationDelayQueueNanoseconds: [UInt64] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
+    private(set) var createConversationCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
 
@@ -2345,6 +2347,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createConversation(_ input: NewConversationRequest, surfaceId: String) async throws -> ConversationBootstrapEnvelope {
+        createConversationCount += 1
+        if createConversationDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createConversationDelayNanoseconds)
+        }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let conversationId = "conv-\(Int.random(in: 100...999))"
         let session = SessionMeta(

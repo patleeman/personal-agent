@@ -1351,6 +1351,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testHostSessionCreateConversationIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createConversationDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let request = NewConversationRequest(promptText: "Create this conversation once", cwd: "/tmp/ios-create")
+        async let first = session.createConversation(request)
+        async let second = session.createConversation(request)
+        let createdIds = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(createdIds.count, 1)
+        XCTAssertEqual(client.createConversationCount, 1)
+        XCTAssertEqual(session.sessions.values.filter { $0.title == "Create this conversation once" }.count, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testStaleHostRefreshDoesNotOverwriteAppEventConversationList() async throws {
         let client = MockCompanionClient()
         let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")

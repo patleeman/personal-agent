@@ -484,6 +484,7 @@ final class HostSessionModel: ObservableObject {
     private var refreshTask: Task<Void, Never>?
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
+    private var pendingConversationCreateKeys: Set<String> = []
     private var appEventRevision = 0
     private var refreshRequestId = 0
 
@@ -595,6 +596,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func createConversation(_ request: NewConversationRequest) async -> String? {
+        let createKey = conversationCreateKey(for: request)
+        guard pendingConversationCreateKeys.insert(createKey).inserted else {
+            return nil
+        }
+        defer { pendingConversationCreateKeys.remove(createKey) }
         do {
             let envelope = try await client.createConversation(request, surfaceId: installationSurfaceId)
             let conversationId = envelope.bootstrap.conversationId
@@ -608,6 +614,17 @@ final class HostSessionModel: ObservableObject {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func conversationCreateKey(for request: NewConversationRequest) -> String {
+        [
+            request.promptText.trimmed,
+            request.cwd.trimmed,
+            request.executionTargetId.trimmed,
+            request.model.trimmed,
+            request.thinkingLevel.trimmed,
+            request.serviceTier.trimmed
+        ].joined(separator: "\u{1f}")
     }
 
     func resumeConversation(_ request: ResumeConversationRequest) async -> String? {
