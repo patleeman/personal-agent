@@ -933,6 +933,7 @@ final class HostSessionModel: ObservableObject {
             let state = try await client.deleteSshTarget(targetId: targetId)
             sshTargets = state.hosts
             executionTargets = [ExecutionTargetSummary(id: "local", label: "Local", kind: "local")] + state.hosts.map { ExecutionTargetSummary(id: $0.id, label: $0.label, kind: "ssh") }
+            errorMessage = nil
             return state.hosts
         } catch {
             errorMessage = error.localizedDescription

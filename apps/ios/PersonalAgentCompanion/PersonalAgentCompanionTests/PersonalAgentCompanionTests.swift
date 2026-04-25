@@ -1440,6 +1440,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testDeleteSshTargetClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.deleteSshTargetFailureQueueMessages = ["SSH target delete temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialTargets = await session.listSshTargets()
+        let targetId = try XCTUnwrap(initialTargets.first?.id)
+
+        let failedTargets = await session.deleteSshTarget(targetId)
+        XCTAssertTrue(failedTargets.contains { $0.id == targetId })
+        XCTAssertNotNil(session.errorMessage)
+
+        let targets = await session.deleteSshTarget(targetId)
+        XCTAssertFalse(targets.contains { $0.id == targetId })
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testStaleModelRefreshDoesNotOverwriteSavedPreference() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(

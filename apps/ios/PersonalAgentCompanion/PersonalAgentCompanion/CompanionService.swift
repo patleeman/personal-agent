@@ -1392,6 +1392,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var saveSshTargetDelayNanoseconds: UInt64 = 0
     var saveSshTargetFailureQueueMessages: [String] = []
     var deleteSshTargetDelayNanoseconds: UInt64 = 0
+    var deleteSshTargetFailureQueueMessages: [String] = []
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
@@ -2361,6 +2362,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         deleteSshTargetCount += 1
         if deleteSshTargetDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: deleteSshTargetDelayNanoseconds)
+        }
+        if !deleteSshTargetFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(deleteSshTargetFailureQueueMessages.removeFirst())
         }
         sshTargetState = CompanionSshTargetState(hosts: sshTargetState.hosts.filter { $0.id != targetId })
         listState = ConversationListState(
