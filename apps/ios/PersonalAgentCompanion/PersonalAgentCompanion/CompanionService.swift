@@ -1403,6 +1403,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readRemoteDirectoryFailureQueueMessages: [String] = []
     var readDeviceAdminStateFailureQueueMessages: [String] = []
     var createPairingCodeDelayNanoseconds: UInt64 = 0
+    var createPairingCodeFailureQueueMessages: [String] = []
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
     var deletePairedDeviceDelayNanoseconds: UInt64 = 0
@@ -3605,6 +3606,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         createPairingCodeCount += 1
         if createPairingCodeDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createPairingCodeDelayNanoseconds)
+        }
+        if !createPairingCodeFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createPairingCodeFailureQueueMessages.removeFirst())
         }
         let next = CompanionPairingCodeRecord(id: "pair-\(Int.random(in: 10...999))", code: "WXYZ-QRST-UVWX", createdAt: ISO8601DateFormatter.flexible.string(from: .now), expiresAt: ISO8601DateFormatter.flexible.string(from: .now.addingTimeInterval(600)))
         deviceAdminState = CompanionDeviceAdminState(pendingPairings: [CompanionPendingPairing(id: next.id, createdAt: next.createdAt, expiresAt: next.expiresAt)] + deviceAdminState.pendingPairings, devices: deviceAdminState.devices)

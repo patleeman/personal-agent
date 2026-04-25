@@ -2248,6 +2248,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testCreatePairingCodeClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createPairingCodeFailureQueueMessages = ["Pairing code temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedCode = await session.createPairingCode()
+        XCTAssertNil(failedCode)
+        XCTAssertNotNil(session.errorMessage)
+
+        let code = await session.createPairingCode()
+        XCTAssertEqual(code?.code, "WXYZ-QRST-UVWX")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testAutomationEditorPersistsCallbackFields() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()

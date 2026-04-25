@@ -973,7 +973,9 @@ final class HostSessionModel: ObservableObject {
         isCreatingPairingCode = true
         defer { isCreatingPairingCode = false }
         do {
-            return try await client.createPairingCode()
+            let code = try await client.createPairingCode()
+            errorMessage = nil
+            return code
         } catch {
             errorMessage = error.localizedDescription
             return nil
