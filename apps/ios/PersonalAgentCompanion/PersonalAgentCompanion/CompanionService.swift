@@ -1396,6 +1396,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
     var createTaskDelayNanoseconds: UInt64 = 0
     var deleteTaskDelayNanoseconds: UInt64 = 0
+    var deleteTaskFailureQueueMessages: [String] = []
     var runTaskDelayNanoseconds: UInt64 = 0
     var runTaskFailureQueueMessages: [String] = []
     var cancelRunDelayNanoseconds: UInt64 = 0
@@ -3517,6 +3518,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         deleteTaskCount += 1
         if deleteTaskDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: deleteTaskDelayNanoseconds)
+        }
+        if !deleteTaskFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(deleteTaskFailureQueueMessages.removeFirst())
         }
         tasks.removeAll { $0.id == taskId }
     }

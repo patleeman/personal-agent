@@ -822,6 +822,7 @@ final class HostSessionModel: ObservableObject {
         defer { pendingTaskDeleteIds.remove(taskId) }
         do {
             try await client.deleteTask(taskId: taskId)
+            errorMessage = nil
             return true
         } catch {
             errorMessage = error.localizedDescription

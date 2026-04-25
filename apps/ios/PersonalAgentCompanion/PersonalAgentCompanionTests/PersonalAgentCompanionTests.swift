@@ -2407,6 +2407,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testDeleteTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.deleteTaskFailureQueueMessages = ["Task delete temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedResult = await session.deleteTask("task-1")
+        XCTAssertFalse(failedResult)
+        XCTAssertNotNil(session.errorMessage)
+
+        let result = await session.deleteTask("task-1")
+        XCTAssertTrue(result)
+        XCTAssertNil(session.errorMessage)
+
+        let tasks = await session.listTasks()
+        XCTAssertFalse(tasks.contains { $0.id == "task-1" })
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testLiveSetupURLPairsAgainstDesktopHost() async throws {
         let environment = ProcessInfo.processInfo.environment
         let config = try loadLiveCompanionConfig(from: environment)
