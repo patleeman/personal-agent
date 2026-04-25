@@ -1,8 +1,9 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { getDesktopBridge, isDesktopShell } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, DesktopNavigationState } from '../shared/types';
 import { ToolbarButton } from './ui';
+import type { AppLayoutMode } from '../ui-state/appLayoutMode';
 
 function LeftSidebarToggleIcon({ open }: { open: boolean }) {
   return (
@@ -20,6 +21,16 @@ function RightRailToggleIcon({ open }: { open: boolean }) {
       <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
       <path d="M9.25 2v10" />
       {open ? <path d="M8 7H5.5" /> : <path d="M6.1 5.4 7.8 7l-1.7 1.6" />}
+    </svg>
+  );
+}
+
+function LayoutIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden="true">
+      <rect x="1.5" y="2" width="11" height="10" rx="1.8" />
+      <path d="M4.7 2v10" />
+      <path d="M8.8 2v10" />
     </svg>
   );
 }
@@ -56,6 +67,8 @@ export function DesktopTopBar({
   showRailToggle,
   railOpen,
   onToggleRail,
+  layoutMode,
+  onLayoutModeChange,
 }: {
   environment: DesktopEnvironmentState | null;
   sidebarOpen: boolean;
@@ -63,12 +76,16 @@ export function DesktopTopBar({
   showRailToggle: boolean;
   railOpen: boolean;
   onToggleRail: () => void;
+  layoutMode: AppLayoutMode;
+  onLayoutModeChange: (mode: AppLayoutMode) => void;
 }) {
   const location = useLocation();
   const [navigation, setNavigation] = useState<DesktopNavigationState>({
     canGoBack: false,
     canGoForward: false,
   });
+  const [layoutMenuOpen, setLayoutMenuOpen] = useState(false);
+  const layoutMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const bridge = getDesktopBridge();
@@ -94,6 +111,33 @@ export function DesktopTopBar({
       cancelled = true;
     };
   }, [location.key, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!layoutMenuOpen) {
+      return;
+    }
+
+    function handlePointerDown(event: MouseEvent) {
+      const target = event.target;
+      if (target instanceof Node && layoutMenuRef.current?.contains(target)) {
+        return;
+      }
+      setLayoutMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setLayoutMenuOpen(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [layoutMenuOpen]);
 
   const bridge = getDesktopBridge();
   const desktopShell = isDesktopShell();
@@ -163,6 +207,50 @@ export function DesktopTopBar({
       </div>
       <div className="ui-desktop-top-bar__center" />
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+        <div ref={layoutMenuRef} className="relative">
+          <ToolbarButton
+            className="ui-desktop-top-bar__action-button"
+            onClick={() => setLayoutMenuOpen((current) => !current)}
+            aria-haspopup="menu"
+            aria-expanded={layoutMenuOpen}
+            aria-label="Choose layout"
+            title="Choose layout"
+          >
+            <LayoutIcon />
+            <span>{layoutMode === 'workbench' ? 'Workbench' : 'Compact'}</span>
+            <span aria-hidden="true" className="text-dim">⌄</span>
+          </ToolbarButton>
+          {layoutMenuOpen ? (
+            <div className="ui-desktop-layout-menu" role="menu" aria-label="Layout">
+              <button
+                type="button"
+                className="ui-desktop-layout-menu__item"
+                role="menuitemradio"
+                aria-checked={layoutMode === 'compact'}
+                onClick={() => {
+                  onLayoutModeChange('compact');
+                  setLayoutMenuOpen(false);
+                }}
+              >
+                <span className="font-medium text-primary">Compact</span>
+                <span className="text-[11px] leading-4 text-secondary">Sidebar and one focused main pane.</span>
+              </button>
+              <button
+                type="button"
+                className="ui-desktop-layout-menu__item"
+                role="menuitemradio"
+                aria-checked={layoutMode === 'workbench'}
+                onClick={() => {
+                  onLayoutModeChange('workbench');
+                  setLayoutMenuOpen(false);
+                }}
+              >
+                <span className="font-medium text-primary">Workbench</span>
+                <span className="text-[11px] leading-4 text-secondary">Chat, open note, and Knowledge side by side.</span>
+              </button>
+            </div>
+          ) : null}
+        </div>
         {showRailToggle ? (
           <ToolbarButton
             className="ui-desktop-top-bar__icon-button"

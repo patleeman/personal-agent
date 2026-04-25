@@ -18,6 +18,15 @@ For packaged builds, launch `Personal Agent.app`.
 - The daemon still owns durable background behavior: runs, automations, wakeups, reminders, and companion pairing.
 - The companion API still exposes HTTP/WebSocket on its configured port because phones and Tailnet clients need a public endpoint.
 
+## Layout modes
+
+The desktop top bar has a layout selector:
+
+- **Compact** keeps the classic left sidebar plus one main content pane.
+- **Workbench** applies to conversation routes and adds resizable panes for the transcript, the open Knowledge note, and the Knowledge file explorer/open-files rail.
+
+Workbench stores its mode and pane widths in browser-local layout preferences. Reset them from Settings → Browser local state → “Reset layout + reload”.
+
 ## Validation
 
 For desktop UI work, run the desktop app and validate with agent-browser through the repo wrapper:

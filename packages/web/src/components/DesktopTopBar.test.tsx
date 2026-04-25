@@ -19,6 +19,8 @@ function renderTopBar(
         showRailToggle={false}
         railOpen={false}
         onToggleRail={() => {}}
+        layoutMode="compact"
+        onLayoutModeChange={() => {}}
         {...overrides}
       />
     </MemoryRouter>,
@@ -78,7 +80,23 @@ describe('DesktopTopBar', () => {
 
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
-    expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('Hide right sidebar'));
+    expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('Choose layout'));
+    expect(html.indexOf('Choose layout')).toBeLessThan(html.indexOf('Hide right sidebar'));
+  });
+
+  it('shows the active layout in the top-right layout control', () => {
+    const html = renderTopBar({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local runtime is healthy.',
+      launchMode: 'normal',
+      launchLabel: null,
+    }, { layoutMode: 'workbench' });
+
+    expect(html).toContain('Workbench');
+    expect(html).toContain('Choose layout');
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {

@@ -1,11 +1,13 @@
 import { Component, Suspense, lazy, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
 import { DesktopTopBar } from './DesktopTopBar';
 import { PageSearchBar } from './PageSearchBar';
+import { VaultEditor } from './knowledge/VaultEditor';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
+import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
@@ -16,10 +18,15 @@ import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached 
 import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
+import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const ContextRail = lazy(() => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
+const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
+
+const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
+const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail';
 
@@ -427,10 +434,66 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
     : [];
 }
 
+function WorkbenchDocumentPane() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeFileId = searchParams.get('file') ?? null;
+  const fileName = activeFileId
+    ? activeFileId.split('/').filter(Boolean).pop()
+    : undefined;
+
+  const handleFileNavigate = useCallback((id: string) => {
+    navigateKnowledgeFile(setSearchParams, id);
+  }, [setSearchParams]);
+
+  const handleFileRenamed = useCallback((oldId: string, newId: string) => {
+    if (activeFileId === oldId) {
+      navigateKnowledgeFile(setSearchParams, newId, { replace: true });
+    }
+  }, [activeFileId, setSearchParams]);
+
+  if (!activeFileId) {
+    return (
+      <div className="flex h-full items-center justify-center px-6 text-center select-text">
+        <div className="max-w-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Workbench</p>
+          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a Knowledge note</h2>
+          <p className="mt-2 text-[13px] leading-6 text-secondary">
+            Pick a file from the Knowledge sidebar to keep it beside the transcript.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <VaultEditor
+      fileId={activeFileId}
+      fileName={fileName}
+      onFileNavigate={handleFileNavigate}
+      onFileRenamed={handleFileRenamed}
+    />
+  );
+}
+
+function WorkbenchKnowledgeRail() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeFileId = searchParams.get('file') ?? null;
+  const handleFileSelect = useCallback((id: string) => {
+    navigateKnowledgeFile(setSearchParams, id);
+  }, [setSearchParams]);
+
+  return (
+    <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
+      <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
+    </Suspense>
+  );
+}
+
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
+  const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
@@ -455,6 +518,20 @@ export function Layout() {
     min: railMinWidth,
     max: railMaxWidth,
     storageKey: railPrefs.storageKey,
+    side: 'right',
+  });
+  const workbenchExplorer = useResize({
+    initial: 276,
+    min: 220,
+    max: Math.max(220, Math.min(380, viewportWidth - sidebar.width - 760)),
+    storageKey: WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY,
+    side: 'right',
+  });
+  const workbenchDocument = useResize({
+    initial: 520,
+    min: 360,
+    max: Math.max(360, viewportWidth - sidebar.width - workbenchExplorer.width - 460),
+    storageKey: WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY,
     side: 'right',
   });
   const [railOpen, setRailOpen] = useState(true);
@@ -491,12 +568,18 @@ export function Layout() {
   }, []);
 
   const showContextRail = canShowContextRail && railOpen;
+  const showWorkbench = appLayoutMode === 'workbench' && location.pathname.startsWith('/conversations');
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
         railOpen: showContextRail,
         toggleRail: () => setRailOpen((current) => !current),
       }
     : null);
+
+  const handleAppLayoutModeChange = useCallback((mode: AppLayoutMode) => {
+    setAppLayoutMode(mode);
+    writeAppLayoutMode(mode);
+  }, []);
 
   useEffect(() => {
     function handleDesktopShortcut(event: Event) {
@@ -551,6 +634,8 @@ export function Layout() {
             showRailToggle={activeRightRailControl !== null}
             railOpen={activeRightRailControl?.railOpen ?? false}
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
+            layoutMode={appLayoutMode}
+            onLayoutModeChange={handleAppLayoutModeChange}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
           {sidebarOpen ? (
@@ -563,9 +648,32 @@ export function Layout() {
 
           <div ref={pageSearchRootRef} className="flex min-w-0 flex-1 overflow-hidden">
             <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>
-              <main className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text">
+              <main className={showWorkbench
+                ? 'flex-1 min-w-[360px] overflow-y-auto overflow-x-hidden select-text'
+                : 'flex-1 min-w-0 overflow-y-auto overflow-x-hidden select-text'}>
                 <Outlet />
               </main>
+
+              {showWorkbench ? (
+                <>
+                  <ResizeHandle onMouseDown={workbenchDocument.onMouseDown} onDoubleClick={workbenchDocument.reset} />
+                  <section
+                    style={{ width: workbenchDocument.width }}
+                    className="flex-shrink-0 overflow-hidden border-x border-border-subtle bg-base select-text"
+                    aria-label="Workbench note"
+                  >
+                    <WorkbenchDocumentPane />
+                  </section>
+                  <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
+                  <aside
+                    style={{ width: workbenchExplorer.width }}
+                    className="flex-shrink-0 overflow-hidden bg-surface select-text"
+                    aria-label="Knowledge sidebar"
+                  >
+                    <WorkbenchKnowledgeRail />
+                  </aside>
+                </>
+              ) : null}
 
               {showContextRail ? (
                 <>
