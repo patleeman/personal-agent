@@ -2562,11 +2562,24 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func cancelDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
-        DeferredResumeListResponse(conversationId: conversationId, resumes: conversations[conversationId]?.sessionMeta?.deferredResumes ?? [])
+        guard var meta = conversations[conversationId]?.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let remaining = (meta.deferredResumes ?? []).filter { $0.id != resumeId }
+        meta.deferredResumes = remaining
+        replaceConversationMeta(conversationId: conversationId, meta: meta)
+        return DeferredResumeListResponse(conversationId: conversationId, resumes: remaining)
     }
 
     func fireDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
-        DeferredResumeListResponse(conversationId: conversationId, resumes: conversations[conversationId]?.sessionMeta?.deferredResumes ?? [])
+        guard var meta = conversations[conversationId]?.sessionMeta else {
+            throw CompanionClientError.requestFailed("Conversation not found.")
+        }
+        let remaining = (meta.deferredResumes ?? []).filter { $0.id != resumeId }
+        meta.deferredResumes = remaining
+        replaceConversationMeta(conversationId: conversationId, meta: meta)
+        addMockRun(runId: "deferred-\(resumeId)", sourceType: "deferred-resume", sourceId: resumeId)
+        return DeferredResumeListResponse(conversationId: conversationId, resumes: remaining)
     }
 
     func abortConversation(conversationId: String) async throws {

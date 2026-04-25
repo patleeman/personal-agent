@@ -1446,6 +1446,38 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.sessionMeta?.deferredResumes?.map(\.id), ["resume-1"])
     }
 
+    func testCancellingDeferredResumeRemovesItFromConversation() async throws {
+        let client = MockCompanionClient()
+        client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.contains(where: { $0.id == "resume-1" }) == true
+        }
+
+        model.cancelDeferredResume("resume-1")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.isEmpty == true
+        }
+        model.loadBootstrap()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+
+        XCTAssertEqual(model.sessionMeta?.deferredResumes, [])
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 
