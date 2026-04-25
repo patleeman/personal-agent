@@ -1171,6 +1171,28 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testConversationDuplicateClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.duplicateConversationFailureQueueMessages = ["Conversation duplicate temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        let failedDuplicateId = await model.duplicateConversation()
+        XCTAssertNil(failedDuplicateId)
+        XCTAssertNotNil(model.errorMessage)
+
+        let duplicateId = await model.duplicateConversation()
+        XCTAssertNotNil(duplicateId)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testChangeWorkingDirectoryIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.changeConversationCwdDelayNanoseconds = 150_000_000

@@ -2684,7 +2684,9 @@ final class ConversationViewModel: ObservableObject {
         pendingDuplicateConversation = true
         defer { pendingDuplicateConversation = false }
         do {
-            return try await client.duplicateConversation(conversationId: conversationId)
+            let duplicateId = try await client.duplicateConversation(conversationId: conversationId)
+            errorMessage = nil
+            return duplicateId
         } catch {
             errorMessage = error.localizedDescription
             return nil
