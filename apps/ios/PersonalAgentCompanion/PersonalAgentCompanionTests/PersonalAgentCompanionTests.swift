@@ -1335,6 +1335,31 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.currentExecutionTargetId, "local")
     }
 
+    func testStaleConversationRenameDoesNotOverrideLatestTitle() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        client.renameConversationDelayQueueNanoseconds = [150_000_000, 0]
+        model.renameConversation("Old slow title")
+        try await Task.sleep(nanoseconds: 30_000_000)
+        model.renameConversation("New fast title")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.title == "New fast title"
+        }
+        try await Task.sleep(nanoseconds: 180_000_000)
+
+        XCTAssertEqual(model.title, "New fast title")
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

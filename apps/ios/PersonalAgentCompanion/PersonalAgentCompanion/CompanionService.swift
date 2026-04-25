@@ -1384,6 +1384,8 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
+    var renameConversationDelayNanoseconds: UInt64 = 0
+    var renameConversationDelayQueueNanoseconds: [UInt64] = []
     private(set) var promptSubmissionCount = 0
 
     private var listState: ConversationListState
@@ -2562,6 +2564,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func renameConversation(conversationId: String, name: String, surfaceId: String) async throws {
+        let delay = renameConversationDelayQueueNanoseconds.isEmpty ? renameConversationDelayNanoseconds : renameConversationDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
+        }
         guard var envelope = conversations[conversationId], let sessionMeta = envelope.sessionMeta else { return }
         let renamedMeta = SessionMeta(
             id: sessionMeta.id,

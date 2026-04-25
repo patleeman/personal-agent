@@ -1966,6 +1966,7 @@ final class ConversationViewModel: ObservableObject {
     private var activityRefreshTask: Task<Void, Never>?
     private var activityRunsRefreshTask: Task<Void, Never>?
     private var executionTargetChangeTask: Task<Void, Never>?
+    private var renameConversationTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
     private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
@@ -1978,6 +1979,7 @@ final class ConversationViewModel: ObservableObject {
     private var modelRefreshRequestId = 0
     private var activityRunsRefreshRequestId = 0
     private var executionTargetChangeRequestId = 0
+    private var renameConversationRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -2042,6 +2044,8 @@ final class ConversationViewModel: ObservableObject {
         activityRunsRefreshTask = nil
         executionTargetChangeTask?.cancel()
         executionTargetChangeTask = nil
+        renameConversationTask?.cancel()
+        renameConversationTask = nil
         composerNoticeTask?.cancel()
         composerNoticeTask = nil
         transcriptImageCache.removeAll()
@@ -2359,12 +2363,21 @@ final class ConversationViewModel: ObservableObject {
     func renameConversation(_ name: String) {
         let trimmed = name.trimmed
         guard !trimmed.isEmpty else { return }
-        Task {
+        renameConversationTask?.cancel()
+        renameConversationRequestId += 1
+        let requestId = renameConversationRequestId
+        renameConversationTask = Task {
             do {
                 try await client.renameConversation(conversationId: conversationId, name: trimmed, surfaceId: installationSurfaceId)
-                title = trimmed
+                if !Task.isCancelled, renameConversationRequestId == requestId {
+                    title = trimmed
+                    renameConversationTask = nil
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if !Task.isCancelled, renameConversationRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                    renameConversationTask = nil
+                }
             }
         }
     }
