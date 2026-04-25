@@ -166,6 +166,29 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.hosts.first?.baseURL, "http://192.168.1.23:3843")
     }
 
+    func testLoadingSavedHostsKeepsValidRecordsWhenOneRecordIsMalformed() async throws {
+        setenv("PA_IOS_MOCK_MODE", "1", 1)
+        let valid = CompanionHostRecord(
+            id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
+            baseURL: "https://192.168.1.23:3843",
+            hostLabel: "Desktop Host",
+            hostInstanceId: "host_1",
+            deviceId: "device_1",
+            deviceLabel: "iPhone"
+        )
+        let validObject = try JSONSerialization.jsonObject(with: JSONEncoder().encode(valid))
+        let data = try JSONSerialization.data(withJSONObject: [
+            validObject,
+            ["id": "22222222-2222-2222-2222-222222222222", "hostLabel": "Malformed host"],
+        ])
+        UserDefaults.standard.set(data, forKey: hostsStorageKey)
+
+        let model = CompanionAppModel()
+
+        XCTAssertEqual(model.hosts.map(\.hostLabel), ["Desktop Host"])
+        XCTAssertNil(model.bannerMessage)
+    }
+
     func testMockModeSeedsASelectableHostWithoutAutoConnecting() async throws {
         setenv("PA_IOS_MOCK_MODE", "1", 1)
 

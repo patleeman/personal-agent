@@ -440,18 +440,19 @@ final class CompanionAppModel: ObservableObject {
             return
         }
         do {
-            let decoded = try JSONDecoder().decode([CompanionHostRecord].self, from: data)
-            var didNormalize = false
-            hosts = decoded.map { host in
+            let decoded = try JSONDecoder().decode([LossyCompanionHostRecord].self, from: data)
+            let validHosts = decoded.compactMap(\.value)
+            var didChangeStoredHosts = validHosts.count != decoded.count
+            hosts = validHosts.map { host in
                 guard let normalized = try? normalizeHostURL(host.baseURL), normalized.absoluteString != host.baseURL else {
                     return host
                 }
-                didNormalize = true
+                didChangeStoredHosts = true
                 var updated = host
                 updated.baseURL = normalized.absoluteString
                 return updated
             }
-            if didNormalize {
+            if didChangeStoredHosts {
                 persistHosts()
             }
         } catch {
@@ -467,6 +468,14 @@ final class CompanionAppModel: ObservableObject {
         } catch {
             bannerMessage = "Failed to save host state: \(error.localizedDescription)"
         }
+    }
+}
+
+private struct LossyCompanionHostRecord: Decodable {
+    let value: CompanionHostRecord?
+
+    init(from decoder: Decoder) throws {
+        self.value = try? CompanionHostRecord(from: decoder)
     }
 }
 
