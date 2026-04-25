@@ -58,6 +58,8 @@ final class PersonalAgentCompanionTests: XCTestCase {
 
     func testCompanionIncomingShareLinkParsesShareURL() {
         XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion://share")!))
+        XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion:/share")!))
+        XCTAssertNil(CompanionIncomingShareLink(url: URL(string: "https://example.com/share")!))
     }
 
     func testKnowledgeShareInboxSkipsCorruptPendingShareFiles() throws {
@@ -390,6 +392,12 @@ final class PersonalAgentCompanionTests: XCTestCase {
             "/companion/v1/conversations/conv-1/blocks/block-1/image"
         )
         XCTAssertNil(companionTranscriptImageAssetPath("https://example.com/image.png"))
+    }
+
+    func testDataURLDataDecodesWrappedBase64Payloads() {
+        let wrapped = "data:text/plain;base64,aGVs\n bG8="
+
+        XCTAssertEqual(dataURLData(wrapped), Data("hello".utf8))
     }
 
     func testConversationComposerDraftRestoresAcrossViewModels() {

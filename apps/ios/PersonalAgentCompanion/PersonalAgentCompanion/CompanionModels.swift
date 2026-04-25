@@ -1288,7 +1288,7 @@ func dataURLData(_ string: String?) -> Data? {
     guard let string, let range = string.range(of: ",") else {
         return nil
     }
-    return Data(base64Encoded: String(string[range.upperBound...]))
+    return Data(base64Encoded: String(string[range.upperBound...]), options: [.ignoreUnknownCharacters])
 }
 
 func makeDataURL(mimeType: String, base64Data: String) -> String {
