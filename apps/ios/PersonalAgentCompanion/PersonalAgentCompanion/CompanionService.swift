@@ -1397,6 +1397,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createTaskDelayNanoseconds: UInt64 = 0
     var deleteTaskDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
+    var runTaskFailureQueueMessages: [String] = []
     var cancelRunDelayNanoseconds: UInt64 = 0
     var listSshTargetsFailureQueueMessages: [String] = []
     var testSshTargetFailureQueueMessages: [String] = []
@@ -3523,6 +3524,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         runTaskCount += 1
         if runTaskDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: runTaskDelayNanoseconds)
+        }
+        if !runTaskFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(runTaskFailureQueueMessages.removeFirst())
         }
         guard let task = tasks.first(where: { $0.id == taskId }) else {
             throw CompanionClientError.requestFailed("Task not found.")

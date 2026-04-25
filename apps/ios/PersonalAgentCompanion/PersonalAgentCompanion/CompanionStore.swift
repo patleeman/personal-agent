@@ -835,7 +835,9 @@ final class HostSessionModel: ObservableObject {
         }
         defer { pendingTaskRunIds.remove(taskId) }
         do {
-            return try await client.runTask(taskId: taskId)
+            let response = try await client.runTask(taskId: taskId)
+            errorMessage = nil
+            return response
         } catch {
             errorMessage = error.localizedDescription
             return nil

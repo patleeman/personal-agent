@@ -2263,6 +2263,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testRunTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.runTaskFailureQueueMessages = ["Task run temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialRunCount = await session.listRuns()?.runs.filter { $0.manifest?.source?.type == "task" && $0.manifest?.source?.id == "task-1" }.count ?? 0
+
+        let failedResponse = await session.runTask("task-1")
+        XCTAssertNil(failedResponse)
+        XCTAssertNotNil(session.errorMessage)
+
+        let response = await session.runTask("task-1")
+        XCTAssertEqual(response?.accepted, true)
+        XCTAssertNil(session.errorMessage)
+
+        let runs = await session.listRuns()
+        XCTAssertEqual(runs?.runs.filter { $0.manifest?.source?.type == "task" && $0.manifest?.source?.id == "task-1" }.count, initialRunCount + 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testCancelRunIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.cancelRunDelayNanoseconds = 150_000_000
