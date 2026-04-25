@@ -899,6 +899,29 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testStaleHostRefreshDoesNotOverwriteAppEventConversationList() async throws {
+        let client = MockCompanionClient()
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        session.start()
+        defer { session.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            session.sessions.keys.contains("conv-1")
+        }
+
+        client.listConversationsDelayNanoseconds = 150_000_000
+        session.refresh()
+        try await Task.sleep(nanoseconds: 30_000_000)
+        let created = try await client.createConversation(
+            NewConversationRequest(promptText: "Created while refresh is stale"),
+            surfaceId: "ios-test"
+        )
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            !session.isLoading
+        }
+        XCTAssertTrue(session.sessions.keys.contains(created.bootstrap.conversationId))
+    }
+
     func testCreatedConversationOpensWithReturnedBootstrapImmediately() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         let createdConversationId = await session.createConversation(NewConversationRequest(promptText: "Start from the returned bootstrap", cwd: "/tmp/ios-create"))

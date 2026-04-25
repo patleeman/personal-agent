@@ -483,6 +483,7 @@ final class HostSessionModel: ObservableObject {
     private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
+    private var appEventRevision = 0
 
     var workspacePathOptions: [String] {
         var seen = Set<String>()
@@ -530,6 +531,7 @@ final class HostSessionModel: ObservableObject {
         Task {
             isLoading = true
             defer { isLoading = false }
+            let appEventRevisionAtRequest = appEventRevision
             do {
                 try await client.connect()
                 async let conversationState = client.listConversations()
@@ -541,7 +543,9 @@ final class HostSessionModel: ObservableObject {
                 errorMessage = nil
                 modelState = nextModels
                 sshTargets = nextSshTargets.hosts
-                applyConversationListState(state)
+                if appEventRevision == appEventRevisionAtRequest {
+                    applyConversationListState(state)
+                }
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -857,8 +861,10 @@ final class HostSessionModel: ObservableObject {
                     if Task.isCancelled { break }
                     switch event {
                     case .conversationListState(let state):
+                        appEventRevision += 1
                         applyConversationListState(state)
                     case .conversationListChanged:
+                        appEventRevision += 1
                         refresh()
                     case .open:
                         break

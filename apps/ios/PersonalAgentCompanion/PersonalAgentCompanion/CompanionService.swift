@@ -1368,6 +1368,7 @@ private struct MockCompanionSeed {
 final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
     var supportsRunningConversationSimulation: Bool { true }
+    var listConversationsDelayNanoseconds: UInt64 = 0
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
@@ -2101,7 +2102,13 @@ final class MockCompanionClient: CompanionClientProtocol {
 
     func disconnect() {}
 
-    func listConversations() async throws -> ConversationListState { listState }
+    func listConversations() async throws -> ConversationListState {
+        let state = listState
+        if listConversationsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: listConversationsDelayNanoseconds)
+        }
+        return state
+    }
 
     func updateConversationTabs(ordering: ConversationOrdering) async throws {
         listState = ConversationListState(sessions: listState.sessions, ordering: ordering, executionTargets: listState.executionTargets)
