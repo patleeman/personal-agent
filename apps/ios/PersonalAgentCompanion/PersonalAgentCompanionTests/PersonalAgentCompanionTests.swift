@@ -1280,6 +1280,35 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(checkpoints.contains(where: { $0.id == checkpoint.id }))
     }
 
+    func testStaleActivityRunRefreshDoesNotOverwriteNewerRunList() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        client.addMockRun(runId: "run-old", sourceId: "conv-1")
+        client.listRunsDelayNanoseconds = 150_000_000
+        model.refreshActivityRuns()
+        try await Task.sleep(nanoseconds: 30_000_000)
+
+        client.addMockRun(runId: "run-new", sourceId: "conv-1")
+        client.listRunsDelayNanoseconds = 0
+        model.refreshActivityRuns()
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.connectedRuns.contains(where: { $0.runId == "run-new" })
+        }
+        try await Task.sleep(nanoseconds: 180_000_000)
+
+        XCTAssertTrue(model.connectedRuns.contains(where: { $0.runId == "run-new" }))
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

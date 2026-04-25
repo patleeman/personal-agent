@@ -1381,6 +1381,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
+    var listRunsDelayNanoseconds: UInt64 = 0
     private(set) var promptSubmissionCount = 0
 
     private var listState: ConversationListState
@@ -3214,9 +3215,28 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listRuns() async throws -> DurableRunsListResponse {
-        let statuses = Dictionary(grouping: runs.compactMap { $0.status?.status }, by: { $0 }).mapValues(\.count)
-        let recoveryActions = Dictionary(grouping: runs.map(\.recoveryAction), by: { $0 }).mapValues(\.count)
-        return DurableRunsListResponse(scannedAt: ISO8601DateFormatter.flexible.string(from: .now), runs: runs, summary: DurableRunsSummary(total: runs.count, recoveryActions: recoveryActions, statuses: statuses))
+        let snapshot = runs
+        if listRunsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: listRunsDelayNanoseconds)
+        }
+        let statuses = Dictionary(grouping: snapshot.compactMap { $0.status?.status }, by: { $0 }).mapValues(\.count)
+        let recoveryActions = Dictionary(grouping: snapshot.map(\.recoveryAction), by: { $0 }).mapValues(\.count)
+        return DurableRunsListResponse(scannedAt: ISO8601DateFormatter.flexible.string(from: .now), runs: snapshot, summary: DurableRunsSummary(total: snapshot.count, recoveryActions: recoveryActions, statuses: statuses))
+    }
+
+    func addMockRun(runId: String, sourceType: String = "conversation", sourceId: String, status: String = "running") {
+        let now = ISO8601DateFormatter.flexible.string(from: .now)
+        let summary = DurableRunSummary(
+            runId: runId,
+            paths: DurableRunPaths(root: "/runs/\(runId)", manifestPath: "/runs/\(runId)/manifest.json", statusPath: "/runs/\(runId)/status.json", checkpointPath: "/runs/\(runId)/checkpoint.json", eventsPath: "/runs/\(runId)/events.jsonl", outputLogPath: "/runs/\(runId)/output.log", resultPath: "/runs/\(runId)/result.json"),
+            manifest: DurableRunManifest(version: 1, id: runId, kind: "background-agent", resumePolicy: "manual", createdAt: now, spec: [:], parentId: nil, rootId: nil, source: DurableRunManifestSource(type: sourceType, id: sourceId, filePath: nil)),
+            status: DurableRunStatusRecord(version: 1, runId: runId, status: status, createdAt: now, updatedAt: now, activeAttempt: 1, startedAt: now, completedAt: nil, checkpointKey: nil, lastError: nil),
+            checkpoint: nil,
+            problems: [],
+            recoveryAction: "none"
+        )
+        runs.insert(summary, at: 0)
+        runLogs[runId] = "[info] Started run \(runId).\n"
     }
 
     func readRun(runId: String) async throws -> DurableRunDetailResponse {

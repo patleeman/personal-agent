@@ -1964,6 +1964,7 @@ final class ConversationViewModel: ObservableObject {
     private var modelRefreshTask: Task<Void, Never>?
     private var streamTask: Task<Void, Never>?
     private var activityRefreshTask: Task<Void, Never>?
+    private var activityRunsRefreshTask: Task<Void, Never>?
     private var composerNoticeTask: Task<Void, Never>?
     private var composerDraftSaveTask: Task<Void, Never>?
     private var lastStreamingTextBlockId: String?
@@ -1974,6 +1975,7 @@ final class ConversationViewModel: ObservableObject {
     private var bootstrapLoadRequestId = 0
     private var attachmentRefreshRequestId = 0
     private var modelRefreshRequestId = 0
+    private var activityRunsRefreshRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -2034,6 +2036,8 @@ final class ConversationViewModel: ObservableObject {
         streamTask = nil
         activityRefreshTask?.cancel()
         activityRefreshTask = nil
+        activityRunsRefreshTask?.cancel()
+        activityRunsRefreshTask = nil
         composerNoticeTask?.cancel()
         composerNoticeTask = nil
         transcriptImageCache.removeAll()
@@ -2283,10 +2287,13 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func refreshActivityRuns() {
-        Task {
+        activityRunsRefreshTask?.cancel()
+        activityRunsRefreshRequestId += 1
+        let requestId = activityRunsRefreshRequestId
+        activityRunsRefreshTask = Task {
             do {
                 let result = try await client.listRuns()
-                connectedRuns = result.runs.filter { run in
+                let runs = result.runs.filter { run in
                     guard isActiveRunStatus(run.status?.status) else { return false }
                     let source = run.manifest?.source
                     if source?.id == conversationId || source?.id == liveConversationId {
@@ -2298,6 +2305,9 @@ final class ConversationViewModel: ObservableObject {
                         return true
                     }
                     return false
+                }
+                if !Task.isCancelled, activityRunsRefreshRequestId == requestId {
+                    connectedRuns = runs
                 }
             } catch {
                 // Activity runs are auxiliary; leave the conversation usable if this refresh misses.
