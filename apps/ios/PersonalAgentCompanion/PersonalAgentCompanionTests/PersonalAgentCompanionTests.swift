@@ -1493,6 +1493,39 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.promptText, "Keep this newer draft")
     }
 
+    func testPromptSendClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.promptSubmissionFailureQueueMessages = ["Prompt send temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Send after retry"
+        model.sendPrompt()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+        XCTAssertEqual(model.promptText, "Send after retry")
+
+        model.sendPrompt()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.blocks.contains(where: { $0.type == "user" && $0.text == "Send after retry" })
+        }
+        XCTAssertTrue(model.promptText.isEmpty)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testQueuedPromptRestorePrefillsComposer() async throws {
         let model = ConversationViewModel(
             client: MockCompanionClient(),

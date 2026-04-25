@@ -1392,6 +1392,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createKnowledgeImageAssetDelayNanoseconds: UInt64 = 0
     var renameKnowledgeEntryDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
+    var promptSubmissionFailureQueueMessages: [String] = []
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var createAttachmentFailureQueueMessages: [String] = []
     var updateAttachmentFailureQueueMessages: [String] = []
@@ -2539,6 +2540,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         promptSubmissionCount += 1
         if promptSubmissionDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: promptSubmissionDelayNanoseconds)
+        }
+        if !promptSubmissionFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(promptSubmissionFailureQueueMessages.removeFirst())
         }
         guard var envelope = conversations[conversationId], let detail = envelope.bootstrap.sessionDetail else {
             throw CompanionClientError.requestFailed("Conversation not found.")

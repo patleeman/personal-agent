@@ -2373,6 +2373,7 @@ final class ConversationViewModel: ObservableObject {
                     images: currentImages,
                     attachmentRefs: currentRefs
                 )
+                errorMessage = nil
                 if let notice = resolvedMode.noticeMessage {
                     showComposerNotice(notice)
                 }
@@ -2402,6 +2403,7 @@ final class ConversationViewModel: ObservableObject {
                     mode: mode,
                     surfaceId: installationSurfaceId
                 )
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }
