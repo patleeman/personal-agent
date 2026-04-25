@@ -1,5 +1,5 @@
 import { fuzzyScore } from '../commands/slashMenu';
-import type { SessionMeta } from '../shared/types';
+import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;
@@ -18,6 +18,14 @@ export interface RelatedConversationSearchResult {
   matchedTerms: string[];
   score: number;
   sameWorkspace: boolean;
+  summary?: ConversationSummaryRecord;
+  reason?: string;
+  preselectEligible?: boolean;
+}
+
+export interface RelatedConversationPreselection {
+  sessionId: string;
+  confidence: number;
 }
 
 function normalizeQueryTokens(query: string): string[] {
@@ -74,6 +82,44 @@ function scoreRecency(timestamp: string, nowMs: number): number {
 
   const ageDays = Math.max(0, (nowMs - parsed) / DAY_MS);
   return Math.max(0, Math.round(42 - ageDays * 5));
+}
+
+function buildReason(input: {
+  sameWorkspace: boolean;
+  matchedTerms: string[];
+  summary?: ConversationSummaryRecord;
+}): string {
+  const reasons: string[] = [];
+  if (input.sameWorkspace) {
+    reasons.push('Same workspace');
+  }
+  if (input.matchedTerms.length > 0) {
+    reasons.push(`Matches ${input.matchedTerms.slice(0, 3).join(', ')}`);
+  }
+  if (input.summary?.filesTouched.length) {
+    reasons.push(`Touched ${input.summary.filesTouched.slice(0, 2).join(', ')}`);
+  }
+  if (input.summary?.status && input.summary.status !== 'unknown') {
+    reasons.push(input.summary.status === 'needs_user' ? 'Needs user' : input.summary.status.replace(/_/g, ' '));
+  }
+  return reasons.join(' · ');
+}
+
+function buildSummarySearchText(session: SessionMeta, searchText: string, summary?: ConversationSummaryRecord): string {
+  if (!summary) {
+    return searchText;
+  }
+
+  return [
+    summary.searchText,
+    summary.displaySummary,
+    summary.outcome,
+    summary.promptSummary,
+    summary.keyTerms.join(' '),
+    summary.filesTouched.join(' '),
+    searchText,
+    session.title,
+  ].filter(Boolean).join('\n');
 }
 
 function scorePhrase(query: string, value: string | undefined, weight: number): number {
@@ -207,6 +253,7 @@ export function listRecentConversationResults(
   sessions: SessionMeta[] | null | undefined,
   options: {
     workspaceCwd?: string | null;
+    summaries?: Record<string, ConversationSummaryRecord>;
     nowMs?: number;
     recentWindowDays?: number | null;
     limit?: number;
@@ -220,21 +267,29 @@ export function listRecentConversationResults(
     ...options,
     recentWindowDays: options.recentWindowDays ?? null,
     limit,
-  }).map((session, index) => ({
-    sessionId: session.id,
-    title: session.title,
-    cwd: session.cwd,
-    timestamp: session.lastActivityAt ?? session.timestamp,
-    snippet: '',
-    matchedTerms: [],
-    score: limit - index,
-    sameWorkspace: workspaceCwd.length > 0 && normalizePath(session.cwd) === workspaceCwd,
-  }));
+  }).map((session, index) => {
+    const summary = options.summaries?.[session.id];
+    const sameWorkspace = workspaceCwd.length > 0 && normalizePath(session.cwd) === workspaceCwd;
+    const reason = buildReason({ sameWorkspace, matchedTerms: [], summary });
+    return {
+      sessionId: session.id,
+      title: session.title,
+      cwd: session.cwd,
+      timestamp: session.lastActivityAt ?? session.timestamp,
+      snippet: summary?.displaySummary ?? '',
+      matchedTerms: [],
+      score: (limit - index) + (summary ? 20 : 0),
+      sameWorkspace,
+      ...(summary ? { summary } : {}),
+      ...(reason ? { reason } : {}),
+    };
+  });
 }
 
 export function rankRelatedConversationSessions(input: {
   sessions: SessionMeta[];
   searchIndex: Record<string, string>;
+  summaries?: Record<string, ConversationSummaryRecord>;
   query: string;
   workspaceCwd?: string | null;
   limit?: number;
@@ -251,7 +306,8 @@ export function rankRelatedConversationSessions(input: {
 
   return input.sessions
     .map((session) => {
-      const searchText = input.searchIndex[session.id] ?? '';
+      const summary = input.summaries?.[session.id];
+      const searchText = buildSummarySearchText(session, input.searchIndex[session.id] ?? '', summary);
       const fields = [session.title, session.cwd, searchText];
       let totalScore = 0;
       const matchedTerms: string[] = [];
@@ -296,7 +352,15 @@ export function rankRelatedConversationSessions(input: {
       if (sameWorkspace) {
         totalScore += 90;
       }
+      if (summary) {
+        totalScore += 45;
+        if (summary.status === 'blocked' || summary.status === 'needs_user' || summary.status === 'in_progress') {
+          totalScore += 20;
+        }
+      }
       totalScore += scoreRecency(timestamp, nowMs);
+
+      const reason = buildReason({ sameWorkspace, matchedTerms, summary });
 
       return {
         sessionId: session.id,
@@ -307,6 +371,8 @@ export function rankRelatedConversationSessions(input: {
         matchedTerms,
         score: totalScore,
         sameWorkspace,
+        ...(summary ? { summary } : {}),
+        ...(reason ? { reason } : {}),
       } satisfies RelatedConversationSearchResult;
     })
     .filter((result): result is RelatedConversationSearchResult => result !== null)
@@ -327,4 +393,19 @@ export function rankRelatedConversationSessions(input: {
       return left.title.localeCompare(right.title);
     })
     .slice(0, limit);
+}
+
+export function pickHighConfidenceRelatedConversation(results: RelatedConversationSearchResult[]): RelatedConversationPreselection | null {
+  const [first, second] = results;
+  if (!first || !first.sameWorkspace || !first.summary) {
+    return null;
+  }
+
+  const matchedTermCount = first.matchedTerms.length;
+  const scoreGap = second ? first.score - second.score : first.score;
+  if (matchedTermCount < 2 || first.score < 360 || scoreGap < 70) {
+    return null;
+  }
+
+  return { sessionId: first.sessionId, confidence: first.score };
 }

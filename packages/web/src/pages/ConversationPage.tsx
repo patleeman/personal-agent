@@ -124,7 +124,8 @@ import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
-import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
+import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
+import type { ConversationSummaryRecord } from '../shared/types';
 import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../content/excalidrawUtils';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
@@ -3343,9 +3344,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id, setInputState]);
   const [debouncedRelatedThreadsQuery, setDebouncedRelatedThreadsQuery] = useState(() => input.trim());
   const [relatedThreadSearchIndex, setRelatedThreadSearchIndex] = useState<Record<string, string>>({});
+  const [relatedThreadSummaries, setRelatedThreadSummaries] = useState<Record<string, ConversationSummaryRecord>>({});
   const [relatedThreadSearchLoading, setRelatedThreadSearchLoading] = useState(false);
   const [relatedThreadSearchError, setRelatedThreadSearchError] = useState<string | null>(null);
   const [selectedRelatedThreadIds, setSelectedRelatedThreadIds] = useState<string[]>([]);
+  const [autoSelectedRelatedThreadId, setAutoSelectedRelatedThreadId] = useState<string | null>(null);
   const [preparingRelatedThreadContext, setPreparingRelatedThreadContext] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
@@ -3932,19 +3935,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => rankRelatedConversationSessions({
       sessions: relatedThreadCandidates,
       searchIndex: relatedThreadSearchIndex,
+      summaries: relatedThreadSummaries,
       query: debouncedRelatedThreadsQuery,
       workspaceCwd: draftCwdValue || null,
       limit: MAX_VISIBLE_RELATED_THREAD_RESULTS,
     }),
-    [debouncedRelatedThreadsQuery, draftCwdValue, relatedThreadCandidates, relatedThreadSearchIndex],
+    [debouncedRelatedThreadsQuery, draftCwdValue, relatedThreadCandidates, relatedThreadSearchIndex, relatedThreadSummaries],
   );
   const recentClosedThreadResults = useMemo(
     () => listRecentConversationResults(relatedThreadCandidates, {
       workspaceCwd: draftCwdValue || null,
+      summaries: relatedThreadSummaries,
       recentWindowDays: null,
       limit: MAX_VISIBLE_RELATED_THREAD_RESULTS,
     }),
-    [draftCwdValue, relatedThreadCandidates],
+    [draftCwdValue, relatedThreadCandidates, relatedThreadSummaries],
   );
   const visibleRelatedThreadResults = useMemo<RelatedConversationSearchResult[]>(() => {
     const baseResults = debouncedRelatedThreadsQuery.trim().length > 0
@@ -3971,18 +3976,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }
 
       const normalizedSnippet = (relatedThreadSearchIndex[sessionId] ?? '').replace(/\s+/g, ' ').trim();
+      const summary = relatedThreadSummaries[sessionId];
       const snippet = normalizedSnippet.length > 140
         ? `${normalizedSnippet.slice(0, 139).trimEnd()}…`
         : normalizedSnippet;
+      const sameWorkspace = Boolean(draftCwdValue && session.cwd === draftCwdValue);
       results.push({
         sessionId,
         title: session.title,
         cwd: session.cwd,
         timestamp: session.lastActivityAt ?? session.timestamp,
-        snippet,
+        snippet: summary?.displaySummary ?? snippet,
         matchedTerms: [],
         score: Number.MAX_SAFE_INTEGER - results.length,
-        sameWorkspace: Boolean(draftCwdValue && session.cwd === draftCwdValue),
+        sameWorkspace,
+        ...(summary ? { summary, reason: sameWorkspace ? 'Same workspace' : undefined } : {}),
       });
       seen.add(sessionId);
     }
@@ -4000,7 +4008,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     return results.slice(0, MAX_VISIBLE_RELATED_THREAD_RESULTS);
-  }, [debouncedRelatedThreadsQuery, draftCwdValue, recentClosedThreadResults, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, selectedRelatedThreadIds]);
+  }, [debouncedRelatedThreadsQuery, draftCwdValue, recentClosedThreadResults, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, relatedThreadSummaries, selectedRelatedThreadIds]);
   const toggleRelatedThreadSelection = useCallback((sessionId: string) => {
     setSelectedRelatedThreadIds((current) => {
       if (current.includes(sessionId)) {
@@ -4107,6 +4115,67 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       cancelled = true;
     };
   }, [draft, input, relatedThreadCandidateIds, relatedThreadSearchIndex, selectedRelatedThreadIds.length]);
+
+  useEffect(() => {
+    if (!draft || relatedThreadCandidateIds.length === 0) {
+      return;
+    }
+
+    const missingSessionIds = relatedThreadCandidateIds.filter((sessionId) => relatedThreadSummaries[sessionId] === undefined);
+    if (missingSessionIds.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    api.conversationSummaries(missingSessionIds)
+      .then((result) => {
+        if (cancelled || Object.keys(result.summaries).length === 0) {
+          return;
+        }
+
+        setRelatedThreadSummaries((current) => ({ ...current, ...result.summaries }));
+      })
+      .catch(() => {
+        // Summary metadata is an enhancement. Keep the picker usable on cache misses or generation failures.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [draft, relatedThreadCandidateIds, relatedThreadSummaries]);
+
+  useEffect(() => {
+    if (!draft || debouncedRelatedThreadsQuery.trim().length < 8) {
+      if (autoSelectedRelatedThreadId && selectedRelatedThreadIds.length === 1 && selectedRelatedThreadIds[0] === autoSelectedRelatedThreadId) {
+        setSelectedRelatedThreadIds([]);
+        setAutoSelectedRelatedThreadId(null);
+      }
+      return;
+    }
+
+    const preselection = pickHighConfidenceRelatedConversation(relatedThreadSearchResults);
+    const onlyAutoSelected = autoSelectedRelatedThreadId !== null
+      && selectedRelatedThreadIds.length === 1
+      && selectedRelatedThreadIds[0] === autoSelectedRelatedThreadId;
+
+    if (!preselection) {
+      if (onlyAutoSelected) {
+        setSelectedRelatedThreadIds([]);
+        setAutoSelectedRelatedThreadId(null);
+      }
+      return;
+    }
+
+    if (preselection.sessionId === autoSelectedRelatedThreadId) {
+      return;
+    }
+    if (selectedRelatedThreadIds.length > 0 && !onlyAutoSelected) {
+      return;
+    }
+
+    setSelectedRelatedThreadIds([preselection.sessionId]);
+    setAutoSelectedRelatedThreadId(preselection.sessionId);
+  }, [autoSelectedRelatedThreadId, debouncedRelatedThreadsQuery, draft, relatedThreadSearchResults, selectedRelatedThreadIds]);
 
   useEffect(() => {
     if (draft) {
@@ -7647,6 +7716,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   query={debouncedRelatedThreadsQuery}
                   results={visibleRelatedThreadResults}
                   selectedSessionIds={selectedRelatedThreadIds}
+                  autoSelectedSessionId={autoSelectedRelatedThreadId}
                   selectedCount={selectedRelatedThreadIds.length}
                   loading={relatedThreadSearchLoading}
                   busy={preparingRelatedThreadContext}

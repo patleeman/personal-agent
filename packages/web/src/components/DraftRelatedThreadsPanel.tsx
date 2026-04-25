@@ -21,6 +21,7 @@ export function DraftRelatedThreadsPanel({
   query,
   results,
   selectedSessionIds,
+  autoSelectedSessionId,
   selectedCount,
   loading,
   busy,
@@ -32,6 +33,7 @@ export function DraftRelatedThreadsPanel({
   query: string;
   results: RelatedConversationSearchResult[];
   selectedSessionIds: string[];
+  autoSelectedSessionId?: string | null;
   selectedCount: number;
   loading: boolean;
   busy: boolean;
@@ -60,8 +62,8 @@ export function DraftRelatedThreadsPanel({
     <section className="mx-auto mt-3 w-full max-w-[38rem] text-left">
       <div className="flex items-center justify-between gap-3 text-[11px] text-dim/85">
         <p className="min-w-0 truncate">
-          <span className="font-semibold uppercase tracking-[0.14em] text-dim/80">Recent threads</span>
-          <span className="ml-2 text-secondary">Select up to {maxSelections} to reuse context.</span>
+          <span className="font-semibold uppercase tracking-[0.14em] text-dim/80">Suggested context</span>
+          <span className="ml-2 text-secondary">Auto-ranked from past conversations.</span>
         </p>
         <p className="shrink-0" aria-live="polite">{statusText}</p>
       </div>
@@ -70,9 +72,12 @@ export function DraftRelatedThreadsPanel({
         <div className="mt-2 space-y-0.5">
           {results.map((result, index) => {
             const checked = selectedSessionIds.includes(result.sessionId);
+            const autoSelected = checked && autoSelectedSessionId === result.sessionId;
             const inputId = `draft-related-thread-${result.sessionId}`;
             const matchedTerms = formatMatchedTerms(result);
             const hotkey = formatRowHotkey(index, hotkeyLimit);
+            const detail = result.summary?.displaySummary || result.snippet;
+            const reason = result.reason || (matchedTerms ? `Matches ${matchedTerms}` : 'Recent in this workspace');
             return (
               <label
                 key={result.sessionId}
@@ -97,11 +102,18 @@ export function DraftRelatedThreadsPanel({
                   disabled={busy}
                 />
                 <span className="flex min-w-0 flex-1 items-center gap-2">
-                  <span className="min-w-0 flex-1 truncate text-[12px] text-primary">
-                    <span className="font-medium">{result.title}</span>
-                    <span className={cx('text-dim', checked && 'text-accent/70')}>{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
-                    {matchedTerms && (
-                      <span className={cx('text-accent/80', checked && 'text-accent/75')}>{` · ${matchedTerms}`}</span>
+                  <span className="min-w-0 flex-1 text-[12px]">
+                    <span className="block min-w-0 truncate text-primary">
+                      <span className="font-medium">{result.title}</span>
+                      <span className={cx('text-dim', checked && 'text-accent/70')}>{` · ${summarizeConversationCwd(result.cwd) || result.cwd} · ${timeAgo(result.timestamp)}`}</span>
+                      {autoSelected && (
+                        <span className="text-accent/80"> · auto-selected</span>
+                      )}
+                    </span>
+                    {(detail || reason) && (
+                      <span className={cx('mt-0.5 block min-w-0 truncate text-[11px] text-secondary', checked && 'text-accent/70')}>
+                        {[detail, reason].filter(Boolean).join(' · ')}
+                      </span>
                     )}
                   </span>
                   {hotkey && (

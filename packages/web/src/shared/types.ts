@@ -446,6 +446,23 @@ export interface SessionMeta {
   attachedContextDocs?: ConversationContextDocRef[];
 }
 
+export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
+
+export interface ConversationSummaryRecord {
+  sessionId: string;
+  fingerprint: string;
+  title: string;
+  cwd: string;
+  displaySummary: string;
+  outcome: string;
+  status: ConversationSummaryStatus;
+  promptSummary: string;
+  searchText: string;
+  keyTerms: string[];
+  filesTouched: string[];
+  updatedAt: string;
+}
+
 export type DisplayBlock =
   | { type: 'user';     id: string; ts: string; text: string; images?: MessageImage[] }
   | { type: 'text';     id: string; ts: string; text: string }

@@ -49,6 +49,10 @@ import {
   readConversationSessionsCapability,
 } from '../conversations/conversationSessionCapability.js';
 import {
+  queueConversationSummaryBackfill,
+  readConversationSummaryIndexCapability,
+} from '../conversations/conversationSummaries.js';
+import {
   readConversationContextDocs,
   writeConversationContextDocs,
 } from '../conversations/conversationContextDocs.js';
@@ -316,7 +320,9 @@ export function registerConversationRoutes(
   initializeConversationRoutesContext(context);
   router.get('/api/sessions', (_req, res) => {
     try {
-      res.json(readConversationSessionsCapability());
+      const sessions = readConversationSessionsCapability();
+      queueConversationSummaryBackfill(sessions);
+      res.json(sessions);
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),
@@ -331,6 +337,18 @@ export function registerConversationRoutes(
   router.post('/api/sessions/search-index', (req, res) => {
     try {
       res.json(readConversationSessionSearchIndexCapability(req.body as { sessionIds?: unknown }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/conversation-summaries', (req, res) => {
+    try {
+      res.json(readConversationSummaryIndexCapability(req.body as { sessionIds?: unknown }));
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

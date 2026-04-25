@@ -47,8 +47,11 @@ describe('DraftRelatedThreadsPanel', () => {
 
     expect(html).toContain('Ctrl+1');
     expect(html).toContain('Ctrl+2');
+    expect(html).toContain('Suggested context');
+    expect(html).toContain('Auto-ranked from past conversations.');
     expect(html).toContain('appearance-none');
     expect(html).toContain('Reuse context from Release signing flow');
+    expect(html).toContain('Mapped APPLE_PASSWORD for the release flow.');
     expect(html).toContain('after:rotate-45');
   });
 });

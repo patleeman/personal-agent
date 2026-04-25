@@ -24,6 +24,7 @@ import {
   buildAttachedConversationContextDocsContext,
   readConversationContextDocs,
 } from './conversationContextDocs.js';
+import { queueConversationSummaryRefresh } from './conversationSummaries.js';
 import {
   abortSession as abortLocalSession,
   branchSession as branchLiveSession,
@@ -44,7 +45,7 @@ import {
   takeOverSessionControl,
   type PromptImageAttachment,
 } from './liveSessions.js';
-import { readSessionBlocks } from './sessions.js';
+import { readSessionBlocks, readSessionMeta } from './sessions.js';
 import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
@@ -875,6 +876,10 @@ export async function destroyLiveSessionCapability(
   }
 
   destroyLiveSession(conversationId);
+  const meta = readSessionMeta(conversationId);
+  if (meta) {
+    queueConversationSummaryRefresh(meta);
+  }
   return { ok: true };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionMeta } from '../shared/types';
-import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
+import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
+import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
 
 function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' | 'title' | 'cwd'>): SessionMeta {
   return {
@@ -15,6 +15,23 @@ function buildSession(overrides: Partial<SessionMeta> & Pick<SessionMeta, 'id' |
     ...(overrides.lastActivityAt ? { lastActivityAt: overrides.lastActivityAt } : {}),
     ...(overrides.isLive !== undefined ? { isLive: overrides.isLive } : {}),
     ...(overrides.isRunning !== undefined ? { isRunning: overrides.isRunning } : {}),
+  };
+}
+
+function buildSummary(overrides: Partial<ConversationSummaryRecord> & Pick<ConversationSummaryRecord, 'sessionId'>): ConversationSummaryRecord {
+  return {
+    sessionId: overrides.sessionId,
+    fingerprint: overrides.fingerprint ?? '1:2:3',
+    title: overrides.title ?? 'Summary title',
+    cwd: overrides.cwd ?? '/repo/current',
+    displaySummary: overrides.displaySummary ?? 'Changed transcript context suggestions.',
+    outcome: overrides.outcome ?? 'Finished the suggested context plan.',
+    status: overrides.status ?? 'done',
+    promptSummary: overrides.promptSummary ?? 'Use this context when working on suggested conversation context.',
+    searchText: overrides.searchText ?? 'suggested context related thread conversation recovery',
+    keyTerms: overrides.keyTerms ?? ['suggested context', 'conversation recovery'],
+    filesTouched: overrides.filesTouched ?? ['packages/web/src/components/DraftRelatedThreadsPanel.tsx'],
+    updatedAt: overrides.updatedAt ?? '2026-04-13T09:00:00.000Z',
   };
 }
 
@@ -241,5 +258,31 @@ describe('rankRelatedConversationSessions', () => {
       searchIndex: { one: 'Thread one details' },
       query: '   ',
     })).toEqual([]);
+  });
+
+  it('uses generated summaries for ranking reasons and high-confidence preselection', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({ id: 'summary-match', title: 'Unclear old title', cwd: '/repo/current' }),
+      buildSession({ id: 'runner-up', title: 'Related context', cwd: '/repo/current' }),
+    ];
+
+    const results = rankRelatedConversationSessions({
+      sessions,
+      searchIndex: {
+        'summary-match': '',
+        'runner-up': 'context recovery',
+      },
+      summaries: {
+        'summary-match': buildSummary({ sessionId: 'summary-match' }),
+      },
+      query: 'suggested context conversation recovery',
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+    });
+
+    expect(results[0]?.sessionId).toBe('summary-match');
+    expect(results[0]?.reason).toContain('Same workspace');
+    expect(results[0]?.reason).toContain('Touched packages/web/src/components/DraftRelatedThreadsPanel.tsx');
+    expect(pickHighConfidenceRelatedConversation(results)?.sessionId).toBe('summary-match');
   });
 });
