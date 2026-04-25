@@ -738,7 +738,9 @@ final class HostSessionModel: ObservableObject {
 
     func listTasks() async -> [ScheduledTaskSummary] {
         do {
-            return try await client.listTasks()
+            let tasks = try await client.listTasks()
+            errorMessage = nil
+            return tasks
         } catch {
             errorMessage = error.localizedDescription
             return []

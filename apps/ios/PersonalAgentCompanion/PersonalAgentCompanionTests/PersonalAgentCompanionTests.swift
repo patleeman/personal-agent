@@ -2013,6 +2013,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setup?.pairing.code, "ABCD-EFGH-IJKL")
     }
 
+    func testListTasksClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listTasksFailureQueueMessages = ["Task list temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedTasks = await session.listTasks()
+        XCTAssertTrue(failedTasks.isEmpty)
+        XCTAssertNotNil(session.errorMessage)
+
+        let tasks = await session.listTasks()
+        XCTAssertEqual(tasks.first?.id, "task-1")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testReadTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

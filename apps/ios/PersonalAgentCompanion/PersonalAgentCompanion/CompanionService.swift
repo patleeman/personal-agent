@@ -1375,6 +1375,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
     var readModelsDelayNanoseconds: UInt64 = 0
+    var listTasksFailureQueueMessages: [String] = []
     var readTaskLogFailureQueueMessages: [String] = []
     var readRunLogFailureQueueMessages: [String] = []
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
@@ -3368,7 +3369,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listTasks() async throws -> [ScheduledTaskSummary] {
-        tasks.map { task in
+        if !listTasksFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(listTasksFailureQueueMessages.removeFirst())
+        }
+        return tasks.map { task in
             ScheduledTaskSummary(
                 id: task.id,
                 title: task.title,
