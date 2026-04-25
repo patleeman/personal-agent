@@ -1375,6 +1375,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
     var readModelsDelayNanoseconds: UInt64 = 0
+    var readRunLogFailureQueueMessages: [String] = []
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
@@ -3549,7 +3550,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readRunLog(runId: String, tail: Int?) async throws -> DurableRunLogResponse {
-        DurableRunLogResponse(path: "/tmp/\(runId).log", log: runLogs[runId] ?? "")
+        if !readRunLogFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readRunLogFailureQueueMessages.removeFirst())
+        }
+        return DurableRunLogResponse(path: "/tmp/\(runId).log", log: runLogs[runId] ?? "")
     }
 
     func cancelRun(runId: String) async throws -> DurableRunCancelResponse {
