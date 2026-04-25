@@ -1382,6 +1382,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
+    var manageParallelJobDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
@@ -2584,6 +2585,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func manageParallelJob(conversationId: String, jobId: String, action: String, surfaceId: String) async throws -> CompanionParallelJobActionResult {
+        if manageParallelJobDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: manageParallelJobDelayNanoseconds)
+        }
         var jobs = parallelJobsByConversation[conversationId] ?? []
         guard let index = jobs.firstIndex(where: { $0.id == jobId }) else {
             throw CompanionClientError.requestFailed("Parallel prompt no longer exists.")

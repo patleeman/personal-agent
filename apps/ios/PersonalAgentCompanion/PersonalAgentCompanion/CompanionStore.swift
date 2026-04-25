@@ -1983,6 +1983,7 @@ final class ConversationViewModel: ObservableObject {
     private var initialBootstrap: ConversationBootstrapEnvelope?
     private var firedDeferredResumeIds: Set<String> = []
     private var restoringQueuedPromptKeys: Set<String> = []
+    private var pendingParallelJobActionKeys: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2238,7 +2239,12 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func manageParallelJob(_ jobId: String, action: String) {
+        let actionKey = "\(jobId):\(action)"
+        guard pendingParallelJobActionKeys.insert(actionKey).inserted else {
+            return
+        }
         Task {
+            defer { pendingParallelJobActionKeys.remove(actionKey) }
             do {
                 let result = try await client.manageParallelJob(
                     conversationId: conversationId,

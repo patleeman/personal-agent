@@ -979,6 +979,40 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
     }
 
+    func testParallelJobActionIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.manageParallelJobDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Investigate this in parallel"
+        model.sendPrompt(mode: .parallel)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.parallelJobs.count == 1
+        }
+
+        let job = try XCTUnwrap(model.parallelJobs.first)
+        model.manageParallelJob(job.id, action: "cancel")
+        model.manageParallelJob(job.id, action: "cancel")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.parallelJobs.isEmpty
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testPromptSendIgnoresDuplicateTapWhileSubmissionIsPending() async throws {
         let client = MockCompanionClient()
         client.promptSubmissionDelayNanoseconds = 150_000_000
