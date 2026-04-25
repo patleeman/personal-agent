@@ -320,6 +320,37 @@ struct MessageImage: Codable, Equatable, Identifiable {
     let height: Double?
     let caption: String?
     let deferred: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case alt
+        case src
+        case mimeType
+        case width
+        case height
+        case caption
+        case deferred
+    }
+
+    init(alt: String, src: String?, mimeType: String?, width: Double?, height: Double?, caption: String?, deferred: Bool?) {
+        self.alt = alt
+        self.src = src
+        self.mimeType = mimeType
+        self.width = width
+        self.height = height
+        self.caption = caption
+        self.deferred = deferred
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.src = try container.decodeIfPresent(String.self, forKey: .src)
+        self.mimeType = try container.decodeIfPresent(String.self, forKey: .mimeType)
+        self.width = try container.decodeIfPresent(Double.self, forKey: .width)
+        self.height = try container.decodeIfPresent(Double.self, forKey: .height)
+        self.caption = try container.decodeIfPresent(String.self, forKey: .caption)
+        self.deferred = try container.decodeIfPresent(Bool.self, forKey: .deferred)
+        self.alt = try container.decodeIfPresent(String.self, forKey: .alt) ?? ""
+    }
 }
 
 struct DisplayBlock: Codable, Equatable, Identifiable {

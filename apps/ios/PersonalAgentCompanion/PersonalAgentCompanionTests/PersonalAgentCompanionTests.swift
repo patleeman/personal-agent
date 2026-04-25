@@ -415,6 +415,15 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(dataURLData(wrapped), Data("hello".utf8))
     }
 
+    func testDisplayBlockDecodesImagesWithoutAltText() throws {
+        let payload = Data(#"{"type":"text","id":"block-1","ts":"2026-04-25T00:00:00Z","text":"Image attached","images":[{"src":"/companion/v1/conversations/conv-1/blocks/block-1/images/0"}]}"#.utf8)
+
+        let block = try JSONDecoder().decode(DisplayBlock.self, from: payload)
+
+        XCTAssertEqual(block.images?.first?.alt, "")
+        XCTAssertEqual(block.images?.first?.src, "/companion/v1/conversations/conv-1/blocks/block-1/images/0")
+    }
+
     func testConversationComposerDraftRestoresAcrossViewModels() {
         let client = MockCompanionClient()
         let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
