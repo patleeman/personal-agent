@@ -1552,6 +1552,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
     private var linkSearchTask: Task<Void, Never>?
     private var currentSelectionRange = NSRange(location: 0, length: 0)
     private var isApplyingRemoteState = false
+    private var pendingImageMarkdownCreateKeys: Set<String> = []
 
     init(client: CompanionClientProtocol, fileId: String, draftStore: KnowledgeDraftStore = .shared) {
         self.client = client
@@ -1762,11 +1763,17 @@ final class KnowledgeNoteViewModel: ObservableObject {
     }
 
     func createImageMarkdown(data: Data, mimeType: String?, fileName: String?) async -> String? {
+        let dataBase64 = data.base64EncodedString()
+        let createKey = [fileName?.trimmed ?? "", mimeType?.trimmed ?? "", dataBase64].joined(separator: "\u{1f}")
+        guard pendingImageMarkdownCreateKeys.insert(createKey).inserted else {
+            return nil
+        }
+        defer { pendingImageMarkdownCreateKeys.remove(createKey) }
         do {
             let response = try await client.createKnowledgeImageAsset(
                 fileName: fileName,
                 mimeType: mimeType,
-                dataBase64: data.base64EncodedString()
+                dataBase64: dataBase64
             )
             let relativePath = knowledgeRelativePath(from: fileId, to: response.id)
             let alt = (fileName ?? response.id)

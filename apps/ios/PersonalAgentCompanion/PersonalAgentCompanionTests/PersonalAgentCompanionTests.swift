@@ -795,6 +795,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(asset.id, "_attachments/snapshot.png")
     }
 
+    func testKnowledgeImageMarkdownIgnoresDuplicateCreateWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.createKnowledgeImageAssetDelayNanoseconds = 150_000_000
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        async let first = model.createImageMarkdown(data: Data("png-data".utf8), mimeType: "image/png", fileName: "snapshot.png")
+        async let second = model.createImageMarkdown(data: Data("png-data".utf8), mimeType: "image/png", fileName: "snapshot.png")
+        let markdown = await [first, second].compactMap { $0 }
+
+        XCTAssertEqual(markdown.count, 1)
+        XCTAssertEqual(markdown.first, "![snapshot](../_attachments/snapshot.png)")
+        XCTAssertEqual(client.createKnowledgeImageAssetCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testKnowledgeHelpersParseHeadingsLinksAndRelativePaths() {
         let text = """
         ---

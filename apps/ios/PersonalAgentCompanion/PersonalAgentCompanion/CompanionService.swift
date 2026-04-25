@@ -1382,6 +1382,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readKnowledgeFileDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
+    var createKnowledgeImageAssetDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var saveSshTargetDelayNanoseconds: UInt64 = 0
@@ -1418,6 +1419,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var updateConversationAutoModeCount = 0
     private(set) var updateConversationTabsCount = 0
     private(set) var writeKnowledgeFileCount = 0
+    private(set) var createKnowledgeImageAssetCount = 0
     private(set) var deleteKnowledgeEntryCount = 0
     private(set) var createTaskCount = 0
     private(set) var deleteTaskCount = 0
@@ -3304,6 +3306,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func createKnowledgeImageAsset(fileName: String?, mimeType: String?, dataBase64: String) async throws -> CompanionKnowledgeImageAssetResponse {
+        createKnowledgeImageAssetCount += 1
+        if createKnowledgeImageAssetDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: createKnowledgeImageAssetDelayNanoseconds)
+        }
         let baseName = fileName?.trimmed.nilIfBlank ?? "image.png"
         let safeName = baseName.replacingOccurrences(of: #"[^a-zA-Z0-9._-]"#, with: "-", options: .regularExpression)
         let assetId = "_attachments/\(safeName)"
