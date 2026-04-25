@@ -1368,6 +1368,7 @@ private struct MockCompanionSeed {
 final class MockCompanionClient: CompanionClientProtocol {
     let host: CompanionHostRecord
     var supportsRunningConversationSimulation: Bool { true }
+    var simulateRunningConversationFailureQueueMessages: [String] = []
     var listConversationsDelayNanoseconds: UInt64 = 0
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
     var updateConversationTabsDelayNanoseconds: UInt64 = 0
@@ -1480,6 +1481,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var deletePairedDeviceCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
+    private(set) var simulateRunningConversationCount = 0
     private(set) var abortConversationCount = 0
     private(set) var takeOverConversationCount = 0
 
@@ -2113,6 +2115,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func simulateRunningConversation(conversationId: String) async throws {
+        simulateRunningConversationCount += 1
+        if !simulateRunningConversationFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(simulateRunningConversationFailureQueueMessages.removeFirst())
+        }
         guard simulatedConversationTasks[conversationId] == nil else {
             return
         }

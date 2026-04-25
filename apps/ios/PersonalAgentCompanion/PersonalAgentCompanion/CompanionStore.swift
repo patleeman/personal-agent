@@ -2683,6 +2683,7 @@ final class ConversationViewModel: ObservableObject {
         Task {
             do {
                 try await client.simulateRunningConversation(conversationId: conversationId)
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }
