@@ -481,6 +481,7 @@ final class HostSessionModel: ObservableObject {
     let installationSurfaceId: String
     fileprivate let client: CompanionClientProtocol
     private var currentOrdering = ConversationOrdering(sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [])
+    private var refreshTask: Task<Void, Never>?
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var appEventRevision = 0
@@ -523,16 +524,20 @@ final class HostSessionModel: ObservableObject {
     }
 
     func stop() {
+        refreshTask?.cancel()
+        refreshTask = nil
+        isLoading = false
         appEventsTask?.cancel()
         appEventsTask = nil
         client.disconnect()
     }
 
     func refresh() {
+        refreshTask?.cancel()
         refreshRequestId += 1
         let requestId = refreshRequestId
         isLoading = true
-        Task {
+        refreshTask = Task {
             let appEventRevisionAtRequest = appEventRevision
             defer {
                 if refreshRequestId == requestId {
@@ -547,16 +552,16 @@ final class HostSessionModel: ObservableObject {
                 let state = try await conversationState
                 let nextModels = try await models
                 let nextSshTargets = try await sshTargetState
-                if refreshRequestId == requestId {
+                if !Task.isCancelled && refreshRequestId == requestId {
                     errorMessage = nil
                     modelState = nextModels
                     sshTargets = nextSshTargets.hosts
                 }
-                if refreshRequestId == requestId && appEventRevision == appEventRevisionAtRequest {
+                if !Task.isCancelled && refreshRequestId == requestId && appEventRevision == appEventRevisionAtRequest {
                     applyConversationListState(state)
                 }
             } catch {
-                if refreshRequestId == requestId {
+                if !Task.isCancelled && refreshRequestId == requestId {
                     errorMessage = error.localizedDescription
                 }
             }

@@ -988,6 +988,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
     }
 
+    func testStoppingHostSessionCancelsPendingRefresh() async throws {
+        let client = MockCompanionClient()
+        client.listConversationsDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        session.refresh()
+        try await waitForCondition(timeout: .seconds(2)) {
+            session.isLoading
+        }
+        session.stop()
+        XCTAssertFalse(session.isLoading)
+
+        try await Task.sleep(nanoseconds: 220_000_000)
+        XCTAssertTrue(session.sessions.isEmpty)
+        XCTAssertTrue(session.sections.isEmpty)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testCreatedConversationOpensWithReturnedBootstrapImmediately() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         let createdConversationId = await session.createConversation(NewConversationRequest(promptText: "Start from the returned bootstrap", cwd: "/tmp/ios-create"))
