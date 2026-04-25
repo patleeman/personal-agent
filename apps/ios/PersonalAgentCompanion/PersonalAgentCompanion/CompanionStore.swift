@@ -485,6 +485,7 @@ final class HostSessionModel: ObservableObject {
     private var appEventsTask: Task<Void, Never>?
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
+    private var pendingConversationResumeKeys: Set<String> = []
     private var pendingConversationDuplicateIds: Set<String> = []
     private var pendingConversationOrderingMutationKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
@@ -639,6 +640,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func resumeConversation(_ request: ResumeConversationRequest) async -> String? {
+        let resumeKey = conversationResumeKey(for: request)
+        guard pendingConversationResumeKeys.insert(resumeKey).inserted else {
+            return nil
+        }
+        defer { pendingConversationResumeKeys.remove(resumeKey) }
         do {
             let envelope = try await client.resumeConversation(request)
             if let meta = envelope.sessionMeta {
@@ -650,6 +656,14 @@ final class HostSessionModel: ObservableObject {
             errorMessage = error.localizedDescription
             return nil
         }
+    }
+
+    private func conversationResumeKey(for request: ResumeConversationRequest) -> String {
+        [
+            request.sessionFile.trimmed,
+            request.cwd.trimmed,
+            request.executionTargetId.trimmed
+        ].joined(separator: "\u{1f}")
     }
 
     func togglePinned(_ conversationId: String) async {
