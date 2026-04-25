@@ -1382,6 +1382,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
     var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
     var createConversationDelayNanoseconds: UInt64 = 0
+    var createConversationFailureQueueMessages: [String] = []
     var readKnowledgeFileDelayNanoseconds: UInt64 = 0
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
@@ -2454,6 +2455,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         createConversationCount += 1
         if createConversationDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: createConversationDelayNanoseconds)
+        }
+        if !createConversationFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(createConversationFailureQueueMessages.removeFirst())
         }
         let now = ISO8601DateFormatter.flexible.string(from: .now)
         let conversationId = "conv-\(Int.random(in: 100...999))"

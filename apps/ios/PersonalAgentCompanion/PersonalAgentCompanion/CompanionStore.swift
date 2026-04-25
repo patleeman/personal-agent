@@ -622,6 +622,7 @@ final class HostSessionModel: ObservableObject {
                 sessions[meta.id] = meta
             }
             refresh()
+            errorMessage = nil
             return conversationId
         } catch {
             errorMessage = error.localizedDescription

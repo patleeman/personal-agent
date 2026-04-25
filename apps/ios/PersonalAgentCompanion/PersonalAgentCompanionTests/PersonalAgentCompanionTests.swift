@@ -1908,6 +1908,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testHostSessionCreateConversationClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.createConversationFailureQueueMessages = ["Conversation create temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedConversationId = await session.createConversation(NewConversationRequest(cwd: "/tmp/ios-create"))
+        XCTAssertNil(failedConversationId)
+        XCTAssertNotNil(session.errorMessage)
+
+        let createdConversationId = await session.createConversation(NewConversationRequest(cwd: "/tmp/ios-create"))
+        XCTAssertNotNil(createdConversationId)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testHostSessionCreateConversationIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.createConversationDelayNanoseconds = 150_000_000
