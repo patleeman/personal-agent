@@ -844,7 +844,9 @@ final class HostSessionModel: ObservableObject {
 
     func listRuns() async -> DurableRunsListResponse? {
         do {
-            return try await client.listRuns()
+            let runs = try await client.listRuns()
+            errorMessage = nil
+            return runs
         } catch {
             errorMessage = error.localizedDescription
             return nil

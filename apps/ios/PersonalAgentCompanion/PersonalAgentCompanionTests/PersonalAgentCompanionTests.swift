@@ -2027,6 +2027,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testListRunsClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listRunsFailureQueueMessages = ["Run list temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedRuns = await session.listRuns()
+        XCTAssertNil(failedRuns)
+        XCTAssertNotNil(session.errorMessage)
+
+        let runs = await session.listRuns()
+        XCTAssertEqual(runs?.runs.first?.runId, "run-1")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testReadTaskClearsStaleErrorAfterSuccessfulRetry() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

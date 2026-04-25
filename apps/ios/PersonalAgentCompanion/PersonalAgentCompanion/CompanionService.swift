@@ -1407,6 +1407,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var abortConversationDelayNanoseconds: UInt64 = 0
     var takeOverConversationDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
+    var listRunsFailureQueueMessages: [String] = []
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
     var renameConversationDelayNanoseconds: UInt64 = 0
@@ -3529,6 +3530,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         let snapshot = runs
         if listRunsDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: listRunsDelayNanoseconds)
+        }
+        if !listRunsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(listRunsFailureQueueMessages.removeFirst())
         }
         let statuses = Dictionary(grouping: snapshot.compactMap { $0.status?.status }, by: { $0 }).mapValues(\.count)
         let recoveryActions = Dictionary(grouping: snapshot.map(\.recoveryAction), by: { $0 }).mapValues(\.count)
