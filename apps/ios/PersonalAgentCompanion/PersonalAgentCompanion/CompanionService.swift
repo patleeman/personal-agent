@@ -1381,6 +1381,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
+    var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
@@ -2560,6 +2561,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func restoreQueuedPrompt(conversationId: String, behavior: String, index: Int, previewId: String?, surfaceId: String) async throws -> CompanionQueueRestoreResult {
+        if restoreQueuedPromptDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: restoreQueuedPromptDelayNanoseconds)
+        }
         var queueState = queuedPromptsByConversation[conversationId] ?? (steering: [], followUp: [])
         let source = behavior == "followUp" ? queueState.followUp : queueState.steering
         guard source.indices.contains(index) else {

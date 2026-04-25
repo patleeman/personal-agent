@@ -1982,6 +1982,7 @@ final class ConversationViewModel: ObservableObject {
     private var renameConversationRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
     private var firedDeferredResumeIds: Set<String> = []
+    private var restoringQueuedPromptKeys: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2202,7 +2203,12 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func restoreQueuedPrompt(behavior: String, index: Int, previewId: String?) {
+        let restoreKey = "\(behavior):\(previewId?.nilIfBlank ?? String(index))"
+        guard restoringQueuedPromptKeys.insert(restoreKey).inserted else {
+            return
+        }
         Task {
+            defer { restoringQueuedPromptKeys.remove(restoreKey) }
             do {
                 let restored = try await client.restoreQueuedPrompt(
                     conversationId: conversationId,

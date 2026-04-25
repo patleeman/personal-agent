@@ -1071,6 +1071,41 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
     }
 
+    func testQueuedPromptRestoreIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.restoreQueuedPromptDelayNanoseconds = 150_000_000
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.blocks.isEmpty
+        }
+
+        model.promptText = "Queue this once"
+        model.sendPrompt(mode: .followUp)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.queuedFollowUpPrompts.count == 1
+        }
+
+        let preview = try XCTUnwrap(model.queuedFollowUpPrompts.first)
+        model.restoreQueuedPrompt(behavior: "followUp", index: 0, previewId: preview.id)
+        model.restoreQueuedPrompt(behavior: "followUp", index: 0, previewId: preview.id)
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.promptText == "Queue this once"
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertNil(model.errorMessage)
+        XCTAssertEqual(model.promptText.components(separatedBy: "Queue this once").count - 1, 1)
+    }
+
     func testHostSessionLoadsModelCatalogAndSshTargets() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
         session.refresh()
