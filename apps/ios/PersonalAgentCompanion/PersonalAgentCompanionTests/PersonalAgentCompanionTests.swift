@@ -1348,6 +1348,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.sshTargets.first?.label, "Buildbox")
     }
 
+    func testListSshTargetsClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.listSshTargetsFailureQueueMessages = ["SSH target list temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedTargets = await session.listSshTargets()
+        XCTAssertTrue(failedTargets.isEmpty)
+        XCTAssertNotNil(session.errorMessage)
+
+        let targets = await session.listSshTargets()
+        XCTAssertEqual(targets.first?.label, "Buildbox")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testSaveSshTargetIgnoresDuplicateCreateWhilePending() async throws {
         let client = MockCompanionClient()
         client.saveSshTargetDelayNanoseconds = 150_000_000

@@ -1398,6 +1398,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var deleteTaskDelayNanoseconds: UInt64 = 0
     var runTaskDelayNanoseconds: UInt64 = 0
     var cancelRunDelayNanoseconds: UInt64 = 0
+    var listSshTargetsFailureQueueMessages: [String] = []
     var createPairingCodeDelayNanoseconds: UInt64 = 0
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
@@ -2318,7 +2319,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func listSshTargets() async throws -> CompanionSshTargetState {
-        sshTargetState
+        if !listSshTargetsFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(listSshTargetsFailureQueueMessages.removeFirst())
+        }
+        return sshTargetState
     }
 
     func saveSshTarget(id: String?, label: String, sshTarget: String) async throws -> CompanionSshTargetState {

@@ -892,6 +892,7 @@ final class HostSessionModel: ObservableObject {
         do {
             let state = try await client.listSshTargets()
             sshTargets = state.hosts
+            errorMessage = nil
             return state.hosts
         } catch {
             errorMessage = error.localizedDescription
