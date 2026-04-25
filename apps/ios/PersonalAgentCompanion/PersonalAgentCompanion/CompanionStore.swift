@@ -729,6 +729,7 @@ final class HostSessionModel: ObservableObject {
         do {
             let nextId = try await client.duplicateConversation(conversationId: conversationId)
             refresh()
+            errorMessage = nil
             return nextId
         } catch {
             errorMessage = error.localizedDescription
