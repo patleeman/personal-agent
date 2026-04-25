@@ -1131,6 +1131,7 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var loadRequestId = 0
     private var pendingCreateIds: Set<String> = []
+    private var pendingMutationIds: Set<String> = []
 
     init(client: CompanionClientProtocol, directoryId: String?) {
         self.client = client
@@ -1269,6 +1270,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             errorMessage = "A file or folder with that name already exists here."
             return nil
         }
+        guard pendingMutationIds.insert(entry.id).inserted else {
+            return nil
+        }
+        defer { pendingMutationIds.remove(entry.id) }
         do {
             let renamed = try await client.renameKnowledgeEntry(id: entry.id, newName: finalName, parentId: nil)
             errorMessage = nil
@@ -1287,6 +1292,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
             errorMessage = "A folder cannot be moved into itself. Physics remains undefeated."
             return nil
         }
+        guard pendingMutationIds.insert(entry.id).inserted else {
+            return nil
+        }
+        defer { pendingMutationIds.remove(entry.id) }
         do {
             let moved = try await client.renameKnowledgeEntry(id: entry.id, newName: entry.name, parentId: destinationFolder)
             errorMessage = nil
@@ -1299,6 +1308,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     }
 
     func delete(entry: CompanionKnowledgeEntry) async -> Bool {
+        guard pendingMutationIds.insert(entry.id).inserted else {
+            return false
+        }
+        defer { pendingMutationIds.remove(entry.id) }
         do {
             try await client.deleteKnowledgeEntry(id: entry.id)
             errorMessage = nil

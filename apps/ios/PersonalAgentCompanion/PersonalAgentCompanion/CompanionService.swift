@@ -1404,8 +1404,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     var renameConversationDelayQueueNanoseconds: [UInt64] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
+    var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var writeKnowledgeFileCount = 0
+    private(set) var deleteKnowledgeEntryCount = 0
     private(set) var createTaskCount = 0
     private(set) var deleteTaskCount = 0
     private(set) var runTaskCount = 0
@@ -3251,6 +3253,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     func deleteKnowledgeEntry(id: String) async throws {
         guard let normalizedId = normalizeKnowledgeId(id) else {
             throw CompanionClientError.requestFailed("Knowledge entry id is required.")
+        }
+        deleteKnowledgeEntryCount += 1
+        if deleteKnowledgeEntryDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: deleteKnowledgeEntryDelayNanoseconds)
         }
         let isDirectory = knowledgeFolders.contains(normalizedId)
         guard isDirectory || knowledgeFiles[normalizedId] != nil else {

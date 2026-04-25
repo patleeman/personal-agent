@@ -767,6 +767,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertFalse(notesRoot.entries.contains(where: { $0.id == "notes/history/" }))
     }
 
+    func testKnowledgeDeleteIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.deleteKnowledgeEntryDelayNanoseconds = 150_000_000
+        let model = KnowledgeDirectoryViewModel(client: client, directoryId: "notes")
+        await model.reload()
+        let entry = try XCTUnwrap(model.entries.first(where: { $0.id == "notes/ios-companion.md" }))
+
+        async let first = model.delete(entry: entry)
+        async let second = model.delete(entry: entry)
+        let results = await [first, second]
+        let listing = try await client.listKnowledgeEntries(directoryId: "notes")
+
+        XCTAssertEqual(results.filter { $0 }.count, 1)
+        XCTAssertEqual(client.deleteKnowledgeEntryCount, 1)
+        XCTAssertFalse(listing.entries.contains(where: { $0.id == entry.id }))
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testMockKnowledgeSearchAndImageAssetUpload() async throws {
         let client = MockCompanionClient()
 
