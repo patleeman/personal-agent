@@ -91,6 +91,7 @@ export interface CompanionConversationBlockImageInput {
 
 export interface CompanionConversationCreateInput {
   cwd?: string;
+  workspaceCwd?: string | null;
   model?: string | null;
   thinkingLevel?: string | null;
   serviceTier?: string | null;

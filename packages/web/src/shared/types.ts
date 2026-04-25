@@ -421,6 +421,7 @@ export interface SessionMeta {
   file: string;
   timestamp: string;
   cwd: string;
+  workspaceCwd?: string | null;
   cwdSlug: string;
   model: string;
   title: string;

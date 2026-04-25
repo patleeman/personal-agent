@@ -394,6 +394,7 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
 
       const created = await localController.createLiveSession({
         cwd: input.cwd,
+        ...(input.workspaceCwd !== undefined ? { workspaceCwd: input.workspaceCwd } : {}),
         ...(input.model !== undefined ? { model: input.model } : {}),
         ...(input.thinkingLevel !== undefined ? { thinkingLevel: input.thinkingLevel } : {}),
         ...(input.serviceTier !== undefined ? { serviceTier: input.serviceTier } : {}),

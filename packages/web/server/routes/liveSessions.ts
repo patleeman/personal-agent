@@ -311,12 +311,14 @@ export function registerLiveSessionRoutes(
     try {
       const body = req.body as {
         cwd?: string;
+        workspaceCwd?: string | null;
         model?: string | null;
         thinkingLevel?: string | null;
         serviceTier?: string | null;
       };
       const result = await createLiveSessionCapability({
         cwd: body.cwd,
+        ...(body.workspaceCwd !== undefined ? { workspaceCwd: body.workspaceCwd } : {}),
         ...(body.model !== undefined ? { model: body.model } : {}),
         ...(body.thinkingLevel !== undefined ? { thinkingLevel: body.thinkingLevel } : {}),
         ...(body.serviceTier !== undefined ? { serviceTier: body.serviceTier } : {}),

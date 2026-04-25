@@ -1552,6 +1552,7 @@ export class DaemonCompanionServer {
         const promptPayload = isRecord(payload.prompt) ? payload.prompt : null;
         const input: CompanionConversationCreateInput = {
           cwd: readOptionalString(payload.cwd),
+          ...(payload.workspaceCwd !== undefined ? { workspaceCwd: payload.workspaceCwd === null ? null : readOptionalString(payload.workspaceCwd) } : {}),
           model: payload.model === null ? null : readOptionalString(payload.model),
           thinkingLevel: payload.thinkingLevel === null ? null : readOptionalString(payload.thinkingLevel),
           serviceTier: payload.serviceTier === null ? null : readOptionalString(payload.serviceTier),

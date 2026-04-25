@@ -785,12 +785,13 @@ export const api = {
   createLiveSession: async (
     cwd?: string,
     text?: string,
-    options?: { model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null },
+    options?: { workspaceCwd?: string | null; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null },
   ) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
       return desktopBridge.createLiveSession({
         cwd,
+        ...(options?.workspaceCwd !== undefined ? { workspaceCwd: options.workspaceCwd } : {}),
         ...(options?.model !== undefined ? { model: options.model } : {}),
         ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
         ...(options?.serviceTier !== undefined ? { serviceTier: options.serviceTier } : {}),
@@ -800,6 +801,7 @@ export const api = {
     return post<LiveSessionCreateResult>('/live-sessions', {
       cwd,
       text,
+      ...(options?.workspaceCwd !== undefined ? { workspaceCwd: options.workspaceCwd } : {}),
       ...(options?.model !== undefined ? { model: options.model } : {}),
       ...(options?.thinkingLevel !== undefined ? { thinkingLevel: options.thinkingLevel } : {}),
       ...(options?.serviceTier !== undefined ? { serviceTier: options.serviceTier } : {}),

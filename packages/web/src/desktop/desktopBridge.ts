@@ -328,7 +328,7 @@ export interface PersonalAgentDesktopBridge {
     knownLastBlockId?: string;
   }): Promise<SessionDetailResult>;
   readSessionBlock(input: { sessionId: string; blockId: string }): Promise<DisplayBlock>;
-  createLiveSession(input: { cwd?: string; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<LiveSessionCreateResult>;
+  createLiveSession(input: { cwd?: string; workspaceCwd?: string | null; model?: string | null; thinkingLevel?: string | null; serviceTier?: string | null }): Promise<LiveSessionCreateResult>;
   resumeLiveSession(input: { sessionFile: string; cwd?: string }): Promise<{ id: string }>;
   takeOverLiveSession(input: { conversationId: string; surfaceId: string }): Promise<LiveSessionPresenceState>;
   restoreQueuedLiveSessionMessage(input: {

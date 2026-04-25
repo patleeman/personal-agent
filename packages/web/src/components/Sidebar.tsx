@@ -673,8 +673,15 @@ function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId'
   };
 }
 
-function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'remoteHostId' | 'remoteHostLabel'>): string {
-  return resolveSessionExecutionTarget(session).isLocal ? session.cwd ?? '' : '';
+function getSessionWorkspaceCwd(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd'>): string | null {
+  return Object.prototype.hasOwnProperty.call(session, 'workspaceCwd')
+    ? (session.workspaceCwd ?? null)
+    : (session.cwd ?? null);
+}
+
+function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel'>): string {
+  const workspaceCwd = getSessionWorkspaceCwd(session);
+  return resolveSessionExecutionTarget(session).isLocal ? workspaceCwd ?? '' : '';
 }
 
 function buildScopedConversationGroupKey(input: {
@@ -2033,7 +2040,7 @@ export function Sidebar() {
   const conversationGroupLabels = useMemo(
     () => buildConversationGroupLabels([
       ...workspaceOrder,
-      ...filteredConversationItems.map((item) => item.session.cwd),
+      ...filteredConversationItems.map((item) => getSessionWorkspaceCwd(item.session)),
     ]),
     [filteredConversationItems, workspaceOrder],
   );
@@ -2128,7 +2135,7 @@ export function Sidebar() {
 
     for (const targetBucket of orderedTargetBuckets) {
       const groupsByCwdKey = new Map(
-        groupConversationItemsByCwd(targetBucket.items, (item) => item.session.cwd, {
+        groupConversationItemsByCwd(targetBucket.items, (item) => getSessionWorkspaceCwd(item.session), {
           labelsByCwd: conversationGroupLabels,
         })
           .map((group) => [group.key, group] as const),
@@ -2165,8 +2172,8 @@ export function Sidebar() {
           row: {
             key: scopedGroupKey,
             cwd: group.cwd,
-            defaultLabel: group.label,
-            label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || group.label,
+            defaultLabel: group.cwd ? group.label : 'Chats',
+            label: conversationGroupLabelOverrides[scopedGroupKey]?.trim() || (group.cwd ? group.label : 'Chats'),
             items: group.items,
             executionTargetKey: targetBucket.executionTargetKey,
             executionTargetLabel: targetBucket.executionTargetLabel,
@@ -2524,6 +2531,9 @@ export function Sidebar() {
     if (explicitCwd) {
       persistDraftConversationCwd(explicitCwd);
       setDraftCwd(explicitCwd);
+    } else {
+      clearDraftConversationCwd();
+      setDraftCwd('');
     }
 
     navigate('/conversations/new');

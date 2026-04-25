@@ -45,8 +45,9 @@ import {
   type PromptImageAttachment,
 } from './liveSessions.js';
 import { readSessionBlocks } from './sessions.js';
-import { resolveConversationCwd } from './conversationCwd.js';
+import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
+import { appendConversationWorkspaceMetadata } from './sessions.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import { buildRelatedConversationContext } from './relatedConversationContext.js';
 
@@ -78,6 +79,7 @@ export interface LiveSessionCapabilityContext {
 
 export interface CreateLiveSessionCapabilityInput {
   cwd?: string;
+  workspaceCwd?: string | null;
   model?: string | null;
   thinkingLevel?: string | null;
   serviceTier?: string | null;
@@ -416,18 +418,26 @@ export async function createLiveSessionCapability(
   context: LiveSessionCapabilityContext,
 ): Promise<CreateLiveSessionCapabilityResult> {
   const profile = context.getCurrentProfile();
-  const cwd = resolveConversationCwd({
-    repoRoot: context.getRepoRoot(),
-    profile,
-    explicitCwd: input.cwd,
-    defaultCwd: context.getDefaultWebCwd(),
-  });
+  const hasExplicitCwd = typeof input.cwd === 'string' && input.cwd.trim().length > 0;
+  const cwd = hasExplicitCwd
+    ? resolveConversationCwd({
+        repoRoot: context.getRepoRoot(),
+        profile,
+        explicitCwd: input.cwd,
+        defaultCwd: context.getDefaultWebCwd(),
+      })
+    : resolveNeutralChatCwd(profile);
 
   const created = await createLocalSession(cwd, buildLiveSessionOptions(context, {
     ...(input.model !== undefined ? { initialModel: input.model } : {}),
     ...(input.thinkingLevel !== undefined ? { initialThinkingLevel: input.thinkingLevel } : {}),
     ...(input.serviceTier !== undefined ? { initialServiceTier: input.serviceTier } : {}),
   }));
+  appendConversationWorkspaceMetadata({
+    sessionFile: created.sessionFile,
+    cwd,
+    workspaceCwd: input.workspaceCwd !== undefined ? input.workspaceCwd : (hasExplicitCwd ? cwd : null),
+  });
   const bootstrap = buildCreatedLiveSessionBootstrap(created.id, created.sessionFile);
 
   return {

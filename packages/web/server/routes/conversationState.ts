@@ -19,11 +19,13 @@ import {
   readLiveSessionAutoModeState,
   registry as liveRegistry,
   renameSession,
+  resumeSession,
   setLiveSessionAutoModeState,
   updateLiveSessionModelPreferences,
 } from '../conversations/liveSessions.js';
 import {
   readSessionBlocks,
+  appendConversationWorkspaceMetadata,
   renameStoredSession,
 } from '../conversations/sessions.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
@@ -86,6 +88,7 @@ function resolveConversationSource(conversationId: string) {
   return {
     cwd,
     sessionFile,
+    meta: sessionDetail?.meta,
     liveEntry,
   };
 }
@@ -481,17 +484,26 @@ export function registerConversationStateRoutes(
         return;
       }
 
-      const result = await createSessionFromExisting(source.sessionFile, nextCwd, {
-        ...buildLiveSessionResourceOptionsFn(),
-        extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+      appendConversationWorkspaceMetadata({
+        sessionFile: source.sessionFile,
+        previousCwd: source.cwd,
+        previousWorkspaceCwd: source.meta?.workspaceCwd ?? source.cwd,
+        cwd: nextCwd,
+        workspaceCwd: nextCwd,
+        visibleMessage: true,
       });
 
       if (source.liveEntry) {
         destroySession(conversationId);
+        await resumeSession(source.sessionFile, {
+          cwdOverride: nextCwd,
+          ...buildLiveSessionResourceOptionsFn(),
+          extensionFactories: buildLiveSessionExtensionFactoriesFn(),
+        });
       }
 
-      publishConversationSessionMetaChanged(conversationId, result.id);
-      res.json({ id: result.id, sessionFile: result.sessionFile, cwd: nextCwd, changed: true });
+      publishConversationSessionMetaChanged(conversationId);
+      res.json({ id: conversationId, sessionFile: source.sessionFile, cwd: nextCwd, changed: true });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

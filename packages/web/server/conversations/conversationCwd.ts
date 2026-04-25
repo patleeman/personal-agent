@@ -1,5 +1,7 @@
 import { homedir } from 'node:os';
-import { resolve } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { getPiAgentRuntimeDir } from '@personal-agent/core';
 
 function expandHome(pathValue: string): string {
   if (pathValue === '~') {
@@ -32,4 +34,11 @@ export function resolveConversationCwd(input: {
   const explicitCwd = resolveRequestedCwd(input.explicitCwd, normalizedDefaultCwd);
 
   return explicitCwd ?? normalizedDefaultCwd;
+}
+
+export function resolveNeutralChatCwd(profile: string): string {
+  const safeProfile = profile.trim().replace(/[^a-zA-Z0-9._-]+/g, '-') || 'default';
+  const cwd = join(getPiAgentRuntimeDir(), 'chat-workspaces', safeProfile);
+  mkdirSync(cwd, { recursive: true });
+  return cwd;
 }

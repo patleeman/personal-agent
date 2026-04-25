@@ -13,6 +13,7 @@
  *   toolResult   → toolCallId, toolName, content: [{type:'text', text}|{type:'image', data, mimeType}]
  */
 
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, relative } from 'node:path';
 import { getDurableSessionsDir, getPiAgentRuntimeDir } from '@personal-agent/core';
@@ -67,6 +68,15 @@ interface RawSessionInfo {
   parentId?: string | null;
   timestamp?: string;
   name?: string;
+}
+
+interface RawCustomEntry {
+  type: 'custom';
+  id?: string;
+  parentId?: string | null;
+  timestamp?: string;
+  customType?: string;
+  data?: unknown;
 }
 
 interface RawContentBlock {
@@ -132,7 +142,7 @@ interface RawBranchSummary {
   fromId: string;
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawThinkingLevelChange | RawSessionInfo | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
+type RawLine = RawSessionRecord | RawModelChange | RawThinkingLevelChange | RawSessionInfo | RawCustomEntry | RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 type RawDisplayLine = RawMessage | RawCustomMessage | RawCompaction | RawBranchSummary;
 
 interface TailScanDisplayEntrySummary {
@@ -159,6 +169,7 @@ export interface SessionMeta {
   file: string;          // absolute path
   timestamp: string;
   cwd: string;
+  workspaceCwd?: string | null;
   cwdSlug: string;       // directory name without leading/trailing --
   model: string;
   title: string;         // session display name or derived fallback title
@@ -172,6 +183,14 @@ export interface SessionMeta {
   remoteHostId?: string;
   remoteHostLabel?: string;
   remoteConversationId?: string;
+}
+
+export const CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE = 'personal_agent_conversation_workspace';
+export const CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE = 'conversation_workspace_change';
+
+interface ConversationWorkspaceMetadata {
+  cwd?: string;
+  workspaceCwd?: string | null;
 }
 
 export interface SessionDetail {
@@ -674,7 +693,9 @@ export function getAssistantErrorDisplayMessage(message: {
 const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
 
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
-  return message.role === 'custom' && message.display === true && message.customType === 'referenced_context';
+  return message.role === 'custom'
+    && message.display === true
+    && (message.customType === 'referenced_context' || message.customType === CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE);
 }
 
 function formatRelatedThreadsSummaryText(text: string): string {
@@ -1220,6 +1241,90 @@ function normalizeOptionalPath(value: string | undefined): string | undefined {
   return normalized && normalized.length > 0 ? normalized : undefined;
 }
 
+function normalizeWorkspaceCwdValue(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readConversationWorkspaceMetadata(line: RawCustomEntry): ConversationWorkspaceMetadata | null {
+  if (line.customType !== CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE || !line.data || typeof line.data !== 'object') {
+    return null;
+  }
+
+  const data = line.data as Record<string, unknown>;
+  const cwd = typeof data.cwd === 'string' && data.cwd.trim().length > 0 ? data.cwd.trim() : undefined;
+  const workspaceCwd = normalizeWorkspaceCwdValue(data.workspaceCwd);
+
+  if (cwd === undefined && workspaceCwd === undefined) {
+    return null;
+  }
+
+  return {
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(workspaceCwd !== undefined ? { workspaceCwd } : {}),
+  };
+}
+
+export function appendConversationWorkspaceMetadata(input: {
+  sessionFile: string;
+  cwd?: string;
+  workspaceCwd?: string | null;
+  previousCwd?: string;
+  previousWorkspaceCwd?: string | null;
+  visibleMessage?: boolean;
+}): void {
+  const cwd = input.cwd?.trim();
+  const workspaceCwd = input.workspaceCwd === null ? null : input.workspaceCwd?.trim();
+  const timestamp = new Date().toISOString();
+
+  appendFileSync(input.sessionFile, `${JSON.stringify({
+    type: 'custom',
+    id: randomUUID(),
+    parentId: null,
+    timestamp,
+    customType: CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE,
+    data: {
+      ...(cwd ? { cwd } : {}),
+      ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
+    },
+  })}\n`, 'utf-8');
+
+  if (!input.visibleMessage) {
+    return;
+  }
+
+  const previousLabel = input.previousWorkspaceCwd === null
+    ? 'Chats'
+    : (input.previousCwd?.trim() || input.previousWorkspaceCwd?.trim() || 'previous workspace');
+  const nextLabel = input.workspaceCwd === null
+    ? 'Chats'
+    : (cwd || workspaceCwd || 'new workspace');
+
+  appendFileSync(input.sessionFile, `${JSON.stringify({
+    type: 'custom_message',
+    id: randomUUID(),
+    parentId: null,
+    timestamp,
+    customType: CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE,
+    content: `Working directory changed from ${previousLabel} to ${nextLabel}.`,
+    display: true,
+    details: {
+      ...(input.previousCwd ? { previousCwd: input.previousCwd } : {}),
+      ...(input.previousWorkspaceCwd !== undefined ? { previousWorkspaceCwd: input.previousWorkspaceCwd } : {}),
+      ...(cwd ? { cwd } : {}),
+      ...(input.workspaceCwd !== undefined ? { workspaceCwd: workspaceCwd || null } : {}),
+    },
+  })}\n`, 'utf-8');
+}
+
 function readSourceRunIdFromSessionFilePath(filePath: string): string | undefined {
   const sessionsDir = resolveSessionsDir();
   const relativePath = relative(sessionsDir, filePath).replace(/\\/g, '/');
@@ -1258,6 +1363,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
   let namedTitle: string | null = null;
   let sawSessionInfo = false;
   let messageCount = 0;
+  let workspaceMetadata: ConversationWorkspaceMetadata | null = null;
 
   for (const rawLine of raw.split('\n')) {
     if (!rawLine.trim()) {
@@ -1284,6 +1390,11 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     if (line.type === 'session_info') {
       sawSessionInfo = true;
       namedTitle = normalizeSessionName((line as RawSessionInfo).name);
+      continue;
+    }
+
+    if (line.type === 'custom') {
+      workspaceMetadata = readConversationWorkspaceMetadata(line as RawCustomEntry) ?? workspaceMetadata;
       continue;
     }
 
@@ -1322,11 +1433,14 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     ? sessionRecord.remoteConversationId.trim()
     : null;
 
+  const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
+
   return {
     id: sessionRecord.id,
     file: filePath,
     timestamp: sessionRecord.timestamp,
-    cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
+    cwd: workspaceMetadata?.cwd ?? headerCwd,
+    ...(workspaceMetadata && 'workspaceCwd' in workspaceMetadata ? { workspaceCwd: workspaceMetadata.workspaceCwd ?? null } : {}),
     cwdSlug,
     model,
     title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',

@@ -2,7 +2,7 @@ import { appendFileSync, chmodSync, existsSync, mkdtempSync, mkdirSync, readFile
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
+import { appendConversationWorkspaceMetadata, buildAppendOnlySessionDetailResponse, buildDisplayBlocksFromEntries, clearSessionCaches, clearStoredSessionRemoteTargetByFile, listSessions, readSessionBlock, readSessionBlocks, readSessionBlocksWithTelemetry, readSessionImageAsset, readSessionSearchText, renameStoredSession, setStoredSessionRemoteTargetByFile } from './sessions.js';
 
 const originalEnv = process.env;
 const tempDirs: string[] = [];
@@ -930,6 +930,39 @@ describe('sessions', () => {
     }));
     expect(readSessionBlocks('session-rename')?.meta.title).toBe('Better manual title');
     expect(readFileSync(filePath, 'utf-8')).toContain('"name":"Better manual title"');
+  });
+
+  it('applies latest workspace metadata without rewriting the session header', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const filePath = writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-workspace-move',
+      cwd: '/tmp/original',
+      title: 'Move me',
+    });
+
+    appendConversationWorkspaceMetadata({
+      sessionFile: filePath,
+      previousCwd: '/tmp/original',
+      previousWorkspaceCwd: null,
+      cwd: '/tmp/attached-project',
+      workspaceCwd: '/tmp/attached-project',
+      visibleMessage: true,
+    });
+
+    const detail = readSessionBlocks('session-workspace-move');
+    expect(detail?.meta.cwd).toBe('/tmp/attached-project');
+    expect(detail?.meta.workspaceCwd).toBe('/tmp/attached-project');
+    expect(readFileSync(filePath, 'utf-8').split('\n')[0]).toContain('"cwd":"/tmp/original"');
+    expect(detail?.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'context',
+        customType: 'conversation_workspace_change',
+        text: 'Working directory changed from Chats to /tmp/attached-project.',
+      }),
+    ]));
   });
 
   it('stores remote execution target metadata in the session header', () => {

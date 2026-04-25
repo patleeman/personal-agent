@@ -232,6 +232,7 @@ export interface LocalApiModule {
   }): Promise<unknown>;
   createDesktopLiveSession(input: {
     cwd?: string;
+    workspaceCwd?: string | null;
     model?: string | null;
     thinkingLevel?: string | null;
     serviceTier?: string | null;

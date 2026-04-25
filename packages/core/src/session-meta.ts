@@ -7,6 +7,7 @@ export interface StoredSessionMeta {
   file: string;
   timestamp: string;
   cwd: string;
+  workspaceCwd?: string | null;
   cwdSlug: string;
   model: string;
   title: string;
@@ -37,6 +38,12 @@ interface RawSessionInfo {
   name?: string;
 }
 
+interface RawCustomEntry {
+  type: 'custom';
+  customType?: string;
+  data?: unknown;
+}
+
 interface RawContentBlock {
   type: 'text' | 'image';
   text?: string;
@@ -51,7 +58,14 @@ interface RawMessage {
   };
 }
 
-type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawMessage | { type: string };
+type RawLine = RawSessionRecord | RawModelChange | RawSessionInfo | RawCustomEntry | RawMessage | { type: string };
+
+const CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE = 'personal_agent_conversation_workspace';
+
+interface ConversationWorkspaceMetadata {
+  cwd?: string;
+  workspaceCwd?: string | null;
+}
 
 function resolveDefaultSessionsDir(): string {
   return getDurableSessionsDir();
@@ -104,6 +118,38 @@ function normalizeSessionName(name: unknown): string | null {
 
   const normalized = name.replace(/\s+/g, ' ').trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeWorkspaceCwdValue(value: unknown): string | null | undefined {
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function readConversationWorkspaceMetadata(line: RawCustomEntry): ConversationWorkspaceMetadata | null {
+  if (line.customType !== CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE || !line.data || typeof line.data !== 'object') {
+    return null;
+  }
+
+  const data = line.data as Record<string, unknown>;
+  const cwd = typeof data.cwd === 'string' && data.cwd.trim().length > 0 ? data.cwd.trim() : undefined;
+  const workspaceCwd = normalizeWorkspaceCwdValue(data.workspaceCwd);
+
+  if (cwd === undefined && workspaceCwd === undefined) {
+    return null;
+  }
+
+  return {
+    ...(cwd !== undefined ? { cwd } : {}),
+    ...(workspaceCwd !== undefined ? { workspaceCwd } : {}),
+  };
 }
 
 function slugToCwd(slug: string): string {
@@ -169,6 +215,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
     let sawSessionInfo = false;
     let messageCount = 0;
     let lastMessageTimestamp: string | undefined;
+    let workspaceMetadata: ConversationWorkspaceMetadata | null = null;
 
     for (const rawLine of raw.split('\n')) {
       if (!rawLine.trim()) {
@@ -193,6 +240,11 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       if (line.type === 'session_info') {
         sawSessionInfo = true;
         namedTitle = normalizeSessionName((line as RawSessionInfo).name);
+        continue;
+      }
+
+      if (line.type === 'custom') {
+        workspaceMetadata = readConversationWorkspaceMetadata(line as RawCustomEntry) ?? workspaceMetadata;
         continue;
       }
 
@@ -224,11 +276,14 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): StoredSessi
       ? sessionRecord.remoteConversationId.trim()
       : null;
 
+    const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
+
     return {
       id: sessionRecord.id,
       file: filePath,
       timestamp: fallbackTimestamp,
-      cwd: sessionRecord.cwd ?? slugToCwd(cwdSlug),
+      cwd: workspaceMetadata?.cwd ?? headerCwd,
+      ...(workspaceMetadata && 'workspaceCwd' in workspaceMetadata ? { workspaceCwd: workspaceMetadata.workspaceCwd ?? null } : {}),
       cwdSlug,
       model,
       title: (sawSessionInfo ? namedTitle : null) ?? fallbackTitle ?? 'New Conversation',

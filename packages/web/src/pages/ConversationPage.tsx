@@ -5099,6 +5099,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setConversationCwdDraft(result.cwd);
 
       if (!result.changed || result.id === id) {
+        stream.reconnect();
         void refetchLiveSessionContext();
         return;
       }
@@ -5111,7 +5112,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } finally {
       setConversationCwdBusy(false);
     }
-  }, [conversationCwdBusy, conversationCwdDraft, currentSurfaceId, draft, ensureConversationCanControl, id, navigate, refetchLiveSessionContext, showNotice, stream.isStreaming]);
+  }, [conversationCwdBusy, conversationCwdDraft, currentSurfaceId, draft, ensureConversationCanControl, id, navigate, refetchLiveSessionContext, showNotice, stream.isStreaming, stream.reconnect]);
 
   const pickConversationCwd = useCallback(async () => {
     if (draft || !id || conversationCwdPickBusy || conversationCwdBusy) {

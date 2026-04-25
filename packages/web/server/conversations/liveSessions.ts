@@ -3191,10 +3191,12 @@ export async function resumeSession(
     ? cwdOverride.trim()
     : undefined;
 
+  const metadataCwd = readSessionMetaByFile(sessionFile)?.cwd;
+  const effectiveCwdOverride = normalizedCwdOverride ?? metadataCwd;
   const auth = makeAuth();
   const modelRegistry = makeRegistry(auth);
-  const sessionManager = SessionManager.open(sessionFile, undefined, normalizedCwdOverride);
-  const cwd = normalizedCwdOverride ?? sessionManager.getCwd();
+  const sessionManager = SessionManager.open(sessionFile, undefined, effectiveCwdOverride);
+  const cwd = effectiveCwdOverride ?? sessionManager.getCwd();
   const resourceLoader = await makeLoader(cwd, loaderOptions);
   const { session } = await createAgentSession({
     cwd,
