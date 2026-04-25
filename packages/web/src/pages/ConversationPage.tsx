@@ -897,6 +897,14 @@ function FolderIcon({ className }: { className?: string }) {
   );
 }
 
+function ChatBubbleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6.75a2.25 2.25 0 0 1-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 0 1 4.5 13.5V6.75Z" />
+    </svg>
+  );
+}
+
 function FolderPlusIcon({ className }: { className?: string }) {
   return (
     <svg className={className} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -7557,8 +7565,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             action={draft ? (
               <div className="mt-4 w-full space-y-3">
                 <div className="flex items-center justify-start gap-2 text-[11px] uppercase tracking-[0.16em] text-dim/80">
-                  <FolderIcon className="text-accent" />
-                  <span>Workspace</span>
+                  {hasDraftCwd ? <FolderIcon className="text-accent" /> : <ChatBubbleIcon className="text-accent" />}
+                  <span>{hasDraftCwd ? 'Workspace' : 'Chat'}</span>
                 </div>
                 <div className="flex w-full flex-wrap items-center justify-start gap-1.5">
                   {selectedExecutionTargetIsRemote ? (
@@ -7599,13 +7607,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                         aria-label="Saved workspace"
                         title={hasDraftCwd
                           ? draftCwdValue
-                          : 'Using the saved default from Settings, or the current repo root if no default is saved.'}
+                          : 'Start as a chat with no attached workspace.'}
                         disabled={draftCwdPickBusy || (savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0)}
                       >
                         <option value="">
                           {savedWorkspacePathsLoading && availableDraftWorkspacePaths.length === 0
                             ? 'Loading workspaces…'
-                            : 'Use saved default workspace'}
+                            : 'Chat — no workspace'}
                         </option>
                         {availableDraftWorkspacePaths.map((workspacePath) => (
                           <option key={workspacePath} value={workspacePath}>
@@ -8557,7 +8565,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
                 {draft ? (
                   <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none">
-                    <FolderIcon className="shrink-0 text-dim/70" />
+                    {hasDraftCwd ? <FolderIcon className="shrink-0 text-dim/70" /> : <ChatBubbleIcon className="shrink-0 text-dim/70" />}
                     {selectedExecutionTargetIsRemote ? (
                       <>
                         <label className="sr-only" htmlFor="draft-composer-remote-cwd">Remote workspace path</label>
@@ -8589,10 +8597,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                           <select
                             id="draft-composer-cwd"
                             value={draftCwdValue}
-                            onChange={(event) => { setDraftConversationCwd(event.target.value); }}
+                            onChange={(event) => {
+                              const nextWorkspacePath = event.target.value.trim();
+                              if (!nextWorkspacePath) {
+                                clearDraftConversationCwdSelection();
+                                return;
+                              }
+                              selectDraftConversationWorkspace(nextWorkspacePath);
+                            }}
                             className="h-7 w-full min-w-0 truncate appearance-none rounded-md bg-transparent pl-1 pr-6 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
                           >
-                            <option value="">Default workspace</option>
+                            <option value="">Chat</option>
                             {availableDraftWorkspacePaths.map((workspacePath) => (
                               <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
                             ))}

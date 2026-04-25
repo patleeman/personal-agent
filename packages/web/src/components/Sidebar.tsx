@@ -84,6 +84,7 @@ const PATH = {
   grip: 'M9 6.75h.01M9 12h.01M9 17.25h.01M15 6.75h.01M15 12h.01M15 17.25h.01',
   clock: 'M12 6v6l4 2m5-2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z',
   sparkles: 'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
+  chatBubble: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6.75a2.25 2.25 0 0 1-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 0 1 4.5 13.5V6.75Z',
   check: 'm5 12.75 4.5 4.5L19 7.75',
 };
 
@@ -1030,11 +1031,11 @@ function ConversationCwdGroupHeader({
     : 'New conversation';
   const workspaceActionsTitle = cwd
     ? `Workspace actions for ${cwd}`
-    : `Workspace actions for ${label}`;
+    : `Chat actions for ${label}`;
   const toggleTitle = `${collapsed ? 'Expand' : 'Collapse'} ${label}`;
   const iconPath = hovered
     ? (collapsed ? PATH.chevronRight : PATH.chevronDown)
-    : PATH.workspace;
+    : (cwd ? PATH.workspace : PATH.chatBubble);
   const hasMenuActions = Boolean(onOpenInFinder || onEditName || onArchiveThreads || onRemove);
   const menuActionCount = Number(Boolean(onOpenInFinder))
     + Number(Boolean(onEditName))
