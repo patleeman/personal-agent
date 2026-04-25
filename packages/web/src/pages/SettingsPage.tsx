@@ -3928,7 +3928,54 @@ export function SettingsPage() {
                         {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
                         {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
 
-                        {(editingModelId === NEW_MODEL_ID || editingProviderModel) && (
+                        {editingModelId === NEW_MODEL_ID && (
+                          <form
+                            className="flex flex-col gap-2 border-t border-border-subtle pt-4 sm:flex-row sm:items-end"
+                            onSubmit={(event) => {
+                              event.preventDefault();
+                              void handleSaveProviderModel();
+                            }}
+                          >
+                            <div className="min-w-0 flex-1 space-y-1.5">
+                              <label className="ui-card-meta" htmlFor="settings-provider-model-id">Model id</label>
+                              <input
+                                id="settings-provider-model-id"
+                                value={modelDraft.id}
+                                onChange={(event) => { setModelDraft((current) => ({ ...current, id: event.target.value })); }}
+                                className={`${INPUT_CLASS} font-mono text-[13px]`}
+                                placeholder="gpt-5.6"
+                                autoComplete="off"
+                                spellCheck={false}
+                                disabled={modelDraftAction !== null}
+                                autoFocus
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                type="submit"
+                                disabled={modelDraftAction !== null || modelDraft.id.trim().length === 0}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                {modelDraftAction === 'save' ? 'Adding…' : 'Add model'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingModelId(null);
+                                  setModelDraft(createModelEditorDraft(null));
+                                  setModelDraftError(null);
+                                  setModelDraftMessage(null);
+                                }}
+                                disabled={modelDraftAction !== null}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </form>
+                        )}
+
+                        {editingProviderModel && (
                           <form
                             className="space-y-4 border-t border-border-subtle pt-6"
                             onSubmit={(event) => {
@@ -3938,11 +3985,8 @@ export function SettingsPage() {
                           >
                             <div className="space-y-1">
                               <h4 className="text-[13px] font-medium text-primary">
-                                {editingModelId === NEW_MODEL_ID ? 'New model' : `Edit ${editingProviderModel?.id ?? 'model'}`}
+                                Edit {editingProviderModel.id}
                               </h4>
-                              <p className="ui-card-meta max-w-3xl">
-                                Only the model id is required. Leave API blank to inherit the provider API.
-                              </p>
                             </div>
 
                             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -4153,9 +4197,7 @@ export function SettingsPage() {
                               >
                                 {modelDraftAction === 'save'
                                   ? 'Saving model…'
-                                  : editingModelId === NEW_MODEL_ID
-                                    ? 'Add model'
-                                    : 'Save model'}
+                                  : 'Save model'}
                               </button>
                               <button
                                 type="button"
