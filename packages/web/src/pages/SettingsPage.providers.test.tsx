@@ -73,15 +73,6 @@ function queryButton(container: HTMLElement, label: string, index = 0): HTMLButt
   return button;
 }
 
-function queryButtonContaining(container: HTMLElement, label: string, index = 0): HTMLButtonElement {
-  const matches = Array.from(container.querySelectorAll('button')).filter((node) => node.textContent?.includes(label));
-  const button = matches[index];
-  if (!(button instanceof HTMLButtonElement)) {
-    throw new Error(`Expected button containing ${label} at index ${index}`);
-  }
-  return button;
-}
-
 function queryInput(container: HTMLElement, selector: string): HTMLInputElement {
   const input = container.querySelector(selector);
   if (!(input instanceof HTMLInputElement)) {
@@ -443,13 +434,19 @@ describe('SettingsPage provider model editor', () => {
     }));
   });
 
-  it('shows known providers as direct add-model targets', async () => {
+  it('opens known providers from the preconfigured provider picker', async () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    expect(container.textContent).toContain('Known providers you can add models to');
+    expect(container.textContent).toContain('Preconfigured provider');
 
-    click(queryButtonContaining(container, 'anthropic'));
+    const picker = Array.from(container.querySelectorAll('select')).find((select) => select.textContent?.includes('Choose provider…'));
+    if (!(picker instanceof HTMLSelectElement)) {
+      throw new Error('Expected preconfigured provider picker');
+    }
+
+    updateSelectValue(picker, 'anthropic');
+    click(queryButton(container, 'Configure provider'));
 
     expect(queryInput(container, '#settings-model-provider-id').value).toBe('anthropic');
     expect(container.textContent).toContain('Saving a model creates that provider entry in models.json immediately.');

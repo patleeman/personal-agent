@@ -1430,6 +1430,8 @@ export function SettingsPage() {
   const [savingTranscription, setSavingTranscription] = useState(false);
   const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
+  const [modelProviderModalOpen, setModelProviderModalOpen] = useState(false);
+  const [modelProviderPickerId, setModelProviderPickerId] = useState('');
   const [modelProviderDraft, setModelProviderDraft] = useState<ProviderEditorDraft>(() => createProviderEditorDraft(null));
   const [modelProviderAction, setModelProviderAction] = useState<'save' | 'delete' | null>(null);
   const [modelProviderMessage, setModelProviderMessage] = useState<string | null>(null);
@@ -2263,6 +2265,7 @@ export function SettingsPage() {
 
   function startNewModelProvider(initialId = '') {
     setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
+    setSelectedProviderId(initialId);
     setModelProviderDraft({
       ...createProviderEditorDraft(null),
       id: initialId,
@@ -2273,6 +2276,9 @@ export function SettingsPage() {
     setModelProviderMessage(null);
     setModelDraftError(null);
     setModelDraftMessage(null);
+    setProviderCredentialError(null);
+    setProviderCredentialNotice(null);
+    setModelProviderModalOpen(true);
   }
 
   function selectModelProvider(providerId: string) {
@@ -2283,6 +2289,7 @@ export function SettingsPage() {
 
     const provider = modelProviderState?.providers.find((candidate) => candidate.id === providerId) ?? null;
     setSelectedModelProviderId(providerId);
+    setSelectedProviderId(providerId);
     setModelProviderDraft(createProviderEditorDraft(provider));
     setEditingModelId(null);
     setModelDraft(createModelEditorDraft(null));
@@ -2290,6 +2297,25 @@ export function SettingsPage() {
     setModelProviderMessage(null);
     setModelDraftError(null);
     setModelDraftMessage(null);
+    setProviderCredentialError(null);
+    setProviderCredentialNotice(null);
+    setModelProviderModalOpen(true);
+  }
+
+  function closeModelProviderModal() {
+    if (modelProviderAction !== null || modelDraftAction !== null || providerCredentialAction !== null || oauthAction !== null) {
+      return;
+    }
+
+    setModelProviderModalOpen(false);
+    setEditingModelId(null);
+    setModelDraft(createModelEditorDraft(null));
+    setModelProviderEditorError(null);
+    setModelProviderMessage(null);
+    setModelDraftError(null);
+    setModelDraftMessage(null);
+    setProviderCredentialError(null);
+    setProviderCredentialNotice(null);
   }
 
   function selectKnownModelProvider(providerId: string) {
@@ -2378,6 +2404,7 @@ export function SettingsPage() {
       });
 
       syncModelProviderSelection(state, providerId);
+      setSelectedProviderId(providerId);
       setModelProviderMessage(existed ? `Saved ${providerId}.` : `Created ${providerId}.`);
       await Promise.all([
         refetchModels({ resetLoading: false }),
@@ -2484,6 +2511,7 @@ export function SettingsPage() {
       });
 
       syncModelProviderSelection(state, providerId, modelId);
+      setSelectedProviderId(providerId);
       setModelDraftMessage(existed ? `Saved ${modelId}.` : `Added ${modelId}.`);
       await Promise.all([
         refetchModels({ resetLoading: false }),
@@ -3572,29 +3600,30 @@ export function SettingsPage() {
                         </div>
 
                         {unconfiguredModelProviderIds.length > 0 && (
-                          <div className="space-y-2">
-                            <p className="ui-card-meta">Known providers you can add models to</p>
-                            <div className="space-y-px">
-                              {unconfiguredModelProviderIds.map((providerId) => {
-                                const selected = selectedModelProviderId === NEW_MODEL_PROVIDER_ID && modelProviderDraft.id.trim() === providerId;
-                                return (
-                                  <button
-                                    key={providerId}
-                                    type="button"
-                                    onClick={() => { startNewModelProvider(providerId); }}
-                                    className={cx(
-                                      'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
-                                      selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
-                                    )}
-                                    aria-pressed={selected}
-                                  >
-                                    <span className="min-w-0">
-                                      <span className="block truncate text-[13px] font-medium text-primary">{providerId}</span>
-                                      <span className="ui-card-meta block truncate">Add a model override or new model</span>
-                                    </span>
-                                  </button>
-                                );
-                              })}
+                          <div className="space-y-3 border-t border-border-subtle pt-4">
+                            <div className="space-y-1">
+                              <h4 className="text-[13px] font-medium text-primary">Preconfigured provider</h4>
+                              <p className="ui-card-meta">Select a built-in or discovered provider, then add any extra models you want.</p>
+                            </div>
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <select
+                                value={modelProviderPickerId}
+                                onChange={(event) => { setModelProviderPickerId(event.target.value); }}
+                                className={INPUT_CLASS}
+                              >
+                                <option value="">Choose provider…</option>
+                                {unconfiguredModelProviderIds.map((providerId) => (
+                                  <option key={providerId} value={providerId}>{providerId}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => { startNewModelProvider(modelProviderPickerId); }}
+                                disabled={!modelProviderPickerId}
+                                className={ACTION_BUTTON_CLASS}
+                              >
+                                Configure provider
+                              </button>
                             </div>
                           </div>
                         )}
@@ -3603,7 +3632,32 @@ export function SettingsPage() {
                   ) : null}
                 </div>
 
-                <div className="space-y-8 border-t border-border-subtle pt-6 min-w-0">
+                {modelProviderModalOpen && (
+                  <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 px-4 py-6 backdrop-blur-sm">
+                    <div
+                      role="dialog"
+                      aria-modal="true"
+                      aria-label="Provider settings"
+                      className="flex max-h-[88vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-border-subtle bg-base shadow-2xl"
+                    >
+                      <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
+                        <div className="space-y-1">
+                          <h3 className="text-[17px] font-medium text-primary">
+                            {editableModelProviderId ? `Provider · ${editableModelProviderId}` : 'Add provider'}
+                          </h3>
+                          <p className="ui-card-meta">Configure provider details, models, and credentials in one place.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={closeModelProviderModal}
+                          disabled={modelProviderAction !== null || modelDraftAction !== null || providerCredentialAction !== null || oauthAction !== null}
+                          className={ACTION_BUTTON_CLASS}
+                        >
+                          Close
+                        </button>
+                      </div>
+                      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+                <div className="space-y-8 min-w-0">
                   <div className="space-y-4 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">
@@ -4101,68 +4155,25 @@ export function SettingsPage() {
                       <p className="ui-card-meta">Select a provider, or type a provider id above, to edit its models.</p>
                     )}
                   </div>
-                </div>
-                </div>
-              </SettingsPanel>
 
-              <SettingsPanel
-                title="Provider credentials"
-                description={(
-                  <>
-                    Manage API keys and OAuth in <span className="font-mono text-[11px]">{providerAuthState?.authFile ?? 'auth.json'}</span>.
-                  </>
-                )}
-              >
-                <div className="space-y-6">
-                  <div className="space-y-3 min-w-0">
+                  <div className="space-y-4 border-t border-border-subtle pt-6 min-w-0">
                     <div className="space-y-1">
-                      <h3 className="text-[15px] font-medium text-primary">Provider</h3>
-                      <p className="ui-card-meta max-w-2xl">
-                        Built-in Pi providers that support auth.json API keys appear here even before any environment variables are set. Provider-level <span className="font-mono text-[11px]">apiKey</span> values set above still live in <span className="font-mono text-[11px]">models.json</span>.
-                      </p>
-                    </div>
-
-                    {providerAuthLoading && !providerAuthState ? (
-                      <p className="ui-card-meta">Loading provider credentials…</p>
-                    ) : providerAuthError && !providerAuthState ? (
-                      <p className="text-[12px] text-danger">Failed to load provider credentials: {providerAuthError}</p>
-                    ) : providerAuthState ? (
-                      <>
-                        <label className="ui-card-meta" htmlFor="settings-provider-auth">Provider</label>
-                        <select
-                          id="settings-provider-auth"
-                          value={selectedProviderId}
-                          onChange={(event) => { setSelectedProviderId(event.target.value); }}
-                          disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running' || providerAuthState.providers.length === 0}
-                          className={INPUT_CLASS}
-                        >
-                          {providerAuthState.providers.map((provider) => (
-                            <option key={provider.id} value={provider.id}>
-                              {provider.id}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="ui-card-meta">{formatProviderAuthStatus(selectedProvider)}</p>
-                        <p className="ui-card-meta">{formatProviderModelCoverage(selectedProvider)}</p>
-                      </>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-3 border-t border-border-subtle pt-6 min-w-0">
-                    <div className="space-y-1">
-                      <h3 className="text-[15px] font-medium text-primary">API key and OAuth</h3>
-                      <p className="ui-card-meta max-w-2xl">
-                        Equivalent to <span className="font-mono text-[11px]">/login</span> and manual auth-file edits in the TUI.
+                      <h3 className="text-[15px] font-medium text-primary">Credentials</h3>
+                      <p className="ui-card-meta max-w-3xl">
+                        API key and OAuth live with the provider. {providerAuthState?.authFile ? `Stored auth writes to ${providerAuthState.authFile}.` : ''}
                       </p>
                     </div>
 
                     {selectedProvider ? (
-                      <>
+                      <div className="space-y-3">
+                        <p className="ui-card-meta">{formatProviderAuthStatus(selectedProvider)}</p>
+                        <p className="ui-card-meta">{formatProviderModelCoverage(selectedProvider)}</p>
+
                         {canProviderUseApiKey(selectedProvider) ? (
-                          <>
-                            <label className="ui-card-meta" htmlFor="settings-provider-api-key">API key</label>
+                          <div className="space-y-2">
+                            <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">API key</label>
                             <input
-                              id="settings-provider-api-key"
+                              id="settings-provider-api-key-modal"
                               type="password"
                               value={providerApiKey}
                               onChange={(event) => { setProviderApiKey(event.target.value); }}
@@ -4172,14 +4183,9 @@ export function SettingsPage() {
                               spellCheck={false}
                               disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running'}
                             />
-                            <p className="ui-card-meta">
-                              Save a key for <span className="font-mono text-[11px]">{selectedProvider.id}</span>.
-                            </p>
-                          </>
+                          </div>
                         ) : (
-                          <p className="ui-card-meta">
-                            Stored API keys are not used for <span className="font-mono text-[11px]">{selectedProvider.id}</span>. Use OAuth or provider-specific runtime configuration instead.
-                          </p>
+                          <p className="ui-card-meta">This provider uses OAuth, environment credentials, or provider-specific config instead of auth.json API keys.</p>
                         )}
 
                         <div className="flex flex-wrap gap-2">
@@ -4201,103 +4207,22 @@ export function SettingsPage() {
                           >
                             {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
                           </button>
+                          {selectedProvider.oauthSupported && (
+                            <button
+                              type="button"
+                              onClick={() => { void handleStartProviderOAuthLogin(); }}
+                              disabled={providerCredentialAction !== null || oauthAction !== null || selectedProviderLogin?.status === 'running'}
+                              className={ACTION_BUTTON_CLASS}
+                            >
+                              {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${selectedProvider.id})`}
+                            </button>
+                          )}
                         </div>
-
-                        {selectedProvider.oauthSupported ? (
-                          <div className="space-y-2 pt-2">
-                            <p className="ui-card-meta">
-                              OAuth available via {selectedProvider.oauthProviderName || selectedProvider.id}
-                              {selectedProvider.oauthUsesCallbackServer ? ' (supports browser callback).' : '.'}
-                            </p>
-
-                            <div className="flex flex-wrap gap-2">
-                              <button
-                                type="button"
-                                onClick={() => { void handleStartProviderOAuthLogin(); }}
-                                disabled={providerCredentialAction !== null || oauthAction !== null || selectedProviderLogin?.status === 'running'}
-                                className={ACTION_BUTTON_CLASS}
-                              >
-                                {oauthAction === 'start'
-                                  ? 'Starting login…'
-                                  : selectedProviderLogin?.status === 'running'
-                                    ? 'OAuth login running…'
-                                    : `Start OAuth login (${selectedProvider.id})`}
-                              </button>
-                              {selectedProviderLogin?.status === 'running' && (
-                                <button
-                                  type="button"
-                                  onClick={() => { void handleCancelProviderOAuthLogin(); }}
-                                  disabled={providerCredentialAction !== null || oauthAction !== null}
-                                  className={ACTION_BUTTON_CLASS}
-                                >
-                                  {oauthAction === 'cancel' ? 'Cancelling…' : 'Cancel login'}
-                                </button>
-                              )}
-                            </div>
-
-                            {selectedProviderLogin ? (
-                              <>
-                                <p className="ui-card-meta">
-                                  Status: <span className="font-medium text-primary">{selectedProviderLogin.status}</span>
-                                </p>
-
-                                {selectedProviderLogin.authUrl && (
-                                  <p className="ui-card-meta break-all">
-                                    Open auth URL:{' '}
-                                    <a
-                                      href={selectedProviderLogin.authUrl}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="text-accent hover:underline"
-                                    >
-                                      {selectedProviderLogin.authUrl}
-                                    </a>
-                                    {selectedProviderLogin.authInstructions ? ` — ${selectedProviderLogin.authInstructions}` : ''}
-                                  </p>
-                                )}
-
-                                {selectedProviderLogin.prompt && (
-                                  <>
-                                    <label className="ui-card-meta" htmlFor="settings-provider-oauth-input">
-                                      {selectedProviderLogin.prompt.message}
-                                    </label>
-                                    <input
-                                      id="settings-provider-oauth-input"
-                                      type="text"
-                                      value={oauthInputValue}
-                                      onChange={(event) => { setOauthInputValue(event.target.value); }}
-                                      className={INPUT_CLASS}
-                                      placeholder={selectedProviderLogin.prompt.placeholder || 'Enter value'}
-                                      disabled={providerCredentialAction !== null || oauthAction !== null}
-                                      spellCheck={false}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => { void handleSubmitProviderOAuthInput(); }}
-                                      disabled={providerCredentialAction !== null || oauthAction !== null}
-                                      className={ACTION_BUTTON_CLASS}
-                                    >
-                                      {oauthAction === 'submit' ? 'Submitting…' : 'Submit input'}
-                                    </button>
-                                  </>
-                                )}
-
-                                {selectedProviderLogin.progress.length > 0 && (
-                                  <p className="ui-card-meta">
-                                    Latest progress: {selectedProviderLogin.progress[selectedProviderLogin.progress.length - 1]}
-                                  </p>
-                                )}
-                              </>
-                            ) : (
-                              <p className="ui-card-meta">No active OAuth login for this provider.</p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="ui-card-meta">OAuth login is not available for this provider.</p>
-                        )}
-                      </>
+                      </div>
+                    ) : editableModelProviderId ? (
+                      <p className="ui-card-meta">Save or select the provider before managing stored credentials.</p>
                     ) : (
-                      <p className="ui-card-meta">Select a provider to manage credentials.</p>
+                      <p className="ui-card-meta">Choose or create a provider first.</p>
                     )}
 
                     {providerCredentialNotice && <p className="text-[12px] text-success">{providerCredentialNotice}</p>}
@@ -4308,7 +4233,13 @@ export function SettingsPage() {
                     )}
                   </div>
                 </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                </div>
               </SettingsPanel>
+
 
             </div>
           </SettingsSection>
