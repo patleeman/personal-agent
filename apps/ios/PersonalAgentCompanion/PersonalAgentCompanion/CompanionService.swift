@@ -1390,6 +1390,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var createAttachmentFailureQueueMessages: [String] = []
+    var updateAttachmentFailureQueueMessages: [String] = []
     var saveSshTargetDelayNanoseconds: UInt64 = 0
     var saveSshTargetFailureQueueMessages: [String] = []
     var deleteSshTargetDelayNanoseconds: UInt64 = 0
@@ -3213,6 +3214,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func updateAttachment(conversationId: String, attachmentId: String, draft: AttachmentEditorDraft) async throws -> ConversationAttachmentMutationResponse {
+        if !updateAttachmentFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(updateAttachmentFailureQueueMessages.removeFirst())
+        }
         guard let index = attachmentsByConversation[conversationId]?.firstIndex(where: { $0.id == attachmentId }) else {
             throw CompanionClientError.requestFailed("Attachment not found.")
         }

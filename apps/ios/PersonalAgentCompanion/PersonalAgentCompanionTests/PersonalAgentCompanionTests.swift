@@ -706,6 +706,37 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.savedAttachments.first?.title, "Updated whiteboard")
     }
 
+    func testSaveExistingAttachmentClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.updateAttachmentFailureQueueMessages = ["Attachment update temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.savedAttachments.contains(where: { $0.id == "att-1" })
+        }
+
+        var draft = makeLiveAttachmentDraft()
+        draft.title = "Updated whiteboard"
+
+        let failedSave = await model.saveExistingAttachment(attachmentId: "att-1", draft: draft)
+        XCTAssertFalse(failedSave)
+        XCTAssertNotNil(model.errorMessage)
+
+        let saved = await model.saveExistingAttachment(attachmentId: "att-1", draft: draft)
+        XCTAssertTrue(saved)
+        XCTAssertEqual(model.savedAttachments.first?.title, "Updated whiteboard")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testStaleAttachmentRefreshDoesNotOverwriteNewlySavedAttachment() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(
