@@ -28,6 +28,7 @@ export type DesktopRendererShortcutAction =
   | 'next-conversation'
   | 'toggle-sidebar'
   | 'toggle-right-rail'
+  | 'toggle-layout-mode'
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive'
   | 'focus-composer'

@@ -402,6 +402,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onToggleRightRail: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-right-rail');
     },
+    onToggleLayoutMode: () => {
+      windowController?.sendShortcutToFocusedWindow('toggle-layout-mode');
+    },
     onHideWindow: () => {
       windowController?.hideFocusedWindow();
     },

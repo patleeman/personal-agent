@@ -18,6 +18,7 @@ function createActions() {
     onFindInPage: vi.fn(),
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
+    onToggleLayoutMode: vi.fn(),
     onHideWindow: vi.fn(),
     onSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -72,6 +73,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
       expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
+      expect.objectContaining({ label: 'Toggle Layout Mode', accelerator: 'CommandOrControl+Alt+\\' }),
     ]));
 
     const windowMenu = template[4];

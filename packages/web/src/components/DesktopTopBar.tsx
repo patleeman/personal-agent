@@ -232,8 +232,8 @@ export function DesktopTopBar({
                   setLayoutMenuOpen(false);
                 }}
               >
-                <span className="font-medium text-primary">Compact</span>
-                <span className="text-[11px] leading-4 text-secondary">Sidebar and one focused main pane.</span>
+                <span className="text-[13px] font-medium leading-4 text-primary">Compact</span>
+                <span className="text-[10.5px] leading-3.5 text-secondary">One focused main pane.</span>
               </button>
               <button
                 type="button"
@@ -245,8 +245,8 @@ export function DesktopTopBar({
                   setLayoutMenuOpen(false);
                 }}
               >
-                <span className="font-medium text-primary">Workbench</span>
-                <span className="text-[11px] leading-4 text-secondary">Chat, open note, and Knowledge side by side.</span>
+                <span className="text-[13px] font-medium leading-4 text-primary">Workbench</span>
+                <span className="text-[10.5px] leading-3.5 text-secondary">Chat, note, and Knowledge.</span>
               </button>
             </div>
           ) : null}

@@ -25,6 +25,8 @@ The desktop top bar has a layout selector:
 - **Compact** keeps the classic left sidebar plus one main content pane.
 - **Workbench** applies to conversation routes and adds resizable panes for the transcript, the open Knowledge note, and the Knowledge file explorer/open-files rail.
 
+Use `Cmd+Option+\` on macOS, or `Ctrl+Alt+\` elsewhere, to toggle between Compact and Workbench. It sits with the related layout shortcuts: `Cmd/Ctrl+\` toggles the left sidebar and `Cmd/Ctrl+Shift+\` toggles the right rail.
+
 Workbench stores its mode and pane widths in browser-local layout preferences. Reset them from Settings → Browser local state → “Reset layout + reload”.
 
 ## Validation

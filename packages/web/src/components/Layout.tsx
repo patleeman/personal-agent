@@ -28,10 +28,10 @@ const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((modul
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 
-type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail';
+type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
-  return value === 'toggle-sidebar' || value === 'toggle-right-rail';
+  return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode';
 }
 
 function isDesktopNavigateDetail(value: unknown): value is { route: string; replace?: boolean } {
@@ -597,6 +597,11 @@ export function Layout() {
         return;
       }
 
+      if (action === 'toggle-layout-mode') {
+        handleAppLayoutModeChange(appLayoutMode === 'workbench' ? 'compact' : 'workbench');
+        return;
+      }
+
       activeRightRailControl?.toggleRail();
     }
 
@@ -621,7 +626,7 @@ export function Layout() {
       window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
       window.removeEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
     };
-  }, [activeRightRailControl, location.hash, location.pathname, location.search, navigate]);
+  }, [activeRightRailControl, appLayoutMode, handleAppLayoutModeChange, location.hash, location.pathname, location.search, navigate]);
 
   return (
     <>

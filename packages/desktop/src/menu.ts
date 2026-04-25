@@ -16,6 +16,7 @@ export interface DesktopApplicationMenuActions {
   onFindInPage: () => void;
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
+  onToggleLayoutMode: () => void;
   onHideWindow: () => void;
   onSettings: () => void;
   onCheckForUpdates: () => void;
@@ -178,6 +179,11 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Toggle Right Rail',
         accelerator: 'CommandOrControl+Shift+\\',
         click: actions.onToggleRightRail,
+      },
+      {
+        label: 'Toggle Layout Mode',
+        accelerator: 'CommandOrControl+Alt+\\',
+        click: actions.onToggleLayoutMode,
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },
