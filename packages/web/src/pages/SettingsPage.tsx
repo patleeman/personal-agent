@@ -54,6 +54,12 @@ const MODEL_PROVIDER_API_OPTIONS: Array<{ value: ModelProviderApi; label: string
   { value: 'google-generative-ai', label: 'Google Generative AI' },
 ];
 
+const TRANSCRIPTION_MODEL_OPTIONS: Record<TranscriptionProviderId, string[]> = {
+  'openai-codex-realtime': ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe'],
+  'openai-api': ['gpt-4o-mini-transcribe', 'gpt-4o-transcribe', 'whisper-1'],
+  'whisperkit-local': ['openai_whisper-base', 'openai_whisper-small', 'openai_whisper-medium'],
+};
+
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
 const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] font-mono text-[11px] leading-5`;
@@ -1667,6 +1673,9 @@ export function SettingsPage() {
     ? transcriptionProviderDraft !== (transcriptionState.settings.provider ?? '')
       || transcriptionModelDraft.trim() !== transcriptionState.settings.model
     : false;
+  const transcriptionModelOptions = transcriptionProviderDraft
+    ? TRANSCRIPTION_MODEL_OPTIONS[transcriptionProviderDraft]
+    : Array.from(new Set(Object.values(TRANSCRIPTION_MODEL_OPTIONS).flat()));
   const skillFoldersDirty = skillFoldersState
     ? skillFoldersDraft.length !== skillFoldersState.skillDirs.length
       || skillFoldersDraft.some((value, index) => value !== skillFoldersState.skillDirs[index])
@@ -3425,6 +3434,7 @@ export function SettingsPage() {
                     <label className="ui-card-meta pt-1" htmlFor="settings-transcription-model">Model</label>
                     <input
                       id="settings-transcription-model"
+                      list="settings-transcription-model-options"
                       value={transcriptionModelDraft}
                       onChange={(event) => {
                         setTranscriptionModelDraft(event.target.value);
@@ -3436,6 +3446,12 @@ export function SettingsPage() {
                       autoComplete="off"
                       spellCheck={false}
                     />
+                    <datalist id="settings-transcription-model-options">
+                      {transcriptionModelOptions.map((model) => (
+                        <option key={model} value={model} />
+                      ))}
+                    </datalist>
+                    <p className="ui-card-meta">Pick a known model from the dropdown or type a custom id.</p>
 
                     <div className="flex flex-wrap items-center gap-2">
                       <button
