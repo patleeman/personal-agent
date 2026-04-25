@@ -1174,6 +1174,24 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(session.sshTargets.first?.label, "Buildbox")
     }
 
+    func testSaveSshTargetIgnoresDuplicateCreateWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.saveSshTargetDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let initialTargets = await session.listSshTargets()
+
+        async let first = session.saveSshTarget(id: nil, label: "Staging box", sshTarget: "agent@staging")
+        async let second = session.saveSshTarget(id: nil, label: "Staging box", sshTarget: "agent@staging")
+        let results = await [first, second]
+        let targets = await session.listSshTargets()
+
+        XCTAssertEqual(results.filter { $0.contains { $0.label == "Staging box" } }.count, 1)
+        XCTAssertEqual(client.saveSshTargetCount, 1)
+        XCTAssertEqual(targets.filter { $0.label == "Staging box" && $0.sshTarget == "agent@staging" }.count, 1)
+        XCTAssertEqual(targets.count, initialTargets.count + 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testStaleModelRefreshDoesNotOverwriteSavedPreference() async throws {
         let client = MockCompanionClient()
         let model = ConversationViewModel(

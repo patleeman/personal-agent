@@ -1383,6 +1383,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
+    var saveSshTargetDelayNanoseconds: UInt64 = 0
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
@@ -1405,6 +1406,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var deleteTaskCount = 0
     private(set) var runTaskCount = 0
     private(set) var cancelRunCount = 0
+    private(set) var saveSshTargetCount = 0
     private(set) var createPairingCodeCount = 0
     private(set) var promptSubmissionCount = 0
     private(set) var cancelDeferredResumeCount = 0
@@ -2281,6 +2283,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func saveSshTarget(id: String?, label: String, sshTarget: String) async throws -> CompanionSshTargetState {
+        saveSshTargetCount += 1
+        if saveSshTargetDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: saveSshTargetDelayNanoseconds)
+        }
         let targetId = id?.trimmed.nilIfBlank ?? "ssh-\(Int.random(in: 100...999))"
         let record = CompanionSshTargetRecord(id: targetId, label: label.trimmed, kind: "ssh", sshTarget: sshTarget.trimmed)
         sshTargetState = CompanionSshTargetState(hosts: sshTargetState.hosts.filter { $0.id != targetId } + [record])
