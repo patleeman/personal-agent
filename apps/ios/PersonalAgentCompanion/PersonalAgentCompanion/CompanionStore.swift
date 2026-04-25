@@ -2902,7 +2902,7 @@ final class ConversationViewModel: ObservableObject {
             async let preview = client.downloadAttachmentAsset(conversationId: conversationId, attachmentId: record.id, asset: "preview", revision: record.currentRevision)
             let sourceAsset = try await source
             let previewAsset = try await preview
-            return AttachmentEditorDraft(
+            let draft = AttachmentEditorDraft(
                 title: record.title,
                 note: record.latestRevision.note ?? "",
                 sourceAsset: AttachmentDraftAsset(
@@ -2918,6 +2918,8 @@ final class ConversationViewModel: ObservableObject {
                     rawData: previewAsset.data
                 )
             )
+            errorMessage = nil
+            return draft
         } catch {
             errorMessage = error.localizedDescription
             return nil
