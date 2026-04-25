@@ -3,7 +3,6 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
-import { ConversationForkMap } from '../components/ConversationForkMap';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
@@ -2170,11 +2169,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedCheckpointId]);
-
-  const openForkMapConversation = useCallback((conversationId: string) => {
-    ensureConversationTabOpen(conversationId);
-    navigate(`/conversations/${encodeURIComponent(conversationId)}`);
-  }, [navigate]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -7540,13 +7534,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 />
               )}
             </div>
-            {!draft && id && (
-              <ConversationForkMap
-                currentId={id}
-                sessions={sessions}
-                onOpenConversation={openForkMapConversation}
-              />
-            )}
             {visibleTranscriptHasOlderBlocks && (
               <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-subtle/30 pt-3">
                 <div className="min-w-0 text-[11px] text-secondary/80">
@@ -7762,7 +7749,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     loadOlderMessages,
     openArtifact,
     openCheckpoint,
-    openForkMapConversation,
     displayedPendingAssistantStatusLabel,
     realMessages,
     renderingStaleTranscript,
@@ -7772,7 +7758,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     rewindConversationFromMessage,
     selectedArtifactId,
     selectedCheckpointId,
-    sessions,
     sessionLoading,
     showConversationRail,
     showConversationLoadingState,
