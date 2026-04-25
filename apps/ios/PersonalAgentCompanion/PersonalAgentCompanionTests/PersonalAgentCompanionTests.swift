@@ -2025,6 +2025,20 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testReadTaskLogClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.readTaskLogFailureQueueMessages = ["Task log temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        let failedLog = await session.readTaskLog("task-1")
+        XCTAssertNil(failedLog)
+        XCTAssertNotNil(session.errorMessage)
+
+        let log = await session.readTaskLog("task-1")
+        XCTAssertEqual(log?.path, "/tmp/task-1.log")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testReadRunClearsStaleErrorAfterSuccessfulRetry() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

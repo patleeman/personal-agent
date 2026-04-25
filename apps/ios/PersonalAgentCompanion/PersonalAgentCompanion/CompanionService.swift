@@ -1375,6 +1375,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
     var readModelsDelayNanoseconds: UInt64 = 0
+    var readTaskLogFailureQueueMessages: [String] = []
     var readRunLogFailureQueueMessages: [String] = []
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
@@ -3408,7 +3409,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func readTaskLog(taskId: String) async throws -> DurableRunLogResponse {
-        DurableRunLogResponse(path: "/tmp/\(taskId).log", log: runLogs[taskId] ?? "[info] Task \(taskId) completed.\n")
+        if !readTaskLogFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(readTaskLogFailureQueueMessages.removeFirst())
+        }
+        return DurableRunLogResponse(path: "/tmp/\(taskId).log", log: runLogs[taskId] ?? "[info] Task \(taskId) completed.\n")
     }
 
     func createTask(draft: ScheduledTaskEditorDraft) async throws -> ScheduledTaskDetail {

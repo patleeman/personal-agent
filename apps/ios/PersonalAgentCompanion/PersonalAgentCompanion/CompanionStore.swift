@@ -758,7 +758,9 @@ final class HostSessionModel: ObservableObject {
 
     func readTaskLog(_ taskId: String) async -> DurableRunLogResponse? {
         do {
-            return try await client.readTaskLog(taskId: taskId)
+            let log = try await client.readTaskLog(taskId: taskId)
+            errorMessage = nil
+            return log
         } catch {
             errorMessage = error.localizedDescription
             return nil
