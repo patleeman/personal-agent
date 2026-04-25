@@ -1005,7 +1005,9 @@ final class HostSessionModel: ObservableObject {
         }
         defer { pendingPairedDeviceUpdateKeys.remove(updateKey) }
         do {
-            return try await client.updatePairedDevice(deviceId: deviceId, deviceLabel: label)
+            let state = try await client.updatePairedDevice(deviceId: deviceId, deviceLabel: label)
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil

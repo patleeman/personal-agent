@@ -1407,6 +1407,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var createSetupStateDelayNanoseconds: UInt64 = 0
     var createSetupStateFailureQueueMessages: [String] = []
     var updatePairedDeviceDelayNanoseconds: UInt64 = 0
+    var updatePairedDeviceFailureQueueMessages: [String] = []
     var deletePairedDeviceDelayNanoseconds: UInt64 = 0
     var cancelDeferredResumeDelayNanoseconds: UInt64 = 0
     var fireDeferredResumeDelayNanoseconds: UInt64 = 0
@@ -3632,6 +3633,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         updatePairedDeviceCount += 1
         if updatePairedDeviceDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: updatePairedDeviceDelayNanoseconds)
+        }
+        if !updatePairedDeviceFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(updatePairedDeviceFailureQueueMessages.removeFirst())
         }
         deviceAdminState = CompanionDeviceAdminState(pendingPairings: deviceAdminState.pendingPairings, devices: deviceAdminState.devices.map { device in
             device.id == deviceId

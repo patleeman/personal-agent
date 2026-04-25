@@ -2212,6 +2212,23 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testUpdatePairedDeviceClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.updatePairedDeviceFailureQueueMessages = ["Device update temporarily unavailable."]
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        let state = await session.readDeviceAdminState()
+        let initialState = try XCTUnwrap(state)
+        let deviceId = try XCTUnwrap(initialState.devices.first?.id)
+
+        let failedState = await session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        XCTAssertNil(failedState)
+        XCTAssertNotNil(session.errorMessage)
+
+        let updatedState = await session.updatePairedDevice(deviceId, label: "Patrick’s phone")
+        XCTAssertEqual(updatedState?.devices.first?.deviceLabel, "Patrick’s phone")
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testRunTaskIgnoresDuplicateTapWhilePending() async throws {
         let client = MockCompanionClient()
         client.runTaskDelayNanoseconds = 150_000_000
