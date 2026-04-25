@@ -2,7 +2,7 @@ import { appendFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { getStateRoot, hydrateProcessEnvFromShell } from '@personal-agent/core';
 import { setCompanionRuntimeProvider } from '@personal-agent/daemon';
-import { app, dialog, shell } from 'electron';
+import { app, clipboard, dialog, Notification, shell } from 'electron';
 import { applyDesktopApplicationIcon } from './app-icon.js';
 import { applyDesktopShellAppMode } from './app-mode.js';
 import { applyDesktopAboutPanelOptions } from './about.js';
@@ -20,6 +20,7 @@ import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
 import { readDesktopDaemonOwnership } from './backend/daemon-ownership.js';
 import { loadDesktopConfig, readDesktopAppPreferences, updateDesktopAppPreferences } from './state/desktop-config.js';
+import { importClipboardUrlToKnowledge } from './url-clipper.js';
 
 let hostManager: HostManager | undefined;
 let windowController: DesktopWindowController | undefined;
@@ -130,6 +131,44 @@ function logBootstrapError(error: unknown): void {
   }
 
   console.error(rendered);
+}
+
+function showClipperNotification(input: { title: string; body: string }): void {
+  if (Notification.isSupported()) {
+    new Notification(input).show();
+    return;
+  }
+
+  void dialog.showMessageBox({
+    type: 'info',
+    message: input.title,
+    detail: input.body,
+  });
+}
+
+async function clipUrlFromClipboard(): Promise<void> {
+  if (!hostManager) {
+    throw new Error('Desktop runtime is not ready.');
+  }
+
+  const imported = await importClipboardUrlToKnowledge({
+    host: hostManager,
+    clipboardText: clipboard.readText('clipboard'),
+  });
+  const noteId = imported.note?.id ? `Saved to ${imported.note.id}` : 'Saved to Knowledge Inbox.';
+  showClipperNotification({
+    title: 'URL clipped',
+    body: `${imported.title}\n${noteId}`,
+  });
+}
+
+function clipUrlFromClipboardAndNotify(): void {
+  void clipUrlFromClipboard().catch((error) => {
+    showClipperNotification({
+      title: 'Could not clip URL',
+      body: renderDesktopErrorMessage(error),
+    });
+  });
 }
 
 function reportDesktopError(error: unknown): void {
@@ -324,6 +363,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onNewConversation: () => {
       void openNewConversation();
     },
+    onClipUrlFromClipboard: () => {
+      clipUrlFromClipboardAndNotify();
+    },
     onCloseConversation: () => {
       windowController?.sendShortcutToFocusedWindow('close-conversation');
     },
@@ -387,6 +429,7 @@ async function bootstrapDesktopApp(): Promise<void> {
       void openConversation(conversationId);
     },
     onNewConversation: shellActions.onNewConversation,
+    onClipUrlFromClipboard: shellActions.onClipUrlFromClipboard,
     onSettings: shellActions.onSettings,
     onCheckForUpdates: shellActions.onCheckForUpdates,
     onRestartRuntime: shellActions.onRestartRuntime,
