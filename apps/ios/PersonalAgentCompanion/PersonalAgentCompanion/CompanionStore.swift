@@ -2539,6 +2539,7 @@ final class ConversationViewModel: ObservableObject {
                 let result = try await client.fireDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
                 firedDeferredResumeIds.insert(resumeId)
                 updateDeferredResumes(result.resumes)
+                errorMessage = nil
                 loadBootstrap()
                 refreshActivityRuns()
             } catch {

@@ -2836,6 +2836,39 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testFireDeferredResumeClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.fireDeferredResumeFailureQueueMessages = ["Deferred resume fire temporarily unavailable."]
+        client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.contains(where: { $0.id == "resume-1" }) == true
+        }
+
+        model.fireDeferredResume("resume-1")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        client.conversationBootstrapDelayNanoseconds = 500_000_000
+        model.fireDeferredResume("resume-1")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.connectedRuns.contains(where: { $0.manifest?.source?.type == "deferred-resume" && $0.manifest?.source?.id == "resume-1" })
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 
