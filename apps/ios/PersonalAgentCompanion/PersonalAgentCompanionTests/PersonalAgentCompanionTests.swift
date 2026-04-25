@@ -1635,6 +1635,38 @@ final class PersonalAgentCompanionTests: XCTestCase {
         }
     }
 
+    func testFiringDeferredResumeIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.fireDeferredResumeDelayNanoseconds = 150_000_000
+        client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.contains(where: { $0.id == "resume-1" }) == true
+        }
+
+        model.fireDeferredResume("resume-1")
+        model.fireDeferredResume("resume-1")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.connectedRuns.contains(where: { $0.manifest?.source?.type == "deferred-resume" && $0.manifest?.source?.id == "resume-1" })
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(model.connectedRuns.filter { $0.manifest?.source?.type == "deferred-resume" && $0.manifest?.source?.id == "resume-1" }.count, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testAutomationRunsAndDeviceAdminAreAvailable() async throws {
         let session = HostSessionModel(client: MockCompanionClient(), installationSurfaceId: "ios-test")
 

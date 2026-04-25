@@ -1384,6 +1384,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var restoreQueuedPromptDelayNanoseconds: UInt64 = 0
     var manageParallelJobDelayNanoseconds: UInt64 = 0
     var createConversationCheckpointDelayNanoseconds: UInt64 = 0
+    var fireDeferredResumeDelayNanoseconds: UInt64 = 0
     var listRunsDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayNanoseconds: UInt64 = 0
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
@@ -2667,6 +2668,9 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func fireDeferredResume(conversationId: String, resumeId: String) async throws -> DeferredResumeListResponse {
+        if fireDeferredResumeDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: fireDeferredResumeDelayNanoseconds)
+        }
         guard var meta = conversations[conversationId]?.sessionMeta else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
