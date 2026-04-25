@@ -1383,6 +1383,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var readKnowledgeFileDelayQueueNanoseconds: [UInt64] = []
     var writeKnowledgeFileDelayNanoseconds: UInt64 = 0
     var createKnowledgeImageAssetDelayNanoseconds: UInt64 = 0
+    var renameKnowledgeEntryDelayNanoseconds: UInt64 = 0
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     var createAttachmentDelayNanoseconds: UInt64 = 0
     var saveSshTargetDelayNanoseconds: UInt64 = 0
@@ -1420,6 +1421,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     private(set) var updateConversationTabsCount = 0
     private(set) var writeKnowledgeFileCount = 0
     private(set) var createKnowledgeImageAssetCount = 0
+    private(set) var renameKnowledgeEntryCount = 0
     private(set) var deleteKnowledgeEntryCount = 0
     private(set) var createTaskCount = 0
     private(set) var deleteTaskCount = 0
@@ -3258,6 +3260,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func renameKnowledgeEntry(id: String, newName: String, parentId: String?) async throws -> CompanionKnowledgeEntry {
+        renameKnowledgeEntryCount += 1
+        if renameKnowledgeEntryDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: renameKnowledgeEntryDelayNanoseconds)
+        }
         guard let normalizedId = normalizeKnowledgeId(id) else {
             throw CompanionClientError.requestFailed("Knowledge entry id is required.")
         }

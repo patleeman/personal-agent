@@ -811,6 +811,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testKnowledgeNoteRenameIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.renameKnowledgeEntryDelayNanoseconds = 150_000_000
+        let tempDraftRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let model = KnowledgeNoteViewModel(client: client, fileId: "notes/ios-companion.md", draftStore: KnowledgeDraftStore(baseURL: tempDraftRoot))
+
+        async let first = model.rename(to: "ios-renamed")
+        async let second = model.rename(to: "ios-renamed")
+        let results = await [first, second]
+
+        XCTAssertEqual(results.filter { $0 }.count, 1)
+        XCTAssertEqual(client.renameKnowledgeEntryCount, 1)
+        XCTAssertEqual(model.fileId, "notes/ios-renamed.md")
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testKnowledgeHelpersParseHeadingsLinksAndRelativePaths() {
         let text = """
         ---

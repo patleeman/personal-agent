@@ -1553,6 +1553,7 @@ final class KnowledgeNoteViewModel: ObservableObject {
     private var currentSelectionRange = NSRange(location: 0, length: 0)
     private var isApplyingRemoteState = false
     private var pendingImageMarkdownCreateKeys: Set<String> = []
+    private var pendingRenameKeys: Set<String> = []
 
     init(client: CompanionClientProtocol, fileId: String, draftStore: KnowledgeDraftStore = .shared) {
         self.client = client
@@ -1661,6 +1662,11 @@ final class KnowledgeNoteViewModel: ObservableObject {
             return false
         }
         let finalName = trimmed.lowercased().hasSuffix(".md") ? trimmed : "\(trimmed).md"
+        let renameKey = [fileId, finalName].joined(separator: "\u{1f}")
+        guard pendingRenameKeys.insert(renameKey).inserted else {
+            return false
+        }
+        defer { pendingRenameKeys.remove(renameKey) }
         do {
             let oldFileId = fileId
             let renamed = try await client.renameKnowledgeEntry(id: fileId, newName: finalName, parentId: nil)
