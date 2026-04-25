@@ -1370,6 +1370,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var supportsRunningConversationSimulation: Bool { true }
     var listConversationsDelayNanoseconds: UInt64 = 0
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
+    var updateConversationTabsDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayNanoseconds: UInt64 = 0
     var listKnowledgeEntriesDelayQueueNanoseconds: [UInt64] = []
     var listAttachmentsDelayNanoseconds: UInt64 = 0
@@ -1408,6 +1409,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
     private(set) var createConversationCount = 0
     private(set) var duplicateConversationCount = 0
+    private(set) var updateConversationTabsCount = 0
     private(set) var writeKnowledgeFileCount = 0
     private(set) var deleteKnowledgeEntryCount = 0
     private(set) var createTaskCount = 0
@@ -2183,6 +2185,10 @@ final class MockCompanionClient: CompanionClientProtocol {
     }
 
     func updateConversationTabs(ordering: ConversationOrdering) async throws {
+        updateConversationTabsCount += 1
+        if updateConversationTabsDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: updateConversationTabsDelayNanoseconds)
+        }
         listState = ConversationListState(sessions: listState.sessions, ordering: ordering, executionTargets: listState.executionTargets)
         emitApp(.conversationListState(listState))
     }

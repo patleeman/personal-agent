@@ -1338,6 +1338,21 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(session.errorMessage)
     }
 
+    func testPinnedConversationIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.updateConversationTabsDelayNanoseconds = 150_000_000
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+
+        async let first: Void = session.togglePinned("conv-1")
+        async let second: Void = session.togglePinned("conv-1")
+        _ = await (first, second)
+        let list = try await client.listConversations()
+
+        XCTAssertEqual(client.updateConversationTabsCount, 1)
+        XCTAssertEqual(list.ordering.pinnedSessionIds.filter { $0 == "conv-1" }.count, 1)
+        XCTAssertNil(session.errorMessage)
+    }
+
     func testMockDuplicateConversationCopiesTranscript() async throws {
         let client = MockCompanionClient()
         let source = try await client.conversationBootstrap(conversationId: "conv-1")

@@ -486,6 +486,7 @@ final class HostSessionModel: ObservableObject {
     private var pendingConversationBootstraps: [String: ConversationBootstrapEnvelope] = [:]
     private var pendingConversationCreateKeys: Set<String> = []
     private var pendingConversationDuplicateIds: Set<String> = []
+    private var pendingConversationOrderingMutationKeys: Set<String> = []
     private var pendingTaskRunIds: Set<String> = []
     private var pendingTaskSaveKeys: Set<String> = []
     private var pendingTaskDeleteIds: Set<String> = []
@@ -652,6 +653,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func togglePinned(_ conversationId: String) async {
+        let mutationKey = "pin:\(conversationId)"
+        guard pendingConversationOrderingMutationKeys.insert(mutationKey).inserted else {
+            return
+        }
+        defer { pendingConversationOrderingMutationKeys.remove(mutationKey) }
         var next = currentOrdering
         let isPinned = next.pinnedSessionIds.contains(conversationId)
         if isPinned {
@@ -667,6 +673,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func toggleArchived(_ conversationId: String) async {
+        let mutationKey = "archive:\(conversationId)"
+        guard pendingConversationOrderingMutationKeys.insert(mutationKey).inserted else {
+            return
+        }
+        defer { pendingConversationOrderingMutationKeys.remove(mutationKey) }
         var next = currentOrdering
         let isArchived = next.archivedSessionIds.contains(conversationId)
         if isArchived {
@@ -682,6 +693,11 @@ final class HostSessionModel: ObservableObject {
     }
 
     func restoreConversation(_ conversationId: String) async {
+        let mutationKey = "restore:\(conversationId)"
+        guard pendingConversationOrderingMutationKeys.insert(mutationKey).inserted else {
+            return
+        }
+        defer { pendingConversationOrderingMutationKeys.remove(mutationKey) }
         var next = currentOrdering
         next.archivedSessionIds.removeAll { $0 == conversationId }
         if !next.sessionIds.contains(conversationId) {
