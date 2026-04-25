@@ -164,7 +164,7 @@ struct CompanionSetupLink: Equatable {
     init?(url: URL) {
         guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
               url.scheme?.lowercased() == Self.scheme,
-              url.host?.lowercased() == "pair" || components.path == "/pair" else {
+              url.host?.lowercased() == "pair" || (url.host == nil && components.path == "/pair") else {
             return nil
         }
 

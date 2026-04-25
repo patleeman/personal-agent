@@ -56,6 +56,13 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(setupLink?.hostInstanceId, "host_123")
     }
 
+    func testCompanionSetupLinkRejectsNonCompanionPairURLs() {
+        let raw = "pa-companion://example.com/pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL"
+
+        XCTAssertNil(CompanionSetupLink(rawString: raw))
+        XCTAssertNil(CompanionSetupLink(rawString: "https://example.com/pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL"))
+    }
+
     func testCompanionIncomingShareLinkParsesShareURL() {
         XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion://share")!))
         XCTAssertNotNil(CompanionIncomingShareLink(url: URL(string: "pa-companion:/share")!))
