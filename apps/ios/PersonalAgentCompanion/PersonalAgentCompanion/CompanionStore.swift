@@ -1883,6 +1883,7 @@ final class ConversationViewModel: ObservableObject {
     private var transcriptImageCache: [String: Data] = [:]
     private var liveConversationId: String?
     private var liveEventRevision = 0
+    private var bootstrapLoadRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
 
     init(
@@ -1942,19 +1943,29 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func loadBootstrap() {
+        bootstrapLoadRequestId += 1
+        let requestId = bootstrapLoadRequestId
+        isLoading = true
         Task {
-            isLoading = true
-            defer { isLoading = false }
             let eventRevisionAtRequest = liveEventRevision
+            defer {
+                if bootstrapLoadRequestId == requestId {
+                    isLoading = false
+                }
+            }
             do {
                 let envelope = try await client.conversationBootstrap(
                     conversationId: conversationId,
                     options: ConversationBootstrapRequestOptions(tailBlocks: Self.bootstrapTailBlocks)
                 )
-                errorMessage = nil
-                applyBootstrap(envelope, eventRevisionAtRequest: eventRevisionAtRequest)
+                if bootstrapLoadRequestId == requestId {
+                    errorMessage = nil
+                    applyBootstrap(envelope, eventRevisionAtRequest: eventRevisionAtRequest)
+                }
             } catch {
-                errorMessage = error.localizedDescription
+                if bootstrapLoadRequestId == requestId {
+                    errorMessage = error.localizedDescription
+                }
             }
         }
     }

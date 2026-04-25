@@ -295,6 +295,30 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.title, "Updated remote title")
     }
 
+    func testOlderConversationBootstrapDoesNotClearLoadingForNewerBootstrap() async throws {
+        let client = MockCompanionClient()
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+        client.conversationBootstrapDelayQueueNanoseconds = [50_000_000, 150_000_000]
+
+        model.loadBootstrap()
+        try await Task.sleep(nanoseconds: 10_000_000)
+        model.loadBootstrap()
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertTrue(model.isLoading)
+        try await waitForCondition(timeout: .seconds(2)) {
+            !model.isLoading
+        }
+    }
+
     func testCompanionTranscriptImageAssetPathRewritesSessionAssetUrls() {
         XCTAssertEqual(
             companionTranscriptImageAssetPath("/api/sessions/conv-1/blocks/block-1/image"),

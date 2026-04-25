@@ -1372,6 +1372,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var listConversationsDelayQueueNanoseconds: [UInt64] = []
     private(set) var lastConversationBootstrapOptions: ConversationBootstrapRequestOptions?
     var conversationBootstrapDelayNanoseconds: UInt64 = 0
+    var conversationBootstrapDelayQueueNanoseconds: [UInt64] = []
     var promptSubmissionDelayNanoseconds: UInt64 = 0
     private(set) var promptSubmissionCount = 0
 
@@ -2185,8 +2186,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let value = conversations[conversationId] else {
             throw CompanionClientError.requestFailed("Conversation not found.")
         }
-        if conversationBootstrapDelayNanoseconds > 0 {
-            try await Task.sleep(nanoseconds: conversationBootstrapDelayNanoseconds)
+        let delay = conversationBootstrapDelayQueueNanoseconds.isEmpty ? conversationBootstrapDelayNanoseconds : conversationBootstrapDelayQueueNanoseconds.removeFirst()
+        if delay > 0 {
+            try await Task.sleep(nanoseconds: delay)
         }
         return value
     }
