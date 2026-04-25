@@ -1171,6 +1171,31 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertNil(model.errorMessage)
     }
 
+    func testTakeOverClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.takeOverConversationFailureQueueMessages = ["Take over temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.takeOver()
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        model.takeOver()
+        try await waitForCondition(timeout: .seconds(2)) {
+            client.takeOverConversationCount == 2
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testConversationDuplicateClearsStaleErrorAfterSuccessfulRetry() async throws {
         let client = MockCompanionClient()
         client.duplicateConversationFailureQueueMessages = ["Conversation duplicate temporarily unavailable."]

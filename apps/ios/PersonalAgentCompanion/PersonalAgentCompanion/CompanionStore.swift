@@ -2609,6 +2609,7 @@ final class ConversationViewModel: ObservableObject {
             defer { pendingTakeOverConversation = false }
             do {
                 try await client.takeOverConversation(conversationId: conversationId, surfaceId: installationSurfaceId)
+                errorMessage = nil
             } catch {
                 errorMessage = error.localizedDescription
             }
