@@ -1405,6 +1405,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     private(set) var createConversationCount = 0
+    private(set) var writeKnowledgeFileCount = 0
     private(set) var createTaskCount = 0
     private(set) var deleteTaskCount = 0
     private(set) var runTaskCount = 0
@@ -3190,6 +3191,7 @@ final class MockCompanionClient: CompanionClientProtocol {
         guard let normalizedFileId = normalizeKnowledgeId(fileId) else {
             throw CompanionClientError.requestFailed("Knowledge file id is required.")
         }
+        writeKnowledgeFileCount += 1
         if writeKnowledgeFileDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: writeKnowledgeFileDelayNanoseconds)
         }

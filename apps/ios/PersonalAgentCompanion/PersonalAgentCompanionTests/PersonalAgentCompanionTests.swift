@@ -722,6 +722,25 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(saved.content, "# Mobile KB\n")
     }
 
+    func testKnowledgeCreateNoteIgnoresDuplicateSaveWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.writeKnowledgeFileDelayNanoseconds = 150_000_000
+        let model = KnowledgeDirectoryViewModel(client: client, directoryId: "notes")
+        await model.reload()
+        let initialEntries = model.entries
+
+        async let first = model.createNote(named: "One Tap")
+        async let second = model.createNote(named: "One Tap")
+        let created = await [first, second].compactMap { $0 }
+        let listing = try await client.listKnowledgeEntries(directoryId: "notes")
+
+        XCTAssertEqual(created.count, 1)
+        XCTAssertEqual(client.writeKnowledgeFileCount, 1)
+        XCTAssertEqual(listing.entries.filter { $0.id == "notes/One Tap.md" }.count, 1)
+        XCTAssertEqual(listing.entries.count, initialEntries.count + 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testMockKnowledgeCanRenameAndDeleteEntries() async throws {
         let client = MockCompanionClient()
 

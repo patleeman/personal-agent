@@ -1130,6 +1130,7 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
     private let client: CompanionClientProtocol
     private var loadTask: Task<Void, Never>?
     private var loadRequestId = 0
+    private var pendingCreateIds: Set<String> = []
 
     init(client: CompanionClientProtocol, directoryId: String?) {
         self.client = client
@@ -1212,6 +1213,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
         } else {
             fileName
         }
+        guard pendingCreateIds.insert(fileId).inserted else {
+            return nil
+        }
+        defer { pendingCreateIds.remove(fileId) }
         do {
             let created = try await client.writeKnowledgeFile(fileId: fileId, content: "")
             errorMessage = nil
@@ -1238,6 +1243,10 @@ final class KnowledgeDirectoryViewModel: ObservableObject {
         } else {
             trimmed
         }
+        guard pendingCreateIds.insert(folderId).inserted else {
+            return nil
+        }
+        defer { pendingCreateIds.remove(folderId) }
         do {
             let created = try await client.createKnowledgeFolder(folderId: folderId)
             errorMessage = nil
