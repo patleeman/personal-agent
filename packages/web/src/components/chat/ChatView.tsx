@@ -1310,13 +1310,13 @@ function AskUserQuestionToolBlock({
                 )}
                 <div className="mt-2 space-y-1">
                   {presentation.questions.map((question, index) => (
-                    <p key={question.id} className="flex items-start gap-2 text-[12px] leading-relaxed text-secondary">
-                      <span className="mt-px w-4 shrink-0 text-[10px] font-mono text-dim">{index + 1}.</span>
+                    <p key={question.id} className="flex items-start gap-2 text-[13px] leading-relaxed text-secondary">
+                      <span className="mt-px w-4 shrink-0 text-[11px] font-mono text-dim">{index + 1}.</span>
                       <span className="min-w-0 break-words">{question.label}</span>
                     </p>
                   ))}
                 </div>
-                <p className="mt-2 text-[11px] text-dim">
+                <p className="mt-2 text-[12px] text-dim">
                   Answer using the composer below. Type 1-9 to select, or send a normal message to skip.
                 </p>
               </>
@@ -1341,7 +1341,7 @@ function AskUserQuestionToolBlock({
                         onClick={() => activateQuestion(index)}
                         onKeyDown={(event) => handleQuestionTabKeyDown(index, event)}
                         className={cx(
-                          'ui-action-button min-w-0 px-1 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                          'ui-action-button min-w-0 px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                           active
                             ? 'text-primary hover:text-primary'
                             : answered
@@ -1349,7 +1349,7 @@ function AskUserQuestionToolBlock({
                               : 'text-dim',
                         )}
                       >
-                        <span aria-hidden="true" className={cx('shrink-0 text-[10px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                        <span aria-hidden="true" className={cx('shrink-0 text-[11px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
                           {answered ? '✓' : active ? '•' : '○'}
                         </span>
                         <span className="truncate">{question.label}</span>
@@ -1364,7 +1364,7 @@ function AskUserQuestionToolBlock({
                       onClick={() => { void submitIfReady(); }}
                       onKeyDown={handleSubmitKeyDown}
                       className={cx(
-                        'ui-action-button px-1 py-0.5 text-[10px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                        'ui-action-button px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                         canSubmit && !submitting ? 'text-accent' : 'text-dim',
                       )}
                     >
@@ -1380,9 +1380,9 @@ function AskUserQuestionToolBlock({
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
                       </p>
                     )}
-                    <p className="mt-0.5 text-[13px] font-medium text-primary break-words">{activeQuestion.label}</p>
+                    <p className="mt-0.5 text-[14px] font-medium text-primary break-words">{activeQuestion.label}</p>
                     {activeQuestion.details && (
-                      <p className="mt-0.5 text-[12px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+                      <p className="mt-0.5 text-[13px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
                     )}
 
                     {activeQuestion.options.length > 0 ? (
@@ -1414,13 +1414,13 @@ function AskUserQuestionToolBlock({
                                 submitting && 'cursor-default opacity-60',
                               )}
                             >
-                              <span className={cx('mt-px w-3 shrink-0 text-[11px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              <span className={cx('mt-px w-3 shrink-0 text-[12px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
                                 {indicator}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="ui-row-title block break-words">{option.label}</span>
+                                <span className="ui-row-title block break-words text-[14px]">{option.label}</span>
                                 {option.details && (
-                                  <span className="ui-row-summary block break-words">{option.details}</span>
+                                  <span className="ui-row-summary block break-words text-[13px]">{option.details}</span>
                                 )}
                               </span>
                             </button>
@@ -1428,14 +1428,14 @@ function AskUserQuestionToolBlock({
                         })}
                       </div>
                     ) : (
-                      <p className="mt-1.5 text-[12px] leading-relaxed text-secondary">
+                      <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
                         Send a normal message in the composer to answer this question.
                       </p>
                     )}
                   </div>
                 )}
 
-                <p className="mt-2.5 text-[10px] text-dim">
+                <p className="mt-2.5 text-[11px] text-dim">
                   1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip
                 </p>
               </>
