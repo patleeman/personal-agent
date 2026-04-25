@@ -1981,6 +1981,7 @@ final class ConversationViewModel: ObservableObject {
     private var executionTargetChangeRequestId = 0
     private var renameConversationRequestId = 0
     private var initialBootstrap: ConversationBootstrapEnvelope?
+    private var firedDeferredResumeIds: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2285,6 +2286,7 @@ final class ConversationViewModel: ObservableObject {
         Task {
             do {
                 let result = try await client.fireDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
+                firedDeferredResumeIds.insert(resumeId)
                 updateDeferredResumes(result.resumes)
                 loadBootstrap()
                 refreshActivityRuns()
@@ -2309,7 +2311,7 @@ final class ConversationViewModel: ObservableObject {
                     }
                     if source?.type == "deferred-resume",
                        let sourceId = source?.id,
-                       sessionMeta?.deferredResumes?.contains(where: { $0.id == sourceId }) == true {
+                       (sessionMeta?.deferredResumes?.contains(where: { $0.id == sourceId }) == true || firedDeferredResumeIds.contains(sourceId)) {
                         return true
                     }
                     return false
