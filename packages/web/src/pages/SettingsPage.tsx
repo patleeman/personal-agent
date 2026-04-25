@@ -62,6 +62,7 @@ const TRANSCRIPTION_MODEL_OPTIONS: Record<TranscriptionProviderId, string[]> = {
 
 const NEW_MODEL_PROVIDER_ID = '__new-model-provider__';
 const NEW_MODEL_ID = '__new-model__';
+const ADD_CUSTOM_PROVIDER_ID = '__add-custom-provider__';
 const JSON_TEXTAREA_CLASS = `${INPUT_CLASS} min-h-[88px] font-mono text-[11px] leading-5`;
 const COMPACT_META_INPUT_CLASS = `${INPUT_CLASS} px-2.5 py-1.5 text-[12px]`;
 
@@ -1431,6 +1432,7 @@ export function SettingsPage() {
   const [transcriptionSaveError, setTranscriptionSaveError] = useState<string | null>(null);
   const [selectedModelProviderId, setSelectedModelProviderId] = useState('');
   const [modelProviderModalOpen, setModelProviderModalOpen] = useState(false);
+  const [modelProviderModalMode, setModelProviderModalMode] = useState<'provider' | 'custom'>('provider');
   const [modelProviderPickerId, setModelProviderPickerId] = useState('');
   const [modelProviderDraft, setModelProviderDraft] = useState<ProviderEditorDraft>(() => createProviderEditorDraft(null));
   const [modelProviderAction, setModelProviderAction] = useState<'save' | 'delete' | null>(null);
@@ -1621,8 +1623,36 @@ export function SettingsPage() {
   );
   const unconfiguredModelProviderIds = useMemo(() => {
     const configured = new Set((modelProviderState?.providers ?? []).map((provider) => provider.id));
+    for (const provider of providerAuthState?.providers ?? []) {
+      if (provider.authType !== 'none' || provider.hasStoredCredential) {
+        configured.add(provider.id);
+      }
+    }
     return availableModelProviderIds.filter((providerId) => !configured.has(providerId));
-  }, [availableModelProviderIds, modelProviderState?.providers]);
+  }, [availableModelProviderIds, modelProviderState?.providers, providerAuthState?.providers]);
+  const configuredProviderSummaries = useMemo(() => {
+    const summaries = new Map<string, { id: string; modelProvider: ModelProviderConfig | null; auth: ProviderAuthSummary | null }>();
+
+    for (const provider of modelProviderState?.providers ?? []) {
+      summaries.set(provider.id, { id: provider.id, modelProvider: provider, auth: null });
+    }
+
+    for (const auth of providerAuthState?.providers ?? []) {
+      const isConfigured = auth.authType !== 'none' || auth.hasStoredCredential;
+      if (!isConfigured) {
+        continue;
+      }
+
+      const current = summaries.get(auth.id);
+      summaries.set(auth.id, {
+        id: auth.id,
+        modelProvider: current?.modelProvider ?? null,
+        auth,
+      });
+    }
+
+    return [...summaries.values()].sort((left, right) => left.id.localeCompare(right.id));
+  }, [modelProviderState?.providers, providerAuthState?.providers]);
 
   const selectedModelProvider = useMemo(() => {
     if (!modelProviderState || !selectedModelProviderId || selectedModelProviderId === NEW_MODEL_PROVIDER_ID) {
@@ -1644,6 +1674,11 @@ export function SettingsPage() {
     return '';
   }, [modelProviderDraft.id, selectedModelProvider, selectedModelProviderId]);
 
+  const builtInProviderModels = useMemo(
+    () => (modelState?.models ?? []).filter((model) => model.provider === editableModelProviderId),
+    [editableModelProviderId, modelState?.models],
+  );
+
   const editingProviderModel = useMemo(() => {
     if (!selectedModelProvider || !editingModelId || editingModelId === NEW_MODEL_ID) {
       return null;
@@ -1659,6 +1694,14 @@ export function SettingsPage() {
 
     return providerAuthState.providers.find((provider) => provider.id === selectedProviderId) ?? null;
   }, [providerAuthState, selectedProviderId]);
+
+  const modalProviderAuth = useMemo(() => {
+    if (!providerAuthState || !editableModelProviderId) {
+      return null;
+    }
+
+    return providerAuthState.providers.find((provider) => provider.id === editableModelProviderId) ?? null;
+  }, [editableModelProviderId, providerAuthState]);
 
   const vaultRootDirty = vaultRootState
     ? vaultRootDraft.trim() !== vaultRootState.currentRoot
@@ -2263,12 +2306,12 @@ export function SettingsPage() {
     }
   }
 
-  function startNewModelProvider(initialId = '') {
+  function startNewModelProvider(initialId = '', mode: 'provider' | 'custom' = initialId ? 'provider' : 'custom') {
     setSelectedModelProviderId(NEW_MODEL_PROVIDER_ID);
-    setSelectedProviderId(initialId);
+    setSelectedProviderId(mode === 'provider' ? initialId : '');
     setModelProviderDraft({
       ...createProviderEditorDraft(null),
-      id: initialId,
+      id: mode === 'provider' ? initialId : '',
     });
     setEditingModelId(null);
     setModelDraft(createModelEditorDraft(null));
@@ -2278,6 +2321,7 @@ export function SettingsPage() {
     setModelDraftMessage(null);
     setProviderCredentialError(null);
     setProviderCredentialNotice(null);
+    setModelProviderModalMode(mode);
     setModelProviderModalOpen(true);
   }
 
@@ -2299,6 +2343,7 @@ export function SettingsPage() {
     setModelDraftMessage(null);
     setProviderCredentialError(null);
     setProviderCredentialNotice(null);
+    setModelProviderModalMode('custom');
     setModelProviderModalOpen(true);
   }
 
@@ -3540,24 +3585,10 @@ export function SettingsPage() {
             <div className="space-y-0">
               <SettingsPanel
                 title="Provider & model definitions"
-                description={(
-                  <>
-                    Edit <span className="font-mono text-[11px]">{modelProviderState?.filePath ?? 'models.json'}</span> for local overrides.
-                  </>
-                )}
               >
                 <div className="space-y-5">
                 <div className="space-y-3 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="text-[13px] font-medium text-primary">Providers</h3>
-                    <button
-                      type="button"
-                      onClick={() => { selectModelProvider(NEW_MODEL_PROVIDER_ID); }}
-                      className={ACTION_BUTTON_CLASS}
-                    >
-                      Add provider/model
-                    </button>
-                  </div>
+                  <h3 className="text-[13px] font-medium text-primary">Providers</h3>
 
                   {modelProviderLoading && !modelProviderState ? (
                     <p className="ui-card-meta">Loading provider definitions…</p>
@@ -3567,16 +3598,22 @@ export function SettingsPage() {
                     <>
                       <div className="space-y-4">
                         <div className="space-y-2">
-                          <p className="ui-card-meta">Configured in models.json</p>
-                          {modelProviderState.providers.length > 0 ? (
+                          <p className="ui-card-meta">Configured providers</p>
+                          {configuredProviderSummaries.length > 0 ? (
                             <div className="space-y-px">
-                              {modelProviderState.providers.map((provider) => {
-                                const selected = provider.id === selectedModelProviderId;
+                              {configuredProviderSummaries.map((provider) => {
+                                const selected = provider.id === selectedModelProviderId || provider.id === selectedProviderId;
                                 return (
                                   <button
                                     key={provider.id}
                                     type="button"
-                                    onClick={() => { selectModelProvider(provider.id); }}
+                                    onClick={() => {
+                                      if (provider.modelProvider) {
+                                        selectModelProvider(provider.id);
+                                      } else {
+                                        startNewModelProvider(provider.id, 'provider');
+                                      }
+                                    }}
                                     className={cx(
                                       'group ui-list-row w-full justify-between px-3 py-3 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-base',
                                       selected ? 'ui-list-row-selected' : 'ui-list-row-hover',
@@ -3585,10 +3622,12 @@ export function SettingsPage() {
                                   >
                                     <span className="min-w-0">
                                       <span className="block truncate text-[13px] font-medium text-primary">{provider.id}</span>
-                                      <span className="ui-card-meta block truncate">{formatModelProviderSummary(provider)}</span>
+                                      <span className="ui-card-meta block truncate">
+                                        {provider.modelProvider ? formatModelProviderSummary(provider.modelProvider) : formatProviderAuthStatus(provider.auth)}
+                                      </span>
                                     </span>
-                                    {provider.baseUrl && (
-                                      <span className="ui-card-meta hidden truncate text-right xl:block">{provider.baseUrl}</span>
+                                    {provider.modelProvider?.baseUrl && (
+                                      <span className="ui-card-meta hidden truncate text-right xl:block">{provider.modelProvider.baseUrl}</span>
                                     )}
                                   </button>
                                 );
@@ -3599,34 +3638,40 @@ export function SettingsPage() {
                           )}
                         </div>
 
-                        {unconfiguredModelProviderIds.length > 0 && (
                           <div className="space-y-3 border-t border-border-subtle pt-4">
                             <div className="space-y-1">
-                              <h4 className="text-[13px] font-medium text-primary">Preconfigured provider</h4>
-                              <p className="ui-card-meta">Select a built-in or discovered provider, then add any extra models you want.</p>
+                              <h4 className="text-[13px] font-medium text-primary">Add provider</h4>
+                              <p className="ui-card-meta">Choose a built-in provider to add models, or create a custom provider.</p>
                             </div>
-                            <div className="flex flex-col gap-2 sm:flex-row">
+                            <div className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-center">
                               <select
+                                id="settings-model-provider-picker"
                                 value={modelProviderPickerId}
                                 onChange={(event) => { setModelProviderPickerId(event.target.value); }}
-                                className={INPUT_CLASS}
+                                className={`${INPUT_CLASS} h-9 py-1.5 text-[12px]`}
                               >
                                 <option value="">Choose provider…</option>
                                 {unconfiguredModelProviderIds.map((providerId) => (
                                   <option key={providerId} value={providerId}>{providerId}</option>
                                 ))}
+                                <option value={ADD_CUSTOM_PROVIDER_ID}>Add custom provider…</option>
                               </select>
                               <button
                                 type="button"
-                                onClick={() => { startNewModelProvider(modelProviderPickerId); }}
+                                onClick={() => {
+                                  if (modelProviderPickerId === ADD_CUSTOM_PROVIDER_ID) {
+                                    startNewModelProvider('', 'custom');
+                                  } else {
+                                    startNewModelProvider(modelProviderPickerId, 'provider');
+                                  }
+                                }}
                                 disabled={!modelProviderPickerId}
-                                className={ACTION_BUTTON_CLASS}
+                                className={`${ACTION_BUTTON_CLASS} h-9 shrink-0`}
                               >
-                                Configure provider
+                                Continue
                               </button>
                             </div>
                           </div>
-                        )}
                       </div>
                     </>
                   ) : null}
@@ -3643,9 +3688,15 @@ export function SettingsPage() {
                       <div className="flex items-start justify-between gap-4 border-b border-border-subtle px-6 py-5">
                         <div className="space-y-1">
                           <h3 className="text-[17px] font-medium text-primary">
-                            {editableModelProviderId ? `Provider · ${editableModelProviderId}` : 'Add provider'}
+                            {modelProviderModalMode === 'custom'
+                              ? (selectedModelProvider ? `Edit provider · ${selectedModelProvider.id}` : 'Add custom provider')
+                              : `Provider · ${editableModelProviderId}`}
                           </h3>
-                          <p className="ui-card-meta">Configure provider details, models, and credentials in one place.</p>
+                          <p className="ui-card-meta">
+                            {modelProviderModalMode === 'custom'
+                              ? 'Define a custom provider, then add its models and credentials.'
+                              : 'Inspect built-in models, add extra models, and manage credentials.'}
+                          </p>
                         </div>
                         <button
                           type="button"
@@ -3658,6 +3709,7 @@ export function SettingsPage() {
                       </div>
                       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
                 <div className="space-y-8 min-w-0">
+                  {(modelProviderModalMode === 'custom' || selectedModelProvider) && (
                   <div className="space-y-4 min-w-0">
                     <div className="space-y-1">
                       <h3 className="text-[15px] font-medium text-primary">
@@ -3677,27 +3729,6 @@ export function SettingsPage() {
                         void handleSaveModelProvider();
                       }}
                     >
-                      {selectedModelProviderId === NEW_MODEL_PROVIDER_ID && availableModelProviderIds.length > 0 && (
-                        <div className="space-y-2 min-w-0">
-                          <label className="ui-card-meta" htmlFor="settings-model-provider-existing">Existing provider</label>
-                          <select
-                            id="settings-model-provider-existing"
-                            value={availableModelProviderIds.includes(modelProviderDraft.id.trim()) ? modelProviderDraft.id.trim() : ''}
-                            onChange={(event) => { selectKnownModelProvider(event.target.value); }}
-                            className={INPUT_CLASS}
-                            disabled={modelProviderAction !== null || modelDraftAction !== null}
-                          >
-                            <option value="">Type a custom id or choose a built-in provider</option>
-                            {availableModelProviderIds.map((providerId) => (
-                              <option key={providerId} value={providerId}>{providerId}</option>
-                            ))}
-                          </select>
-                          <p className="ui-card-meta max-w-3xl">
-                            Pick a built-in or discovered provider to add models right away. You can still type any provider id below.
-                          </p>
-                        </div>
-                      )}
-
                       <div className="grid gap-4 md:grid-cols-2">
                         <div className="space-y-2 min-w-0">
                           <label className="ui-card-meta" htmlFor="settings-model-provider-id">Provider id</label>
@@ -3841,17 +3872,16 @@ export function SettingsPage() {
                       {modelProviderEditorError && <p className="text-[12px] text-danger">{modelProviderEditorError}</p>}
                     </form>
                   </div>
+                  )}
 
                   <div className="space-y-4 border-t border-border-subtle pt-6 min-w-0">
                     <div className="flex items-center justify-between gap-3">
                       <div className="space-y-1">
                         <h3 className="text-[15px] font-medium text-primary">Models</h3>
                         <p className="ui-card-meta max-w-3xl">
-                          {selectedModelProvider
-                            ? `Models under ${selectedModelProvider.id}. Matching a built-in id replaces that provider model.`
-                            : editableModelProviderId
-                              ? `Add models under ${editableModelProviderId}. Saving a model creates that provider entry in models.json immediately. Save the provider form too if you also want provider-level overrides.`
-                              : 'Pick or type a provider id before adding models.'}
+                          {editableModelProviderId
+                            ? `Models available under ${editableModelProviderId}. Add any extra model ids you want to use.`
+                            : 'Save the custom provider before adding models.'}
                         </p>
                       </div>
                       <button
@@ -3866,6 +3896,24 @@ export function SettingsPage() {
 
                     {editableModelProviderId ? (
                       <>
+                        {builtInProviderModels.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-[13px] font-medium text-primary">Built-in models</h4>
+                            <div className="space-y-px">
+                              {builtInProviderModels.map((model) => (
+                                <div key={`${model.provider}/${model.id}`} className="ui-list-row justify-between px-3 py-3">
+                                  <div className="min-w-0">
+                                    <p className="truncate text-[13px] font-medium text-primary">{model.id}</p>
+                                    <p className="ui-card-meta truncate">{model.name || model.id} · {formatContextWindowLabel(model.context)} ctx</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <h4 className="text-[13px] font-medium text-primary">Additional models</h4>
                         {selectedModelProvider && selectedModelProvider.models.length > 0 ? (
                           <div className="space-y-px">
                             {selectedModelProvider.models.map((model) => (
@@ -3900,6 +3948,7 @@ export function SettingsPage() {
                         ) : (
                           <p className="ui-card-meta">No models configured for this provider yet.</p>
                         )}
+                        </div>
 
                         {modelDraftMessage && <p className="text-[12px] text-success">{modelDraftMessage}</p>}
                         {modelDraftError && <p className="text-[12px] text-danger">{modelDraftError}</p>}
@@ -4164,12 +4213,12 @@ export function SettingsPage() {
                       </p>
                     </div>
 
-                    {selectedProvider ? (
+                    {modalProviderAuth ? (
                       <div className="space-y-3">
-                        <p className="ui-card-meta">{formatProviderAuthStatus(selectedProvider)}</p>
-                        <p className="ui-card-meta">{formatProviderModelCoverage(selectedProvider)}</p>
+                        <p className="ui-card-meta">{formatProviderAuthStatus(modalProviderAuth)}</p>
+                        <p className="ui-card-meta">{formatProviderModelCoverage(modalProviderAuth)}</p>
 
-                        {canProviderUseApiKey(selectedProvider) ? (
+                        {canProviderUseApiKey(modalProviderAuth) ? (
                           <div className="space-y-2">
                             <label className="ui-card-meta" htmlFor="settings-provider-api-key-modal">API key</label>
                             <input
@@ -4189,7 +4238,7 @@ export function SettingsPage() {
                         )}
 
                         <div className="flex flex-wrap gap-2">
-                          {canProviderUseApiKey(selectedProvider) && (
+                          {canProviderUseApiKey(modalProviderAuth) && (
                             <button
                               type="button"
                               onClick={() => { void handleSaveProviderApiKey(); }}
@@ -4202,19 +4251,19 @@ export function SettingsPage() {
                           <button
                             type="button"
                             onClick={() => { void handleRemoveProviderCredential(); }}
-                            disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running' || !selectedProvider.hasStoredCredential}
+                            disabled={providerCredentialAction !== null || oauthLoginState?.status === 'running' || !modalProviderAuth.hasStoredCredential}
                             className={ACTION_BUTTON_CLASS}
                           >
                             {providerCredentialAction === 'remove' ? 'Removing…' : 'Remove stored credential'}
                           </button>
-                          {selectedProvider.oauthSupported && (
+                          {modalProviderAuth.oauthSupported && (
                             <button
                               type="button"
                               onClick={() => { void handleStartProviderOAuthLogin(); }}
                               disabled={providerCredentialAction !== null || oauthAction !== null || selectedProviderLogin?.status === 'running'}
                               className={ACTION_BUTTON_CLASS}
                             >
-                              {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${selectedProvider.id})`}
+                              {oauthAction === 'start' ? 'Starting login…' : `Start OAuth login (${modalProviderAuth.id})`}
                             </button>
                           )}
                         </div>

@@ -81,12 +81,12 @@ function queryInput(container: HTMLElement, selector: string): HTMLInputElement 
   return input;
 }
 
-function querySelect(container: HTMLElement, selector: string): HTMLSelectElement {
-  const select = container.querySelector(selector);
-  if (!(select instanceof HTMLSelectElement)) {
-    throw new Error(`Expected select for selector ${selector}`);
+function queryProviderPicker(container: HTMLElement): HTMLSelectElement {
+  const picker = Array.from(container.querySelectorAll('select')).find((select) => select.textContent?.includes('Choose provider…'));
+  if (!(picker instanceof HTMLSelectElement)) {
+    throw new Error('Expected provider picker');
   }
-  return select;
+  return picker;
 }
 
 function click(button: HTMLButtonElement) {
@@ -408,11 +408,11 @@ describe('SettingsPage provider model editor', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    click(queryButton(container, 'Add provider/model'));
-    updateSelectValue(querySelect(container, '#settings-model-provider-existing'), 'anthropic');
+    updateSelectValue(queryProviderPicker(container), 'anthropic');
+    click(queryButton(container, 'Continue'));
 
-    expect(queryInput(container, '#settings-model-provider-id').value).toBe('anthropic');
-    expect(container.textContent).toContain('Saving a model creates that provider entry in models.json immediately.');
+    expect(container.textContent).toContain('Provider · anthropic');
+    expect(container.textContent).toContain('Models available under anthropic. Add any extra model ids you want to use.');
 
     click(queryButton(container, 'Add model'));
     const modelIdInput = queryInput(container, '#settings-provider-model-id');
@@ -438,17 +438,12 @@ describe('SettingsPage provider model editor', () => {
     const { container } = renderPage();
     await flushAsyncWork();
 
-    expect(container.textContent).toContain('Preconfigured provider');
+    expect(container.textContent).toContain('Add provider');
 
-    const picker = Array.from(container.querySelectorAll('select')).find((select) => select.textContent?.includes('Choose provider…'));
-    if (!(picker instanceof HTMLSelectElement)) {
-      throw new Error('Expected preconfigured provider picker');
-    }
+    updateSelectValue(queryProviderPicker(container), 'anthropic');
+    click(queryButton(container, 'Continue'));
 
-    updateSelectValue(picker, 'anthropic');
-    click(queryButton(container, 'Configure provider'));
-
-    expect(queryInput(container, '#settings-model-provider-id').value).toBe('anthropic');
-    expect(container.textContent).toContain('Saving a model creates that provider entry in models.json immediately.');
+    expect(container.querySelector('#settings-model-provider-id')).toBeNull();
+    expect(container.textContent).toContain('Provider · anthropic');
   });
 });
