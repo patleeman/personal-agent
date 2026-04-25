@@ -2635,6 +2635,7 @@ final class ConversationViewModel: ObservableObject {
                 try await client.renameConversation(conversationId: conversationId, name: trimmed, surfaceId: installationSurfaceId)
                 if !Task.isCancelled, renameConversationRequestId == requestId {
                     title = trimmed
+                    errorMessage = nil
                     renameConversationTask = nil
                 }
             } catch {

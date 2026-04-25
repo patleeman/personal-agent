@@ -1438,6 +1438,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var changeExecutionTargetDelayQueueNanoseconds: [UInt64] = []
     var renameConversationDelayNanoseconds: UInt64 = 0
     var renameConversationDelayQueueNanoseconds: [UInt64] = []
+    var renameConversationFailureQueueMessages: [String] = []
     var duplicateConversationDelayNanoseconds: UInt64 = 0
     var duplicateConversationFailureQueueMessages: [String] = []
     var changeConversationCwdDelayNanoseconds: UInt64 = 0
@@ -2862,6 +2863,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         let delay = renameConversationDelayQueueNanoseconds.isEmpty ? renameConversationDelayNanoseconds : renameConversationDelayQueueNanoseconds.removeFirst()
         if delay > 0 {
             try await Task.sleep(nanoseconds: delay)
+        }
+        if !renameConversationFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(renameConversationFailureQueueMessages.removeFirst())
         }
         guard var envelope = conversations[conversationId], let sessionMeta = envelope.sessionMeta else { return }
         var renamedMeta = SessionMeta(

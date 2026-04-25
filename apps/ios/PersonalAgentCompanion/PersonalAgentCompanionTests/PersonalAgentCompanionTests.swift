@@ -2559,6 +2559,31 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.title, "New fast title")
     }
 
+    func testRenamingConversationClearsStaleErrorAfterSuccessfulRetry() async throws {
+        let client = MockCompanionClient()
+        client.renameConversationFailureQueueMessages = ["Conversation rename temporarily unavailable."]
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.renameConversation("Retry title")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.errorMessage != nil
+        }
+
+        model.renameConversation("Retry title")
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.title == "Retry title"
+        }
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testRenamingConversationPreservesDeferredResumes() async throws {
         let client = MockCompanionClient()
         client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
