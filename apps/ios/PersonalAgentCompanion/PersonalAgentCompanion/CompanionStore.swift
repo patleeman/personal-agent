@@ -2728,11 +2728,13 @@ final class ConversationViewModel: ObservableObject {
         }
         defer { pendingAutoModeSaveKeys.remove(saveKey) }
         do {
-            return try await client.updateConversationAutoMode(
+            let state = try await client.updateConversationAutoMode(
                 conversationId: conversationId,
                 enabled: enabled,
                 surfaceId: installationSurfaceId
             )
+            errorMessage = nil
+            return state
         } catch {
             errorMessage = error.localizedDescription
             return nil

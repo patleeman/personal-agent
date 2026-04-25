@@ -1430,6 +1430,7 @@ final class MockCompanionClient: CompanionClientProtocol {
     var changeConversationCwdDelayNanoseconds: UInt64 = 0
     var changeConversationCwdFailureQueueMessages: [String] = []
     var updateConversationAutoModeDelayNanoseconds: UInt64 = 0
+    var updateConversationAutoModeFailureQueueMessages: [String] = []
     var updateConversationModelPreferencesDelayNanoseconds: UInt64 = 0
     var updateConversationModelPreferencesDelayQueueNanoseconds: [UInt64] = []
     var deleteKnowledgeEntryDelayNanoseconds: UInt64 = 0
@@ -2928,6 +2929,9 @@ final class MockCompanionClient: CompanionClientProtocol {
         updateConversationAutoModeCount += 1
         if updateConversationAutoModeDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: updateConversationAutoModeDelayNanoseconds)
+        }
+        if !updateConversationAutoModeFailureQueueMessages.isEmpty {
+            throw CompanionClientError.requestFailed(updateConversationAutoModeFailureQueueMessages.removeFirst())
         }
         guard conversations[conversationId] != nil else {
             throw CompanionClientError.requestFailed("Conversation not found.")
