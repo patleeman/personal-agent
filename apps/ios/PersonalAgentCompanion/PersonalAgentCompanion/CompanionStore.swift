@@ -1987,6 +1987,7 @@ final class ConversationViewModel: ObservableObject {
     private var pendingCheckpointCreateKeys: Set<String> = []
     private var pendingDeferredResumeFireIds: Set<String> = []
     private var pendingAttachmentCreateKeys: Set<String> = []
+    private var pendingDeferredResumeCancelIds: Set<String> = []
 
     init(
         client: CompanionClientProtocol,
@@ -2286,7 +2287,11 @@ final class ConversationViewModel: ObservableObject {
     }
 
     func cancelDeferredResume(_ resumeId: String) {
+        guard pendingDeferredResumeCancelIds.insert(resumeId).inserted else {
+            return
+        }
         Task {
+            defer { pendingDeferredResumeCancelIds.remove(resumeId) }
             do {
                 let result = try await client.cancelDeferredResume(conversationId: liveConversationId ?? conversationId, resumeId: resumeId)
                 updateDeferredResumes(result.resumes)

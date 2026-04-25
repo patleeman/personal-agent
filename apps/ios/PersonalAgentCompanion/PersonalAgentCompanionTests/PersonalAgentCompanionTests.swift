@@ -1632,6 +1632,38 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(model.sessionMeta?.deferredResumes, [])
     }
 
+    func testCancellingDeferredResumeIgnoresDuplicateTapWhilePending() async throws {
+        let client = MockCompanionClient()
+        client.cancelDeferredResumeDelayNanoseconds = 150_000_000
+        client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
+        let model = ConversationViewModel(
+            client: client,
+            conversationId: "conv-1",
+            installationSurfaceId: "ios-test",
+            initialSession: nil,
+            initialExecutionTargets: [],
+            initialWorkspacePaths: [],
+            initialModelState: nil
+        )
+
+        model.start()
+        defer { model.stop() }
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.contains(where: { $0.id == "resume-1" }) == true
+        }
+
+        model.cancelDeferredResume("resume-1")
+        model.cancelDeferredResume("resume-1")
+
+        try await waitForCondition(timeout: .seconds(2)) {
+            model.sessionMeta?.deferredResumes?.isEmpty == true
+        }
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(client.cancelDeferredResumeCount, 1)
+        XCTAssertNil(model.errorMessage)
+    }
+
     func testFiringDeferredResumeShowsStartedRun() async throws {
         let client = MockCompanionClient()
         client.addMockDeferredResume(conversationId: "conv-1", resumeId: "resume-1")
