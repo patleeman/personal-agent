@@ -83,7 +83,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 
 **First slices:**
 
-1. Extract provider/model draft parsing and validation from `SettingsPage.tsx`.
+1. [done] Extract provider/model draft parsing and validation from `SettingsPage.tsx`.
 2. Reuse validation between route and desktop capability where it is genuinely the same seam.
 
 ### 4. Live-session follow-up hardening
