@@ -490,17 +490,17 @@ function WorkbenchKnowledgeRail({ workspaceCwd }: { workspaceCwd: string | null 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 flex-col gap-1 px-1.5 py-1.5">
-        <button type="button" className={cx('ui-sidebar-nav-item w-full', railMode === 'knowledge' && 'ui-sidebar-nav-item-active')} title="Knowledge" onClick={() => setRailMode('knowledge')}>
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'knowledge' && 'ui-sidebar-nav-item-active')} title="Knowledge" onClick={() => setRailMode('knowledge')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d={KNOWLEDGE_ICON_PATH} />
           </svg>
-          <span className="flex-1">Knowledge</span>
+          <span className="flex-1 text-left">Knowledge</span>
         </button>
-        <button type="button" className={cx('ui-sidebar-nav-item w-full', railMode === 'files' && 'ui-sidebar-nav-item-active')} title="File explorer" onClick={() => setRailMode('files')}>
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'files' && 'ui-sidebar-nav-item-active')} title="File explorer" onClick={() => setRailMode('files')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d="M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75" />
           </svg>
-          <span className="flex-1">File Explorer</span>
+          <span className="flex-1 text-left">File Explorer</span>
         </button>
       </div>
       {railMode === 'knowledge' ? (
