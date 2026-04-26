@@ -66,9 +66,6 @@ import {
   restoreLiveSessionQueuedMessage,
 } from './liveSessionQueueOperations.js';
 import {
-  applyLatestCompactionSummaryTitle,
-  buildLiveStateBlocks,
-  mergeConversationHistoryBlocks,
   resolveCompactionSummaryTitle,
 } from './liveSessionTranscript.js';
 import {
@@ -153,6 +150,7 @@ import {
   inspectAvailableLiveSessionTools,
   type BeforeAgentStartProbeMessage,
 } from './liveSessionToolInspection.js';
+import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -439,64 +437,12 @@ function createParallelPromptJobId(): string {
   return `parallel-${parallelPromptJobCounter}`;
 }
 
-const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
-
-function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
-  blocks: DisplayBlock[];
-  blockOffset: number;
-  totalBlocks: number;
-  isStreaming: boolean;
-} {
-  ensureHiddenTurnState(entry);
-  const liveBlocks = buildLiveStateBlocks(entry.session, {
-    omitStreamMessage: Boolean(entry.activeHiddenTurnCustomType),
-  });
-  const sessionFile = entry.session.sessionFile?.trim();
-  if (!sessionFile || !existsSync(sessionFile)) {
-    return {
-      blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
-      blockOffset: 0,
-      totalBlocks: liveBlocks.length,
-      isStreaming: entry.session.isStreaming,
-    };
-  }
-
-  const persisted = readSessionBlocksByFile(sessionFile, { tailBlocks: tailBlocks ?? DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS });
-  if (!persisted || persisted.blocks.length === 0) {
-    return {
-      blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
-      blockOffset: 0,
-      totalBlocks: liveBlocks.length,
-      isStreaming: entry.session.isStreaming,
-    };
-  }
-
-  // session.state.messages is the *current context window*, not a chronological display transcript.
-  // After compaction it can reorder blocks as: summary → pre-compaction tail → post-compaction tail.
-  // For idle live sessions we should render the durable transcript from disk exactly as persisted.
-  if (!entry.session.isStreaming) {
-    return {
-      blocks: applyLatestCompactionSummaryTitle(persisted.blocks, entry.lastCompactionSummaryTitle),
-      blockOffset: persisted.blockOffset,
-      totalBlocks: persisted.totalBlocks,
-      isStreaming: entry.session.isStreaming,
-    };
-  }
-
-  const blocks = mergeConversationHistoryBlocks(persisted.blocks, liveBlocks);
-  return {
-    blocks: applyLatestCompactionSummaryTitle(blocks, entry.lastCompactionSummaryTitle),
-    blockOffset: persisted.blockOffset,
-    totalBlocks: persisted.blockOffset + blocks.length,
-    isStreaming: entry.session.isStreaming,
-  };
-}
-
 function broadcastSnapshot(entry: LiveEntry): void {
+  ensureHiddenTurnState(entry);
   for (const listener of entry.listeners) {
     listener.send({
       type: 'snapshot',
-      ...buildLiveSnapshot(entry, listener.tailBlocks),
+      ...buildLiveSessionSnapshot(entry, listener.tailBlocks),
     });
   }
 }
@@ -510,6 +456,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }
+  ensureHiddenTurnState(entry);
 
   let tokens: LiveSessionStateSnapshot['tokens'] = null;
   let cost: number | null = null;
@@ -523,7 +470,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
   }
 
   return {
-    ...buildLiveSnapshot(entry, tailBlocks),
+    ...buildLiveSessionSnapshot(entry, tailBlocks),
     hasSnapshot: true,
     isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
     isCompacting: entry.isCompacting === true,
@@ -1229,7 +1176,8 @@ export function subscribe(
     ? registerLiveSessionSurface(entry, options.surface)
     : false;
 
-  listener({ type: 'snapshot', ...buildLiveSnapshot(entry, options?.tailBlocks) });
+  ensureHiddenTurnState(entry);
+  listener({ type: 'snapshot', ...buildLiveSessionSnapshot(entry, options?.tailBlocks) });
   const title = resolveEntryTitle(entry);
   if (title) {
     listener({ type: 'title_update', title });
