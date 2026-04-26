@@ -163,6 +163,7 @@ import {
 } from './liveSessionBranching.js';
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
 import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
+import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -1283,27 +1284,14 @@ export async function executeSessionBash(
     broadcast: (event) => broadcast(entry, event),
   });
 
-  if (!entry.session.isStreaming) {
-    if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
-      const fallbackTitle = buildFallbackTitleFromContent([{ type: 'text', text: normalizedCommand }]);
-      if (fallbackTitle) {
-        entry.title = fallbackTitle;
-        broadcastTitle(entry);
-      }
-    }
-
-    try {
-      const stats = entry.session.getSessionStats();
-      broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
-    } catch {
-      // ignore stats errors for bash-only updates
-    }
-
-    clearContextUsageTimer(entry);
-    broadcastContextUsage(entry, true);
-    broadcastSnapshot(entry);
-    publishSessionMetaChanged(entry.sessionId);
-  }
+  finalizeLiveSessionBashExecution(entry, normalizedCommand, {
+    broadcastTitle,
+    broadcast,
+    clearContextUsageTimer,
+    broadcastContextUsage,
+    broadcastSnapshot,
+    publishSessionMetaChanged,
+  });
 
   return result;
 }
