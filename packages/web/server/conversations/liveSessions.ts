@@ -1030,7 +1030,7 @@ function readImportedParallelChildConversationIds(sessionFile: string): Set<stri
           customType?: string;
           details?: { childConversationId?: unknown } | null;
         };
-        if (entry.type !== 'custom_message' || entry.display !== true || entry.customType !== PARALLEL_RESULT_CUSTOM_TYPE) {
+        if (entry.type !== 'custom_message' || entry.customType !== PARALLEL_RESULT_CUSTOM_TYPE) {
           continue;
         }
 
@@ -3515,6 +3515,25 @@ export async function appendVisibleCustomMessage(
   publishSessionMetaChanged(sessionId);
 }
 
+async function appendParallelImportedMessage(
+  sessionId: string,
+  content: string,
+  details: { childConversationId: string; status: 'complete' | 'failed' },
+): Promise<void> {
+  await appendDetachedUserMessage(sessionId, content);
+
+  const entry = registry.get(sessionId);
+  if (!entry) throw new Error(`Session ${sessionId} is not live`);
+  await entry.session.sendCustomMessage({
+    customType: PARALLEL_RESULT_CUSTOM_TYPE,
+    content: `Imported parallel response from ${details.childConversationId}.`,
+    display: false,
+    details,
+  });
+  broadcastSnapshot(entry);
+  publishSessionMetaChanged(sessionId);
+}
+
 function shouldPreserveParallelChildLiveSession(entry: LiveEntry | undefined): boolean {
   if (!entry) {
     return false;
@@ -3582,9 +3601,8 @@ async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
       broadcastParallelState(entry, true);
 
       try {
-        await appendVisibleCustomMessage(
+        await appendParallelImportedMessage(
           entry.sessionId,
-          PARALLEL_RESULT_CUSTOM_TYPE,
           buildParallelImportedContent(currentJob),
           {
             childConversationId: currentJob.childConversationId,

@@ -466,6 +466,7 @@ describe('parallel prompt job management', () => {
     writeFileSync(jobsFile, `${JSON.stringify([runningJob, readyJob], null, 2)}\n`);
 
     const sendCustomMessage = vi.fn(async () => {});
+    const appendMessage = vi.fn();
     setLiveEntry('session-parallel-parent', {
       sessionId: 'session-parallel-parent',
       cwd: '/tmp/workspace',
@@ -478,6 +479,7 @@ describe('parallel prompt job management', () => {
       session: {
         sessionFile,
         isStreaming: false,
+        sessionManager: { appendMessage },
         state: {
           messages: [],
           streamingMessage: null,
@@ -496,15 +498,15 @@ describe('parallel prompt job management', () => {
 
     expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
       customType: 'parallel_result',
-      display: true,
-      content: expect.stringContaining('diagram (rev 2)'),
+      display: false,
+      details: expect.objectContaining({ childConversationId: 'child-ready', status: 'complete' }),
     }));
-    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('src/app.ts'),
-    }));
-    expect(sendCustomMessage).toHaveBeenCalledWith(expect.objectContaining({
-      content: expect.stringContaining('Saved checkpoint abc1234 Keep the docs fix.'),
-    }));
+    const importedMessages = registry.get('session-parallel-parent')?.session.state.messages ?? [];
+    expect(importedMessages).toEqual([expect.objectContaining({ role: 'user' })]);
+    expect(importedMessages[0].content[0].text).toContain('diagram (rev 2)');
+    expect(importedMessages[0].content[0].text).toContain('src/app.ts');
+    expect(importedMessages[0].content[0].text).toContain('Saved checkpoint abc1234 Keep the docs fix.');
+    expect(appendMessage).toHaveBeenCalledWith(importedMessages[0]);
     expect(registry.get('session-parallel-parent')?.parallelJobs).toEqual([
       expect.objectContaining({ id: 'parallel-running', status: 'running' }),
     ]);
