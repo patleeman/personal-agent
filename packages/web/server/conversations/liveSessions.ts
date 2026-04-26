@@ -34,7 +34,6 @@ import {
   readSessionMetaByFile,
   type DisplayBlock,
 } from './sessions.js';
-import { estimateContextUsageSegments } from './sessionContextUsage.js';
 import { readGitRepoInfo } from '../workspace/gitStatus.js';
 import { logWarn } from '../shared/logging.js';
 import {
@@ -140,7 +139,6 @@ import {
 import { executeLiveSessionBash } from './liveSessionBash.js';
 import {
   markLiveSessionAutoModeContinueRequested,
-  readLiveSessionAutoModeHostState,
   requestLiveSessionAutoModeContinuationTurn,
   requestLiveSessionAutoModeTurn,
   writeLiveSessionAutoModeHostState,
@@ -151,6 +149,16 @@ import {
   type BeforeAgentStartProbeMessage,
 } from './liveSessionToolInspection.js';
 import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
+import {
+  broadcastLiveSessionAutoModeState,
+  broadcastLiveSessionContextUsage,
+  broadcastLiveSessionParallelState,
+  broadcastLiveSessionQueueState,
+  clearLiveSessionContextUsageTimer,
+  readConversationAutoModeState,
+  readLiveSessionContextUsage,
+  scheduleLiveSessionContextUsage,
+} from './liveSessionStateBroadcasts.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -348,34 +356,6 @@ function isLikelyUnsupportedImageInputError(error: unknown): boolean {
   return mentionsImageInput && indicatesUnsupported;
 }
 
-function readContextUsagePayload(session: AgentSession): LiveContextUsage | null {
-  try {
-    const usage = session.getContextUsage();
-    if (!usage) {
-      return null;
-    }
-
-    const modelId = session.model?.id;
-    const contextWindow = normalizeModelContextWindow(
-      modelId,
-      usage.contextWindow,
-      session.model?.contextWindow ?? 128_000,
-    );
-
-    return {
-      ...usage,
-      modelId,
-      contextWindow,
-      percent: usage.tokens !== null && contextWindow > 0 ? (usage.tokens / contextWindow) * 100 : null,
-      ...(usage.tokens !== null
-        ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) }
-        : {}),
-    };
-  } catch {
-    return null;
-  }
-}
-
 export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
   const entry = registry.get(sessionId);
   if (!entry) {
@@ -479,7 +459,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
     title: resolveEntryTitle(entry),
     tokens,
     cost,
-    contextUsage: readContextUsagePayload(entry.session),
+    contextUsage: readLiveSessionContextUsage(entry.session),
     pendingQueue: readQueueState(entry.session),
     parallelJobs: readParallelState(entry.parallelJobs),
     presence: buildLiveSessionPresenceState(entry),
@@ -601,71 +581,27 @@ function maybeAutoTitleConversation(entry: LiveEntry): void {
 }
 
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
-  const usage = readContextUsagePayload(entry.session);
-  const nextJson = JSON.stringify(usage);
-  if (!force && entry.lastContextUsageJson === nextJson) {
-    return;
-  }
-
-  entry.lastContextUsageJson = nextJson;
-  broadcast(entry, { type: 'context_usage', usage });
+  broadcastLiveSessionContextUsage(entry, (event) => broadcast(entry, event), force);
 }
 
 function broadcastQueueState(entry: LiveEntry, force = false): void {
-  const queueState = readQueueState(entry.session);
-  const nextJson = JSON.stringify(queueState);
-  if (!force && entry.lastQueueStateJson === nextJson) {
-    return;
-  }
-
-  entry.lastQueueStateJson = nextJson;
-  broadcast(entry, { type: 'queue_state', ...queueState });
+  broadcastLiveSessionQueueState(entry, (event) => broadcast(entry, event), force);
 }
 
 function broadcastParallelState(entry: LiveEntry, force = false): void {
-  const jobs = readParallelState(entry.parallelJobs);
-  const nextJson = JSON.stringify(jobs);
-  if (!force && entry.lastParallelStateJson === nextJson) {
-    return;
-  }
-
-  entry.lastParallelStateJson = nextJson;
-  broadcast(entry, { type: 'parallel_state', jobs });
-}
-
-function readConversationAutoModeState(entry: Pick<LiveEntry, 'session'>): ConversationAutoModeState {
-  return readLiveSessionAutoModeHostState(entry);
+  broadcastLiveSessionParallelState(entry, (event) => broadcast(entry, event), force);
 }
 
 function broadcastAutoModeState(entry: LiveEntry, force = false): void {
-  const state = readConversationAutoModeState(entry);
-  const nextJson = JSON.stringify(state);
-  if (!force && entry.lastAutoModeStateJson === nextJson) {
-    return;
-  }
-
-  entry.lastAutoModeStateJson = nextJson;
-  broadcast(entry, { type: 'auto_mode_state', state });
+  broadcastLiveSessionAutoModeState(entry, (event) => broadcast(entry, event), force);
 }
 
 function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
-  if (entry.contextUsageTimer) {
-    return;
-  }
-
-  entry.contextUsageTimer = setTimeout(() => {
-    entry.contextUsageTimer = undefined;
-    broadcastContextUsage(entry);
-  }, delayMs);
+  scheduleLiveSessionContextUsage(entry, (event) => broadcast(entry, event), delayMs);
 }
 
 function clearContextUsageTimer(entry: LiveEntry): void {
-  if (!entry.contextUsageTimer) {
-    return;
-  }
-
-  clearTimeout(entry.contextUsageTimer);
-  entry.contextUsageTimer = undefined;
+  clearLiveSessionContextUsageTimer(entry);
 }
 
 function broadcastPresenceState(entry: LiveEntry, options?: { exclude?: LiveListener }): void {
@@ -949,7 +885,7 @@ export function getSessionStats(sessionId: string) {
 export function getSessionContextUsage(sessionId: string): LiveContextUsage | null {
   const entry = registry.get(sessionId);
   if (!entry) return null;
-  return readContextUsagePayload(entry.session);
+  return readLiveSessionContextUsage(entry.session);
 }
 
 /** Create a brand-new Pi session. */
@@ -1182,7 +1118,7 @@ export function subscribe(
   if (title) {
     listener({ type: 'title_update', title });
   }
-  listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
+  listener({ type: 'context_usage', usage: readLiveSessionContextUsage(entry.session) });
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
   listener({ type: 'parallel_state', jobs: readParallelState(entry.parallelJobs) });
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
