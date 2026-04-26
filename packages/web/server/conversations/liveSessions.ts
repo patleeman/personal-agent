@@ -23,7 +23,6 @@ import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
-  getAssistantErrorDisplayMessage,
   readSessionBlocksByFile,
   readSessionMetaByFile,
   type DisplayBlock,
@@ -157,6 +156,10 @@ import {
   manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
   tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
 } from './liveSessionParallelImportOps.js';
+import {
+  runPromptOnLiveEntry as runPromptOnLiveEntryWithCallbacks,
+  submitPromptOnLiveEntry,
+} from './liveSessionPromptOps.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -327,25 +330,6 @@ function resolveEntryTitle(entry: LiveEntry): string {
   }
 
   return entry.title.trim();
-}
-
-function isLikelyUnsupportedImageInputError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const normalized = message.toLowerCase();
-
-  const mentionsImageInput = normalized.includes('image')
-    || normalized.includes('vision')
-    || normalized.includes('multimodal');
-
-  const indicatesUnsupported = normalized.includes('not support')
-    || normalized.includes('unsupported')
-    || normalized.includes('not enabled')
-    || normalized.includes('text-only')
-    || normalized.includes('text only')
-    || normalized.includes('invalid image')
-    || normalized.includes('image input');
-
-  return mentionsImageInput && indicatesUnsupported;
 }
 
 export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
@@ -1293,38 +1277,10 @@ async function runPromptOnLiveEntry(
   behavior: 'steer' | 'followUp' | undefined,
   images?: PromptImageAttachment[],
 ): Promise<void> {
-  const { session } = entry;
-  const hasImages = Boolean(images && images.length > 0);
-
-  if (behavior === undefined) {
-    repairLiveSessionTranscriptTail(entry.sessionId);
-  }
-
-  const runPrompt = async (allowImages: boolean): Promise<void> => {
-    if (behavior === 'steer') {
-      await (allowImages && hasImages ? session.steer(text, images) : session.steer(text));
-      broadcastQueueState(entry, true);
-      return;
-    }
-
-    if (behavior === 'followUp') {
-      await (allowImages && hasImages ? session.followUp(text, images) : session.followUp(text));
-      broadcastQueueState(entry, true);
-      return;
-    }
-
-    await (allowImages && hasImages ? session.prompt(text, { images }) : session.prompt(text));
-  };
-
-  try {
-    await runPrompt(true);
-  } catch (error) {
-    if (!hasImages || !isLikelyUnsupportedImageInputError(error)) {
-      throw error;
-    }
-
-    await runPrompt(false);
-  }
+  await runPromptOnLiveEntryWithCallbacks(entry, text, behavior, images, {
+    repairLiveSessionTranscriptTail,
+    broadcastQueueState,
+  });
 }
 
 export async function promptSession(
@@ -1353,69 +1309,9 @@ export async function submitPromptSession(
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
 
   const normalizedBehavior = resolvePromptBehavior(entry, behavior);
-  if (normalizedBehavior === 'steer' || normalizedBehavior === 'followUp') {
-    await runPromptOnLiveEntry(entry, text, normalizedBehavior, images);
-    return {
-      acceptedAs: 'queued',
-      completion: Promise.resolve(),
-    };
-  }
-
-  let settled = false;
-  let unsubscribe: (() => void) | null = null;
-  const accepted = new Promise<void>((resolve, reject) => {
-    const finish = (handler: () => void) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      unsubscribe?.();
-      unsubscribe = null;
-      handler();
-    };
-
-    unsubscribe = entry.session.subscribe((event) => {
-      if (event.type === 'message_start' && event.message.role === 'user') {
-        finish(resolve);
-        return;
-      }
-
-      if (event.type === 'agent_start' || event.type === 'agent_end' || event.type === 'turn_end') {
-        finish(resolve);
-        return;
-      }
-
-      if (event.type === 'message_end' && event.message.role === 'assistant') {
-        const errorMessage = getAssistantErrorDisplayMessage(event.message);
-        if (errorMessage) {
-          finish(() => reject(new Error(errorMessage)));
-        }
-      }
-    });
+  return submitPromptOnLiveEntry(entry, text, normalizedBehavior, images, {
+    runPromptOnLiveEntry,
   });
-
-  const completion = runPromptOnLiveEntry(entry, text, normalizedBehavior, images);
-  void completion
-    .finally(() => {
-      if (!settled) {
-        settled = true;
-        unsubscribe?.();
-        unsubscribe = null;
-      }
-    })
-    .catch(() => {
-      // The caller observes prompt-start failures through the race below, and
-      // accepted prompts expose their eventual failure through the transcript.
-      // Do not let the detached completion cleanup promise become an unhandled
-      // rejection and take down the companion dev host.
-    });
-
-  await Promise.race([accepted, completion]);
-  return {
-    acceptedAs: 'started',
-    completion,
-  };
 }
 
 export async function executeSessionBash(
