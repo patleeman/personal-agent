@@ -45,11 +45,7 @@ import { readGitRepoInfo } from '../workspace/gitStatus.js';
 import { logWarn } from '../shared/logging.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-  CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
-  CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
   CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-  readConversationAutoModeStateFromSessionManager,
-  writeConversationAutoModeState,
   type ConversationAutoModeState,
   type ConversationAutoModeStateInput,
 } from './conversationAutoMode.js';
@@ -151,6 +147,13 @@ import {
   type SseEvent,
 } from './liveSessionEvents.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
+import {
+  markLiveSessionAutoModeContinueRequested,
+  readLiveSessionAutoModeHostState,
+  requestLiveSessionAutoModeContinuationTurn,
+  requestLiveSessionAutoModeTurn,
+  writeLiveSessionAutoModeHostState,
+} from './liveSessionAutoModeOps.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -746,7 +749,7 @@ function broadcastParallelState(entry: LiveEntry, force = false): void {
 }
 
 function readConversationAutoModeState(entry: Pick<LiveEntry, 'session'>): ConversationAutoModeState {
-  return readConversationAutoModeStateFromSessionManager(entry.session.sessionManager);
+  return readLiveSessionAutoModeHostState(entry);
 }
 
 function broadcastAutoModeState(entry: LiveEntry, force = false): void {
@@ -1535,51 +1538,10 @@ export async function requestConversationAutoModeTurn(sessionId: string): Promis
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  if (!readConversationAutoModeState(entry).enabled) {
-    return false;
-  }
-
-  const hasCompletedAssistantTurn = Array.isArray(entry.session.state?.messages)
-    && entry.session.state.messages.some((message) => message?.role === 'assistant');
-  if (!hasCompletedAssistantTurn) {
-    return false;
-  }
-
-  if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
-    return false;
-  }
-
-  const steering = typeof entry.session.getSteeringMessages === 'function'
-    ? entry.session.getSteeringMessages()
-    : [];
-  const followUp = typeof entry.session.getFollowUpMessages === 'function'
-    ? entry.session.getFollowUpMessages()
-    : [];
-  if (steering.length > 0 || followUp.length > 0) {
-    return false;
-  }
-
-  ensureHiddenTurnState(entry);
-  entry.pendingHiddenTurnCustomTypes.push(CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE);
   publishSessionMetaChanged(sessionId);
-
   try {
-    repairDanglingToolCallContext(entry.session);
-    await entry.session.sendCustomMessage({
-      customType: CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
-      content: CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT,
-      display: false,
-      details: { source: 'conversation-auto-mode' },
-    }, {
-      deliverAs: 'followUp',
-      triggerTurn: true,
-    });
-    return true;
+    return await requestLiveSessionAutoModeTurn(entry);
   } catch (error) {
-    const pendingIndex = entry.pendingHiddenTurnCustomTypes.lastIndexOf(CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE);
-    if (pendingIndex >= 0) {
-      entry.pendingHiddenTurnCustomTypes.splice(pendingIndex, 1);
-    }
     publishSessionMetaChanged(sessionId);
     throw error;
   }
@@ -1591,7 +1553,7 @@ export function markConversationAutoModeContinueRequested(sessionId: string): vo
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  entry.pendingAutoModeContinuation = true;
+  markLiveSessionAutoModeContinueRequested(entry);
 }
 
 export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
@@ -1600,31 +1562,7 @@ export async function requestConversationAutoModeContinuationTurn(sessionId: str
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  if (!readConversationAutoModeState(entry).enabled || entry.session.isStreaming) {
-    return false;
-  }
-
-  const steering = typeof entry.session.getSteeringMessages === 'function'
-    ? entry.session.getSteeringMessages()
-    : [];
-  const followUp = typeof entry.session.getFollowUpMessages === 'function'
-    ? entry.session.getFollowUpMessages()
-    : [];
-  if (steering.length > 0 || followUp.length > 0) {
-    return false;
-  }
-
-  repairDanglingToolCallContext(entry.session);
-  await entry.session.sendCustomMessage({
-    customType: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-    content: CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_PROMPT,
-    display: false,
-    details: { source: 'conversation-auto-mode' },
-  }, {
-    deliverAs: 'followUp',
-    triggerTurn: true,
-  });
-  return true;
+  return requestLiveSessionAutoModeContinuationTurn(entry);
 }
 
 export async function setLiveSessionAutoModeState(
@@ -1636,10 +1574,7 @@ export async function setLiveSessionAutoModeState(
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  const nextState = writeConversationAutoModeState(entry.session.sessionManager, input);
-  if (!nextState.enabled) {
-    entry.pendingAutoModeContinuation = false;
-  }
+  const nextState = writeLiveSessionAutoModeHostState(entry, input);
   broadcastAutoModeState(entry, true);
   publishSessionMetaChanged(sessionId);
   publishAppEvent({ type: 'session_file_changed', sessionId });
