@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  insertFileReplyQuoteIntoComposer,
   insertReplyQuoteIntoComposer,
   normalizeReplyQuoteSelection,
 } from './conversationReplyQuote';
@@ -58,6 +59,24 @@ describe('insertReplyQuoteIntoComposer', () => {
       text: '> alpha\n>\n> beta\n\n',
       selectionStart: 18,
       selectionEnd: 18,
+    });
+  });
+});
+
+describe('insertFileReplyQuoteIntoComposer', () => {
+  it('adds the file path before the quoted selection', () => {
+    expect(insertFileReplyQuoteIntoComposer('', 'packages/web/src/App.tsx', 'Important line')).toEqual({
+      text: 'From `packages/web/src/App.tsx`:\n> Important line\n\n',
+      selectionStart: 51,
+      selectionEnd: 51,
+    });
+  });
+
+  it('appends the file quote after existing draft text', () => {
+    expect(insertFileReplyQuoteIntoComposer('Existing draft', 'README.md', 'alpha\n\nbeta')).toEqual({
+      text: 'Existing draft\n\nFrom `README.md`:\n> alpha\n>\n> beta\n\n',
+      selectionStart: 52,
+      selectionEnd: 52,
     });
   });
 });

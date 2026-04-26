@@ -28,6 +28,7 @@ const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((modul
 const WorkspaceExplorer = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
 const WorkspaceFileDocument = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceFileDocument })));
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
+const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
@@ -466,6 +467,9 @@ function WorkbenchDocumentPane({
         <WorkspaceFileDocument
           cwd={workspaceFile.cwd}
           path={workspaceFile.path}
+          onReplyWithSelection={(selection) => {
+            window.dispatchEvent(new CustomEvent(WORKSPACE_REPLY_SELECTION_EVENT, { detail: selection }));
+          }}
         />
       </Suspense>
     );

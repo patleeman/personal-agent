@@ -26,18 +26,17 @@ function formatReplyQuoteMarkdown(text: string): string {
     .join('\n');
 }
 
-export function insertReplyQuoteIntoComposer(
+function buildInsertedComposerBlock(
   promptText: string,
-  replyQuoteText: string | null | undefined,
+  block: string,
   selection?: { start: number; end: number } | null,
 ): ReplyQuoteInsertionResult {
-  const quote = formatReplyQuoteMarkdown(replyQuoteText ?? '');
   const normalizedPrompt = promptText.replace(/\r\n?/g, '\n');
   const fallbackPosition = normalizedPrompt.length;
   const start = Math.max(0, Math.min(selection?.start ?? fallbackPosition, normalizedPrompt.length));
   const end = Math.max(start, Math.min(selection?.end ?? start, normalizedPrompt.length));
 
-  if (!quote) {
+  if (!block) {
     return {
       text: normalizedPrompt,
       selectionStart: end,
@@ -61,7 +60,7 @@ export function insertReplyQuoteIntoComposer(
       : after.startsWith('\n')
         ? '\n'
         : '\n\n';
-  const inserted = `${beforeGap}${quote}${afterGap}`;
+  const inserted = `${beforeGap}${block}${afterGap}`;
   const nextText = `${before}${inserted}${after}`;
   const caret = before.length + inserted.length;
 
@@ -70,4 +69,28 @@ export function insertReplyQuoteIntoComposer(
     selectionStart: caret,
     selectionEnd: caret,
   };
+}
+
+export function insertReplyQuoteIntoComposer(
+  promptText: string,
+  replyQuoteText: string | null | undefined,
+  selection?: { start: number; end: number } | null,
+): ReplyQuoteInsertionResult {
+  const quote = formatReplyQuoteMarkdown(replyQuoteText ?? '');
+  return buildInsertedComposerBlock(promptText, quote, selection);
+}
+
+export function insertFileReplyQuoteIntoComposer(
+  promptText: string,
+  filePath: string,
+  replyQuoteText: string | null | undefined,
+  selection?: { start: number; end: number } | null,
+): ReplyQuoteInsertionResult {
+  const normalizedPath = filePath.trim();
+  const quote = formatReplyQuoteMarkdown(replyQuoteText ?? '');
+  const block = normalizedPath && quote
+    ? `From \`${normalizedPath}\`:\n${quote}`
+    : quote;
+
+  return buildInsertedComposerBlock(promptText, block, selection);
 }

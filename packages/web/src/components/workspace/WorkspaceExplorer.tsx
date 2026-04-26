@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
 import { FileTree as TreesModel } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import CodeMirror from '@uiw/react-codemirror';
@@ -18,6 +18,7 @@ import { buildApiPath } from '../../client/apiBase';
 import type { WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceEntry, WorkspaceFileContent, WorkspaceGitStatusChange } from '../../shared/types';
 import { cx, EmptyState, LoadingState, Pill } from '../ui';
 import { useTheme } from '../../ui-state/theme';
+import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 
 interface WorkspaceExplorerProps {
   cwd: string | null;
@@ -333,6 +334,26 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
     syntaxHighlighting(theme === 'dark' ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true }),
     extensionForPath(path),
   ];
+}
+
+function getSelectedTextWithin(container: HTMLElement | null): string {
+  if (!container || typeof window === 'undefined') {
+    return '';
+  }
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    return '';
+  }
+
+  const range = selection.getRangeAt(0);
+  const commonAncestor = range.commonAncestorContainer;
+  const target = commonAncestor instanceof HTMLElement ? commonAncestor : commonAncestor.parentElement;
+  if (!target || !container.contains(target)) {
+    return '';
+  }
+
+  return selection.toString().trim();
 }
 
 function WorkspaceStatusBadge({ status, count }: { status: WorkspaceGitStatusChange | null; count?: number }) {
@@ -729,14 +750,19 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
 export function WorkspaceFileDocument({
   cwd,
   path,
+  onReplyWithSelection,
 }: {
   cwd: string;
   path: string;
+  onReplyWithSelection?: (selection: { filePath: string; text: string }) => void;
 }) {
   const { theme } = useTheme();
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [fileState, setFileState] = useState<LoadState<WorkspaceFileContent>>({ status: 'loading', data: null, error: null });
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
+  const [selectionContextMenu, setSelectionContextMenu] = useState<{ x: number; y: number; text: string } | null>(null);
+  const editorContainerRef = useRef<HTMLDivElement | null>(null);
+  const selectionContextMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadFile = useCallback(async (options?: { force?: boolean }) => {
     setFileState((current) => ({ status: 'loading', data: current.data, error: null }));
@@ -762,6 +788,49 @@ export function WorkspaceFileDocument({
     writeStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, showDiff);
   }, [showDiff]);
 
+  const closeSelectionContextMenu = useCallback(() => {
+    setSelectionContextMenu(null);
+  }, []);
+
+  useEffect(() => {
+    if (!selectionContextMenu || typeof document === 'undefined' || typeof window === 'undefined') {
+      return;
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && selectionContextMenuRef.current?.contains(target)) {
+        return;
+      }
+
+      closeSelectionContextMenu();
+    };
+    const handleSelectionChange = () => {
+      if (!getSelectedTextWithin(editorContainerRef.current)) {
+        closeSelectionContextMenu();
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeSelectionContextMenu();
+      }
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown, true);
+    document.addEventListener('selectionchange', handleSelectionChange);
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('blur', closeSelectionContextMenu);
+    window.addEventListener('resize', closeSelectionContextMenu);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown, true);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('blur', closeSelectionContextMenu);
+      window.removeEventListener('resize', closeSelectionContextMenu);
+    };
+  }, [closeSelectionContextMenu, selectionContextMenu]);
+
   const selectedFile = fileState.data;
   const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
   const editorExtensions = useMemo(
@@ -772,6 +841,58 @@ export function WorkspaceFileDocument({
   const onEditorCreate = useCallback((view: EditorView) => {
     view.dispatch({ effects: setDiffDecorations.of(diffSpec) });
   }, [diffSpec]);
+
+  const copySelectedText = useCallback(async (text: string) => {
+    closeSelectionContextMenu();
+    if (!text || typeof navigator === 'undefined' || typeof navigator.clipboard?.writeText !== 'function') {
+      return;
+    }
+
+    await navigator.clipboard.writeText(text);
+  }, [closeSelectionContextMenu]);
+
+  const replyWithSelectedText = useCallback((text: string) => {
+    closeSelectionContextMenu();
+    if (!selectedFile || !text || !onReplyWithSelection) {
+      return;
+    }
+
+    onReplyWithSelection({ filePath: selectedFile.path, text });
+  }, [closeSelectionContextMenu, onReplyWithSelection, selectedFile]);
+
+  const handleEditorContextMenu = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+    const text = getSelectedTextWithin(editorContainerRef.current);
+    if (!text) {
+      closeSelectionContextMenu();
+      return;
+    }
+
+    event.preventDefault();
+
+    const desktopBridge = shouldUseNativeAppContextMenus() ? getDesktopBridge() : null;
+    if (desktopBridge?.showSelectionContextMenu) {
+      closeSelectionContextMenu();
+      void desktopBridge.showSelectionContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        canReply: Boolean(onReplyWithSelection),
+        canCopy: true,
+      }).then(({ action }) => {
+        if (action === 'reply') {
+          replyWithSelectedText(text);
+          return;
+        }
+        if (action === 'copy') {
+          void copySelectedText(text);
+        }
+      }).catch(() => {
+        setSelectionContextMenu({ x: event.clientX, y: event.clientY, text });
+      });
+      return;
+    }
+
+    setSelectionContextMenu({ x: event.clientX, y: event.clientY, text });
+  }, [closeSelectionContextMenu, copySelectedText, onReplyWithSelection, replyWithSelectedText]);
 
   if (fileState.status === 'loading' && !selectedFile) {
     return <LoadingState label="Opening file…" className="h-full justify-center" />;
@@ -810,7 +931,7 @@ export function WorkspaceFileDocument({
         )}
         <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh file" onClick={() => { void loadFile(); }}>↻</button>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div ref={editorContainerRef} className="min-h-0 flex-1 overflow-hidden" onContextMenu={handleEditorContextMenu}>
         {selectedFile.binary || (selectedFile.tooLarge && !selectedFile.content) ? (
           <EmptyState
             className="flex h-full flex-col justify-center px-5"
@@ -833,6 +954,55 @@ export function WorkspaceFileDocument({
           />
         )}
       </div>
+      {selectionContextMenu ? (
+        <div
+          ref={selectionContextMenuRef}
+          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
+          style={{ left: selectionContextMenu.x, top: selectionContextMenu.y }}
+          role="menu"
+          aria-label="Selected file text actions"
+        >
+          <div className="space-y-px">
+            {onReplyWithSelection ? (
+              <>
+                <button
+                  type="button"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onClick={() => replyWithSelectedText(selectionContextMenu.text)}
+                  className="ui-context-menu-item"
+                  role="menuitem"
+                >
+                  Reply with Selection
+                </button>
+                <div className="mx-1 my-1 h-px bg-border-subtle" role="separator" />
+              </>
+            ) : null}
+            <button
+              type="button"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+              }}
+              onClick={() => { void copySelectedText(selectionContextMenu.text); }}
+              className="ui-context-menu-item"
+              role="menuitem"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
