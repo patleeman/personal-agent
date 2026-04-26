@@ -19,6 +19,7 @@ import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
+import { cx } from './ui';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
