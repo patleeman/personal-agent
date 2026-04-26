@@ -60,6 +60,25 @@ import {
   type ConversationAutoModeState,
   type ConversationAutoModeStateInput,
 } from './conversationAutoMode.js';
+import {
+  assertLiveSessionSurfaceCanControl,
+  buildLiveSessionPresenceState,
+  createLiveSessionPresenceHost,
+  LiveSessionControlError,
+  registerLiveSessionSurface,
+  removeLiveSessionSurface,
+  takeOverLiveSessionSurface,
+  type LiveSessionPresenceState,
+  type LiveSessionSurfaceType,
+  type LiveSessionPresenceHost,
+} from './liveSessionPresence.js';
+
+export {
+  LiveSessionControlError,
+  type LiveSessionPresence,
+  type LiveSessionPresenceState,
+  type LiveSessionSurfaceType,
+} from './liveSessionPresence.js';
 
 const AGENT_DIR = getPiAgentRuntimeDir();
 const SETTINGS_FILE = join(AGENT_DIR, 'settings.json');
@@ -170,35 +189,6 @@ export interface ParallelPromptPreview {
   error?: string;
 }
 
-export type LiveSessionSurfaceType = 'desktop_web' | 'mobile_web';
-
-interface LiveSurfacePresenceRecord {
-  surfaceId: string;
-  surfaceType: LiveSessionSurfaceType;
-  connectedAt: string;
-  connections: number;
-}
-
-export interface LiveSessionPresence {
-  surfaceId: string;
-  surfaceType: LiveSessionSurfaceType;
-  connectedAt: string;
-}
-
-export interface LiveSessionPresenceState {
-  surfaces: LiveSessionPresence[];
-  controllerSurfaceId: string | null;
-  controllerSurfaceType: LiveSessionSurfaceType | null;
-  controllerAcquiredAt: string | null;
-}
-
-export class LiveSessionControlError extends Error {
-  constructor(message = 'This conversation is controlled by another surface. Take over here to continue.') {
-    super(message);
-    this.name = 'LiveSessionControlError';
-  }
-}
-
 export type SseEvent =
   | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean }
   | { type: 'agent_start' }
@@ -241,7 +231,7 @@ interface LiveListener {
   tailBlocks?: number;
 }
 
-interface LiveEntry {
+interface LiveEntry extends LiveSessionPresenceHost {
   sessionId: string;
   session: AgentSession;
   cwd: string;
@@ -263,9 +253,6 @@ interface LiveEntry {
   isCompacting?: boolean;
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
-  presenceBySurfaceId?: Map<string, LiveSurfacePresenceRecord>;
-  controllerSurfaceId?: string | null;
-  controllerAcquiredAt?: string | null;
 }
 
 interface ParallelPromptJob {
@@ -1973,7 +1960,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
     contextUsage: readContextUsagePayload(entry.session),
     pendingQueue: readQueueState(entry.session),
     parallelJobs: readParallelState(entry),
-    presence: buildPresenceState(entry),
+    presence: buildLiveSessionPresenceState(entry),
     autoModeState: readConversationAutoModeState(entry),
     cwdChange: null,
   };
@@ -2184,128 +2171,8 @@ function clearContextUsageTimer(entry: LiveEntry): void {
   entry.contextUsageTimer = undefined;
 }
 
-function ensurePresenceMap(entry: LiveEntry): Map<string, LiveSurfacePresenceRecord> {
-  entry.presenceBySurfaceId ??= new Map<string, LiveSurfacePresenceRecord>();
-  entry.controllerSurfaceId ??= null;
-  entry.controllerAcquiredAt ??= null;
-  return entry.presenceBySurfaceId;
-}
-
-function buildPresenceState(entry: LiveEntry): LiveSessionPresenceState {
-  const presenceBySurfaceId = ensurePresenceMap(entry);
-  const surfaces = [...presenceBySurfaceId.values()]
-    .sort((left, right) => {
-      const byConnectedAt = left.connectedAt.localeCompare(right.connectedAt);
-      return byConnectedAt !== 0 ? byConnectedAt : left.surfaceId.localeCompare(right.surfaceId);
-    })
-    .map((surface) => ({
-      surfaceId: surface.surfaceId,
-      surfaceType: surface.surfaceType,
-      connectedAt: surface.connectedAt,
-    }));
-  const controller = entry.controllerSurfaceId ? presenceBySurfaceId.get(entry.controllerSurfaceId) ?? null : null;
-
-  return {
-    surfaces,
-    controllerSurfaceId: controller?.surfaceId ?? null,
-    controllerSurfaceType: controller?.surfaceType ?? null,
-    controllerAcquiredAt: controller ? entry.controllerAcquiredAt ?? null : null,
-  };
-}
-
 function broadcastPresenceState(entry: LiveEntry, options?: { exclude?: LiveListener }): void {
-  broadcast(entry, { type: 'presence_state', state: buildPresenceState(entry) }, options);
-}
-
-function registerLiveSurface(entry: LiveEntry, input: {
-  surfaceId: string;
-  surfaceType: LiveSessionSurfaceType;
-}): boolean {
-  const surfaceId = input.surfaceId.trim();
-  if (!surfaceId) {
-    return false;
-  }
-
-  const presenceBySurfaceId = ensurePresenceMap(entry);
-  const existing = presenceBySurfaceId.get(surfaceId);
-  if (existing) {
-    existing.connections += 1;
-    if (existing.surfaceType !== input.surfaceType) {
-      existing.surfaceType = input.surfaceType;
-      return true;
-    }
-    return false;
-  }
-
-  presenceBySurfaceId.set(surfaceId, {
-    surfaceId,
-    surfaceType: input.surfaceType,
-    connectedAt: new Date().toISOString(),
-    connections: 1,
-  });
-
-  const currentController = entry.controllerSurfaceId
-    ? presenceBySurfaceId.get(entry.controllerSurfaceId) ?? null
-    : null;
-  const shouldAdoptController = !currentController || currentController.surfaceType === input.surfaceType;
-
-  if (shouldAdoptController && entry.controllerSurfaceId !== surfaceId) {
-    entry.controllerSurfaceId = surfaceId;
-    entry.controllerAcquiredAt = new Date().toISOString();
-  }
-
-  return true;
-}
-
-function removeLiveSurface(entry: LiveEntry, surfaceId: string): boolean {
-  const trimmedSurfaceId = surfaceId.trim();
-  if (!trimmedSurfaceId) {
-    return false;
-  }
-
-  const presenceBySurfaceId = ensurePresenceMap(entry);
-  const existing = presenceBySurfaceId.get(trimmedSurfaceId);
-  if (!existing) {
-    return false;
-  }
-
-  if (existing.connections > 1) {
-    existing.connections -= 1;
-    return false;
-  }
-
-  presenceBySurfaceId.delete(trimmedSurfaceId);
-
-  if (entry.controllerSurfaceId === trimmedSurfaceId) {
-    entry.controllerSurfaceId = null;
-    entry.controllerAcquiredAt = null;
-  }
-
-  return true;
-}
-
-function assertSurfaceCanControl(entry: LiveEntry, surfaceId?: string): void {
-  if (!surfaceId) {
-    return;
-  }
-
-  const trimmedSurfaceId = surfaceId.trim();
-  if (!trimmedSurfaceId) {
-    throw new LiveSessionControlError('Surface id is required to control this conversation.');
-  }
-
-  const presenceBySurfaceId = ensurePresenceMap(entry);
-  if (!presenceBySurfaceId.has(trimmedSurfaceId)) {
-    throw new LiveSessionControlError();
-  }
-
-  if (!entry.controllerSurfaceId) {
-    throw new LiveSessionControlError('No surface is currently controlling this conversation. Take over here to continue.');
-  }
-
-  if (entry.controllerSurfaceId !== trimmedSurfaceId) {
-    throw new LiveSessionControlError();
-  }
+  broadcast(entry, { type: 'presence_state', state: buildLiveSessionPresenceState(entry) }, options);
 }
 
 export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: string): void {
@@ -2314,7 +2181,7 @@ export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: st
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  assertSurfaceCanControl(entry, surfaceId);
+  assertLiveSessionSurfaceCanControl(entry, surfaceId);
 }
 
 export function takeOverSessionControl(sessionId: string, surfaceId: string): LiveSessionPresenceState {
@@ -2323,19 +2190,12 @@ export function takeOverSessionControl(sessionId: string, surfaceId: string): Li
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  const trimmedSurfaceId = surfaceId.trim();
-  const presenceBySurfaceId = ensurePresenceMap(entry);
-  if (!trimmedSurfaceId || !presenceBySurfaceId.has(trimmedSurfaceId)) {
-    throw new LiveSessionControlError('Open the conversation on this surface before taking control.');
-  }
-
-  if (entry.controllerSurfaceId !== trimmedSurfaceId) {
-    entry.controllerSurfaceId = trimmedSurfaceId;
-    entry.controllerAcquiredAt = new Date().toISOString();
+  const takeover = takeOverLiveSessionSurface(entry, surfaceId);
+  if (takeover.changed) {
     broadcastPresenceState(entry);
   }
 
-  return buildPresenceState(entry);
+  return takeover.state;
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
@@ -2365,9 +2225,7 @@ function wireSession(
     isCompacting: false,
     parallelJobs: [],
     importingParallelJobs: false,
-    presenceBySurfaceId: new Map(),
-    controllerSurfaceId: null,
-    controllerAcquiredAt: null,
+    ...createLiveSessionPresenceHost(),
 
   };
   entry.parallelJobs = loadPersistedParallelJobs(entry);
@@ -3256,7 +3114,7 @@ export function subscribe(
   entry.listeners.add(subscription);
 
   const presenceChanged = options?.surface
-    ? registerLiveSurface(entry, options.surface)
+    ? registerLiveSessionSurface(entry, options.surface)
     : false;
 
   listener({ type: 'snapshot', ...buildLiveSnapshot(entry, options?.tailBlocks) });
@@ -3268,7 +3126,7 @@ export function subscribe(
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
   listener({ type: 'parallel_state', jobs: readParallelState(entry) });
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
-    listener({ type: 'presence_state', state: buildPresenceState(entry) });
+    listener({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
   }
   if (entry.session.isStreaming
     && (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))) {
@@ -3281,7 +3139,7 @@ export function subscribe(
 
   return () => {
     entry.listeners.delete(subscription);
-    if (options?.surface && removeLiveSurface(entry, options.surface.surfaceId)) {
+    if (options?.surface && removeLiveSessionSurface(entry, options.surface.surfaceId)) {
       broadcastPresenceState(entry);
     }
   };
