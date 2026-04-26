@@ -15,12 +15,10 @@ import {
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
-  applyConversationModelPreferencesToLiveSession,
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
-import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   readSessionBlocksByFile,
@@ -56,9 +54,6 @@ import {
   restoreLiveSessionQueuedMessage,
 } from './liveSessionQueueOperations.js';
 import {
-  resolveCompactionSummaryTitle,
-} from './liveSessionTranscript.js';
-import {
   clearPrewarmedLiveSessionLoaders,
   prewarmLiveSessionLoader,
   queuePrewarmLiveSessionLoader,
@@ -92,9 +87,7 @@ import {
   resolveStableSessionTitle,
 } from './liveSessionTitle.js';
 import {
-  applyLiveSessionServiceTier,
   buildConversationServiceTierPreferenceInput,
-  repairSessionModelProvider,
   resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
 } from './liveSessionModels.js';
 import {
@@ -164,6 +157,11 @@ import {
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
 import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
+import {
+  compactLiveSession,
+  renameLiveSession,
+  updateLiveSessionModelPreferences as updateLiveSessionModelPreferencesWithCallbacks,
+} from './liveSessionMaintenanceOps.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -1327,13 +1325,12 @@ export async function cancelQueuedPrompt(
 export async function compactSession(sessionId: string, customInstructions?: string) {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  const result = await entry.session.compact(customInstructions);
-  entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({ mode: 'manual' });
-  broadcastSnapshot(entry);
-  clearContextUsageTimer(entry);
-  broadcastContextUsage(entry, true);
-  publishSessionMetaChanged(sessionId);
-  return result;
+  return compactLiveSession(entry, customInstructions, {
+    broadcastSnapshot,
+    clearContextUsageTimer,
+    broadcastContextUsage,
+    publishSessionMetaChanged,
+  });
 }
 
 export async function reloadSessionResources(sessionId: string): Promise<void> {
@@ -1351,10 +1348,9 @@ export async function exportSessionHtml(sessionId: string, outputPath?: string):
 export function renameSession(sessionId: string, name: string): void {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  entry.autoTitleRequested = true;
-  applySessionTitle(entry, name);
-  void syncDurableConversationRun(entry, entry.lastDurableRunState ?? (entry.session.isStreaming ? 'running' : 'waiting'), {
-    force: true,
+  renameLiveSession(entry, name, {
+    applySessionTitle,
+    syncDurableConversationRun,
   });
 }
 
@@ -1367,20 +1363,13 @@ export async function updateLiveSessionModelPreferences(
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
 
   const models = availableModels ?? getAvailableModelObjects();
-  const next = await applyConversationModelPreferencesToLiveSession(
-    entry.session,
-    input,
-    {
-      currentModel: entry.session.model?.id ?? '',
-      currentThinkingLevel: entry.session.thinkingLevel ?? '',
-      currentServiceTier: readSavedModelPreferences(SETTINGS_FILE, models).currentServiceTier,
-    },
-    models,
-  );
-
-  applyLiveSessionServiceTier(entry.session, next.currentServiceTier);
-  publishSessionMetaChanged(sessionId);
-  return next;
+  return updateLiveSessionModelPreferencesWithCallbacks({
+    entry,
+    preferences: input,
+    availableModels: models,
+    settingsFile: SETTINGS_FILE,
+    publishSessionMetaChanged,
+  });
 }
 
 /** Abort the current agent run. */
