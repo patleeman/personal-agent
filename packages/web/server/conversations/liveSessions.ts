@@ -74,7 +74,6 @@ import {
   readParallelState,
   writePersistedParallelJobs,
   type ParallelPromptJob,
-  type ParallelPromptJobStatus,
   type ParallelPromptPreview,
 } from './liveSessionParallelJobs.js';
 import {
@@ -95,7 +94,6 @@ import {
   resolveLiveSessionFile,
 } from './liveSessionPersistence.js';
 import {
-  buildParallelImportedContent,
   resolveLastCompletedConversationEntryId,
   resolveStableForkEntryId,
 } from './liveSessionForking.js';
@@ -156,6 +154,11 @@ import {
 } from './liveSessionStateBroadcasts.js';
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
 import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
+import {
+  finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
+  manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
+  tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
+} from './liveSessionParallelImportOps.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -1245,97 +1248,25 @@ async function appendParallelImportedMessage(
   publishSessionMetaChanged(sessionId);
 }
 
-function shouldPreserveParallelChildLiveSession(entry: LiveEntry | undefined): boolean {
-  if (!entry) {
-    return false;
-  }
-
-  return entry.listeners.size > 0 || (entry.presenceBySurfaceId?.size ?? 0) > 0;
-}
-
 async function finalizeParallelChildLiveSession(
   childConversationId: string,
   options: { abortIfRunning?: boolean } = {},
 ): Promise<'destroyed' | 'preserved' | 'missing'> {
-  const childEntry = registry.get(childConversationId);
-  if (!childEntry) {
-    return 'missing';
-  }
-
-  if (options.abortIfRunning && childEntry.session.isStreaming) {
-    try {
-      await childEntry.session.abort();
-    } catch (error) {
-      logWarn('parallel child abort failed before cleanup', {
-        conversationId: childConversationId,
-        message: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    }
-  }
-
-  if (shouldPreserveParallelChildLiveSession(childEntry)) {
-    return 'preserved';
-  }
-
-  if (!options.abortIfRunning && childEntry.session.isStreaming) {
-    return 'preserved';
-  }
-
-  destroySession(childConversationId);
-  return 'destroyed';
+  return finalizeParallelChildLiveSessionWithCallbacks(childConversationId, {
+    childEntry: registry.get(childConversationId),
+    destroySession,
+    abortIfRunning: options.abortIfRunning,
+  });
 }
 
 async function tryImportReadyParallelJobs(entry: LiveEntry): Promise<void> {
-  entry.parallelJobs ??= [];
-  if (entry.importingParallelJobs || entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
-    return;
-  }
-
-  const nextJob = entry.parallelJobs[0];
-  if (!nextJob || (nextJob.status !== 'ready' && nextJob.status !== 'failed')) {
-    return;
-  }
-
-  entry.importingParallelJobs = true;
-  try {
-    while (!entry.session.isStreaming && !hasQueuedOrActiveHiddenTurn(entry)) {
-      const currentJob = entry.parallelJobs[0];
-      if (!currentJob || (currentJob.status !== 'ready' && currentJob.status !== 'failed')) {
-        break;
-      }
-
-      const fallbackStatus: Extract<ParallelPromptJobStatus, 'ready' | 'failed'> = currentJob.error?.trim() ? 'failed' : 'ready';
-      currentJob.status = 'importing';
-      currentJob.updatedAt = new Date().toISOString();
-      persistParallelJobs(entry);
-      broadcastParallelState(entry, true);
-
-      try {
-        await appendParallelImportedMessage(
-          entry.sessionId,
-          buildParallelImportedContent(currentJob),
-          {
-            childConversationId: currentJob.childConversationId,
-            status: currentJob.error?.trim() ? 'failed' : 'complete',
-          },
-        );
-      } catch (error) {
-        currentJob.status = fallbackStatus;
-        currentJob.updatedAt = new Date().toISOString();
-        persistParallelJobs(entry);
-        broadcastParallelState(entry, true);
-        throw error;
-      }
-
-      entry.parallelJobs.shift();
-      persistParallelJobs(entry);
-      broadcastParallelState(entry, true);
-      await finalizeParallelChildLiveSession(currentJob.childConversationId);
-    }
-  } finally {
-    entry.importingParallelJobs = false;
-  }
+  await tryImportReadyParallelJobsWithCallbacks(entry, {
+    hasQueuedOrActiveHiddenTurn,
+    persistParallelJobs,
+    broadcastParallelState,
+    appendParallelImportedMessage,
+    finalizeParallelChildLiveSession,
+  });
 }
 
 export async function startParallelPromptSession(
@@ -1488,59 +1419,12 @@ export async function manageParallelPromptJob(
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  const jobId = input.jobId.trim();
-  if (!jobId) {
-    throw new Error('jobId required');
-  }
-
-  entry.parallelJobs ??= [];
-  const jobIndex = entry.parallelJobs.findIndex((candidate) => candidate.id === jobId);
-  if (jobIndex < 0) {
-    throw new Error('Parallel prompt no longer exists.');
-  }
-
-  const job = entry.parallelJobs[jobIndex]!;
-  if (input.action === 'skip') {
-    if (job.status === 'running') {
-      throw new Error('Use cancel to stop a running parallel prompt.');
-    }
-    if (job.status === 'importing') {
-      throw new Error('Parallel prompt is already being appended.');
-    }
-
-    entry.parallelJobs.splice(jobIndex, 1);
-    persistParallelJobs(entry);
-    broadcastParallelState(entry, true);
-    await finalizeParallelChildLiveSession(job.childConversationId);
-    return { ok: true, status: 'skipped' };
-  }
-
-  if (input.action === 'cancel') {
-    if (job.status === 'importing') {
-      throw new Error('Parallel prompt is already being appended.');
-    }
-
-    entry.parallelJobs.splice(jobIndex, 1);
-    persistParallelJobs(entry);
-    broadcastParallelState(entry, true);
-    await finalizeParallelChildLiveSession(job.childConversationId, { abortIfRunning: true });
-    return { ok: true, status: 'cancelled' };
-  }
-
-  if (job.status !== 'ready' && job.status !== 'failed') {
-    throw new Error('Only completed parallel prompts can be imported now.');
-  }
-
-  if (jobIndex > 0) {
-    entry.parallelJobs.splice(jobIndex, 1);
-    entry.parallelJobs.unshift(job);
-    persistParallelJobs(entry);
-    broadcastParallelState(entry, true);
-  }
-
-  await tryImportReadyParallelJobs(entry);
-  const imported = !(entry.parallelJobs ?? []).some((candidate) => candidate.id === jobId);
-  return { ok: true, status: imported ? 'imported' : 'queued' };
+  return manageParallelPromptJobWithCallbacks(entry, input, {
+    persistParallelJobs,
+    broadcastParallelState,
+    finalizeParallelChildLiveSession,
+    tryImportReadyParallelJobs,
+  });
 }
 
 function resolvePromptBehavior(
