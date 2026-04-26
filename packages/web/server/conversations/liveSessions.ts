@@ -33,8 +33,6 @@ import {
   buildLiveSessionPresenceState,
   createLiveSessionPresenceHost,
   LiveSessionControlError,
-  registerLiveSessionSurface,
-  removeLiveSessionSurface,
   takeOverLiveSessionSurface,
   type LiveSessionPresenceState,
   type LiveSessionSurfaceType,
@@ -96,7 +94,6 @@ import {
   createLiveSessionHiddenTurnState,
   ensureHiddenTurnState,
   hasQueuedOrActiveHiddenTurn,
-  shouldExposeHiddenTurnInTranscript,
   type LiveSessionHiddenTurnState,
 } from './liveSessionHiddenTurns.js';
 import {
@@ -153,6 +150,10 @@ import {
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
 import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 import { finalizeLiveSessionBashExecution } from './liveSessionBashFinalization.js';
+import {
+  subscribeLiveSession,
+  type LiveSessionSubscriptionListener,
+} from './liveSessionSubscription.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -229,10 +230,7 @@ function resolveConversationPreferenceStateForSession(
 
 // ── Internal entry ────────────────────────────────────────────────────────────
 
-interface LiveListener {
-  send: (event: SseEvent) => void;
-  tailBlocks?: number;
-}
+type LiveListener = LiveSessionSubscriptionListener;
 
 interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
   sessionId: string;
@@ -808,44 +806,10 @@ export function subscribe(
 ): (() => void) | null {
   const entry = registry.get(sessionId);
   if (!entry) return null;
-
-  const subscription: LiveListener = {
-    send: listener,
-    tailBlocks: options?.tailBlocks,
-  };
-  entry.listeners.add(subscription);
-
-  const presenceChanged = options?.surface
-    ? registerLiveSessionSurface(entry, options.surface)
-    : false;
-
-  ensureHiddenTurnState(entry);
-  listener({ type: 'snapshot', ...buildLiveSessionSnapshot(entry, options?.tailBlocks) });
-  const title = resolveEntryTitle(entry);
-  if (title) {
-    listener({ type: 'title_update', title });
-  }
-  listener({ type: 'context_usage', usage: readLiveSessionContextUsage(entry.session) });
-  listener({ type: 'queue_state', ...readQueueState(entry.session) });
-  listener({ type: 'parallel_state', jobs: readParallelState(entry.parallelJobs) });
-  if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
-    listener({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
-  }
-  if (entry.session.isStreaming
-    && (!entry.activeHiddenTurnCustomType || shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType))) {
-    listener({ type: 'agent_start' });
-  }
-
-  if (presenceChanged) {
-    broadcastPresenceState(entry, { exclude: subscription });
-  }
-
-  return () => {
-    entry.listeners.delete(subscription);
-    if (options?.surface && removeLiveSessionSurface(entry, options.surface.surfaceId)) {
-      broadcastPresenceState(entry);
-    }
-  };
+  return subscribeLiveSession(entry, listener, options, {
+    resolveTitle: resolveEntryTitle,
+    broadcastPresenceState,
+  });
 }
 
 export function readLiveSessionAutoModeState(sessionId: string): ConversationAutoModeState {
