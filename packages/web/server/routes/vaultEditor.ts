@@ -73,6 +73,21 @@ function entryFromStat(root: string, abs: string, stats: Stats): VaultEntry {
   };
 }
 
+function deleteVaultPath(abs: string): void {
+  rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+
+  // macOS can occasionally leave an empty directory behind after recursive
+  // contents are removed. Retry before reporting success so the UI does not
+  // require a second delete on the now-empty folder.
+  if (existsSync(abs)) {
+    rmSync(abs, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+  }
+
+  if (existsSync(abs)) {
+    throw new Error('Failed to delete vault path');
+  }
+}
+
 function readDirEntries(root: string, abs: string): VaultEntry[] {
   let dirents: Dirent[];
   try {
@@ -317,7 +332,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         res.status(404).json({ error: 'Not found' });
         return;
       }
-      rmSync(abs, { recursive: true, force: true });
+      deleteVaultPath(abs);
       res.json({ ok: true });
     } catch (err) {
       logError('vault/file DELETE error', { message: String(err) });

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
@@ -84,5 +84,21 @@ describe('desktop local API vault routes', () => {
     expect(assetResponse.statusCode).toBe(200);
     expect(assetResponse.headers['content-type']).toContain('image/svg+xml');
     expect(Buffer.from(assetResponse.body).toString('utf-8')).toContain('<svg');
+  });
+
+  it('deletes a vault folder recursively in one request', async () => {
+    process.env.PERSONAL_AGENT_VAULT_ROOT = tempRoot;
+    const folderPath = join(tempRoot, 'delete-me');
+    mkdirSync(join(folderPath, 'nested'), { recursive: true });
+    writeFileSync(join(folderPath, 'nested', 'note.md'), '# Delete me\n', 'utf-8');
+
+    const response = await dispatchDesktopLocalApiRequest({
+      method: 'DELETE',
+      path: '/api/vault/file?id=delete-me%2F',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(readJsonBody(response)).toEqual({ ok: true });
+    expect(existsSync(folderPath)).toBe(false);
   });
 });

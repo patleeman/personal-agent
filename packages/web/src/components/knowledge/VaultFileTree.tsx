@@ -922,11 +922,18 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
     try {
       await vaultApi.deleteFile(entry.id);
+      applyDeleteEffects(entry.id);
+      setEntries((currentEntries) => currentEntries.filter((currentEntry) => !isPathAffectedByRemoval(currentEntry.id, entry.id)));
+      try {
+        model.remove(entry.id, entry.kind === 'folder' ? { recursive: true } : undefined);
+      } catch {
+        // The follow-up snapshot is authoritative; this is only an immediate UI update.
+      }
       emitKBEvent('kb:file-deleted', { id: entry.id });
     } catch (error) {
       console.error('delete failed', error);
     }
-  }, []);
+  }, [applyDeleteEffects, model]);
 
   const handleOpenInFinder = useCallback(async (entry: VaultEntry) => {
     const desktopBridge = getDesktopBridge();
