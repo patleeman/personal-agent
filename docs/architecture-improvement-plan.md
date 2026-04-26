@@ -117,6 +117,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 4. [in progress] Extract linked durable-run presentation/rendering after the message renderer seams are stable.
    - Extracted linked-run discovery and compact run-tool preview formatting into `linkedRuns.ts` with focused tests.
    - Extracted linked-run record resolution into `linkedRunResolution.ts` with focused tests.
+   - Extracted linked-run polling and status display helpers into focused modules.
 
 ## Next action
 

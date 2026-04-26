@@ -13,7 +13,6 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../../transcript/askUserQuestions';
-import { api } from '../../client/api';
 import { useAppData } from '../../app/contexts';
 import {
   getRunHeadline,
@@ -27,7 +26,7 @@ import {
   isRunActive,
   type RunPresentationLookups,
 } from '../../automation/runPresentation';
-import type { DurableRunDetailResult, MessageBlock } from '../../shared/types';
+import type { MessageBlock } from '../../shared/types';
 import { timeAgo } from '../../shared/utils';
 import { buildChatRenderItems, type ChatRenderItem, type TraceClusterSummary, type TraceClusterSummaryCategory, type TraceConversationBlock } from './transcriptItems.js';
 import { renderMarkdownText, renderText, SkillInvocationCard } from './MarkdownMessage.js';
@@ -40,6 +39,8 @@ import { buildReplySelectionScopeProps, findSelectionReplyScopeElement, findSele
 import { buildSummaryPreview } from './summaryPreview.js';
 import { buildToolPreview, readLinkedRuns, type LinkedRunPresentation } from './linkedRuns.js';
 import { resolveLinkedRunRecord } from './linkedRunResolution.js';
+import { buildInlineRunExpansionKey, INLINE_RUN_LOG_TAIL_LINES, INLINE_RUN_POLL_INTERVAL_MS, usePolledDurableRunSnapshot } from './linkedRunPolling.js';
+import { describeInlineRunStatus, inferStatusFromLinkedRunDetail } from './linkedRunStatus.js';
 
 function formatInjectedContextLabel(customType?: string): string {
   if (!customType || customType === 'referenced_context') {
@@ -943,174 +944,6 @@ const MAX_VISIBLE_LINKED_RUNS = 5;
 
 
 const TRACE_LINKED_RUN_VISIBLE_LIMIT = 4;
-const INLINE_RUN_LOG_TAIL_LINES = 240;
-const INLINE_RUN_POLL_INTERVAL_MS = 2200;
-
-interface PolledRunSnapshotState {
-  detail: DurableRunDetailResult | null;
-  log: { path: string; log: string } | null;
-  loading: boolean;
-  refreshing: boolean;
-  error: string | null;
-}
-
-const EMPTY_POLLED_RUN_SNAPSHOT_STATE: PolledRunSnapshotState = {
-  detail: null,
-  log: null,
-  loading: false,
-  refreshing: false,
-  error: null,
-};
-
-function buildInlineRunExpansionKey(clusterStartIndex: number, runId: string): string {
-  return `${clusterStartIndex}:${runId}`;
-}
-
-function usePolledDurableRunSnapshot(
-  runId: string | null,
-  enabled: boolean,
-  options?: {
-    tail?: number;
-    pollIntervalMs?: number;
-  },
-): PolledRunSnapshotState {
-  const tail = options?.tail ?? INLINE_RUN_LOG_TAIL_LINES;
-  const pollIntervalMs = options?.pollIntervalMs ?? INLINE_RUN_POLL_INTERVAL_MS;
-  const [state, setState] = useState<PolledRunSnapshotState>(EMPTY_POLLED_RUN_SNAPSHOT_STATE);
-
-  useEffect(() => {
-    if (!runId) {
-      setState(EMPTY_POLLED_RUN_SNAPSHOT_STATE);
-      return;
-    }
-
-    setState((current) => (
-      current.detail?.run.runId === runId
-        ? current
-        : {
-            detail: null,
-            log: null,
-            loading: false,
-            refreshing: false,
-            error: null,
-          }
-    ));
-  }, [runId]);
-
-  useEffect(() => {
-    if (!runId || !enabled) {
-      setState((current) => ({ ...current, loading: false, refreshing: false }));
-      return;
-    }
-
-    let cancelled = false;
-    let inFlight = false;
-
-    const pollSnapshot = async (initial: boolean) => {
-      if (cancelled || inFlight) {
-        return;
-      }
-
-      inFlight = true;
-      setState((current) => {
-        const hasDetail = current.detail?.run.runId === runId;
-        return {
-          ...current,
-          loading: initial && !hasDetail,
-          refreshing: !initial && hasDetail,
-          error: initial ? null : current.error,
-        };
-      });
-
-      try {
-        const [detail, log] = await Promise.all([
-          api.durableRun(runId),
-          api.durableRunLog(runId, tail),
-        ]);
-
-        if (cancelled) {
-          return;
-        }
-
-        setState({
-          detail,
-          log,
-          loading: false,
-          refreshing: false,
-          error: null,
-        });
-      } catch (error) {
-        if (!cancelled) {
-          const message = error instanceof Error ? error.message : 'Could not load run.';
-          setState((current) => ({
-            ...current,
-            loading: false,
-            refreshing: false,
-            error: message,
-          }));
-        }
-      } finally {
-        inFlight = false;
-      }
-    };
-
-    void pollSnapshot(true);
-    const intervalId = window.setInterval(() => {
-      void pollSnapshot(false);
-    }, pollIntervalMs);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(intervalId);
-    };
-  }, [enabled, pollIntervalMs, runId, tail]);
-
-  return state;
-}
-
-function inferStatusFromLinkedRunDetail(detail: string | null | undefined): string | undefined {
-  if (!detail) {
-    return undefined;
-  }
-
-  const firstSegment = detail.split('·')[0]?.trim().toLowerCase();
-  if (!firstSegment) {
-    return undefined;
-  }
-
-  const knownStatus = ['queued', 'waiting', 'running', 'recovering', 'completed', 'failed', 'interrupted', 'cancelled'];
-  return knownStatus.includes(firstSegment) ? firstSegment : undefined;
-}
-
-function describeInlineRunStatus(status: string | undefined): {
-  text: string;
-  tone: 'accent' | 'success' | 'warning' | 'danger' | 'muted';
-} {
-  if (status === 'running') {
-    return { text: 'running', tone: 'accent' };
-  }
-  if (status === 'recovering') {
-    return { text: 'recovering', tone: 'warning' };
-  }
-  if (status === 'queued' || status === 'waiting') {
-    return { text: status, tone: 'muted' };
-  }
-  if (status === 'completed') {
-    return { text: 'completed', tone: 'success' };
-  }
-  if (status === 'failed' || status === 'interrupted') {
-    return { text: status, tone: 'danger' };
-  }
-  if (status === 'cancelled') {
-    return { text: 'cancelled', tone: 'muted' };
-  }
-
-  return {
-    text: status?.trim().length ? status : 'linked',
-    tone: 'muted',
-  };
-}
-
 function collectTraceClusterLinkedRuns(blocks: TraceConversationBlock[]): LinkedRunPresentation[] {
   const seen = new Set<string>();
   const next: LinkedRunPresentation[] = [];
