@@ -533,9 +533,7 @@ function AutomationDetailView({
     : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`;
   const activityEntries = detail?.activity ?? [];
   const folderLabel = detail?.cwd || effectiveSummary?.cwd || 'Current workspace';
-  const modelLabel = detail?.targetType === 'conversation'
-    ? 'Not used for thread wakeups'
-    : (detail?.model || effectiveSummary?.model || 'Default');
+  const modelLabel = detail?.model || effectiveSummary?.model || 'Default';
   const definitionLabel = detail?.filePath ? detail.filePath.split('/').slice(-1)[0] : null;
   const nowMs = useAutomationClock();
   const minuteStartMs = Math.floor(nowMs / 60000) * 60000;
@@ -701,7 +699,7 @@ function AutomationDetailView({
             <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
             <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
             <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
-            <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'thread wakeups reuse the thread context instead' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
+            <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'used when the automation runs against the thread' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
           </section>
 
           <AppPageSection

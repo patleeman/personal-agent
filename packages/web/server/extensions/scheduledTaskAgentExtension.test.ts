@@ -179,6 +179,7 @@ describe('scheduled task agent extension', () => {
         targetType: 'conversation',
         at: '2026-04-11T09:00:00.000Z',
         deliverAs: 'followUp',
+        model: 'openai-codex/gpt-5.5',
         prompt: 'Check back in tomorrow.',
       },
       undefined,
@@ -198,6 +199,7 @@ describe('scheduled task agent extension', () => {
     expect(fetched.content[0]?.text).toContain('threadMode: existing');
     expect(fetched.content[0]?.text).toContain('threadConversationId: conv-123');
     expect(fetched.content[0]?.text).toContain('deliverAs: followUp');
+    expect(fetched.content[0]?.text).toContain('model: openai-codex/gpt-5.5');
   });
 
   it('lists and validates scheduled task definitions', async () => {
