@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { FileTree as TreesModel } from '@pierre/trees';
+import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
@@ -60,6 +62,23 @@ const STATUS_TITLES: Record<WorkspaceGitStatusChange, string> = {
   untracked: 'Untracked',
   conflicted: 'Conflicted',
 };
+
+const TREE_HOST_STYLE = {
+  display: 'block',
+  height: '100%',
+  '--trees-accent-override': 'rgb(var(--color-accent))',
+  '--trees-bg-override': 'transparent',
+  '--trees-bg-muted-override': 'transparent',
+  '--trees-border-color-override': 'rgb(var(--color-border-subtle))',
+  '--trees-fg-override': 'rgb(var(--color-secondary))',
+  '--trees-fg-muted-override': 'rgb(var(--color-dim))',
+  '--trees-focus-ring-color-override': 'rgb(var(--color-accent) / 0.35)',
+  '--trees-item-margin-x-override': '4px',
+  '--trees-item-padding-x-override': '8px',
+  '--trees-padding-inline-override': '0px',
+  '--trees-selected-bg-override': 'rgb(var(--color-accent) / 0.14)',
+  '--trees-selected-fg-override': 'rgb(var(--color-primary))',
+} satisfies CSSProperties & Record<string, string | number>;
 
 function readStoredBoolean(key: string, fallback: boolean): boolean {
   try {
@@ -221,6 +240,14 @@ function buildPrompt(root: string | null, action: string, path: string): string 
   return `${rootText}${action} \`${path}\`.`;
 }
 
+function workspaceEntryToTreePath(entry: WorkspaceEntry): string {
+  return entry.kind === 'directory' ? `${entry.path}/` : entry.path;
+}
+
+function treePathToWorkspacePath(path: string): string {
+  return path.replace(/\/+$/g, '');
+}
+
 function WorkspaceStatusBadge({ status, count }: { status: WorkspaceGitStatusChange | null; count?: number }) {
   if (!status && !count) return null;
   if (status) {
@@ -321,6 +348,12 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
   const refreshSerial = useRef(0);
   const refreshTimer = useRef<number | null>(null);
+  const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
+  const model = useMemo(() => new TreesModel({
+    paths: [],
+    search: false,
+    onSelectionChange: (paths) => selectionChangeRef.current(paths),
+  }), []);
 
   const loadRoot = useCallback(async () => {
     if (!cwd) return;
@@ -341,7 +374,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
     refreshTimer.current = window.setTimeout(() => { void loadRoot(); }, GIT_REFRESH_DEBOUNCE_MS);
   }, [loadRoot]);
 
-  useWorkspaceWatcher(cwd, open, scheduleRefresh);
+  useWorkspaceWatcher(cwd, open || railOnly, scheduleRefresh);
 
   useEffect(() => {
     setNodes({});
@@ -397,6 +430,22 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
 
   const root = rootListing.data?.root ?? null;
   const changes = rootListing.data?.changes ?? [];
+  const workspaceEntryMap = useMemo(() => {
+    const map = new Map<string, WorkspaceEntry>();
+    for (const entry of rootListing.data?.entries ?? []) {
+      map.set(entry.path, entry);
+    }
+    for (const node of Object.values(nodes)) {
+      for (const entry of node.entries ?? []) {
+        map.set(entry.path, entry);
+      }
+    }
+    return map;
+  }, [nodes, rootListing.data?.entries]);
+  const workspaceTreePaths = useMemo(
+    () => [...workspaceEntryMap.values()].map(workspaceEntryToTreePath),
+    [workspaceEntryMap],
+  );
   const selectedFile = fileState.data;
   const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
   const editorExtensions = useMemo(() => [
@@ -426,6 +475,43 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
     writeStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, showDiff);
   }, [showDiff]);
 
+  useEffect(() => {
+    model.resetPaths(workspaceTreePaths);
+  }, [model, workspaceTreePaths]);
+
+  useEffect(() => {
+    selectionChangeRef.current = (paths: readonly string[]) => {
+      const selected = paths[0];
+      if (!selected) return;
+      const workspacePath = treePathToWorkspacePath(selected);
+      const entry = workspaceEntryMap.get(workspacePath);
+      if (!entry) return;
+      if (entry.kind === 'directory') {
+        if (!nodes[entry.path]?.entries && !nodes[entry.path]?.loading) {
+          void loadDirectory(entry.path);
+        }
+        return;
+      }
+      onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
+    };
+  }, [loadDirectory, nodes, onDraftPrompt, root, workspaceEntryMap]);
+
+  useEffect(() => {
+    if (!railOnly) return;
+    const unsubscribe = model.subscribe(() => {
+      for (const entry of workspaceEntryMap.values()) {
+        if (entry.kind !== 'directory') continue;
+        const item = model.getItem(workspaceEntryToTreePath(entry));
+        if (item?.isDirectory() && item.isExpanded() && !nodes[entry.path]?.entries && !nodes[entry.path]?.loading) {
+          void loadDirectory(entry.path);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [loadDirectory, model, nodes, railOnly, workspaceEntryMap]);
+
+  useEffect(() => () => model.cleanUp(), [model]);
+
   if (!cwd) return null;
 
   if (!open && !railOnly) {
@@ -433,6 +519,30 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
       <button type="button" className="absolute right-3 top-3 z-40 rounded-md border border-border-subtle bg-base/90 px-2 py-1 text-[11px] text-secondary shadow-sm hover:text-primary" onClick={() => setOpen(true)}>
         Files
       </button>
+    );
+  }
+
+  if (railOnly) {
+    return (
+      <div className="flex h-full flex-col bg-base/96 text-sm">
+        <div className="px-3 pt-1 pb-1 shrink-0 rounded-md">
+          <div className="flex items-center gap-1">
+            <p className="ui-section-label flex-1">File Explorer</p>
+            {changes.length > 0 ? <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent" title={`${changes.length} changed file${changes.length === 1 ? '' : 's'}`}>{changes.length}</span> : null}
+            <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh workspace" onClick={() => { void loadRoot(); }}>↻</button>
+          </div>
+          <div className="mt-1 truncate font-mono text-[10px] text-dim" title={rootListing.data?.root ?? cwd}>{rootListing.data?.rootName ?? 'Workspace'} · {rootListing.data?.branch ?? 'no branch'}</div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden px-1 pb-3">
+          {rootListing.status === 'loading' && !rootListing.data ? (
+            <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
+          ) : rootListing.error ? (
+            <EmptyState title="Workspace unavailable" body={rootListing.error} className="px-3 py-8" />
+          ) : (
+            <TreesFileTree className="h-full" model={model} style={TREE_HOST_STYLE} />
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -465,9 +575,6 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
               root={root}
             />
           ))}
-        </div>
-        <div className="border-t border-border-subtle px-3 py-2 text-[10px] text-dim">
-          Realtime watcher active; git refresh is debounced.
         </div>
       </div>
 

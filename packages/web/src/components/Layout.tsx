@@ -480,42 +480,51 @@ function WorkbenchDocumentPane() {
 
 function WorkbenchKnowledgeRail({ workspaceCwd }: { workspaceCwd: string | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const [railMode, setRailMode] = useState<'knowledge' | 'files'>('knowledge');
   const activeFileId = searchParams.get('file') ?? null;
-  const knowledgeHref = activeFileId ? `/knowledge?file=${encodeURIComponent(activeFileId)}` : '/knowledge';
   const handleFileSelect = useCallback((id: string) => {
     navigateKnowledgeFile(setSearchParams, id);
   }, [setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 py-1.5">
-        <Link to={knowledgeHref} className="ui-sidebar-nav-item ui-sidebar-nav-item-active" title="Open full Knowledge view">
+      <div className="flex shrink-0 gap-1 px-1.5 py-1.5">
+        <button type="button" className={cx('ui-sidebar-nav-item flex-1', railMode === 'knowledge' && 'ui-sidebar-nav-item-active')} title="Knowledge" onClick={() => setRailMode('knowledge')}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d={KNOWLEDGE_ICON_PATH} />
           </svg>
           <span className="flex-1">Knowledge</span>
-        </Link>
+        </button>
+        <button type="button" className={cx('ui-sidebar-nav-item flex-1', railMode === 'files' && 'ui-sidebar-nav-item-active')} title="File explorer" onClick={() => setRailMode('files')}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
+            <path d="M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75" />
+          </svg>
+          <span className="flex-1">Files</span>
+        </button>
       </div>
-      <div className="min-h-0 flex-[0.55] overflow-hidden border-b border-border-subtle/80">
-        <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
-          <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
-        </Suspense>
-      </div>
-      <div className="min-h-0 flex-[0.45] overflow-hidden">
-        {workspaceCwd ? (
-          <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading workspace…</div>}>
-            <WorkspaceExplorer
-              cwd={workspaceCwd}
-              railOnly
-              onDraftPrompt={(prompt) => {
-                window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
-              }}
-            />
+      {railMode === 'knowledge' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
+            <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
           </Suspense>
-        ) : (
-          <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          {workspaceCwd ? (
+            <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading workspace…</div>}>
+              <WorkspaceExplorer
+                cwd={workspaceCwd}
+                railOnly
+                onDraftPrompt={(prompt) => {
+                  window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
+                }}
+              />
+            </Suspense>
+          ) : (
+            <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
