@@ -11,7 +11,6 @@ import {
 import {
   AgentSession,
   ModelRegistry,
-  SessionManager,
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
@@ -22,7 +21,6 @@ import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   readSessionBlocksByFile,
-  readSessionMetaByFile,
   type DisplayBlock,
 } from './sessions.js';
 import {
@@ -55,7 +53,6 @@ import {
 import {
   clearPrewarmedLiveSessionLoaders,
   prewarmLiveSessionLoader,
-  queuePrewarmLiveSessionLoader,
   type LiveSessionLoaderOptions,
 } from './liveSessionLoader.js';
 import {
@@ -87,10 +84,14 @@ import {
   resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
 } from './liveSessionModels.js';
 import {
-  createPreparedLiveAgentSession,
   makeAuth as makeFactoryAuth,
   makeRegistry,
 } from './liveSessionFactory.js';
+import {
+  createLiveSession as createLiveSessionWithCallbacks,
+  createLiveSessionFromExisting as createLiveSessionFromExistingWithCallbacks,
+  resumeLiveSession as resumeLiveSessionWithCallbacks,
+} from './liveSessionCreation.js';
 import {
   createLiveSessionHiddenTurnState,
   ensureHiddenTurnState,
@@ -693,20 +694,14 @@ export async function createSession(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
-  const sessionManager = SessionManager.create(cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createPreparedLiveAgentSession({
+  return createLiveSessionWithCallbacks({
     cwd,
-    agentDir: options.agentDir ?? AGENT_DIR,
-    sessionManager,
+    agentDir: AGENT_DIR,
     settingsFile: SETTINGS_FILE,
     options,
-    applyInitialPreferences: true,
+    persistentSessionDir: resolvePersistentSessionDir(cwd),
+    wireSession,
   });
-
-  const id = session.sessionId;
-  wireSession(id, session, cwd);
-  queuePrewarmLiveSessionLoader(cwd, options);
-  return { id, sessionFile: resolveLiveSessionFile(session) ?? '' };
 }
 
 /** Create a new live session in a different cwd from an existing session file. */
@@ -715,19 +710,15 @@ export async function createSessionFromExisting(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
-  const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createPreparedLiveAgentSession({
+  return createLiveSessionFromExistingWithCallbacks({
+    sessionFile,
     cwd,
-    agentDir: options.agentDir ?? AGENT_DIR,
-    sessionManager,
+    agentDir: AGENT_DIR,
     settingsFile: SETTINGS_FILE,
     options,
+    persistentSessionDir: resolvePersistentSessionDir(cwd),
+    wireSession,
   });
-
-  const id = session.sessionId;
-  wireSession(id, session, cwd);
-  queuePrewarmLiveSessionLoader(cwd, options);
-  return { id, sessionFile: resolveLiveSessionFile(session) ?? '' };
 }
 
 export async function summarizeSessionFileForPrompt(
@@ -788,38 +779,19 @@ export async function resumeSession(
   sessionFile: string,
   options: LiveSessionLoaderOptions & { cwdOverride?: string } = {},
 ): Promise<{ id: string }> {
-  // Don't re-create if already live
-  for (const [id, e] of registry.entries()) {
-    if (resolveLiveSessionFile(e.session) === sessionFile) return { id };
-  }
-
-  const {
-    cwdOverride,
-    ...loaderOptions
-  } = options;
-  const normalizedCwdOverride = typeof cwdOverride === 'string' && cwdOverride.trim().length > 0
-    ? cwdOverride.trim()
-    : undefined;
-
-  const metadataCwd = readSessionMetaByFile(sessionFile)?.cwd;
-  const effectiveCwdOverride = normalizedCwdOverride ?? metadataCwd;
-  const sessionManager = SessionManager.open(sessionFile, undefined, effectiveCwdOverride);
-  const cwd = effectiveCwdOverride ?? sessionManager.getCwd();
-  const { session } = await createPreparedLiveAgentSession({
-    cwd,
-    agentDir: loaderOptions.agentDir ?? AGENT_DIR,
-    sessionManager,
+  return resumeLiveSessionWithCallbacks({
+    sessionFile,
+    agentDir: AGENT_DIR,
     settingsFile: SETTINGS_FILE,
-    options: loaderOptions,
-    ensureSessionFile: false,
+    options,
+    findLiveSessionByFile: (candidateFile) => {
+      for (const [id, entry] of registry.entries()) {
+        if (resolveLiveSessionFile(entry.session) === candidateFile) return { id };
+      }
+      return null;
+    },
+    wireSession,
   });
-
-  const id = session.sessionId;
-  wireSession(id, session, cwd, {
-    autoTitleRequested: Boolean(session.sessionName?.trim()),
-  });
-  queuePrewarmLiveSessionLoader(cwd, loaderOptions);
-  return { id };
 }
 
 /** Subscribe to SSE events for a live session. Returns unsubscribe fn or null if not live. */
