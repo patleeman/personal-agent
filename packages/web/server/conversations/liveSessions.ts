@@ -17,7 +17,6 @@ import {
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
-import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   readSessionBlocksByFile,
@@ -158,6 +157,13 @@ import {
   appendVisibleLiveSessionCustomMessage,
   queueLiveSessionPromptContext,
 } from './liveSessionMessageAppend.js';
+import {
+  formatAvailableModels,
+  getLiveSessionContextUsage as readLiveSessionContextUsageForEntry,
+  getLiveSessionForkEntries as readLiveSessionForkEntries,
+  getLiveSessionStats as readLiveSessionStats,
+  listLiveSessions as listLiveSessionEntries,
+} from './liveSessionReadApi.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -612,22 +618,11 @@ export function isLive(sessionId: string): boolean {
 }
 
 export function getLiveSessions() {
-  return Array.from(registry.entries()).map(([id, entry]) => ({
-    id,
-    cwd: entry.cwd,
-    sessionFile: resolveLiveSessionFile(entry.session) ?? '',
-    title: resolveEntryTitle(entry),
-    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
-    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
-  }));
+  return listLiveSessionEntries(registry.entries(), resolveEntryTitle);
 }
 
 export function getLiveSessionForkEntries(sessionId: string): unknown[] | null {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    return null;
-  }
-  return entry.session.getUserMessagesForForking();
+  return readLiveSessionForkEntries(registry.get(sessionId));
 }
 
 export function getAvailableModelObjects() {
@@ -637,17 +632,7 @@ export function getAvailableModelObjects() {
 }
 
 export function getAvailableModels() {
-  return getAvailableModelObjects().map((model) => {
-    const contextWindow = normalizeModelContextWindow(model.id, model.contextWindow, 128_000);
-    return {
-      id: model.id,
-      name: model.name ?? model.id,
-      context: contextWindow,
-      contextWindow,
-      provider: (model as { provider?: string }).provider ?? '',
-      api: (model as { api?: string }).api,
-    };
-  });
+  return formatAvailableModels(getAvailableModelObjects());
 }
 
 export async function inspectAvailableTools(
@@ -679,15 +664,11 @@ export async function inspectAvailableTools(
 }
 
 export function getSessionStats(sessionId: string) {
-  const entry = registry.get(sessionId);
-  if (!entry) return null;
-  try { return entry.session.getSessionStats(); } catch { return null; }
+  return readLiveSessionStats(registry.get(sessionId));
 }
 
 export function getSessionContextUsage(sessionId: string): LiveContextUsage | null {
-  const entry = registry.get(sessionId);
-  if (!entry) return null;
-  return readLiveSessionContextUsage(entry.session);
+  return readLiveSessionContextUsageForEntry(registry.get(sessionId));
 }
 
 /** Create a brand-new Pi session. */
