@@ -290,9 +290,9 @@ function humanizeCronExpression(cron: string): string {
 
   switch (parsed.cadence) {
     case 'hourly':
-      return `every hour at :${pad2(parsed.minute)}`;
+      return parsed.minute === 0 ? 'every hour on the hour' : `every hour at :${pad2(parsed.minute)}`;
     case 'interval':
-      return `every ${parsed.intervalHours}h at :${pad2(parsed.minute)}`;
+      return parsed.minute === 0 ? `every ${parsed.intervalHours}h on the hour` : `every ${parsed.intervalHours}h at :${pad2(parsed.minute)}`;
     case 'daily':
       return `daily at ${formatTime(parsed.hour, parsed.minute)}`;
     case 'weekdays':

@@ -1,53 +1,45 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../client/api';
-import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
-import { CONVERSATION_LAYOUT_CHANGED_EVENT, ensureConversationTabOpen, readArchivedSessionIds } from '../session/sessionTabs';
+import { ensureConversationTabOpen } from '../session/sessionTabs';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
-import { AppPageIntro, AppPageLayout, AppPageSection, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
+import { AppPageIntro, AppPageLayout, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { useAppData, useSseConnection } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
-import { getRunHeadline, getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention, type RunPresentationLookups } from '../automation/runPresentation';
+import { getRunMoment, getRunTaskId, isRunInProgress, runNeedsAttention } from '../automation/runPresentation';
 import { formatTaskNextRunCountdown, formatTaskSchedule, getNextTaskRunAt } from '../automation/taskSchedule';
-import type { DurableRunRecord, ScheduledTaskActivityEntry, ScheduledTaskSummary } from '../shared/types';
+import type { DurableRunRecord, ScheduledTaskDetail, ScheduledTaskSummary } from '../shared/types';
 import { timeAgo } from '../shared/utils';
-
-function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
-  if (task.running) return 'bg-accent animate-pulse';
-  if (!task.enabled) return 'bg-border-default';
-  if (isFailedTaskStatus(task.lastStatus)) return 'bg-danger';
-  if (task.lastStatus === 'success') return 'bg-success';
-  return 'bg-border-default/50';
-}
 
 function isFailedTaskStatus(status: string | undefined): boolean {
   return status === 'failed' || status === 'failure';
-}
-
-function statusText(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): { text: string; cls: string } {
-  if (task.running) return { text: 'Running', cls: 'text-accent' };
-  if (!task.enabled) return { text: 'Disabled', cls: 'text-dim' };
-  if (isFailedTaskStatus(task.lastStatus)) return { text: 'Needs attention', cls: 'text-danger' };
-  if (task.lastStatus === 'success') return { text: 'Active', cls: 'text-success' };
-  return { text: 'Scheduled', cls: 'text-secondary' };
-}
-
-function summarizePrompt(value: string): string {
-  return value
-    .replace(/[`*_>#-]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function formatTaskName(task: Pick<ScheduledTaskSummary, 'id' | 'title'>): string {
   return task.title?.trim() || task.id;
 }
 
-function automationTargetLabel(task: Pick<ScheduledTaskSummary, 'targetType'>): string {
+function formatProjectLabel(task: Pick<ScheduledTaskSummary, 'cwd'>): string {
+  const cwd = task.cwd?.trim();
+  if (!cwd) return 'local';
+  const parts = cwd.split('/').filter(Boolean);
+  return parts.at(-1) ?? cwd;
+}
+
+function capitalizeFirst(value: string): string {
+  return value.length > 0 ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}` : value;
+}
+
+function formatScheduleLabel(task: Pick<ScheduledTaskSummary, 'cron' | 'at' | 'scheduleType'>): string {
+  if (!task.cron && !task.at) return 'Manual';
+  return capitalizeFirst(formatTaskSchedule(task));
+}
+
+function formatTargetLabel(task: Pick<ScheduledTaskSummary, 'targetType'>): string {
   return task.targetType === 'conversation' ? 'Thread' : 'Job';
 }
 
-function formatThreadModeLabel(mode: 'dedicated' | 'existing' | 'none'): string {
+function formatThreadModeLabel(mode: ScheduledTaskDetail['threadMode'] | undefined): string {
   switch (mode) {
     case 'existing':
       return 'Existing thread';
@@ -57,20 +49,6 @@ function formatThreadModeLabel(mode: 'dedicated' | 'existing' | 'none'): string 
     default:
       return 'Dedicated thread';
   }
-}
-
-function formatCatchUpWindowLabel(seconds: number | undefined): string {
-  if (!seconds || seconds <= 0) {
-    return 'Disabled';
-  }
-
-  const minutes = Math.max(1, Math.round(seconds / 60));
-  if (minutes % 60 === 0) {
-    const hours = minutes / 60;
-    return `${hours}h`;
-  }
-
-  return `${minutes}m`;
 }
 
 function useAutomationClock(): number {
@@ -84,28 +62,20 @@ function useAutomationClock(): number {
   return nowMs;
 }
 
-function useArchivedConversationIdSet(): Set<string> {
-  const [archivedConversationIds, setArchivedConversationIds] = useState(() => readArchivedSessionIds());
-
-  useEffect(() => {
-    function handleConversationLayoutChanged() {
-      setArchivedConversationIds(readArchivedSessionIds());
-    }
-
-    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
-    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
-  }, []);
-
-  return useMemo(() => new Set(archivedConversationIds), [archivedConversationIds]);
+function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): string {
+  if (task.running) return 'border-accent bg-accent/25 shadow-[0_0_0_3px_rgb(var(--color-accent)/0.14)]';
+  if (!task.enabled) return 'border-border-default bg-transparent';
+  if (isFailedTaskStatus(task.lastStatus)) return 'border-danger bg-danger/20';
+  if (task.lastStatus === 'success') return 'border-success bg-success/20';
+  return 'border-secondary/70 bg-transparent';
 }
 
-function formatNextRunHint(nextRunAt: Date): string {
-  return nextRunAt.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+function statusText(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): { text: string; cls: string } {
+  if (task.running) return { text: 'Running', cls: 'text-accent' };
+  if (!task.enabled) return { text: 'Disabled', cls: 'text-dim' };
+  if (isFailedTaskStatus(task.lastStatus)) return { text: 'Needs attention', cls: 'text-danger' };
+  if (task.lastStatus === 'success') return { text: 'Active', cls: 'text-success' };
+  return { text: 'Scheduled', cls: 'text-secondary' };
 }
 
 function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
@@ -118,15 +88,11 @@ function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'l
 function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
   return [...tasks].sort((left, right) => {
     const rankDiff = taskRowRank(left) - taskRowRank(right);
-    if (rankDiff !== 0) {
-      return rankDiff;
-    }
+    if (rankDiff !== 0) return rankDiff;
 
     const leftLastRun = left.lastRunAt ? Date.parse(left.lastRunAt) : 0;
     const rightLastRun = right.lastRunAt ? Date.parse(right.lastRunAt) : 0;
-    if (leftLastRun !== rightLastRun) {
-      return rightLastRun - leftLastRun;
-    }
+    if (leftLastRun !== rightLastRun) return rightLastRun - leftLastRun;
 
     return formatTaskName(left).localeCompare(formatTaskName(right));
   });
@@ -136,15 +102,11 @@ function sortAutomationRuns(runs: DurableRunRecord[]): DurableRunRecord[] {
   return [...runs].sort((left, right) => {
     const leftAttention = runNeedsAttention(left) ? 1 : 0;
     const rightAttention = runNeedsAttention(right) ? 1 : 0;
-    if (leftAttention !== rightAttention) {
-      return rightAttention - leftAttention;
-    }
+    if (leftAttention !== rightAttention) return rightAttention - leftAttention;
 
     const leftActive = isRunInProgress(left) ? 1 : 0;
     const rightActive = isRunInProgress(right) ? 1 : 0;
-    if (leftActive !== rightActive) {
-      return rightActive - leftActive;
-    }
+    if (leftActive !== rightActive) return rightActive - leftActive;
 
     const leftAt = getRunMoment(left).at ?? '';
     const rightAt = getRunMoment(right).at ?? '';
@@ -152,51 +114,25 @@ function sortAutomationRuns(runs: DurableRunRecord[]): DurableRunRecord[] {
   });
 }
 
-function automationRunStatus(run: DurableRunRecord): { text: string; cls: string } {
+function runStatusText(run: DurableRunRecord): { text: string; cls: string } {
   const status = run.status?.status;
   if (status === 'running' || status === 'recovering' || status === 'queued' || status === 'waiting') {
     return { text: 'Running', cls: 'text-accent' };
   }
   if (status === 'completed') {
-    return { text: runNeedsAttention(run) ? 'Needs review' : 'Completed', cls: runNeedsAttention(run) ? 'text-warning' : 'text-success' };
+    return runNeedsAttention(run)
+      ? { text: 'Needs review', cls: 'text-warning' }
+      : { text: 'Completed', cls: 'text-success' };
   }
-  if (status === 'failed' || status === 'interrupted') {
-    return { text: 'Failed', cls: 'text-danger' };
-  }
-  if (status === 'cancelled') {
-    return { text: 'Cancelled', cls: 'text-dim' };
-  }
+  if (status === 'failed' || status === 'interrupted') return { text: 'Failed', cls: 'text-danger' };
+  if (status === 'cancelled') return { text: 'Cancelled', cls: 'text-dim' };
   return { text: status ?? 'Unknown', cls: 'text-dim' };
-}
-
-function automationActivityStatus(entry: ScheduledTaskActivityEntry): { text: string; cls: string } {
-  return entry.outcome === 'catch-up-started'
-    ? { text: 'Catch-up started', cls: 'text-accent' }
-    : { text: 'Skipped', cls: 'text-warning' };
-}
-
-function automationActivityHeadline(entry: ScheduledTaskActivityEntry): string {
-  return entry.count === 1 ? 'Missed run' : `Missed ${entry.count} runs`;
-}
-
-function automationActivitySummary(entry: ScheduledTaskActivityEntry): string {
-  if (entry.outcome === 'catch-up-started') {
-    return entry.count === 1
-      ? 'The daemon missed this slot while offline and started a catch-up run when it came back.'
-      : 'The daemon missed these slots while offline and started one catch-up run for the latest slot when it came back.';
-  }
-
-  return entry.count === 1
-    ? 'The daemon was offline, so this scheduled slot did not run.'
-    : 'The daemon was offline, so these scheduled slots did not run.';
 }
 
 function CreateTaskModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+      if (event.key === 'Escape') onClose();
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -208,9 +144,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
       className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
@@ -236,9 +170,7 @@ function CreateTaskModal({ onClose }: { onClose: () => void }) {
 function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        onClose();
-      }
+      if (event.key === 'Escape') onClose();
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -250,9 +182,7 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
       className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
+        if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
@@ -275,88 +205,42 @@ function EditTaskModal({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-function AutomationsSection({
-  id,
-  label,
-  children,
-  className,
-}: {
-  id: string;
-  label: ReactNode;
-  children: ReactNode;
-  className?: string;
-}) {
-  return (
-    <AppPageSection id={id} title={label} className={className} bodyClassName="pt-6">
-      {children}
-    </AppPageSection>
-  );
-}
-
 function DeleteTaskModal({
   title,
   deleting,
   error,
-  onClose,
+  onCancel,
   onConfirm,
 }: {
   title: string;
   deleting: boolean;
   error: string | null;
-  onClose: () => void;
+  onCancel: () => void;
   onConfirm: () => void;
 }) {
-  useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape' && !deleting) {
-        onClose();
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [deleting, onClose]);
-
   return (
     <div
       className="ui-overlay-backdrop"
       style={{ background: 'rgb(0 0 0 / 0.58)', backdropFilter: 'blur(10px)', alignItems: 'center', justifyContent: 'center', padding: '1.75rem' }}
       onMouseDown={(event) => {
-        if (!deleting && event.target === event.currentTarget) {
-          onClose();
-        }
+        if (event.target === event.currentTarget && !deleting) onCancel();
       }}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Delete automation"
-        className="ui-dialog-shell"
-        style={{
-          maxWidth: '440px',
-          background: 'rgb(var(--color-surface) / 0.985)',
-          backdropFilter: 'blur(28px)',
-          boxShadow: '0 28px 80px rgb(0 0 0 / 0.35)',
-        }}
+        className="w-full max-w-md rounded-2xl border border-border-default bg-surface p-5 shadow-2xl"
       >
-        <div className="space-y-4 px-6 py-6">
+        <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Delete automation</p>
-            <h2 className="text-[24px] font-semibold tracking-tight text-primary">Delete “{title}”?</h2>
-            <p className="text-[14px] leading-6 text-secondary">
-              This removes the schedule from Automations. It will not undo past runs or existing thread history.
-            </p>
+            <h2 className="text-[20px] font-semibold tracking-tight text-primary">Delete {title}?</h2>
+            <p className="text-[14px] leading-6 text-secondary">This removes the schedule. Past runs and existing thread history stay put.</p>
           </div>
-
-          {error ? <p className="text-[12px] text-danger" aria-live="polite">{error}</p> : null}
-
-          <div className="flex items-center justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={deleting}
-              className="text-[13px] text-secondary transition-colors hover:text-primary disabled:cursor-default disabled:opacity-50"
-            >
+          {error && <p className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-[13px] text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={onCancel} disabled={deleting} className="text-[13px] text-secondary transition-colors hover:text-primary disabled:opacity-50">
               Cancel
             </button>
             <ToolbarButton onClick={onConfirm} disabled={deleting} className="text-danger hover:text-danger">
@@ -369,82 +253,81 @@ function DeleteTaskModal({
   );
 }
 
-function AutomationListRow({ task, nowMs }: { task: ScheduledTaskSummary; nowMs: number }) {
-  const { text, cls } = statusText(task);
-  const scheduleLabel = task.cron || task.at ? formatTaskSchedule(task) : 'Manual';
-  const targetLabel = automationTargetLabel(task);
-  const modelLabel = task.targetType === 'conversation'
-    ? (task.threadTitle ? `Thread · ${task.threadTitle}` : 'Conversation wakeup')
-    : (task.model?.split('/').pop() ?? 'Default model');
-  const lastRunLabel = task.lastRunAt ? `Last run ${timeAgo(task.lastRunAt)}` : 'Never run';
-  const minuteStartMs = Math.floor(nowMs / 60000) * 60000;
-  const nextRunAt = useMemo(() => getNextTaskRunAt(task, nowMs), [minuteStartMs, task]);
-  const nextRunLabel = nextRunAt ? `Next run ${formatTaskNextRunCountdown(nextRunAt, nowMs)}` : (task.enabled ? 'No upcoming run' : 'Disabled');
-  const summary = summarizePrompt(task.prompt) || 'No prompt yet.';
+function CurrentAutomationRow({ task }: { task: ScheduledTaskSummary }) {
+  const status = statusText(task);
+  const schedule = formatScheduleLabel(task);
+  const project = formatProjectLabel(task);
+  const title = formatTaskName(task);
 
   return (
     <Link
       to={`/automations/${encodeURIComponent(task.id)}`}
-      className="group block border-t border-border-subtle py-5 first:border-t-0"
+      className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-6 border-t border-border-subtle py-6 text-primary transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base"
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-            <span className={`inline-flex items-center gap-2 text-[12px] ${cls}`}>
-              <span className={`h-2 w-2 rounded-full ${statusDotClass(task)}`} />
-              {text}
-            </span>
-            <span className="text-[12px] text-secondary">{scheduleLabel}</span>
-            <span className="text-[12px] text-secondary">{targetLabel}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(task)}`} aria-hidden="true" />
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="truncate text-[15px] font-semibold text-primary group-hover:text-accent">{title}</span>
+            <span className="truncate text-[14px] text-secondary">{project}</span>
           </div>
-          <p className="mt-2 break-words text-[18px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
-            {formatTaskName(task)}
-          </p>
-          <p className="mt-1 max-w-3xl text-[14px] leading-6 text-secondary">{summary}</p>
-          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-secondary">
-            <span title={nextRunAt ? formatNextRunHint(nextRunAt) : undefined}>{nextRunLabel}</span>
-            <span>{lastRunLabel}</span>
-            <span>{modelLabel}</span>
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-secondary">
+            <span className={status.cls}>{status.text}</span>
+            <span>{formatTargetLabel(task)}</span>
+            {task.lastRunAt && <span>Last run {timeAgo(task.lastRunAt)}</span>}
           </div>
         </div>
-        <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
       </div>
+      <div className="shrink-0 text-right text-[14px] text-secondary">{schedule}</div>
     </Link>
   );
 }
 
-interface AssociatedAutomationThread {
-  conversationId: string;
-  title: string;
-  cwd?: string;
-  lastActivityAt?: string;
-  automationTitles: string[];
-}
+function AutomationsOverview({
+  tasks,
+  onCreate,
+}: {
+  tasks: ScheduledTaskSummary[];
+  onCreate: () => void;
+}) {
+  const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
+  const enabledCount = tasks.filter((task) => task.enabled).length;
+  const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
+  const runningCount = tasks.filter((task) => task.running).length;
 
-function AutomationThreadRow({ thread }: { thread: AssociatedAutomationThread }) {
-  const automationCountLabel = `${thread.automationTitles.length} automation${thread.automationTitles.length === 1 ? '' : 's'}`;
-  const automationSummary = thread.automationTitles.join(' · ');
-  const lastActivityLabel = thread.lastActivityAt ? `Last active ${timeAgo(thread.lastActivityAt)}` : 'No activity yet';
+  const pageMeta = useMemo(() => {
+    if (tasks.length === 0) return undefined;
+    const segments = [`${enabledCount} enabled`];
+    if (runningCount > 0) segments.push(`${runningCount} running`);
+    if (attentionCount > 0) segments.push(`${attentionCount} need review`);
+    return segments.join(' · ');
+  }, [attentionCount, enabledCount, runningCount, tasks.length]);
 
   return (
-    <Link
-      to={`/conversations/${encodeURIComponent(thread.conversationId)}`}
-      className="group block border-t border-border-subtle py-5 first:border-t-0"
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-secondary">
-            <span>{automationCountLabel}</span>
-            <span>{lastActivityLabel}</span>
+    <div className="h-full overflow-y-auto">
+      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-14">
+        <AppPageIntro
+          title="Automations"
+          summary={pageMeta}
+          actions={(
+            <ToolbarButton className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none" onClick={onCreate}>
+              + New automation
+            </ToolbarButton>
+          )}
+        />
+
+        <section className="max-w-4xl">
+          <h2 className="text-[18px] font-semibold tracking-tight text-primary">Current</h2>
+          <div className="mt-3 border-t border-border-subtle">
+            {rows.length === 0 ? (
+              <div className="py-6 text-[14px] text-secondary">No automations yet.</div>
+            ) : (
+              rows.map((task) => <CurrentAutomationRow key={task.id} task={task} />)
+            )}
           </div>
-          <p className="mt-2 break-words text-[18px] font-semibold tracking-tight text-primary transition-colors group-hover:text-accent">
-            {thread.title}
-          </p>
-          <p className="mt-1 max-w-3xl break-words text-[14px] leading-6 text-secondary">{automationSummary}</p>
-        </div>
-        <div className="shrink-0 text-[12px] text-accent transition-colors group-hover:text-primary">Open →</div>
-      </div>
-    </Link>
+        </section>
+      </AppPageLayout>
+    </div>
   );
 }
 
@@ -452,35 +335,33 @@ function PromptBody({ value }: { value: string }) {
   const lines = value.split('\n');
 
   return (
-    <div className="space-y-3 text-[15px] leading-7 text-secondary whitespace-pre-wrap break-words">
+    <div className="space-y-3 whitespace-pre-wrap break-words text-[14px] leading-7 text-secondary">
       {lines.map((line, index) => {
         if (line.startsWith('## ') || line.startsWith('# ')) {
-          return <p key={index} className="pt-2 text-[18px] font-semibold tracking-tight text-primary">{line.replace(/^#+\s/, '')}</p>;
+          return <p key={index} className="pt-2 text-[16px] font-semibold tracking-tight text-primary">{line.replace(/^#+\s/, '')}</p>;
         }
-        if (line.trim() === '') {
-          return <div key={index} className="h-2" />;
-        }
+        if (line.trim() === '') return <div key={index} className="h-1" />;
         return <p key={index}>{line}</p>;
       })}
     </div>
   );
 }
 
-function DetailMetaBlock({
-  label,
-  value,
-  hint,
-}: {
-  label: string;
-  value: string;
-  hint?: string | null;
-}) {
+function DetailLine({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="space-y-1.5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</p>
-      <p className="break-words text-[15px] leading-6 text-primary">{value}</p>
-      {hint ? <p className="break-words text-[12px] leading-5 text-secondary">{hint}</p> : null}
+    <div className="grid gap-1 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5">
+      <dt className="text-[12px] text-dim">{label}</dt>
+      <dd className="min-w-0 break-words text-[14px] text-secondary">{children}</dd>
     </div>
+  );
+}
+
+function DetailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-border-subtle pt-5">
+      <h2 className="text-[15px] font-semibold text-primary">{title}</h2>
+      <div className="mt-3">{children}</div>
+    </section>
   );
 }
 
@@ -495,14 +376,11 @@ function AutomationDetailView({
   onOpenEdit: () => void;
   onRefreshTasks: () => void;
 }) {
-  const location = useLocation();
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
-  const { runs, sessions } = useAppData();
+  const { runs } = useAppData();
   const { data, loading, error, refetch } = useApi(async () => {
-    if (!id) {
-      throw new Error('Task not found.');
-    }
+    if (!id) throw new Error('Task not found.');
     return api.taskDetail(id);
   }, id);
   const [runningNow, setRunningNow] = useState(false);
@@ -510,6 +388,7 @@ function AutomationDetailView({
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const nowMs = useAutomationClock();
 
   const detail = data;
   const effectiveSummary = summary ?? (detail ? {
@@ -525,56 +404,32 @@ function AutomationDetailView({
     prompt: detail.prompt,
     model: detail.model,
     cwd: detail.cwd,
+    threadConversationId: detail.threadConversationId,
+    threadTitle: detail.threadTitle,
     lastStatus: detail.lastStatus,
     lastRunAt: detail.lastRunAt,
+    lastSuccessAt: detail.lastSuccessAt,
   } satisfies ScheduledTaskSummary : null);
 
-  const status = effectiveSummary ? statusText(effectiveSummary) : { text: 'Unknown', cls: 'text-dim' };
-  const prompt = detail?.prompt ?? effectiveSummary?.prompt ?? '';
   const title = detail?.title ?? effectiveSummary?.title ?? id ?? 'Automation';
-  const scheduleLabel = detail ? formatTaskSchedule(detail) : effectiveSummary ? formatTaskSchedule(effectiveSummary) : 'Manual';
-  const targetLabel = automationTargetLabel(detail ?? effectiveSummary ?? { targetType: 'background-agent' });
-  const lastRunLabel = effectiveSummary?.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : null;
-  const lastSuccessLabel = effectiveSummary?.lastSuccessAt ? timeAgo(effectiveSummary.lastSuccessAt) : null;
-  const threadModeLabel = formatThreadModeLabel(detail?.threadMode ?? 'dedicated');
-  const selectedRunId = getConversationRunIdFromSearch(location.search);
-  const runLookups = useMemo<RunPresentationLookups>(() => ({ tasks: effectiveSummary ? [effectiveSummary] : [], sessions }), [effectiveSummary, sessions]);
+  const status = effectiveSummary ? statusText(effectiveSummary) : { text: 'Unknown', cls: 'text-dim' };
+  const scheduleLabel = effectiveSummary ? formatScheduleLabel(effectiveSummary) : 'Manual';
+  const targetLabel = effectiveSummary ? formatTargetLabel(effectiveSummary) : 'Job';
+  const projectLabel = effectiveSummary ? formatProjectLabel(effectiveSummary) : 'local';
+  const nextRunAt = effectiveSummary ? getNextTaskRunAt(effectiveSummary, nowMs) : null;
+  const nextRunLabel = nextRunAt ? formatTaskNextRunCountdown(nextRunAt, nowMs) : '—';
+  const prompt = detail?.prompt ?? effectiveSummary?.prompt ?? '';
   const taskRuns = useMemo(
     () => sortAutomationRuns((runs?.runs ?? []).filter((run) => getRunTaskId(run) === effectiveSummary?.id)),
     [effectiveSummary?.id, runs?.runs],
   );
-  const runHistoryLabel = taskRuns.length === 0
-    ? (selectedRunId ? 'Opening run details…' : 'No runs yet')
-    : `${taskRuns.length} run${taskRuns.length === 1 ? '' : 's'}`;
-  const activityEntries = detail?.activity ?? [];
-  const folderLabel = detail?.cwd || effectiveSummary?.cwd || 'Current workspace';
-  const modelLabel = detail?.model || effectiveSummary?.model || 'Default';
-  const definitionLabel = detail?.filePath ? detail.filePath.split('/').slice(-1)[0] : null;
-  const nowMs = useAutomationClock();
-  const minuteStartMs = Math.floor(nowMs / 60000) * 60000;
-  const nextRunAt = useMemo(() => effectiveSummary ? getNextTaskRunAt(effectiveSummary, nowMs) : null, [effectiveSummary, minuteStartMs]);
-  const nextRunLabel = nextRunAt ? formatTaskNextRunCountdown(nextRunAt, nowMs) : '—';
-  const nextRunHint = !effectiveSummary.enabled
-    ? 'schedule disabled'
-    : nextRunAt
-      ? formatNextRunHint(nextRunAt)
-      : 'no upcoming scheduled run';
-
-  const setSelectedRun = useCallback((runId: string | null) => {
-    navigate({
-      pathname: location.pathname,
-      search: setConversationRunIdInSearch(location.search, runId),
-    });
-  }, [location.pathname, location.search, navigate]);
 
   async function handleRunNow() {
-    if (!id || runningNow || effectiveSummary?.running) {
-      return;
-    }
+    if (!id || runningNow || effectiveSummary?.running) return;
 
     setRunningNow(true);
     try {
-      const result = await api.runTaskNow(id);
+      await api.runTaskNow(id);
       const [refreshedDetail] = await Promise.all([
         refetch({ resetLoading: false }),
         onRefreshTasks(),
@@ -584,10 +439,7 @@ function AutomationDetailView({
       if (threadConversationId) {
         ensureConversationTabOpen(threadConversationId);
         navigate(`/conversations/${encodeURIComponent(threadConversationId)}`);
-        return;
       }
-
-      setSelectedRun(result.runId);
     } catch (nextError) {
       console.error(nextError);
     } finally {
@@ -596,9 +448,7 @@ function AutomationDetailView({
   }
 
   async function handleToggleEnabled() {
-    if (!id || toggling || !effectiveSummary) {
-      return;
-    }
+    if (!id || toggling || !effectiveSummary) return;
 
     setToggling(true);
     try {
@@ -615,9 +465,7 @@ function AutomationDetailView({
   }
 
   async function handleDelete() {
-    if (!id || deleting) {
-      return;
-    }
+    if (!id || deleting) return;
 
     setDeleting(true);
     setDeleteError(null);
@@ -644,10 +492,9 @@ function AutomationDetailView({
     return (
       <div className="px-8 py-12">
         <div className="max-w-xl space-y-4">
-          <p className="text-[12px] uppercase tracking-[0.18em] text-dim">Automations</p>
-          <h1 className="text-[36px] font-semibold tracking-tight text-primary">Automation not found</h1>
-          <p className="text-[15px] leading-7 text-secondary">This automation may have been deleted or moved. Go back to the automation list and pick another one.</p>
-          <ToolbarButton onClick={onBack}>Back to automations</ToolbarButton>
+          <h1 className="text-[32px] font-semibold tracking-tight text-primary">Automation not found</h1>
+          <p className="text-[15px] leading-7 text-secondary">This automation may have been deleted or moved.</p>
+          <ToolbarButton onClick={onBack}>Back to Automations</ToolbarButton>
         </div>
       </div>
     );
@@ -656,183 +503,81 @@ function AutomationDetailView({
   return (
     <>
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-[72rem] space-y-8">
-          <AppPageIntro
-            title={title}
-            summary={(
-              <div className="flex flex-wrap items-center gap-3 text-[13px]">
-                <span className={`inline-flex items-center gap-2 ${status.cls}`}>
-                  <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(effectiveSummary)}`} />
-                  {status.text}
-                </span>
-                <span className="text-dim">{scheduleLabel}</span>
-                <span className="text-dim">{targetLabel}</span>
+        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-4xl space-y-8">
+          <div className="space-y-5">
+            <button type="button" onClick={onBack} className="text-[13px] text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+              ← Automations
+            </button>
+
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0 space-y-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(effectiveSummary)}`} aria-hidden="true" />
+                  <h1 className="break-words text-[36px] font-semibold tracking-tight text-primary sm:text-[42px]">{title}</h1>
+                </div>
+                <p className="text-[14px] text-secondary">
+                  <span className={status.cls}>{status.text}</span>
+                  <span className="mx-2 text-dim">·</span>
+                  <span>{projectLabel}</span>
+                  <span className="mx-2 text-dim">·</span>
+                  <span>{scheduleLabel}</span>
+                </p>
               </div>
-            )}
-            titleClassName="text-[40px] sm:text-[46px]"
-            actions={(
-              <>
-                <ToolbarButton onClick={onBack}>Back</ToolbarButton>
-                <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>
-                  ↻ Refresh
-                </ToolbarButton>
+
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <ToolbarButton onClick={() => { void refetch({ resetLoading: false }); void onRefreshTasks(); }}>Refresh</ToolbarButton>
+                <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
                 <ToolbarButton onClick={handleToggleEnabled} disabled={toggling || effectiveSummary.running}>
                   {toggling ? '…' : effectiveSummary.enabled ? 'Disable' : 'Enable'}
                 </ToolbarButton>
-                {detail?.threadConversationId && (
-                  <ToolbarButton onClick={() => {
-                    if (detail.threadConversationId) {
-                      navigate(`/conversations/${encodeURIComponent(detail.threadConversationId)}`);
-                    }
-                  }}>
-                    Open thread
-                  </ToolbarButton>
-                )}
-                <ToolbarButton onClick={onOpenEdit}>Edit</ToolbarButton>
-                <ToolbarButton
-                  onClick={() => {
-                    setDeleteError(null);
-                    setDeleteModalOpen(true);
-                  }}
-                  disabled={deleting}
-                  className="text-danger hover:text-danger"
-                >
-                  Delete
-                </ToolbarButton>
                 <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running} className="text-accent">
-                  {runningNow ? 'Running…' : '▷ Run now'}
+                  {runningNow ? 'Running…' : 'Run now'}
                 </ToolbarButton>
-              </>
-            )}
-          />
-
-          <section className="grid gap-6 border-t border-border-subtle pt-6 sm:grid-cols-2 xl:grid-cols-3">
-            <DetailMetaBlock label="State" value={status.text} hint={effectiveSummary.enabled ? scheduleLabel : 'schedule disabled'} />
-            <DetailMetaBlock label="Next run" value={nextRunLabel} hint={nextRunHint} />
-            <DetailMetaBlock label="Target" value={targetLabel} hint={detail?.targetType === 'conversation' ? 'injects the prompt back into a thread' : 'runs the prompt as a background automation'} />
-            <DetailMetaBlock label="Last ran" value={lastRunLabel ?? '—'} hint={lastRunLabel ? 'most recent attempt' : 'no runs yet'} />
-            <DetailMetaBlock label="Last success" value={lastSuccessLabel ?? '—'} hint={lastSuccessLabel ? 'most recent successful run' : 'no successful runs yet'} />
-            <DetailMetaBlock label="Run history" value={runHistoryLabel} hint={selectedRunId ? 'run details open below' : 'owned by this automation'} />
-            <DetailMetaBlock label="Thread" value={threadModeLabel} hint={detail?.threadTitle ?? (detail?.threadConversationId ? 'open from the toolbar' : 'no attached thread')} />
-            <DetailMetaBlock label="Model" value={modelLabel} hint={detail?.targetType === 'conversation' ? 'used when the automation runs against the thread' : (detail?.thinkingLevel ? `Reasoning: ${detail.thinkingLevel}` : 'uses default reasoning')} />
-          </section>
-
-          <AppPageSection
-            title="Configuration"
-            description="The bits that matter without shoving them into a skinny side rail."
-          >
-            <div className="space-y-4">
-              {definitionLabel && <span className="block truncate text-[12px] text-dim">{definitionLabel}</span>}
-              <div className="grid gap-6 sm:grid-cols-2">
-                <DetailMetaBlock label="Automation ID" value={effectiveSummary.id} />
-                <DetailMetaBlock label="Folder" value={folderLabel} />
-                {detail?.threadTitle && <DetailMetaBlock label="Thread title" value={detail.threadTitle} />}
-                {detail?.scheduleType === 'cron' && <DetailMetaBlock label="Catch-up" value={formatCatchUpWindowLabel(detail.catchUpWindowSeconds)} hint={detail.catchUpWindowSeconds ? 'run once after wake if the last missed slot is still fresh' : 'skip missed runs while the daemon was offline'} />}
-                {typeof detail?.timeoutSeconds === 'number' && <DetailMetaBlock label="Timeout" value={`${detail.timeoutSeconds}s`} />}
-                {typeof effectiveSummary.lastAttemptCount === 'number' && effectiveSummary.lastAttemptCount > 1 && (
-                  <DetailMetaBlock label="Attempts" value={String(effectiveSummary.lastAttemptCount)} hint="last run retries" />
-                )}
-                {detail?.filePath && <DetailMetaBlock label="Definition path" value={detail.filePath} />}
               </div>
             </div>
-          </AppPageSection>
+          </div>
 
-          <AppPageSection title="Prompt">
-            <div className="space-y-4">
-              {definitionLabel && <span className="block truncate text-[12px] text-dim">{definitionLabel}</span>}
-              {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
-            </div>
-          </AppPageSection>
+          <DetailSection title="Prompt">
+            {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
+          </DetailSection>
 
-          <AppPageSection
-            title="Runs"
-            description="This automation owns its run history."
-          >
-            <div className="space-y-4">
-              {selectedRunId && (
-                <div className="flex justify-end">
-                  <ToolbarButton onClick={() => setSelectedRun(null)}>
-                    Hide run details
-                  </ToolbarButton>
-                </div>
-              )}
+          <DetailSection title="Details">
+            <dl className="divide-y divide-border-subtle">
+              <DetailLine label="Schedule">{scheduleLabel}</DetailLine>
+              <DetailLine label="Next run">{nextRunLabel}</DetailLine>
+              <DetailLine label="Target">{targetLabel}</DetailLine>
+              <DetailLine label="Thread">{detail?.threadTitle ?? formatThreadModeLabel(detail?.threadMode)}</DetailLine>
+              <DetailLine label="Model">{detail?.model ?? effectiveSummary.model ?? 'Default'}</DetailLine>
+            </dl>
+          </DetailSection>
 
-              {taskRuns.length === 0 ? (
-                <p className="text-[14px] text-secondary">{runHistoryLabel}</p>
-              ) : (
-                <div className="space-y-2">
-                  {taskRuns.slice(0, 8).map((run) => {
-                    const headline = getRunHeadline(run, runLookups);
-                    const runStatus = automationRunStatus(run);
-                    const activityAt = getRunMoment(run).at;
-                    const selected = selectedRunId === run.runId;
-
-                    return (
-                      <button
-                        key={run.runId}
-                        type="button"
-                        onClick={() => setSelectedRun(selected ? null : run.runId)}
-                        className={`w-full rounded-2xl border px-4 py-3 text-left transition ${selected ? 'border-accent bg-surface' : 'border-border-subtle/80 hover:border-border-default hover:bg-surface/70'}`}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-[14px] font-medium text-primary">{headline.title}</p>
-                              <span className={`text-[12px] ${runStatus.cls}`}>{runStatus.text}</span>
-                            </div>
-                            <p className="mt-1 text-[12px] text-secondary">{headline.summary}</p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
-                              <span>{run.runId}</span>
-                              {activityAt && <><span>·</span><span>{timeAgo(activityAt)}</span></>}
-                              {runNeedsAttention(run) && <><span>·</span><span className="text-warning">needs review</span></>}
-                            </div>
-                          </div>
-                          <span className="text-[12px] text-accent">{selected ? 'Hide' : 'Inspect'}</span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </AppPageSection>
-
-          {detail && (
-            <AppPageSection
-              title="Activity"
-              description="Missed schedules and catch-up decisions for this automation."
-            >
-              {activityEntries.length === 0 ? (
-                <p className="text-[14px] text-secondary">No schedule events yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  {activityEntries.map((entry) => {
-                    const statusMeta = automationActivityStatus(entry);
-
-                    return (
-                      <div key={entry.id} className="rounded-2xl border border-border-subtle/80 px-4 py-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="text-[14px] font-medium text-primary">{automationActivityHeadline(entry)}</p>
-                              <span className={`text-[12px] ${statusMeta.cls}`}>{statusMeta.text}</span>
-                            </div>
-                            <p className="mt-1 text-[12px] text-secondary">{automationActivitySummary(entry)}</p>
-                            <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-dim">
-                              <span>Detected {timeAgo(entry.createdAt)}</span>
-                              <span>·</span>
-                              <span>Latest slot {timeAgo(entry.lastScheduledAt)}</span>
-                              {entry.count > 1 && <><span>·</span><span>First slot {timeAgo(entry.firstScheduledAt)}</span></>}
-                            </div>
-                          </div>
-                        </div>
+          <DetailSection title="Runs">
+            {taskRuns.length === 0 ? (
+              <p className="text-[14px] text-secondary">No runs yet.</p>
+            ) : (
+              <div className="divide-y divide-border-subtle border-t border-border-subtle">
+                {taskRuns.slice(0, 6).map((run) => {
+                  const runStatus = runStatusText(run);
+                  const moment = getRunMoment(run);
+                  return (
+                    <div key={run.runId} className="grid gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate text-[14px] font-medium text-primary">{run.runId}</p>
+                        <p className="mt-1 text-[12px] text-secondary">{moment.at ? timeAgo(moment.at) : 'No timestamp'}</p>
                       </div>
-                    );
-                  })}
-                </div>
-              )}
-            </AppPageSection>
-          )}
+                      <p className={`text-[13px] ${runStatus.cls}`}>{runStatus.text}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DetailSection>
+
+          <div className="border-t border-border-subtle pt-5">
+            <button type="button" onClick={() => setDeleteModalOpen(true)} className="text-[13px] text-danger transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+              Delete automation
+            </button>
+          </div>
         </AppPageLayout>
       </div>
 
@@ -841,12 +586,8 @@ function AutomationDetailView({
           title={title}
           deleting={deleting}
           error={deleteError}
-          onClose={() => {
-            if (deleting) {
-              return;
-            }
-            setDeleteModalOpen(false);
-            setDeleteError(null);
+          onCancel={() => {
+            if (!deleting) setDeleteModalOpen(false);
           }}
           onConfirm={() => { void handleDelete(); }}
         />
@@ -855,175 +596,10 @@ function AutomationDetailView({
   );
 }
 
-function AutomationsOverview({
-  tasks,
-  onCreate,
-}: {
-  tasks: ScheduledTaskSummary[];
-  onCreate: () => void;
-}) {
-  const { sessions } = useAppData();
-  const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
-  const runningCount = tasks.filter((task) => task.running).length;
-  const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
-  const enabledCount = tasks.filter((task) => task.enabled).length;
-  const nowMs = useAutomationClock();
-  const archivedConversationIds = useArchivedConversationIdSet();
-
-  const pageMeta = useMemo(() => {
-    if (tasks.length === 0) {
-      return undefined;
-    }
-
-    const segments = [`${enabledCount} enabled`];
-    if (runningCount > 0) {
-      segments.push(`${runningCount} running`);
-    }
-    if (attentionCount > 0) {
-      segments.push(`${attentionCount} need review`);
-    }
-
-    return segments.join(' · ');
-  }, [attentionCount, enabledCount, runningCount, tasks.length]);
-
-  const associatedThreads = useMemo(() => {
-    const sessionsById = new Map((sessions ?? []).map((session) => [session.id, session] as const));
-    const tasksById = new Map(rows.map((task) => [task.id, task] as const));
-    const byConversationId = new Map<string, {
-      conversationId: string;
-      title: string;
-      cwd?: string;
-      lastActivityAt?: string;
-      automationTitles: string[];
-    }>();
-
-    function upsertThread(conversationId: string, input: {
-      title?: string;
-      cwd?: string;
-      lastActivityAt?: string;
-      automationTitle?: string;
-    }) {
-      const existing = byConversationId.get(conversationId);
-      if (!existing) {
-        byConversationId.set(conversationId, {
-          conversationId,
-          title: input.title?.trim() || conversationId,
-          cwd: input.cwd,
-          lastActivityAt: input.lastActivityAt,
-          automationTitles: input.automationTitle ? [input.automationTitle] : [],
-        });
-        return;
-      }
-
-      if ((!existing.title || existing.title === conversationId) && input.title?.trim()) {
-        existing.title = input.title.trim();
-      }
-      if (!existing.cwd && input.cwd) {
-        existing.cwd = input.cwd;
-      }
-      if (input.lastActivityAt && (!existing.lastActivityAt || input.lastActivityAt > existing.lastActivityAt)) {
-        existing.lastActivityAt = input.lastActivityAt;
-      }
-      if (input.automationTitle && !existing.automationTitles.includes(input.automationTitle)) {
-        existing.automationTitles.push(input.automationTitle);
-      }
-    }
-
-    rows.forEach((task) => {
-      if (!task.threadConversationId) {
-        return;
-      }
-      if (archivedConversationIds.has(task.threadConversationId)) {
-        return;
-      }
-
-      const session = sessionsById.get(task.threadConversationId);
-      upsertThread(task.threadConversationId, {
-        title: session?.title || task.threadTitle || formatTaskName(task),
-        cwd: session?.cwd || task.cwd,
-        lastActivityAt: session?.lastActivityAt || session?.timestamp,
-        automationTitle: formatTaskName(task),
-      });
-    });
-
-    (sessions ?? []).forEach((session) => {
-      if (!session.automationTaskId && !session.automationTitle) {
-        return;
-      }
-      if (archivedConversationIds.has(session.id)) {
-        return;
-      }
-
-      const linkedTask = session.automationTaskId ? tasksById.get(session.automationTaskId) : undefined;
-      upsertThread(session.id, {
-        title: session.title,
-        cwd: session.cwd,
-        lastActivityAt: session.lastActivityAt || session.timestamp,
-        automationTitle: linkedTask ? formatTaskName(linkedTask) : session.automationTitle,
-      });
-    });
-
-    return Array.from(byConversationId.values())
-      .map((thread) => ({
-        ...thread,
-        automationTitles: [...thread.automationTitles].sort((left, right) => left.localeCompare(right)),
-      }))
-      .sort((left, right) => {
-        const leftActivity = left.lastActivityAt ?? '';
-        const rightActivity = right.lastActivityAt ?? '';
-        return rightActivity.localeCompare(leftActivity) || left.title.localeCompare(right.title);
-      }) satisfies AssociatedAutomationThread[];
-  }, [archivedConversationIds, rows, sessions]);
-
-  return (
-    <div className="h-full overflow-y-auto">
-      <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="space-y-12">
-        <AppPageIntro
-          title="Automations"
-          summary={pageMeta}
-          actions={tasks.length > 0 ? (
-            <ToolbarButton
-              className="rounded-lg px-3 py-1.5 text-[12px] text-primary shadow-none"
-              onClick={onCreate}
-            >
-              + New automation
-            </ToolbarButton>
-          ) : undefined}
-        />
-
-        <div className="space-y-12">
-          <AutomationsSection id="automation-jobs" label="Jobs">
-            {tasks.length === 0 ? (
-              <div className="space-y-4">
-                <p className="max-w-xl text-[14px] leading-6 text-secondary">No jobs yet.</p>
-                <ToolbarButton className="px-4 py-2 text-[13px]" onClick={onCreate}>New automation</ToolbarButton>
-              </div>
-            ) : (
-              <div>
-                {rows.map((task) => (
-                  <AutomationListRow key={task.id} task={task} nowMs={nowMs} />
-                ))}
-              </div>
-            )}
-          </AutomationsSection>
-
-          <AutomationsSection id="automation-threads" label="Threads">
-            {associatedThreads.length === 0 ? (
-              <div>
-                <p className="max-w-xl text-[14px] leading-6 text-secondary">No associated threads yet.</p>
-              </div>
-            ) : (
-              <div>
-                {associatedThreads.map((thread) => (
-                  <AutomationThreadRow key={thread.conversationId} thread={thread} />
-                ))}
-              </div>
-            )}
-          </AutomationsSection>
-        </div>
-      </AppPageLayout>
-    </div>
-  );
+async function refreshTaskSnapshot(setTasks: (tasks: ScheduledTaskSummary[]) => void) {
+  const tasks = await api.tasks();
+  setTasks(tasks);
+  return tasks;
 }
 
 export function TasksPage() {
@@ -1040,52 +616,46 @@ export function TasksPage() {
   const selectedTask = tasks?.find((task) => task.id === selectedId) ?? null;
 
   const refreshTasks = useCallback(async () => {
+    setRefreshError(null);
     try {
-      const next = await api.tasks();
-      setTasks(next);
-      setRefreshError(null);
-      return next;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setRefreshError(message);
-      return null;
+      await refreshTaskSnapshot(setTasks);
+    } catch (nextError) {
+      setRefreshError(nextError instanceof Error ? nextError.message : String(nextError));
     }
   }, [setTasks]);
 
-  const query = new URLSearchParams(location.search);
-  const showingCreateForm = query.get('new') === '1';
-  const showingEditForm = Boolean(selectedId) && query.get('edit') === '1';
-
-  const setComposerMode = useCallback((mode: 'new' | 'edit' | null) => {
-    const nextSearch = new URLSearchParams(location.search);
-    nextSearch.delete('new');
-    nextSearch.delete('edit');
-
-    if (mode === 'new') {
-      nextSearch.set('new', '1');
-    } else if (mode === 'edit') {
-      nextSearch.set('edit', '1');
+  useEffect(() => {
+    if (tasks === null && sseStatus === 'offline') {
+      void refreshTasks();
     }
+  }, [refreshTasks, sseStatus, tasks]);
 
-    const nextSearchString = nextSearch.toString();
-    navigate({
-      pathname: location.pathname,
-      search: nextSearchString ? `?${nextSearchString}` : '',
-    });
-  }, [location.pathname, location.search, navigate]);
+  const params = new URLSearchParams(location.search);
+  const composerMode = selectedId && params.get('edit') === '1'
+    ? 'edit'
+    : params.get('new') === '1'
+      ? 'create'
+      : null;
+
+  function closeComposer() {
+    if (selectedId) {
+      navigate(`/automations/${encodeURIComponent(selectedId)}`);
+    } else {
+      navigate('/automations');
+    }
+  }
 
   return (
     <div className="flex h-full flex-col">
       {isLoading && <LoadingState label="Loading automations…" className="px-8 py-12" />}
       {visibleError && <ErrorState message={`Failed to load automations: ${visibleError}`} className="px-8 py-12" />}
-      {!isLoading && !visibleError && tasks && (
+      {tasks && (
         selectedId
-          ? <AutomationDetailView summary={selectedTask} onBack={() => navigate('/automations')} onOpenEdit={() => setComposerMode('edit')} onRefreshTasks={() => refreshTasks()} />
-          : <AutomationsOverview tasks={tasks} onCreate={() => setComposerMode('new')} />
+          ? <AutomationDetailView summary={selectedTask} onBack={() => navigate('/automations')} onOpenEdit={() => navigate(`/automations/${encodeURIComponent(selectedId)}?edit=1`)} onRefreshTasks={() => refreshTasks()} />
+          : <AutomationsOverview tasks={tasks} onCreate={() => navigate('/automations?new=1')} />
       )}
-
-      {showingCreateForm && <CreateTaskModal onClose={() => setComposerMode(null)} />}
-      {showingEditForm && selectedId && <EditTaskModal id={selectedId} onClose={() => setComposerMode(null)} />}
+      {composerMode === 'create' && <CreateTaskModal onClose={closeComposer} />}
+      {composerMode === 'edit' && selectedId && <EditTaskModal id={selectedId} onClose={closeComposer} />}
     </div>
   );
 }

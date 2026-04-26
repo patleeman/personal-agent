@@ -51,6 +51,7 @@ describe('taskSchedule helpers', () => {
 
   it('formats supported schedules for display', () => {
     expect(formatTaskSchedule({ cron: '11 */4 * * *' })).toBe('every 4h at :11');
+    expect(formatTaskSchedule({ cron: '0 */4 * * *' })).toBe('every 4h on the hour');
     expect(formatTaskSchedule({ cron: '0 9 * * 1-5' })).toBe('weekdays at 09:00');
   });
 

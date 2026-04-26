@@ -3,7 +3,6 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, SseConnectionContext } from '../app/contexts.js';
-import { ARCHIVED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
 import { TasksPage } from './TasksPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
@@ -43,7 +42,7 @@ describe('TasksPage', () => {
     vi.clearAllMocks();
   });
 
-  it('renders jobs and associated automation threads on the overview page', () => {
+  it('renders a clean current automation list on the overview page', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -92,12 +91,13 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Automations');
-    expect(html).toContain('Jobs');
-    expect(html).toContain('Threads');
+    expect(html).toContain('Current');
     expect(html).toContain('Daily report');
-    expect(html).toContain('Automation: Daily report');
     expect(html).toContain('href="/automations/daily-report"');
-    expect(html).toContain('href="/conversations/automation.daily-report"');
+    expect(html).toContain('Weekdays at 09:00');
+    expect(html).not.toContain('href="/conversations/automation.daily-report"');
+    expect(html).not.toContain('Jobs');
+    expect(html).not.toContain('Threads');
     expect(html).not.toContain('Automation jobs');
     expect(html).not.toContain('Automation threads');
     expect(html).not.toContain('On this page');
@@ -105,9 +105,7 @@ describe('TasksPage', () => {
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
   });
 
-  it('hides archived automation threads from the overview thread list', () => {
-    localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['automation.daily-report']));
-
+  it('does not render a separate thread row for thread-backed automations', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -156,11 +154,11 @@ describe('TasksPage', () => {
     );
 
     expect(html).toContain('Daily report');
-    expect(html).toContain('No associated threads yet.');
+    expect(html).not.toContain('Automation: Daily report');
     expect(html).not.toContain('href="/conversations/automation.daily-report"');
   });
 
-  it('renders lean empty states for jobs and threads', () => {
+  it('renders a lean empty state', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -182,13 +180,12 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Jobs');
-    expect(html).toContain('Threads');
-    expect(html).toContain('No jobs yet.');
-    expect(html).toContain('No associated threads yet.');
+    expect(html).toContain('Current');
+    expect(html).toContain('No automations yet.');
+    expect(html).not.toContain('Jobs');
+    expect(html).not.toContain('Threads');
     expect(html).not.toContain('No automation jobs yet.');
-    expect(html).not.toContain('+ New automation');
-    expect(html.match(/New automation/g)?.length ?? 0).toBe(1);
+    expect(html).toContain('+ New automation');
     expect(html).not.toContain('Create one to start recurring work.');
     expect(html).not.toContain('Automation jobs');
     expect(html).not.toContain('Automation threads');
@@ -311,9 +308,9 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('This automation owns its run history.');
+    expect(html).toContain('Runs');
     expect(html).toContain('task-daily-report-2026-03-18');
-    expect(html).toContain('Hide run details');
+    expect(html).not.toContain('Hide run details');
   });
 
   it('does not repeat the prompt summary above the full prompt body on the detail page', () => {
@@ -381,7 +378,7 @@ describe('TasksPage', () => {
     expect(html).toContain('Automation title');
     expect(html).toContain('Select project');
     expect(html).toContain('Worktree');
-    expect(html).toContain('No jobs yet.');
+    expect(html).toContain('No automations yet.');
   });
 
   it('uses existing conversation workspaces as project options in the create form', () => {
