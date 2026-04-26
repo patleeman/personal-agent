@@ -81,6 +81,21 @@ export function useConversationScroll({
     clearSmoothBottomScrollSettle();
   }, [clearSmoothBottomScrollSettle]);
 
+  const cancelPinnedBottomWatch = useCallback(() => {
+    pinnedBottomWatchUntilRef.current = 0;
+    if (pinnedBottomWatchFrameRef.current !== 0) {
+      window.cancelAnimationFrame(pinnedBottomWatchFrameRef.current);
+      pinnedBottomWatchFrameRef.current = 0;
+    }
+  }, []);
+
+  const detachFromBottom = useCallback(() => {
+    scrollPinnedToBottomRef.current = false;
+    setAtBottom(false);
+    cancelBottomScrollSettle();
+    cancelPinnedBottomWatch();
+  }, [cancelBottomScrollSettle, cancelPinnedBottomWatch]);
+
   const syncPinnedBottomFromDom = useCallback((el: HTMLDivElement, scrollHeight = el.scrollHeight) => {
     scrollPinnedToBottomRef.current = true;
     if (!scrollConversationTailIntoView(el)) {
@@ -198,12 +213,26 @@ export function useConversationScroll({
 
   useLayoutEffect(() => () => {
     cancelBottomScrollSettle();
-    if (pinnedBottomWatchFrameRef.current !== 0) {
-      window.cancelAnimationFrame(pinnedBottomWatchFrameRef.current);
-      pinnedBottomWatchFrameRef.current = 0;
+    cancelPinnedBottomWatch();
+  }, [cancelBottomScrollSettle, cancelPinnedBottomWatch]);
+
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) {
+      return;
     }
-    pinnedBottomWatchUntilRef.current = 0;
-  }, [cancelBottomScrollSettle]);
+
+    const handleWheel = (event: WheelEvent) => {
+      if (event.deltaY < 0 && scrollPinnedToBottomRef.current) {
+        detachFromBottom();
+      }
+    };
+
+    el.addEventListener('wheel', handleWheel, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', handleWheel);
+    };
+  }, [detachFromBottom, scrollRef]);
 
   const syncScrollStateFromDom = useCallback(() => {
     const el = scrollRef.current;
@@ -219,9 +248,13 @@ export function useConversationScroll({
         scrollTop: el.scrollTop,
         clientHeight: el.clientHeight,
       });
+    if (!nextAtBottom) {
+      cancelBottomScrollSettle();
+      cancelPinnedBottomWatch();
+    }
     scrollPinnedToBottomRef.current = nextAtBottom;
     setAtBottom(nextAtBottom);
-  }, [scrollRef]);
+  }, [cancelBottomScrollSettle, cancelPinnedBottomWatch, scrollRef]);
 
   const scrollToBottom = useCallback((options?: { behavior?: ScrollBehavior }) => {
     const el = scrollRef.current;
