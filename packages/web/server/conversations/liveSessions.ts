@@ -20,16 +20,12 @@ import {
   type AgentSessionEvent,
   type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
-import { stream, streamSimple, type Api, type Context, type Model, type ProviderStreamOptions, type SimpleStreamOptions } from '@mariozechner/pi-ai';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
   applyConversationModelPreferencesToLiveSession,
-  readConversationModelPreferenceSnapshot,
-  resolveConversationModelPreferenceState,
   type ConversationModelPreferenceInput,
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
-import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
@@ -133,6 +129,12 @@ import {
   isPlaceholderConversationTitle,
   resolveStableSessionTitle,
 } from './liveSessionTitle.js';
+import {
+  applyLiveSessionServiceTier,
+  buildConversationServiceTierPreferenceInput,
+  repairSessionModelProvider,
+  resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
+} from './liveSessionModels.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -181,63 +183,10 @@ export function resolvePersistentSessionDir(cwd: string): string {
 }
 
 function resolveConversationPreferenceStateForSession(
-  sessionManager: Pick<SessionManager, 'buildSessionContext' | 'getBranch'>,
-  availableModels: Model<Api>[],
-): ConversationModelPreferenceState {
-  return resolveConversationModelPreferenceState(
-    readConversationModelPreferenceSnapshot(sessionManager),
-    readSavedModelPreferences(SETTINGS_FILE, availableModels),
-    availableModels,
-  );
-}
-
-function buildConversationServiceTierPreferenceInput(
-  state: Pick<ConversationModelPreferenceState, 'currentServiceTier' | 'hasExplicitServiceTier'>,
-): string | null | undefined {
-  if (!state.hasExplicitServiceTier) {
-    return undefined;
-  }
-
-  return state.currentServiceTier || null;
-}
-
-function buildServiceTierAwareStreamFn(
-  modelRegistry: ModelRegistry,
-  serviceTier: string,
-) {
-  return async (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => {
-    const auth = await modelRegistry.getApiKeyAndHeaders(model);
-    if (!auth.ok) {
-      throw new Error(auth.error);
-    }
-
-    const mergedOptions: ProviderStreamOptions = {
-      ...options,
-      apiKey: auth.apiKey,
-      headers: auth.headers || options?.headers ? { ...auth.headers, ...options?.headers } : undefined,
-    };
-
-    if (!serviceTier || !modelSupportsServiceTier(model, serviceTier)) {
-      return streamSimple(model, context, mergedOptions);
-    }
-
-    const reasoningEffort = typeof (options as { reasoning?: unknown } | undefined)?.reasoning === 'string'
-      ? (options as { reasoning: string }).reasoning
-      : undefined;
-
-    return stream(model, context, {
-      ...mergedOptions,
-      reasoningEffort,
-      serviceTier,
-    });
-  };
-}
-
-function applyLiveSessionServiceTier(
-  session: AgentSession,
-  serviceTier: string,
-): void {
-  session.agent.streamFn = buildServiceTierAwareStreamFn(session.modelRegistry, serviceTier);
+  sessionManager: Parameters<typeof resolveConversationPreferenceStateForSessionWithSettings>[1],
+  availableModels: Parameters<typeof resolveConversationPreferenceStateForSessionWithSettings>[2],
+): ReturnType<typeof resolveConversationPreferenceStateForSessionWithSettings> {
+  return resolveConversationPreferenceStateForSessionWithSettings(SETTINGS_FILE, sessionManager, availableModels);
 }
 
 // ── SSE event types sent to clients ──────────────────────────────────────────
@@ -1342,28 +1291,6 @@ export function getSessionContextUsage(sessionId: string): LiveContextUsage | nu
   const entry = registry.get(sessionId);
   if (!entry) return null;
   return readContextUsagePayload(entry.session);
-}
-
-async function repairSessionModelProvider(session: Pick<AgentSession, 'setModel' | 'sessionManager' | 'model'>, models: ReturnType<ModelRegistry['getAvailable']>): Promise<void> {
-  const currentId = session.model?.id ?? '';
-  const currentProvider = (session.model as { provider?: string } | undefined)?.provider ?? '';
-  if (!currentId) {
-    return;
-  }
-
-  const exactMatch = models.find((candidate) => candidate.id === currentId && candidate.provider === currentProvider);
-  if (exactMatch) {
-    return;
-  }
-
-  const idMatches = models.filter((candidate) => candidate.id === currentId);
-  if (idMatches.length !== 1) {
-    return;
-  }
-
-  const repairedModel = idMatches[0]!;
-  await session.setModel(repairedModel);
-  session.sessionManager.appendModelChange(repairedModel.provider, repairedModel.id);
 }
 
 /** Create a brand-new Pi session. */
