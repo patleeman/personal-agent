@@ -25,11 +25,8 @@ import {
   type ConversationAutoModeStateInput,
 } from './conversationAutoMode.js';
 import {
-  assertLiveSessionSurfaceCanControl,
-  buildLiveSessionPresenceState,
   createLiveSessionPresenceHost,
   LiveSessionControlError,
-  takeOverLiveSessionSurface,
   type LiveSessionPresenceState,
   type LiveSessionSurfaceType,
   type LiveSessionPresenceHost,
@@ -176,6 +173,11 @@ import {
   canInjectResumeFallbackPrompt as canInjectResumeFallbackPromptForEntry,
   listQueuedPromptPreviews as listQueuedPromptPreviewsForEntry,
 } from './liveSessionQueueRead.js';
+import {
+  broadcastLiveSessionPresenceState,
+  ensureLiveSessionSurfaceCanControl,
+  takeOverLiveSessionControl,
+} from './liveSessionPresenceFacade.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -432,7 +434,7 @@ function clearContextUsageTimer(entry: LiveEntry): void {
 }
 
 function broadcastPresenceState(entry: LiveEntry, options?: { exclude?: LiveListener }): void {
-  broadcast(entry, { type: 'presence_state', state: buildLiveSessionPresenceState(entry) }, options);
+  broadcastLiveSessionPresenceState(entry, { broadcast }, options);
 }
 
 export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: string): void {
@@ -441,7 +443,7 @@ export function ensureSessionSurfaceCanControl(sessionId: string, surfaceId?: st
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  assertLiveSessionSurfaceCanControl(entry, surfaceId);
+  ensureLiveSessionSurfaceCanControl(entry, surfaceId);
 }
 
 export function takeOverSessionControl(sessionId: string, surfaceId: string): LiveSessionPresenceState {
@@ -450,12 +452,7 @@ export function takeOverSessionControl(sessionId: string, surfaceId: string): Li
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  const takeover = takeOverLiveSessionSurface(entry, surfaceId);
-  if (takeover.changed) {
-    broadcastPresenceState(entry);
-  }
-
-  return takeover.state;
+  return takeOverLiveSessionControl(entry, surfaceId, { broadcastPresenceState });
 }
 
 // ── Event wiring ──────────────────────────────────────────────────────────────
