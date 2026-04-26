@@ -286,11 +286,16 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
     EditorView.theme({
       '&': {
         height: '100%',
-        background: 'transparent',
+        background: 'rgb(var(--color-base))',
         color: 'rgb(var(--color-primary))',
         fontSize: '12px',
       },
+      '.cm-editor': {
+        height: '100%',
+        backgroundColor: 'rgb(var(--color-base))',
+      },
       '.cm-scroller': {
+        backgroundColor: 'rgb(var(--color-base))',
         fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         lineHeight: '1.55',
       },
@@ -301,7 +306,7 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
         paddingLeft: '0',
       },
       '.cm-gutters': {
-        background: 'transparent',
+        background: 'rgb(var(--color-base))',
         color: 'rgb(var(--color-dim))',
         borderRight: '1px solid rgb(var(--color-border-subtle) / 0.7)',
         fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -330,7 +335,7 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
       },
       '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
       '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
-    }),
+    }, { dark: theme === 'dark' }),
     syntaxHighlighting(theme === 'dark' ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true }),
     extensionForPath(path),
   ];
@@ -726,11 +731,13 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
                 <CodeMirror
                   value={selectedFile.content ?? ''}
                   height="100%"
+                  theme="none"
                   basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
                   editable={false}
                   readOnly={true}
                   extensions={editorExtensions}
                   onCreateEditor={onEditorCreate}
+                  style={{ backgroundColor: 'rgb(var(--color-base))', color: 'rgb(var(--color-primary))', height: '100%' }}
                   key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}
                 />
               )}
@@ -945,11 +952,13 @@ export function WorkspaceFileDocument({
           <CodeMirror
             value={selectedFile.content ?? ''}
             height="100%"
+            theme="none"
             basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
             editable={false}
             readOnly={true}
             extensions={editorExtensions}
             onCreateEditor={onEditorCreate}
+            style={{ backgroundColor: 'rgb(var(--color-base))', color: 'rgb(var(--color-primary))', height: '100%' }}
             key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}
           />
         )}
