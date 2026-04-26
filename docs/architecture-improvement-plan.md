@@ -54,6 +54,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
+   - Extracted related-thread hotkey selection into `useRelatedThreadHotkeys`.
 4. Leave JSX migration for last; moving render chunks first tends to create shallow wrappers.
 
 ### 2. Desktop local API adapter split
