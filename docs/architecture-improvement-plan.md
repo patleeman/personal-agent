@@ -89,11 +89,11 @@ For UI architecture work, also run app build/tests and perform a visual check if
 
 **First slices:**
 
-1. Add focused tests for `liveSessionPresence.ts`.
-2. Add focused tests for `liveSessionQueue.ts`.
-3. Add focused tests for `liveSessionTranscript.ts` merge behavior.
+1. [done] Add focused tests for `liveSessionPresence.ts`.
+2. [done] Add focused tests for `liveSessionQueue.ts`.
+3. [done] Add focused tests for `liveSessionTranscript.ts` merge behavior.
 4. Avoid testing every facade; test behavior-heavy modules.
 
 ## Next action
 
-Start with Priority 4 test hardening, then move to Priority 1. The live-session split is already done; tests will lock the new seams before the next architecture pass moves to the front-end.
+Move to Priority 1. The live-session split is locked with focused tests for the behavior-heavy extracted modules; the next high-impact architecture work is reducing `ConversationPage.tsx` by extracting pure attachment/image preparation first.
