@@ -25,7 +25,7 @@ Good fits:
 - morning reports
 - recurring reviews
 - unattended background prompts
-- durable conversation wakeups that should resume a thread later
+- durable conversation jobs that should resume a thread later
 - automation that should surface attention on its owning thread
 - task-style work that may optionally callback into a conversation later
 
@@ -132,7 +132,7 @@ Important behavior to understand:
 - each run writes a log
 - every automation defaults to a dedicated thread unless you explicitly bind it to an existing thread or disable thread ownership
 - successful and failed runs stay on the automation and its owning thread by default
-- tasks are still passive by default; they do not become interrupting reminders unless explicitly wired back to a conversation
+- background-agent tasks are passive by default; conversation-target tasks write directly into their bound thread when due
 
 One-time tasks resolve once and do not run again.
 
@@ -140,7 +140,7 @@ One-time tasks resolve once and do not run again.
 
 Background-agent automations run as direct daemon-managed subprocesses.
 
-Conversation-target automations create a durable automation execution record and a wakeup back into the bound thread.
+Conversation-target automations create a durable automation execution record and run Pi directly against the bound thread session, so they continue even when that thread is archived or not open in the UI.
 
 Each execution still writes a durable run record under the daemon state root.
 

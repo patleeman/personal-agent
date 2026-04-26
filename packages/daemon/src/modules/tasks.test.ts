@@ -1069,7 +1069,7 @@ Run hourly task
     await module.stop?.(context);
   });
 
-  it('creates ready wakeups for one-time conversation automations without spawning background runs', async () => {
+  it('runs one-time conversation automations directly in their bound thread', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
@@ -1113,23 +1113,12 @@ Run hourly task
     await module.handleEvent(createTimerEvent(), context);
 
     await waitForCondition(() => {
-      const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-      return Object.keys(state.resumes).length === 1;
-    });
-
-    const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-    const wakeup = Object.values(deferredState.resumes)[0];
-    expect(wakeup).toEqual(expect.objectContaining({
-      status: 'ready',
-      prompt: 'Check the deployment again.',
-      behavior: 'followUp',
-      source: expect.objectContaining({ kind: 'automation-schedule', id: 'conversation-check' }),
-    }));
-
-    await waitForCondition(() => {
       const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
       return runtimeState['conversation-check']?.lastStatus === 'success';
     });
+
+    const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
+    expect(Object.keys(deferredState.resumes)).toHaveLength(0);
 
     const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
     expect(runtimeState['conversation-check']).toEqual(expect.objectContaining({
@@ -1137,12 +1126,25 @@ Run hourly task
       lastAttemptCount: 1,
       oneTimeResolvedStatus: 'success',
     }));
-    expect(runTask).not.toHaveBeenCalled();
+    expect(runTask).toHaveBeenCalledTimes(1);
+    expect(runTask.mock.calls[0]?.[0].task).toEqual(expect.objectContaining({
+      id: 'conversation-check',
+      targetType: 'conversation',
+      threadMode: 'dedicated',
+      threadConversationId: expect.any(String),
+      threadSessionFile: expect.any(String),
+      conversationBehavior: 'followUp',
+    }));
+
+    const runId = runtimeState['conversation-check']?.lastRunId;
+    expect(runId).toBeTruthy();
+    const runStatus = loadDurableRunStatus(resolveDurableRunPaths(resolveDurableRunsRoot(stateRoot), runId!).statusPath);
+    expect(runStatus).toEqual(expect.objectContaining({ status: 'completed' }));
 
     await module.stop?.(context);
   });
 
-  it('skips recurring conversation automations while a prior wakeup is still pending', async () => {
+  it('reruns recurring conversation automations after the prior run completes', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
@@ -1184,29 +1186,30 @@ Run hourly task
     currentTime = new Date('2026-03-02T10:00:00.000Z');
     await module.handleEvent(createTimerEvent(), context);
     await waitForCondition(() => {
-      const state = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-      return Object.keys(state.resumes).length === 1;
-    });
-    await waitForCondition(() => {
       const status = module.getStatus?.() as { runningTasks?: number; successfulRuns?: number };
       return (status.runningTasks ?? 0) === 0 && (status.successfulRuns ?? 0) === 1;
     });
 
     currentTime = new Date('2026-03-02T11:00:00.000Z');
     await module.handleEvent(createTimerEvent(), context);
+    await waitForCondition(() => {
+      const status = module.getStatus?.() as { runningTasks?: number; successfulRuns?: number };
+      return (status.runningTasks ?? 0) === 0 && (status.successfulRuns ?? 0) === 2;
+    });
 
     const deferredState = loadDeferredResumeState(join(stateRoot, 'pi-agent', 'deferred-resumes-state.json'));
-    expect(Object.keys(deferredState.resumes)).toHaveLength(1);
+    expect(Object.keys(deferredState.resumes)).toHaveLength(0);
 
     const runtimeState = loadAutomationRuntimeStateMap({ dbPath });
     expect(runtimeState['hourly-check']).toEqual(expect.objectContaining({
-      lastStatus: 'skipped',
-      lastError: 'Task skipped because a previous conversation wakeup is still pending',
+      lastStatus: 'success',
+      lastError: undefined,
     }));
     const status = module.getStatus?.() as { skippedRuns?: number; successfulRuns?: number };
-    expect(status.skippedRuns).toBe(1);
-    expect(status.successfulRuns).toBe(1);
-    expect(runTask).not.toHaveBeenCalled();
+    expect(status.skippedRuns).toBe(0);
+    expect(status.successfulRuns).toBe(2);
+    expect(runTask).toHaveBeenCalledTimes(2);
+    expect(runTask.mock.calls.every((call) => Boolean(call[0].task.threadSessionFile))).toBe(true);
 
     await module.stop?.(context);
   });
