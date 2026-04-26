@@ -98,12 +98,26 @@ import {
   queuePrewarmLiveSessionLoader,
   type LiveSessionLoaderOptions,
 } from './liveSessionLoader.js';
+import {
+  normalizeParallelPromptList,
+  readParallelState,
+  readPersistedParallelJobs,
+  truncateParallelPreviewText,
+  writePersistedParallelJobs,
+  type ParallelPromptJob,
+  type ParallelPromptJobStatus,
+  type ParallelPromptPreview,
+} from './liveSessionParallelJobs.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
   prewarmLiveSessionLoader,
   type LiveSessionLoaderOptions,
 } from './liveSessionLoader.js';
+
+export {
+  type ParallelPromptPreview,
+} from './liveSessionParallelJobs.js';
 
 export {
   LiveSessionControlError,
@@ -202,23 +216,6 @@ export interface LiveContextUsage {
   segments?: LiveContextUsageSegment[];
 }
 
-type ParallelPromptJobStatus = 'running' | 'ready' | 'failed' | 'importing';
-
-export interface ParallelPromptPreview {
-  id: string;
-  prompt: string;
-  childConversationId: string;
-  status: ParallelPromptJobStatus;
-  imageCount: number;
-  attachmentRefs: string[];
-  touchedFiles: string[];
-  parentTouchedFiles: string[];
-  overlapFiles: string[];
-  sideEffects: string[];
-  resultPreview?: string;
-  error?: string;
-}
-
 export type SseEvent =
   | { type: 'snapshot';        blocks: DisplayBlock[]; blockOffset: number; totalBlocks: number; isStreaming: boolean }
   | { type: 'agent_start' }
@@ -276,27 +273,6 @@ interface LiveEntry extends LiveSessionPresenceHost {
   isCompacting?: boolean;
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
-}
-
-interface ParallelPromptJob {
-  id: string;
-  prompt: string;
-  childConversationId: string;
-  childSessionFile?: string;
-  status: ParallelPromptJobStatus;
-  createdAt: string;
-  updatedAt: string;
-  imageCount: number;
-  attachmentRefs: string[];
-  touchedFiles: string[];
-  parentTouchedFiles: string[];
-  overlapFiles: string[];
-  sideEffects: string[];
-  forkEntryId?: string;
-  repoRoot?: string;
-  worktreeDirtyPathsAtStart: string[];
-  resultText?: string;
-  error?: string;
 }
 
 export interface LiveSessionLifecycleEvent {
@@ -674,132 +650,7 @@ export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedP
 }
 
 const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
-const PARALLEL_JOBS_FILE_SUFFIX = '.parallel.json';
-const PARALLEL_PREVIEW_PATH_LIMIT = 5;
-const PARALLEL_PREVIEW_ATTACHMENT_LIMIT = 4;
-const PARALLEL_PREVIEW_SIDE_EFFECT_LIMIT = 3;
 let parallelPromptJobCounter = 0;
-
-function resolveParallelJobsFile(sessionFile: string): string {
-  return `${sessionFile}${PARALLEL_JOBS_FILE_SUFFIX}`;
-}
-
-function normalizeParallelPromptJobStatus(value: unknown): ParallelPromptJobStatus {
-  return value === 'ready' || value === 'failed' || value === 'importing'
-    ? value
-    : 'running';
-}
-
-function normalizeParallelPromptList(value: unknown, limit = 32): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const next: string[] = [];
-  const seen = new Set<string>();
-  for (const candidate of value) {
-    if (typeof candidate !== 'string') {
-      continue;
-    }
-
-    const normalized = candidate.trim();
-    if (!normalized || seen.has(normalized)) {
-      continue;
-    }
-
-    seen.add(normalized);
-    next.push(normalized);
-    if (next.length >= limit) {
-      break;
-    }
-  }
-
-  return next;
-}
-
-function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | null {
-  if (!candidate || typeof candidate !== 'object') {
-    return null;
-  }
-
-  const job = candidate as Partial<ParallelPromptJob>;
-  const id = typeof job.id === 'string' ? job.id.trim() : '';
-  const prompt = typeof job.prompt === 'string' ? job.prompt : '';
-  const childConversationId = typeof job.childConversationId === 'string' ? job.childConversationId.trim() : '';
-  if (!id || !childConversationId) {
-    return null;
-  }
-
-  const createdAt = typeof job.createdAt === 'string' && job.createdAt.trim().length > 0
-    ? job.createdAt.trim()
-    : new Date().toISOString();
-  const updatedAt = typeof job.updatedAt === 'string' && job.updatedAt.trim().length > 0
-    ? job.updatedAt.trim()
-    : createdAt;
-  const childSessionFile = typeof job.childSessionFile === 'string' && job.childSessionFile.trim().length > 0
-    ? job.childSessionFile.trim()
-    : undefined;
-  const forkEntryId = typeof job.forkEntryId === 'string' && job.forkEntryId.trim().length > 0
-    ? job.forkEntryId.trim()
-    : undefined;
-  const repoRoot = typeof job.repoRoot === 'string' && job.repoRoot.trim().length > 0
-    ? job.repoRoot.trim()
-    : undefined;
-
-  return {
-    id,
-    prompt,
-    childConversationId,
-    ...(childSessionFile ? { childSessionFile } : {}),
-    status: normalizeParallelPromptJobStatus(job.status),
-    createdAt,
-    updatedAt,
-    imageCount: Number.isInteger(job.imageCount) && Number(job.imageCount) > 0 ? Number(job.imageCount) : 0,
-    attachmentRefs: normalizeParallelPromptList(job.attachmentRefs, 12),
-    touchedFiles: normalizeParallelPromptList(job.touchedFiles, 24),
-    parentTouchedFiles: normalizeParallelPromptList(job.parentTouchedFiles, 24),
-    overlapFiles: normalizeParallelPromptList(job.overlapFiles, 24),
-    sideEffects: normalizeParallelPromptList(job.sideEffects, 12),
-    ...(forkEntryId ? { forkEntryId } : {}),
-    ...(repoRoot ? { repoRoot } : {}),
-    worktreeDirtyPathsAtStart: normalizeParallelPromptList(job.worktreeDirtyPathsAtStart, 128),
-    ...(typeof job.resultText === 'string' && job.resultText.trim().length > 0 ? { resultText: job.resultText } : {}),
-    ...(typeof job.error === 'string' && job.error.trim().length > 0 ? { error: job.error.trim() } : {}),
-  };
-}
-
-function readPersistedParallelJobs(sessionFile: string): ParallelPromptJob[] {
-  const jobsFile = resolveParallelJobsFile(sessionFile);
-  if (!existsSync(jobsFile)) {
-    return [];
-  }
-
-  try {
-    const parsed = JSON.parse(readFileSync(jobsFile, 'utf-8')) as unknown;
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.flatMap((candidate): ParallelPromptJob[] => {
-      const normalized = normalizeParallelPromptJob(candidate);
-      return normalized ? [normalized] : [];
-    });
-  } catch {
-    return [];
-  }
-}
-
-function writePersistedParallelJobs(sessionFile: string, jobs: ParallelPromptJob[]): void {
-  const jobsFile = resolveParallelJobsFile(sessionFile);
-  if (jobs.length === 0) {
-    if (existsSync(jobsFile)) {
-      unlinkSync(jobsFile);
-    }
-    return;
-  }
-
-  writeFileSync(jobsFile, `${JSON.stringify(jobs, null, 2)}\n`);
-}
 
 function persistParallelJobs(entry: Pick<LiveEntry, 'session' | 'parallelJobs'>): void {
   const sessionFile = entry.session.sessionFile?.trim();
@@ -1295,44 +1146,6 @@ function createParallelPromptJobId(): string {
   return `parallel-${parallelPromptJobCounter}`;
 }
 
-function truncateParallelPreviewText(text: string, maxLength = 240): string {
-  const normalized = text.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return '';
-  }
-
-  return normalized.length > maxLength
-    ? `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
-    : normalized;
-}
-
-function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPreview {
-  const attachmentRefs = Array.isArray(job.attachmentRefs) ? job.attachmentRefs : [];
-  const touchedFiles = Array.isArray(job.touchedFiles) ? job.touchedFiles : [];
-  const parentTouchedFiles = Array.isArray(job.parentTouchedFiles) ? job.parentTouchedFiles : [];
-  const overlapFiles = Array.isArray(job.overlapFiles) ? job.overlapFiles : [];
-  const sideEffects = Array.isArray(job.sideEffects) ? job.sideEffects : [];
-  return {
-    id: job.id,
-    prompt: truncateParallelPreviewText(job.prompt),
-    childConversationId: job.childConversationId,
-    status: job.status,
-    imageCount: Number.isInteger(job.imageCount) && job.imageCount > 0 ? job.imageCount : 0,
-    attachmentRefs: attachmentRefs.slice(0, PARALLEL_PREVIEW_ATTACHMENT_LIMIT),
-    touchedFiles: touchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
-    parentTouchedFiles: parentTouchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
-    overlapFiles: overlapFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
-    sideEffects: sideEffects.slice(0, PARALLEL_PREVIEW_SIDE_EFFECT_LIMIT),
-    ...(job.resultText ? { resultPreview: truncateParallelPreviewText(job.resultText) } : {}),
-    ...(job.error ? { error: truncateParallelPreviewText(job.error) } : {}),
-  };
-}
-
-function readParallelState(entry: Pick<LiveEntry, 'parallelJobs'>): ParallelPromptPreview[] {
-  const jobs = Array.isArray(entry.parallelJobs) ? entry.parallelJobs : [];
-  return jobs.map((job) => buildParallelPromptPreview(job));
-}
-
 function buildUserMessageBlock(message: { content?: unknown; timestamp?: string | number }): Extract<DisplayBlock, { type: 'user' }> | null {
   const [block] = buildDisplayBlocksFromEntries([
     {
@@ -1452,7 +1265,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
     cost,
     contextUsage: readContextUsagePayload(entry.session),
     pendingQueue: readQueueState(entry.session),
-    parallelJobs: readParallelState(entry),
+    parallelJobs: readParallelState(entry.parallelJobs),
     presence: buildLiveSessionPresenceState(entry),
     autoModeState: readConversationAutoModeState(entry),
     cwdChange: null,
@@ -1594,7 +1407,7 @@ function broadcastQueueState(entry: LiveEntry, force = false): void {
 }
 
 function broadcastParallelState(entry: LiveEntry, force = false): void {
-  const jobs = readParallelState(entry);
+  const jobs = readParallelState(entry.parallelJobs);
   const nextJson = JSON.stringify(jobs);
   if (!force && entry.lastParallelStateJson === nextJson) {
     return;
@@ -2470,7 +2283,7 @@ export function subscribe(
   }
   listener({ type: 'context_usage', usage: readContextUsagePayload(entry.session) });
   listener({ type: 'queue_state', ...readQueueState(entry.session) });
-  listener({ type: 'parallel_state', jobs: readParallelState(entry) });
+  listener({ type: 'parallel_state', jobs: readParallelState(entry.parallelJobs) });
   if (options?.surface || (entry.presenceBySurfaceId?.size ?? 0) > 0) {
     listener({ type: 'presence_state', state: buildLiveSessionPresenceState(entry) });
   }
