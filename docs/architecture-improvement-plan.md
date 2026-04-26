@@ -120,6 +120,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted linked-run polling and status display helpers into focused modules.
    - Moved trace-cluster linked-run collection into the linked-run module.
    - Extracted inline trace run card rendering into `InlineTraceRunCard.tsx`.
+5. [done] Extract ask-user-question tool rendering and state helpers into `AskUserQuestionToolBlock.tsx` with focused tests.
 
 ## Next action
 
