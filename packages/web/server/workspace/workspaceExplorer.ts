@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync, type Stats } from 'node:fs';
 import { basename, relative, resolve, sep } from 'node:path';
 import { readGitRepoInfo, readGitStatusSummary, type GitStatusChangeKind } from './gitStatus.js';
 
@@ -113,7 +113,7 @@ export function readWorkspaceRootSnapshot(cwd: string): WorkspaceRootSnapshot {
   };
 }
 
-function statKind(stats: ReturnType<typeof statSync>): WorkspaceEntryKind {
+function statKind(stats: Stats): WorkspaceEntryKind {
   if (stats.isDirectory()) return 'directory';
   if (stats.isFile()) return 'file';
   if (stats.isSymbolicLink()) return 'symlink';
