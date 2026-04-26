@@ -582,7 +582,10 @@ export function Layout() {
   }, []);
 
   const showContextRail = canShowContextRail && railOpen;
-  const showWorkbench = appLayoutMode === 'workbench' && location.pathname.startsWith('/conversations');
+  const showWorkbench = appLayoutMode === 'workbench' && (
+    location.pathname.startsWith('/conversations')
+    || location.pathname.startsWith('/automations')
+  );
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
         railOpen: showContextRail,
