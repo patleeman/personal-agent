@@ -3,7 +3,7 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -150,6 +150,7 @@ import {
   requestLiveSessionAutoModeTurn,
   writeLiveSessionAutoModeHostState,
 } from './liveSessionAutoModeOps.js';
+import { summarizeSessionFileForPromptWithLiveSession } from './liveSessionSummaries.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -1146,69 +1147,21 @@ export async function createSessionFromExisting(
   return { id, sessionFile: resolveLiveSessionFile(session) ?? '' };
 }
 
-function buildRelatedConversationCompactionInstructions(prompt: string): string {
-  return [
-    'You are preparing a compact handoff from an older conversation for reuse in a brand new conversation.',
-    'Focus only on context that still helps with the user\'s next prompt.',
-    '',
-    'The next prompt is:',
-    prompt.trim(),
-    '',
-    'Include only the most relevant goals, decisions, file paths, commands, errors, and unresolved work.',
-    'Drop unrelated history and repetition. If the conversation is not directly relevant, say so briefly.',
-  ].join('\n');
-}
-
-function extractLatestCompactionSummaryText(detail: ReturnType<typeof readSessionBlocksByFile>): string | null {
-  const blocks = detail?.blocks ?? [];
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (block?.type === 'summary' && block.kind === 'compaction' && block.text.trim().length > 0) {
-      return block.text.trim();
-    }
-  }
-
-  return null;
-}
-
 export async function summarizeSessionFileForPrompt(
   sessionFile: string,
   cwd: string,
   prompt: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<string> {
-  const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createPreparedLiveAgentSession({
+  return summarizeSessionFileForPromptWithLiveSession({
+    sessionFile,
     cwd,
-    agentDir: options.agentDir ?? AGENT_DIR,
-    sessionManager,
+    prompt,
+    agentDir: AGENT_DIR,
     settingsFile: SETTINGS_FILE,
+    persistentSessionDir: resolvePersistentSessionDir(cwd),
     options,
   });
-
-  const temporarySessionFile = resolveLiveSessionFile(session) ?? '';
-
-  try {
-    await session.compact(buildRelatedConversationCompactionInstructions(prompt));
-    const detail = temporarySessionFile
-      ? readSessionBlocksByFile(temporarySessionFile)
-      : null;
-    const summary = extractLatestCompactionSummaryText(detail);
-    if (!summary) {
-      throw new Error('Compaction did not produce a reusable summary.');
-    }
-
-    return summary;
-  } finally {
-    session.dispose();
-    if (temporarySessionFile && existsSync(temporarySessionFile)) {
-      try {
-        unlinkSync(temporarySessionFile);
-      } catch {
-        // Ignore temp session cleanup failures.
-      }
-    }
-  }
 }
 
 export async function requestConversationWorkingDirectoryChange(
