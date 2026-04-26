@@ -487,6 +487,10 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
       const entry = workspaceEntryMap.get(workspacePath);
       if (!entry) return;
       if (entry.kind === 'directory') {
+        const directoryItem = model.getItem(workspaceEntryToTreePath(entry));
+        if (directoryItem?.isDirectory() && !directoryItem.isExpanded()) {
+          directoryItem.expand();
+        }
         if (!nodes[entry.path]?.entries && !nodes[entry.path]?.loading) {
           void loadDirectory(entry.path);
         }
@@ -494,7 +498,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
       }
       onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
     };
-  }, [loadDirectory, nodes, onDraftPrompt, root, workspaceEntryMap]);
+  }, [loadDirectory, model, nodes, onDraftPrompt, root, workspaceEntryMap]);
 
   useEffect(() => {
     if (!railOnly) return;
@@ -528,7 +532,6 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
         <div className="px-3 pt-1 pb-1 shrink-0 rounded-md">
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">File Explorer</p>
-            {changes.length > 0 ? <span className="rounded-sm bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent" title={`${changes.length} changed file${changes.length === 1 ? '' : 's'}`}>{changes.length}</span> : null}
             <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh workspace" onClick={() => { void loadRoot(); }}>↻</button>
           </div>
           <div className="mt-1 truncate font-mono text-[10px] text-dim" title={rootListing.data?.root ?? cwd}>{rootListing.data?.rootName ?? 'Workspace'} · {rootListing.data?.branch ?? 'no branch'}</div>
