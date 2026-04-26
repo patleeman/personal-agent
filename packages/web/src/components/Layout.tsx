@@ -486,7 +486,7 @@ function WorkbenchKnowledgeRail() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="shrink-0 border-b border-border-subtle py-1.5">
+      <div className="shrink-0 py-1.5">
         <Link to={knowledgeHref} className="ui-sidebar-nav-item ui-sidebar-nav-item-active" title="Open full Knowledge view">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d={KNOWLEDGE_ICON_PATH} />
