@@ -19,6 +19,8 @@ const apiMocks = vi.hoisted(() => ({
   openConversationTabs: vi.fn(),
   setOpenConversationTabs: vi.fn(),
   setSavedWorkspacePaths: vi.fn(),
+  changeConversationCwd: vi.fn(),
+  sessions: vi.fn(),
 }));
 
 vi.mock('../client/api', () => ({
@@ -161,8 +163,11 @@ describe('Sidebar group drag reordering', () => {
     apiMocks.openConversationTabs.mockReset();
     apiMocks.setOpenConversationTabs.mockReset();
     apiMocks.setSavedWorkspacePaths.mockReset();
+    apiMocks.changeConversationCwd.mockReset();
+    apiMocks.sessions.mockReset();
     apiMocks.setOpenConversationTabs.mockResolvedValue({ ok: true, sessionIds: [], pinnedSessionIds: [], archivedSessionIds: [], workspacePaths: [] });
     apiMocks.setSavedWorkspacePaths.mockResolvedValue([]);
+    apiMocks.sessions.mockResolvedValue([]);
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     localStorage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
   });
@@ -244,6 +249,51 @@ describe('Sidebar group drag reordering', () => {
     expect(JSON.parse(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-beta', 'conv-alpha']);
     expect(apiMocks.setOpenConversationTabs).toHaveBeenCalledWith(['conv-beta', 'conv-alpha'], [], []);
     expect(apiMocks.setSavedWorkspacePaths).toHaveBeenCalledWith([betaPath, alphaPath]);
+  });
+
+  it('moves a conversation to another local cwd when dropped on a project section', async () => {
+    const alphaPath = '/tmp/alpha-worktree';
+    const betaPath = '/tmp/beta-worktree';
+    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-alpha', 'conv-beta']));
+    localStorage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([alphaPath, betaPath]));
+    apiMocks.openConversationTabs.mockResolvedValue({
+      sessionIds: ['conv-alpha', 'conv-beta'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [alphaPath, betaPath],
+    });
+    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha', sessionFile: '/tmp/conv-alpha.jsonl', cwd: betaPath, changed: true });
+    apiMocks.sessions.mockResolvedValue([
+      createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+      createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+    ]);
+
+    const container = renderSidebar([
+      createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: alphaPath, cwdSlug: 'alpha-worktree' }),
+      createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+    ]);
+
+    await flushAsyncWork();
+
+    const alphaRow = container.querySelector<HTMLElement>('[data-sidebar-session-id="conv-alpha"]');
+    const betaGroup = getGroup(container, betaPath);
+    if (!alphaRow) {
+      throw new Error('Missing alpha row');
+    }
+    setDragBounds(alphaRow);
+    setDragBounds(betaGroup);
+
+    const dataTransfer = new TestDataTransfer();
+    await act(async () => {
+      alphaRow.dispatchEvent(createDragEvent('dragstart', dataTransfer, 75));
+      betaGroup.dispatchEvent(createDragEvent('dragover', dataTransfer, 50));
+      betaGroup.dispatchEvent(createDragEvent('drop', dataTransfer, 50));
+    });
+    await flushAsyncWork();
+
+    expect(apiMocks.changeConversationCwd).toHaveBeenCalledWith('conv-alpha', betaPath, expect.any(String));
+    expect(apiMocks.sessions).toHaveBeenCalled();
+    expect(container.textContent).toContain('Moved conversation to beta-worktree.');
   });
 
   it('stores manual group order for remote sections even when shelf order cannot express it', async () => {

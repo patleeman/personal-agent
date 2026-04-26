@@ -990,6 +990,7 @@ function ConversationCwdGroupHeader({
   collapsed,
   canDrag = false,
   isDragging = false,
+  isConversationDropTarget = false,
   dropPosition = null,
   dragId,
   onToggleCollapsed,
@@ -1008,6 +1009,7 @@ function ConversationCwdGroupHeader({
   collapsed: boolean;
   canDrag?: boolean;
   isDragging?: boolean;
+  isConversationDropTarget?: boolean;
   dropPosition?: OpenConversationDropPosition | null;
   dragId?: string;
   onToggleCollapsed: () => void;
@@ -1153,7 +1155,10 @@ function ConversationCwdGroupHeader({
 
   return (
     <div
-      className="relative px-4 pt-1 pb-0.5"
+      className={[
+        'relative px-4 pt-1 pb-0.5 transition-colors',
+        isConversationDropTarget && 'bg-accent/10',
+      ].filter(Boolean).join(' ')}
       onContextMenu={handleContextMenu}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
@@ -1579,6 +1584,7 @@ function OpenConversationRow({
     <div
       ref={hoverRef}
       className="relative"
+      data-sidebar-session-id={session.id}
       draggable={canDrag}
       onDragStart={canDrag ? onDragStart : undefined}
       onDragOver={canDrag ? onDragOver : undefined}
@@ -1866,6 +1872,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     groupKey: string;
     position: OpenConversationDropPosition;
   } | null>(null);
+  const [conversationCwdDropTargetGroupKey, setConversationCwdDropTargetGroupKey] = useState<string | null>(null);
   const conversationSurfaceId = useMemo(() => getOrCreateConversationSurfaceId(), []);
   const sidebarNoticeTimeoutRef = useRef<number | null>(null);
   const [sidebarNotice, setSidebarNotice] = useState<{ tone: 'accent' | 'danger'; text: string } | null>(null);
@@ -2310,6 +2317,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     setDraggingGroupKey(null);
     setDropTarget(null);
     setGroupDropTarget(null);
+    setConversationCwdDropTargetGroupKey(null);
   }
 
   function getDropPosition(event: DragEvent<HTMLDivElement>): OpenConversationDropPosition {
@@ -2337,6 +2345,20 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     );
   }
 
+  function canDropConversationOnGroup(draggedSessionId: string, targetGroupKey: string): boolean {
+    const targetGroup = conversationGroupsByKey.get(targetGroupKey);
+    if (!targetGroup?.executionTargetIsLocal || !targetGroup.cwd) {
+      return false;
+    }
+
+    const draggedSession = [...pinnedSessions, ...tabs].find((session) => session.id === draggedSessionId);
+    if (!draggedSession || draggedSession.remoteHostId) {
+      return false;
+    }
+
+    return normalizeConversationGroupCwd(draggedSession.cwd) !== normalizeConversationGroupCwd(targetGroup.cwd);
+  }
+
   function handleTabDragStart(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     setDraggingSessionId(sessionId);
     setDraggingSection(section);
@@ -2344,6 +2366,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     setDropTarget(null);
     setGroupDropTarget(null);
     event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('application/x-personal-agent-conversation', sessionId);
     event.dataTransfer.setData('text/plain', sessionId);
   }
 
@@ -2385,6 +2408,20 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
   }
 
   function handleConversationGroupDragOver(groupKey: string, event: DragEvent<HTMLDivElement>) {
+    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    if (draggedConversationId) {
+      if (!canDropConversationOnGroup(draggedConversationId, groupKey)) {
+        setConversationCwdDropTargetGroupKey(null);
+        return;
+      }
+
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setConversationCwdDropTargetGroupKey((current) => (current === groupKey ? current : groupKey));
+      setGroupDropTarget(null);
+      return;
+    }
+
     const draggedGroupId = draggingGroupKey ?? event.dataTransfer.getData('application/x-personal-agent-conversation-group');
     if (!draggedGroupId) {
       return;
@@ -2409,6 +2446,31 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         ? current
         : { groupKey, position }
     ));
+  }
+
+  async function handleConversationCwdDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+
+    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    const targetGroup = conversationGroupsByKey.get(targetGroupKey);
+    if (!draggedConversationId || !targetGroup?.cwd || !canDropConversationOnGroup(draggedConversationId, targetGroupKey)) {
+      clearDragState();
+      return;
+    }
+
+    clearDragState();
+    try {
+      const result = await api.changeConversationCwd(draggedConversationId, targetGroup.cwd, conversationSurfaceId);
+      await refetch();
+      showSidebarNotice(
+        'accent',
+        result.changed === false
+          ? `Conversation is already in ${targetGroup.label}.`
+          : `Moved conversation to ${targetGroup.label}.`,
+      );
+    } catch (error) {
+      showSidebarNotice('danger', `Move failed: ${error instanceof Error ? error.message : String(error)}`, 4000);
+    }
   }
 
   function handleConversationDrop(targetSection: ConversationShelf, targetSessionId: string | null, position: OpenConversationDropPosition) {
@@ -2447,6 +2509,12 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
   function handleConversationGroupDrop(targetGroupKey: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
+
+    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    if (draggedConversationId) {
+      void handleConversationCwdDrop(targetGroupKey, event);
+      return;
+    }
 
     const draggedGroupId = draggingGroupKey ?? event.dataTransfer.getData('application/x-personal-agent-conversation-group');
     if (!draggedGroupId || draggedGroupId === targetGroupKey || !canDropConversationGroupOnGroup(draggedGroupId, targetGroupKey)) {
@@ -3253,6 +3321,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
                       collapsed={collapsed}
                       canDrag={canReorderConversationGroups}
                       isDragging={canReorderConversationGroups && draggingGroupKey === group.key}
+                      isConversationDropTarget={conversationCwdDropTargetGroupKey === group.key}
                       dropPosition={groupDropPosition}
                       dragId={group.key}
                       onToggleCollapsed={() => toggleConversationGroupCollapsed(group.key)}
