@@ -2367,6 +2367,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     setGroupDropTarget(null);
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('application/x-personal-agent-conversation', sessionId);
+    event.dataTransfer.setData('application/x-personal-agent-conversation-section', section);
     event.dataTransfer.setData('text/plain', sessionId);
   }
 
@@ -2382,11 +2383,18 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
   function handleTabDragOver(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     const draggedId = draggingSessionId ?? event.dataTransfer.getData('text/plain');
-    if (!draggedId || !draggingSection || draggingSection !== section) {
+    const draggedSection = draggingSection || event.dataTransfer.getData('application/x-personal-agent-conversation-section');
+    if (!draggedId || !draggedSection || draggedSection !== section) {
       return;
     }
 
     if (!canDropConversationOnSession(draggedId, sessionId)) {
+      const targetGroupKey = conversationGroupKeyBySessionId.get(sessionId);
+      if (targetGroupKey && canDropConversationOnGroup(draggedId, targetGroupKey)) {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setConversationCwdDropTargetGroupKey((current) => (current === targetGroupKey ? current : targetGroupKey));
+      }
       setDropTarget(null);
       return;
     }
@@ -2572,6 +2580,13 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
 
   function handleTabDrop(section: ConversationShelf, sessionId: string, event: DragEvent<HTMLDivElement>) {
     event.preventDefault();
+    const targetGroupKey = conversationGroupKeyBySessionId.get(sessionId);
+    const draggedConversationId = draggingSessionId || event.dataTransfer.getData('application/x-personal-agent-conversation') || event.dataTransfer.getData('text/plain');
+    if (draggedConversationId && targetGroupKey && !canDropConversationOnSession(draggedConversationId, sessionId) && canDropConversationOnGroup(draggedConversationId, targetGroupKey)) {
+      void handleConversationCwdDrop(targetGroupKey, event);
+      return;
+    }
+
     handleConversationDrop(section, sessionId, getDropPosition(event));
   }
 

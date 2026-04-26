@@ -296,6 +296,51 @@ describe('Sidebar group drag reordering', () => {
     expect(container.textContent).toContain('Moved conversation to beta-worktree.');
   });
 
+  it('moves a conversation to another local cwd when dropped on a conversation in that section', async () => {
+    const alphaPath = '/tmp/alpha-worktree';
+    const betaPath = '/tmp/beta-worktree';
+    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-alpha', 'conv-beta']));
+    localStorage.setItem(SAVED_WORKSPACE_PATHS_STORAGE_KEY, JSON.stringify([alphaPath, betaPath]));
+    apiMocks.openConversationTabs.mockResolvedValue({
+      sessionIds: ['conv-alpha', 'conv-beta'],
+      pinnedSessionIds: [],
+      archivedSessionIds: [],
+      workspacePaths: [alphaPath, betaPath],
+    });
+    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha', sessionFile: '/tmp/conv-alpha.jsonl', cwd: betaPath, changed: true });
+    apiMocks.sessions.mockResolvedValue([
+      createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+      createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+    ]);
+
+    const container = renderSidebar([
+      createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: alphaPath, cwdSlug: 'alpha-worktree' }),
+      createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+    ]);
+
+    await flushAsyncWork();
+
+    const alphaRow = container.querySelector<HTMLElement>('[data-sidebar-session-id="conv-alpha"]');
+    const betaRow = container.querySelector<HTMLElement>('[data-sidebar-session-id="conv-beta"]');
+    if (!alphaRow || !betaRow) {
+      throw new Error('Missing conversation row');
+    }
+    setDragBounds(alphaRow);
+    setDragBounds(betaRow);
+
+    const dataTransfer = new TestDataTransfer();
+    await act(async () => {
+      alphaRow.dispatchEvent(createDragEvent('dragstart', dataTransfer, 75));
+      betaRow.dispatchEvent(createDragEvent('dragover', dataTransfer, 50));
+      betaRow.dispatchEvent(createDragEvent('drop', dataTransfer, 50));
+    });
+    await flushAsyncWork();
+
+    expect(apiMocks.changeConversationCwd).toHaveBeenCalledWith('conv-alpha', betaPath, expect.any(String));
+    expect(apiMocks.sessions).toHaveBeenCalled();
+    expect(container.textContent).toContain('Moved conversation to beta-worktree.');
+  });
+
   it('stores manual group order for remote sections even when shelf order cannot express it', async () => {
     const alphaKey = 'remote:bender::/srv/repos/alpha';
     const betaKey = 'remote:bender::/srv/repos/beta';
