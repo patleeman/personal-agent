@@ -49,10 +49,10 @@ interface TaskFormState {
   prompt: string;
 }
 
-function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: string } {
+export function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: string } {
   if (task.running) return { text: 'running', cls: 'text-accent' };
   if (task.lastStatus === 'success') return { text: 'success', cls: 'text-success' };
-  if (task.lastStatus === 'failure') return { text: 'failed', cls: 'text-danger' };
+  if (task.lastStatus === 'failed' || task.lastStatus === 'failure') return { text: 'failed', cls: 'text-danger' };
   return { text: 'never run', cls: 'text-dim' };
 }
 
