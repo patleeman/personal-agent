@@ -123,6 +123,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 5. [done] Extract ask-user-question tool rendering and state helpers into `AskUserQuestionToolBlock.tsx` with focused tests.
 6. [done] Extract artifact/checkpoint tool card rendering into `ArtifactCheckpointToolBlocks.tsx`.
 7. [done] Extract shared message actions and terminal tool rendering into focused components.
+8. [done] Extract image preview, image message block, and image inspection modal into `ImageMessageBlocks.tsx`.
 
 ## Next action
 
