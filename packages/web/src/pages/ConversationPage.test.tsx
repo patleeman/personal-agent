@@ -16,9 +16,9 @@ import {
   shouldUseHealthyDesktopConversationState,
   shouldFetchConversationAttachments,
   shouldRenderConversationRail,
-  constrainPromptImageDimensions,
   replaceConversationMetaInSessionList,
 } from './ConversationPage.js';
+import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 

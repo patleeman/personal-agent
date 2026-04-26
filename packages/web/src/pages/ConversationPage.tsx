@@ -8,7 +8,7 @@ import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { AppPageEmptyState, EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
@@ -89,7 +89,6 @@ import {
   readDraftConversationModel,
   readDraftConversationServiceTier,
   readDraftConversationThinkingLevel,
-  type DraftConversationDrawingAttachment,
 } from '../conversation/draftConversation';
 import {
   clearPendingConversationPrompt,
@@ -126,7 +125,22 @@ import { completeConversationOpenPhase, ensureConversationOpenStart } from '../c
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import type { ConversationSummaryRecord } from '../shared/types';
-import { buildDrawingFileNames, inferDrawingTitleFromFileName, loadExcalidrawSceneFromBlob, parseExcalidrawSceneFromSourceData, serializeExcalidrawScene } from '../content/excalidrawUtils';
+import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
+import {
+  base64ToFile,
+  buildComposerDrawingFromFile,
+  buildPromptImages,
+  createComposerDrawingLocalId,
+  drawingAttachmentToPromptImage,
+  drawingAttachmentToPromptRef,
+  fileExtensionForMimeType,
+  isPotentialExcalidrawFile,
+  restoreComposerImageFiles,
+  restoreQueuedImageFiles,
+  type ComposerDrawingAttachment,
+} from '../conversation/promptAttachments';
+
+export { constrainPromptImageDimensions } from '../conversation/promptAttachments';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
 const ConversationCheckpointModal = lazy(() => import('../components/ConversationCheckpointModal').then((module) => ({ default: module.ConversationCheckpointModal })));
@@ -1570,161 +1584,6 @@ function MentionMenu({
   );
 }
 
-const MAX_PROMPT_IMAGE_DIMENSION = 2000;
-
-function readBlobAsDataUrl(blob: Blob, label: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') resolve(reader.result);
-      else reject(new Error(`Failed to read ${label}`));
-    };
-    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${label}`));
-    reader.readAsDataURL(blob);
-  });
-}
-
-function readFileAsDataUrl(file: File): Promise<string> {
-  return readBlobAsDataUrl(file, file.name);
-}
-
-function dataUrlToBase64(dataUrl: string): string {
-  const commaIndex = dataUrl.indexOf(',');
-  return commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
-}
-
-function loadImageFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error('Failed to decode image.'));
-    image.src = dataUrl;
-  });
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality?: number): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error('Failed to encode image.'));
-        return;
-      }
-
-      resolve(blob);
-    }, mimeType, quality);
-  });
-}
-
-function normalizePromptImageMimeType(mimeType: string): string {
-  const normalized = mimeType.trim().toLowerCase();
-  if (normalized === 'image/jpeg' || normalized === 'image/jpg') {
-    return 'image/jpeg';
-  }
-
-  if (normalized === 'image/webp') {
-    return 'image/webp';
-  }
-
-  return 'image/png';
-}
-
-export function constrainPromptImageDimensions(width: number, height: number, maxDimension = MAX_PROMPT_IMAGE_DIMENSION): { width: number; height: number } {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-    return {
-      width: Math.max(1, Math.round(width) || 1),
-      height: Math.max(1, Math.round(height) || 1),
-    };
-  }
-
-  const longSide = Math.max(width, height);
-  if (longSide <= maxDimension) {
-    return {
-      width: Math.round(width),
-      height: Math.round(height),
-    };
-  }
-
-  const scale = maxDimension / longSide;
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  };
-}
-
-async function preparePromptImage(file: File): Promise<PromptImageInput> {
-  const previewUrl = await readFileAsDataUrl(file);
-  const mimeType = file.type || 'image/png';
-
-  try {
-    const image = await loadImageFromDataUrl(previewUrl);
-    const targetSize = constrainPromptImageDimensions(image.naturalWidth, image.naturalHeight);
-    if (targetSize.width === image.naturalWidth && targetSize.height === image.naturalHeight) {
-      return {
-        name: file.name,
-        mimeType,
-        data: dataUrlToBase64(previewUrl),
-        previewUrl,
-      } satisfies PromptImageInput;
-    }
-
-    const canvas = document.createElement('canvas');
-    canvas.width = targetSize.width;
-    canvas.height = targetSize.height;
-
-    const context = canvas.getContext('2d');
-    if (!context) {
-      throw new Error('Failed to resize image.');
-    }
-
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-    context.drawImage(image, 0, 0, targetSize.width, targetSize.height);
-
-    const outputMimeType = normalizePromptImageMimeType(mimeType);
-    const outputBlob = await canvasToBlob(
-      canvas,
-      outputMimeType,
-      outputMimeType === 'image/png' ? undefined : 0.9,
-    );
-    const resizedPreviewUrl = await readBlobAsDataUrl(outputBlob, file.name);
-
-    return {
-      name: file.name,
-      mimeType: outputBlob.type || outputMimeType,
-      data: dataUrlToBase64(resizedPreviewUrl),
-      previewUrl: resizedPreviewUrl,
-    } satisfies PromptImageInput;
-  } catch {
-    return {
-      name: file.name,
-      mimeType,
-      data: dataUrlToBase64(previewUrl),
-      previewUrl,
-    } satisfies PromptImageInput;
-  }
-}
-
-function fileExtensionForMimeType(mimeType: string): string {
-  const normalized = mimeType.trim().toLowerCase();
-  if (normalized === 'image/jpeg') {
-    return 'jpg';
-  }
-
-  const [, subtype] = normalized.split('/');
-  return subtype || 'png';
-}
-
-function base64ToFile(data: string, mimeType: string, name: string): File {
-  const decoded = window.atob(data);
-  const bytes = new Uint8Array(decoded.length);
-
-  for (let index = 0; index < decoded.length; index += 1) {
-    bytes[index] = decoded.charCodeAt(index);
-  }
-
-  return new File([bytes], name, { type: mimeType });
-}
-
 function bytesToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let index = 0; index < bytes.length; index += 0x8000) {
@@ -1799,97 +1658,6 @@ async function startComposerDictationCapture(): Promise<ComposerDictationCapture
         fileName: `dictation.${extension}`,
       };
     },
-  };
-}
-
-function restoreQueuedImageFiles(
-  images: PromptImageInput[] | undefined | null,
-  behavior: 'steer' | 'followUp',
-  queueIndex: number,
-): File[] {
-  const normalizedImages = Array.isArray(images) ? images : [];
-  return normalizedImages.map((image, imageIndex) => {
-    const extension = fileExtensionForMimeType(image.mimeType);
-    const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
-    return base64ToFile(image.data, image.mimeType, name);
-  });
-}
-
-function restoreComposerImageFiles(
-  images: PromptImageInput[] | undefined | null,
-  fallbackNamePrefix: string,
-): File[] {
-  const normalizedImages = Array.isArray(images) ? images : [];
-  return normalizedImages.map((image, imageIndex) => {
-    const extension = fileExtensionForMimeType(image.mimeType);
-    const name = image.name?.trim() || `${fallbackNamePrefix}-${imageIndex + 1}.${extension}`;
-    return base64ToFile(image.data, image.mimeType, name);
-  });
-}
-
-async function buildPromptImages(files: File[]): Promise<PromptImageInput[]> {
-  const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-  return Promise.all(imageFiles.map((file) => preparePromptImage(file)));
-}
-
-type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
-
-function createComposerDrawingLocalId(): string {
-  return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function isPotentialExcalidrawFile(file: File): boolean {
-  const lowerName = file.name.trim().toLowerCase();
-  if (lowerName.endsWith('.excalidraw')) {
-    return true;
-  }
-
-  if (lowerName.endsWith('.png')) {
-    return true;
-  }
-
-  return file.type === 'application/json' || file.type === 'application/vnd.excalidraw+json';
-}
-
-function drawingAttachmentToPromptImage(attachment: ComposerDrawingAttachment): PromptImageInput {
-  return {
-    name: `${attachment.title}.png`,
-    mimeType: attachment.previewMimeType,
-    data: attachment.previewData,
-    previewUrl: attachment.previewUrl,
-  };
-}
-
-function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachment): PromptAttachmentRefInput | null {
-  const attachmentId = attachment.attachmentId?.trim();
-  if (!attachmentId) {
-    return null;
-  }
-
-  return {
-    attachmentId,
-    ...(attachment.revision ? { revision: attachment.revision } : {}),
-  };
-}
-
-async function buildComposerDrawingFromFile(file: File): Promise<ComposerDrawingAttachment> {
-  const scene = await loadExcalidrawSceneFromBlob(file);
-  const serialized = await serializeExcalidrawScene(scene);
-  const title = inferDrawingTitleFromFileName(file.name);
-  const fileNames = buildDrawingFileNames(title);
-
-  return {
-    localId: createComposerDrawingLocalId(),
-    title,
-    sourceData: serialized.sourceData,
-    sourceMimeType: serialized.sourceMimeType,
-    sourceName: fileNames.sourceName,
-    previewData: serialized.previewData,
-    previewMimeType: serialized.previewMimeType,
-    previewName: fileNames.previewName,
-    previewUrl: serialized.previewUrl,
-    scene,
-    dirty: true,
   };
 }
 
