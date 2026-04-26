@@ -18,10 +18,7 @@ import {
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
-import {
-  readSessionBlocksByFile,
-  type DisplayBlock,
-} from './sessions.js';
+import { readSessionBlocksByFile } from './sessions.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
@@ -53,10 +50,8 @@ import {
   type LiveSessionLoaderOptions,
 } from './liveSessionLoader.js';
 import {
-  readParallelState,
   writePersistedParallelJobs,
   type ParallelPromptJob,
-  type ParallelPromptPreview,
 } from './liveSessionParallelJobs.js';
 import {
   loadPersistedParallelJobs,
@@ -106,15 +101,17 @@ import {
   inspectAvailableLiveSessionTools,
   type BeforeAgentStartProbeMessage,
 } from './liveSessionToolInspection.js';
-import { buildLiveSessionSnapshot } from './liveSessionStateSnapshot.js';
+import {
+  buildLiveSessionSnapshot,
+  readLiveSessionStateSnapshotFromEntry,
+  type LiveSessionStateSnapshot,
+} from './liveSessionStateSnapshot.js';
 import {
   broadcastLiveSessionAutoModeState,
   broadcastLiveSessionContextUsage,
   broadcastLiveSessionParallelState,
   broadcastLiveSessionQueueState,
   clearLiveSessionContextUsageTimer,
-  readConversationAutoModeState,
-  readLiveSessionContextUsage,
   scheduleLiveSessionContextUsage,
 } from './liveSessionStateBroadcasts.js';
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
@@ -267,25 +264,7 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   importingParallelJobs?: boolean;
 }
 
-export interface LiveSessionStateSnapshot {
-  blocks: DisplayBlock[];
-  blockOffset: number;
-  totalBlocks: number;
-  hasSnapshot: boolean;
-  isStreaming: boolean;
-  isCompacting: boolean;
-  hasPendingHiddenTurn: boolean;
-  error: string | null;
-  title: string | null;
-  tokens: { input: number; output: number; total: number } | null;
-  cost: number | null;
-  contextUsage: LiveContextUsage | null;
-  pendingQueue: { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] };
-  parallelJobs: ParallelPromptPreview[];
-  presence: LiveSessionPresenceState;
-  autoModeState: ConversationAutoModeState | null;
-  cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
-}
+export type { LiveSessionStateSnapshot } from './liveSessionStateSnapshot.js';
 
 export const registry = new Map<string, LiveEntry>();
 const pendingConversationWorkingDirectoryChanges = new Map<string, PendingConversationWorkingDirectoryChange>();
@@ -421,35 +400,7 @@ export function readLiveSessionStateSnapshot(sessionId: string, tailBlocks?: num
     throw new Error(`Session ${sessionId} is not live`);
   }
   ensureHiddenTurnState(entry);
-
-  let tokens: LiveSessionStateSnapshot['tokens'] = null;
-  let cost: number | null = null;
-  try {
-    const stats = entry.session.getSessionStats();
-    tokens = stats.tokens;
-    cost = stats.cost;
-  } catch {
-    tokens = null;
-    cost = null;
-  }
-
-  return {
-    ...buildLiveSessionSnapshot(entry, tailBlocks),
-    hasSnapshot: true,
-    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
-    isCompacting: entry.isCompacting === true,
-    hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
-    error: entry.currentTurnError ?? null,
-    title: resolveEntryTitle(entry),
-    tokens,
-    cost,
-    contextUsage: readLiveSessionContextUsage(entry.session),
-    pendingQueue: readQueueState(entry.session),
-    parallelJobs: readParallelState(entry.parallelJobs),
-    presence: buildLiveSessionPresenceState(entry),
-    autoModeState: readConversationAutoModeState(entry),
-    cwdChange: null,
-  };
+  return readLiveSessionStateSnapshotFromEntry(entry, resolveEntryTitle(entry), tailBlocks);
 }
 
 function broadcastTitle(entry: LiveEntry): void {
