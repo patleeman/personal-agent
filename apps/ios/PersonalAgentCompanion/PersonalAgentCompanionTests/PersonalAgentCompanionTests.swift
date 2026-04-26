@@ -46,6 +46,37 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertTrue(session.archivedSessions.isEmpty)
     }
 
+    func testHostSessionBuildsSectionsFromNormalizedConversationOrdering() async throws {
+        let client = MockCompanionClient()
+        try await client.updateConversationTabs(ordering: ConversationOrdering(
+            sessionIds: ["conv-2"],
+            pinnedSessionIds: ["conv-1"],
+            archivedSessionIds: [],
+            workspacePaths: []
+        ))
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        session.refresh()
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(session.chatSections.map(\.id), ["pinned", "open"])
+        XCTAssertEqual(session.chatSections.first?.sessions.map(\.id), ["conv-1"])
+        XCTAssertEqual(session.chatSections.last?.sessions.map(\.id), ["conv-2"])
+    }
+
+    func testArchivingConversationRemovesItFromOpenOrderingBeforeSaving() async throws {
+        let client = MockCompanionClient()
+        let session = HostSessionModel(client: client, installationSurfaceId: "ios-test")
+        session.refresh()
+        try await Task.sleep(for: .milliseconds(50))
+
+        await session.toggleArchived("conv-2")
+        try await Task.sleep(for: .milliseconds(50))
+
+        let state = try await client.listConversations()
+        XCTAssertFalse(state.ordering.sessionIds.contains("conv-2"))
+        XCTAssertEqual(state.ordering.archivedSessionIds, ["conv-2"])
+    }
+
     func testCompanionSetupLinkParsesCustomPairURL() {
         let raw = "pa-companion://pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL&label=Patrick%20Mac&hostInstanceId=host_123"
         let setupLink = CompanionSetupLink(rawString: raw)

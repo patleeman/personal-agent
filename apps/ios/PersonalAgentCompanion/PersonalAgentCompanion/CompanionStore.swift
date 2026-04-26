@@ -715,6 +715,7 @@ final class HostSessionModel: ObservableObject {
                 next.sessionIds.append(conversationId)
             }
         } else {
+            next.sessionIds.removeAll { $0 == conversationId }
             next.archivedSessionIds.append(conversationId)
             next.pinnedSessionIds.removeAll { $0 == conversationId }
         }
@@ -1092,16 +1093,13 @@ final class HostSessionModel: ObservableObject {
         let pinnedOrder = Set(state.ordering.pinnedSessionIds)
         let archivedOrder = Set(state.ordering.archivedSessionIds)
         let sessionOrder = state.ordering.sessionIds
-        let pinned: [SessionMeta] = sessionOrder.compactMap { (id: String) -> SessionMeta? in
-            guard pinnedOrder.contains(id), !archivedOrder.contains(id) else { return nil }
-            return sessionIndex[id]
-        }
+        let pinned: [SessionMeta] = state.ordering.pinnedSessionIds.compactMap { sessionIndex[$0] }
         let open: [SessionMeta] = sessionOrder.compactMap { (id: String) -> SessionMeta? in
             guard !pinnedOrder.contains(id), !archivedOrder.contains(id) else { return nil }
             return sessionIndex[id]
         }
         let archived: [SessionMeta] = state.ordering.archivedSessionIds.compactMap { sessionIndex[$0] }
-        let orderedSet = Set(sessionOrder).union(archivedOrder)
+        let orderedSet = Set(sessionOrder).union(pinnedOrder).union(archivedOrder)
         let recent = state.sessions
             .filter { !orderedSet.contains($0.id) }
             .sorted { lhs, rhs in
