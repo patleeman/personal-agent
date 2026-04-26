@@ -73,8 +73,6 @@ import {
   resolveLiveSessionFile,
 } from './liveSessionPersistence.js';
 import {
-  buildFallbackTitleFromContent,
-  isPlaceholderConversationTitle,
   resolveStableSessionTitle,
 } from './liveSessionTitle.js';
 import {
@@ -154,6 +152,12 @@ import {
   subscribeLiveSession,
   type LiveSessionSubscriptionListener,
 } from './liveSessionSubscription.js';
+import {
+  appendDetachedLiveSessionUserMessage,
+  appendParallelImportedLiveSessionMessage,
+  appendVisibleLiveSessionCustomMessage,
+  queueLiveSessionPromptContext,
+} from './liveSessionMessageAppend.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -360,7 +364,6 @@ export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedP
   return readQueueState(entry.session);
 }
 
-const PARALLEL_RESULT_CUSTOM_TYPE = 'parallel_result';
 let parallelPromptJobCounter = 0;
 
 const resolveParallelChildSession: ResolveParallelChildSession = (childConversationId) => {
@@ -888,26 +891,7 @@ export async function queuePromptContext(
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  const message = content.trim();
-  if (!message) {
-    return;
-  }
-
-  const customMessage = {
-    customType,
-    content: message,
-    display: false,
-    details: undefined,
-  };
-
-  if (entry.session.isStreaming) {
-    await entry.session.sendCustomMessage(customMessage, {
-      deliverAs: 'nextTurn',
-    });
-    return;
-  }
-
-  await entry.session.sendCustomMessage(customMessage);
+  await queueLiveSessionPromptContext(entry, customType, content);
 }
 
 export async function appendDetachedUserMessage(
@@ -916,33 +900,10 @@ export async function appendDetachedUserMessage(
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  if (entry.session.isStreaming) {
-    throw new Error(`Session ${sessionId} is currently streaming`);
-  }
-
-  const normalizedText = text.trim();
-  if (!normalizedText) {
-    return;
-  }
-
-  const message = {
-    role: 'user' as const,
-    content: [{ type: 'text' as const, text: normalizedText }],
-    timestamp: Date.now(),
-  };
-
-  entry.session.state.messages = [...entry.session.state.messages, message];
-  entry.session.sessionManager.appendMessage(message);
-
-  if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
-    const fallbackTitle = buildFallbackTitleFromContent(message.content);
-    if (fallbackTitle) {
-      entry.title = fallbackTitle;
-      broadcastTitle(entry);
-    }
-  }
-
-  publishSessionMetaChanged(sessionId);
+  await appendDetachedLiveSessionUserMessage(entry, text, {
+    broadcastTitle,
+    publishSessionMetaChanged,
+  });
 }
 
 export async function appendVisibleCustomMessage(
@@ -953,23 +914,10 @@ export async function appendVisibleCustomMessage(
 ): Promise<void> {
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  if (entry.session.isStreaming) {
-    throw new Error(`Session ${sessionId} is currently streaming`);
-  }
-
-  const message = content.trim();
-  if (!message) {
-    return;
-  }
-
-  await entry.session.sendCustomMessage({
-    customType,
-    content: message,
-    display: true,
-    details,
+  await appendVisibleLiveSessionCustomMessage(entry, customType, content, details, {
+    broadcastSnapshot,
+    publishSessionMetaChanged,
   });
-  broadcastSnapshot(entry);
-  publishSessionMetaChanged(sessionId);
 }
 
 async function appendParallelImportedMessage(
@@ -977,18 +925,16 @@ async function appendParallelImportedMessage(
   content: string,
   details: { childConversationId: string; status: 'complete' | 'failed' },
 ): Promise<void> {
-  await appendDetachedUserMessage(sessionId, content);
-
   const entry = registry.get(sessionId);
   if (!entry) throw new Error(`Session ${sessionId} is not live`);
-  await entry.session.sendCustomMessage({
-    customType: PARALLEL_RESULT_CUSTOM_TYPE,
-    content: `Imported parallel response from ${details.childConversationId}.`,
-    display: false,
-    details,
+  await appendParallelImportedLiveSessionMessage(entry, content, details, {
+    appendDetachedUserMessage: (target, text) => appendDetachedLiveSessionUserMessage(target, text, {
+      broadcastTitle,
+      publishSessionMetaChanged,
+    }),
+    broadcastSnapshot,
+    publishSessionMetaChanged,
   });
-  broadcastSnapshot(entry);
-  publishSessionMetaChanged(sessionId);
 }
 
 async function finalizeParallelChildLiveSession(
