@@ -125,6 +125,43 @@ describe('TasksPage', () => {
     expect(html).not.toContain('Start with a title, a prompt, a working directory, and a schedule.');
   });
 
+  it('marks failed automations as needing attention', () => {
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            projects: null,
+            sessions: [],
+            runs: null,
+            tasks: [{
+              id: 'broken-report',
+              title: 'Broken report',
+              scheduleType: 'cron',
+              running: false,
+              enabled: true,
+              cron: '0 9 * * *',
+              prompt: 'Send the report.',
+              lastStatus: 'failed',
+              lastRunAt: '2026-03-18T00:00:00.000Z',
+            }],
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('1 enabled · 1 need review');
+    expect(html).toContain('Needs attention');
+    expect(html).not.toContain('Active');
+  });
+
   it('shows recent runs on the automation detail page', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations/daily-report?run=task-daily-report-2026-03-18']}>

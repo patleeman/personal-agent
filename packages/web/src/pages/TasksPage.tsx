@@ -15,15 +15,19 @@ import { timeAgo } from '../shared/utils';
 function statusDotClass(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>) {
   if (task.running) return 'bg-accent animate-pulse';
   if (!task.enabled) return 'bg-border-default';
-  if (task.lastStatus === 'failure') return 'bg-danger';
+  if (isFailedTaskStatus(task.lastStatus)) return 'bg-danger';
   if (task.lastStatus === 'success') return 'bg-success';
   return 'bg-border-default/50';
+}
+
+function isFailedTaskStatus(status: string | undefined): boolean {
+  return status === 'failed' || status === 'failure';
 }
 
 function statusText(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): { text: string; cls: string } {
   if (task.running) return { text: 'Running', cls: 'text-accent' };
   if (!task.enabled) return { text: 'Disabled', cls: 'text-dim' };
-  if (task.lastStatus === 'failure') return { text: 'Needs attention', cls: 'text-danger' };
+  if (isFailedTaskStatus(task.lastStatus)) return { text: 'Needs attention', cls: 'text-danger' };
   if (task.lastStatus === 'success') return { text: 'Active', cls: 'text-success' };
   return { text: 'Scheduled', cls: 'text-secondary' };
 }
@@ -91,7 +95,7 @@ function formatNextRunHint(nextRunAt: Date): string {
 
 function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'lastStatus'>): number {
   if (task.running) return 0;
-  if (task.lastStatus === 'failure') return 1;
+  if (isFailedTaskStatus(task.lastStatus)) return 1;
   if (task.enabled) return 2;
   return 3;
 }
@@ -848,7 +852,7 @@ function AutomationsOverview({
   const { sessions } = useAppData();
   const rows = useMemo(() => sortAutomationRows(tasks), [tasks]);
   const runningCount = tasks.filter((task) => task.running).length;
-  const attentionCount = tasks.filter((task) => task.lastStatus === 'failure').length;
+  const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
   const enabledCount = tasks.filter((task) => task.enabled).length;
   const nowMs = useAutomationClock();
 
