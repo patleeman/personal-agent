@@ -8,17 +8,13 @@ import { join, resolve } from 'node:path';
 import {
   getDurableSessionsDir,
   getPiAgentRuntimeDir,
-  resolveChildProcessEnv,
 } from '@personal-agent/core';
 import {
   AgentSession,
-  AuthStorage,
   ModelRegistry,
   SessionManager,
   createAgentSession,
-  createBashTool,
   type AgentSessionEvent,
-  type ExtensionFactory,
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
@@ -28,7 +24,6 @@ import {
 } from './conversationModelPreferences.js';
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import {
   generateConversationTitle,
   hasAssistantTitleSourceMessage,
@@ -126,6 +121,11 @@ import {
   repairSessionModelProvider,
   resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
 } from './liveSessionModels.js';
+import {
+  createPreparedLiveAgentSession,
+  makeAuth as makeFactoryAuth,
+  makeRegistry,
+} from './liveSessionFactory.js';
 import {
   activateNextHiddenTurn,
   clearActiveHiddenTurnAfterTerminalEvent,
@@ -337,47 +337,6 @@ export function refreshAllLiveSessionModelRegistries(): number {
   }
 
   return refreshedCount;
-}
-
-// ── Auth / model helpers ──────────────────────────────────────────────────────
-
-function makeAuth() {
-  return AuthStorage.create(join(AGENT_DIR, 'auth.json'));
-}
-
-function makeRegistry(auth: AuthStorage) {
-  return createRuntimeModelRegistry(auth);
-}
-
-interface ToolPatchableSessionInternals {
-  _baseToolRegistry?: Map<string, unknown>;
-  _refreshToolRegistry?: (options?: {
-    activeToolNames?: string[];
-    includeAllExtensionTools?: boolean;
-  }) => void;
-}
-
-function patchConversationBashTool(session: AgentSession, cwd: string, conversationId: string, sessionFile?: string): void {
-  const patchableSession = session as unknown as ToolPatchableSessionInternals;
-  if (!(patchableSession._baseToolRegistry instanceof Map) || typeof patchableSession._refreshToolRegistry !== 'function') {
-    return;
-  }
-
-  patchableSession._baseToolRegistry.set('bash', createBashTool(cwd, {
-    commandPrefix: session.settingsManager.getShellCommandPrefix(),
-    spawnHook: (context) => ({
-      ...context,
-      env: resolveChildProcessEnv({
-        PERSONAL_AGENT_SOURCE_CONVERSATION_ID: conversationId,
-        ...(sessionFile ? { PERSONAL_AGENT_SOURCE_SESSION_FILE: sessionFile } : {}),
-      }, context.env),
-    }),
-  }));
-
-  patchableSession._refreshToolRegistry({
-    activeToolNames: session.getActiveToolNames(),
-    includeAllExtensionTools: true,
-  });
 }
 
 function resolveEntryTitle(entry: LiveEntry): string {
@@ -1004,7 +963,7 @@ export function getLiveSessionForkEntries(sessionId: string): unknown[] | null {
 }
 
 export function getAvailableModelObjects() {
-  const auth = makeAuth();
+  const auth = makeFactoryAuth(AGENT_DIR);
   const registry = makeRegistry(auth);
   return registry.getAvailable();
 }
@@ -1092,7 +1051,7 @@ export async function inspectAvailableTools(
     active: true;
   }>;
 }> {
-  const auth = makeAuth();
+  const auth = makeFactoryAuth(AGENT_DIR);
   const resourceLoader = await makeLoader(cwd, options);
   const { session } = await createAgentSession({
     cwd,
@@ -1150,47 +1109,15 @@ export async function createSession(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
-  const auth = makeAuth();
-  const modelRegistry = makeRegistry(auth);
-  const resourceLoader = await makeLoader(cwd, options);
   const sessionManager = SessionManager.create(cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createAgentSession({
+  const { session } = await createPreparedLiveAgentSession({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
-    authStorage: auth,
-    modelRegistry,
-    resourceLoader,
     sessionManager,
+    settingsFile: SETTINGS_FILE,
+    options,
+    applyInitialPreferences: true,
   });
-
-  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
-  patchSessionManagerPersistence(session.sessionManager);
-  ensureSessionFileExists(session.sessionManager);
-
-  const availableModels = modelRegistry.getAvailable();
-  await repairSessionModelProvider(session, availableModels);
-
-  if (options.initialModel !== undefined || options.initialThinkingLevel !== undefined || options.initialServiceTier !== undefined) {
-    await applyConversationModelPreferencesToLiveSession(
-      session,
-      {
-        ...(options.initialModel !== undefined ? { model: options.initialModel } : {}),
-        ...(options.initialThinkingLevel !== undefined ? { thinkingLevel: options.initialThinkingLevel } : {}),
-        ...(options.initialServiceTier !== undefined ? { serviceTier: options.initialServiceTier } : {}),
-      },
-      {
-        currentModel: session.model?.id ?? '',
-        currentThinkingLevel: session.thinkingLevel ?? '',
-        currentServiceTier: readSavedModelPreferences(SETTINGS_FILE, availableModels).currentServiceTier,
-      },
-      availableModels,
-    );
-  }
-
-  applyLiveSessionServiceTier(
-    session,
-    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
-  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -1204,28 +1131,14 @@ export async function createSessionFromExisting(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<{ id: string; sessionFile: string }> {
-  const auth = makeAuth();
-  const modelRegistry = makeRegistry(auth);
-  const resourceLoader = await makeLoader(cwd, options);
   const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createAgentSession({
+  const { session } = await createPreparedLiveAgentSession({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
-    authStorage: auth,
-    modelRegistry,
-    resourceLoader,
     sessionManager,
+    settingsFile: SETTINGS_FILE,
+    options,
   });
-
-  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
-  patchSessionManagerPersistence(session.sessionManager);
-  ensureSessionFileExists(session.sessionManager);
-  const availableModels = modelRegistry.getAvailable();
-  await repairSessionModelProvider(session, availableModels);
-  applyLiveSessionServiceTier(
-    session,
-    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
-  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd);
@@ -1264,21 +1177,14 @@ export async function summarizeSessionFileForPrompt(
   prompt: string,
   options: LiveSessionLoaderOptions = {},
 ): Promise<string> {
-  const auth = makeAuth();
-  const modelRegistry = makeRegistry(auth);
-  const resourceLoader = await makeLoader(cwd, options);
   const sessionManager = SessionManager.forkFrom(sessionFile, cwd, resolvePersistentSessionDir(cwd));
-  const { session } = await createAgentSession({
+  const { session } = await createPreparedLiveAgentSession({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
-    authStorage: auth,
-    modelRegistry,
-    resourceLoader,
     sessionManager,
+    settingsFile: SETTINGS_FILE,
+    options,
   });
-
-  ensureSessionFileExists(session.sessionManager);
-  await repairSessionModelProvider(session, modelRegistry.getAvailable());
 
   const temporarySessionFile = resolveLiveSessionFile(session) ?? '';
 
@@ -1426,28 +1332,16 @@ export async function resumeSession(
 
   const metadataCwd = readSessionMetaByFile(sessionFile)?.cwd;
   const effectiveCwdOverride = normalizedCwdOverride ?? metadataCwd;
-  const auth = makeAuth();
-  const modelRegistry = makeRegistry(auth);
   const sessionManager = SessionManager.open(sessionFile, undefined, effectiveCwdOverride);
   const cwd = effectiveCwdOverride ?? sessionManager.getCwd();
-  const resourceLoader = await makeLoader(cwd, loaderOptions);
-  const { session } = await createAgentSession({
+  const { session } = await createPreparedLiveAgentSession({
     cwd,
     agentDir: loaderOptions.agentDir ?? AGENT_DIR,
-    authStorage: auth,
-    modelRegistry,
-    resourceLoader,
     sessionManager,
+    settingsFile: SETTINGS_FILE,
+    options: loaderOptions,
+    ensureSessionFile: false,
   });
-
-  patchConversationBashTool(session, cwd, session.sessionId, resolveLiveSessionFile(session));
-  patchSessionManagerPersistence(session.sessionManager);
-  const availableModels = modelRegistry.getAvailable();
-  await repairSessionModelProvider(session, availableModels);
-  applyLiveSessionServiceTier(
-    session,
-    resolveConversationPreferenceStateForSession(session.sessionManager, availableModels).currentServiceTier,
-  );
 
   const id = session.sessionId;
   wireSession(id, session, cwd, {
