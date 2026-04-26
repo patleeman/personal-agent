@@ -126,6 +126,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 8. [done] Extract image preview, image message block, and image inspection modal into `ImageMessageBlocks.tsx`.
 9. [done] Extract user, assistant, context, and summary message rendering into `MessageBlocks.tsx` with focused summary-helper tests.
 10. [done] Extract tool metadata, disclosure state, and streaming-status helpers into `toolPresentation.ts` with focused tests.
+11. [done] Extract generic tool block orchestration into `ToolBlock.tsx`.
 
 ## Next action
 
