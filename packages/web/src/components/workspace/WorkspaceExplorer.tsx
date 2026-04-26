@@ -251,6 +251,23 @@ function treePathToWorkspacePath(path: string): string {
   return path.replace(/\/+$/g, '');
 }
 
+function collectExpandedWorkspaceFolderPaths(
+  model: TreesModel,
+  entries: Iterable<WorkspaceEntry>,
+): string[] {
+  const expanded: string[] = [];
+  for (const entry of entries) {
+    if (entry.kind !== 'directory') {
+      continue;
+    }
+    const item = model.getItem(workspaceEntryToTreePath(entry));
+    if (item?.isDirectory() && item.isExpanded()) {
+      expanded.push(workspaceEntryToTreePath(entry));
+    }
+  }
+  return expanded;
+}
+
 function buildWorkspaceBreadcrumbs(path: string): string[] {
   const parts = path.split('/').filter(Boolean);
   if (parts.length <= 4) {
@@ -537,8 +554,10 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
   }, [showDiff]);
 
   useEffect(() => {
-    model.resetPaths(workspaceTreePaths);
-  }, [model, workspaceTreePaths]);
+    model.resetPaths(workspaceTreePaths, {
+      initialExpandedPaths: collectExpandedWorkspaceFolderPaths(model, workspaceEntryMap.values()),
+    });
+  }, [model, workspaceEntryMap, workspaceTreePaths]);
 
   useEffect(() => {
     selectionChangeRef.current = (paths: readonly string[]) => {
