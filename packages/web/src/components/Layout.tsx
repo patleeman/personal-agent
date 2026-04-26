@@ -460,9 +460,9 @@ function WorkbenchDocumentPane() {
       <div className="flex h-full items-center justify-center px-6 text-center select-text">
         <div className="max-w-sm">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-steel/80">Workbench</p>
-          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a Knowledge note</h2>
+          <h2 className="mt-2 text-lg font-semibold text-primary text-balance">Open a file</h2>
           <p className="mt-2 text-[13px] leading-6 text-secondary">
-            Pick a file from the Knowledge sidebar to keep it beside the transcript.
+            Pick a file from the right rail to keep it beside the transcript.
           </p>
         </div>
       </div>
@@ -722,7 +722,7 @@ export function Layout() {
                   <aside
                     style={{ width: workbenchExplorer.width }}
                     className="flex-shrink-0 overflow-hidden bg-surface select-text"
-                    aria-label="Knowledge sidebar"
+                    aria-label="Workbench sidebar"
                   >
                     <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} />
                   </aside>
