@@ -6,7 +6,7 @@ const BUILT_IN_MODELS = [
   { id: 'claude-opus-4-6', provider: 'anthropic', name: 'Claude Opus 4.6', context: 200_000 },
   { id: 'claude-sonnet-4-6', provider: 'anthropic', name: 'Claude Sonnet 4.6', context: 200_000 },
   { id: 'claude-haiku-4-6', provider: 'anthropic', name: 'Claude Haiku 4.6', context: 200_000 },
-  { id: 'gpt-5.5', provider: 'openai-codex', name: 'GPT-5.5', context: 128_000 },
+  { id: 'gpt-5.5', provider: 'openai-codex', name: 'GPT-5.5', context: 400_000 },
   { id: 'gpt-5.4', provider: 'openai-codex', name: 'GPT-5.4', context: 128_000 },
   { id: 'gpt-5.4-mini', provider: 'openai-codex', name: 'GPT-5.4 Mini', context: 128_000 },
   { id: 'gpt-5.2', provider: 'openai-codex', name: 'GPT-5.2', context: 128_000 },

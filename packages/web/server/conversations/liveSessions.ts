@@ -32,6 +32,7 @@ import {
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 import { modelSupportsServiceTier } from '../models/modelServiceTiers.js';
+import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
 import { createRuntimeModelRegistry } from '../models/modelRegistry.js';
 import {
@@ -602,9 +603,18 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
       return null;
     }
 
+    const modelId = session.model?.id;
+    const contextWindow = normalizeModelContextWindow(
+      modelId,
+      usage.contextWindow,
+      session.model?.contextWindow ?? 128_000,
+    );
+
     return {
       ...usage,
-      modelId: session.model?.id,
+      modelId,
+      contextWindow,
+      percent: usage.tokens !== null && contextWindow > 0 ? (usage.tokens / contextWindow) * 100 : null,
       ...(usage.tokens !== null
         ? { segments: estimateContextUsageSegments(session.messages, usage.tokens) }
         : {}),
@@ -2609,7 +2619,7 @@ export function getAvailableModelObjects() {
 
 export function getAvailableModels() {
   return getAvailableModelObjects().map((model) => {
-    const contextWindow = model.contextWindow ?? 128_000;
+    const contextWindow = normalizeModelContextWindow(model.id, model.contextWindow, 128_000);
     return {
       id: model.id,
       name: model.name ?? model.id,

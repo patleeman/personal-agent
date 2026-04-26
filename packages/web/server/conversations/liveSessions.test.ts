@@ -3758,6 +3758,24 @@ describe('promptSession', () => {
 });
 
 describe('session actions', () => {
+  it('normalizes GPT-5.5 live context usage to the current 400k window', () => {
+    setLiveEntry('session-gpt-55-context', {
+      sessionId: 'session-gpt-55-context',
+      session: {
+        model: { id: 'gpt-5.5', contextWindow: 272_000 },
+        messages: [{ role: 'user', content: [{ type: 'text', text: 'Context tokens' }] }],
+        getContextUsage: () => ({ tokens: 200_000, contextWindow: 272_000, percent: 73.5 }),
+      },
+    });
+
+    expect(getSessionContextUsage('session-gpt-55-context')).toEqual(expect.objectContaining({
+      tokens: 200_000,
+      modelId: 'gpt-5.5',
+      contextWindow: 400_000,
+      percent: 50,
+    }));
+  });
+
   it('compacts a live session and broadcasts the refreshed snapshot and context usage', async () => {
     const compact = vi.fn(async () => ({ summary: 'compacted' }));
     const events: SseEvent[] = [];
