@@ -97,7 +97,7 @@ const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey(
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
-const SETTINGS_ROUTE_PREFIXES = ['/settings', '/automations'] as const;
+const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations'] as const;
 
 type DesktopConversationShortcutAction =
   | 'close-conversation'
