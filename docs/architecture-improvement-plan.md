@@ -101,6 +101,20 @@ For UI architecture work, also run app build/tests and perform a visual check if
 3. [done] Add focused tests for `liveSessionTranscript.ts` merge behavior.
 4. Avoid testing every facade; test behavior-heavy modules.
 
+### 5. Chat transcript rendering split
+
+**Files:** `packages/web/src/components/chat/ChatView.tsx`, `packages/web/src/components/chat/*`
+
+**Problem:** `ChatView.tsx` mixes transcript layout, message markdown rendering, skill invocation rendering, durable run blocks, tool blocks, reply selection, and action wiring. That makes UI changes riskier than they need to be and buries testable rendering rules inside a giant component.
+
+**Target shape:** keep `ChatView.tsx` as transcript orchestration while behavior-heavy renderers live in focused modules with small props.
+
+**First slices:**
+
+1. [done] Extract markdown, mention, commit hash, and skill-aware message rendering into `MarkdownMessage.tsx`.
+2. Extract reply-selection DOM helpers into a small tested module.
+3. Extract linked durable-run block rendering after the message renderer seams are stable.
+
 ## Next action
 
-Move to Priority 1. The live-session split is locked with focused tests for the behavior-heavy extracted modules; the next high-impact architecture work is reducing `ConversationPage.tsx` by extracting pure attachment/image preparation first.
+Move to Priority 5. `ChatView.tsx` is now one of the highest-risk UI files; keep pulling behavior-heavy seams out without changing transcript behavior.
