@@ -15,6 +15,7 @@ import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDr
 import { useComposerModifierKeys, useVisualViewportKeyboardInset } from '../conversation/useConversationKeyboardState';
 import { useWorkspaceComposerEvents } from '../conversation/useWorkspaceComposerEvents';
 import { MAX_RELATED_THREAD_HOTKEYS, useRelatedThreadHotkeys } from '../conversation/useRelatedThreadHotkeys';
+import { useDesktopConversationShortcuts } from '../conversation/useDesktopConversationShortcuts';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -162,16 +163,10 @@ const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
-const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
 const MAX_RELATED_THREAD_CANDIDATES = 24;
-
-type DesktopConversationShortcutAction = 'focus-composer' | 'edit-working-directory' | 'rename-conversation';
-function isDesktopConversationShortcutAction(value: unknown): value is DesktopConversationShortcutAction {
-  return value === 'focus-composer' || value === 'edit-working-directory' || value === 'rename-conversation';
-}
 
 function resolveConversationAutocompleteCatalogDemand(input: string): {
   needsMemoryData: boolean;
@@ -6004,50 +5999,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setDraftCwdError(null);
   }, []);
 
-  useEffect(() => {
-    function handleDesktopShortcut(event: Event) {
-      if (document.querySelector('.ui-overlay-backdrop') !== null) {
-        return;
-      }
-
-      const action = (event as CustomEvent<{ action?: unknown }>).detail?.action;
-      if (!isDesktopConversationShortcutAction(action)) {
-        return;
-      }
-
-      if (action === 'focus-composer') {
-        const composer = textareaRef.current;
-        if (!composer) {
-          return;
-        }
-
-        composer.focus();
-        const end = composer.value.length;
-        composer.selectionStart = end;
-        composer.selectionEnd = end;
-        return;
-      }
-
-      if (action === 'rename-conversation') {
-        beginTitleEdit();
-        return;
-      }
-
-      if (draft) {
-        if (draftCwdPickBusy) {
-          return;
-        }
-
-        void pickDraftConversationCwd();
-        return;
-      }
-
-      beginConversationCwdEdit();
-    }
-
-    window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-    return () => window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
-  }, [beginConversationCwdEdit, beginTitleEdit, draft, draftCwdPickBusy, pickDraftConversationCwd]);
+  useDesktopConversationShortcuts({
+    draft,
+    draftCwdPickBusy,
+    textareaRef,
+    beginTitleEdit,
+    beginConversationCwdEdit,
+    pickDraftConversationCwd,
+  });
 
   function showSessionSummary() {
     const cwd = draft
