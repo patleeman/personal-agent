@@ -3,7 +3,6 @@ import { parseSkillBlock } from '../../knowledge/skillBlock';
 import { readArtifactPresentation } from '../../conversation/conversationArtifacts';
 import { readCheckpointPresentation } from '../../conversation/conversationCheckpoints';
 import { extractDurableRunIdsFromBlock } from '../../conversation/conversationRuns';
-import { normalizeReplyQuoteSelection } from '../../conversation/conversationReplyQuote';
 import {
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
@@ -39,96 +38,7 @@ import { getStreamingThroughputLabel } from '../../transcript/streamingThroughpu
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 import { Pill, SurfacePanel, cx } from '../ui';
-function getElementFromNode(node: Node | null): HTMLElement | null {
-  if (!node) {
-    return null;
-  }
-
-  if (node instanceof HTMLElement) {
-    return node;
-  }
-
-  return node.parentElement;
-}
-
-function findSelectionReplyScopeElement(node: Node | null): HTMLElement | null {
-  return getElementFromNode(node)?.closest('[data-selection-reply-scope="assistant-message"]') ?? null;
-}
-
-function findSelectionReplyScopeElements(selection: Selection, range: Range): { startScope: HTMLElement | null; endScope: HTMLElement | null } {
-  const anchorScope = findSelectionReplyScopeElement(selection.anchorNode);
-  const focusScope = findSelectionReplyScopeElement(selection.focusNode);
-
-  return {
-    startScope: anchorScope ?? findSelectionReplyScopeElement(range.startContainer),
-    endScope: focusScope ?? findSelectionReplyScopeElement(range.endContainer),
-  };
-}
-
-function readSelectedTextWithinElement(element: HTMLElement | null, selectionRange?: Range | null): string {
-  if (!element || typeof window === 'undefined' || typeof document === 'undefined') {
-    return '';
-  }
-
-  const range = selectionRange ?? (() => {
-    const selection = window.getSelection();
-    if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      return null;
-    }
-
-    return selection.getRangeAt(0);
-  })();
-
-  if (!range) {
-    return '';
-  }
-
-  const scopeRange = document.createRange();
-  scopeRange.selectNodeContents(element);
-
-  if (
-    range.compareBoundaryPoints(Range.START_TO_END, scopeRange) <= 0
-    || range.compareBoundaryPoints(Range.END_TO_START, scopeRange) >= 0
-  ) {
-    return '';
-  }
-
-  const intersection = document.createRange();
-
-  if (range.compareBoundaryPoints(Range.START_TO_START, scopeRange) <= 0) {
-    intersection.setStart(scopeRange.startContainer, scopeRange.startOffset);
-  } else {
-    intersection.setStart(range.startContainer, range.startOffset);
-  }
-
-  if (range.compareBoundaryPoints(Range.END_TO_END, scopeRange) >= 0) {
-    intersection.setEnd(scopeRange.endContainer, scopeRange.endOffset);
-  } else {
-    intersection.setEnd(range.endContainer, range.endOffset);
-  }
-
-  return normalizeReplyQuoteSelection(intersection.toString());
-}
-
-type ReplySelectionGestureHandler = (scopeElement: HTMLElement) => void;
-
-function buildReplySelectionScopeProps(messageIndex?: number, blockId?: string, onSelectionGesture?: ReplySelectionGestureHandler) {
-  const handleSelectionGesture = onSelectionGesture
-    ? (event: React.SyntheticEvent<HTMLElement>) => {
-        onSelectionGesture(event.currentTarget);
-      }
-    : undefined;
-
-  return {
-    'data-selection-reply-scope': 'assistant-message',
-    'data-message-index': typeof messageIndex === 'number' ? String(messageIndex) : undefined,
-    'data-block-id': blockId,
-    onMouseUp: handleSelectionGesture,
-    onPointerUp: handleSelectionGesture,
-    onKeyUp: handleSelectionGesture,
-    onTouchEnd: handleSelectionGesture,
-  };
-}
+import { buildReplySelectionScopeProps, findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement, type ReplySelectionGestureHandler } from './replySelection.js';
 
 function stripPreviewMarkdownWrappers(line: string) {
   if ((line.startsWith('**') && line.endsWith('**')) || (line.startsWith('__') && line.endsWith('__'))) {
@@ -353,6 +263,7 @@ const CheckpointToolBlock = memo(function CheckpointToolBlock({
   const isRunning = block.status === 'running' || !!block.running;
   const isError = block.status === 'error' || !!block.error;
   const isActive = activeCheckpointId === checkpoint.checkpointId;
+  const commentCount = (checkpoint as { commentCount?: number }).commentCount;
 
   return (
     <SurfacePanel
@@ -376,8 +287,8 @@ const CheckpointToolBlock = memo(function CheckpointToolBlock({
             {typeof checkpoint.linesAdded === 'number' && typeof checkpoint.linesDeleted === 'number' ? (
               <span className="font-mono tabular-nums text-secondary"><span className="text-success">+{checkpoint.linesAdded}</span> <span className="text-danger">-{checkpoint.linesDeleted}</span></span>
             ) : null}
-            {typeof (checkpoint as { commentCount?: number }).commentCount === 'number' && (checkpoint as { commentCount?: number }).commentCount > 0 ? (
-              <span className="text-dim">{(checkpoint as { commentCount?: number }).commentCount} comment{(checkpoint as { commentCount?: number }).commentCount === 1 ? '' : 's'}</span>
+            {typeof commentCount === 'number' && commentCount > 0 ? (
+              <span className="text-dim">{commentCount} comment{commentCount === 1 ? '' : 's'}</span>
             ) : null}
             {checkpoint.updatedAt && <span className="text-dim">updated {timeAgo(checkpoint.updatedAt)}</span>}
           </div>

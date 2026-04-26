@@ -112,7 +112,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 **First slices:**
 
 1. [done] Extract markdown, mention, commit hash, and skill-aware message rendering into `MarkdownMessage.tsx`.
-2. Extract reply-selection DOM helpers into a small tested module.
+2. [done] Extract reply-selection DOM helpers into a small tested module.
 3. Extract linked durable-run block rendering after the message renderer seams are stable.
 
 ## Next action
