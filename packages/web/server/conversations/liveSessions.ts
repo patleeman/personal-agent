@@ -153,6 +153,12 @@ import {
   inspectAvailableLiveSessionTools,
   type BeforeAgentStartProbeMessage,
 } from './liveSessionToolInspection.js';
+export {
+  registerLiveSessionLifecycleHandler,
+  type LiveSessionLifecycleEvent,
+  type LiveSessionLifecycleHandler,
+} from './liveSessionLifecycle.js';
+import { notifyLiveSessionLifecycleHandlers } from './liveSessionLifecycle.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -251,14 +257,6 @@ interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState 
   importingParallelJobs?: boolean;
 }
 
-export interface LiveSessionLifecycleEvent {
-  conversationId: string;
-  sessionFile?: string;
-  title: string;
-  cwd: string;
-  trigger: 'turn_end' | 'auto_compaction_end';
-}
-
 export interface LiveSessionStateSnapshot {
   blocks: DisplayBlock[];
   blockOffset: number;
@@ -279,35 +277,17 @@ export interface LiveSessionStateSnapshot {
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
-export type LiveSessionLifecycleHandler = (event: LiveSessionLifecycleEvent) => void | Promise<void>;
-
 export const registry = new Map<string, LiveEntry>();
-const lifecycleHandlers = new Set<LiveSessionLifecycleHandler>();
 const pendingConversationWorkingDirectoryChanges = new Map<string, PendingConversationWorkingDirectoryChange>();
 
-export function registerLiveSessionLifecycleHandler(handler: LiveSessionLifecycleHandler): () => void {
-  lifecycleHandlers.add(handler);
-  return () => lifecycleHandlers.delete(handler);
-}
-
-function notifyLiveSessionLifecycleHandlers(entry: LiveEntry, trigger: 'turn_end' | 'auto_compaction_end'): void {
-  const event: LiveSessionLifecycleEvent = {
+function notifyEntryLifecycleHandlers(entry: LiveEntry, trigger: 'turn_end' | 'auto_compaction_end'): void {
+  notifyLiveSessionLifecycleHandlers({
     conversationId: entry.sessionId,
     sessionFile: resolveLiveSessionFile(entry.session, { ensurePersisted: true }),
     title: resolveEntryTitle(entry),
     cwd: entry.cwd,
     trigger,
-  };
-
-  for (const handler of lifecycleHandlers) {
-    Promise.resolve(handler(event)).catch((error) => {
-      logWarn('live session lifecycle handler failed', {
-        conversationId: entry.sessionId,
-        trigger,
-        error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-      });
-    });
-  }
+  });
 }
 
 export function reloadAllLiveSessionAuth(): number {
@@ -832,7 +812,7 @@ function wireSession(
         }
       }
       void syncDurableConversationRun(entry, 'waiting');
-      notifyLiveSessionLifecycleHandlers(entry, 'turn_end');
+      notifyEntryLifecycleHandlers(entry, 'turn_end');
       void applyPendingConversationWorkingDirectoryChange(entry);
     }
 
@@ -911,7 +891,7 @@ function wireSession(
         clearContextUsageTimer(entry);
         broadcastContextUsage(entry, true);
         publishSessionMetaChanged(entry.sessionId);
-        notifyLiveSessionLifecycleHandlers(entry, 'auto_compaction_end');
+        notifyEntryLifecycleHandlers(entry, 'auto_compaction_end');
       }
     }
 
