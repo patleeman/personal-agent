@@ -886,7 +886,7 @@ function ModelPicker({ models, currentModel, query, idx, onSelect, onClose }:
 }
 
 const COMPOSER_PREFERENCE_SELECT_CLASS = 'h-8 min-w-0 truncate rounded-md border border-transparent bg-transparent px-1.5 pr-6 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:border-border-subtle focus-visible:bg-surface/55 focus-visible:text-primary focus-visible:ring-1 focus-visible:ring-accent/20 disabled:cursor-default disabled:opacity-40';
-const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 560;
+const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 680;
 const DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS = 'max-w-[38rem]';
 const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
 
