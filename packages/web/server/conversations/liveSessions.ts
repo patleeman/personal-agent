@@ -25,7 +25,6 @@ import {
   readSessionMetaByFile,
   type DisplayBlock,
 } from './sessions.js';
-import { readGitRepoInfo } from '../workspace/gitStatus.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
@@ -78,9 +77,6 @@ import {
   patchSessionManagerPersistence,
   resolveLiveSessionFile,
 } from './liveSessionPersistence.js';
-import {
-  resolveStableForkEntryId,
-} from './liveSessionForking.js';
 import {
   buildFallbackTitleFromContent,
   isPlaceholderConversationTitle,
@@ -140,10 +136,9 @@ import {
   type PendingConversationWorkingDirectoryChange,
 } from './liveSessionCwdChange.js';
 import {
-  createRunningParallelPromptJob,
   finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
-  handleParallelPromptCompletion,
   manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
+  startParallelPromptSession as startParallelPromptSessionWithCallbacks,
   tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
 } from './liveSessionParallelImportOps.js';
 import {
@@ -1095,88 +1090,22 @@ export async function startParallelPromptSession(
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }
-
-  const text = input.text.trim();
-  if (!text && (!input.images || input.images.length === 0)) {
-    throw new Error('text or images required');
-  }
-
-  const sourceSessionFile = entry.session.sessionFile?.trim();
-  if (!sourceSessionFile) {
-    throw new Error('Parallel prompts require a persisted session file.');
-  }
-
-  const activeTurnInProgress = entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry);
-  if (!activeTurnInProgress) {
-    throw new Error('Parallel prompts are only available while the conversation is busy.');
-  }
-
-  const parallelRepoRoot = readGitRepoInfo(entry.cwd)?.root;
-  const stableEntryId = resolveStableForkEntryId(sourceSessionFile, { activeTurnInProgress });
-  const forked = stableEntryId
-    ? await forkSession(sessionId, stableEntryId, {
-        preserveSource: true,
-        ...options,
-      })
-    : await createSession(entry.cwd, {
-        ...options,
-        initialModel: options.initialModel === undefined ? entry.session.model?.id ?? null : options.initialModel,
-        initialThinkingLevel: options.initialThinkingLevel === undefined
-          ? entry.session.thinkingLevel ?? null
-          : options.initialThinkingLevel,
-        initialServiceTier: options.initialServiceTier === undefined
-          ? buildConversationServiceTierPreferenceInput(resolveConversationPreferenceStateForSession(entry.session.sessionManager, getAvailableModelObjects()))
-          : options.initialServiceTier,
-      });
-
-  const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
-  const job: ParallelPromptJob = createRunningParallelPromptJob({
-    id: createParallelPromptJobId(),
-    prompt: text,
-    childConversationId,
-    childSessionFile: forked.sessionFile,
-    imageCount: input.images?.length ?? 0,
-    attachmentRefs: input.attachmentRefs,
-    forkEntryId: stableEntryId ?? undefined,
-    repoRoot: parallelRepoRoot,
-    cwd: entry.cwd,
+  return startParallelPromptSessionWithCallbacks(entry, input, options, {
+    createJobId: createParallelPromptJobId,
+    createSession,
+    forkSession,
+    queuePromptContext,
+    submitPromptSession,
+    resolveDefaultServiceTier: (candidate) => buildConversationServiceTierPreferenceInput(
+      resolveConversationPreferenceStateForSession(candidate.session.sessionManager, getAvailableModelObjects()),
+    ),
+    hasQueuedOrActiveHiddenTurn,
+    persistParallelJobs,
+    broadcastParallelState,
+    getCurrentEntry: () => registry.get(sessionId),
+    resolveParallelChildSession,
+    tryImportReadyParallelJobs,
   });
-  entry.parallelJobs ??= [];
-  entry.parallelJobs.push(job);
-  persistParallelJobs(entry);
-  broadcastParallelState(entry, true);
-
-  try {
-    for (const message of input.contextMessages ?? []) {
-      await queuePromptContext(childConversationId, message.customType, message.content);
-    }
-
-    const submitted = await submitPromptSession(childConversationId, text, undefined, input.images);
-    const completionInput = {
-      sourceSessionFile,
-      jobId: job.id,
-      childSessionFile: forked.sessionFile,
-      cwd: entry.cwd,
-      repoRoot: parallelRepoRoot,
-      getCurrentEntry: () => registry.get(sessionId),
-      resolveParallelChildSession,
-      broadcastParallelState,
-      tryImportReadyParallelJobs,
-    };
-    void submitted.completion
-      .then(() => handleParallelPromptCompletion(completionInput))
-      .catch((error: unknown) => handleParallelPromptCompletion({ ...completionInput, error }));
-
-    return {
-      jobId: job.id,
-      childConversationId,
-    };
-  } catch (error) {
-    entry.parallelJobs = entry.parallelJobs.filter((candidate) => candidate.id !== job.id);
-    persistParallelJobs(entry);
-    broadcastParallelState(entry, true);
-    throw error;
-  }
 }
 
 export async function manageParallelPromptJob(

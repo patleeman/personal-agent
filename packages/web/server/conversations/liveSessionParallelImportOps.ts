@@ -1,6 +1,12 @@
 import { existsSync } from 'node:fs';
 import { logWarn } from '../shared/logging.js';
-import { buildParallelImportedContent } from './liveSessionForking.js';
+import { readGitRepoInfo } from '../workspace/gitStatus.js';
+import {
+  buildParallelImportedContent,
+  resolveStableForkEntryId,
+} from './liveSessionForking.js';
+import type { PromptImageAttachment } from './liveSessionQueue.js';
+import type { LiveSessionLoaderOptions } from './liveSessionLoader.js';
 import {
   normalizeParallelPromptList,
   type ParallelPromptJob,
@@ -15,9 +21,13 @@ import {
 
 export interface LiveSessionParallelImportHost {
   sessionId: string;
+  cwd: string;
   session: {
     isStreaming: boolean;
     sessionFile?: string | null;
+    model?: { id?: string } | null;
+    thinkingLevel?: string | null;
+    sessionManager?: unknown;
   };
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
@@ -42,6 +52,113 @@ export interface LiveSessionParallelImportCallbacks<TEntry extends LiveSessionPa
     details: { childConversationId: string; status: 'complete' | 'failed' },
   ) => Promise<void>;
   finalizeParallelChildLiveSession: (childConversationId: string, options?: { abortIfRunning?: boolean }) => Promise<'destroyed' | 'preserved' | 'missing'>;
+}
+
+export async function startParallelPromptSession<TEntry extends LiveSessionParallelImportHost>(
+  entry: TEntry,
+  input: {
+    text: string;
+    images?: PromptImageAttachment[];
+    attachmentRefs?: string[];
+    contextMessages?: Array<{ customType: string; content: string }>;
+  },
+  options: LiveSessionLoaderOptions,
+  callbacks: {
+    createJobId: () => string;
+    createSession: (cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
+    forkSession: (sessionId: string, entryId: string, options: LiveSessionLoaderOptions & { preserveSource?: boolean }) => Promise<{ newSessionId: string; sessionFile: string }>;
+    queuePromptContext: (sessionId: string, customType: string, content: string) => Promise<void>;
+    submitPromptSession: (sessionId: string, text: string, behavior?: 'steer' | 'followUp', images?: PromptImageAttachment[]) => Promise<{ acceptedAs: 'started' | 'queued'; completion: Promise<void> }>;
+    resolveDefaultServiceTier: (entry: TEntry) => LiveSessionLoaderOptions['initialServiceTier'];
+    hasQueuedOrActiveHiddenTurn: (entry: TEntry) => boolean;
+    persistParallelJobs: (entry: TEntry) => void;
+    broadcastParallelState: (entry: TEntry, force?: boolean) => void;
+    getCurrentEntry: () => TEntry | undefined;
+    resolveParallelChildSession: ResolveParallelChildSession;
+    tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
+  },
+): Promise<{ jobId: string; childConversationId: string }> {
+  const text = input.text.trim();
+  if (!text && (!input.images || input.images.length === 0)) {
+    throw new Error('text or images required');
+  }
+
+  const sourceSessionFile = entry.session.sessionFile?.trim();
+  if (!sourceSessionFile) {
+    throw new Error('Parallel prompts require a persisted session file.');
+  }
+
+  const activeTurnInProgress = entry.session.isStreaming || callbacks.hasQueuedOrActiveHiddenTurn(entry);
+  if (!activeTurnInProgress) {
+    throw new Error('Parallel prompts are only available while the conversation is busy.');
+  }
+
+  const parallelRepoRoot = readGitRepoInfo(entry.cwd)?.root;
+  const stableEntryId = resolveStableForkEntryId(sourceSessionFile, { activeTurnInProgress });
+  const forked = stableEntryId
+    ? await callbacks.forkSession(entry.sessionId, stableEntryId, {
+        preserveSource: true,
+        ...options,
+      })
+    : await callbacks.createSession(entry.cwd, {
+        ...options,
+        initialModel: options.initialModel === undefined ? entry.session.model?.id ?? null : options.initialModel,
+        initialThinkingLevel: options.initialThinkingLevel === undefined
+          ? entry.session.thinkingLevel ?? null
+          : options.initialThinkingLevel,
+        initialServiceTier: options.initialServiceTier === undefined
+          ? callbacks.resolveDefaultServiceTier(entry)
+          : options.initialServiceTier,
+      });
+
+  const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
+  const job = createRunningParallelPromptJob({
+    id: callbacks.createJobId(),
+    prompt: text,
+    childConversationId,
+    childSessionFile: forked.sessionFile,
+    imageCount: input.images?.length ?? 0,
+    attachmentRefs: input.attachmentRefs,
+    forkEntryId: stableEntryId ?? undefined,
+    repoRoot: parallelRepoRoot,
+    cwd: entry.cwd,
+  });
+  entry.parallelJobs ??= [];
+  entry.parallelJobs.push(job);
+  callbacks.persistParallelJobs(entry);
+  callbacks.broadcastParallelState(entry, true);
+
+  try {
+    for (const message of input.contextMessages ?? []) {
+      await callbacks.queuePromptContext(childConversationId, message.customType, message.content);
+    }
+
+    const submitted = await callbacks.submitPromptSession(childConversationId, text, undefined, input.images);
+    const completionInput = {
+      sourceSessionFile,
+      jobId: job.id,
+      childSessionFile: forked.sessionFile,
+      cwd: entry.cwd,
+      repoRoot: parallelRepoRoot,
+      getCurrentEntry: callbacks.getCurrentEntry,
+      resolveParallelChildSession: callbacks.resolveParallelChildSession,
+      broadcastParallelState: callbacks.broadcastParallelState,
+      tryImportReadyParallelJobs: callbacks.tryImportReadyParallelJobs,
+    };
+    void submitted.completion
+      .then(() => handleParallelPromptCompletion(completionInput))
+      .catch((error: unknown) => handleParallelPromptCompletion({ ...completionInput, error }));
+
+    return {
+      jobId: job.id,
+      childConversationId,
+    };
+  } catch (error) {
+    entry.parallelJobs = entry.parallelJobs.filter((candidate) => candidate.id !== job.id);
+    callbacks.persistParallelJobs(entry);
+    callbacks.broadcastParallelState(entry, true);
+    throw error;
+  }
 }
 
 export function createRunningParallelPromptJob(input: {
