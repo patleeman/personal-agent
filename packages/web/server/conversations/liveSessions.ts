@@ -36,7 +36,6 @@ import {
 } from './liveSessionPresence.js';
 import {
   normalizeQueuedPromptBehavior,
-  readQueueState,
   type PromptImageAttachment,
   type QueuedPromptPreview,
 } from './liveSessionQueue.js';
@@ -169,6 +168,14 @@ import {
   renameLiveSession,
   updateLiveSessionModelPreferences as updateLiveSessionModelPreferencesWithCallbacks,
 } from './liveSessionMaintenanceOps.js';
+import {
+  refreshAllLiveSessionModelRegistries as refreshLiveSessionModelRegistries,
+  reloadAllLiveSessionAuth as reloadLiveSessionAuth,
+} from './liveSessionRegistryMaintenance.js';
+import {
+  canInjectResumeFallbackPrompt as canInjectResumeFallbackPromptForEntry,
+  listQueuedPromptPreviews as listQueuedPromptPreviewsForEntry,
+} from './liveSessionQueueRead.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -280,35 +287,11 @@ function notifyEntryLifecycleHandlers(entry: LiveEntry, trigger: 'turn_end' | 'a
 }
 
 export function reloadAllLiveSessionAuth(): number {
-  let reloadedCount = 0;
-
-  for (const entry of registry.values()) {
-    const authStorage = entry.session.modelRegistry?.authStorage;
-    if (!authStorage || typeof authStorage.reload !== 'function') {
-      continue;
-    }
-
-    authStorage.reload();
-    reloadedCount += 1;
-  }
-
-  return reloadedCount;
+  return reloadLiveSessionAuth(registry.values());
 }
 
 export function refreshAllLiveSessionModelRegistries(): number {
-  let refreshedCount = 0;
-
-  for (const entry of registry.values()) {
-    const modelRegistry = entry.session.modelRegistry;
-    if (!modelRegistry || typeof modelRegistry.refresh !== 'function') {
-      continue;
-    }
-
-    modelRegistry.refresh();
-    refreshedCount += 1;
-  }
-
-  return refreshedCount;
+  return refreshLiveSessionModelRegistries(registry.values());
 }
 
 function resolveEntryTitle(entry: LiveEntry): string {
@@ -321,26 +304,7 @@ function resolveEntryTitle(entry: LiveEntry): string {
 }
 
 export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    return false;
-  }
-
-  if (entry.session.isStreaming || hasQueuedOrActiveHiddenTurn(entry)) {
-    return false;
-  }
-
-  const steering = typeof entry.session.getSteeringMessages === 'function'
-    ? entry.session.getSteeringMessages()
-    : [];
-  if (steering.length > 0) {
-    return false;
-  }
-
-  const followUp = typeof entry.session.getFollowUpMessages === 'function'
-    ? entry.session.getFollowUpMessages()
-    : [];
-  return followUp.length === 0;
+  return canInjectResumeFallbackPromptForEntry(registry.get(sessionId));
 }
 
 export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedPromptPreview[]; followUp: QueuedPromptPreview[] } {
@@ -349,7 +313,7 @@ export function listQueuedPromptPreviews(sessionId: string): { steering: QueuedP
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  return readQueueState(entry.session);
+  return listQueuedPromptPreviewsForEntry(entry);
 }
 
 let parallelPromptJobCounter = 0;
