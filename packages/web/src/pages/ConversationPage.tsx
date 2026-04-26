@@ -13,6 +13,7 @@ import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
 import { useComposerModifierKeys, useVisualViewportKeyboardInset } from '../conversation/useConversationKeyboardState';
+import { useWorkspaceComposerEvents } from '../conversation/useWorkspaceComposerEvents';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -124,7 +125,7 @@ import {
   resolveConversationComposerSubmitState,
   shouldShowQuestionSubmitAsPrimaryComposerAction,
 } from '../conversation/conversationComposerSubmit';
-import { insertFileReplyQuoteIntoComposer, insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
+import { insertReplyQuoteIntoComposer } from '../conversation/conversationReplyQuote';
 import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
@@ -161,8 +162,6 @@ const HISTORICAL_TAIL_BLOCKS_STEP = 400;
 const COMPOSER_SHELF_TEXT_MAX_CHARS = 640;
 const COMPOSER_SHELF_TEXT_MAX_LINES = 8;
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
-const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
-const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
 const MAX_RELATED_THREAD_HOTKEYS = 9;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
@@ -3419,53 +3418,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const pendingJumpMessageIndexRef = useRef<number | null>(null);
   const [requestedFocusMessageIndex, setRequestedFocusMessageIndex] = useState<number | null>(null);
 
-  useEffect(() => {
-    function handleWorkspaceDraftPrompt(event: Event) {
-      const prompt = (event as CustomEvent<{ prompt?: unknown }>).detail?.prompt;
-      if (typeof prompt !== 'string' || prompt.trim().length === 0) {
-        return;
-      }
+  const resetComposerMenus = useCallback(() => {
+    setSlashIdx(0);
+    setMentionIdx(0);
+  }, []);
 
-      setInput(prompt);
-      textareaRef.current?.focus();
-    }
-
-    window.addEventListener(WORKSPACE_DRAFT_PROMPT_EVENT, handleWorkspaceDraftPrompt);
-    return () => window.removeEventListener(WORKSPACE_DRAFT_PROMPT_EVENT, handleWorkspaceDraftPrompt);
-  }, [setInput]);
-
-  useEffect(() => {
-    function handleWorkspaceReplySelection(event: Event) {
-      const detail = (event as CustomEvent<{ filePath?: unknown; text?: unknown }>).detail;
-      if (typeof detail?.filePath !== 'string' || typeof detail?.text !== 'string') {
-        return;
-      }
-
-      const currentInput = textareaRef.current?.value ?? input;
-      const next = insertFileReplyQuoteIntoComposer(currentInput, detail.filePath, detail.text);
-
-      setInput(next.text);
-      setSlashIdx(0);
-      setMentionIdx(0);
-      composerSelectionRef.current = {
-        start: next.selectionStart,
-        end: next.selectionEnd,
-      };
-
-      window.requestAnimationFrame(() => {
-        const el = textareaRef.current;
-        if (!el || el.disabled) {
-          return;
-        }
-
-        el.focus();
-        el.setSelectionRange(next.selectionStart, next.selectionEnd);
-      });
-    }
-
-    window.addEventListener(WORKSPACE_REPLY_SELECTION_EVENT, handleWorkspaceReplySelection);
-    return () => window.removeEventListener(WORKSPACE_REPLY_SELECTION_EVENT, handleWorkspaceReplySelection);
-  }, [input, setInput]);
+  useWorkspaceComposerEvents({
+    input,
+    textareaRef,
+    composerSelectionRef,
+    setInput,
+    resetMenus: resetComposerMenus,
+  });
 
   useEffect(() => {
     setComposerQuestionIndex(0);
