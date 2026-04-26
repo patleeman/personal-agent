@@ -2469,6 +2469,17 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     clearDragState();
     try {
       const result = await api.changeConversationCwd(draggedConversationId, targetGroup.cwd, conversationSurfaceId);
+      if (result.changed && result.id !== draggedConversationId) {
+        replaceConversationLayout({
+          sessionIds: openIds.map((id) => (id === draggedConversationId ? result.id : id)),
+          pinnedSessionIds: pinnedIds.map((id) => (id === draggedConversationId ? result.id : id)),
+          archivedSessionIds: archivedConversationIds,
+        });
+
+        if (activeConversationSurfaceId === draggedConversationId) {
+          navigate(buildConversationSurfacePath(result.id));
+        }
+      }
       await refetch();
       showSidebarNotice(
         'accent',

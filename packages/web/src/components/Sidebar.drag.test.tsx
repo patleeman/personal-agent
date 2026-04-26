@@ -262,9 +262,9 @@ describe('Sidebar group drag reordering', () => {
       archivedSessionIds: [],
       workspacePaths: [alphaPath, betaPath],
     });
-    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha', sessionFile: '/tmp/conv-alpha.jsonl', cwd: betaPath, changed: true });
+    apiMocks.changeConversationCwd.mockResolvedValue({ id: 'conv-alpha-moved', sessionFile: '/tmp/conv-alpha-moved.jsonl', cwd: betaPath, changed: true });
     apiMocks.sessions.mockResolvedValue([
-      createSession({ id: 'conv-alpha', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
+      createSession({ id: 'conv-alpha-moved', title: 'Alpha thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
       createSession({ id: 'conv-beta', title: 'Beta thread', cwd: betaPath, cwdSlug: 'beta-worktree' }),
     ]);
 
@@ -293,6 +293,7 @@ describe('Sidebar group drag reordering', () => {
 
     expect(apiMocks.changeConversationCwd).toHaveBeenCalledWith('conv-alpha', betaPath, expect.any(String));
     expect(apiMocks.sessions).toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem(OPEN_SESSION_IDS_STORAGE_KEY) ?? '[]')).toEqual(['conv-alpha-moved', 'conv-beta']);
     expect(container.textContent).toContain('Moved conversation to beta-worktree.');
   });
 
