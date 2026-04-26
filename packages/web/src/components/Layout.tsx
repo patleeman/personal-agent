@@ -24,6 +24,8 @@ const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const ContextRail = lazy(() => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
 const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
+const WorkspaceExplorer = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
+const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
@@ -476,7 +478,7 @@ function WorkbenchDocumentPane() {
   );
 }
 
-function WorkbenchKnowledgeRail() {
+function WorkbenchKnowledgeRail({ workspaceCwd }: { workspaceCwd: string | null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
   const knowledgeHref = activeFileId ? `/knowledge?file=${encodeURIComponent(activeFileId)}` : '/knowledge';
@@ -494,10 +496,25 @@ function WorkbenchKnowledgeRail() {
           <span className="flex-1">Knowledge</span>
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="min-h-0 flex-[0.55] overflow-hidden border-b border-border-subtle/80">
         <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
           <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
         </Suspense>
+      </div>
+      <div className="min-h-0 flex-[0.45] overflow-hidden">
+        {workspaceCwd ? (
+          <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading workspace…</div>}>
+            <WorkspaceExplorer
+              cwd={workspaceCwd}
+              railOnly
+              onDraftPrompt={(prompt) => {
+                window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
+              }}
+            />
+          </Suspense>
+        ) : (
+          <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>
+        )}
       </div>
     </div>
   );
@@ -506,6 +523,7 @@ function WorkbenchKnowledgeRail() {
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { sessions } = useAppData();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
@@ -586,6 +604,10 @@ export function Layout() {
     location.pathname.startsWith('/conversations')
     || location.pathname.startsWith('/automations')
   );
+  const activeConversationId = getActiveConversationId(location.pathname);
+  const activeWorkspaceCwd = activeConversationId
+    ? sessions?.find((session) => session.id === activeConversationId && !session.remoteHostId)?.cwd ?? null
+    : null;
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
         railOpen: showContextRail,
@@ -692,7 +714,7 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden bg-surface select-text"
                     aria-label="Knowledge sidebar"
                   >
-                    <WorkbenchKnowledgeRail />
+                    <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} />
                   </aside>
                 </>
               ) : null}

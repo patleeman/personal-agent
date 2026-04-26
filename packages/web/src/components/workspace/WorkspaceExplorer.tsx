@@ -18,6 +18,7 @@ import { cx, EmptyState, LoadingState, Pill } from '../ui';
 interface WorkspaceExplorerProps {
   cwd: string | null;
   onDraftPrompt: (prompt: string) => void;
+  railOnly?: boolean;
 }
 
 type LoadState<T> = { status: 'idle' | 'loading'; data: T | null; error: string | null };
@@ -310,7 +311,7 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
   return <WorkspaceTreeRow {...props} />;
 }
 
-export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: WorkspaceExplorerProps) {
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [rootListing, setRootListing] = useState<LoadState<WorkspaceDirectoryListing>>({ status: 'idle', data: null, error: null });
@@ -427,7 +428,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps
 
   if (!cwd) return null;
 
-  if (!open) {
+  if (!open && !railOnly) {
     return (
       <button type="button" className="absolute right-3 top-3 z-40 rounded-md border border-border-subtle bg-base/90 px-2 py-1 text-[11px] text-secondary shadow-sm hover:text-primary" onClick={() => setOpen(true)}>
         Files
@@ -436,8 +437,8 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps
   }
 
   return (
-    <aside className="flex h-full w-[min(42vw,560px)] min-w-[360px] shrink-0 border-l border-border-subtle bg-base/96 text-sm shadow-[-12px_0_28px_rgba(0,0,0,0.08)]">
-      <div className="flex h-full w-[45%] min-w-[180px] flex-col border-r border-border-subtle/80">
+    <div className={cx('flex h-full bg-base/96 text-sm', railOnly ? 'w-full flex-col' : 'w-[min(42vw,560px)] min-w-[360px] shrink-0 border-l border-border-subtle shadow-[-12px_0_28px_rgba(0,0,0,0.08)]')}>
+      <div className={cx('flex h-full flex-col', railOnly ? 'w-full' : 'w-[45%] min-w-[180px] border-r border-border-subtle/80')}>
         <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12px] font-semibold text-primary">{rootListing.data?.rootName ?? 'Workspace'}</div>
@@ -445,7 +446,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps
           </div>
           {changes.length > 0 && <Pill tone="warning" mono className="px-1.5 py-0 text-[10px]">{changes.length}</Pill>}
           <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh workspace" onClick={() => { void loadRoot(); }}>↻</button>
-          <button type="button" className="ui-icon-button ui-icon-button-compact" title="Hide file explorer" onClick={() => setOpen(false)}>×</button>
+          {!railOnly && <button type="button" className="ui-icon-button ui-icon-button-compact" title="Hide file explorer" onClick={() => setOpen(false)}>×</button>}
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-1.5">
           {rootListing.status === 'loading' && !rootListing.data ? <LoadingState label="Loading files…" className="px-3 py-6" /> : null}
@@ -470,7 +471,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps
         </div>
       </div>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      {!railOnly && <div className="flex min-w-0 flex-1 flex-col">
         {!selectedPath ? (
           <EmptyState className="flex h-full flex-col justify-center px-5" title="Select a file" body="Files open read-only. Dirty files can show inline git decorations over the current source." />
         ) : fileState.status === 'loading' ? (
@@ -527,7 +528,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt }: WorkspaceExplorerProps
             </div>
           </>
         ) : null}
-      </div>
-    </aside>
+      </div>}
+    </div>
   );
 }
