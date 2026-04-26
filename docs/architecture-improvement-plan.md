@@ -69,7 +69,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 
 **First slices:**
 
-1. Extract checkpoint git commit/diff creation into `conversationCheckpointCommit` or similar.
+1. [done] Extract checkpoint git commit/diff creation into `conversationCheckpointCommit`.
 2. Extract desktop stream subscription helpers by stream type.
 3. Keep `dispatchDesktopLocalApiRequest` as the small external seam.
 
