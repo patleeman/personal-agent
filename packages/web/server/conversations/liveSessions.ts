@@ -77,7 +77,6 @@ import {
 } from './liveSessionParallelReconciliation.js';
 import {
   repairDanglingToolCallContext,
-  resolveTranscriptTailRecoveryPlan,
   type TranscriptTailRecoveryReason,
 } from './liveSessionRecovery.js';
 import {
@@ -164,6 +163,7 @@ import {
   branchLiveSession,
   forkLiveSession,
 } from './liveSessionBranching.js';
+import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -1218,61 +1218,12 @@ export function repairLiveSessionTranscriptTail(sessionId: string): {
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }
-
-  const sessionManager = entry.session.sessionManager as Partial<Pick<SessionManager, 'getBranch' | 'getEntry' | 'branch' | 'branchWithSummary' | 'resetLeaf' | 'buildSessionContext'>> | undefined;
-  if (!sessionManager
-    || typeof sessionManager.getBranch !== 'function'
-    || typeof sessionManager.getEntry !== 'function') {
-    return {
-      recoverable: false,
-      repaired: false,
-      reason: null,
-    };
-  }
-
-  const plan = resolveTranscriptTailRecoveryPlan(sessionManager as Pick<SessionManager, 'getBranch' | 'getEntry'>);
-  if (!plan) {
-    return {
-      recoverable: false,
-      repaired: false,
-      reason: null,
-    };
-  }
-
-  if (typeof sessionManager.resetLeaf !== 'function'
-    || typeof sessionManager.buildSessionContext !== 'function'
-    || (plan.targetEntryId !== null
-      && typeof sessionManager.branch !== 'function'
-      && typeof sessionManager.branchWithSummary !== 'function')) {
-    return {
-      recoverable: true,
-      repaired: false,
-      reason: plan.reason,
-      summary: plan.summary,
-    };
-  }
-
-  if (plan.targetEntryId === null) {
-    sessionManager.resetLeaf();
-  } else if (typeof sessionManager.branchWithSummary === 'function') {
-    sessionManager.branchWithSummary(plan.targetEntryId, plan.summary, plan.details);
-  } else if (typeof sessionManager.branch === 'function') {
-    sessionManager.branch(plan.targetEntryId);
-  }
-
-  entry.session.state.messages = sessionManager.buildSessionContext().messages;
-  entry.currentTurnError = null;
-  broadcastSnapshot(entry);
-  clearContextUsageTimer(entry);
-  broadcastContextUsage(entry, true);
-  publishSessionMetaChanged(sessionId);
-
-  return {
-    recoverable: true,
-    repaired: true,
-    reason: plan.reason,
-    summary: plan.summary,
-  };
+  return repairLiveSessionTranscriptTailWithCallbacks(entry, {
+    broadcastSnapshot,
+    clearContextUsageTimer,
+    broadcastContextUsage,
+    publishSessionMetaChanged: () => publishSessionMetaChanged(sessionId),
+  });
 }
 
 async function runPromptOnLiveEntry(
