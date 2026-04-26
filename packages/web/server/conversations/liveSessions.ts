@@ -12,7 +12,6 @@ import {
   AgentSession,
   ModelRegistry,
   SessionManager,
-  type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
 import {
@@ -33,7 +32,6 @@ import { readGitRepoInfo } from '../workspace/gitStatus.js';
 import { logWarn } from '../shared/logging.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
-  CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
   type ConversationAutoModeStateInput,
 } from './conversationAutoMode.js';
@@ -109,13 +107,10 @@ import {
   makeRegistry,
 } from './liveSessionFactory.js';
 import {
-  activateNextHiddenTurn,
-  clearActiveHiddenTurnAfterTerminalEvent,
   createLiveSessionHiddenTurnState,
   ensureHiddenTurnState,
   hasQueuedOrActiveHiddenTurn,
   shouldExposeHiddenTurnInTranscript,
-  shouldSuppressLiveEventForHiddenTurn,
   type LiveSessionHiddenTurnState,
 } from './liveSessionHiddenTurns.js';
 import {
@@ -124,6 +119,7 @@ import {
   type LiveContextUsageSegment,
   type SseEvent,
 } from './liveSessionEvents.js';
+import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
 import {
   markLiveSessionAutoModeContinueRequested,
@@ -595,124 +591,23 @@ function wireSession(
     });
   }
 
-  session.subscribe((event: AgentSessionEvent) => {
-    const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);
-    const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
-
-    if (event.type === 'turn_end') {
-      if (!activeHiddenTurnCustomType) {
-        maybeAutoTitleConversation(entry);
-      }
-      if (activeHiddenTurnCustomType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
-        const shouldContinueAutoMode = entry.pendingAutoModeContinuation === true;
-        entry.pendingAutoModeContinuation = false;
-        if (shouldContinueAutoMode) {
-          queueMicrotask(() => {
-            void Promise.resolve(requestConversationAutoModeContinuationTurn(entry.sessionId)).catch((error) => {
-              logWarn('conversation auto mode continuation request failed', {
-                sessionId: entry.sessionId,
-                message: error instanceof Error ? error.message : String(error),
-                stack: error instanceof Error ? error.stack : undefined,
-              });
-            });
-          });
-        }
-      }
-      void syncDurableConversationRun(entry, 'waiting');
-      notifyEntryLifecycleHandlers(entry, 'turn_end');
-      void applyPendingConversationWorkingDirectoryChange(entry);
-    }
-
-    if (event.type === 'agent_start' || event.type === 'message_update' || event.type === 'tool_execution_start' || event.type === 'tool_execution_update' || event.type === 'tool_execution_end') {
-      scheduleContextUsage(entry);
-    }
-
-    if (event.type === 'agent_start') {
-      entry.currentTurnError = null;
-      publishSessionMetaChanged(entry.sessionId);
-      void syncDurableConversationRun(entry, 'running');
-    }
-
-    if (event.type === 'agent_end') {
-      if (!entry.activeHiddenTurnCustomType) {
-        maybeAutoTitleConversation(entry);
-      }
-      void syncDurableConversationRun(entry, 'waiting');
-    }
-
-    if (event.type === 'message_end' && event.message.role === 'assistant') {
-      const errorMessage = getAssistantErrorDisplayMessage(event.message);
-      if (errorMessage) {
-        entry.currentTurnError = errorMessage;
-      }
-    }
-
-    if (event.type === 'queue_update') {
-      broadcastQueueState(entry, true);
-    }
-
-    if (event.type === 'message_start' && event.message.role === 'user') {
-      if (!entry.session.sessionName?.trim() && isPlaceholderConversationTitle(entry.title)) {
-        const fallbackTitle = buildFallbackTitleFromContent(event.message.content);
-        if (fallbackTitle) {
-          entry.title = fallbackTitle;
-          broadcastTitle(entry);
-        }
-      }
-      broadcastQueueState(entry);
-    }
-
-    // Emit stats after agent_end
-    if (event.type === 'agent_end') {
-      try {
-        const stats = session.getSessionStats();
-        broadcast(entry, { type: 'stats_update', tokens: stats.tokens, cost: stats.cost });
-      } catch { /* ignore */ }
-      clearContextUsageTimer(entry);
-      broadcastContextUsage(entry, true);
-    }
-
-    if (event.type === 'turn_end') {
-      clearContextUsageTimer(entry);
-      broadcastContextUsage(entry, true);
-      publishSessionMetaChanged(entry.sessionId);
-    }
-
-    if (event.type === 'compaction_start') {
-      entry.isCompacting = true;
-      entry.pendingAutoCompactionReason = event.reason === 'manual' ? null : event.reason;
-    }
-
-    if (event.type === 'compaction_end') {
-      entry.isCompacting = false;
-      const compactionReason = event.reason === 'manual' ? null : event.reason;
-      entry.pendingAutoCompactionReason = null;
-
-      if (compactionReason && !event.aborted && event.result) {
-        entry.lastCompactionSummaryTitle = resolveCompactionSummaryTitle({
-          mode: 'auto',
-          reason: compactionReason,
-          willRetry: event.willRetry,
-        });
-        broadcastSnapshot(entry);
-        clearContextUsageTimer(entry);
-        broadcastContextUsage(entry, true);
-        publishSessionMetaChanged(entry.sessionId);
-        notifyEntryLifecycleHandlers(entry, 'auto_compaction_end');
-      }
-    }
-
-    const sse = toSse(event);
-    if (sse && !suppressLiveEvent) {
-      broadcast(entry, sse);
-    }
-
-    clearActiveHiddenTurnAfterTerminalEvent(entry, event);
-
-    if (event.type === 'turn_end' || event.type === 'agent_end') {
-      void tryImportReadyParallelJobs(entry);
-    }
-  });
+  session.subscribe((event) => handleLiveSessionEvent(entry, event, {
+    maybeAutoTitleConversation,
+    requestConversationAutoModeContinuationTurn,
+    syncDurableConversationRun,
+    notifyLifecycleHandlers: notifyEntryLifecycleHandlers,
+    applyPendingConversationWorkingDirectoryChange,
+    scheduleContextUsage,
+    publishSessionMetaChanged,
+    broadcastQueueState,
+    broadcastTitle,
+    broadcastStats: (target, tokens, cost) => broadcast(target, { type: 'stats_update', tokens, cost }),
+    clearContextUsageTimer,
+    broadcastContextUsage,
+    broadcastSnapshot,
+    broadcast,
+    tryImportReadyParallelJobs,
+  }));
 
 
   return entry;
