@@ -1,11 +1,23 @@
+import { existsSync } from 'node:fs';
 import { logWarn } from '../shared/logging.js';
 import { buildParallelImportedContent } from './liveSessionForking.js';
-import type { ParallelPromptJob, ParallelPromptJobStatus } from './liveSessionParallelJobs.js';
+import {
+  normalizeParallelPromptList,
+  type ParallelPromptJob,
+  type ParallelPromptJobStatus,
+} from './liveSessionParallelJobs.js';
+import {
+  readParallelCurrentWorktreeDirtyPaths,
+  readParallelJobCompletionFromSessionFile,
+  replacePersistedParallelJob,
+  type ResolveParallelChildSession,
+} from './liveSessionParallelReconciliation.js';
 
 export interface LiveSessionParallelImportHost {
   sessionId: string;
   session: {
     isStreaming: boolean;
+    sessionFile?: string | null;
   };
   parallelJobs?: ParallelPromptJob[];
   importingParallelJobs?: boolean;
@@ -30,6 +42,78 @@ export interface LiveSessionParallelImportCallbacks<TEntry extends LiveSessionPa
     details: { childConversationId: string; status: 'complete' | 'failed' },
   ) => Promise<void>;
   finalizeParallelChildLiveSession: (childConversationId: string, options?: { abortIfRunning?: boolean }) => Promise<'destroyed' | 'preserved' | 'missing'>;
+}
+
+export function createRunningParallelPromptJob(input: {
+  id: string;
+  prompt: string;
+  childConversationId: string;
+  childSessionFile: string;
+  imageCount?: number;
+  attachmentRefs?: string[];
+  forkEntryId?: string;
+  repoRoot?: string;
+  cwd: string;
+}): ParallelPromptJob {
+  const now = new Date().toISOString();
+  return {
+    id: input.id,
+    prompt: input.prompt,
+    childConversationId: input.childConversationId,
+    childSessionFile: input.childSessionFile,
+    status: 'running',
+    createdAt: now,
+    updatedAt: now,
+    imageCount: input.imageCount ?? 0,
+    attachmentRefs: normalizeParallelPromptList(input.attachmentRefs, 12),
+    touchedFiles: [],
+    parentTouchedFiles: [],
+    overlapFiles: [],
+    sideEffects: [],
+    ...(input.forkEntryId ? { forkEntryId: input.forkEntryId } : {}),
+    ...(input.repoRoot ? { repoRoot: input.repoRoot } : {}),
+    worktreeDirtyPathsAtStart: readParallelCurrentWorktreeDirtyPaths(input.cwd, input.repoRoot),
+  };
+}
+
+export async function handleParallelPromptCompletion<TEntry extends LiveSessionParallelImportHost>(input: {
+  sourceSessionFile: string;
+  jobId: string;
+  childSessionFile: string;
+  cwd: string;
+  repoRoot?: string;
+  error?: unknown;
+  getCurrentEntry: () => TEntry | undefined;
+  resolveParallelChildSession: ResolveParallelChildSession;
+  broadcastParallelState: (entry: TEntry, force?: boolean) => void;
+  tryImportReadyParallelJobs: (entry: TEntry) => Promise<void>;
+}): Promise<void> {
+  const completion = existsSync(input.childSessionFile)
+    ? readParallelJobCompletionFromSessionFile(input.childSessionFile, { cwd: input.cwd, repoRoot: input.repoRoot })
+    : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
+  const failed = input.error !== undefined;
+  const nextJobs = replacePersistedParallelJob(input.sourceSessionFile, input.jobId, (currentJob) => ({
+    ...currentJob,
+    childSessionFile: input.childSessionFile,
+    status: failed ? 'failed' : completion.status ?? 'ready',
+    updatedAt: new Date().toISOString(),
+    touchedFiles: completion.touchedFiles,
+    sideEffects: completion.sideEffects,
+    ...((failed || completion.status === 'failed')
+      ? { error: completion.error ?? (input.error instanceof Error ? input.error.message : input.error !== undefined ? String(input.error) : 'The parallel prompt failed before completing.') }
+      : {}),
+    ...((!failed && completion.status === 'ready') || completion.resultText !== undefined
+      ? { resultText: completion.resultText ?? '' }
+      : {}),
+  }), input.resolveParallelChildSession);
+  const currentEntry = input.getCurrentEntry();
+  if (!currentEntry || currentEntry.session.sessionFile?.trim() !== input.sourceSessionFile) {
+    return;
+  }
+
+  currentEntry.parallelJobs = nextJobs;
+  input.broadcastParallelState(currentEntry, true);
+  await input.tryImportReadyParallelJobs(currentEntry);
 }
 
 export function shouldPreserveParallelChildLiveSession(entry: LiveSessionParallelChildHost | undefined): boolean {

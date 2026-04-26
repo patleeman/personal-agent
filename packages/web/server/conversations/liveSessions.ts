@@ -3,7 +3,6 @@
  * Wraps @mariozechner/pi-coding-agent SDK sessions in-process and
  * exposes a pub/sub SSE event layer for the web server.
  */
-import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
   getDurableSessionsDir,
@@ -70,7 +69,6 @@ import {
   type LiveSessionLoaderOptions,
 } from './liveSessionLoader.js';
 import {
-  normalizeParallelPromptList,
   readParallelState,
   writePersistedParallelJobs,
   type ParallelPromptJob,
@@ -78,9 +76,6 @@ import {
 } from './liveSessionParallelJobs.js';
 import {
   loadPersistedParallelJobs,
-  readParallelCurrentWorktreeDirtyPaths,
-  readParallelJobCompletionFromSessionFile,
-  replacePersistedParallelJob,
   type ResolveParallelChildSession,
 } from './liveSessionParallelReconciliation.js';
 import {
@@ -155,7 +150,9 @@ import {
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
 import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
 import {
+  createRunningParallelPromptJob,
   finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
+  handleParallelPromptCompletion,
   manageParallelPromptJob as manageParallelPromptJobWithCallbacks,
   tryImportReadyParallelJobs as tryImportReadyParallelJobsWithCallbacks,
 } from './liveSessionParallelImportOps.js';
@@ -1318,25 +1315,17 @@ export async function startParallelPromptSession(
       });
 
   const childConversationId = 'id' in forked ? forked.id : forked.newSessionId;
-  const now = new Date().toISOString();
-  const job: ParallelPromptJob = {
+  const job: ParallelPromptJob = createRunningParallelPromptJob({
     id: createParallelPromptJobId(),
     prompt: text,
     childConversationId,
     childSessionFile: forked.sessionFile,
-    status: 'running',
-    createdAt: now,
-    updatedAt: now,
     imageCount: input.images?.length ?? 0,
-    attachmentRefs: normalizeParallelPromptList(input.attachmentRefs, 12),
-    touchedFiles: [],
-    parentTouchedFiles: [],
-    overlapFiles: [],
-    sideEffects: [],
-    ...(stableEntryId ? { forkEntryId: stableEntryId } : {}),
-    ...(parallelRepoRoot ? { repoRoot: parallelRepoRoot } : {}),
-    worktreeDirtyPathsAtStart: readParallelCurrentWorktreeDirtyPaths(entry.cwd, parallelRepoRoot),
-  };
+    attachmentRefs: input.attachmentRefs,
+    forkEntryId: stableEntryId ?? undefined,
+    repoRoot: parallelRepoRoot,
+    cwd: entry.cwd,
+  });
   entry.parallelJobs ??= [];
   entry.parallelJobs.push(job);
   persistParallelJobs(entry);
@@ -1348,55 +1337,20 @@ export async function startParallelPromptSession(
     }
 
     const submitted = await submitPromptSession(childConversationId, text, undefined, input.images);
-    void submitted.completion.then(async () => {
-      const completion = existsSync(forked.sessionFile)
-        ? readParallelJobCompletionFromSessionFile(forked.sessionFile, { cwd: entry.cwd, repoRoot: parallelRepoRoot })
-        : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
-      const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
-        ...currentJob,
-        childSessionFile: forked.sessionFile,
-        status: completion.status ?? 'ready',
-        updatedAt: new Date().toISOString(),
-        touchedFiles: completion.touchedFiles,
-        sideEffects: completion.sideEffects,
-        ...(completion.status === 'failed'
-          ? { error: completion.error ?? 'The parallel prompt failed before completing.' }
-          : {}),
-        ...(completion.status === 'ready' || completion.resultText !== undefined
-          ? { resultText: completion.resultText ?? '' }
-          : {}),
-      }), resolveParallelChildSession);
-      const currentEntry = registry.get(sessionId);
-      if (!currentEntry || currentEntry.session.sessionFile?.trim() !== sourceSessionFile) {
-        return;
-      }
-
-      currentEntry.parallelJobs = nextJobs;
-      broadcastParallelState(currentEntry, true);
-      await tryImportReadyParallelJobs(currentEntry);
-    }).catch(async (error: unknown) => {
-      const completion = existsSync(forked.sessionFile)
-        ? readParallelJobCompletionFromSessionFile(forked.sessionFile, { cwd: entry.cwd, repoRoot: parallelRepoRoot })
-        : { hasTerminalReply: false, touchedFiles: [] as string[], sideEffects: [] as string[] };
-      const nextJobs = replacePersistedParallelJob(sourceSessionFile, job.id, (currentJob) => ({
-        ...currentJob,
-        childSessionFile: forked.sessionFile,
-        status: 'failed',
-        updatedAt: new Date().toISOString(),
-        touchedFiles: completion.touchedFiles,
-        sideEffects: completion.sideEffects,
-        error: completion.error ?? (error instanceof Error ? error.message : String(error)),
-        ...(completion.resultText !== undefined ? { resultText: completion.resultText } : {}),
-      }), resolveParallelChildSession);
-      const currentEntry = registry.get(sessionId);
-      if (!currentEntry || currentEntry.session.sessionFile?.trim() !== sourceSessionFile) {
-        return;
-      }
-
-      currentEntry.parallelJobs = nextJobs;
-      broadcastParallelState(currentEntry, true);
-      await tryImportReadyParallelJobs(currentEntry);
-    });
+    const completionInput = {
+      sourceSessionFile,
+      jobId: job.id,
+      childSessionFile: forked.sessionFile,
+      cwd: entry.cwd,
+      repoRoot: parallelRepoRoot,
+      getCurrentEntry: () => registry.get(sessionId),
+      resolveParallelChildSession,
+      broadcastParallelState,
+      tryImportReadyParallelJobs,
+    };
+    void submitted.completion
+      .then(() => handleParallelPromptCompletion(completionInput))
+      .catch((error: unknown) => handleParallelPromptCompletion({ ...completionInput, error }));
 
     return {
       jobId: job.id,
