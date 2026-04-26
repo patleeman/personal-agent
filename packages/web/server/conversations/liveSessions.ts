@@ -150,6 +150,11 @@ import {
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
 import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
 import {
+  applyPendingLiveSessionWorkingDirectoryChange,
+  requestLiveSessionWorkingDirectoryChange,
+  type PendingConversationWorkingDirectoryChange,
+} from './liveSessionCwdChange.js';
+import {
   createRunningParallelPromptJob,
   finalizeParallelChildLiveSession as finalizeParallelChildLiveSessionWithCallbacks,
   handleParallelPromptCompletion,
@@ -224,12 +229,6 @@ function resolveConversationPreferenceStateForSession(
 }
 
 // ── SSE event types sent to clients ──────────────────────────────────────────
-
-interface PendingConversationWorkingDirectoryChange {
-  cwd: string;
-  continuePrompt?: string;
-  loaderOptions: LiveSessionLoaderOptions;
-}
 
 // ── Internal entry ────────────────────────────────────────────────────────────
 
@@ -885,92 +884,27 @@ export async function requestConversationWorkingDirectoryChange(
   queued: boolean;
   unchanged?: boolean;
 }> {
-  const conversationId = input.conversationId.trim();
-  if (!conversationId) {
-    throw new Error('conversationId is required.');
-  }
-
-  const nextCwd = input.cwd.trim();
-  if (!nextCwd) {
-    throw new Error('cwd is required.');
-  }
-
-  const entry = registry.get(conversationId);
-  if (!entry) {
-    throw new Error(`Session ${conversationId} is not live.`);
-  }
-
-  if (!resolveLiveSessionFile(entry.session, { ensurePersisted: true })) {
-    throw new Error('Conversation working directory changes require a persisted session file.');
-  }
-
-  if (nextCwd === entry.cwd) {
-    pendingConversationWorkingDirectoryChanges.delete(conversationId);
-    return {
-      conversationId,
-      cwd: entry.cwd,
-      queued: false,
-      unchanged: true,
-    };
-  }
-
-  pendingConversationWorkingDirectoryChanges.set(conversationId, {
-    cwd: nextCwd,
-    continuePrompt: input.continuePrompt?.trim() || undefined,
+  return requestLiveSessionWorkingDirectoryChange({
+    conversationId: input.conversationId,
+    cwd: input.cwd,
+    continuePrompt: input.continuePrompt,
     loaderOptions,
+    registry,
+    pendingChanges: pendingConversationWorkingDirectoryChanges,
+    resolveSessionFile: (entry) => resolveLiveSessionFile(entry.session, { ensurePersisted: true }) ?? undefined,
   });
-
-  return {
-    conversationId,
-    cwd: nextCwd,
-    queued: true,
-  };
 }
 
 async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry): Promise<void> {
-  const pending = pendingConversationWorkingDirectoryChanges.get(entry.sessionId);
-  if (!pending) {
-    return;
-  }
-
-  pendingConversationWorkingDirectoryChanges.delete(entry.sessionId);
-
-  const sourceSessionFile = resolveLiveSessionFile(entry.session, { ensurePersisted: true });
-  if (!sourceSessionFile) {
-    broadcast(entry, {
-      type: 'error',
-      message: 'Could not change the working directory because the session file is unavailable.',
-    });
-    return;
-  }
-
-  try {
-    const result = await createSessionFromExisting(sourceSessionFile, pending.cwd, pending.loaderOptions);
-    const autoContinued = Boolean(pending.continuePrompt);
-
-    broadcast(entry, {
-      type: 'cwd_changed',
-      newConversationId: result.id,
-      cwd: pending.cwd,
-      autoContinued,
-    });
-    destroySession(entry.sessionId);
-
-    if (pending.continuePrompt) {
-      void promptSession(result.id, pending.continuePrompt).catch((error) => {
-        logWarn('failed to continue conversation after working directory change', {
-          conversationId: result.id,
-          cwd: pending.cwd,
-          error: error instanceof Error ? { message: error.message, stack: error.stack } : String(error),
-        });
-      });
-    }
-  } catch (error) {
-    broadcast(entry, {
-      type: 'error',
-      message: `Could not change the working directory: ${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
+  await applyPendingLiveSessionWorkingDirectoryChange({
+    entry,
+    pendingChanges: pendingConversationWorkingDirectoryChanges,
+    resolveSessionFile: (candidate) => resolveLiveSessionFile(candidate.session, { ensurePersisted: true }) ?? undefined,
+    createSessionFromExisting,
+    promptSession,
+    destroySession,
+    broadcast,
+  });
 }
 
 /** Resume an existing session file into a live session. */
