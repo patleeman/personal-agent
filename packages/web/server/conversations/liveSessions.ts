@@ -166,6 +166,7 @@ import {
   requestConversationAutoModeTurn as requestConversationAutoModeTurnForEntry,
   setLiveSessionAutoModeState as setLiveSessionAutoModeStateForEntry,
 } from './liveSessionAutoModeFacade.js';
+import { destroyLiveSession } from './liveSessionDestroy.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -1209,15 +1210,11 @@ export async function summarizeAndForkSession(
 
 /** Cleanly dispose a live session. */
 export function destroySession(sessionId: string): void {
-  pendingConversationWorkingDirectoryChanges.delete(sessionId);
-  const entry = registry.get(sessionId);
-  if (!entry) return;
-  clearContextUsageTimer(entry);
-  void syncDurableConversationRun(entry, entry.session.isStreaming ? 'interrupted' : 'waiting', {
-    force: true,
-    ...(entry.session.isStreaming ? { lastError: 'Live session disposed while a response was active.' } : {}),
+  destroyLiveSession(sessionId, {
+    registry,
+    pendingConversationWorkingDirectoryChanges,
+    clearContextUsageTimer,
+    syncDurableConversationRun,
+    publishSessionMetaChanged,
   });
-  entry.session.dispose();
-  registry.delete(sessionId);
-  publishSessionMetaChanged(sessionId);
 }
