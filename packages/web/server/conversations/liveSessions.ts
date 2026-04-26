@@ -13,7 +13,6 @@ import {
   AgentSession,
   ModelRegistry,
   SessionManager,
-  createAgentSession,
   type AgentSessionEvent,
 } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
@@ -74,7 +73,6 @@ import {
 } from './liveSessionTranscript.js';
 import {
   clearPrewarmedLiveSessionLoaders,
-  makeLoader,
   prewarmLiveSessionLoader,
   queuePrewarmLiveSessionLoader,
   type LiveSessionLoaderOptions,
@@ -151,6 +149,10 @@ import {
   writeLiveSessionAutoModeHostState,
 } from './liveSessionAutoModeOps.js';
 import { summarizeSessionFileForPromptWithLiveSession } from './liveSessionSummaries.js';
+import {
+  inspectAvailableLiveSessionTools,
+  type BeforeAgentStartProbeMessage,
+} from './liveSessionToolInspection.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -983,54 +985,6 @@ export function getAvailableModels() {
   });
 }
 
-const NEW_SESSION_PROMPT_PROBE = 'hello';
-
-interface BeforeAgentStartProbeMessage {
-  customType: string;
-  content: string;
-  display?: boolean;
-  details?: unknown;
-}
-
-interface BeforeAgentStartProbeRunner {
-  emitBeforeAgentStart: (
-    prompt: string,
-    images: unknown[] | undefined,
-    systemPrompt: string,
-  ) => Promise<{
-    messages?: BeforeAgentStartProbeMessage[];
-    systemPrompt?: string;
-  } | undefined>;
-}
-
-async function inspectNewSessionRequest(session: AgentSession): Promise<{
-  newSessionSystemPrompt: string;
-  newSessionInjectedMessages: BeforeAgentStartProbeMessage[];
-  newSessionToolDefinitions: Array<{
-    name: string;
-    description: string;
-    parameters: Record<string, unknown>;
-    active: true;
-  }>;
-}> {
-  const baseSystemPrompt = session.systemPrompt;
-  const extensionRunner = (session as unknown as { _extensionRunner?: BeforeAgentStartProbeRunner })._extensionRunner;
-  const beforeAgentStartResult = extensionRunner
-    ? await extensionRunner.emitBeforeAgentStart(NEW_SESSION_PROMPT_PROBE, undefined, baseSystemPrompt)
-    : undefined;
-
-  return {
-    newSessionSystemPrompt: beforeAgentStartResult?.systemPrompt ?? baseSystemPrompt,
-    newSessionInjectedMessages: beforeAgentStartResult?.messages ?? [],
-    newSessionToolDefinitions: session.state.tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters as Record<string, unknown>,
-      active: true as const,
-    })),
-  };
-}
-
 export async function inspectAvailableTools(
   cwd: string,
   options: LiveSessionLoaderOptions = {},
@@ -1052,45 +1006,11 @@ export async function inspectAvailableTools(
     active: true;
   }>;
 }> {
-  const auth = makeFactoryAuth(AGENT_DIR);
-  const resourceLoader = await makeLoader(cwd, options);
-  const { session } = await createAgentSession({
+  return inspectAvailableLiveSessionTools({
     cwd,
     agentDir: options.agentDir ?? AGENT_DIR,
-    authStorage: auth,
-    modelRegistry: makeRegistry(auth),
-    resourceLoader,
-    sessionManager: SessionManager.inMemory(cwd),
+    options,
   });
-
-  try {
-    const activeTools = session.getActiveToolNames();
-    const activeToolSet = new Set(activeTools);
-    const tools = session.getAllTools()
-      .map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters as Record<string, unknown>,
-        active: activeToolSet.has(tool.name),
-      }))
-      .sort((left, right) => {
-        if (left.active !== right.active) {
-          return left.active ? -1 : 1;
-        }
-
-        return left.name.localeCompare(right.name);
-      });
-    const newSessionRequest = await inspectNewSessionRequest(session);
-
-    return {
-      cwd,
-      activeTools,
-      tools,
-      ...newSessionRequest,
-    };
-  } finally {
-    session.dispose();
-  }
 }
 
 export function getSessionStats(sessionId: string) {
