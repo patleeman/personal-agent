@@ -326,8 +326,24 @@ function stripLeadingShellEnvironment(command: string | undefined): string | und
   return trimmed.slice(tokens[index]?.start ?? 0).trim();
 }
 
+function normalizeShellHeadlineCommand(command: string | undefined): string | undefined {
+  const withoutEnvironment = stripLeadingShellEnvironment(command);
+  if (!withoutEnvironment) {
+    return undefined;
+  }
+
+  const tokens = tokenizeShell(withoutEnvironment);
+  const runIndex = tokens.findIndex((token) => shellTokenValue(token.raw) === 'run');
+  const scriptToken = runIndex >= 0 ? tokens[runIndex + 1] : undefined;
+  if (!scriptToken || shellTokenValue(scriptToken.raw) !== 'dev:client') {
+    return withoutEnvironment;
+  }
+
+  return `${withoutEnvironment.slice(0, scriptToken.start)}dev`.trim();
+}
+
 function excerptShellCommand(command: string | undefined, maxLength = 88): string | undefined {
-  return excerpt(stripLeadingShellEnvironment(command), maxLength);
+  return excerpt(normalizeShellHeadlineCommand(command), maxLength);
 }
 
 export function getRunTaskId(run: DurableRunRecord): string | undefined {
