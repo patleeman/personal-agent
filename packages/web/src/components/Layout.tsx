@@ -1,4 +1,4 @@
-import { Component, Suspense, lazy, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { Component, Suspense, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
@@ -19,14 +19,15 @@ import { primeSessionDetailCache } from '../hooks/useSessions';
 import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
+import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { cx } from './ui';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
-const ContextRail = lazy(() => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
-const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
-const WorkspaceExplorer = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
-const WorkspaceFileDocument = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceFileDocument })));
+const ContextRail = lazyRouteWithRecovery('layout-context-rail', () => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
+const VaultFileTree = lazyRouteWithRecovery('layout-vault-file-tree', () => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
+const WorkspaceExplorer = lazyRouteWithRecovery('layout-workspace-explorer', () => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
+const WorkspaceFileDocument = lazyRouteWithRecovery('layout-workspace-file-document', () => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceFileDocument })));
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
 const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
 
