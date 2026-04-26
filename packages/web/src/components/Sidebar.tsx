@@ -1817,7 +1817,7 @@ function OpenConversationRow({
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boolean }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { versions } = useAppEvents();
@@ -3182,7 +3182,9 @@ export function Sidebar() {
             </button>
           </div>
           <TopNavItem to="/automations" icon={PATH.automations} label="Automations" forceActive={location.pathname.startsWith('/automations')} />
-          <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
+          {!hideKnowledgeNav ? (
+            <TopNavItem to="/knowledge" icon={PATH.notes} label="Knowledge" forceActive={location.pathname.startsWith('/knowledge')} />
+          ) : null}
         </div>
 
         <div className="px-4 pt-1 pb-0.5" style={{ display: location.pathname.startsWith('/knowledge') ? 'none' : '' }}>

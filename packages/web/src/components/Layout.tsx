@@ -27,6 +27,7 @@ const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((modul
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
+const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode';
 
@@ -478,14 +479,27 @@ function WorkbenchDocumentPane() {
 function WorkbenchKnowledgeRail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
+  const knowledgeHref = activeFileId ? `/knowledge?file=${encodeURIComponent(activeFileId)}` : '/knowledge';
   const handleFileSelect = useCallback((id: string) => {
     navigateKnowledgeFile(setSearchParams, id);
   }, [setSearchParams]);
 
   return (
-    <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
-      <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
-    </Suspense>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="shrink-0 border-b border-border-subtle py-1.5">
+        <Link to={knowledgeHref} className="ui-sidebar-nav-item ui-sidebar-nav-item-active" title="Open full Knowledge view">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
+            <path d={KNOWLEDGE_ICON_PATH} />
+          </svg>
+          <span className="flex-1">Knowledge</span>
+        </Link>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
+          <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
+        </Suspense>
+      </div>
+    </div>
   );
 }
 
@@ -645,7 +659,7 @@ export function Layout() {
           <div className="flex min-h-0 flex-1 overflow-hidden">
           {sidebarOpen ? (
             <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
-              <Sidebar />
+              <Sidebar hideKnowledgeNav={showWorkbench} />
             </div>
           ) : null}
 

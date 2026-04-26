@@ -90,6 +90,7 @@ describe('Sidebar', () => {
       tasks?: ScheduledTaskSummary[];
       liveTitles?: Map<string, string>;
       runs?: DurableRunListResult;
+      hideKnowledgeNav?: boolean;
     },
   ) {
     return renderToString(
@@ -119,7 +120,7 @@ describe('Sidebar', () => {
             setRuns: () => {},
           }}>
             <LiveTitlesContext.Provider value={{ titles: options?.liveTitles ?? new Map(), setTitle: () => {} }}>
-              <Sidebar />
+              <Sidebar hideKnowledgeNav={options?.hideKnowledgeNav} />
             </LiveTitlesContext.Provider>
           </AppDataContext.Provider>
         </SseConnectionContext.Provider>
@@ -149,6 +150,14 @@ describe('Sidebar', () => {
     expect(html).not.toContain('Capabilities');
     expect(html).not.toContain('Needs review');
     expect(html).not.toContain('Archived');
+  });
+
+  it('can hide Knowledge from the left nav for workbench layouts', () => {
+    const html = renderSidebar('/conversations/new', { hideKnowledgeNav: true });
+
+    expect(html).toContain('Chat');
+    expect(html).toContain('Automations');
+    expect(html).not.toContain('href="/knowledge"');
   });
 
   it('keeps pinned conversations in the main conversation list without separate pin chrome', () => {
