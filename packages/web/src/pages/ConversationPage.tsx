@@ -11,6 +11,7 @@ import { AppPageEmptyState, EmptyState, IconButton, LoadingState, PageHeader, Pi
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
+import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -44,6 +45,10 @@ import { filterModelPickerItems } from '../model/modelPicker';
 import { parseDeferredResumeSlashCommand } from '../deferred-resume/deferredResumeSlashCommand';
 import { parseWholeLineBashCommand } from '../conversation/conversationBashCommand';
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
+import {
+  hasConversationTranscriptAcceptedPendingInitialPrompt,
+  shouldAutoDispatchPendingInitialPrompt,
+} from '../conversation/pendingInitialPromptLogic';
 import { buildSlashMenuItems, parseSlashInput, type SlashMenuItem } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
 import { buildDeferredResumeAutoResumeKey, shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
@@ -133,7 +138,6 @@ import {
   createComposerDrawingLocalId,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
-  fileExtensionForMimeType,
   isPotentialExcalidrawFile,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
@@ -141,6 +145,10 @@ import {
 } from '../conversation/promptAttachments';
 
 export { constrainPromptImageDimensions } from '../conversation/promptAttachments';
+export {
+  hasConversationTranscriptAcceptedPendingInitialPrompt,
+  shouldAutoDispatchPendingInitialPrompt,
+} from '../conversation/pendingInitialPromptLogic';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
 const ConversationCheckpointModal = lazy(() => import('../components/ConversationCheckpointModal').then((module) => ({ default: module.ConversationCheckpointModal })));
@@ -401,50 +409,6 @@ export function shouldShowMissingConversationState(input: {
     && !input.hasVisibleSessionDetail
     && !input.hasSavedConversationSessionFile
     && !input.hasPendingInitialPrompt;
-}
-
-export function shouldAutoDispatchPendingInitialPrompt(input: {
-  draft: boolean;
-  conversationId: string | null | undefined;
-  hasPendingInitialPrompt: boolean;
-  pendingInitialPromptDispatching: boolean;
-  hasStreamSnapshot: boolean;
-}): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.hasPendingInitialPrompt
-    && !input.pendingInitialPromptDispatching
-    && input.hasStreamSnapshot;
-}
-
-export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
-  messages: MessageBlock[] | undefined;
-  prompt: PendingConversationPrompt | null | undefined;
-}): boolean {
-  if (!input.prompt || !input.messages || input.messages.length === 0) {
-    return false;
-  }
-
-  const pendingText = input.prompt.text.trim();
-  const pendingImageCount = input.prompt.images.length;
-
-  return input.messages.some((message) => {
-    if (message.type !== 'user') {
-      return false;
-    }
-
-    const messageText = message.text.trim();
-    const messageImageCount = message.images?.length ?? 0;
-    if (messageImageCount !== pendingImageCount) {
-      return false;
-    }
-
-    if (pendingText.length === 0) {
-      return pendingImageCount > 0;
-    }
-
-    return messageText === pendingText;
-  });
 }
 
 export function shouldDeferConversationFileRefresh(input: {
@@ -2729,7 +2693,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const appliedInitialModelPreferenceLocationKeyRef = useRef<string | null>(null);
   const skippedInitialDeferredResumeLocationKeyRef = useRef<string | null>(null);
   const attemptedDeferredResumeAutoResumeKeyRef = useRef<string | null>(null);
-  const appliedInitialDraftHydrationLocationKeyRef = useRef<string | null>(null);
   const appliedDraftAutoModeLocationKeyRef = useRef<string | null>(null);
   const [savedWorkspacePaths, setSavedWorkspacePaths] = useState<string[]>(() => readStoredWorkspacePaths());
   const [savedWorkspacePathsLoading, setSavedWorkspacePathsLoading] = useState(false);
@@ -2968,30 +2931,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [conversationEventVersion, draft, id]);
 
-  useEffect(() => {
-    if (draft || !id || !initialDraftHydrationState) {
-      return;
-    }
-
-    if (appliedInitialDraftHydrationLocationKeyRef.current === location.key) {
-      return;
-    }
-
-    appliedInitialDraftHydrationLocationKeyRef.current = location.key;
-    const storedAttachments = readDraftConversationAttachments();
-    if (storedAttachments.images.length > 0) {
-      setAttachments(storedAttachments.images.map((image, index) => {
-        const extension = fileExtensionForMimeType(image.mimeType);
-        const name = image.name?.trim() || `draft-image-${index + 1}.${extension}`;
-        return base64ToFile(image.data, image.mimeType, name);
-      }));
-    }
-    if (storedAttachments.drawings.length > 0) {
-      setDrawingAttachments(storedAttachments.drawings);
-    }
-    clearDraftConversationAttachments();
-  }, [draft, id, initialDraftHydrationState, location.key]);
-
   const effectiveConversationAutoModeState = stream.autoModeState ?? conversationAutoModeState;
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
 
@@ -3170,6 +3109,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     lastComposerAttachmentScopeKeyRef.current = composerAttachmentScopeKey;
     composerAttachmentsHydratedRef.current = false;
   }
+
+  useInitialDraftAttachmentHydration({
+    draft,
+    conversationId: id,
+    enabled: Boolean(initialDraftHydrationState),
+    locationKey: location.key,
+    setAttachments,
+    setDrawingAttachments,
+  });
 
   useLayoutEffect(() => {
     const storedAttachments = draft

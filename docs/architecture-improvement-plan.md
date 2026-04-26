@@ -48,7 +48,9 @@ For UI architecture work, also run app build/tests and perform a visual check if
 **First slices:**
 
 1. [done] Extract pure attachment/image preparation logic out of `ConversationPage.tsx`.
-2. Extract draft/pending prompt hydration into a controller hook.
+2. [in progress] Extract draft/pending prompt hydration into controller hooks.
+   - Extracted pending-initial-prompt acceptance/dispatch predicates into `pendingInitialPromptLogic`.
+   - Extracted initial draft attachment hydration into `useInitialDraftAttachmentHydration`.
 3. Extract keyboard shortcut/event wiring into focused hooks.
 4. Leave JSX migration for last; moving render chunks first tends to create shallow wrappers.
 
