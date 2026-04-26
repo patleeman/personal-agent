@@ -28,7 +28,6 @@ import {
   type DisplayBlock,
 } from './sessions.js';
 import { readGitRepoInfo } from '../workspace/gitStatus.js';
-import { logWarn } from '../shared/logging.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
@@ -85,7 +84,6 @@ import {
   resolveLiveSessionFile,
 } from './liveSessionPersistence.js';
 import {
-  resolveLastCompletedConversationEntryId,
   resolveStableForkEntryId,
 } from './liveSessionForking.js';
 import {
@@ -164,6 +162,7 @@ import {
   forkLiveSession,
 } from './liveSessionBranching.js';
 import { repairLiveSessionTranscriptTail as repairLiveSessionTranscriptTailWithCallbacks } from './liveSessionTranscriptRepair.js';
+import { summarizeAndForkLiveSession } from './liveSessionSummarizeFork.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -1438,54 +1437,12 @@ export async function summarizeAndForkSession(
   if (!entry) {
     throw new Error(`Session ${sessionId} is not live`);
   }
-
-  const sourceSessionFile = entry.session.sessionFile;
-  if (!sourceSessionFile) {
-    throw new Error('Cannot summarize and fork a live session without a session file.');
-  }
-
-  const duplicated = entry.session.isStreaming
-    ? await (async () => {
-      const lastCompletedEntryId = resolveLastCompletedConversationEntryId(sourceSessionFile);
-      if (!lastCompletedEntryId) {
-        throw new Error('No completed conversation turn is ready to summarize and fork yet.');
-      }
-
-      const sourceManager = SessionManager.open(sourceSessionFile, undefined, entry.cwd);
-      const forkedSessionFile = sourceManager.createBranchedSession(lastCompletedEntryId);
-      if (!forkedSessionFile) {
-        throw new Error('Unable to create a summary fork from the latest completed turn.');
-      }
-
-      const resumed = await resumeSession(forkedSessionFile, {
-        ...options,
-        cwdOverride: entry.cwd,
-      });
-      return { id: resumed.id, sessionFile: forkedSessionFile };
-    })()
-    : await createSessionFromExisting(sourceSessionFile, entry.cwd, options);
-
-  void compactSession(duplicated.id).catch(async (error) => {
-    const message = error instanceof Error ? error.message : String(error);
-    logWarn('summary fork compaction failed', {
-      sourceConversationId: sessionId,
-      conversationId: duplicated.id,
-      sessionFile: duplicated.sessionFile,
-      error: error instanceof Error ? { message: error.message, stack: error.stack } : message,
-    });
-
-    try {
-      await appendVisibleCustomMessage(
-        duplicated.id,
-        'system_notice',
-        `Summarize & New could not compact this copy automatically: ${message}`,
-      );
-    } catch {
-      // Ignore best-effort failure surfacing.
-    }
+  return summarizeAndForkLiveSession(entry, options, {
+    createSessionFromExisting,
+    resumeSession,
+    compactSession,
+    appendVisibleCustomMessage,
   });
-
-  return { newSessionId: duplicated.id, sessionFile: duplicated.sessionFile };
 }
 
 /** Cleanly dispose a live session. */
