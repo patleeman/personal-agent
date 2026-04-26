@@ -23,10 +23,6 @@ import {
 } from './conversationModelPreferences.js';
 import { normalizeModelContextWindow } from '../models/modelContextWindows.js';
 import { readSavedModelPreferences } from '../models/modelPreferences.js';
-import {
-  generateConversationTitle,
-  hasAssistantTitleSourceMessage,
-} from './conversationAutoTitle.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
 import {
   getAssistantErrorDisplayMessage,
@@ -105,7 +101,6 @@ import {
 } from './liveSessionForking.js';
 import {
   buildFallbackTitleFromContent,
-  getSessionMessages,
   isPlaceholderConversationTitle,
   resolveStableSessionTitle,
 } from './liveSessionTitle.js';
@@ -160,6 +155,7 @@ import {
   scheduleLiveSessionContextUsage,
 } from './liveSessionStateBroadcasts.js';
 import { syncLiveSessionDurableRun } from './liveSessionDurableRun.js';
+import { requestLiveSessionAutoTitle } from './liveSessionAutoTitleOps.js';
 export {
   registerLiveSessionLifecycleHandler,
   type LiveSessionLifecycleEvent,
@@ -501,55 +497,12 @@ async function syncDurableConversationRun(
 }
 
 function maybeAutoTitleConversation(entry: LiveEntry): void {
-  if (entry.autoTitleRequested) {
-    return;
-  }
-
-  if (entry.session.sessionName?.trim()) {
-    entry.autoTitleRequested = true;
-    return;
-  }
-
-  const messages = getSessionMessages(entry.session);
-  if (!hasAssistantTitleSourceMessage(messages)) {
-    return;
-  }
-
-  entry.autoTitleRequested = true;
-  void generateConversationTitle({
-    messages,
-    modelRegistry: entry.session.modelRegistry,
+  requestLiveSessionAutoTitle({
+    entry,
     settingsFile: SETTINGS_FILE,
-  })
-    .then((title) => {
-      if (registry.get(entry.sessionId) !== entry) {
-        return;
-      }
-
-      if (entry.session.sessionName?.trim()) {
-        entry.autoTitleRequested = true;
-        return;
-      }
-
-      if (!title) {
-        entry.autoTitleRequested = false;
-        return;
-      }
-
-      applySessionTitle(entry, title);
-    })
-    .catch((error) => {
-      if (registry.get(entry.sessionId) === entry && !entry.session.sessionName?.trim()) {
-        entry.autoTitleRequested = false;
-      }
-
-      const message = error instanceof Error ? error.message : String(error);
-      const stack = error instanceof Error ? error.stack : undefined;
-      console.error(`[${new Date().toISOString()}] [web] [error] conversation auto-title failed sessionId=${entry.sessionId} message=${message}`);
-      if (stack) {
-        console.error(stack);
-      }
-    });
+    isCurrent: () => registry.get(entry.sessionId) === entry,
+    applyTitle: (title) => applySessionTitle(entry, title),
+  });
 }
 
 function broadcastContextUsage(entry: LiveEntry, force = false): void {
