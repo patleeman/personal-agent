@@ -121,6 +121,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved trace-cluster linked-run collection into the linked-run module.
    - Extracted inline trace run card rendering into `InlineTraceRunCard.tsx`.
 5. [done] Extract ask-user-question tool rendering and state helpers into `AskUserQuestionToolBlock.tsx` with focused tests.
+6. [done] Extract artifact/checkpoint tool card rendering into `ArtifactCheckpointToolBlocks.tsx`.
 
 ## Next action
 
