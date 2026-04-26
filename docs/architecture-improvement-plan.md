@@ -114,7 +114,8 @@ For UI architecture work, also run app build/tests and perform a visual check if
 1. [done] Extract markdown, mention, commit hash, and skill-aware message rendering into `MarkdownMessage.tsx`.
 2. [done] Extract reply-selection DOM helpers into a small tested module.
 3. [done] Extract summary-preview formatting into a small tested module.
-4. Extract linked durable-run block rendering after the message renderer seams are stable.
+4. [in progress] Extract linked durable-run presentation/rendering after the message renderer seams are stable.
+   - Extracted linked-run discovery and compact run-tool preview formatting into `linkedRuns.ts` with focused tests.
 
 ## Next action
 
