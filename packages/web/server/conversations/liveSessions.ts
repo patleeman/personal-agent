@@ -101,12 +101,6 @@ import {
 } from './liveSessionEvents.js';
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
-import {
-  markLiveSessionAutoModeContinueRequested,
-  requestLiveSessionAutoModeContinuationTurn,
-  requestLiveSessionAutoModeTurn,
-  writeLiveSessionAutoModeHostState,
-} from './liveSessionAutoModeOps.js';
 import { summarizeSessionFileForPromptWithLiveSession } from './liveSessionSummaries.js';
 import {
   inspectAvailableLiveSessionTools,
@@ -164,6 +158,14 @@ import {
   getLiveSessionStats as readLiveSessionStats,
   listLiveSessions as listLiveSessionEntries,
 } from './liveSessionReadApi.js';
+import {
+  broadcastConversationAutoModeState as broadcastConversationAutoModeStateForEntry,
+  markConversationAutoModeContinueRequested as markConversationAutoModeContinueRequestedForEntry,
+  readLiveSessionAutoModeState as readLiveSessionAutoModeStateForEntry,
+  requestConversationAutoModeContinuationTurn as requestConversationAutoModeContinuationTurnForEntry,
+  requestConversationAutoModeTurn as requestConversationAutoModeTurnForEntry,
+  setLiveSessionAutoModeState as setLiveSessionAutoModeStateForEntry,
+} from './liveSessionAutoModeFacade.js';
 import {
   compactLiveSession,
   renameLiveSession,
@@ -802,16 +804,13 @@ export function readLiveSessionAutoModeState(sessionId: string): ConversationAut
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  return readConversationAutoModeState(entry);
+  return readLiveSessionAutoModeStateForEntry(entry);
 }
 
 export function broadcastConversationAutoModeState(sessionId: string, force = true): void {
-  const entry = registry.get(sessionId);
-  if (!entry) {
-    return;
-  }
-
-  broadcastAutoModeState(entry, force);
+  broadcastConversationAutoModeStateForEntry(registry.get(sessionId), force, {
+    broadcastAutoModeState,
+  });
 }
 
 export async function requestConversationAutoModeTurn(sessionId: string): Promise<boolean> {
@@ -820,13 +819,9 @@ export async function requestConversationAutoModeTurn(sessionId: string): Promis
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  publishSessionMetaChanged(sessionId);
-  try {
-    return await requestLiveSessionAutoModeTurn(entry);
-  } catch (error) {
-    publishSessionMetaChanged(sessionId);
-    throw error;
-  }
+  return requestConversationAutoModeTurnForEntry(entry, {
+    publishSessionMetaChanged,
+  });
 }
 
 export function markConversationAutoModeContinueRequested(sessionId: string): void {
@@ -835,7 +830,7 @@ export function markConversationAutoModeContinueRequested(sessionId: string): vo
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  markLiveSessionAutoModeContinueRequested(entry);
+  markConversationAutoModeContinueRequestedForEntry(entry);
 }
 
 export async function requestConversationAutoModeContinuationTurn(sessionId: string): Promise<boolean> {
@@ -844,7 +839,7 @@ export async function requestConversationAutoModeContinuationTurn(sessionId: str
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  return requestLiveSessionAutoModeContinuationTurn(entry);
+  return requestConversationAutoModeContinuationTurnForEntry(entry);
 }
 
 export async function setLiveSessionAutoModeState(
@@ -856,12 +851,10 @@ export async function setLiveSessionAutoModeState(
     throw new Error(`Session ${sessionId} is not live`);
   }
 
-  const nextState = writeLiveSessionAutoModeHostState(entry, input);
-  broadcastAutoModeState(entry, true);
-  publishSessionMetaChanged(sessionId);
-  publishAppEvent({ type: 'session_file_changed', sessionId });
-
-  return nextState;
+  return setLiveSessionAutoModeStateForEntry(entry, input, {
+    broadcastAutoModeState,
+    publishSessionMetaChanged,
+  });
 }
 
 /** Append hidden context before the next user-visible prompt in a live session. */
