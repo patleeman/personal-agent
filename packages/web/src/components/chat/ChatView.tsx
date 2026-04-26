@@ -37,7 +37,7 @@ import { CheckpointInlineDiff } from './CheckpointInlineDiff';
 import { Pill, SurfacePanel, cx } from '../ui';
 import { buildReplySelectionScopeProps, findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement, type ReplySelectionGestureHandler } from './replySelection.js';
 import { buildSummaryPreview } from './summaryPreview.js';
-import { buildToolPreview, readLinkedRuns, type LinkedRunPresentation } from './linkedRuns.js';
+import { buildToolPreview, collectTraceClusterLinkedRuns, readLinkedRuns, type LinkedRunPresentation } from './linkedRuns.js';
 import { resolveLinkedRunRecord } from './linkedRunResolution.js';
 import { buildInlineRunExpansionKey, INLINE_RUN_LOG_TAIL_LINES, INLINE_RUN_POLL_INTERVAL_MS, usePolledDurableRunSnapshot } from './linkedRunPolling.js';
 import { describeInlineRunStatus, inferStatusFromLinkedRunDetail } from './linkedRunStatus.js';
@@ -944,30 +944,6 @@ const MAX_VISIBLE_LINKED_RUNS = 5;
 
 
 const TRACE_LINKED_RUN_VISIBLE_LIMIT = 4;
-function collectTraceClusterLinkedRuns(blocks: TraceConversationBlock[]): LinkedRunPresentation[] {
-  const seen = new Set<string>();
-  const next: LinkedRunPresentation[] = [];
-
-  for (let index = blocks.length - 1; index >= 0; index -= 1) {
-    const block = blocks[index];
-    if (!block || block.type !== 'tool_use') {
-      continue;
-    }
-
-    for (const run of readLinkedRuns(block).runs) {
-      const runId = run.runId.trim();
-      if (!runId || seen.has(runId)) {
-        continue;
-      }
-
-      seen.add(runId);
-      next.push(run);
-    }
-  }
-
-  return next;
-}
-
 function InlineRunMetadataRow({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="grid grid-cols-[auto,minmax(0,1fr)] items-start gap-2">

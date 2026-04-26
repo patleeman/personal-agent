@@ -400,3 +400,27 @@ export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }
     runs: extractDurableRunIdsFromBlock(block).map((runId) => presentLinkedRun(runId)),
   };
 }
+
+export function collectTraceClusterLinkedRuns(blocks: MessageBlock[]): LinkedRunPresentation[] {
+  const seen = new Set<string>();
+  const next: LinkedRunPresentation[] = [];
+
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index];
+    if (!block || block.type !== 'tool_use') {
+      continue;
+    }
+
+    for (const run of readLinkedRuns(block).runs) {
+      const runId = run.runId.trim();
+      if (!runId || seen.has(runId)) {
+        continue;
+      }
+
+      seen.add(runId);
+      next.push(run);
+    }
+  }
+
+  return next;
+}

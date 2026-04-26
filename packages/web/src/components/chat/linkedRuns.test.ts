@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../../shared/types';
-import { buildToolPreview, normalizeRunLabel, readLinkedRuns } from './linkedRuns.js';
+import { buildToolPreview, collectTraceClusterLinkedRuns, normalizeRunLabel, readLinkedRuns } from './linkedRuns.js';
 
 function runToolBlock(overrides: Partial<Extract<MessageBlock, { type: 'tool_use' }>>): Extract<MessageBlock, { type: 'tool_use' }> {
   return {
@@ -75,5 +75,16 @@ describe('linkedRuns', () => {
       scope: 'mentioned',
       runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'background run' }],
     });
+  });
+
+  it('collects trace cluster linked runs from newest to oldest without duplicates', () => {
+    const older = runToolBlock({ details: { action: 'logs', runId: 'run-old-cleanup-abc123' } });
+    const newer = runToolBlock({ details: { action: 'logs', runId: 'run-new-cleanup-def456' } });
+    const duplicateOlder = runToolBlock({ details: { action: 'logs', runId: 'run-old-cleanup-abc123' } });
+
+    expect(collectTraceClusterLinkedRuns([older, { type: 'thinking', ts: '2026-04-26T00:00:00.000Z', text: 'thinking' }, newer, duplicateOlder])).toEqual([
+      { runId: 'run-old-cleanup-abc123', title: 'Old cleanup', detail: 'log view' },
+      { runId: 'run-new-cleanup-def456', title: 'New cleanup', detail: 'log view' },
+    ]);
   });
 });

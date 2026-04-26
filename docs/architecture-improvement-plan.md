@@ -118,6 +118,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted linked-run discovery and compact run-tool preview formatting into `linkedRuns.ts` with focused tests.
    - Extracted linked-run record resolution into `linkedRunResolution.ts` with focused tests.
    - Extracted linked-run polling and status display helpers into focused modules.
+   - Moved trace-cluster linked-run collection into the linked-run module.
 
 ## Next action
 
