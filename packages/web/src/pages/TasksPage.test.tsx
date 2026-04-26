@@ -3,15 +3,31 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, SseConnectionContext } from '../app/contexts.js';
+import { ARCHIVED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
 import { TasksPage } from './TasksPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
+
+function createStorage() {
+  const values = new Map<string, string>();
+  return {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+    key: (index: number) => Array.from(values.keys())[index] ?? null,
+    get length() {
+      return values.size;
+    },
+  } satisfies Storage;
+}
 
 describe('TasksPage', () => {
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
   const originalConsoleError = console.error;
 
   beforeEach(() => {
+    vi.stubGlobal('localStorage', createStorage());
     consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((message?: unknown, ...args: unknown[]) => {
       if (typeof message === 'string' && message.includes('useLayoutEffect does nothing on the server')) {
         return;
@@ -23,6 +39,7 @@ describe('TasksPage', () => {
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -86,6 +103,61 @@ describe('TasksPage', () => {
     expect(html).not.toContain('On this page');
     expect(html).not.toContain('href="/settings"');
     expect(html).not.toContain('Stable preferences and adjacent operational pages.');
+  });
+
+  it('hides archived automation threads from the overview thread list', () => {
+    localStorage.setItem(ARCHIVED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['automation.daily-report']));
+
+    const html = renderToString(
+      <MemoryRouter initialEntries={['/automations']}>
+        <SseConnectionContext.Provider value={{ status: 'open' }}>
+          <AppDataContext.Provider value={{
+            projects: null,
+            sessions: [{
+              id: 'automation.daily-report',
+              file: '/tmp/automation.daily-report.jsonl',
+              timestamp: '2026-03-18T00:00:00.000Z',
+              lastActivityAt: '2026-03-18T00:05:00.000Z',
+              cwd: '/repo/project',
+              cwdSlug: 'repo-project',
+              model: 'openai/gpt-5.4',
+              title: 'Automation: Daily report',
+              messageCount: 12,
+              automationTaskId: 'daily-report',
+              automationTitle: 'Daily report',
+            }],
+            runs: null,
+            tasks: [{
+              id: 'daily-report',
+              title: 'Daily report',
+              scheduleType: 'cron',
+              running: false,
+              enabled: true,
+              cron: '0 9 * * 1-5',
+              prompt: 'Send the daily report.',
+              model: 'openai/gpt-5.4',
+              cwd: '/repo/project',
+              threadConversationId: 'automation.daily-report',
+              threadTitle: 'Automation: Daily report',
+              lastStatus: 'success',
+              lastRunAt: '2026-03-18T00:00:00.000Z',
+            }],
+            setProjects: vi.fn(),
+            setSessions: vi.fn(),
+            setTasks: vi.fn(),
+            setRuns: vi.fn(),
+          }}>
+            <Routes>
+              <Route path="/automations" element={<TasksPage />} />
+            </Routes>
+          </AppDataContext.Provider>
+        </SseConnectionContext.Provider>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain('Daily report');
+    expect(html).toContain('No associated threads yet.');
+    expect(html).not.toContain('href="/conversations/automation.daily-report"');
   });
 
   it('renders lean empty states for jobs and threads', () => {

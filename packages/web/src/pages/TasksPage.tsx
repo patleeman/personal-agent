@@ -2,7 +2,7 @@ import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../client/api';
 import { setConversationRunIdInSearch, getConversationRunIdFromSearch } from '../conversation/conversationRuns';
-import { ensureConversationTabOpen } from '../session/sessionTabs';
+import { CONVERSATION_LAYOUT_CHANGED_EVENT, ensureConversationTabOpen, readArchivedSessionIds } from '../session/sessionTabs';
 import { ScheduledTaskCreatePanel, ScheduledTaskPanel } from '../components/ScheduledTaskPanel';
 import { AppPageIntro, AppPageLayout, AppPageSection, ErrorState, LoadingState, ToolbarButton } from '../components/ui';
 import { useAppData, useSseConnection } from '../app/contexts';
@@ -82,6 +82,21 @@ function useAutomationClock(): number {
   }, []);
 
   return nowMs;
+}
+
+function useArchivedConversationIdSet(): Set<string> {
+  const [archivedConversationIds, setArchivedConversationIds] = useState(() => readArchivedSessionIds());
+
+  useEffect(() => {
+    function handleConversationLayoutChanged() {
+      setArchivedConversationIds(readArchivedSessionIds());
+    }
+
+    window.addEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+    return () => window.removeEventListener(CONVERSATION_LAYOUT_CHANGED_EVENT, handleConversationLayoutChanged);
+  }, []);
+
+  return useMemo(() => new Set(archivedConversationIds), [archivedConversationIds]);
 }
 
 function formatNextRunHint(nextRunAt: Date): string {
@@ -853,6 +868,7 @@ function AutomationsOverview({
   const attentionCount = tasks.filter((task) => isFailedTaskStatus(task.lastStatus)).length;
   const enabledCount = tasks.filter((task) => task.enabled).length;
   const nowMs = useAutomationClock();
+  const archivedConversationIds = useArchivedConversationIdSet();
 
   const pageMeta = useMemo(() => {
     if (tasks.length === 0) {
@@ -917,6 +933,9 @@ function AutomationsOverview({
       if (!task.threadConversationId) {
         return;
       }
+      if (archivedConversationIds.has(task.threadConversationId)) {
+        return;
+      }
 
       const session = sessionsById.get(task.threadConversationId);
       upsertThread(task.threadConversationId, {
@@ -929,6 +948,9 @@ function AutomationsOverview({
 
     (sessions ?? []).forEach((session) => {
       if (!session.automationTaskId && !session.automationTitle) {
+        return;
+      }
+      if (archivedConversationIds.has(session.id)) {
         return;
       }
 
@@ -951,7 +973,7 @@ function AutomationsOverview({
         const rightActivity = right.lastActivityAt ?? '';
         return rightActivity.localeCompare(leftActivity) || left.title.localeCompare(right.title);
       }) satisfies AssociatedAutomationThread[];
-  }, [rows, sessions]);
+  }, [archivedConversationIds, rows, sessions]);
 
   return (
     <div className="h-full overflow-y-auto">
