@@ -16,6 +16,7 @@ import { useComposerModifierKeys, useVisualViewportKeyboardInset } from '../conv
 import { useWorkspaceComposerEvents } from '../conversation/useWorkspaceComposerEvents';
 import { MAX_RELATED_THREAD_HOTKEYS, useRelatedThreadHotkeys } from '../conversation/useRelatedThreadHotkeys';
 import { useDesktopConversationShortcuts } from '../conversation/useDesktopConversationShortcuts';
+import { hasBlockingConversationOverlay, useEscapeAbortStream } from '../conversation/useEscapeAbortStream';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -1623,11 +1624,7 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
 }
 
 function hasBlockingOverlayOpen(): boolean {
-  if (typeof document === 'undefined') {
-    return false;
-  }
-
-  return document.querySelector('.ui-overlay-backdrop') !== null;
+  return typeof document !== 'undefined' && hasBlockingConversationOverlay();
 }
 
 function primeCreatedConversationOpenCaches(
@@ -4676,25 +4673,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, [historicalHasOlderBlocks, historicalTailBlocks, historicalTotalBlocks, id, isLiveSession, loadOlderMessages, sessionLoading, stream.isStreaming]);
 
-  // Esc aborts an active run.
-  useEffect(() => {
-    function handler(e: KeyboardEvent) {
-      if (e.key !== 'Escape' || e.defaultPrevented) {
-        return;
-      }
-
-      if (hasBlockingOverlayOpen()) {
-        return;
-      }
-
-      if (stream.isStreaming) {
-        e.preventDefault();
-        void streamAbort();
-      }
-    }
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [stream.isStreaming, streamAbort]);
+  useEscapeAbortStream({
+    isStreaming: stream.isStreaming,
+    abort: streamAbort,
+    hasBlockingOverlay: hasBlockingOverlayOpen,
+  });
 
   // Forked/new conversations with a queued initial prompt should stay pinned to
   // the bottom only until that queued user block lands and the assistant starts

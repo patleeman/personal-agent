@@ -56,6 +56,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
    - Extracted related-thread hotkey selection into `useRelatedThreadHotkeys`.
    - Extracted desktop conversation shortcuts into `useDesktopConversationShortcuts`.
+   - Extracted Escape-to-abort stream handling into `useEscapeAbortStream`.
 4. Leave JSX migration for last; moving render chunks first tends to create shallow wrappers.
 
 ### 2. Desktop local API adapter split
