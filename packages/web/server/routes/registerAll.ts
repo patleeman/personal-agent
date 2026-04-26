@@ -16,6 +16,7 @@ import { registerTaskRoutes } from './tasks.js';
 import { registerToolsRoutes } from './tools.js';
 import { registerTranscriptionRoutes } from './transcription.js';
 import { registerUiPreferenceRoutes } from './uiPreferences.js';
+import { registerWorkspaceExplorerRoutes } from './workspaceExplorer.js';
 
 export function registerServerRoutes({ app, context }: RegisterServerRoutesInput): void {
   registerDaemonRoutes(app);
@@ -47,6 +48,7 @@ export function registerServerRoutes({ app, context }: RegisterServerRoutesInput
 
   registerFilePickerRoutes(app, context);
   registerFolderPickerRoutes(app, context);
+  registerWorkspaceExplorerRoutes(app, context);
 
   registerVaultEditorRoutes(app);
 

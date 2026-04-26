@@ -1,4 +1,4 @@
-import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult } from '../shared/types';
+import type { AppStatus, ConversationArtifactRecord, ConversationArtifactSummary, ConversationAttachmentAssetData, ConversationAttachmentRecord, ConversationAttachmentSummary, ConversationAutoModeState, ConversationAutomationWorkspaceState, ConversationBootstrapState, ConversationCheckpointReviewContext, ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointRecord, ConversationCommitCheckpointSummary, ConversationContextDocRef, ConversationCwdChangeResult, ConversationRecoveryResult, ConversationSummaryRecord, ConversationTitleSettingsState, DaemonState, DefaultCwdState, DeferredResumeSummary, DesktopEnvironmentState, DesktopRemoteDirectoryListing, DisplayBlock, DurableRunDetailResult, DurableRunListResult, FilePickerResult, FolderPickerResult, InjectedPromptMessage, InstructionFilesState, KnowledgeBaseState, LiveSessionContext, LiveSessionCreateResult, LiveSessionExportResult, LiveSessionForkEntry, LiveSessionMeta, LiveSessionPresenceState, MemoryData, ModelProviderState, ModelState, PromptAttachmentRefInput, PromptImageInput, ProviderAuthState, ProviderOAuthLoginState, ScheduledTaskDetail, ScheduledTaskSummary, SessionDetailResult, SessionMeta, SkillFoldersState, ToolsState, TranscriptionProviderId, TranscriptionResult, TranscriptionSettingsState, VaultBacklinksResult, VaultEntry, VaultFileContent, VaultFileListResult, VaultImageUploadResult, VaultSearchResponse, VaultShareImportResult, VaultTreeResult, WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceFileContent } from '../shared/types';
 import { buildApiPath } from './apiBase';
 import { getDesktopBridge, readDesktopEnvironment } from '../desktop/desktopBridge';
 import { recordApiTiming } from './perfDiagnostics';
@@ -559,6 +559,20 @@ export const api = {
   // ── Live sessions ─────────────────────────────────────────────────────────
   liveSession: async (id: string) => get<LiveSessionMeta & { live: boolean }>(`/live-sessions/${id}`),
   liveSessionContext: async (id: string) => get<LiveSessionContext>(`/live-sessions/${id}/context`),
+  workspaceTree: async (cwd: string, path = '') => {
+    const params = new URLSearchParams({ cwd });
+    if (path) params.set('path', path);
+    return get<WorkspaceDirectoryListing>(`/workspace/tree?${params.toString()}`);
+  },
+  workspaceFile: async (cwd: string, path: string, options?: { force?: boolean }) => {
+    const params = new URLSearchParams({ cwd, path });
+    if (options?.force) params.set('force', '1');
+    return get<WorkspaceFileContent>(`/workspace/file?${params.toString()}`);
+  },
+  workspaceDiff: async (cwd: string, path: string) => {
+    const params = new URLSearchParams({ cwd, path });
+    return get<WorkspaceDiffOverlay>(`/workspace/diff?${params.toString()}`);
+  },
   conversationBootstrap: async (id: string, options?: {
     tailBlocks?: number;
     knownSessionSignature?: string;

@@ -7,6 +7,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
+import { WorkspaceExplorer } from '../components/workspace/WorkspaceExplorer';
 import { AppPageEmptyState, EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
 import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, PromptImageInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
@@ -7908,11 +7909,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
-      {transcriptPane}
+    <div className="relative flex h-full overflow-hidden">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {transcriptPane}
 
-      {/* Input area */}
-      {!keyboardOpen && (
+        {/* Input area */}
+        {!keyboardOpen && (
         <div
           className={`px-4 pt-2 pb-[calc(env(safe-area-inset-bottom)+1rem)] transition-colors ${dragOver ? 'bg-accent/5' : ''}`}
           onDragOver={handleDragOver}
@@ -8823,6 +8825,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           ) : null}
         </div>
       </div>
+        )}
+      </div>
+
+      {!selectedExecutionTargetIsRemote && (
+        <WorkspaceExplorer
+          cwd={currentCwd}
+          onDraftPrompt={(prompt) => {
+            setInput(prompt);
+            textareaRef.current?.focus();
+          }}
+        />
       )}
 
       {remoteDirectoryBrowserState && selectedExecutionTargetHost ? (

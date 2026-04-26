@@ -1230,6 +1230,59 @@ export interface VaultShareImportResult {
   };
 }
 
+// ── Workspace explorer ──────────────────────────────────────────────────────
+
+export type WorkspaceGitStatusChange = 'modified' | 'added' | 'deleted' | 'renamed' | 'copied' | 'typechange' | 'untracked' | 'conflicted';
+export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
+
+export interface WorkspaceEntry {
+  name: string;
+  path: string;
+  kind: WorkspaceEntryKind;
+  size: number | null;
+  modifiedAt: string | null;
+  gitStatus: WorkspaceGitStatusChange | null;
+  descendantGitStatusCount: number;
+}
+
+export interface WorkspaceRootSnapshot {
+  cwd: string;
+  root: string;
+  rootName: string;
+  rootKind: 'git' | 'cwd';
+  activeCwdRelativePath: string | null;
+  branch: string | null;
+  changes: Array<{ relativePath: string; change: WorkspaceGitStatusChange }>;
+}
+
+export interface WorkspaceDirectoryListing extends WorkspaceRootSnapshot {
+  path: string;
+  entries: WorkspaceEntry[];
+}
+
+export interface WorkspaceFileContent extends WorkspaceRootSnapshot {
+  path: string;
+  name: string;
+  exists: boolean;
+  kind: WorkspaceEntryKind;
+  size: number | null;
+  modifiedAt: string | null;
+  binary: boolean;
+  tooLarge: boolean;
+  truncated: boolean;
+  content: string | null;
+  gitStatus: WorkspaceGitStatusChange | null;
+}
+
+export interface WorkspaceDiffOverlay extends WorkspaceRootSnapshot {
+  path: string;
+  gitStatus: WorkspaceGitStatusChange | null;
+  binary: boolean;
+  tooLarge: boolean;
+  addedLines: number[];
+  deletedBlocks: Array<{ afterLine: number; lines: string[] }>;
+}
+
 // ── Transcription / dictation ───────────────────────────────────────────────
 
 export type TranscriptionProviderId = 'openai-codex-realtime' | 'openai-api' | 'whisperkit-local';
