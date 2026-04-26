@@ -4,6 +4,7 @@ import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
+import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
@@ -11,11 +12,12 @@ import { python } from '@codemirror/lang-python';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { yaml } from '@codemirror/lang-yaml';
-import { oneDark } from '@codemirror/theme-one-dark';
+import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
 import { api } from '../../client/api';
 import { buildApiPath } from '../../client/apiBase';
 import type { WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceEntry, WorkspaceFileContent, WorkspaceGitStatusChange } from '../../shared/types';
 import { cx, EmptyState, LoadingState, Pill } from '../ui';
+import { useTheme } from '../../ui-state/theme';
 
 interface WorkspaceExplorerProps {
   cwd: string | null;
@@ -249,6 +251,73 @@ function treePathToWorkspacePath(path: string): string {
   return path.replace(/\/+$/g, '');
 }
 
+function buildWorkspaceBreadcrumbs(path: string): string[] {
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length <= 4) {
+    return parts;
+  }
+
+  return ['…', ...parts.slice(-3)];
+}
+
+function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') {
+  return [
+    diffDecorationsField,
+    diffDecorationPlugin,
+    EditorView.lineWrapping,
+    EditorView.theme({
+      '&': {
+        height: '100%',
+        background: 'transparent',
+        color: 'rgb(var(--color-primary))',
+        fontSize: '12px',
+      },
+      '.cm-scroller': {
+        fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        lineHeight: '1.55',
+      },
+      '.cm-content': {
+        padding: '8px 0 24px',
+      },
+      '.cm-line': {
+        paddingLeft: '0',
+      },
+      '.cm-gutters': {
+        background: 'transparent',
+        color: 'rgb(var(--color-dim))',
+        borderRight: '1px solid rgb(var(--color-border-subtle) / 0.7)',
+        fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontSize: '11px',
+      },
+      '.cm-activeLine': {
+        backgroundColor: 'rgb(var(--color-surface) / 0.55)',
+      },
+      '.cm-activeLineGutter': {
+        backgroundColor: 'rgb(var(--color-surface) / 0.55)',
+      },
+      '.cm-cursor': {
+        borderLeftColor: 'rgb(var(--color-primary))',
+      },
+      '.cm-selectionBackground, &.cm-focused .cm-selectionBackground, ::selection': {
+        backgroundColor: 'rgb(var(--color-accent) / 0.24)',
+      },
+      '.workspace-added-line': { backgroundColor: 'rgba(34, 197, 94, 0.12)' },
+      '.workspace-deleted-lines': {
+        backgroundColor: 'rgba(239, 68, 68, 0.10)',
+        color: 'rgb(var(--color-danger))',
+        borderLeft: '2px solid rgba(239, 68, 68, 0.6)',
+        padding: '2px 0 2px 8px',
+        fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        fontSize: '12px',
+      },
+      '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
+      '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
+    }),
+    syntaxHighlighting(theme === 'dark' ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true }),
+    extensionForPath(path),
+  ];
+}
+
 function WorkspaceStatusBadge({ status, count }: { status: WorkspaceGitStatusChange | null; count?: number }) {
   if (!status && !count) return null;
   if (status) {
@@ -340,6 +409,7 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
 }
 
 export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = false }: WorkspaceExplorerProps) {
+  const { theme } = useTheme();
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [rootListing, setRootListing] = useState<LoadState<WorkspaceDirectoryListing>>({ status: 'idle', data: null, error: null });
@@ -449,20 +519,10 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
   );
   const selectedFile = fileState.data;
   const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
-  const editorExtensions = useMemo(() => [
-    diffDecorationsField,
-    diffDecorationPlugin,
-    EditorView.lineWrapping,
-    EditorView.theme({
-      '&': { height: '100%', background: 'transparent' },
-      '.cm-scroller': { fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
-      '.workspace-added-line': { backgroundColor: 'rgba(34, 197, 94, 0.15)' },
-      '.workspace-deleted-lines': { backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'rgb(var(--color-danger, 239 68 68))', borderLeft: '2px solid rgba(239, 68, 68, 0.7)', padding: '2px 0 2px 8px', fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
-      '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
-      '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
-    }),
-    extensionForPath(selectedFile?.path ?? ''),
-  ], [selectedFile?.path]);
+  const editorExtensions = useMemo(
+    () => createWorkspaceEditorExtensions(selectedFile?.path ?? '', theme),
+    [selectedFile?.path, theme],
+  );
 
   const onEditorCreate = useCallback((view: EditorView) => {
     view.dispatch({ effects: setDiffDecorations.of(diffSpec) });
@@ -629,7 +689,6 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
                   basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
                   editable={false}
                   readOnly={true}
-                  theme={oneDark}
                   extensions={editorExtensions}
                   onCreateEditor={onEditorCreate}
                   key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}
@@ -651,12 +710,11 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
 export function WorkspaceFileDocument({
   cwd,
   path,
-  onDraftPrompt,
 }: {
   cwd: string;
   path: string;
-  onDraftPrompt: (prompt: string) => void;
 }) {
+  const { theme } = useTheme();
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [fileState, setFileState] = useState<LoadState<WorkspaceFileContent>>({ status: 'loading', data: null, error: null });
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
@@ -687,20 +745,10 @@ export function WorkspaceFileDocument({
 
   const selectedFile = fileState.data;
   const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
-  const editorExtensions = useMemo(() => [
-    diffDecorationsField,
-    diffDecorationPlugin,
-    EditorView.lineWrapping,
-    EditorView.theme({
-      '&': { height: '100%', background: 'transparent' },
-      '.cm-scroller': { fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
-      '.workspace-added-line': { backgroundColor: 'rgba(34, 197, 94, 0.15)' },
-      '.workspace-deleted-lines': { backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'rgb(var(--color-danger, 239 68 68))', borderLeft: '2px solid rgba(239, 68, 68, 0.7)', padding: '2px 0 2px 8px', fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
-      '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
-      '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
-    }),
-    extensionForPath(selectedFile?.path ?? path),
-  ], [path, selectedFile?.path]);
+  const editorExtensions = useMemo(
+    () => createWorkspaceEditorExtensions(selectedFile?.path ?? path, theme),
+    [path, selectedFile?.path, theme],
+  );
 
   const onEditorCreate = useCallback((view: EditorView) => {
     view.dispatch({ effects: setDiffDecorations.of(diffSpec) });
@@ -718,18 +766,26 @@ export function WorkspaceFileDocument({
     return <EmptyState className="flex h-full flex-col justify-center px-5" title="File unavailable" body="No file is selected." />;
   }
 
-  const root = selectedFile.root;
+  const breadcrumbs = buildWorkspaceBreadcrumbs(selectedFile.path);
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-base select-text">
-      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate font-mono text-[12px] font-semibold text-primary" title={selectedFile.path}>{selectedFile.path}</div>
-          <div className="text-[10px] text-dim">{formatBytes(selectedFile.size)} {selectedFile.binary ? '· binary' : ''} {selectedFile.tooLarge ? '· large' : ''}</div>
+      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5">
+        <div className="min-w-0 flex flex-1 items-center gap-1 overflow-hidden font-mono text-[11px] leading-5 text-secondary">
+          {breadcrumbs.map((segment, index) => (
+            <div key={`${segment}-${index}`} className="flex min-w-0 items-center gap-1">
+              {index > 0 ? <span className="shrink-0 text-dim/80">›</span> : null}
+              <span
+                className={cx('truncate', index === breadcrumbs.length - 1 && 'text-primary')}
+                title={index === breadcrumbs.length - 1 ? selectedFile.path : undefined}
+              >
+                {segment}
+              </span>
+            </div>
+          ))}
         </div>
-        <WorkspaceStatusBadge status={selectedFile.gitStatus} />
         {selectedFile.gitStatus && !selectedFile.binary && !selectedFile.tooLarge && (
-          <button type="button" className={cx('ui-toolbar-button text-[11px]', showDiff && 'text-accent')} onClick={() => setShowDiff((value) => !value)}>
+          <button type="button" className={cx('ui-toolbar-button px-2 text-[10px]', showDiff && 'text-accent')} onClick={() => setShowDiff((value) => !value)}>
             {showDiff ? 'Diff on' : 'Diff off'}
           </button>
         )}
@@ -752,17 +808,11 @@ export function WorkspaceFileDocument({
             basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
             editable={false}
             readOnly={true}
-            theme={oneDark}
             extensions={editorExtensions}
             onCreateEditor={onEditorCreate}
             key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}
           />
         )}
-      </div>
-      <div className="flex items-center gap-2 border-t border-border-subtle px-3 py-2">
-        <button type="button" className="ui-toolbar-button text-[11px]" onClick={() => onDraftPrompt(buildPrompt(root, 'explain this file', selectedFile.path))}>Ask about file</button>
-        <button type="button" className="ui-toolbar-button text-[11px]" onClick={() => onDraftPrompt(buildPrompt(root, 'rename this file', selectedFile.path))}>Rename</button>
-        <button type="button" className="ui-toolbar-button text-[11px] text-danger" onClick={() => onDraftPrompt(buildPrompt(root, 'delete this file after confirming it is safe', selectedFile.path))}>Delete</button>
       </div>
     </div>
   );

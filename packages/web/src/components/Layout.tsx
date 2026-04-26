@@ -466,9 +466,6 @@ function WorkbenchDocumentPane({
         <WorkspaceFileDocument
           cwd={workspaceFile.cwd}
           path={workspaceFile.path}
-          onDraftPrompt={(prompt) => {
-            window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
-          }}
         />
       </Suspense>
     );
