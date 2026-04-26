@@ -71,6 +71,7 @@ import {
 import { resolveRequestedCwd } from '../conversations/conversationCwd.js';
 import {
   buildAppendOnlySessionDetailResponse,
+  appendConversationWorkspaceMetadata,
   readSessionBlocks,
   readSessionMeta,
   renameStoredSession,
@@ -1889,6 +1890,17 @@ export async function changeDesktopConversationCwd(input: {
   const result = await createSessionFromExisting(sourceSessionFile, nextCwd, {
     ...context.buildLiveSessionResourceOptions(context.getCurrentProfile()),
     extensionFactories: context.buildLiveSessionExtensionFactories(),
+  });
+
+  appendConversationWorkspaceMetadata({
+    sessionFile: result.sessionFile,
+    previousCwd: currentCwd,
+    previousWorkspaceCwd: sessionDetail?.meta && Object.prototype.hasOwnProperty.call(sessionDetail.meta, 'workspaceCwd')
+      ? sessionDetail.meta.workspaceCwd ?? null
+      : currentCwd,
+    cwd: nextCwd,
+    workspaceCwd: nextCwd,
+    visibleMessage: true,
   });
 
   if (liveEntry) {

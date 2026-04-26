@@ -1446,7 +1446,9 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
   const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
   const cwd = workspaceMetadata?.cwd ?? headerCwd;
   const workspaceCwd = workspaceMetadata && 'workspaceCwd' in workspaceMetadata
-    ? workspaceMetadata.workspaceCwd ?? null
+    ? workspaceMetadata.workspaceCwd === null
+      ? isNeutralChatWorkspaceCwd(cwd) ? null : undefined
+      : workspaceMetadata.workspaceCwd
     : isNeutralChatWorkspaceCwd(cwd)
       ? null
       : undefined;

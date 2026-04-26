@@ -984,6 +984,31 @@ describe('sessions', () => {
     expect(detail?.meta.workspaceCwd).toBeNull();
   });
 
+  it('ignores a stale chat workspace marker when metadata points at a project cwd', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const filePath = writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-stale-chat-workspace-marker',
+      cwd: '/tmp/original-chat-workspace',
+      title: 'Moved from chat',
+    });
+
+    appendConversationWorkspaceMetadata({
+      sessionFile: filePath,
+      previousCwd: '/tmp/original-chat-workspace',
+      previousWorkspaceCwd: null,
+      cwd: '/tmp/personal-agent',
+      workspaceCwd: null,
+      visibleMessage: true,
+    });
+
+    const detail = readSessionBlocks('session-stale-chat-workspace-marker');
+    expect(detail?.meta.cwd).toBe('/tmp/personal-agent');
+    expect(detail?.meta).not.toHaveProperty('workspaceCwd');
+  });
+
   it('stores remote execution target metadata in the session header', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
