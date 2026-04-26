@@ -135,6 +135,16 @@ import {
   repairSessionModelProvider,
   resolveConversationPreferenceStateForSession as resolveConversationPreferenceStateForSessionWithSettings,
 } from './liveSessionModels.js';
+import {
+  activateNextHiddenTurn,
+  clearActiveHiddenTurnAfterTerminalEvent,
+  createLiveSessionHiddenTurnState,
+  ensureHiddenTurnState,
+  hasQueuedOrActiveHiddenTurn,
+  shouldExposeHiddenTurnInTranscript,
+  shouldSuppressLiveEventForHiddenTurn,
+  type LiveSessionHiddenTurnState,
+} from './liveSessionHiddenTurns.js';
 
 export {
   clearPrewarmedLiveSessionLoaders,
@@ -240,7 +250,7 @@ interface LiveListener {
   tailBlocks?: number;
 }
 
-interface LiveEntry extends LiveSessionPresenceHost {
+interface LiveEntry extends LiveSessionPresenceHost, LiveSessionHiddenTurnState {
   sessionId: string;
   session: AgentSession;
   cwd: string;
@@ -254,8 +264,6 @@ interface LiveEntry extends LiveSessionPresenceHost {
   currentTurnError?: string | null;
   lastDurableRunState?: WebLiveConversationRunState;
   contextUsageTimer?: ReturnType<typeof setTimeout>;
-  pendingHiddenTurnCustomTypes: string[];
-  activeHiddenTurnCustomType: string | null;
   pendingAutoModeContinuation?: boolean;
   pendingAutoCompactionReason?: 'overflow' | 'threshold' | null;
   lastCompactionSummaryTitle?: string | null;
@@ -454,13 +462,6 @@ function readContextUsagePayload(session: AgentSession): LiveContextUsage | null
   }
 }
 
-function hasQueuedOrActiveHiddenTurn(entry: Pick<LiveEntry, 'pendingHiddenTurnCustomTypes' | 'activeHiddenTurnCustomType'>): boolean {
-  const pendingHiddenTurnCustomTypes = Array.isArray(entry.pendingHiddenTurnCustomTypes)
-    ? entry.pendingHiddenTurnCustomTypes
-    : [];
-  return Boolean(entry.activeHiddenTurnCustomType) || pendingHiddenTurnCustomTypes.length > 0;
-}
-
 export function canInjectResumeFallbackPrompt(sessionId: string): boolean {
   const entry = registry.get(sessionId);
   if (!entry) {
@@ -538,15 +539,6 @@ function buildUserMessageBlock(message: { content?: unknown; timestamp?: string 
 }
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
-
-function ensureHiddenTurnState(entry: LiveEntry): void {
-  if (!Array.isArray(entry.pendingHiddenTurnCustomTypes)) {
-    entry.pendingHiddenTurnCustomTypes = [];
-  }
-  if (typeof entry.activeHiddenTurnCustomType === 'undefined') {
-    entry.activeHiddenTurnCustomType = null;
-  }
-}
 
 function buildLiveSnapshot(entry: LiveEntry, tailBlocks?: number): {
   blocks: DisplayBlock[];
@@ -808,31 +800,6 @@ function broadcastAutoModeState(entry: LiveEntry, force = false): void {
   broadcast(entry, { type: 'auto_mode_state', state });
 }
 
-function shouldExposeHiddenTurnInTranscript(customType: string | null | undefined): boolean {
-  return customType === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE
-    || customType === CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE;
-}
-
-function shouldSuppressLiveEventForHiddenTurn(entry: LiveEntry, event: AgentSessionEvent): boolean {
-  ensureHiddenTurnState(entry);
-  if (!entry.activeHiddenTurnCustomType) {
-    return false;
-  }
-
-  if (shouldExposeHiddenTurnInTranscript(entry.activeHiddenTurnCustomType)) {
-    return false;
-  }
-
-  return event.type === 'agent_start'
-    || event.type === 'agent_end'
-    || event.type === 'turn_end'
-    || event.type === 'message_update'
-    || event.type === 'message_end'
-    || event.type === 'tool_execution_start'
-    || event.type === 'tool_execution_update'
-    || event.type === 'tool_execution_end';
-}
-
 function scheduleContextUsage(entry: LiveEntry, delayMs = 400): void {
   if (entry.contextUsageTimer) {
     return;
@@ -899,8 +866,7 @@ function wireSession(
     lastQueueStateJson: null,
     lastParallelStateJson: null,
     currentTurnError: null,
-    pendingHiddenTurnCustomTypes: [],
-    activeHiddenTurnCustomType: null,
+    ...createLiveSessionHiddenTurnState(),
     pendingAutoModeContinuation: false,
     pendingAutoCompactionReason: null,
     lastCompactionSummaryTitle: null,
@@ -922,11 +888,7 @@ function wireSession(
   }
 
   session.subscribe((event: AgentSessionEvent) => {
-    ensureHiddenTurnState(entry);
-    if (event.type === 'agent_start' && !entry.activeHiddenTurnCustomType && entry.pendingHiddenTurnCustomTypes.length > 0) {
-      entry.activeHiddenTurnCustomType = entry.pendingHiddenTurnCustomTypes.shift() ?? null;
-    }
-    const activeHiddenTurnCustomType = entry.activeHiddenTurnCustomType;
+    const activeHiddenTurnCustomType = activateNextHiddenTurn(entry, event);
     const suppressLiveEvent = shouldSuppressLiveEventForHiddenTurn(entry, event);
 
     if (event.type === 'turn_end') {
@@ -1037,9 +999,7 @@ function wireSession(
       broadcast(entry, sse);
     }
 
-    if ((event.type === 'turn_end' || event.type === 'agent_end') && entry.activeHiddenTurnCustomType) {
-      entry.activeHiddenTurnCustomType = null;
-    }
+    clearActiveHiddenTurnAfterTerminalEvent(entry, event);
 
     if (event.type === 'turn_end' || event.type === 'agent_end') {
       void tryImportReadyParallelJobs(entry);
