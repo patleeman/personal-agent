@@ -228,7 +228,7 @@ describe('VaultFileTree', () => {
     const { container } = renderTree();
     await flushAsyncWork();
 
-    expect(container.textContent).toContain('Pending sync · 2 local changes');
+    expect(container.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe('Pending sync · 2 local changes');
   });
 
   it('stays empty when managed sync is off', async () => {
@@ -394,6 +394,8 @@ describe('VaultFileTree', () => {
   });
 
   it('lets the open files section resize taller and persists the new height', async () => {
+    localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, '120');
+
     const { container } = renderManagedTree();
     await flushAsyncWork();
 
@@ -410,7 +412,7 @@ describe('VaultFileTree', () => {
       throw new Error('Expected open files resize separator');
     }
 
-    drag(separator, 160, 120);
+    drag(separator, 120, 220);
     await flushAsyncWork();
 
     const resizedSeparator = container.querySelector<HTMLElement>('[aria-label="Resize open files section"]');

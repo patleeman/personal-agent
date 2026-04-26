@@ -36,7 +36,6 @@ import {
 } from '../../local/knowledgeRecentlyClosedFiles';
 import {
   DEFAULT_OPEN_FILES_SECTION_HEIGHT,
-  MAX_OPEN_FILES_SECTION_HEIGHT,
   MIN_OPEN_FILES_SECTION_HEIGHT,
   clampOpenFilesSectionHeight,
   readStoredOpenFilesSectionHeight,
@@ -653,7 +652,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const headerRef = useRef<HTMLDivElement>(null);
   const useNativeKnowledgeContextMenu = shouldUseNativeAppContextMenus();
   const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
-  const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(MAX_OPEN_FILES_SECTION_HEIGHT);
+  const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(Number.MAX_SAFE_INTEGER);
   const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
   const {
     data: knowledgeBaseState,
@@ -751,7 +750,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     document.body.style.userSelect = 'none';
 
     function handleMouseMove(moveEvent: MouseEvent) {
-      const delta = startY - moveEvent.clientY;
+      const delta = moveEvent.clientY - startY;
       const nextHeight = Math.min(
         maxOpenFilesSectionHeight,
         clampOpenFilesSectionHeight(startHeight + delta),
@@ -774,11 +773,11 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     switch (event.key) {
       case 'ArrowUp':
         event.preventDefault();
-        persistOpenFilesSectionHeight(Math.min(maxOpenFilesSectionHeight, openFilesSectionHeight + OPEN_FILES_SECTION_RESIZE_STEP));
+        persistOpenFilesSectionHeight(openFilesSectionHeight - OPEN_FILES_SECTION_RESIZE_STEP);
         break;
       case 'ArrowDown':
         event.preventDefault();
-        persistOpenFilesSectionHeight(openFilesSectionHeight - OPEN_FILES_SECTION_RESIZE_STEP);
+        persistOpenFilesSectionHeight(Math.min(maxOpenFilesSectionHeight, openFilesSectionHeight + OPEN_FILES_SECTION_RESIZE_STEP));
         break;
       case 'Home':
         event.preventDefault();
@@ -1140,7 +1139,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         - MIN_TREE_HOST_HEIGHT;
       setMaxOpenFilesSectionHeight(Math.max(
         MIN_OPEN_FILES_SECTION_HEIGHT,
-        Math.min(MAX_OPEN_FILES_SECTION_HEIGHT, Math.round(availableHeight)),
+        Math.round(availableHeight),
       ));
     };
 
@@ -1336,6 +1335,12 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       <div ref={headerRef} className="px-3 pt-1 pb-1 shrink-0 rounded-md">
         <div className="flex items-center gap-1">
           <p className="ui-section-label flex-1">Knowledge Base</p>
+          <span
+            role="status"
+            aria-label={knowledgeBaseSyncPresentation.text}
+            title={knowledgeBaseSyncPresentation.text}
+            className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
+          />
           {knowledgeBaseDisabled ? null : (
             <>
               <button
@@ -1368,13 +1373,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
             </>
           )}
         </div>
-        <div className={cx('mt-0.5 flex items-center gap-2 text-[11px]', knowledgeBaseSyncPresentation.toneClass)}>
-          <span
-            aria-hidden="true"
-            className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
-          />
-          <p className="truncate" title={knowledgeBaseSyncPresentation.text}>{knowledgeBaseSyncPresentation.text}</p>
-        </div>
       </div>
 
       {knowledgeBaseDisabled ? (
@@ -1386,6 +1384,48 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         </div>
       ) : (
         <>
+          {openFileIds.length > 0 ? (
+            <>
+              <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
+                <OpenFilesSection
+                  openFileIds={openFileIds}
+                  activeFileId={activeFileId}
+                  onSelect={onFileSelect}
+                  onClose={handleOpenFileClose}
+                  onCloseAll={handleOpenFilesCloseAll}
+                  bordered={false}
+                  className="h-full"
+                />
+              </div>
+              <div
+                role="separator"
+                aria-label="Resize open files section"
+                aria-orientation="horizontal"
+                aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
+                aria-valuemax={maxOpenFilesSectionHeight}
+                aria-valuenow={openFilesSectionHeight}
+                tabIndex={0}
+                className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
+                onMouseDown={handleOpenFilesSectionResizeMouseDown}
+                onKeyDown={handleOpenFilesSectionResizeKeyDown}
+                onDoubleClick={handleOpenFilesSectionResizeReset}
+              >
+                <div className="flex h-2 items-center">
+                  <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <OpenFilesSection
+              openFileIds={openFileIds}
+              activeFileId={activeFileId}
+              onSelect={onFileSelect}
+              onClose={handleOpenFileClose}
+              onCloseAll={handleOpenFilesCloseAll}
+              bordered={false}
+            />
+          )}
+
           <div ref={treeHostWrapperRef} className="flex-1 min-h-0 overflow-hidden px-1 pb-3">
             {loading ? (
               <p className="px-3 py-2 text-[12px] text-dim animate-pulse">Loading…</p>
@@ -1427,47 +1467,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
               />
             )}
           </div>
-
-          {openFileIds.length > 0 ? (
-            <>
-              <div
-                role="separator"
-                aria-label="Resize open files section"
-                aria-orientation="horizontal"
-                aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
-                aria-valuemax={maxOpenFilesSectionHeight}
-                aria-valuenow={openFilesSectionHeight}
-                tabIndex={0}
-                className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
-                onMouseDown={handleOpenFilesSectionResizeMouseDown}
-                onKeyDown={handleOpenFilesSectionResizeKeyDown}
-                onDoubleClick={handleOpenFilesSectionResizeReset}
-              >
-                <div className="flex h-2 items-center">
-                  <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
-                </div>
-              </div>
-              <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
-                <OpenFilesSection
-                  openFileIds={openFileIds}
-                  activeFileId={activeFileId}
-                  onSelect={onFileSelect}
-                  onClose={handleOpenFileClose}
-                  onCloseAll={handleOpenFilesCloseAll}
-                  bordered={false}
-                  className="h-full"
-                />
-              </div>
-            </>
-          ) : (
-            <OpenFilesSection
-              openFileIds={openFileIds}
-              activeFileId={activeFileId}
-              onSelect={onFileSelect}
-              onClose={handleOpenFileClose}
-              onCloseAll={handleOpenFilesCloseAll}
-            />
-          )}
         </>
       )}
 

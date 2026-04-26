@@ -1,7 +1,6 @@
 export const KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY = 'pa:knowledge-open-files-section-height';
-export const DEFAULT_OPEN_FILES_SECTION_HEIGHT = 184;
+export const DEFAULT_OPEN_FILES_SECTION_HEIGHT = 260;
 export const MIN_OPEN_FILES_SECTION_HEIGHT = 88;
-export const MAX_OPEN_FILES_SECTION_HEIGHT = 360;
 
 type StorageLike = Pick<Storage, 'getItem' | 'removeItem' | 'setItem'>;
 
@@ -22,7 +21,7 @@ export function clampOpenFilesSectionHeight(value: number): number {
     return DEFAULT_OPEN_FILES_SECTION_HEIGHT;
   }
 
-  return Math.min(MAX_OPEN_FILES_SECTION_HEIGHT, Math.max(MIN_OPEN_FILES_SECTION_HEIGHT, Math.round(value)));
+  return Math.max(MIN_OPEN_FILES_SECTION_HEIGHT, Math.round(value));
 }
 
 export function readStoredOpenFilesSectionHeight(storage?: StorageLike): number {

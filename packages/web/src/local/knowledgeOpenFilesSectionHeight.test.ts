@@ -36,9 +36,9 @@ describe('knowledgeOpenFilesSectionHeight', () => {
     vi.stubGlobal('localStorage', createStorage());
   });
 
-  it('clamps stored heights into the supported range', () => {
+  it('clamps stored heights to the minimum without a fixed maximum', () => {
     expect(clampOpenFilesSectionHeight(24)).toBe(88);
-    expect(clampOpenFilesSectionHeight(512)).toBe(360);
+    expect(clampOpenFilesSectionHeight(512)).toBe(512);
   });
 
   it('persists non-default heights and restores them', () => {
