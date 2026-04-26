@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ScheduledTaskDetail } from '../shared/types';
-import { taskStatusMeta } from './ScheduledTaskPanel';
+import { shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -24,5 +24,11 @@ describe('ScheduledTaskPanel status presentation', () => {
       text: 'failed',
       cls: 'text-danger',
     });
+  });
+});
+
+describe('ScheduledTaskPanel editor capabilities', () => {
+  it('allows thread automations to choose a model', () => {
+    expect(shouldShowTaskModelControls({ targetType: 'conversation' })).toBe(true);
   });
 });

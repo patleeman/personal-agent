@@ -56,6 +56,10 @@ export function taskStatusMeta(task: ScheduledTaskDetail): { text: string; cls: 
   return { text: 'never run', cls: 'text-dim' };
 }
 
+export function shouldShowTaskModelControls(state: Pick<TaskFormState, 'targetType'>): boolean {
+  return state.targetType === 'background-agent' || state.targetType === 'conversation';
+}
+
 function createDefaultTaskFormState(): TaskFormState {
   return {
     title: '',
@@ -584,7 +588,7 @@ function TaskAdvancedMenu({
           )}
         </div>
 
-        {value.targetType !== 'conversation' && (
+        {shouldShowTaskModelControls(value) && (
           <>
             <div className="space-y-1.5">
               <span className={FIELD_LABEL_CLASS}>Model</span>
@@ -775,8 +779,8 @@ function TaskEditorForm({
     value.threadMode === 'existing'
       ? (selectedExistingThread?.label ?? 'Existing thread')
       : (value.threadMode === 'none' ? 'No thread' : null),
-    value.targetType !== 'conversation' && value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
-    value.targetType !== 'conversation' && value.thinkingLevel.trim() ? thinkingLabel : null,
+    value.model.trim() ? value.model.trim().split('/').pop() ?? value.model.trim() : null,
+    value.thinkingLevel.trim() ? thinkingLabel : null,
   ].filter((entry): entry is string => Boolean(entry));
   const advancedSummary = advancedSummaryParts.length > 0 ? advancedSummaryParts.join(' · ') : null;
   const visibleError = error ?? (submitAttempted ? validationError : null);
