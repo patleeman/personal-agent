@@ -235,7 +235,7 @@ describe('Sidebar', () => {
     expect(html).toContain('right-2.5');
   });
 
-  it('marks automation-owned threads and can filter the thread list to automation rows', () => {
+  it('filters automation-owned threads without labeling idle rows as active automation', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-auto', 'conv-human']));
     storage.setItem(buildSidebarNavSectionStorageKey('threads-filter'), 'automation');
 
@@ -258,7 +258,7 @@ describe('Sidebar', () => {
     });
 
     expect(html).toContain('Daily release brief');
-    expect(html).toContain('>auto<');
+    expect(html).not.toContain('>auto<');
     expect(html).not.toContain('Human thread');
     expect(html).not.toContain('No automation threads yet.');
   });
@@ -293,6 +293,7 @@ describe('Sidebar', () => {
     });
 
     expect(html).toContain('aria-label="Running conversation"');
+    expect(html).toContain('>auto<');
     expect(html).toContain('Morning briefing thread');
   });
 

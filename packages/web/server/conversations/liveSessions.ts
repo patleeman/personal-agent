@@ -2598,7 +2598,7 @@ export function getLiveSessions() {
     cwd: entry.cwd,
     sessionFile: resolveLiveSessionFile(entry.session) ?? '',
     title: resolveEntryTitle(entry),
-    isStreaming: entry.session.isStreaming,
+    isStreaming: entry.session.isStreaming && !entry.activeHiddenTurnCustomType,
     hasPendingHiddenTurn: hasQueuedOrActiveHiddenTurn(entry),
   }));
 }

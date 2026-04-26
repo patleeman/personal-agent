@@ -590,6 +590,30 @@ describe('parallel prompt job management', () => {
     expect(isLive('child-running')).toBe(false);
     expect(existsSync(jobsFile)).toBe(false);
   });
+
+  it('does not report hidden auto-mode turns as user-visible streaming sessions', () => {
+    setLiveEntry('session-hidden-auto-running', {
+      sessionId: 'session-hidden-auto-running',
+      cwd: '/tmp/workspace',
+      listeners: new Set(),
+      title: 'Hidden auto running',
+      autoTitleRequested: false,
+      lastContextUsageJson: null,
+      lastQueueStateJson: null,
+      pendingHiddenTurnCustomTypes: [],
+      activeHiddenTurnCustomType: 'conversation_automation_post_turn_review',
+      session: {
+        sessionFile: '/tmp/session-hidden-auto-running.jsonl',
+        isStreaming: true,
+      },
+    });
+
+    expect(getLiveSessions()).toContainEqual(expect.objectContaining({
+      id: 'session-hidden-auto-running',
+      isStreaming: false,
+      hasPendingHiddenTurn: true,
+    }));
+  });
 });
 
 describe('requestConversationWorkingDirectoryChange', () => {

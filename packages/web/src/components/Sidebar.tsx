@@ -3119,7 +3119,6 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
       ? dropTarget.position
       : null;
 
-    const isAutomation = automationConversationIdSet.has(session.id);
     const isAutomationRunning = runningAutomationConversationIdSet.has(session.id);
 
     return (
@@ -3129,7 +3128,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
         active={isDraftTab ? location.pathname === DRAFT_CONVERSATION_ROUTE : location.pathname === `/conversations/${session.id}`}
         pinned={pinned}
         canDrag={canDrag}
-        isAutomation={isAutomation}
+        isAutomation={isAutomationRunning}
         automationTitle={automationThreadTitleByConversationId.get(session.id)}
         isDragging={canDrag && draggingSessionId === session.id}
         dropPosition={dropPosition}
