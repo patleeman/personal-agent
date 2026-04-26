@@ -51,7 +51,8 @@ For UI architecture work, also run app build/tests and perform a visual check if
 2. [in progress] Extract draft/pending prompt hydration into controller hooks.
    - Extracted pending-initial-prompt acceptance/dispatch predicates into `pendingInitialPromptLogic`.
    - Extracted initial draft attachment hydration into `useInitialDraftAttachmentHydration`.
-3. Extract keyboard shortcut/event wiring into focused hooks.
+3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
+   - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
 4. Leave JSX migration for last; moving render chunks first tends to create shallow wrappers.
 
 ### 2. Desktop local API adapter split

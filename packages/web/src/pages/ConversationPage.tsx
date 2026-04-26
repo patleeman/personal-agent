@@ -12,6 +12,7 @@ import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAu
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
+import { useComposerModifierKeys, useVisualViewportKeyboardInset } from '../conversation/useConversationKeyboardState';
 import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -3080,7 +3081,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [preparingRelatedThreadContext, setPreparingRelatedThreadContext] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
-  const [keyboardInset, setKeyboardInset] = useState(0);
+  const keyboardInset = useVisualViewportKeyboardInset();
   const [attachments, setAttachments] = useState<File[]>([]);
   const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
@@ -3092,8 +3093,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [drawingsBusy, setDrawingsBusy] = useState(false);
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [dictationState, setDictationState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
-  const [composerAltHeld, setComposerAltHeld] = useState(false);
-  const [composerParallelHeld, setComposerParallelHeld] = useState(false);
+  const { composerAltHeld, composerParallelHeld } = useComposerModifierKeys();
   const [dragOver, setDragOver] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
   const [composerHistory, setComposerHistory] = useState<string[]>(() => readComposerHistory(composerHistoryScopeId));
@@ -3148,34 +3148,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }, []);
 
-  // Track keyboard open/close via visualViewport (mobile keyboard)
-  useEffect(() => {
-    const syncKeyboardInset = () => {
-      const visualViewport = window.visualViewport;
-      if (!visualViewport) {
-        setKeyboardInset(0);
-        return;
-      }
-
-      const nextInset = Math.max(
-        0,
-        Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop)),
-      );
-      setKeyboardInset((current) => (current === nextInset ? current : nextInset));
-    };
-
-    syncKeyboardInset();
-    window.addEventListener('resize', syncKeyboardInset);
-    window.visualViewport?.addEventListener('resize', syncKeyboardInset);
-    window.visualViewport?.addEventListener('scroll', syncKeyboardInset);
-
-    return () => {
-      window.removeEventListener('resize', syncKeyboardInset);
-      window.visualViewport?.removeEventListener('resize', syncKeyboardInset);
-      window.visualViewport?.removeEventListener('scroll', syncKeyboardInset);
-    };
-  }, []);
-
   useEffect(() => {
     if (!composerAttachmentsHydratedRef.current || (!draft && !id)) {
       return;
@@ -3207,28 +3179,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         // Ignore composer attachment persistence failures.
       });
   }, [attachments, draft, drawingAttachments, id]);
-
-  useEffect(() => {
-    function handleModifierChange(event: KeyboardEvent) {
-      setComposerAltHeld(event.altKey);
-      setComposerParallelHeld(event.ctrlKey || event.metaKey);
-    }
-
-    function resetModifierState() {
-      setComposerAltHeld(false);
-      setComposerParallelHeld(false);
-    }
-
-    window.addEventListener('keydown', handleModifierChange);
-    window.addEventListener('keyup', handleModifierChange);
-    window.addEventListener('blur', resetModifierState);
-
-    return () => {
-      window.removeEventListener('keydown', handleModifierChange);
-      window.removeEventListener('keyup', handleModifierChange);
-      window.removeEventListener('blur', resetModifierState);
-    };
-  }, []);
 
   useEffect(() => {
     setComposerHistory(readComposerHistory(composerHistoryScopeId));
