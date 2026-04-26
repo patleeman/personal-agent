@@ -311,63 +311,58 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func conversationListCard(_ item: SessionMeta, in section: ConversationListSectionGroup, includeCwdInSubtitle: Bool) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                path.append(item.id)
-            } label: {
-                HStack(spacing: 14) {
-                    ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
-                    Spacer(minLength: 12)
-                    Image(systemName: "chevron.right")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(CompanionTheme.textDim)
+        SwipeableConversationCard(
+            leadingTitle: section.id == "pinned" ? "Unpin" : "Pin",
+            leadingSystemImage: section.id == "pinned" ? "pin.slash" : "pin",
+            leadingTint: CompanionTheme.accent,
+            leadingAction: { Task { await session.togglePinned(item.id) } },
+            trailingTitle: "Archive",
+            trailingSystemImage: "archivebox",
+            trailingTint: .orange,
+            trailingAction: { Task { await session.toggleArchived(item.id) } }
+        ) {
+            HStack(spacing: 10) {
+                Button {
+                    path.append(item.id)
+                } label: {
+                    HStack(spacing: 14) {
+                        ConversationRow(session: item, includeCwdInSubtitle: includeCwdInSubtitle)
+                        Spacer(minLength: 12)
+                        Image(systemName: "chevron.right")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(CompanionTheme.textDim)
+                    }
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            Menu {
-                Button {
-                    Task { await session.togglePinned(item.id) }
+                Menu {
+                    Button {
+                        Task { await session.togglePinned(item.id) }
+                    } label: {
+                        Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+                    }
+                    Button {
+                        Task { await session.toggleArchived(item.id) }
+                    } label: {
+                        Label("Archive", systemImage: "archivebox")
+                    }
                 } label: {
-                    Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+                    Image(systemName: "ellipsis.circle")
+                        .font(.title3.weight(.medium))
+                        .foregroundStyle(CompanionTheme.textSecondary)
+                        .frame(width: 36, height: 36)
                 }
-                Button {
-                    Task { await session.toggleArchived(item.id) }
-                } label: {
-                    Label("Archive", systemImage: "archivebox")
-                }
-            } label: {
-                Image(systemName: "ellipsis.circle")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(CompanionTheme.textSecondary)
-                    .frame(width: 36, height: 36)
+                .buttonStyle(.plain)
+                .accessibilityLabel("Conversation actions")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Conversation actions")
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 16)
-        .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(CompanionTheme.panelBorder, lineWidth: 1)
-        }
-        .swipeActions(edge: .leading, allowsFullSwipe: false) {
-            Button {
-                Task { await session.togglePinned(item.id) }
-            } label: {
-                Label(section.id == "pinned" ? "Unpin" : "Pin", systemImage: section.id == "pinned" ? "pin.slash" : "pin")
+            .padding(.horizontal, 18)
+            .padding(.vertical, 16)
+            .background(CompanionTheme.panelRaised, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .stroke(CompanionTheme.panelBorder, lineWidth: 1)
             }
-            .tint(.accentColor)
-        }
-        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button {
-                Task { await session.toggleArchived(item.id) }
-            } label: {
-                Label("Archive", systemImage: "archivebox")
-            }
-            .tint(.orange)
         }
         .contextMenu {
             Button {
@@ -469,6 +464,101 @@ struct ConversationListView: View {
             }
             path = [firstConversationId]
         }
+    }
+}
+
+struct CompanionSwipeActionState: Equatable {
+    static let actionWidth: CGFloat = 96
+    static let openThreshold: CGFloat = 44
+
+    private(set) var offset: CGFloat = 0
+
+    mutating func update(translationWidth: CGFloat) {
+        offset = Self.clamped(translationWidth)
+    }
+
+    mutating func settle(translationWidth: CGFloat) {
+        if translationWidth > Self.openThreshold {
+            offset = Self.actionWidth
+        } else if translationWidth < -Self.openThreshold {
+            offset = -Self.actionWidth
+        } else {
+            offset = 0
+        }
+    }
+
+    mutating func close() {
+        offset = 0
+    }
+
+    private static func clamped(_ value: CGFloat) -> CGFloat {
+        min(max(value, -actionWidth), actionWidth)
+    }
+}
+
+private struct SwipeableConversationCard<Content: View>: View {
+    let leadingTitle: String
+    let leadingSystemImage: String
+    let leadingTint: Color
+    let leadingAction: () -> Void
+    let trailingTitle: String
+    let trailingSystemImage: String
+    let trailingTint: Color
+    let trailingAction: () -> Void
+    @ViewBuilder var content: () -> Content
+
+    @State private var swipeState = CompanionSwipeActionState()
+
+    var body: some View {
+        ZStack {
+            HStack(spacing: 0) {
+                swipeButton(title: leadingTitle, systemImage: leadingSystemImage, tint: leadingTint) {
+                    leadingAction()
+                    swipeState.close()
+                }
+
+                Spacer(minLength: 0)
+
+                swipeButton(title: trailingTitle, systemImage: trailingSystemImage, tint: trailingTint) {
+                    trailingAction()
+                    swipeState.close()
+                }
+            }
+            .background(CompanionTheme.panel, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+
+            content()
+                .offset(x: swipeState.offset)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12, coordinateSpace: .local)
+                        .onChanged { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            swipeState.update(translationWidth: value.translation.width)
+                        }
+                        .onEnded { value in
+                            guard abs(value.translation.width) > abs(value.translation.height) else { return }
+                            swipeState.settle(translationWidth: value.translation.width)
+                        }
+                )
+                .animation(.spring(response: 0.24, dampingFraction: 0.88), value: swipeState.offset)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private func swipeButton(title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.headline.weight(.semibold))
+                Text(title)
+                    .font(.caption2.weight(.semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(width: CompanionSwipeActionState.actionWidth)
+            .frame(maxHeight: .infinity)
+            .background(tint)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 }
 

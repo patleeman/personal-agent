@@ -77,6 +77,22 @@ final class PersonalAgentCompanionTests: XCTestCase {
         XCTAssertEqual(state.ordering.archivedSessionIds, ["conv-2"])
     }
 
+    func testConversationSwipeActionStateRevealsAndClampsActions() {
+        var state = CompanionSwipeActionState()
+
+        state.update(translationWidth: 240)
+        XCTAssertEqual(state.offset, CompanionSwipeActionState.actionWidth)
+
+        state.settle(translationWidth: 12)
+        XCTAssertEqual(state.offset, 0)
+
+        state.settle(translationWidth: -60)
+        XCTAssertEqual(state.offset, -CompanionSwipeActionState.actionWidth)
+
+        state.close()
+        XCTAssertEqual(state.offset, 0)
+    }
+
     func testCompanionSetupLinkParsesCustomPairURL() {
         let raw = "pa-companion://pair?base=http%3A%2F%2F192.168.1.23%3A3845&code=ABCD-EFGH-IJKL&label=Patrick%20Mac&hostInstanceId=host_123"
         let setupLink = CompanionSetupLink(rawString: raw)
