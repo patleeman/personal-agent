@@ -20,6 +20,7 @@ import { cx, EmptyState, LoadingState, Pill } from '../ui';
 interface WorkspaceExplorerProps {
   cwd: string | null;
   onDraftPrompt: (prompt: string) => void;
+  onOpenFile?: (file: { cwd: string; path: string }) => void;
   railOnly?: boolean;
 }
 
@@ -338,7 +339,7 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
   return <WorkspaceTreeRow {...props} />;
 }
 
-export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = false }: WorkspaceExplorerProps) {
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [rootListing, setRootListing] = useState<LoadState<WorkspaceDirectoryListing>>({ status: 'idle', data: null, error: null });
@@ -496,9 +497,13 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
         }
         return;
       }
+      if (cwd && onOpenFile) {
+        onOpenFile({ cwd, path: entry.path });
+        return;
+      }
       onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
     };
-  }, [loadDirectory, model, nodes, onDraftPrompt, root, workspaceEntryMap]);
+  }, [cwd, loadDirectory, model, nodes, onDraftPrompt, onOpenFile, root, workspaceEntryMap]);
 
   useEffect(() => {
     if (!railOnly) return;
@@ -639,6 +644,126 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, railOnly = false }: Work
           </>
         ) : null}
       </div>}
+    </div>
+  );
+}
+
+export function WorkspaceFileDocument({
+  cwd,
+  path,
+  onDraftPrompt,
+}: {
+  cwd: string;
+  path: string;
+  onDraftPrompt: (prompt: string) => void;
+}) {
+  const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
+  const [fileState, setFileState] = useState<LoadState<WorkspaceFileContent>>({ status: 'loading', data: null, error: null });
+  const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
+
+  const loadFile = useCallback(async (options?: { force?: boolean }) => {
+    setFileState((current) => ({ status: 'loading', data: current.data, error: null }));
+    setDiffState({ status: 'idle', data: null, error: null });
+    try {
+      const file = await api.workspaceFile(cwd, path, { force: options?.force });
+      setFileState({ status: 'idle', data: file, error: null });
+      if (file.gitStatus && !file.binary && !file.tooLarge) {
+        setDiffState({ status: 'loading', data: null, error: null });
+        const diff = await api.workspaceDiff(cwd, path);
+        setDiffState({ status: 'idle', data: diff, error: null });
+      }
+    } catch (error) {
+      setFileState({ status: 'idle', data: null, error: error instanceof Error ? error.message : String(error) });
+    }
+  }, [cwd, path]);
+
+  useEffect(() => {
+    void loadFile();
+  }, [loadFile]);
+
+  useEffect(() => {
+    writeStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, showDiff);
+  }, [showDiff]);
+
+  const selectedFile = fileState.data;
+  const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
+  const editorExtensions = useMemo(() => [
+    diffDecorationsField,
+    diffDecorationPlugin,
+    EditorView.lineWrapping,
+    EditorView.theme({
+      '&': { height: '100%', background: 'transparent' },
+      '.cm-scroller': { fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
+      '.workspace-added-line': { backgroundColor: 'rgba(34, 197, 94, 0.15)' },
+      '.workspace-deleted-lines': { backgroundColor: 'rgba(239, 68, 68, 0.12)', color: 'rgb(var(--color-danger, 239 68 68))', borderLeft: '2px solid rgba(239, 68, 68, 0.7)', padding: '2px 0 2px 8px', fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace)' },
+      '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
+      '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
+    }),
+    extensionForPath(selectedFile?.path ?? path),
+  ], [path, selectedFile?.path]);
+
+  const onEditorCreate = useCallback((view: EditorView) => {
+    view.dispatch({ effects: setDiffDecorations.of(diffSpec) });
+  }, [diffSpec]);
+
+  if (fileState.status === 'loading' && !selectedFile) {
+    return <LoadingState label="Opening file…" className="h-full justify-center" />;
+  }
+
+  if (fileState.error) {
+    return <EmptyState className="flex h-full flex-col justify-center px-5" title="File unavailable" body={fileState.error} />;
+  }
+
+  if (!selectedFile) {
+    return <EmptyState className="flex h-full flex-col justify-center px-5" title="File unavailable" body="No file is selected." />;
+  }
+
+  const root = selectedFile.root;
+
+  return (
+    <div className="flex h-full min-w-0 flex-col bg-base select-text">
+      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate font-mono text-[12px] font-semibold text-primary" title={selectedFile.path}>{selectedFile.path}</div>
+          <div className="text-[10px] text-dim">{formatBytes(selectedFile.size)} {selectedFile.binary ? '· binary' : ''} {selectedFile.tooLarge ? '· large' : ''}</div>
+        </div>
+        <WorkspaceStatusBadge status={selectedFile.gitStatus} />
+        {selectedFile.gitStatus && !selectedFile.binary && !selectedFile.tooLarge && (
+          <button type="button" className={cx('ui-toolbar-button text-[11px]', showDiff && 'text-accent')} onClick={() => setShowDiff((value) => !value)}>
+            {showDiff ? 'Diff on' : 'Diff off'}
+          </button>
+        )}
+        <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh file" onClick={() => { void loadFile(); }}>↻</button>
+      </div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {selectedFile.binary || (selectedFile.tooLarge && !selectedFile.content) ? (
+          <EmptyState
+            className="flex h-full flex-col justify-center px-5"
+            title={selectedFile.binary ? 'Binary file' : 'Large file'}
+            body="Metadata and git status are shown by default. Open anyway when you explicitly want to load the text."
+            action={!selectedFile.binary ? (
+              <button type="button" className="ui-action-button" onClick={() => { void loadFile({ force: true }); }}>Open anyway</button>
+            ) : undefined}
+          />
+        ) : (
+          <CodeMirror
+            value={selectedFile.content ?? ''}
+            height="100%"
+            basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
+            editable={false}
+            readOnly={true}
+            theme={oneDark}
+            extensions={editorExtensions}
+            onCreateEditor={onEditorCreate}
+            key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}
+          />
+        )}
+      </div>
+      <div className="flex items-center gap-2 border-t border-border-subtle px-3 py-2">
+        <button type="button" className="ui-toolbar-button text-[11px]" onClick={() => onDraftPrompt(buildPrompt(root, 'explain this file', selectedFile.path))}>Ask about file</button>
+        <button type="button" className="ui-toolbar-button text-[11px]" onClick={() => onDraftPrompt(buildPrompt(root, 'rename this file', selectedFile.path))}>Rename</button>
+        <button type="button" className="ui-toolbar-button text-[11px] text-danger" onClick={() => onDraftPrompt(buildPrompt(root, 'delete this file after confirming it is safe', selectedFile.path))}>Delete</button>
+      </div>
     </div>
   );
 }

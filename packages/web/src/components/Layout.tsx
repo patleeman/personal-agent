@@ -26,6 +26,7 @@ const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
 const ContextRail = lazy(() => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
 const VaultFileTree = lazy(() => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
 const WorkspaceExplorer = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
+const WorkspaceFileDocument = lazy(() => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceFileDocument })));
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
@@ -438,7 +439,11 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
     : [];
 }
 
-function WorkbenchDocumentPane() {
+function WorkbenchDocumentPane({
+  workspaceFile,
+}: {
+  workspaceFile: { cwd: string; path: string } | null;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
   const fileName = activeFileId
@@ -454,6 +459,20 @@ function WorkbenchDocumentPane() {
       navigateKnowledgeFile(setSearchParams, newId, { replace: true });
     }
   }, [activeFileId, setSearchParams]);
+
+  if (!activeFileId && workspaceFile) {
+    return (
+      <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Opening file…</div>}>
+        <WorkspaceFileDocument
+          cwd={workspaceFile.cwd}
+          path={workspaceFile.path}
+          onDraftPrompt={(prompt) => {
+            window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
+          }}
+        />
+      </Suspense>
+    );
+  }
 
   if (!activeFileId) {
     return (
@@ -479,13 +498,27 @@ function WorkbenchDocumentPane() {
   );
 }
 
-function WorkbenchKnowledgeRail({ workspaceCwd }: { workspaceCwd: string | null }) {
+function WorkbenchKnowledgeRail({
+  workspaceCwd,
+  onWorkspaceFileSelect,
+}: {
+  workspaceCwd: string | null;
+  onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
+}) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [railMode, setRailMode] = useState<'knowledge' | 'files'>('knowledge');
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
     navigateKnowledgeFile(setSearchParams, id);
   }, [setSearchParams]);
+  const handleWorkspaceFileSelect = useCallback((file: { cwd: string; path: string }) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('file');
+      return next;
+    });
+    onWorkspaceFileSelect(file);
+  }, [onWorkspaceFileSelect, setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -516,6 +549,7 @@ function WorkbenchKnowledgeRail({ workspaceCwd }: { workspaceCwd: string | null 
               <WorkspaceExplorer
                 cwd={workspaceCwd}
                 railOnly
+                onOpenFile={handleWorkspaceFileSelect}
                 onDraftPrompt={(prompt) => {
                   window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
                 }}
@@ -536,6 +570,7 @@ export function Layout() {
   const { sessions } = useAppData();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
+  const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<{ cwd: string; path: string } | null>(null);
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
@@ -618,6 +653,13 @@ export function Layout() {
   const activeWorkspaceCwd = activeConversationId
     ? sessions?.find((session) => session.id === activeConversationId && !session.remoteHostId)?.cwd ?? null
     : null;
+
+  useEffect(() => {
+    setActiveWorkspaceFile((current) => (
+      current && current.cwd === activeWorkspaceCwd ? current : null
+    ));
+  }, [activeWorkspaceCwd]);
+
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
         railOpen: showContextRail,
@@ -716,7 +758,7 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden border-x border-border-subtle bg-base select-text"
                     aria-label="Workbench note"
                   >
-                    <WorkbenchDocumentPane />
+                    <WorkbenchDocumentPane workspaceFile={activeWorkspaceFile} />
                   </section>
                   <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
                   <aside
@@ -724,7 +766,7 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden bg-surface select-text"
                     aria-label="Workbench sidebar"
                   >
-                    <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} />
+                    <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} onWorkspaceFileSelect={setActiveWorkspaceFile} />
                   </aside>
                 </>
               ) : null}
