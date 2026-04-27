@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   buildPiResourceArgs: vi.fn(),
   materializeProfileToAgentDir: vi.fn(),
   resolveResourceProfile: vi.fn(),
+  resolveNeutralChatCwd: vi.fn(),
   bootstrapStateOrThrow: vi.fn(),
   preparePiAgentDir: vi.fn(),
   resolveChildProcessEnv: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('@personal-agent/core', () => ({
   preparePiAgentDir: mocks.preparePiAgentDir,
   resolveChildProcessEnv: mocks.resolveChildProcessEnv,
   resolveResourceProfile: mocks.resolveResourceProfile,
+  resolveNeutralChatCwd: mocks.resolveNeutralChatCwd,
   resolveStatePaths: mocks.resolveStatePaths,
   validateStatePathsOutsideRepo: mocks.validateStatePathsOutsideRepo,
 }));
@@ -103,6 +105,7 @@ beforeEach(() => {
     root: '/tmp/state-root',
     authFile: '/tmp/auth.json',
   });
+  mocks.resolveNeutralChatCwd.mockReturnValue('/tmp/state-root/pi-agent-runtime/chat-workspaces/shared');
   mocks.bootstrapStateOrThrow.mockResolvedValue(undefined);
   mocks.preparePiAgentDir.mockResolvedValue({ agentDir: '/tmp/pi-agent' });
   mocks.resolveChildProcessEnv.mockImplementation((overrides: Record<string, string>) => ({
@@ -270,6 +273,36 @@ describe('runTaskInIsolatedPi', () => {
         'Run nightly checks',
       ]),
       expect.any(Object),
+    );
+  });
+
+  it('runs tasks without an explicit cwd in the neutral Chat workspace', async () => {
+    const repoRoot = createTempDir('tasks-runner-repo-');
+    const runsRoot = createTempDir('tasks-runner-runs-');
+
+    mocks.resolveResourceProfile.mockReturnValue({
+      name: 'shared',
+      repoRoot,
+    });
+
+    const child = createMockChildProcess();
+    mocks.spawn.mockReturnValue(child);
+
+    const promise = runTaskInIsolatedPi({
+      task: createTask(),
+      attempt: 1,
+      runsRoot,
+    });
+
+    await waitForCondition(() => mocks.spawn.mock.calls.length === 1);
+    child.emit('close', 0, null);
+    await promise;
+
+    expect(mocks.resolveNeutralChatCwd).toHaveBeenCalledWith('shared', '/tmp/state-root');
+    expect(mocks.spawn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Array),
+      expect.objectContaining({ cwd: '/tmp/state-root/pi-agent-runtime/chat-workspaces/shared' }),
     );
   });
 

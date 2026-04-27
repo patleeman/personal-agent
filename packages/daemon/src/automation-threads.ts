@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { getDurableSessionsDir, listStoredSessions } from '@personal-agent/core';
+import { getDurableSessionsDir, listStoredSessions, resolveNeutralChatCwd } from '@personal-agent/core';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
 import {
   getStoredAutomation,
@@ -69,7 +69,7 @@ function resolveExistingSessionFile(input: {
 function ensureDedicatedThread(task: StoredAutomation, options: { dbPath?: string; stateRoot?: string }): StoredAutomation {
   const expectedSessionFile = readOptionalString(task.threadSessionFile);
   const expectedConversationId = readOptionalString(task.threadConversationId);
-  const desiredCwd = task.cwd ?? process.cwd();
+  const desiredCwd = task.cwd ?? resolveNeutralChatCwd(task.profile, options.stateRoot);
   const desiredTitle = desiredAutomationThreadTitle(task);
 
   if (expectedSessionFile && existsSync(expectedSessionFile)) {

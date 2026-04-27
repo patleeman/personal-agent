@@ -55,6 +55,24 @@ describe('ensureAutomationThread', () => {
     expect((persisted.match(/"type":"session_info"/g) ?? [])).toHaveLength(1);
   });
 
+  it('uses the neutral Chat workspace for dedicated automation threads without an explicit cwd', () => {
+    const stateRoot = createTempDir('pa-automation-thread-state-');
+    const dbPath = join(stateRoot, 'runtime.db');
+    const task = createStoredAutomation({
+      dbPath,
+      profile: 'assistant',
+      title: 'Morning check-in',
+      cron: '0 9 * * *',
+      prompt: 'Start the morning check-in.',
+    });
+
+    const ensured = ensureAutomationThread(task.id, { dbPath, stateRoot });
+
+    const session = SessionManager.open(ensured.threadSessionFile as string);
+    expect(session.getCwd()).toBe(join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'assistant'));
+    expect(existsSync(session.getCwd())).toBe(true);
+  });
+
   it('keeps existing-thread bindings intact when the session exists', () => {
     const stateRoot = createTempDir('pa-automation-thread-state-');
     const dbPath = join(stateRoot, 'runtime.db');

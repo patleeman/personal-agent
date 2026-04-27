@@ -67,7 +67,7 @@ function createDefaultTaskFormState(): TaskFormState {
     scheduleMode: 'cron',
     cronEditor: createCronEditorState('0 9 * * 1-5'),
     atValue: '',
-    runIn: 'worktree',
+    runIn: 'local',
     projectPath: '',
     threadMode: 'dedicated',
     threadConversationId: '',
@@ -912,7 +912,7 @@ function TaskEditorForm({
                     ))}
                   </InlineSelect>
                 ) : (
-                  <span className="text-[12px] text-secondary">Local workspace</span>
+                  <span className="text-[12px] text-secondary">Chat</span>
                 )}
               </div>
             </div>

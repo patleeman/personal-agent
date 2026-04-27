@@ -12,7 +12,7 @@
  * - PERSONAL_AGENT_CACHE_PATH: Override cache directory
  */
 
-import { existsSync, readFileSync, realpathSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'fs';
 import { homedir } from 'os';
 import { basename, dirname, join, resolve } from 'path';
 
@@ -56,6 +56,13 @@ export function getPiAgentStateDir(stateRoot: string = getStateRoot()): string {
 
 export function getPiAgentRuntimeDir(stateRoot: string = getStateRoot()): string {
   return join(stateRoot, 'pi-agent-runtime');
+}
+
+export function resolveNeutralChatCwd(profile: string, stateRoot: string = getStateRoot()): string {
+  const safeProfile = profile.trim().replace(/[^a-zA-Z0-9._-]+/g, '-') || 'default';
+  const cwd = join(getPiAgentRuntimeDir(stateRoot), 'chat-workspaces', safeProfile);
+  mkdirSync(cwd, { recursive: true });
+  return cwd;
 }
 
 /**

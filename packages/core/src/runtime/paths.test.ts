@@ -28,12 +28,13 @@ import {
   getDurableMemoryDir,
   getDurableTasksDir,
   getDurableProjectsDir,
+  resolveNeutralChatCwd,
   resolveStatePaths,
   isPathInRepo,
   validateStatePathsOutsideRepo,
   type RuntimeStatePaths,
 } from './paths.js';
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 
@@ -82,6 +83,20 @@ describe('getStateRoot', () => {
   it('should fall back to default state root', () => {
     delete process.env.PERSONAL_AGENT_STATE_ROOT;
     expect(getStateRoot()).toBe(getDefaultStateRoot());
+  });
+});
+
+describe('resolveNeutralChatCwd', () => {
+  it('returns and creates the profile-scoped neutral Chat workspace', () => {
+    const stateRoot = mkdtempSync(join(tmpdir(), 'pa-neutral-chat-cwd-'));
+    try {
+      const cwd = resolveNeutralChatCwd('shared/profile', stateRoot);
+
+      expect(cwd).toBe(join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'shared-profile'));
+      expect(existsSync(cwd)).toBe(true);
+    } finally {
+      rmSync(stateRoot, { recursive: true, force: true });
+    }
   });
 });
 

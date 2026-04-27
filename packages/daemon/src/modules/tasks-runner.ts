@@ -13,6 +13,7 @@ import {
   bootstrapStateOrThrow,
   preparePiAgentDir,
   resolveChildProcessEnv,
+  resolveNeutralChatCwd,
   resolveStatePaths,
   validateStatePathsOutsideRepo,
 } from '@personal-agent/core';
@@ -404,7 +405,7 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
     const prepared: PreparedTaskRunCommand = {
       command: piCommand.command,
       args: [...piCommand.argsPrefix, ...args],
-      cwd: request.task.cwd ?? process.cwd(),
+      cwd: request.task.cwd ?? resolveNeutralChatCwd(resolvedProfile.name, statePaths.root),
       env: resolveChildProcessEnv(envOverrides),
     };
 

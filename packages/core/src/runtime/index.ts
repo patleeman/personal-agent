@@ -11,6 +11,7 @@ export {
   getStateRoot,
   getPiAgentStateDir,
   getPiAgentRuntimeDir,
+  resolveNeutralChatCwd,
   getDefaultConfigRoot,
   getConfigRoot,
   getDefaultVaultRoot,
