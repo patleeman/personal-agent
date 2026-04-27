@@ -50,7 +50,10 @@ import { resolveConversationCwd, resolveNeutralChatCwd } from './conversationCwd
 import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
-import { buildRelatedConversationContext } from './relatedConversationContext.js';
+import {
+  RELATED_THREADS_CONTEXT_CUSTOM_TYPE,
+  buildRelatedConversationContext,
+} from './relatedConversationContext.js';
 
 export interface LiveSessionCapabilityContext {
   getCurrentProfile: () => string;
@@ -488,6 +491,28 @@ interface PreparedLiveSessionPrompt {
   sourceSessionFile?: string;
 }
 
+function hasConversationTranscriptContent(conversationId: string): boolean {
+  const liveEntry = liveRegistry.get(conversationId);
+  const liveStateMessages = (liveEntry?.session as { state?: { messages?: unknown[] } } | undefined)?.state?.messages;
+  if ((liveStateMessages?.length ?? 0) > 0) {
+    return true;
+  }
+
+  return (readSessionBlocks(conversationId, { tailBlocks: 1 })?.totalBlocks ?? 0) > 0;
+}
+
+function filterPromptContextMessagesForConversationSeed(input: {
+  conversationId: string;
+  contextMessages: Array<{ customType: string; content: string }>;
+}): Array<{ customType: string; content: string }> {
+  const hasRelatedThreadContext = input.contextMessages.some((message) => message.customType === RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
+  if (!hasRelatedThreadContext || !hasConversationTranscriptContent(input.conversationId)) {
+    return input.contextMessages;
+  }
+
+  return input.contextMessages.filter((message) => message.customType !== RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
+}
+
 async function prepareLiveSessionPrompt(
   input: {
     conversationId: string;
@@ -647,8 +672,12 @@ export async function submitLiveSessionPromptCapability(
   const prepared = await prepareLiveSessionPrompt(input, context);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
+  const promptContextMessages = filterPromptContextMessagesForConversationSeed({
+    conversationId: liveConversationId,
+    contextMessages: prepared.normalizedContextMessages,
+  });
 
-  for (const message of prepared.normalizedContextMessages) {
+  for (const message of promptContextMessages) {
     await queuePromptContext(liveConversationId, message.customType, message.content);
   }
 
@@ -674,9 +703,9 @@ export async function submitLiveSessionPromptCapability(
               })),
             }
           : {}),
-        ...(prepared.normalizedContextMessages.length > 0
+        ...(promptContextMessages.length > 0
           ? {
-              contextMessages: prepared.normalizedContextMessages,
+              contextMessages: promptContextMessages,
             }
           : {}),
         enqueuedAt: new Date().toISOString(),
@@ -761,13 +790,17 @@ export async function submitLiveSessionParallelPromptCapability(
 }> {
   const prepared = await prepareLiveSessionPrompt(input, context);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
+  const promptContextMessages = filterPromptContextMessagesForConversationSeed({
+    conversationId: liveConversationId,
+    contextMessages: prepared.normalizedContextMessages,
+  });
   const parallel = await startParallelPromptSession(
     liveConversationId,
     {
       text: prepared.text,
       images: prepared.promptImages,
       attachmentRefs: prepared.referencedAttachments.map((attachment) => `${attachment.attachmentId} (rev ${attachment.revision})`),
-      contextMessages: prepared.normalizedContextMessages,
+      contextMessages: promptContextMessages,
     },
     buildLiveSessionOptions(context),
   );

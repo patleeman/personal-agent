@@ -162,6 +162,7 @@ vi.mock('../conversations/conversationService.js', () => ({
 }));
 
 vi.mock('../conversations/sessions.js', () => ({
+  appendConversationWorkspaceMetadata: vi.fn(),
   readSessionBlocks: readSessionBlocksMock,
   readSessionMeta: readSessionMetaMock,
 }));
@@ -430,6 +431,31 @@ describe('live session routes', () => {
     });
   });
 
+  it('allows related-thread context only while seeding an empty conversation', async () => {
+    createDesktopHarness();
+    isLiveMock.mockReturnValue(true);
+    readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
+
+    const promptRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({
+      params: { id: 'live-empty' },
+      body: {
+        contextMessages: [{
+          customType: 'related_threads_context',
+          content: 'Seed context from an older thread.',
+        }],
+        text: 'Start from this context.',
+      },
+    }), promptRes);
+
+    expect(queuePromptContextMock).toHaveBeenCalledWith(
+      'live-empty',
+      'related_threads_context',
+      'Seed context from an older thread.',
+    );
+    expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+  });
+
   it('handles prompt validation, hidden context injection, resumed sessions, and control conflicts', async () => {
     const flushLiveDeferredResumes = vi.fn(async () => {});
     createDesktopHarness({
@@ -473,7 +499,7 @@ describe('live session routes', () => {
     ]);
     listPendingBackgroundRunResultsMock.mockReturnValue([{ id: 'result-1', prompt: 'Background result.' }]);
     markBackgroundRunResultsDeliveredMock.mockReturnValue(['result-1']);
-    readSessionBlocksMock.mockReturnValue({ meta: { file: '/sessions/stored.jsonl' } });
+    readSessionBlocksMock.mockReturnValue({ meta: { file: '/sessions/stored.jsonl' }, totalBlocks: 5 });
     liveRegistry.set('stored-session', {
       session: { sessionFile: '/sessions/stored.jsonl' },
     });
@@ -504,7 +530,7 @@ describe('live session routes', () => {
     await Promise.resolve();
 
     expect(flushLiveDeferredResumes).toHaveBeenCalled();
-    expect(queuePromptContextMock).toHaveBeenCalledWith(
+    expect(queuePromptContextMock).not.toHaveBeenCalledWith(
       'live-resumed',
       'related_threads_context',
       'Summaries from selected threads.',
@@ -523,10 +549,9 @@ describe('live session routes', () => {
       conversationId: 'live-resumed',
       pendingOperation: expect.objectContaining({
         behavior: 'followUp',
-        contextMessages: expect.arrayContaining([
+        contextMessages: expect.not.arrayContaining([
           expect.objectContaining({
             customType: 'related_threads_context',
-            content: 'Summaries from selected threads.',
           }),
         ]),
         text: 'Please continue.',
