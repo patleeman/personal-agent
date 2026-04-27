@@ -74,6 +74,12 @@ function renderProbe(input: { sessions: SessionMeta[]; tasks: ScheduledTaskSumma
   document.body.appendChild(container);
   const root = createRoot(container);
 
+  renderProbeIntoRoot(root, input);
+
+  mountedRoots.push(root);
+}
+
+function renderProbeIntoRoot(root: Root, input: { sessions: SessionMeta[]; tasks: ScheduledTaskSummary[] | null }) {
   act(() => {
     root.render(
       <SseConnectionContext.Provider value={{ status: 'offline' }}>
@@ -94,8 +100,6 @@ function renderProbe(input: { sessions: SessionMeta[]; tasks: ScheduledTaskSumma
       </SseConnectionContext.Provider>,
     );
   });
-
-  mountedRoots.push(root);
 }
 
 async function flushAsyncWork() {
@@ -120,6 +124,7 @@ describe('useConversations', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     while (mountedRoots.length > 0) {
       const root = mountedRoots.pop();
       act(() => {
@@ -170,5 +175,32 @@ describe('useConversations', () => {
 
     const expired = applyRunningIndicatorGrace(staleSnapshot, runningUntilBySessionId, 7_000, 5_000);
     expect(expired[0]).toMatchObject({ isRunning: false, needsAttention: true });
+  });
+
+  it('clears the sticky running indicator after the grace window without waiting for another snapshot', () => {
+    vi.useFakeTimers();
+    localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-running']));
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push(root);
+
+    renderProbeIntoRoot(root, {
+      sessions: [createSession({ id: 'conv-running', isRunning: true })],
+      tasks: null,
+    });
+    expect(latestHookResult?.tabs[0]?.isRunning).toBe(true);
+
+    renderProbeIntoRoot(root, {
+      sessions: [createSession({ id: 'conv-running', isRunning: false })],
+      tasks: null,
+    });
+    expect(latestHookResult?.tabs[0]?.isRunning).toBe(true);
+
+    act(() => {
+      vi.advanceTimersByTime(751);
+    });
+    expect(latestHookResult?.tabs[0]?.isRunning).toBe(false);
+    vi.useRealTimers();
   });
 });

@@ -37,6 +37,29 @@ import type { SessionMeta } from '../shared/types';
 
 const RUNNING_INDICATOR_GRACE_MS = 750;
 
+function getNextRunningIndicatorGraceExpiration(
+  sessions: SessionMeta[],
+  runningUntilBySessionId: Map<string, number>,
+  nowMs: number,
+): number | null {
+  let nextExpiration: number | null = null;
+
+  for (const session of sessions) {
+    if (session.isRunning) {
+      continue;
+    }
+
+    const runningUntil = runningUntilBySessionId.get(session.id) ?? 0;
+    if (runningUntil <= nowMs) {
+      continue;
+    }
+
+    nextExpiration = nextExpiration === null ? runningUntil : Math.min(nextExpiration, runningUntil);
+  }
+
+  return nextExpiration;
+}
+
 function compareSessionsByRecentActivity(left: SessionMeta, right: SessionMeta): number {
   return (right.lastActivityAt ?? right.timestamp).localeCompare(left.lastActivityAt ?? left.timestamp);
 }
@@ -103,6 +126,7 @@ export function useConversations() {
   const { status: sseStatus } = useSseConnection();
   const seenRunningAutomationIdsRef = useRef<Set<string>>(new Set());
   const runningIndicatorGraceBySessionIdRef = useRef<Map<string, number>>(new Map());
+  const [runningIndicatorGraceClock, setRunningIndicatorGraceClock] = useState(0);
 
   useEffect(() => {
     function handleConversationLayoutChanged() {
@@ -254,8 +278,25 @@ export function useConversations() {
 
   const sessionsWithRunningGrace = useMemo(
     () => applyRunningIndicatorGrace(sessions ?? [], runningIndicatorGraceBySessionIdRef.current, Date.now()),
-    [sessions],
+    [runningIndicatorGraceClock, sessions],
   );
+
+  useEffect(() => {
+    const nextExpiration = getNextRunningIndicatorGraceExpiration(
+      sessions ?? [],
+      runningIndicatorGraceBySessionIdRef.current,
+      Date.now(),
+    );
+    if (nextExpiration === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setRunningIndicatorGraceClock((value) => value + 1);
+    }, Math.max(0, nextExpiration - Date.now()) + 1);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [runningIndicatorGraceClock, sessions]);
 
   const withTitles = useMemo(() => sessionsWithRunningGrace.map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
