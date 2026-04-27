@@ -2,12 +2,14 @@ import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { ChatRenderItem } from './transcriptItems.js';
 
 export type ChatViewPerformanceMode = 'default' | 'aggressive';
-export const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
+export interface ChatWindowingProfile {
   contentVisibilityThreshold: number;
   windowingThreshold: number;
   windowingChunkSize: number;
   windowingOverscanChunks: number;
-}> = {
+}
+
+export const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, ChatWindowingProfile> = {
   default: {
     contentVisibilityThreshold: 120,
     windowingThreshold: 240,
@@ -33,6 +35,12 @@ export interface ChatRenderChunk {
   startMessageIndex: number;
   endMessageIndex: number;
   spanCount: number;
+}
+
+export interface ChatRenderChunkLayout extends ChatRenderChunk {
+  top: number;
+  height: number;
+  bottom: number;
 }
 
 export function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageIndexOffset: number): { start: number; end: number } {

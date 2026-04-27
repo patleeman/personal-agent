@@ -2,7 +2,7 @@ import React, { memo, useCallback, useEffect, useMemo, useState, type RefObject 
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
-import { buildChatRenderChunks, CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT, formatWindowingCount, resolveChunkIndexForOffset, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
+import { CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, formatWindowingCount, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
 import { ErrorBlock, SubagentBlock, ThinkingBlock, TraceClusterBlock } from './TraceBlocks.js';
 import { ImageBlock, ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { AssistantMessage, ContextMessage, SummaryMessage, UserMessage } from './MessageBlocks.js';
@@ -11,6 +11,7 @@ import { ToolBlock } from './ToolBlock.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
 import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
+import { useChatWindowing } from './useChatWindowing.js';
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
@@ -122,13 +123,18 @@ export const ChatView = memo(function ChatView({
     [contentVisibilityReady, shouldUseContentVisibility],
   );
 
-  const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= renderingProfile.windowingThreshold;
-  const renderChunks = useMemo(
-    () => (shouldWindowTranscript ? buildChatRenderChunks(renderItems, messageIndexOffset, renderingProfile.windowingChunkSize) : []),
-    [messageIndexOffset, renderItems, renderingProfile.windowingChunkSize, shouldWindowTranscript],
-  );
-  const [viewport, setViewport] = useState<{ scrollTop: number; clientHeight: number } | null>(null);
-  const [chunkHeights, setChunkHeights] = useState<Record<string, number>>({});
+  const {
+    shouldWindowTranscript,
+    renderChunks,
+    visibleChunkRange,
+    updateChunkHeight,
+  } = useChatWindowing({
+    scrollContainerRef,
+    renderItems,
+    messageIndexOffset,
+    renderingProfile,
+    focusMessageIndex,
+  });
   const [selectedImage, setSelectedImage] = useState<InspectableImage | null>(null);
   const {
     selectionContextMenu,
@@ -158,85 +164,6 @@ export const ChatView = memo(function ChatView({
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [selectedImage]);
-
-  useEffect(() => {
-    if (!shouldWindowTranscript) {
-      setViewport(null);
-      return;
-    }
-
-    const scrollEl = scrollContainerRef?.current;
-    if (!scrollEl) {
-      return;
-    }
-
-    let frame = 0;
-    const sync = () => {
-      frame = 0;
-      const next = {
-        scrollTop: scrollEl.scrollTop,
-        clientHeight: scrollEl.clientHeight,
-      };
-      setViewport((current) => (
-        current && current.scrollTop === next.scrollTop && current.clientHeight === next.clientHeight
-          ? current
-          : next
-      ));
-    };
-    const scheduleSync = () => {
-      if (frame !== 0) {
-        return;
-      }
-
-      frame = window.requestAnimationFrame(sync);
-    };
-
-    scheduleSync();
-    scrollEl.addEventListener('scroll', scheduleSync, { passive: true });
-    window.addEventListener('resize', scheduleSync);
-
-    return () => {
-      scrollEl.removeEventListener('scroll', scheduleSync);
-      window.removeEventListener('resize', scheduleSync);
-      if (frame !== 0) {
-        window.cancelAnimationFrame(frame);
-      }
-    };
-  }, [shouldWindowTranscript, scrollContainerRef]);
-
-  const averageSpanHeight = useMemo(() => {
-    const measurements = renderChunks
-      .map((chunk) => ({ height: chunkHeights[chunk.key], spanCount: chunk.spanCount }))
-      .filter((entry): entry is { height: number; spanCount: number } => typeof entry.height === 'number' && entry.height > 0 && entry.spanCount > 0);
-
-    if (measurements.length === 0) {
-      return CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT;
-    }
-
-    const totalHeight = measurements.reduce((sum, entry) => sum + entry.height, 0);
-    const totalSpans = measurements.reduce((sum, entry) => sum + entry.spanCount, 0);
-    return totalSpans > 0 ? totalHeight / totalSpans : CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT;
-  }, [chunkHeights, renderChunks]);
-
-  const chunkLayouts = useMemo(() => {
-    let top = 0;
-    return renderChunks.map((chunk) => {
-      const estimatedHeight = Math.max(1, chunk.spanCount * averageSpanHeight);
-      const height = chunkHeights[chunk.key] ?? estimatedHeight;
-      const layout = {
-        ...chunk,
-        top,
-        height,
-        bottom: top + height,
-      };
-      top += height;
-      return layout;
-    });
-  }, [averageSpanHeight, chunkHeights, renderChunks]);
-
-  const updateChunkHeight = useCallback((chunkKey: string, height: number) => {
-    setChunkHeights((current) => (current[chunkKey] === height ? current : { ...current, [chunkKey]: height }));
-  }, []);
 
   const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
     const isTailItem = itemIndex === renderItems.length - 1;
@@ -374,51 +301,6 @@ export const ChatView = memo(function ChatView({
       </div>
     ) : null;
   }, [activeArtifactId, activeCheckpointId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isInlineRunExpanded, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenCheckpoint, onOpenFilePath, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync, toggleInlineRun]);
-
-  const visibleChunkRange = useMemo(() => {
-    if (!shouldWindowTranscript || chunkLayouts.length === 0) {
-      return null;
-    }
-
-    const totalHeight = chunkLayouts[chunkLayouts.length - 1]?.bottom ?? 0;
-    const tops = chunkLayouts.map((chunk) => chunk.top);
-    const heights = chunkLayouts.map((chunk) => chunk.height);
-    const focusChunkIndex = focusMessageIndex === null
-      ? -1
-      : chunkLayouts.findIndex((chunk) => focusMessageIndex >= chunk.startMessageIndex && focusMessageIndex <= chunk.endMessageIndex);
-
-    let startChunkIndex: number;
-    let endChunkIndex: number;
-
-    if (viewport === null) {
-      const anchorChunkIndex = focusChunkIndex >= 0 ? focusChunkIndex : chunkLayouts.length - 1;
-      startChunkIndex = Math.max(0, anchorChunkIndex - renderingProfile.windowingOverscanChunks);
-      endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + renderingProfile.windowingOverscanChunks);
-    } else {
-      const viewportTop = Math.max(0, viewport.scrollTop);
-      const viewportBottom = viewportTop + Math.max(1, viewport.clientHeight);
-      const firstVisibleChunkIndex = resolveChunkIndexForOffset(viewportTop, tops, heights);
-      const lastVisibleChunkIndex = resolveChunkIndexForOffset(viewportBottom, tops, heights);
-      startChunkIndex = Math.max(0, firstVisibleChunkIndex - renderingProfile.windowingOverscanChunks);
-      endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + renderingProfile.windowingOverscanChunks);
-
-      if (focusChunkIndex >= 0 && (focusChunkIndex < startChunkIndex || focusChunkIndex > endChunkIndex)) {
-        startChunkIndex = Math.max(0, focusChunkIndex - renderingProfile.windowingOverscanChunks);
-        endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + renderingProfile.windowingOverscanChunks);
-      }
-    }
-
-    const topSpacerHeight = startChunkIndex > 0 ? chunkLayouts[startChunkIndex].top : 0;
-    const bottomSpacerHeight = endChunkIndex < chunkLayouts.length - 1
-      ? Math.max(0, totalHeight - chunkLayouts[endChunkIndex].bottom)
-      : 0;
-
-    return {
-      chunks: chunkLayouts.slice(startChunkIndex, endChunkIndex + 1),
-      topSpacerHeight,
-      bottomSpacerHeight,
-    };
-  }, [chunkLayouts, focusMessageIndex, renderingProfile.windowingOverscanChunks, shouldWindowTranscript, viewport]);
 
   const fullTranscript = (
     <div className="space-y-4">
