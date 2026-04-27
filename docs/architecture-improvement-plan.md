@@ -62,6 +62,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted composer chrome icons, browse-path button, action icons, and shell state-class resolution into `ConversationComposerChrome` with server-render/pure tests.
    - Extracted browser dictation capture and base64 audio encoding into `conversationComposerDictation` with focused boundary tests.
    - Extracted conversation model-list loading into `useConversationModels`, and moved deferred-resume timestamp formatting into `deferredResumeIndicator` with coverage.
+   - Extracted related-thread visible-result merging and selection toggling into `relatedThreadSelection` with focused tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

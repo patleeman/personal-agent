@@ -203,6 +203,7 @@ import { closeConversationTab, ensureConversationTabOpen } from '../session/sess
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
+import { selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } from '../conversation/relatedThreadSelection';
 import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
@@ -2101,76 +2102,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }),
     [draftCwdValue, relatedThreadCandidates, relatedThreadSummaries],
   );
-  const visibleRelatedThreadResults = useMemo<RelatedConversationSearchResult[]>(() => {
-    const baseResults = debouncedRelatedThreadsQuery.trim().length > 0
-      ? relatedThreadSearchResults
-      : recentClosedThreadResults;
-    const results: RelatedConversationSearchResult[] = [];
-    const seen = new Set<string>();
-
-    for (const sessionId of selectedRelatedThreadIds) {
-      if (seen.has(sessionId)) {
-        continue;
-      }
-
-      const existing = baseResults.find((result) => result.sessionId === sessionId);
-      if (existing) {
-        results.push(existing);
-        seen.add(sessionId);
-        continue;
-      }
-
-      const session = relatedThreadCandidateById.get(sessionId);
-      if (!session) {
-        continue;
-      }
-
-      const normalizedSnippet = (relatedThreadSearchIndex[sessionId] ?? '').replace(/\s+/g, ' ').trim();
-      const summary = relatedThreadSummaries[sessionId];
-      const snippet = normalizedSnippet.length > 140
-        ? `${normalizedSnippet.slice(0, 139).trimEnd()}…`
-        : normalizedSnippet;
-      const sameWorkspace = Boolean(draftCwdValue && session.cwd === draftCwdValue);
-      results.push({
-        sessionId,
-        title: session.title,
-        cwd: session.cwd,
-        timestamp: session.lastActivityAt ?? session.timestamp,
-        snippet: summary?.displaySummary ?? snippet,
-        matchedTerms: [],
-        score: Number.MAX_SAFE_INTEGER - results.length,
-        sameWorkspace,
-        ...(summary ? { summary, reason: sameWorkspace ? 'Same workspace' : undefined } : {}),
-      });
-      seen.add(sessionId);
-    }
-
-    for (const result of baseResults) {
-      if (seen.has(result.sessionId)) {
-        continue;
-      }
-
-      results.push(result);
-      seen.add(result.sessionId);
-      if (results.length >= MAX_VISIBLE_RELATED_THREAD_RESULTS) {
-        break;
-      }
-    }
-
-    return results.slice(0, MAX_VISIBLE_RELATED_THREAD_RESULTS);
-  }, [debouncedRelatedThreadsQuery, draftCwdValue, recentClosedThreadResults, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, relatedThreadSummaries, selectedRelatedThreadIds]);
+  const visibleRelatedThreadResults = useMemo<RelatedConversationSearchResult[]>(() => selectVisibleRelatedThreadResults({
+    selectedRelatedThreadIds,
+    query: debouncedRelatedThreadsQuery,
+    searchResults: relatedThreadSearchResults,
+    recentResults: recentClosedThreadResults,
+    candidateById: relatedThreadCandidateById,
+    searchIndex: relatedThreadSearchIndex,
+    summaries: relatedThreadSummaries,
+    workspaceCwd: draftCwdValue || null,
+    limit: MAX_VISIBLE_RELATED_THREAD_RESULTS,
+  }), [debouncedRelatedThreadsQuery, draftCwdValue, recentClosedThreadResults, relatedThreadCandidateById, relatedThreadSearchIndex, relatedThreadSearchResults, relatedThreadSummaries, selectedRelatedThreadIds]);
   const toggleRelatedThreadSelection = useCallback((sessionId: string) => {
     setSelectedRelatedThreadIds((current) => {
-      if (current.includes(sessionId)) {
-        return current.filter((candidate) => candidate !== sessionId);
-      }
-
-      if (current.length >= MAX_RELATED_THREAD_SELECTIONS) {
+      const result = toggleRelatedThreadSelectionIds({
+        current,
+        sessionId,
+        maxSelections: MAX_RELATED_THREAD_SELECTIONS,
+      });
+      if (result.rejected) {
         showNotice('danger', `Choose up to ${MAX_RELATED_THREAD_SELECTIONS} related threads.`, 2500);
-        return current;
       }
-
-      return [...current, sessionId];
+      return result.next;
     });
   }, [showNotice]);
   const branchLabel = liveSessionContext?.branch ?? null;
