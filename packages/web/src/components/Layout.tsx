@@ -24,6 +24,7 @@ import { cx } from './ui';
 
 const DESKTOP_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
 const DESKTOP_NAVIGATE_EVENT = 'personal-agent-desktop-navigate';
+const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
 const ContextRail = lazyRouteWithRecovery('layout-context-rail', () => import('./ContextRail').then((module) => ({ default: module.ContextRail })));
 const VaultFileTree = lazyRouteWithRecovery('layout-vault-file-tree', () => import('./knowledge/VaultFileTree').then((module) => ({ default: module.VaultFileTree })));
 const WorkspaceExplorer = lazyRouteWithRecovery('layout-workspace-explorer', () => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceExplorer })));
@@ -569,6 +570,7 @@ function WorkbenchKnowledgeRail({
 export function Layout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { sessions } = useAppData();
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
@@ -652,6 +654,7 @@ export function Layout() {
     || location.pathname.startsWith('/automations')
   );
   const activeConversationId = getActiveConversationId(location.pathname);
+  const activeWorkbenchKnowledgeFileId = showWorkbench ? searchParams.get('file') : null;
   const activeWorkspaceCwd = activeConversationId
     ? sessions?.find((session) => session.id === activeConversationId && !session.remoteHostId)?.cwd ?? null
     : null;
@@ -661,6 +664,24 @@ export function Layout() {
       current && current.cwd === activeWorkspaceCwd ? current : null
     ));
   }, [activeWorkspaceCwd]);
+
+  useEffect(() => {
+    function handleWorkbenchCloseActiveFile() {
+      if (activeWorkbenchKnowledgeFileId) {
+        setSearchParams((current) => {
+          const next = new URLSearchParams(current);
+          next.delete('file');
+          return next;
+        }, { replace: true });
+        return;
+      }
+
+      setActiveWorkspaceFile(null);
+    }
+
+    window.addEventListener(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT, handleWorkbenchCloseActiveFile);
+    return () => window.removeEventListener(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT, handleWorkbenchCloseActiveFile);
+  }, [activeWorkbenchKnowledgeFileId, setSearchParams]);
 
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
@@ -759,6 +780,8 @@ export function Layout() {
                     style={{ width: workbenchDocument.width }}
                     className="flex-shrink-0 overflow-hidden border-x border-border-subtle bg-base select-text"
                     aria-label="Workbench note"
+                    data-workbench-document-pane="true"
+                    data-has-open-file={activeWorkbenchKnowledgeFileId || activeWorkspaceFile ? 'true' : 'false'}
                   >
                     <WorkbenchDocumentPane workspaceFile={activeWorkspaceFile} />
                   </section>

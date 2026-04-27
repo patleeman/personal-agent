@@ -97,6 +97,8 @@ const THREADS_MANUAL_GROUP_ORDER_STORAGE_KEY = buildSidebarNavSectionStorageKey(
 
 const SIDEBAR_BROWSER_NEW_CHAT_HOTKEY = 'Ctrl+Shift+N';
 const DESKTOP_CONVERSATION_SHORTCUT_EVENT = 'personal-agent-desktop-shortcut';
+const WORKBENCH_CLOSE_ACTIVE_FILE_EVENT = 'pa:workbench-close-active-file';
+const WORKBENCH_DOCUMENT_WITH_OPEN_FILE_SELECTOR = '[data-workbench-document-pane="true"][data-has-open-file="true"]';
 const SETTINGS_ROUTE_PREFIXES = ['/settings', '/system', '/automations'] as const;
 
 type DesktopConversationShortcutAction =
@@ -703,6 +705,15 @@ function matchesLetterHotkey(event: KeyboardEvent, code: string, letter: string)
 
 function hasOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop') !== null;
+}
+
+function isFocusWithinWorkbenchOpenFile(): boolean {
+  const activeElement = document.activeElement;
+  if (!(activeElement instanceof Element)) {
+    return false;
+  }
+
+  return activeElement.closest(WORKBENCH_DOCUMENT_WITH_OPEN_FILE_SELECTOR) !== null;
 }
 
 function isMacPlatform(): boolean {
@@ -3151,6 +3162,11 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
       const isKnowledgeRoute = location.pathname.startsWith('/knowledge');
 
       if (action === 'close-conversation') {
+        if (isFocusWithinWorkbenchOpenFile()) {
+          window.dispatchEvent(new CustomEvent(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT));
+          return;
+        }
+
         if (isKnowledgeRoute) {
           emitKBEvent('kb:close-active-file');
           return;
