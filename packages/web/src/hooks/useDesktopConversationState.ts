@@ -195,12 +195,13 @@ export function useDesktopConversationState(
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     contextMessages?: Array<{ customType: string; content: string }>,
+    relatedConversationIds?: string[],
   ) => {
     if (!conversationId) {
       return;
     }
 
-    await api.promptSession(conversationId, text, behavior, images, attachmentRefs, surfaceId, contextMessages);
+    return await api.promptSession(conversationId, text, behavior, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds);
   }, [conversationId, surfaceId]);
 
   const parallel = useCallback(async (
@@ -208,12 +209,13 @@ export function useDesktopConversationState(
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     contextMessages?: Array<{ customType: string; content: string }>,
+    relatedConversationIds?: string[],
   ) => {
     if (!conversationId) {
       return;
     }
 
-    await api.parallelPromptSession(conversationId, text, images, attachmentRefs, surfaceId, contextMessages);
+    return await api.parallelPromptSession(conversationId, text, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds);
   }, [conversationId, surfaceId]);
 
   const manageParallelJob = useCallback(async (

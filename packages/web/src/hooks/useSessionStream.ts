@@ -404,14 +404,13 @@ export async function retryLiveSessionActionAfterTakeover<T>(input: {
   return input.attemptAction();
 }
 
-async function submitLivePromptWithControlRetry(input: {
-  attemptPrompt: () => Promise<void>;
+async function submitLivePromptWithControlRetry<T>(input: {
+  attemptPrompt: () => Promise<T>;
   waitForSurfaceRegistration: () => Promise<boolean>;
   takeOverSessionControl: () => Promise<unknown>;
-}): Promise<void> {
+}): Promise<T> {
   try {
-    await input.attemptPrompt();
-    return;
+    return await input.attemptPrompt();
   } catch (error) {
     if (!isLiveSessionControlError(error)) {
       throw error;
@@ -424,7 +423,7 @@ async function submitLivePromptWithControlRetry(input: {
   }
 
   await input.takeOverSessionControl();
-  await input.attemptPrompt();
+  return await input.attemptPrompt();
 }
 
 export function useSessionStream(sessionId: string | null, options?: { tailBlocks?: number; enabled?: boolean; registerSurface?: boolean }) {
@@ -491,8 +490,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     contextMessages?: Array<{ customType: string; content: string }>,
+    relatedConversationIds?: string[],
   ) => {
-    if (!normalizedSessionId) return;
+    if (!normalizedSessionId) return undefined;
 
     ensureRequestedSubscription();
 
@@ -524,8 +524,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     }
 
     try {
-      await submitLivePromptWithControlRetry({
-        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId, contextMessages).then(() => undefined),
+      return await submitLivePromptWithControlRetry({
+        attemptPrompt: () => api.promptSession(normalizedSessionId, text, behavior, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds),
         waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
         takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
       });
@@ -548,14 +548,15 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     images?: PromptImageInput[],
     attachmentRefs?: PromptAttachmentRefInput[],
     contextMessages?: Array<{ customType: string; content: string }>,
+    relatedConversationIds?: string[],
   ) => {
     if (!normalizedSessionId) {
       return;
     }
 
     ensureRequestedSubscription();
-    await submitLivePromptWithControlRetry({
-      attemptPrompt: () => api.parallelPromptSession(normalizedSessionId, text, images, attachmentRefs, surfaceId, contextMessages).then(() => undefined),
+    return await submitLivePromptWithControlRetry({
+      attemptPrompt: () => api.parallelPromptSession(normalizedSessionId, text, images, attachmentRefs, surfaceId, contextMessages, relatedConversationIds),
       waitForSurfaceRegistration: waitForCurrentSurfaceRegistration,
       takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
     });

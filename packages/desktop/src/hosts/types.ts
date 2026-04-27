@@ -260,6 +260,7 @@ export interface DesktopLiveSessionPromptRequest {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
   contextMessages?: Array<{ customType: string; content: string }>;
+  relatedConversationIds?: string[];
   surfaceId?: string;
 }
 
@@ -271,6 +272,7 @@ export interface DesktopLiveSessionPromptResult {
   referencedMemoryDocIds: string[];
   referencedVaultFileIds: string[];
   referencedAttachmentIds: string[];
+  relatedConversationPointerWarnings?: string[];
 }
 
 export interface DesktopLiveSessionParallelPromptRequest {
@@ -279,6 +281,7 @@ export interface DesktopLiveSessionParallelPromptRequest {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
   contextMessages?: Array<{ customType: string; content: string }>;
+  relatedConversationIds?: string[];
   surfaceId?: string;
 }
 
@@ -291,6 +294,7 @@ export interface DesktopLiveSessionParallelPromptResult {
   referencedMemoryDocIds: string[];
   referencedVaultFileIds: string[];
   referencedAttachmentIds: string[];
+  relatedConversationPointerWarnings?: string[];
 }
 
 export interface DesktopLiveSessionParallelJobRequest {

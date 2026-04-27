@@ -479,7 +479,7 @@ describe('conversation live state helpers', () => {
       hasPendingInitialPromptInFlight: false,
       isLiveSession: true,
       hasVisibleSessionDetail: false,
-    })).toBe('Summarizing 2 related threads…');
+    })).toBe('Preparing 2 related conversation pointers…');
 
     expect(resolveDisplayedConversationPendingStatusLabel({
       explicitLabel: null,
@@ -571,11 +571,9 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('aria-label="Conversation context"');
     expect(html).not.toContain('Show right sidebar');
     expect(html).toContain('Saved workspace');
-    expect(html).toContain('Use saved default workspace');
     expect(html).toContain('Choose workspace folder');
     expect(html).toContain('max-w-[38rem] text-left');
     expect(html).not.toContain('max-w-[72rem] text-left');
-    expect(html).toContain('More composer settings');
     expect(html).not.toContain('Browse…');
     expect(html).not.toContain('Start typing to create a conversation.');
     expect(html).not.toContain('Edit path');

@@ -5,10 +5,11 @@ import {
   readConversationSessionSignature,
   resolveConversationSessionFile,
 } from './conversationService.js';
+import { readConversationSummary } from './conversationSummaries.js';
 import { readSessionBlocksByFile, type DisplayBlock } from './sessions.js';
 
 export const CONVERSATION_INSPECT_SCOPE_VALUES = ['all', 'live', 'running', 'archived'] as const;
-export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff'] as const;
+export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff', 'outline', 'read_window'] as const;
 export const CONVERSATION_INSPECT_ORDER_VALUES = ['asc', 'desc'] as const;
 export const CONVERSATION_INSPECT_BLOCK_TYPE_VALUES = ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'] as const;
 
@@ -113,6 +114,24 @@ export interface DiffConversationInspectResult {
   firstReturnedBlockId: string | null;
   lastReturnedBlockId: string | null;
   blocks: InspectableConversationBlock[];
+}
+
+export interface ConversationInspectOutlineAnchor {
+  blockId: string;
+  blockIndex: number;
+  type: 'user' | 'summary';
+  label: string;
+  preview: string;
+}
+
+export interface ConversationInspectOutlineResult {
+  conversationId: string;
+  title: string;
+  cwd: string;
+  signature: string | null;
+  totalBlocks: number;
+  cachedPreview?: string;
+  anchors: ConversationInspectOutlineAnchor[];
 }
 
 function readOptionalString(value: unknown): string | undefined {
@@ -750,6 +769,105 @@ export function formatConversationInspectQueryResult(result: QueryConversationIn
     '',
     ...result.blocks.flatMap((block, index) => index === 0 ? [formatInspectableBlock(block)] : ['', formatInspectableBlock(block)]),
   ].join('\n');
+}
+
+function blockPreview(block: DisplayBlock, maxCharacters = 240): string {
+  return truncateText(buildBlockSearchText(block).replace(/\s+/g, ' ').trim(), maxCharacters).text;
+}
+
+function pushUniqueAnchor(
+  anchors: ConversationInspectOutlineAnchor[],
+  seen: Set<string>,
+  block: DisplayBlock,
+  index: number,
+  label: string,
+): void {
+  if (seen.has(block.id)) {
+    return;
+  }
+  if (block.type !== 'user' && block.type !== 'summary') {
+    return;
+  }
+
+  seen.add(block.id);
+  anchors.push({
+    blockId: block.id,
+    blockIndex: index,
+    type: block.type,
+    label,
+    preview: blockPreview(block),
+  });
+}
+
+export function outlineConversationInspectSession(input: {
+  conversationId?: unknown;
+  maxSnippetCharacters?: unknown;
+}): ConversationInspectOutlineResult {
+  const resolved = resolveConversationSession(input.conversationId);
+  const maxSnippetCharacters = normalizePositiveInteger(input.maxSnippetCharacters, 240, 2_000);
+  const summary = readConversationSummary(resolved.conversationId);
+  const anchors: ConversationInspectOutlineAnchor[] = [];
+  const seen = new Set<string>();
+  const userBlocks = resolved.blocks
+    .map((block, index) => ({ block, index }))
+    .filter((entry) => entry.block.type === 'user');
+
+  const firstUser = userBlocks[0];
+  if (firstUser) {
+    pushUniqueAnchor(anchors, seen, firstUser.block, firstUser.index, 'first user prompt');
+  }
+
+  for (const entry of resolved.blocks.map((block, index) => ({ block, index }))) {
+    if (entry.block.type === 'summary') {
+      pushUniqueAnchor(anchors, seen, entry.block, entry.index, entry.block.title);
+    }
+  }
+
+  for (const entry of userBlocks.slice(-3)) {
+    pushUniqueAnchor(anchors, seen, entry.block, entry.index, 'recent user prompt');
+  }
+
+  return {
+    conversationId: resolved.conversationId,
+    title: resolved.title,
+    cwd: resolved.cwd,
+    signature: resolved.signature,
+    totalBlocks: resolved.blocks.length,
+    ...(summary?.displaySummary ? { cachedPreview: truncateText(summary.displaySummary, maxSnippetCharacters).text } : {}),
+    anchors: anchors.map((anchor) => ({
+      ...anchor,
+      preview: truncateText(anchor.preview, maxSnippetCharacters).text,
+    })),
+  };
+}
+
+export function formatConversationInspectOutlineResult(result: ConversationInspectOutlineResult): string {
+  return [
+    `Conversation ${result.conversationId} — ${result.title}`,
+    `cwd: ${result.cwd}`,
+    `signature: ${result.signature ?? 'none'}`,
+    `blocks: ${result.totalBlocks}`,
+    ...(result.cachedPreview ? ['', `Cached preview: ${result.cachedPreview}`] : []),
+    '',
+    result.anchors.length > 0 ? 'Anchors:' : 'No outline anchors found.',
+    ...result.anchors.map((anchor) => `- [${anchor.blockIndex}] ${anchor.blockId} · ${anchor.type} · ${anchor.label}\n  ${anchor.preview}`),
+  ].join('\n');
+}
+
+export function readWindowConversationInspectBlocks(input: {
+  conversationId?: unknown;
+  aroundBlockId?: unknown;
+  window?: unknown;
+  maxCharactersPerBlock?: unknown;
+}): QueryConversationInspectResult {
+  return queryConversationInspectBlocks({
+    conversationId: input.conversationId,
+    aroundBlockId: input.aroundBlockId,
+    window: input.window,
+    order: 'asc',
+    limit: normalizePositiveInteger(input.window, DEFAULT_WINDOW, MAX_WINDOW) * 2 + 1,
+    maxCharactersPerBlock: input.maxCharactersPerBlock,
+  });
 }
 
 export function diffConversationInspectBlocks(input: {

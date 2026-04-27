@@ -2048,6 +2048,7 @@ export async function submitDesktopLiveSessionPrompt(input: {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   contextMessages?: Array<{ customType: string; content: string }>;
+  relatedConversationIds?: unknown;
   surfaceId?: string;
 }): Promise<{
   ok: true;
@@ -2067,6 +2068,7 @@ export async function submitDesktopLiveSessionParallelPrompt(input: {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   contextMessages?: Array<{ customType: string; content: string }>;
+  relatedConversationIds?: unknown;
   surfaceId?: string;
 }): Promise<{
   ok: true;

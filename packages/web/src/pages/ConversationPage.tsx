@@ -3281,29 +3281,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationCwdEditorOpen(false);
   }, [currentCwd]);
 
-  const preparePendingConversationPromptWithRelatedContext = useCallback(async (
-    prompt: PendingConversationPrompt,
-  ): Promise<PendingConversationPrompt> => {
-    if ((prompt.contextMessages?.length ?? 0) > 0) {
-      return prompt;
-    }
-
-    const relatedConversationIds = Array.from(new Set(
-      (prompt.relatedConversationIds ?? [])
-        .map((value) => value.trim())
-        .filter(Boolean),
-    ));
-    if (relatedConversationIds.length === 0) {
-      return prompt;
-    }
-
-    const relatedContext = await api.relatedConversationContext(relatedConversationIds, prompt.text);
-    return {
-      ...prompt,
-      relatedConversationIds,
-      contextMessages: relatedContext.contextMessages,
-    };
-  }, []);
+  const normalizePendingRelatedConversationIds = useCallback((prompt: PendingConversationPrompt): string[] => Array.from(new Set(
+    (prompt.relatedConversationIds ?? [])
+      .map((value) => value.trim())
+      .filter(Boolean),
+  )), []);
 
   useEffect(() => {
     if (!shouldAutoDispatchPendingInitialPrompt({
@@ -3352,20 +3334,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     void (async () => {
-      let preparedInitialPrompt = claimedInitialPrompt;
+      const preparedInitialPrompt = claimedInitialPrompt;
       try {
-        preparedInitialPrompt = await preparePendingConversationPromptWithRelatedContext(claimedInitialPrompt);
-        if (preparedInitialPrompt !== claimedInitialPrompt) {
-          persistPendingConversationPrompt(conversationId, preparedInitialPrompt);
-        }
-
-        await stream.send(
+        const sendResult = await stream.send(
           preparedInitialPrompt.text,
           normalizeConversationComposerBehavior(preparedInitialPrompt.behavior, allowQueuedPrompts),
           preparedInitialPrompt.images,
           preparedInitialPrompt.attachmentRefs,
           preparedInitialPrompt.contextMessages,
+          normalizePendingRelatedConversationIds(preparedInitialPrompt),
         );
+        for (const warning of sendResult?.relatedConversationPointerWarnings ?? []) {
+          showNotice('danger', warning, 5000);
+        }
         pendingInitialPromptSessionIdRef.current = null;
       } catch (error) {
         pendingInitialPromptSessionIdRef.current = null;
@@ -3386,7 +3367,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pendingInitialPrompt,
     pendingInitialPromptDispatching,
     allowQueuedPrompts,
-    preparePendingConversationPromptWithRelatedContext,
+    normalizePendingRelatedConversationIds,
     realMessages?.length,
     stream.hasSnapshot,
     stream.send,
@@ -4931,7 +4912,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             initialPrompt.behavior,
             initialPrompt.images,
             initialPrompt.attachmentRefs,
-          ).catch((error) => {
+          ).then((result) => {
+            for (const warning of result.relatedConversationPointerWarnings ?? []) {
+              showNotice('danger', warning, 5000);
+            }
+          }).catch((error) => {
             setPendingConversationPromptDispatching(newId, false);
             console.error('Initial prompt failed:', error);
           });

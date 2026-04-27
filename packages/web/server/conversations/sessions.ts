@@ -691,6 +691,7 @@ export function getAssistantErrorDisplayMessage(message: {
 }
 
 const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
+const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 
 function isInjectedContextMessage(message: DisplayMessageEntryLike['message']): boolean {
   return message.role === 'custom'
@@ -722,6 +723,19 @@ function resolveRelatedThreadsSummaryDetail(text: string): string {
   }
 
   return `${conversationCount} selected conversation${conversationCount === 1 ? '' : 's'} ${conversationCount === 1 ? 'was' : 'were'} summarized and injected before this prompt so this thread could start with reused context.`;
+}
+
+function formatRelatedConversationPointersText(text: string): string {
+  return text.replace(/\r\n/g, '\n').trim();
+}
+
+function resolveRelatedConversationPointersDetail(text: string): string {
+  const pointerCount = (text.match(/^\d+\.\s+/gm) ?? []).length;
+  if (pointerCount <= 0) {
+    return 'Related conversation pointers were offered before this prompt. Inspect a conversation before relying on its details.';
+  }
+
+  return `${pointerCount} related conversation pointer${pointerCount === 1 ? '' : 's'} ${pointerCount === 1 ? 'was' : 'were'} offered before this prompt. Inspect a conversation before relying on its details.`;
 }
 
 function normalizeSearchSegment(text: string, maxLength = 360): string {
@@ -922,6 +936,29 @@ function buildDisplayBlocksInternal(
           title: 'Reused thread summaries',
           text: relatedSummaryText,
           detail: resolveRelatedThreadsSummaryDetail(relatedSummaryText),
+        });
+      }
+      continue;
+    }
+
+    if (role === 'custom' && msg.message.customType === RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE) {
+      const pointerText = formatRelatedConversationPointersText(contentBlocks
+        .flatMap((block) => (
+          block.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0
+            ? [block.text.trim()]
+            : []
+        ))
+        .join('\n\n'));
+      if (pointerText) {
+        recordAnchor();
+        blocks.push({
+          type: 'summary',
+          id: baseId,
+          ts,
+          kind: 'related',
+          title: 'Related conversation pointers',
+          text: pointerText,
+          detail: resolveRelatedConversationPointersDetail(pointerText),
         });
       }
       continue;

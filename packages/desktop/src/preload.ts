@@ -275,6 +275,7 @@ const desktopBridge = {
     images?: Array<{ data: string; mimeType: string; name?: string }>;
     attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
     contextMessages?: Array<{ customType: string; content: string }>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-prompt`, input),
   submitLiveSessionParallelPrompt: (input: {
@@ -283,6 +284,7 @@ const desktopBridge = {
     images?: Array<{ data: string; mimeType: string; name?: string }>;
     attachmentRefs?: Array<{ attachmentId: string; revision?: number }>;
     contextMessages?: Array<{ customType: string; content: string }>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:submit-live-session-parallel-prompt`, input),
   manageLiveSessionParallelJob: (input: {

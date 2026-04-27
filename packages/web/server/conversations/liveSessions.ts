@@ -92,7 +92,6 @@ import {
 } from './liveSessionEvents.js';
 import { handleLiveSessionEvent } from './liveSessionEventHandling.js';
 import { executeLiveSessionBash } from './liveSessionBash.js';
-import { summarizeSessionFileForPromptWithLiveSession } from './liveSessionSummaries.js';
 import {
   inspectAvailableLiveSessionTools,
   type BeforeAgentStartProbeMessage,
@@ -615,23 +614,6 @@ export async function createSessionFromExisting(
     options,
     persistentSessionDir: resolvePersistentSessionDir(cwd),
     wireSession,
-  });
-}
-
-export async function summarizeSessionFileForPrompt(
-  sessionFile: string,
-  cwd: string,
-  prompt: string,
-  options: LiveSessionLoaderOptions = {},
-): Promise<string> {
-  return summarizeSessionFileForPromptWithLiveSession({
-    sessionFile,
-    cwd,
-    prompt,
-    agentDir: AGENT_DIR,
-    settingsFile: SETTINGS_FILE,
-    persistentSessionDir: resolvePersistentSessionDir(cwd),
-    options,
   });
 }
 

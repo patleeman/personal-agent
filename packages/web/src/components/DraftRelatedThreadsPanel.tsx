@@ -4,6 +4,7 @@ import { timeAgo } from '../shared/utils';
 import { Keycap, cx } from './ui';
 
 const DEFAULT_RELATED_THREAD_HOTKEY_LIMIT = 9;
+const WEAK_SELECTED_RELATED_THREAD_SCORE = 6;
 
 function formatMatchedTerms(result: RelatedConversationSearchResult): string {
   return result.matchedTerms
@@ -47,7 +48,7 @@ export function DraftRelatedThreadsPanel({
   }
 
   const statusText = busy
-    ? `Summarizing ${selectedCount}…`
+    ? `Preparing ${selectedCount}…`
     : loading
       ? 'Searching…'
       : error
@@ -78,6 +79,7 @@ export function DraftRelatedThreadsPanel({
             const hotkey = formatRowHotkey(index, hotkeyLimit);
             const detail = result.summary?.displaySummary || result.snippet;
             const reason = result.reason || (matchedTerms ? `Matches ${matchedTerms}` : 'Recent in this workspace');
+            const weakManualSelection = checked && !autoSelected && result.score < WEAK_SELECTED_RELATED_THREAD_SCORE;
             return (
               <label
                 key={result.sessionId}
@@ -113,6 +115,11 @@ export function DraftRelatedThreadsPanel({
                     {(detail || reason) && (
                       <span className={cx('mt-0.5 block min-w-0 truncate text-[11px] text-secondary', checked && 'text-accent/70')}>
                         {[detail, reason].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                    {weakManualSelection && (
+                      <span className="mt-0.5 block min-w-0 truncate text-[11px] text-warning/80">
+                        Weak match for this prompt; still included because you selected it.
                       </span>
                     )}
                   </span>

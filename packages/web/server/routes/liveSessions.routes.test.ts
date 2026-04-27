@@ -30,6 +30,7 @@ const {
   readGitStatusSummaryWithTelemetryMock,
   readSessionBlocksMock,
   readSessionMetaMock,
+  buildRelatedConversationPointersMock,
   reloadSessionResourcesMock,
   resolveConversationAttachmentPromptFilesMock,
   resolveConversationCwdMock,
@@ -43,7 +44,6 @@ const {
   submitLocalPromptSessionMock,
   subscribeLocalMock,
   summarizeAndForkSessionMock,
-  summarizeSessionFileForPromptMock,
   syncWebLiveConversationRunMock,
   takeOverSessionControlMock,
   buildReferencedMemoryDocsContextMock,
@@ -82,6 +82,7 @@ const {
   readGitStatusSummaryWithTelemetryMock: vi.fn(),
   readSessionBlocksMock: vi.fn(),
   readSessionMetaMock: vi.fn(),
+  buildRelatedConversationPointersMock: vi.fn(),
   reloadSessionResourcesMock: vi.fn(),
   resolveConversationAttachmentPromptFilesMock: vi.fn(),
   resolveConversationCwdMock: vi.fn(),
@@ -95,7 +96,6 @@ const {
   submitLocalPromptSessionMock: vi.fn(),
   subscribeLocalMock: vi.fn(),
   summarizeAndForkSessionMock: vi.fn(),
-  summarizeSessionFileForPromptMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
   takeOverSessionControlMock: vi.fn(),
   buildReferencedMemoryDocsContextMock: vi.fn(),
@@ -144,7 +144,6 @@ vi.mock('../conversations/liveSessions.js', () => ({
   submitPromptSession: submitLocalPromptSessionMock,
   subscribe: subscribeLocalMock,
   summarizeAndForkSession: summarizeAndForkSessionMock,
-  summarizeSessionFileForPrompt: summarizeSessionFileForPromptMock,
   takeOverSessionControl: takeOverSessionControlMock,
 }));
 
@@ -165,6 +164,11 @@ vi.mock('../conversations/sessions.js', () => ({
   appendConversationWorkspaceMetadata: vi.fn(),
   readSessionBlocks: readSessionBlocksMock,
   readSessionMeta: readSessionMetaMock,
+}));
+
+vi.mock('../conversations/relatedConversationPointers.js', () => ({
+  RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE: 'related_conversation_pointers',
+  buildRelatedConversationPointers: buildRelatedConversationPointersMock,
 }));
 
 vi.mock('../conversations/conversationCwd.js', () => ({
@@ -323,6 +327,7 @@ describe('live session routes', () => {
     readGitStatusSummaryWithTelemetryMock.mockReset();
     readSessionBlocksMock.mockReset();
     readSessionMetaMock.mockReset();
+    buildRelatedConversationPointersMock.mockReset();
     reloadSessionResourcesMock.mockReset();
     resolveConversationAttachmentPromptFilesMock.mockReset();
     resolveConversationCwdMock.mockReset();
@@ -379,6 +384,7 @@ describe('live session routes', () => {
     });
     readSessionBlocksMock.mockReturnValue(null);
     readSessionMetaMock.mockReturnValue(null);
+    buildRelatedConversationPointersMock.mockReturnValue({ contextMessages: [], pointers: [], warnings: [] });
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([]);
     resolveConversationCwdMock.mockReturnValue('/repo/worktree');
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
@@ -390,7 +396,6 @@ describe('live session routes', () => {
     submitLocalPromptSessionMock.mockResolvedValue({ acceptedAs: 'started', completion: Promise.resolve() });
     subscribeLocalMock.mockImplementation(() => createSessionListenerUnsubscribeMock);
     summarizeAndForkSessionMock.mockResolvedValue({ id: 'summary-fork-1' });
-    summarizeSessionFileForPromptMock.mockResolvedValue('Relevant summary');
     syncWebLiveConversationRunMock.mockResolvedValue(undefined);
     takeOverSessionControlMock.mockReturnValue({ ok: true, surfaceId: 'surface-1' });
     buildReferencedMemoryDocsContextMock.mockReturnValue('Memory docs context');
@@ -431,27 +436,33 @@ describe('live session routes', () => {
     });
   });
 
-  it('allows related-thread context only while seeding an empty conversation', async () => {
+  it('injects related conversation pointers only while seeding an empty conversation', async () => {
     createDesktopHarness();
     isLiveMock.mockReturnValue(true);
     readSessionBlocksMock.mockReturnValue({ totalBlocks: 0 });
+    buildRelatedConversationPointersMock.mockReturnValue({
+      contextMessages: [{ customType: 'related_conversation_pointers', content: 'Pointer list.' }],
+      pointers: [{ sessionId: 'related-1' }],
+      warnings: [],
+    });
 
     const promptRes = createResponse();
     await handleLiveSessionPrompt(createRequest({
       params: { id: 'live-empty' },
       body: {
-        contextMessages: [{
-          customType: 'related_threads_context',
-          content: 'Seed context from an older thread.',
-        }],
+        relatedConversationIds: ['related-1'],
         text: 'Start from this context.',
       },
     }), promptRes);
 
+    expect(buildRelatedConversationPointersMock).toHaveBeenCalledWith(expect.objectContaining({
+      currentConversationId: 'live-empty',
+      selectedSessionIds: ['related-1'],
+    }));
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'live-empty',
-      'related_threads_context',
-      'Seed context from an older thread.',
+      'related_conversation_pointers',
+      'Pointer list.',
     );
     expect(promptRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
   });

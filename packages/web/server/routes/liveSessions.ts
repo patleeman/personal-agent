@@ -28,7 +28,6 @@ import {
   submitLiveSessionPromptCapability,
   summarizeAndForkLiveSessionCapability,
   takeOverLiveSessionCapability,
-  relatedConversationContextCapability,
   type LiveSessionCapabilityContext,
 } from '../conversations/liveSessionCapability.js';
 import {
@@ -166,6 +165,7 @@ export async function handleLiveSessionPrompt(req: Request, res: Response): Prom
         : undefined,
       attachmentRefs: req.body?.attachmentRefs,
       contextMessages: req.body?.contextMessages,
+      relatedConversationIds: req.body?.relatedConversationIds,
       surfaceId: readRequestSurfaceId(req.body),
     }, getLiveSessionCapabilityContext());
     res.json(result);
@@ -199,6 +199,7 @@ export async function handleLiveSessionParallelPrompt(req: Request, res: Respons
         : undefined,
       attachmentRefs: req.body?.attachmentRefs,
       contextMessages: req.body?.contextMessages,
+      relatedConversationIds: req.body?.relatedConversationIds,
       surfaceId: readRequestSurfaceId(req.body),
     }, getLiveSessionCapabilityContext());
     res.json(result);
@@ -426,25 +427,6 @@ export function registerLiveSessionRoutes(
       }
 
       res.status(500).json({ error: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  router.post('/api/live-sessions/related-context', async (req, res) => {
-    try {
-      res.json(await relatedConversationContextCapability({
-        sessionIds: req.body?.sessionIds,
-        prompt: req.body?.prompt,
-      }, getLiveSessionCapabilityContext()));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (err instanceof LiveSessionCapabilityInputError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.status(500).json({ error: String(err) });
     }
   });
 

@@ -243,6 +243,7 @@ export interface LocalApiModule {
     images?: Array<{ data: string; mimeType: string; name?: string }>;
     attachmentRefs?: unknown;
     contextMessages?: Array<{ customType: string; content: string }>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }): Promise<{
     ok: true;
@@ -252,6 +253,7 @@ export interface LocalApiModule {
     referencedMemoryDocIds: string[];
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
+    relatedConversationPointerWarnings?: string[];
   }>;
   submitDesktopLiveSessionParallelPrompt(input: {
     conversationId: string;
@@ -259,6 +261,7 @@ export interface LocalApiModule {
     images?: Array<{ data: string; mimeType: string; name?: string }>;
     attachmentRefs?: unknown;
     contextMessages?: Array<{ customType: string; content: string }>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }): Promise<{
     ok: true;
@@ -269,6 +272,7 @@ export interface LocalApiModule {
     referencedMemoryDocIds: string[];
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
+    relatedConversationPointerWarnings?: string[];
   }>;
   manageDesktopLiveSessionParallelJob(input: {
     conversationId: string;

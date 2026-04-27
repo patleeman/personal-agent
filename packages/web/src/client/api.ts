@@ -831,6 +831,7 @@ export const api = {
     attachmentRefs?: PromptAttachmentRefInput[],
     surfaceId?: string,
     contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>,
+    relatedConversationIds?: string[],
   ) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
@@ -842,10 +843,11 @@ export const api = {
         images,
         attachmentRefs,
         contextMessages,
+        relatedConversationIds,
       });
     }
 
-    return post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued' }>(`/live-sessions/${id}/prompt`, {
+    return post<{ ok: boolean; accepted: boolean; delivery: 'started' | 'queued'; relatedConversationPointerWarnings?: string[] }>(`/live-sessions/${id}/prompt`, {
       text,
       behavior,
       ...(surfaceId ? { surfaceId } : {}),
@@ -863,6 +865,7 @@ export const api = {
         customType: message.customType,
         content: message.content,
       })),
+      relatedConversationIds,
     });
   },
   parallelPromptSession: async (
@@ -872,6 +875,7 @@ export const api = {
     attachmentRefs?: PromptAttachmentRefInput[],
     surfaceId?: string,
     contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>,
+    relatedConversationIds?: string[],
   ) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalConversationCapabilities(id)) {
@@ -882,10 +886,11 @@ export const api = {
         images,
         attachmentRefs,
         contextMessages,
+        relatedConversationIds,
       });
     }
 
-    return post<{ ok: boolean; accepted: boolean; jobId: string; childConversationId: string }>(`/live-sessions/${id}/parallel-prompt`, {
+    return post<{ ok: boolean; accepted: boolean; jobId: string; childConversationId: string; relatedConversationPointerWarnings?: string[] }>(`/live-sessions/${id}/parallel-prompt`, {
       text,
       ...(surfaceId ? { surfaceId } : {}),
       images: images?.map((image) => ({
@@ -902,6 +907,7 @@ export const api = {
         customType: message.customType,
         content: message.content,
       })),
+      relatedConversationIds,
     });
   },
   manageParallelPromptJob: async (
@@ -924,12 +930,6 @@ export const api = {
       action,
       ...(surfaceId ? { surfaceId } : {}),
     });
-  },
-  relatedConversationContext: async (sessionIds: string[], prompt: string) => {
-    return post<{ contextMessages: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> }>(
-      '/live-sessions/related-context',
-      { sessionIds, prompt },
-    );
   },
   executeLiveSessionBash: async (id: string, command: string, options?: { excludeFromContext?: boolean }) => {
     return post<{ ok: boolean; result: unknown }>(`/live-sessions/${id}/bash`, {

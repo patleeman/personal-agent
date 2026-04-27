@@ -348,6 +348,7 @@ export interface PersonalAgentDesktopBridge {
     images?: PromptImageInput[];
     attachmentRefs?: PromptAttachmentRefInput[];
     contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }): Promise<{
     ok: true;
@@ -357,6 +358,7 @@ export interface PersonalAgentDesktopBridge {
     referencedMemoryDocIds: string[];
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
+    relatedConversationPointerWarnings?: string[];
   }>;
   submitLiveSessionParallelPrompt(input: {
     conversationId: string;
@@ -364,6 +366,7 @@ export interface PersonalAgentDesktopBridge {
     images?: PromptImageInput[];
     attachmentRefs?: PromptAttachmentRefInput[];
     contextMessages?: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>>;
+    relatedConversationIds?: string[];
     surfaceId?: string;
   }): Promise<{
     ok: true;
@@ -374,6 +377,7 @@ export interface PersonalAgentDesktopBridge {
     referencedMemoryDocIds: string[];
     referencedVaultFileIds: string[];
     referencedAttachmentIds: string[];
+    relatedConversationPointerWarnings?: string[];
   }>;
   manageLiveSessionParallelJob(input: {
     conversationId: string;

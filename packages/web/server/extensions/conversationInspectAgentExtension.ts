@@ -7,11 +7,14 @@ import {
   CONVERSATION_INSPECT_SCOPE_VALUES,
   diffConversationInspectBlocks,
   formatConversationInspectDiffResult,
+  formatConversationInspectOutlineResult,
   formatConversationInspectQueryResult,
   formatConversationInspectSearchResult,
   formatConversationInspectSessionList,
+  outlineConversationInspectSession,
   listConversationInspectSessions,
   queryConversationInspectBlocks,
+  readWindowConversationInspectBlocks,
   searchConversationInspectSessions,
 } from '../conversations/conversationInspectCapability.js';
 
@@ -56,6 +59,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
       promptGuidelines: [
         'Use this tool when you need visibility into other active conversations or saved threads.',
         'Prefer list first to find the target conversation, then use search, query, or diff to inspect the transcript.',
+        'Use outline for a compact map of a pointed conversation, then read_window around relevant block ids.',
         'This tool is read-only. It does not message, steer, or modify other conversations.',
         'Cross-thread hidden reasoning is intentionally unavailable; query visible transcript blocks instead.',
         'Use diff with afterBlockId or knownSignature when you need a cheap follow-up read on a live thread.',
@@ -121,6 +125,38 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
               content: [{ type: 'text' as const, text: formatConversationInspectQueryResult(result) }],
               details: {
                 action: 'query',
+                ...result,
+              },
+            };
+          }
+
+          case 'outline': {
+            const result = outlineConversationInspectSession({
+              conversationId: params.conversationId,
+              maxSnippetCharacters: params.maxSnippetCharacters,
+            });
+
+            return {
+              content: [{ type: 'text' as const, text: formatConversationInspectOutlineResult(result) }],
+              details: {
+                action: 'outline',
+                ...result,
+              },
+            };
+          }
+
+          case 'read_window': {
+            const result = readWindowConversationInspectBlocks({
+              conversationId: params.conversationId,
+              aroundBlockId: params.aroundBlockId,
+              window: params.window,
+              maxCharactersPerBlock: params.maxCharactersPerBlock,
+            });
+
+            return {
+              content: [{ type: 'text' as const, text: formatConversationInspectQueryResult(result) }],
+              details: {
+                action: 'read_window',
                 ...result,
               },
             };

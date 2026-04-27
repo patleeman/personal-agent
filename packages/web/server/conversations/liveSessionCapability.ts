@@ -51,9 +51,8 @@ import { syncWebLiveConversationRun } from './conversationRuns.js';
 import { appendConversationWorkspaceMetadata } from './sessions.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import {
-  RELATED_THREADS_CONTEXT_CUSTOM_TYPE,
-  buildRelatedConversationContext,
-} from './relatedConversationContext.js';
+  buildRelatedConversationPointers,
+} from './relatedConversationPointers.js';
 
 export interface LiveSessionCapabilityContext {
   getCurrentProfile: () => string;
@@ -143,6 +142,7 @@ export interface SubmitLiveSessionPromptCapabilityInput {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   contextMessages?: unknown;
+  relatedConversationIds?: unknown;
   surfaceId?: string;
 }
 
@@ -152,6 +152,7 @@ export interface SubmitLiveSessionParallelPromptCapabilityInput {
   images?: Array<{ data: string; mimeType: string; name?: string }>;
   attachmentRefs?: unknown;
   contextMessages?: unknown;
+  relatedConversationIds?: unknown;
   surfaceId?: string;
 }
 
@@ -200,11 +201,6 @@ export interface ForkLiveSessionCapabilityInput {
 
 export interface SummarizeAndForkLiveSessionCapabilityInput {
   conversationId: string;
-}
-
-export interface RelatedConversationContextCapabilityInput {
-  sessionIds?: unknown;
-  prompt?: unknown;
 }
 
 export class LiveSessionCapabilityInputError extends Error {}
@@ -501,16 +497,49 @@ function hasConversationTranscriptContent(conversationId: string): boolean {
   return (readSessionBlocks(conversationId, { tailBlocks: 1 })?.totalBlocks ?? 0) > 0;
 }
 
-function filterPromptContextMessagesForConversationSeed(input: {
+const LEGACY_RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
+
+function withoutLegacyRelatedThreadSummaries(
+  contextMessages: Array<{ customType: string; content: string }>,
+): Array<{ customType: string; content: string }> {
+  return contextMessages.filter((message) => message.customType !== LEGACY_RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
+}
+
+function buildPromptContextMessagesForSubmit(input: {
   conversationId: string;
+  prompt: string;
+  currentCwd?: string;
+  selectedSessionIds?: unknown;
   contextMessages: Array<{ customType: string; content: string }>;
-}): Array<{ customType: string; content: string }> {
-  const hasRelatedThreadContext = input.contextMessages.some((message) => message.customType === RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
-  if (!hasRelatedThreadContext || !hasConversationTranscriptContent(input.conversationId)) {
-    return input.contextMessages;
+}): { contextMessages: Array<{ customType: string; content: string }>; warnings: string[] } {
+  const contextMessages = withoutLegacyRelatedThreadSummaries(input.contextMessages);
+  if (hasConversationTranscriptContent(input.conversationId)) {
+    return { contextMessages, warnings: [] };
   }
 
-  return input.contextMessages.filter((message) => message.customType !== RELATED_THREADS_CONTEXT_CUSTOM_TYPE);
+  try {
+    const pointers = buildRelatedConversationPointers({
+      prompt: input.prompt,
+      currentConversationId: input.conversationId,
+      currentCwd: input.currentCwd,
+      selectedSessionIds: input.selectedSessionIds,
+    });
+
+    return {
+      contextMessages: [...contextMessages, ...pointers.contextMessages],
+      warnings: pointers.warnings,
+    };
+  } catch (error) {
+    logWarn('related conversation pointer generation failed', {
+      conversationId: input.conversationId,
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
+    return {
+      contextMessages,
+      warnings: ['Related conversation pointers failed; sent without them.'],
+    };
+  }
 }
 
 async function prepareLiveSessionPrompt(
@@ -668,14 +697,19 @@ export async function submitLiveSessionPromptCapability(
   referencedMemoryDocIds: string[];
   referencedVaultFileIds: string[];
   referencedAttachmentIds: string[];
+  relatedConversationPointerWarnings?: string[];
 }> {
   const prepared = await prepareLiveSessionPrompt(input, context);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
-  const promptContextMessages = filterPromptContextMessagesForConversationSeed({
+  const promptContext = buildPromptContextMessagesForSubmit({
     conversationId: liveConversationId,
+    prompt: prepared.text,
+    currentCwd: recoveredLiveEntry?.cwd,
+    selectedSessionIds: input.relatedConversationIds,
     contextMessages: prepared.normalizedContextMessages,
   });
+  const promptContextMessages = promptContext.contextMessages;
 
   for (const message of promptContextMessages) {
     await queuePromptContext(liveConversationId, message.customType, message.content);
@@ -772,6 +806,7 @@ export async function submitLiveSessionPromptCapability(
     referencedMemoryDocIds: prepared.promptReferences.memoryDocIds,
     referencedVaultFileIds: prepared.referencedVaultFiles.map((file) => file.id),
     referencedAttachmentIds: prepared.referencedAttachments.map((attachment) => attachment.attachmentId),
+    ...(promptContext.warnings.length > 0 ? { relatedConversationPointerWarnings: promptContext.warnings } : {}),
   };
 }
 
@@ -787,13 +822,19 @@ export async function submitLiveSessionParallelPromptCapability(
   referencedMemoryDocIds: string[];
   referencedVaultFileIds: string[];
   referencedAttachmentIds: string[];
+  relatedConversationPointerWarnings?: string[];
 }> {
   const prepared = await prepareLiveSessionPrompt(input, context);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
-  const promptContextMessages = filterPromptContextMessagesForConversationSeed({
+  const recoveredLiveEntry = liveRegistry.get(liveConversationId);
+  const promptContext = buildPromptContextMessagesForSubmit({
     conversationId: liveConversationId,
+    prompt: prepared.text,
+    currentCwd: recoveredLiveEntry?.cwd,
+    selectedSessionIds: input.relatedConversationIds,
     contextMessages: prepared.normalizedContextMessages,
   });
+  const promptContextMessages = promptContext.contextMessages;
   const parallel = await startParallelPromptSession(
     liveConversationId,
     {
@@ -814,6 +855,7 @@ export async function submitLiveSessionParallelPromptCapability(
     referencedMemoryDocIds: prepared.promptReferences.memoryDocIds,
     referencedVaultFileIds: prepared.referencedVaultFiles.map((file) => file.id),
     referencedAttachmentIds: prepared.referencedAttachments.map((attachment) => attachment.attachmentId),
+    ...(promptContext.warnings.length > 0 ? { relatedConversationPointerWarnings: promptContext.warnings } : {}),
   };
 }
 
@@ -965,21 +1007,6 @@ export async function summarizeAndForkLiveSessionCapability(
   }
 
   return summarizeAndForkLiveSession(conversationId, buildLiveSessionOptions(context));
-}
-
-export async function relatedConversationContextCapability(
-  input: RelatedConversationContextCapabilityInput,
-  context: LiveSessionCapabilityContext,
-) {
-  try {
-    return await buildRelatedConversationContext({
-      sessionIds: input.sessionIds,
-      prompt: input.prompt,
-      loaderOptions: buildLiveSessionOptions(context),
-    });
-  } catch (error) {
-    throw new LiveSessionCapabilityInputError(error instanceof Error ? error.message : String(error));
-  }
 }
 
 export async function abortLiveSessionCapability(input: {
