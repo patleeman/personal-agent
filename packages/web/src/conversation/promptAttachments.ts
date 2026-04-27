@@ -164,6 +164,18 @@ export function base64ToFile(data: string, mimeType: string, name: string): File
   return new File([bytes], name, { type: mimeType });
 }
 
+export function screenshotCaptureImageToFile(image: {
+  data: string;
+  mimeType: string;
+  name?: string | null;
+}): File {
+  return base64ToFile(
+    image.data,
+    image.mimeType,
+    image.name?.trim() || 'Screenshot.png',
+  );
+}
+
 export function restoreQueuedImageFiles(
   images: PromptImageInput[] | undefined | null,
   behavior: 'steer' | 'followUp',

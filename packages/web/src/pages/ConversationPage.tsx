@@ -212,7 +212,6 @@ import { selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } fr
 import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
-  base64ToFile,
   buildComposerDrawingFromFile,
   buildPromptImages,
   createComposerDrawingLocalId,
@@ -221,6 +220,7 @@ import {
   isPotentialExcalidrawFile,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
+  screenshotCaptureImageToFile,
   type ComposerDrawingAttachment,
 } from '../conversation/promptAttachments';
 
@@ -3879,11 +3879,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
       setAttachments((current) => [
         ...current,
-        base64ToFile(
-          image.data,
-          image.mimeType,
-          image.name?.trim() || 'Screenshot.png',
-        ),
+        screenshotCaptureImageToFile(image),
       ]);
       textareaRef.current?.focus();
     } catch (error) {

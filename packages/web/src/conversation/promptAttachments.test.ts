@@ -8,6 +8,7 @@ import {
   isPotentialExcalidrawFile,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
+  screenshotCaptureImageToFile,
   type ComposerDrawingAttachment,
 } from './promptAttachments.js';
 
@@ -73,5 +74,23 @@ describe('promptAttachments', () => {
     expect(await file.text()).toBe('hello');
     expect(fileExtensionForMimeType('image/jpeg')).toBe('jpg');
     expect(fileExtensionForMimeType('image/webp')).toBe('webp');
+  });
+
+  it('converts screenshot captures to composer files with a stable fallback name', async () => {
+    const named = screenshotCaptureImageToFile({
+      data: globalThis.btoa('screenshot'),
+      mimeType: 'image/png',
+      name: '  Capture.png  ',
+    });
+    const fallback = screenshotCaptureImageToFile({
+      data: globalThis.btoa('fallback'),
+      mimeType: 'image/png',
+      name: '   ',
+    });
+
+    expect(named.name).toBe('Capture.png');
+    expect(await named.text()).toBe('screenshot');
+    expect(fallback.name).toBe('Screenshot.png');
+    expect(await fallback.text()).toBe('fallback');
   });
 });
