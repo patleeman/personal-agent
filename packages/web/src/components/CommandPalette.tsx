@@ -14,9 +14,11 @@ import {
   type CommandPaletteSection,
 } from '../commands/commandPalette';
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
+import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
 import { useConversations } from '../hooks/useConversations';
 import type { SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
+import { readAppLayoutMode } from '../ui-state/appLayoutMode';
 import { onKBEvent } from './knowledge/knowledgeEvents';
 import { cx } from './ui';
 
@@ -514,7 +516,13 @@ export function CommandPalette() {
           closePalette();
           return;
         case 'openFile':
-          navigate(`/knowledge?file=${encodeURIComponent(item.action.fileId)}`);
+          navigate(buildCommandPaletteFileOpenRoute({
+            pathname: location.pathname,
+            search: location.search,
+            hash: location.hash,
+            layoutMode: readAppLayoutMode(),
+            fileId: item.action.fileId,
+          }));
           closePalette();
           return;
         default:
@@ -525,7 +533,7 @@ export function CommandPalette() {
     } finally {
       setBusyItemId(null);
     }
-  }, [closePalette, navigate, openSession]);
+  }, [closePalette, location.hash, location.pathname, location.search, navigate, openSession]);
 
   useEffect(() => {
     if (!open) {
