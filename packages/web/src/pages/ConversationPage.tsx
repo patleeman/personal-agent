@@ -8,7 +8,7 @@ import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { AppPageEmptyState, EmptyState, IconButton, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, LiveSessionCreateResult, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
@@ -17,7 +17,7 @@ import { useWorkspaceComposerEvents } from '../conversation/useWorkspaceComposer
 import { MAX_RELATED_THREAD_HOTKEYS, useRelatedThreadHotkeys } from '../conversation/useRelatedThreadHotkeys';
 import { useDesktopConversationShortcuts } from '../conversation/useDesktopConversationShortcuts';
 import { hasBlockingConversationOverlay, useEscapeAbortStream } from '../conversation/useEscapeAbortStream';
-import { primeConversationBootstrapCache, useConversationBootstrap } from '../hooks/useConversationBootstrap';
+import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
@@ -88,6 +88,10 @@ import {
   resolveConversationGitSummaryPresentation,
   truncateConversationShelfText,
 } from '../conversation/conversationComposerPresentation';
+import {
+  isConversationSessionNotLiveError,
+  primeCreatedConversationOpenCaches,
+} from '../conversation/conversationSessionLifecycle';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import {
   THINKING_LEVEL_OPTIONS,
@@ -229,14 +233,6 @@ const MAX_RELATED_THREAD_SELECTIONS = 3;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
 const MAX_RELATED_THREAD_CANDIDATES = 24;
-
-function isConversationSessionNotLiveError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const normalized = message.trim().toLowerCase();
-  return normalized === 'session not live'
-    || normalized === 'not a live session'
-    || normalized.startsWith('session ') && normalized.endsWith(' is not live');
-}
 
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
@@ -1072,35 +1068,6 @@ function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
 
 function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
-}
-
-function primeCreatedConversationOpenCaches(
-  created: LiveSessionCreateResult,
-  options: {
-    tailBlocks: number;
-    bootstrapVersionKey: string;
-    sessionDetailVersion: number;
-  },
-): void {
-  if (!created.bootstrap) {
-    return;
-  }
-
-  primeConversationBootstrapCache(
-    created.id,
-    created.bootstrap,
-    { tailBlocks: options.tailBlocks },
-    options.bootstrapVersionKey,
-  );
-
-  if (created.bootstrap.sessionDetail) {
-    primeSessionDetailCache(
-      created.id,
-      created.bootstrap.sessionDetail,
-      { tailBlocks: options.tailBlocks },
-      options.sessionDetailVersion,
-    );
-  }
 }
 
 // ── ConversationPage ──────────────────────────────────────────────────────────
