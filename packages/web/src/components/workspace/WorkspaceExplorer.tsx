@@ -4,7 +4,7 @@ import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
-import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
+import { HighlightStyle, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { javascript } from '@codemirror/lang-javascript';
 import { json } from '@codemirror/lang-json';
 import { markdown } from '@codemirror/lang-markdown';
@@ -12,7 +12,7 @@ import { python } from '@codemirror/lang-python';
 import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { yaml } from '@codemirror/lang-yaml';
-import { oneDarkHighlightStyle } from '@codemirror/theme-one-dark';
+import { tags as t } from '@lezer/highlight';
 import { api } from '../../client/api';
 import { buildApiPath } from '../../client/apiBase';
 import type { WorkspaceDiffOverlay, WorkspaceDirectoryListing, WorkspaceEntry, WorkspaceFileContent, WorkspaceGitStatusChange } from '../../shared/types';
@@ -66,6 +66,25 @@ const STATUS_TITLES: Record<WorkspaceGitStatusChange, string> = {
   untracked: 'Untracked',
   conflicted: 'Conflicted',
 };
+
+const tokyoNightHighlightStyle = HighlightStyle.define([
+  { tag: t.keyword, color: '#bb9af7' },
+  { tag: [t.atom, t.bool, t.special(t.variableName)], color: '#ff9e64' },
+  { tag: [t.number, t.integer, t.float], color: '#ff9e64' },
+  { tag: [t.string, t.special(t.string), t.regexp], color: '#9ece6a' },
+  { tag: [t.escape, t.character], color: '#7dcfff' },
+  { tag: [t.definition(t.variableName), t.function(t.variableName), t.function(t.propertyName)], color: '#7aa2f7' },
+  { tag: [t.variableName, t.self], color: '#c0caf5' },
+  { tag: [t.className, t.typeName, t.namespace], color: '#2ac3de' },
+  { tag: [t.propertyName, t.attributeName], color: '#7dcfff' },
+  { tag: [t.operator, t.punctuation, t.bracket], color: '#89ddff' },
+  { tag: [t.comment, t.lineComment, t.blockComment], color: '#565f89', fontStyle: 'italic' },
+  { tag: [t.meta, t.labelName], color: '#bb9af7' },
+  { tag: [t.heading, t.strong], color: '#7aa2f7', fontWeight: '600' },
+  { tag: t.emphasis, fontStyle: 'italic' },
+  { tag: t.link, color: '#73daca', textDecoration: 'underline' },
+  { tag: t.invalid, color: '#f7768e' },
+]);
 
 const TREE_HOST_STYLE = {
   display: 'block',
@@ -336,7 +355,7 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
       '.workspace-deleted-line': { whiteSpace: 'pre', minHeight: '1.4em' },
       '.workspace-diff-marker': { display: 'inline-block', width: '1.5em', opacity: '0.75' },
     }, { dark: theme === 'dark' }),
-    syntaxHighlighting(theme === 'dark' ? oneDarkHighlightStyle : defaultHighlightStyle, { fallback: true }),
+    syntaxHighlighting(theme === 'dark' ? tokyoNightHighlightStyle : defaultHighlightStyle, { fallback: true }),
     extensionForPath(path),
   ];
 }

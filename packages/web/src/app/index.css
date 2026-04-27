@@ -1291,13 +1291,13 @@
   color-scheme: dark;
   --color-base:           26  27  38;
   --color-surface:        31  35  53;
-  --color-elevated:       43  49  72;
-  --color-panel:          36  40  59;
-  --color-border-subtle:  55  62  91;
-  --color-border-default: 75  83  118;
-  --color-primary:        228 233 255;
-  --color-secondary:      186 196 233;
-  --color-dim:            136 146 189;
+  --color-elevated:       41  46  66;
+  --color-panel:          22  22  30;
+  --color-border-subtle:  59  66  97;
+  --color-border-default: 65  72  104;
+  --color-primary:        192 202 245;
+  --color-secondary:      169 177 214;
+  --color-dim:            130 139 184;
   --color-accent:         187 154 247;
   --color-accent-bg:      78  61  120;
   --color-success:        158 206 106;
@@ -1306,12 +1306,12 @@
   --color-danger:         247 118 142;
   --color-teal:           125 207 255;
   --color-steel:          122 162 247;
-  --color-selection:      68  86  146;
-  --color-hover:          49  55  80;
-  --color-active:         60  68  98;
-  --color-terminal-surface: 11  14  19;
-  --color-terminal-chrome:  15  18  26;
-  --color-terminal-border:  43  49  72;
+  --color-selection:      54  65  117;
+  --color-hover:          41  46  66;
+  --color-active:         59  66  97;
+  --color-terminal-surface: 22  22  30;
+  --color-terminal-chrome:  26  27  38;
+  --color-terminal-border:  59  66  97;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
