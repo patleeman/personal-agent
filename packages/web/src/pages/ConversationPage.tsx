@@ -4,13 +4,14 @@ import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
+import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationPreferencesRow } from '../components/conversation/ConversationPreferencesRow';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { AppPageEmptyState, EmptyState, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ContextUsageSegment, ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
@@ -31,7 +32,7 @@ import { appendComposerHistory, readComposerHistory } from '../conversation/comp
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
-import { formatContextUsageLabel, formatThinkingLevelLabel, getContextUsagePercent } from '../conversation/conversationHeader';
+import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -364,49 +365,6 @@ function ComposerActionIcon({ label, className }: { label: 'Steer' | 'Follow up'
       <path d="M4 12h11" />
       <path d="m11 5 7 7-7 7" />
     </svg>
-  );
-}
-
-interface TokenCounts {
-  total: number | null;
-  contextWindow: number;
-  segments?: ContextUsageSegment[];
-}
-
-function ContextUsageIndicator({ tokens }: { tokens: TokenCounts }) {
-  const label = formatContextUsageLabel(tokens.total, tokens.contextWindow);
-  const percent = getContextUsagePercent(tokens.total, tokens.contextWindow);
-  const boundedPercent = Math.max(0, Math.min(100, percent ?? 0));
-  const toneClass = percent === null
-    ? 'bg-dim/70'
-    : percent >= 90
-      ? 'bg-danger'
-      : percent >= 70
-        ? 'bg-warning'
-        : 'bg-accent';
-  const ringColor = percent === null
-    ? 'rgba(151, 164, 203, 0.5)'
-    : percent >= 90
-      ? 'rgba(248, 113, 113, 0.95)'
-      : percent >= 70
-        ? 'rgba(251, 191, 36, 0.95)'
-        : 'rgba(139, 167, 255, 0.95)';
-
-  return (
-    <span className="group relative inline-flex shrink-0 items-center" role="img" title={label} aria-label={`Context usage: ${label}`}>
-      <span
-        className="grid h-3.5 w-3.5 place-items-center rounded-full border border-border-subtle/70 shadow-[0_0_0_1px_rgba(0,0,0,0.12)]"
-        style={{ background: `conic-gradient(${ringColor} ${boundedPercent}%, rgba(151, 164, 203, 0.22) 0)` }}
-        aria-hidden="true"
-      >
-        <span className="grid h-2 w-2 place-items-center rounded-full bg-base">
-          <span className={cx('h-1 w-1 rounded-full', toneClass)} />
-        </span>
-      </span>
-      <span className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 whitespace-nowrap rounded-md border border-border-subtle bg-elevated px-2 py-1 font-mono text-[10px] text-primary opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        {label}
-      </span>
-    </span>
   );
 }
 
@@ -1638,7 +1596,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         total: stream.contextUsage?.tokens ?? null,
         contextWindow: stream.contextUsage?.contextWindow ?? modelInfo?.context ?? 200_000,
         segments: stream.contextUsage?.segments,
-      } satisfies TokenCounts;
+      } satisfies ConversationContextUsageTokens;
     }
 
     if (!visibleSessionDetail) return undefined;
@@ -1649,7 +1607,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       total: historicalUsage?.tokens ?? null,
       contextWindow: modelInfo?.context ?? 128_000,
       segments: historicalUsage?.segments,
-    } satisfies TokenCounts;
+    } satisfies ConversationContextUsageTokens;
   }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
 
   const [liveSessionContext, setLiveSessionContext] = useState<LiveSessionContext | null>(null);
@@ -7119,7 +7077,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                     <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
                   )
                 ) : null}
-                {sessionTokens ? <ContextUsageIndicator tokens={sessionTokens} /> : null}
+                {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
               </div>
             </div>
           ) : null}

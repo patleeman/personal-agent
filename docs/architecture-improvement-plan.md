@@ -58,6 +58,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted live-session lifecycle helpers for not-live error detection and created-conversation cache priming into `conversationSessionLifecycle` with focused tests.
    - Extracted composer model/thinking/fast/auto preference controls into `ConversationPreferencesRow` with server-render tests so `ConversationPage` no longer owns that component tree.
    - Extracted model, slash-command, and mention autocomplete menu rendering into `ConversationComposerMenus` with server-render tests.
+   - Extracted context-usage indicator rendering into `ConversationContextUsageIndicator` with server-render tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
