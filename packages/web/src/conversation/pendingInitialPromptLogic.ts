@@ -15,6 +15,24 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
     && input.hasStreamSnapshot;
 }
 
+export function shouldClaimPendingInitialPromptForSession(input: {
+  conversationId: string | null | undefined;
+  prompt: PendingConversationPrompt | null | undefined;
+  inFlightSessionId: string | null | undefined;
+  failedSessionId: string | null | undefined;
+}): boolean {
+  return Boolean(input.conversationId)
+    && Boolean(input.prompt)
+    && input.inFlightSessionId !== input.conversationId
+    && input.failedSessionId !== input.conversationId;
+}
+
+export function shouldKeepStoredPendingInitialPromptDuringDispatch(
+  prompt: PendingConversationPrompt,
+): boolean {
+  return (prompt.relatedConversationIds?.length ?? 0) > 0;
+}
+
 export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
   messages: MessageBlock[] | undefined;
   prompt: PendingConversationPrompt | null | undefined;

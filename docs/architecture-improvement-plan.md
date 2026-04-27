@@ -75,6 +75,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted artifact/checkpoint tool auto-open selection into `toolAutoOpen` with focused tests, removing duplicate scan/processed-key logic from `ConversationPage`.
    - Extracted draft model/thinking/service-tier preference normalization into `conversationModelPreferences` with focused tests.
    - Added `clearDraftConversationModelPreferences` to centralize repeated draft model/thinking/service-tier cleanup in `ConversationPage` with storage coverage.
+   - Expanded `pendingInitialPromptLogic` to own pending-prompt claim/retain decisions with focused tests, tightening the auto-dispatch effect in `ConversationPage`.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

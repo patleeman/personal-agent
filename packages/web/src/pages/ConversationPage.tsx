@@ -124,6 +124,8 @@ import { parseConversationSlashCommand, type ConversationSlashCommand } from '..
 import {
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   shouldAutoDispatchPendingInitialPrompt,
+  shouldClaimPendingInitialPromptForSession,
+  shouldKeepStoredPendingInitialPromptDuringDispatch,
 } from '../conversation/pendingInitialPromptLogic';
 import { buildSlashMenuItems, parseSlashInput } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
@@ -543,7 +545,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (useDesktopConversation) {
       setConfirmedLive(visibleConversationBootstrap?.liveSession.live ?? false);
-      setLiveSessionHasPendingHiddenTurn(visibleConversationBootstrap?.liveSession.live && visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true);
+      setLiveSessionHasPendingHiddenTurn(visibleConversationBootstrap?.liveSession.live === true && visibleConversationBootstrap.liveSession.hasPendingHiddenTurn === true);
       return;
     }
 
@@ -3298,29 +3300,36 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       return;
     }
 
-    if (
-      pendingInitialPromptSessionIdRef.current === id
-      || pendingInitialPromptFailureSessionIdRef.current === id
-      || !pendingInitialPrompt
-    ) {
+    if (!shouldClaimPendingInitialPromptForSession({
+      conversationId: id,
+      prompt: pendingInitialPrompt,
+      inFlightSessionId: pendingInitialPromptSessionIdRef.current,
+      failedSessionId: pendingInitialPromptFailureSessionIdRef.current,
+    })) {
       return;
     }
 
-    const keepsStoredPromptDuringDispatch = (pendingInitialPrompt.relatedConversationIds?.length ?? 0) > 0;
+    const conversationId = id;
+    const promptToClaim = pendingInitialPrompt;
+    if (!conversationId || !promptToClaim) {
+      return;
+    }
+
+    const keepsStoredPromptDuringDispatch = shouldKeepStoredPendingInitialPromptDuringDispatch(promptToClaim);
     const claimedInitialPrompt = keepsStoredPromptDuringDispatch
-      ? pendingInitialPrompt
-      : consumePendingConversationPrompt(id);
+      ? promptToClaim
+      : consumePendingConversationPrompt(conversationId);
     if (!claimedInitialPrompt) {
       setPendingInitialPrompt(null);
       return;
     }
 
-    pendingInitialPromptSessionIdRef.current = id;
-    pinnedInitialPromptScrollSessionIdRef.current = id;
+    pendingInitialPromptSessionIdRef.current = conversationId;
+    pinnedInitialPromptScrollSessionIdRef.current = conversationId;
     pinnedInitialPromptTailKeyRef.current = null;
 
     if (keepsStoredPromptDuringDispatch) {
-      setPendingConversationPromptDispatching(id, true);
+      setPendingConversationPromptDispatching(conversationId, true);
     } else {
       setPendingInitialPrompt(null);
     }
@@ -3330,7 +3339,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       try {
         preparedInitialPrompt = await preparePendingConversationPromptWithRelatedContext(claimedInitialPrompt);
         if (preparedInitialPrompt !== claimedInitialPrompt) {
-          persistPendingConversationPrompt(id, preparedInitialPrompt);
+          persistPendingConversationPrompt(conversationId, preparedInitialPrompt);
         }
 
         await stream.send(
@@ -3343,13 +3352,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         pendingInitialPromptSessionIdRef.current = null;
       } catch (error) {
         pendingInitialPromptSessionIdRef.current = null;
-        pendingInitialPromptFailureSessionIdRef.current = id;
+        pendingInitialPromptFailureSessionIdRef.current = conversationId;
         pinnedInitialPromptScrollSessionIdRef.current = null;
         pinnedInitialPromptTailKeyRef.current = null;
-        persistPendingConversationPrompt(id, preparedInitialPrompt);
-        setPendingConversationPromptDispatching(id, false);
+        persistPendingConversationPrompt(conversationId, preparedInitialPrompt);
+        setPendingConversationPromptDispatching(conversationId, false);
         setPendingInitialPrompt(preparedInitialPrompt);
-        persistForkPromptDraft(id, preparedInitialPrompt.text);
+        persistForkPromptDraft(conversationId, preparedInitialPrompt.text);
         console.error('Initial prompt failed:', error);
         showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
       }
