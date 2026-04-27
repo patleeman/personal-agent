@@ -51,9 +51,9 @@ export function useRelatedThreadHotkeys(input: {
       onToggle(result.sessionId);
     }
 
-    window.addEventListener('keydown', handleRelatedThreadHotkey);
+    window.addEventListener('keydown', handleRelatedThreadHotkey, true);
     return () => {
-      window.removeEventListener('keydown', handleRelatedThreadHotkey);
+      window.removeEventListener('keydown', handleRelatedThreadHotkey, true);
     };
   }, [enabled, hotkeyLimit, onToggle, results]);
 }
