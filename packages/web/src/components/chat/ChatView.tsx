@@ -2,7 +2,7 @@ import React, { memo, useEffect, useMemo, useState, type RefObject } from 'react
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
-import { CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, formatWindowingCount, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
+import { CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
 import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { getStreamingStatusLabel } from './toolPresentation.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
@@ -10,22 +10,9 @@ import { useChatReplySelection } from './useChatReplySelection.js';
 import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 import { useChatWindowing } from './useChatWindowing.js';
 import { ChatRenderItemView } from './ChatRenderItemView.js';
+import { SelectionContextMenu, StreamingIndicator, WindowingBadge } from './ChatTranscriptChrome.js';
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
-
-function StreamingIndicator({ label }: { label: string }) {
-  return (
-    <div className="flex gap-3 items-start" role="status" aria-live="polite">
-      <div className="ui-chat-avatar mt-0.5">
-        <span className="ui-chat-avatar-mark">pa</span>
-      </div>
-      <div className="flex items-center gap-2 pt-1 text-[12px] text-secondary italic">
-        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse not-italic" />
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}
 
 // ── ChatView ──────────────────────────────────────────────────────────────────
 
@@ -224,21 +211,14 @@ export const ChatView = memo(function ChatView({
     ? visibleChunkRange.chunks.reduce((sum, chunk) => sum + chunk.spanCount, 0)
     : messages.length;
   const mountedChunkCount = visibleChunkRange?.chunks.length ?? renderChunks.length;
-  const selectionContextMenuItemClass = 'ui-context-menu-item';
   const windowingBadge = shouldWindowTranscript ? (
-    <div
-      className="sticky z-10 mb-3 flex justify-end pointer-events-none"
-      style={{ top: `${Math.max(0, windowingBadgeTopOffset)}px` }}
-    >
-      <div className="inline-flex min-h-[2rem] items-center gap-2 rounded-lg border border-border-subtle bg-surface/88 px-3 py-1.5 text-[10px] text-secondary shadow-sm backdrop-blur">
-        <span className="font-medium uppercase tracking-[0.16em] text-primary/85">windowing</span>
-        <span>{formatWindowingCount(messages.length)} loaded</span>
-        <span className="text-dim">·</span>
-        <span>{formatWindowingCount(mountedMessageCount)} mounted</span>
-        <span className="text-dim">·</span>
-        <span>{mountedChunkCount}/{renderChunks.length} chunks</span>
-      </div>
-    </div>
+    <WindowingBadge
+      topOffset={windowingBadgeTopOffset}
+      loadedMessageCount={messages.length}
+      mountedMessageCount={mountedMessageCount}
+      mountedChunkCount={mountedChunkCount}
+      totalChunkCount={renderChunks.length}
+    />
   ) : null;
   return (
     <>
@@ -260,54 +240,11 @@ export const ChatView = memo(function ChatView({
         )}
       </div>
       {selectionContextMenu ? (
-        <div
-          ref={selectionContextMenuRef}
-          className="ui-menu-shell ui-context-menu-shell fixed bottom-auto left-auto right-auto top-auto mb-0 min-w-[224px]"
-          style={{ left: selectionContextMenu.x, top: selectionContextMenu.y }}
-          role="menu"
-          aria-label="Selected transcript text actions"
-          data-selection-context-menu="true"
-        >
-          <div className="space-y-px">
-            {selectionContextMenu.replySelection ? (
-              <>
-                <button
-                  type="button"
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onClick={() => { void runSelectionContextMenuAction('reply'); }}
-                  className={selectionContextMenuItemClass}
-                  role="menuitem"
-                >
-                  Reply with Selection
-                </button>
-                <div className="mx-1 my-1 h-px bg-border-subtle" role="separator" />
-              </>
-            ) : null}
-            <button
-              type="button"
-              onPointerDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onMouseDown={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-              }}
-              onClick={() => { void runSelectionContextMenuAction('copy'); }}
-              className={selectionContextMenuItemClass}
-              role="menuitem"
-            >
-              Copy
-            </button>
-          </div>
-        </div>
+        <SelectionContextMenu
+          menuState={selectionContextMenu}
+          menuRef={selectionContextMenuRef}
+          onAction={runSelectionContextMenuAction}
+        />
       ) : null}
       {selectedImage && <ImageInspectModal image={selectedImage} onClose={() => setSelectedImage(null)} />}
     </>

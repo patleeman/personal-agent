@@ -133,6 +133,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 15. [done] Extract inline trace-run expansion state into `useInlineTraceRunExpansion.ts` with focused tests.
 16. [done] Extract transcript windowing state/effects into `useChatWindowing.ts` with focused tests.
 17. [done] Extract per-item chat rendering into `ChatRenderItemView.tsx` with focused rail-kind tests.
+18. [done] Extract transcript chrome pieces — streaming indicator, windowing badge, and selection context menu — into `ChatTranscriptChrome.tsx` with render tests.
 
 ## Next action
 
