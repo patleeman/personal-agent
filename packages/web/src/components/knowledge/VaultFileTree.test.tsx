@@ -156,6 +156,24 @@ function click(target: HTMLElement) {
   });
 }
 
+function contextMenu(target: HTMLElement) {
+  act(() => {
+    target.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2 }));
+  });
+}
+
+function fillInput(input: HTMLInputElement, value: string) {
+  const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
+  if (!valueSetter) {
+    throw new Error('HTMLInputElement value setter unavailable');
+  }
+
+  act(() => {
+    valueSetter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+}
+
 function drag(target: HTMLElement, startY: number, endY: number) {
   act(() => {
     target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientY: startY }));
@@ -391,6 +409,38 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(getButton(container, 'Open file notes/today.md').getAttribute('aria-current')).toBe('true');
+  });
+
+  it('creates a new file inside the right-clicked folder', async () => {
+    apiMocks.writeFile.mockResolvedValue(undefined);
+    const { container } = renderManagedTree();
+    await flushAsyncWork();
+
+    contextMenu(getButton(container, 'notes'));
+    await flushAsyncWork();
+
+    const newFileItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')]
+      .find((button) => button.textContent?.includes('New File'));
+    expect(newFileItem).toBeTruthy();
+
+    click(newFileItem!);
+    await flushAsyncWork();
+
+    expect(container.textContent).toContain('Create a new markdown file in notes/.');
+    const input = container.querySelector<HTMLInputElement>('input[aria-label="File name"], input');
+    if (!input) {
+      throw new Error('Expected file name input');
+    }
+    fillInput(input, 'idea');
+
+    const submit = [...container.querySelectorAll<HTMLButtonElement>('button')]
+      .find((button) => button.textContent === 'New file' && button.type === 'submit');
+    expect(submit).toBeTruthy();
+
+    click(submit!);
+    await flushAsyncWork();
+
+    expect(apiMocks.writeFile).toHaveBeenCalledWith('notes/idea.md', '');
   });
 
   it('lets the open files section resize taller and persists the new height', async () => {

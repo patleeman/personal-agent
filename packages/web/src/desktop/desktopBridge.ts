@@ -72,7 +72,7 @@ export type DesktopConversationCwdGroupContextMenuAction =
   | 'archive-threads'
   | 'remove';
 
-export type DesktopKnowledgeEntryContextMenuAction = 'open-in-finder' | 'rename' | 'move' | 'delete';
+export type DesktopKnowledgeEntryContextMenuAction = 'new-file' | 'new-folder' | 'open-in-finder' | 'rename' | 'move' | 'delete';
 
 type DesktopSelectionContextMenuAction = 'reply' | 'copy';
 
@@ -102,6 +102,8 @@ interface DesktopKnowledgeEntryContextMenuRequest {
   x: number;
   y: number;
   canOpenInFinder?: boolean;
+  canCreateFile?: boolean;
+  canCreateFolder?: boolean;
   canRename?: boolean;
   canMove?: boolean;
   canDelete?: boolean;

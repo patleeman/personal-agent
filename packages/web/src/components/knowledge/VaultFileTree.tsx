@@ -51,7 +51,7 @@ import type { VaultEntry } from '../../shared/types';
 import { emitKBEvent, onKBEvent } from './knowledgeEvents';
 import { canDropVaultEntry, normalizeVaultDir } from './vaultDragAndDrop';
 import { cx } from '../ui';
-import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
+import { getDesktopBridge, shouldUseNativeAppContextMenus, type DesktopKnowledgeEntryContextMenuAction } from '../../desktop/desktopBridge';
 
 function Ico({ d, size = 14 }: { d: string; size?: number }) {
   return (
@@ -112,6 +112,8 @@ export interface FileTreeProps {
 }
 
 interface ContextMenuProps {
+  onCreateFile: () => void;
+  onCreateFolder: () => void;
   onDelete: () => void;
   onOpenInFinder?: () => void;
   onMove: () => void;
@@ -125,6 +127,7 @@ interface FolderOption {
 
 interface CreateEntryState {
   kind: 'file' | 'folder';
+  directoryId: string;
   value: string;
 }
 
@@ -278,7 +281,11 @@ function resolveFinderTargetPath(root: string | null | undefined, entry: VaultEn
   return parentPath ? `${normalizedRoot}/${parentPath}` : normalizedRoot;
 }
 
-function TreeContextMenu({ onDelete, onOpenInFinder, onMove, onRename }: ContextMenuProps) {
+function getCreateTargetDirectoryId(entry: VaultEntry): string {
+  return entry.kind === 'folder' ? entry.id : idToDir(entry.id);
+}
+
+function TreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinder, onMove, onRename }: ContextMenuProps) {
   return (
     <div
       className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]"
@@ -286,6 +293,15 @@ function TreeContextMenu({ onDelete, onOpenInFinder, onMove, onRename }: Context
       aria-label="Knowledge entry actions"
     >
       <div className="space-y-px">
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFile} role="menuitem">
+          <Ico d={ICON.file} size={12} />
+          New File
+        </button>
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFolder} role="menuitem">
+          <Ico d={ICON.folderPlus} size={12} />
+          New Folder
+        </button>
+        <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
         {onOpenInFinder ? (
           <>
             <button type="button" className="ui-context-menu-item gap-2" onClick={onOpenInFinder} role="menuitem">
@@ -509,12 +525,13 @@ function CreateEntryModal({
 
   const title = state.kind === 'file' ? 'New file' : 'New folder';
   const label = state.kind === 'file' ? 'File name' : 'Folder name';
+  const targetLabel = state.directoryId || 'vault root';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => { if (!submitting) onClose(); }}>
       <div className="bg-elevated border border-border-default rounded-xl shadow-2xl w-[min(28rem,calc(100vw-2rem))] p-5" onClick={(event) => event.stopPropagation()}>
         <h3 className="text-[13px] font-semibold text-primary mb-1">{title}</h3>
-        <p className="text-[11px] text-dim mb-3">Create a new {state.kind === 'file' ? 'markdown file' : 'folder'} at the vault root.</p>
+        <p className="text-[11px] text-dim mb-3">Create a new {state.kind === 'file' ? 'markdown file' : 'folder'} in {targetLabel}.</p>
         <form className="space-y-3" onSubmit={(event) => { void handleSubmit(event); }}>
           <label className="block space-y-1">
             <span className="text-[11px] text-dim">{label}</span>
@@ -646,6 +663,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
   const canDropRef = useRef<(event: FileTreeDropContext) => boolean>(() => false);
   const dropCompleteRef = useRef<(event: FileTreeDropResult) => void>(() => {});
+  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
   const reconcilingExpansionRef = useRef(false);
   const treeHostWrapperRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -670,6 +688,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
         ? {
             enabled: true,
             triggerMode: 'right-click',
+            onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context),
           }
         : {
             triggerMode: 'right-click',
@@ -896,20 +915,33 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     onFileSelect(imported.note.id);
   }, [onFileSelect]);
 
+  const openCreateEntryModal = useCallback((kind: CreateEntryState['kind'], directoryIdInput: string) => {
+    const directoryId = normalizeVaultDir(directoryIdInput);
+    setCreateEntryState({
+      kind,
+      directoryId,
+      value: kind === 'file' ? 'untitled.md' : 'New Folder',
+    });
+  }, []);
+
   const handleCreateEntry = useCallback(async (value: string) => {
     if (!createEntryState) {
       return;
     }
 
+    const parentDir = normalizeVaultDir(createEntryState.directoryId);
+    const childName = value.replace(/^\/+|\/+$/gu, '');
+    const childPath = parentDir ? `${parentDir}${childName}` : childName;
+
     if (createEntryState.kind === 'file') {
-      const fileId = value.endsWith('.md') ? value : `${value}.md`;
+      const fileId = childPath.endsWith('.md') ? childPath : `${childPath}.md`;
       await vaultApi.writeFile(fileId, '');
       emitKBEvent('kb:file-created', { id: fileId });
       onFileSelect(fileId);
       return;
     }
 
-    const folderId = value.endsWith('/') ? value : `${value}/`;
+    const folderId = childPath.endsWith('/') ? childPath : `${childPath}/`;
     const created = await vaultApi.createFolder(folderId);
     emitKBEvent('kb:file-created', { id: created.id });
   }, [createEntryState, onFileSelect]);
@@ -950,6 +982,37 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       console.error('open in Finder failed', error);
     }
   }, [knowledgeBaseState?.effectiveRoot]);
+
+  const runKnowledgeContextMenuAction = useCallback((action: DesktopKnowledgeEntryContextMenuAction | null, entry: VaultEntry) => {
+    if (!action) {
+      return;
+    }
+
+    switch (action) {
+      case 'new-file':
+        openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
+        break;
+      case 'new-folder':
+        openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
+        break;
+      case 'open-in-finder':
+        void handleOpenInFinder(entry);
+        break;
+      case 'rename':
+        window.setTimeout(() => {
+          model.startRenaming(entry.id);
+        }, 0);
+        break;
+      case 'move':
+        setMoveEntry(entry);
+        break;
+      case 'delete':
+        void handleDelete(entry);
+        break;
+      default:
+        break;
+    }
+  }, [handleDelete, handleOpenInFinder, model, openCreateEntryModal]);
 
   const handleOpenFileClose = useCallback((id: string) => {
     const normalizedId = id.trim();
@@ -1080,6 +1143,31 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       void handleMovePaths(event.draggedPaths, event.target.directoryPath ?? '', { emitEntriesChangedOnly: event.draggedPaths.length > 1 });
     };
   }, [handleMovePaths]);
+
+  useEffect(() => {
+    nativeContextMenuOpenRef.current = (item, context) => {
+      const entry = entryMapRef.current.get(item.path)
+        ?? createFallbackEntry(item.path, item.kind === 'directory' ? 'folder' : 'file', item.name);
+      const desktopBridge = getDesktopBridge();
+      const canOpenInFinder = Boolean(desktopBridge?.openPath && resolveFinderTargetPath(knowledgeBaseState?.effectiveRoot, entry));
+
+      context.close({ restoreFocus: false });
+      if (!desktopBridge?.showKnowledgeEntryContextMenu) {
+        return;
+      }
+
+      void desktopBridge.showKnowledgeEntryContextMenu({
+        x: context.anchorRect.left,
+        y: context.anchorRect.bottom,
+        canCreateFile: true,
+        canCreateFolder: true,
+        canOpenInFinder,
+        canRename: true,
+        canMove: true,
+        canDelete: true,
+      }).then(({ action }) => runKnowledgeContextMenuAction(action, entry));
+    };
+  }, [knowledgeBaseState?.effectiveRoot, runKnowledgeContextMenuAction]);
 
   useEffect(() => {
     const unsubscribe = model.subscribe(() => {
@@ -1419,7 +1507,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 className="ui-icon-button ui-icon-button-compact"
                 title="New file"
                 aria-label="New file"
-                onClick={() => setCreateEntryState({ kind: 'file', value: 'untitled.md' })}
+                onClick={() => openCreateEntryModal('file', '')}
               >
                 <Ico d={ICON.plus} size={12} />
               </button>
@@ -1428,7 +1516,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 className="ui-icon-button ui-icon-button-compact"
                 title="New folder"
                 aria-label="New folder"
-                onClick={() => setCreateEntryState({ kind: 'folder', value: 'New Folder' })}
+                onClick={() => openCreateEntryModal('folder', '')}
               >
                 <Ico d={ICON.folderPlus} size={12} />
               </button>
@@ -1450,6 +1538,14 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
 
                     return (
                       <TreeContextMenu
+                        onCreateFile={() => {
+                          context.close();
+                          openCreateEntryModal('file', getCreateTargetDirectoryId(entry));
+                        }}
+                        onCreateFolder={() => {
+                          context.close();
+                          openCreateEntryModal('folder', getCreateTargetDirectoryId(entry));
+                        }}
                         onOpenInFinder={canOpenInFinder ? () => {
                           context.close();
                           void handleOpenInFinder(entry);

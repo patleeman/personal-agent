@@ -1,11 +1,13 @@
 import { BrowserWindow, Menu, type MenuItemConstructorOptions, type WebContents } from 'electron';
 
-export type KnowledgeEntryContextMenuAction = 'open-in-finder' | 'rename' | 'move' | 'delete';
+export type KnowledgeEntryContextMenuAction = 'new-file' | 'new-folder' | 'open-in-finder' | 'rename' | 'move' | 'delete';
 
 export interface KnowledgeEntryContextMenuInput {
   x?: number;
   y?: number;
   canOpenInFinder?: boolean;
+  canCreateFile?: boolean;
+  canCreateFolder?: boolean;
   canRename?: boolean;
   canMove?: boolean;
   canDelete?: boolean;
@@ -43,7 +45,22 @@ export function buildKnowledgeEntryContextMenuTemplate(
   onSelect: (action: KnowledgeEntryContextMenuAction) => void,
 ): MenuItemConstructorOptions[] {
   const primarySection: MenuItemConstructorOptions[] = [];
+  const createSection: MenuItemConstructorOptions[] = [];
   const destructiveSection: MenuItemConstructorOptions[] = [];
+
+  if (input.canCreateFile) {
+    createSection.push({
+      label: 'New File',
+      click: () => onSelect('new-file'),
+    });
+  }
+
+  if (input.canCreateFolder) {
+    createSection.push({
+      label: 'New Folder',
+      click: () => onSelect('new-folder'),
+    });
+  }
 
   if (input.canOpenInFinder) {
     primarySection.push({
@@ -73,7 +90,7 @@ export function buildKnowledgeEntryContextMenuTemplate(
     });
   }
 
-  return joinMenuSections([primarySection, destructiveSection]);
+  return joinMenuSections([createSection, primarySection, destructiveSection]);
 }
 
 export async function showKnowledgeEntryContextMenu(

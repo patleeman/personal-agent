@@ -5,12 +5,17 @@ describe('buildKnowledgeEntryContextMenuTemplate', () => {
   it('groups rename and move before delete with a native separator', () => {
     const template = buildKnowledgeEntryContextMenuTemplate({
       canOpenInFinder: true,
+      canCreateFile: true,
+      canCreateFolder: true,
       canRename: true,
       canMove: true,
       canDelete: true,
     }, vi.fn());
 
     expect(template.map((item) => item.type === 'separator' ? 'separator' : item.label)).toEqual([
+      'New File',
+      'New Folder',
+      'separator',
       'Open in Finder',
       'Rename',
       'Move to…',

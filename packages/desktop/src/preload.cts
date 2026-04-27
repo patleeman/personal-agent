@@ -63,6 +63,8 @@ const desktopBridge = {
     x: number;
     y: number;
     canOpenInFinder?: boolean;
+    canCreateFile?: boolean;
+    canCreateFolder?: boolean;
     canRename?: boolean;
     canMove?: boolean;
     canDelete?: boolean;
