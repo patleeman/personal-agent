@@ -148,6 +148,18 @@ export function registerDesktopIpc(options: {
     await options.windowController.openAbsoluteUrlInWindow(event.sender.id, url);
   });
 
+  ipcMain.handle(`${CHANNEL_PREFIX}:open-conversation-popout`, async (event, input) => {
+    const conversationId = typeof input?.conversationId === 'string' ? input.conversationId.trim() : '';
+    if (!conversationId) {
+      throw new Error('conversationId is required.');
+    }
+
+    await options.windowController.openConversationPopoutWindow({
+      hostId: options.windowController.getHostIdForWebContentsId(event.sender.id),
+      conversationId,
+    });
+  });
+
   ipcMain.handle(`${CHANNEL_PREFIX}:show-conversation-context-menu`, async (event, input) => {
     return showConversationContextMenu(event.sender, input ?? {});
   });

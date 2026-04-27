@@ -4,6 +4,7 @@ export type ConversationContextMenuAction =
   | 'pin'
   | 'unpin'
   | 'archive'
+  | 'open-in-new-window'
   | 'duplicate'
   | 'summarize-and-new'
   | 'copy-working-directory'
@@ -15,6 +16,7 @@ export interface ConversationContextMenuInput {
   y?: number;
   pinAction?: 'pin' | 'unpin' | null;
   canArchive?: boolean;
+  canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
   canSummarizeAndNew?: boolean;
   canCopyWorkingDirectory?: boolean;
@@ -56,6 +58,7 @@ export function buildConversationContextMenuTemplate(
 ): MenuItemConstructorOptions[] {
   const menuDisabled = input.busyAction === 'duplicate' || input.busyAction === 'summarize';
   const conversationSection: MenuItemConstructorOptions[] = [];
+  const windowSection: MenuItemConstructorOptions[] = [];
   const creationSection: MenuItemConstructorOptions[] = [];
   const copySection: MenuItemConstructorOptions[] = [];
 
@@ -78,6 +81,14 @@ export function buildConversationContextMenuTemplate(
       label: 'Archive Chat',
       enabled: !menuDisabled,
       click: () => onSelect('archive'),
+    });
+  }
+
+  if (input.canOpenInNewWindow) {
+    windowSection.push({
+      label: 'Open in Separate Window',
+      enabled: !menuDisabled,
+      click: () => onSelect('open-in-new-window'),
     });
   }
 
@@ -121,7 +132,7 @@ export function buildConversationContextMenuTemplate(
     });
   }
 
-  return joinMenuSections([conversationSection, creationSection, copySection]);
+  return joinMenuSections([conversationSection, windowSection, creationSection, copySection]);
 }
 
 export async function showConversationContextMenu(

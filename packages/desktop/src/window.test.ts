@@ -253,4 +253,17 @@ describe('DesktopWindowController', () => {
 
     expect(openWindowForHost).toHaveBeenCalledWith('local-host', '/conversations/abc?view=wide#tail', 'remote');
   });
+
+  it('opens conversation popouts as focused zen windows without reusing the secondary host window', async () => {
+    const controller = new DesktopWindowController({
+      getActiveHostId: () => 'local-host',
+    } as never);
+    const openWindowForHost = vi.fn().mockResolvedValue(undefined);
+
+    (controller as unknown as { openWindowForHost: typeof openWindowForHost }).openWindowForHost = openWindowForHost;
+
+    await controller.openConversationPopoutWindow({ conversationId: 'conv 123' });
+
+    expect(openWindowForHost).toHaveBeenCalledWith('local-host', '/conversations/conv%20123?view=zen', 'popout');
+  });
 });

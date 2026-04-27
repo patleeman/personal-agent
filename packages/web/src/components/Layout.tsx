@@ -648,8 +648,10 @@ export function Layout() {
     };
   }, []);
 
-  const showContextRail = canShowContextRail && railOpen;
-  const showWorkbench = appLayoutMode === 'workbench' && (
+  const zenMode = searchParams.get('view') === 'zen';
+  const effectiveSidebarOpen = !zenMode && sidebarOpen;
+  const showContextRail = !zenMode && canShowContextRail && railOpen;
+  const showWorkbench = !zenMode && appLayoutMode === 'workbench' && (
     location.pathname.startsWith('/conversations')
     || location.pathname.startsWith('/automations')
   );
@@ -748,22 +750,23 @@ export function Layout() {
         <div className="flex h-screen flex-col overflow-hidden bg-base text-primary select-none">
           <DesktopTopBar
             environment={desktopEnvironment}
-            sidebarOpen={sidebarOpen}
+            sidebarOpen={effectiveSidebarOpen}
             onToggleSidebar={() => setSidebarOpen((current) => !current)}
             showRailToggle={activeRightRailControl !== null}
             railOpen={activeRightRailControl?.railOpen ?? false}
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
             onLayoutModeChange={handleAppLayoutModeChange}
+            zenMode={zenMode}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
-          {sidebarOpen ? (
+          {effectiveSidebarOpen ? (
             <div style={{ width: sidebar.width }} className="flex-shrink-0 flex flex-col overflow-hidden bg-surface border-r border-border-subtle">
               <Sidebar hideKnowledgeNav={showWorkbench} />
             </div>
           ) : null}
 
-          {sidebarOpen ? <ResizeHandle onMouseDown={sidebar.onMouseDown} /> : null}
+          {effectiveSidebarOpen ? <ResizeHandle onMouseDown={sidebar.onMouseDown} /> : null}
 
           <div ref={pageSearchRootRef} className="flex min-w-0 flex-1 overflow-hidden">
             <RouteContentBoundary resetKey={`${location.pathname}${location.search}`} pathname={location.pathname}>

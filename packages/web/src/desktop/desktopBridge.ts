@@ -60,6 +60,7 @@ export type DesktopConversationContextMenuAction =
   | 'pin'
   | 'unpin'
   | 'archive'
+  | 'open-in-new-window'
   | 'duplicate'
   | 'summarize-and-new'
   | 'copy-working-directory'
@@ -81,6 +82,7 @@ interface DesktopConversationContextMenuRequest {
   y: number;
   pinAction?: 'pin' | 'unpin' | null;
   canArchive?: boolean;
+  canOpenInNewWindow?: boolean;
   canDuplicate?: boolean;
   canSummarizeAndNew?: boolean;
   canCopyWorkingDirectory?: boolean;
@@ -133,6 +135,7 @@ export interface PersonalAgentDesktopBridge {
   readRemoteDirectory(input: { hostId: string; path?: string | null }): Promise<DesktopRemoteDirectoryListing>;
   testSshConnection(input: { sshTarget: string }): Promise<DesktopSshConnectionTestResult>;
   openNewConversation(): Promise<void>;
+  openConversationPopout(input: { conversationId: string }): Promise<void>;
   showConversationContextMenu(input: DesktopConversationContextMenuRequest): Promise<{ action: DesktopConversationContextMenuAction | null }>;
   showConversationCwdGroupContextMenu(input: DesktopConversationCwdGroupContextMenuRequest): Promise<{ action: DesktopConversationCwdGroupContextMenuAction | null }>;
   showKnowledgeEntryContextMenu(input: DesktopKnowledgeEntryContextMenuRequest): Promise<{ action: DesktopKnowledgeEntryContextMenuAction | null }>;

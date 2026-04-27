@@ -1316,6 +1316,7 @@ function OpenConversationRow({
   onUnpin,
   onClose,
   onArchive,
+  onOpenInNewWindow,
   onDuplicate,
   onSummarizeAndNew,
   onCopyWorkingDirectory,
@@ -1339,6 +1340,7 @@ function OpenConversationRow({
   onUnpin?: () => void;
   onClose?: () => void;
   onArchive?: () => boolean | Promise<boolean>;
+  onOpenInNewWindow?: () => boolean | Promise<boolean>;
   onDuplicate?: () => boolean | Promise<boolean>;
   onSummarizeAndNew?: () => boolean | Promise<boolean>;
   onCopyWorkingDirectory?: () => boolean | Promise<boolean>;
@@ -1364,6 +1366,7 @@ function OpenConversationRow({
     onPin
       || onUnpin
       || onArchive
+      || onOpenInNewWindow
       || onDuplicate
       || onSummarizeAndNew
       || onCopyWorkingDirectory
@@ -1372,6 +1375,7 @@ function OpenConversationRow({
   );
   const contextMenuItemCount = (pinned && onUnpin ? 1 : !pinned && onPin ? 1 : 0)
     + Number(Boolean(onArchive))
+    + Number(Boolean(onOpenInNewWindow))
     + Number(Boolean(onDuplicate))
     + Number(Boolean(onSummarizeAndNew))
     + Number(Boolean(onCopyWorkingDirectory))
@@ -1530,6 +1534,9 @@ function OpenConversationRow({
       case 'archive':
         await onArchive?.();
         return;
+      case 'open-in-new-window':
+        await onOpenInNewWindow?.();
+        return;
       case 'duplicate':
         if (onDuplicate) {
           await runMenuAction('duplicate', onDuplicate);
@@ -1574,6 +1581,7 @@ function OpenConversationRow({
         y,
         pinAction: pinned && onUnpin ? 'unpin' : !pinned && onPin ? 'pin' : null,
         canArchive: Boolean(onArchive),
+        canOpenInNewWindow: Boolean(onOpenInNewWindow),
         canDuplicate: Boolean(onDuplicate),
         canSummarizeAndNew: Boolean(onSummarizeAndNew),
         canCopyWorkingDirectory: Boolean(onCopyWorkingDirectory),
@@ -1750,6 +1758,24 @@ function OpenConversationRow({
                 role="menuitem"
               >
                 Archive
+              </button>
+            ) : null}
+            {onOpenInNewWindow ? (
+              <button
+                type="button"
+                onPointerDown={stopRowInteraction}
+                onMouseDown={stopRowInteraction}
+                onClick={async () => {
+                  const succeeded = await onOpenInNewWindow?.();
+                  if (succeeded !== false) {
+                    setMenuOpen(false);
+                  }
+                }}
+                className={menuItemClass}
+                disabled={busyAction !== null}
+                role="menuitem"
+              >
+                Open in Separate Window
               </button>
             ) : null}
             {onDuplicate ? (
@@ -2778,6 +2804,22 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
   }, [copyTextToClipboard, showSidebarNotice]);
 
+  const handleOpenConversationInNewWindow = useCallback(async (conversationId: string) => {
+    const desktopBridge = getDesktopBridge();
+    if (!desktopBridge?.openConversationPopout) {
+      showSidebarNotice('danger', 'Separate conversation windows are only available in the desktop app.', 4000);
+      return false;
+    }
+
+    try {
+      await desktopBridge.openConversationPopout({ conversationId });
+      return true;
+    } catch (error) {
+      showSidebarNotice('danger', `Could not open separate window: ${error instanceof Error ? error.message : String(error)}`, 4000);
+      return false;
+    }
+  }, [showSidebarNotice]);
+
   const resolveConversationGroupRedirectPath = useCallback((closingIds: readonly string[]) => {
     const closingIdSet = new Set(closingIds.map((value) => value.trim()).filter(Boolean));
     const orderedIds = workspaceConversationTabs.map((session) => session.id);
@@ -3249,6 +3291,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
           handleArchiveConversation(session.id);
           return true;
         } : undefined}
+        onOpenInNewWindow={!isDraftTab ? () => handleOpenConversationInNewWindow(session.id) : undefined}
         onDuplicate={!isDraftTab ? () => handleDuplicateConversation(session) : undefined}
         onSummarizeAndNew={!isDraftTab ? () => handleSummarizeConversation(session) : undefined}
         onCopyWorkingDirectory={!isDraftTab && session.cwd?.trim() ? () => handleCopyConversationWorkingDirectory(session.cwd) : undefined}

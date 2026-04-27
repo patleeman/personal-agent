@@ -36,7 +36,7 @@ export type DesktopRendererShortcutAction =
   | 'rename-conversation'
   | 'find-in-page';
 
-type ManagedWindowRole = 'main' | 'remote';
+type ManagedWindowRole = 'main' | 'remote' | 'popout';
 
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
 const DEFAULT_WINDOW_WIDTH = 1440;
@@ -246,6 +246,16 @@ export class DesktopWindowController {
     await this.openWindowForHost(hostId, route, 'remote');
   }
 
+  async openConversationPopoutWindow(input: { hostId?: string | null; conversationId: string }): Promise<void> {
+    const conversationId = input.conversationId.trim();
+    if (!conversationId) {
+      throw new Error('conversationId is required.');
+    }
+
+    const hostId = input.hostId?.trim() || this.hostManager.getActiveHostId();
+    await this.openWindowForHost(hostId, `/conversations/${encodeURIComponent(conversationId)}?view=zen`, 'popout');
+  }
+
   async openStartupErrorWindow(input: {
     message: string;
     logsDir: string;
@@ -373,9 +383,17 @@ export class DesktopWindowController {
   }
 
   private ensureWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {
-    return role === 'main'
-      ? this.ensureMainWindow(host, partition)
-      : this.ensureRemoteWindow(host, partition);
+    if (role === 'main') {
+      return this.ensureMainWindow(host, partition);
+    }
+
+    if (role === 'remote') {
+      return this.ensureRemoteWindow(host, partition);
+    }
+
+    const window = this.createWindow(host, partition, role);
+    this.registerWindow(window, host.id, role);
+    return window;
   }
 
   private ensureMainWindow(host: DesktopHostRecord, partition: string): BrowserWindow {
@@ -416,8 +434,8 @@ export class DesktopWindowController {
     ensureDesktopAppProtocolForHost(this.hostManager, host.id);
 
     const config = loadDesktopConfig();
-    const remoteOffset = role === 'remote'
-      ? (this.remoteWindows.size + 1) * 28
+    const remoteOffset = role !== 'main'
+      ? (this.countAdditionalWindows() + 1) * 28
       : 0;
     const savedWindowState = constrainDesktopWindowBounds(
       config.windowState ?? { width: DEFAULT_WINDOW_WIDTH, height: DEFAULT_WINDOW_HEIGHT },
@@ -601,6 +619,16 @@ export class DesktopWindowController {
     }
 
     return false;
+  }
+
+  private countAdditionalWindows(): number {
+    let count = 0;
+    for (const trackedWindow of this.trackedWindows.values()) {
+      if (trackedWindow.role !== 'main' && !trackedWindow.window.isDestroyed()) {
+        count += 1;
+      }
+    }
+    return count;
   }
 
   private persistWindowBounds(window: BrowserWindow): void {

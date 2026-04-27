@@ -69,6 +69,7 @@ export function DesktopTopBar({
   onToggleRail,
   layoutMode,
   onLayoutModeChange,
+  zenMode = false,
 }: {
   environment: DesktopEnvironmentState | null;
   sidebarOpen: boolean;
@@ -78,6 +79,7 @@ export function DesktopTopBar({
   onToggleRail: () => void;
   layoutMode: AppLayoutMode;
   onLayoutModeChange: (mode: AppLayoutMode) => void;
+  zenMode?: boolean;
 }) {
   const location = useLocation();
   const [navigation, setNavigation] = useState<DesktopNavigationState>({
@@ -184,14 +186,16 @@ export function DesktopTopBar({
       <div className="ui-desktop-top-bar__leading">
         <div className="ui-desktop-top-bar__traffic-light-gap" aria-hidden="true" />
         <div className="ui-desktop-top-bar__controls" style={noDragStyle}>
-          <ToolbarButton
-            className="ui-desktop-top-bar__icon-button"
-            onClick={onToggleSidebar}
-            aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-            title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
-          >
-            <LeftSidebarToggleIcon open={sidebarOpen} />
-          </ToolbarButton>
+          {!zenMode ? (
+            <ToolbarButton
+              className="ui-desktop-top-bar__icon-button"
+              onClick={onToggleSidebar}
+              aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+              title={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+            >
+              <LeftSidebarToggleIcon open={sidebarOpen} />
+            </ToolbarButton>
+          ) : null}
           <ToolbarButton className="ui-desktop-top-bar__icon-button" onClick={() => { void handleBack(); }} disabled={!navigation.canGoBack} aria-label="Go back" title="Go back">
             ←
           </ToolbarButton>
@@ -207,6 +211,11 @@ export function DesktopTopBar({
       </div>
       <div className="ui-desktop-top-bar__center" />
       <div className="ui-desktop-top-bar__trailing" style={noDragStyle}>
+        {zenMode ? (
+          <div className="ui-desktop-top-bar__mode-badge" title="Focused conversation window">
+            Zen
+          </div>
+        ) : (
         <div ref={layoutMenuRef} className="relative">
           <ToolbarButton
             className="ui-desktop-top-bar__action-button"
@@ -251,6 +260,7 @@ export function DesktopTopBar({
             </div>
           ) : null}
         </div>
+        )}
         {showRailToggle ? (
           <ToolbarButton
             className="ui-desktop-top-bar__icon-button"

@@ -6,6 +6,7 @@ describe('buildConversationContextMenuTemplate', () => {
     const template = buildConversationContextMenuTemplate({
       pinAction: 'pin',
       canArchive: true,
+      canOpenInNewWindow: true,
       canDuplicate: true,
       canSummarizeAndNew: true,
       canCopyWorkingDirectory: true,
@@ -16,6 +17,8 @@ describe('buildConversationContextMenuTemplate', () => {
     expect(template.map((item) => item.type === 'separator' ? 'separator' : item.label)).toEqual([
       'Pin Chat',
       'Archive Chat',
+      'separator',
+      'Open in Separate Window',
       'separator',
       'Duplicate Chat',
       'Summarize & New',
@@ -38,6 +41,7 @@ describe('buildConversationContextMenuTemplate', () => {
     const template = buildConversationContextMenuTemplate({
       pinAction: 'pin',
       canArchive: true,
+      canOpenInNewWindow: true,
       canDuplicate: true,
       canSummarizeAndNew: true,
       canCopyWorkingDirectory: true,
@@ -49,6 +53,7 @@ describe('buildConversationContextMenuTemplate', () => {
     expect(template.filter((item) => item.type !== 'separator')).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Pin Chat', enabled: false }),
       expect.objectContaining({ label: 'Archive Chat', enabled: false }),
+      expect.objectContaining({ label: 'Open in Separate Window', enabled: false }),
       expect.objectContaining({ label: 'Duplicating…', enabled: false }),
       expect.objectContaining({ label: 'Summarize & New', enabled: false }),
       expect.objectContaining({ label: 'Copy Working Directory', enabled: false }),

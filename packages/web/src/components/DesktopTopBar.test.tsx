@@ -99,6 +99,22 @@ describe('DesktopTopBar', () => {
     expect(html).toContain('Choose layout');
   });
 
+  it('keeps zen windows focused by hiding layout and sidebar controls', () => {
+    const html = renderTopBar({
+      isElectron: true,
+      activeHostId: 'local',
+      activeHostLabel: 'Local',
+      activeHostKind: 'local',
+      activeHostSummary: 'Local runtime is healthy.',
+      launchMode: 'normal',
+      launchLabel: null,
+    }, { zenMode: true });
+
+    expect(html).toContain('>Zen<');
+    expect(html).not.toContain('Hide sidebar');
+    expect(html).not.toContain('Choose layout');
+  });
+
   it('does not render desktop chrome outside the desktop shell', () => {
     vi.stubGlobal('navigator', {
       userAgent: 'Mozilla/5.0 Safari/605.1.15',
