@@ -404,6 +404,13 @@ describe('conversationService', () => {
         isStreaming: false,
       },
       {
+        id: 'hidden-turn-1',
+        cwd: '/repo/hidden-turn',
+        sessionFile: '/sessions/hidden-turn-1.jsonl',
+        isStreaming: false,
+        hasPendingHiddenTurn: true,
+      },
+      {
         id: 'workspace-1',
         cwd: '/repo/workspace',
         sessionFile: '/sessions/workspace-1.jsonl',
@@ -427,6 +434,11 @@ describe('conversationService', () => {
         title: 'New Conversation',
         isLive: true,
         isRunning: false,
+      }),
+      expect.objectContaining({
+        id: 'hidden-turn-1',
+        isLive: true,
+        isRunning: true,
       }),
       expect.objectContaining({
         id: 'workspace-1',

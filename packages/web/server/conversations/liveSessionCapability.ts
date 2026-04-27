@@ -361,6 +361,7 @@ function buildCreatedLiveSessionBootstrap(
     : '';
   const hasPendingHiddenTurn = liveEntry.pendingHiddenTurnCustomTypes.length > 0
     || liveEntry.activeHiddenTurnCustomType !== null;
+  const isRunning = liveEntry.session.isStreaming || hasPendingHiddenTurn;
 
   return {
     conversationId,
@@ -374,7 +375,7 @@ function buildCreatedLiveSessionBootstrap(
         model,
         title,
         messageCount: 0,
-        isRunning: liveEntry.session.isStreaming,
+        isRunning,
         isLive: true,
         lastActivityAt: now,
       },

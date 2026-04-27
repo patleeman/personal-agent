@@ -326,6 +326,7 @@ function buildSyntheticLiveSessionSnapshot(
   liveEntry: ReturnType<typeof listAllLiveSessions>[number],
   deferredResumesBySessionFile: ReturnType<typeof listDeferredResumeSummariesBySessionFile>,
 ) {
+  const isRunning = liveEntry.isStreaming || Boolean(liveEntry.hasPendingHiddenTurn);
   return {
     id: liveEntry.id,
     file: liveEntry.sessionFile,
@@ -335,7 +336,7 @@ function buildSyntheticLiveSessionSnapshot(
     model: '',
     title: liveEntry.title || 'New Conversation',
     messageCount: 0,
-    isRunning: liveEntry.isStreaming,
+    isRunning,
     isLive: true,
     lastActivityAt: new Date().toISOString(),
     needsAttention: false,
@@ -345,6 +346,10 @@ function buildSyntheticLiveSessionSnapshot(
     deferredResumes: deferredResumesBySessionFile.get(liveEntry.sessionFile) ?? [],
     attachedContextDocs: readConversationContextDocs(liveEntry.id),
   };
+}
+
+function isLiveEntryRunning(liveEntry: ReturnType<typeof listAllLiveSessions>[number] | null | undefined): boolean {
+  return Boolean(liveEntry?.isStreaming || liveEntry?.hasPendingHiddenTurn);
 }
 
 export function listConversationSessionsSnapshot() {
@@ -366,7 +371,7 @@ export function listConversationSessionsSnapshot() {
       return {
         ...session,
         title: liveEntry?.title || session.title,
-        isRunning: Boolean(liveEntry?.isStreaming),
+        isRunning: isLiveEntryRunning(liveEntry),
         isLive: isRemoteTarget || Boolean(liveEntry),
       };
     }),
@@ -447,7 +452,7 @@ export function readConversationSessionMeta(conversationId: string) {
   return {
     ...decoratedSession,
     title: liveEntry?.title || decoratedSession.title,
-    isRunning: Boolean(liveEntry?.isStreaming),
+    isRunning: isLiveEntryRunning(liveEntry),
     isLive: isRemoteTarget || Boolean(liveEntry),
   };
 }
