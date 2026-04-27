@@ -28,6 +28,7 @@ import { useWorkspaceComposerEvents } from '../conversation/useWorkspaceComposer
 import { MAX_RELATED_THREAD_HOTKEYS, useRelatedThreadHotkeys } from '../conversation/useRelatedThreadHotkeys';
 import { useDesktopConversationShortcuts } from '../conversation/useDesktopConversationShortcuts';
 import { hasBlockingConversationOverlay, useEscapeAbortStream } from '../conversation/useEscapeAbortStream';
+import { useConversationModels } from '../conversation/useConversationModels';
 import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
@@ -125,7 +126,7 @@ import {
 import { buildSlashMenuItems, parseSlashInput } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
 import { buildDeferredResumeAutoResumeKey, shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
-import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
+import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus, formatDeferredResumeWhen } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
   findPendingAskUserQuestion,
@@ -252,57 +253,9 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 
-// ── Model picker ──────────────────────────────────────────────────────────────
-
-function useModels(enabled: boolean) {
-  const [models, setModels] = useState<ModelInfo[]>([]);
-  const [defaultModel, setDefaultModel] = useState<string>('');
-  const [defaultThinkingLevel, setDefaultThinkingLevel] = useState<string>('');
-  const [defaultServiceTier, setDefaultServiceTier] = useState<string>('');
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-
-    api.models()
-      .then((data) => {
-        setModels(data.models);
-        setDefaultModel(data.currentModel);
-        setDefaultThinkingLevel(data.currentThinkingLevel ?? '');
-        setDefaultServiceTier(data.currentServiceTier ?? '');
-      })
-      .catch(() => {});
-  }, [enabled]);
-
-  return {
-    models,
-    defaultModel,
-    defaultThinkingLevel,
-    defaultServiceTier,
-  };
-}
-
 const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 680;
 const DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS = 'max-w-[38rem]';
 const EMPTY_STATE_WORKSPACE_SELECT_CLASS = 'h-8 w-full min-w-0 truncate appearance-none bg-transparent px-0 pr-7 text-[12px] outline-none transition-colors disabled:cursor-default disabled:opacity-60';
-
-function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
-  const target = resume.status === 'ready'
-    ? resume.readyAt ?? resume.dueAt
-    : resume.dueAt;
-  const date = new Date(target);
-  if (Number.isNaN(date.getTime())) {
-    return target;
-  }
-
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
 
 function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
@@ -1127,7 +1080,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     defaultModel,
     defaultThinkingLevel,
     defaultServiceTier,
-  } = useModels(shouldLoadModels);
+  } = useConversationModels(shouldLoadModels);
   const [currentModel, setCurrentModel] = useState<string>('');
   const [currentThinkingLevel, setCurrentThinkingLevel] = useState<string>('');
   const [currentServiceTier, setCurrentServiceTier] = useState<string>('');

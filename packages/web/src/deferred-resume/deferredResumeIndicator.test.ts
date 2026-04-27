@@ -3,6 +3,7 @@ import {
   buildDeferredResumeIndicatorText,
   compareDeferredResumes,
   describeDeferredResumeStatus,
+  formatDeferredResumeWhen,
 } from './deferredResumeIndicator';
 import type { DeferredResumeSummary } from '../shared/types';
 
@@ -73,5 +74,11 @@ describe('deferredResumeIndicator', () => {
       scheduled('two', '2026-03-12T13:08:00.000Z'),
       ready('three', '2026-03-12T13:02:00.000Z'),
     ], Date.parse('2026-03-12T13:03:00.000Z'))).toBe('2 ready now · 1 scheduled');
+  });
+
+  it('formats the visible due/ready timestamp for deferred resumes', () => {
+    expect(formatDeferredResumeWhen(scheduled('one', '2026-03-12T13:08:00.000Z'))).toContain('Mar');
+    expect(formatDeferredResumeWhen(ready('one', '2026-03-12T13:01:00.000Z'))).toContain('Mar');
+    expect(formatDeferredResumeWhen(scheduled('bad', 'not-a-date'))).toBe('not-a-date');
   });
 });

@@ -59,3 +59,20 @@ export function buildDeferredResumeIndicatorText(resumes: DeferredResumeSummary[
   const countLabel = resumes.length === 1 ? '1 scheduled' : `${resumes.length} scheduled`;
   return `${countLabel} · next ${describeDeferredResumeStatus(nextResume, nowMs)}`;
 }
+
+export function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
+  const target = resume.status === 'ready'
+    ? resume.readyAt ?? resume.dueAt
+    : resume.dueAt;
+  const date = new Date(target);
+  if (Number.isNaN(date.getTime())) {
+    return target;
+  }
+
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
