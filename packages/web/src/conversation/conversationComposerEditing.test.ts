@@ -2,10 +2,49 @@ import { describe, expect, it } from 'vitest';
 import {
   canNavigateComposerHistoryValue,
   insertTextAtComposerSelection,
+  resolveComposerClearShortcut,
   resolveComposerHistoryNavigation,
 } from './conversationComposerEditing';
 
 describe('conversation composer editing helpers', () => {
+  it('resolves the composer clear keyboard shortcut', () => {
+    expect(resolveComposerClearShortcut({
+      key: 'c',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      composerInput: '  hello  ',
+      attachmentCount: 1,
+      drawingAttachmentCount: 0,
+    })).toEqual({ shouldClear: true, shouldRememberInput: true });
+
+    expect(resolveComposerClearShortcut({
+      key: 'c',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      composerInput: '   ',
+      attachmentCount: 0,
+      drawingAttachmentCount: 1,
+    })).toEqual({ shouldClear: true, shouldRememberInput: false });
+
+    expect(resolveComposerClearShortcut({
+      key: 'c',
+      ctrlKey: true,
+      metaKey: true,
+      altKey: false,
+      shiftKey: false,
+      isComposing: false,
+      composerInput: 'hello',
+      attachmentCount: 0,
+      drawingAttachmentCount: 0,
+    })).toEqual({ shouldClear: false, shouldRememberInput: false });
+  });
+
   it('allows history navigation only from the first or last visual line with no selection', () => {
     expect(canNavigateComposerHistoryValue({
       value: 'first line\nsecond line',

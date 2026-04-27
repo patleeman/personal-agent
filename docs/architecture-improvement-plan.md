@@ -82,6 +82,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved pending related-conversation id normalization into `pendingInitialPromptLogic` so the initial-prompt dispatch effect no longer owns that data-cleanup rule.
    - Moved screenshot capture image-to-file conversion into `promptAttachments`, keeping composer attachment preparation rules out of `ConversationPage`.
    - Moved composer history navigation state transitions into `conversationComposerEditing`, leaving `ConversationPage` to apply the resolved state only.
+   - Moved composer Ctrl+C clear-shortcut decision logic into `conversationComposerEditing` with focused coverage.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

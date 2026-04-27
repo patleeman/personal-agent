@@ -3,6 +3,37 @@ export interface ComposerSelectionRange {
   end: number;
 }
 
+export function resolveComposerClearShortcut(input: {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  altKey: boolean;
+  shiftKey: boolean;
+  isComposing: boolean;
+  composerInput: string;
+  attachmentCount: number;
+  drawingAttachmentCount: number;
+}): {
+  shouldClear: boolean;
+  shouldRememberInput: boolean;
+} {
+  const isClearShortcut = input.ctrlKey
+    && !input.metaKey
+    && !input.altKey
+    && !input.shiftKey
+    && input.key.toLowerCase() === 'c'
+    && !input.isComposing;
+
+  if (!isClearShortcut) {
+    return { shouldClear: false, shouldRememberInput: false };
+  }
+
+  return {
+    shouldClear: input.composerInput.length > 0 || input.attachmentCount > 0 || input.drawingAttachmentCount > 0,
+    shouldRememberInput: input.composerInput.trim().length > 0,
+  };
+}
+
 export function canNavigateComposerHistoryValue(input: {
   value: string;
   selectionStart: number;

@@ -110,6 +110,7 @@ import {
 import {
   canNavigateComposerHistoryValue,
   insertTextAtComposerSelection,
+  resolveComposerClearShortcut,
   resolveComposerHistoryNavigation,
 } from '../conversation/conversationComposerEditing';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
@@ -5162,11 +5163,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   // Keyboard handling
   async function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c' && !e.nativeEvent.isComposing) {
-      if (input.trim().length > 0) {
+    const clearShortcut = resolveComposerClearShortcut({
+      key: e.key,
+      ctrlKey: e.ctrlKey,
+      metaKey: e.metaKey,
+      altKey: e.altKey,
+      shiftKey: e.shiftKey,
+      isComposing: e.nativeEvent.isComposing,
+      composerInput: input,
+      attachmentCount: attachments.length,
+      drawingAttachmentCount: drawingAttachments.length,
+    });
+    if (clearShortcut.shouldClear || clearShortcut.shouldRememberInput) {
+      if (clearShortcut.shouldRememberInput) {
         rememberComposerInput(input);
       }
-      if (input.length > 0 || attachments.length > 0 || drawingAttachments.length > 0) {
+      if (clearShortcut.shouldClear) {
         e.preventDefault();
         setInput('');
         setAttachments([]);
