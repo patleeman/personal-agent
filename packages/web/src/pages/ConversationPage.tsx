@@ -19,7 +19,7 @@ import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditor
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { RemoteDirectoryBrowserModal } from '../components/RemoteDirectoryBrowserModal';
 import { AppPageEmptyState, EmptyState, LoadingState, PageHeader, Pill, cx } from '../components/ui';
-import type { ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, MemoryData, MessageBlock, ModelInfo, PromptAttachmentRefInput, SessionDetail, SessionMeta, VaultFileListResult } from '../shared/types';
+import type { ConversationAttachmentSummary, ConversationAutoModeState, ConversationContextDocRef, DeferredResumeSummary, DesktopConnectionsState, DesktopHostRecord, DesktopRemoteOperationStatus, DurableRunRecord, LiveSessionContext, MemoryData, MessageBlock, PromptAttachmentRefInput, SessionMeta, VaultFileListResult } from '../shared/types';
 import { useInvalidateOnTopics } from '../hooks/useInvalidateOnTopics';
 import { useConversationScroll } from '../hooks/useConversationScroll';
 import { useInitialDraftAttachmentHydration } from '../conversation/useInitialDraftAttachmentHydration';
@@ -3080,6 +3080,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   // Focus input on navigation
   useEffect(() => { textareaRef.current?.focus(); }, [id]);
 
+  const focusComposerFromTranscriptBackground = useCallback(() => {
+    const composer = textareaRef.current;
+    if (!composer || composer.disabled) {
+      return;
+    }
+
+    composer.focus();
+  }, []);
+
   useEffect(() => {
     if (prevStreamingRef.current && !stream.isStreaming) {
       if (pinnedInitialPromptScrollSessionIdRef.current === id) {
@@ -5582,6 +5591,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}
+              onFocusComposerRequest={focusComposerFromTranscriptBackground}
               resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
               resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
@@ -5677,6 +5687,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     draftCwdValue,
     debouncedRelatedThreadsQuery,
     forkConversationFromMessage,
+    focusComposerFromTranscriptBackground,
     hasRenderableMessages,
     hydrateHistoricalBlock,
     hydratingHistoricalBlockIdSet,

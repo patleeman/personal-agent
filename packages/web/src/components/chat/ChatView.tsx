@@ -39,10 +39,40 @@ interface ChatViewProps {
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode?: 'inline' | 'composer';
   onResumeConversation?: () => Promise<void> | void;
+  onFocusComposerRequest?: () => void;
   resumeConversationBusy?: boolean;
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
   windowingBadgeTopOffset?: number;
+}
+
+function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<HTMLDivElement>): boolean {
+  if (event.defaultPrevented || event.button !== 0) {
+    return false;
+  }
+
+  const target = event.target;
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  const selection = window.getSelection?.();
+  if (selection && !selection.isCollapsed) {
+    return false;
+  }
+
+  return !target.closest([
+    '[data-message-index]',
+    '[data-selection-reply-scope]',
+    'a',
+    'button',
+    'input',
+    'textarea',
+    'select',
+    '[contenteditable="true"]',
+    '[role="button"]',
+    '[role="menu"]',
+  ].join(','));
 }
 
 export const ChatView = memo(function ChatView({
@@ -68,6 +98,7 @@ export const ChatView = memo(function ChatView({
   onSubmitAskUserQuestion,
   askUserQuestionDisplayMode = 'inline',
   onResumeConversation,
+  onFocusComposerRequest,
   resumeConversationBusy = false,
   resumeConversationTitle,
   resumeConversationLabel = 'continue',
@@ -226,6 +257,11 @@ export const ChatView = memo(function ChatView({
       <div
         data-chat-transcript-panel="1"
         onContextMenu={handleTranscriptContextMenu}
+        onPointerDown={(event) => {
+          if (shouldFocusComposerFromTranscriptPointerDown(event)) {
+            onFocusComposerRequest?.();
+          }
+        }}
         className={layout === 'compact' ? 'px-2.5 py-3 sm:px-4 sm:py-4' : 'mx-auto w-full max-w-6xl pl-6 pr-10 pt-5 pb-24'}
       >
         {/* Bottom padding (pb-24) keeps the last message clear of the input area

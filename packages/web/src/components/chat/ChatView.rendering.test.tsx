@@ -50,13 +50,13 @@ function createStreamingTail(text: string): Extract<MessageBlock, { type: 'text'
   };
 }
 
-function renderChatView(messages: MessageBlock[]) {
+function renderChatView(messages: MessageBlock[], props: Partial<React.ComponentProps<typeof ChatView>> = {}) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   const root = createRoot(container);
 
   act(() => {
-    root.render(<ChatView messages={messages} isStreaming />);
+    root.render(<ChatView messages={messages} isStreaming {...props} />);
   });
 
   mountedRoots.push(root);
@@ -127,5 +127,33 @@ describe('ChatView rendering stability', () => {
     });
 
     expect(setIntervalSpy).not.toHaveBeenCalled();
+  });
+
+  it('requests composer focus when the transcript background is clicked', () => {
+    const onFocusComposerRequest = vi.fn();
+    const { container } = renderChatView([createAssistantBlock()], { onFocusComposerRequest });
+    const transcriptPanel = container.querySelector('[data-chat-transcript-panel="1"]');
+
+    expect(transcriptPanel).not.toBeNull();
+
+    act(() => {
+      transcriptPanel?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+
+    expect(onFocusComposerRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not request composer focus when a message is clicked', () => {
+    const onFocusComposerRequest = vi.fn();
+    const { container } = renderChatView([createAssistantBlock()], { onFocusComposerRequest });
+    const message = container.querySelector('[data-message-index="0"]');
+
+    expect(message).not.toBeNull();
+
+    act(() => {
+      message?.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0 }));
+    });
+
+    expect(onFocusComposerRequest).not.toHaveBeenCalled();
   });
 });
