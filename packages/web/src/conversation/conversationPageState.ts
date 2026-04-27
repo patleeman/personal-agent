@@ -1,9 +1,25 @@
-import type { MessageBlock, SessionMeta } from '../shared/types';
+import type { DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
 import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
+import { getRunHeadline, type RunPresentationLookups } from '../automation/runPresentation';
 
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
+
+export function shouldEnableConversationLiveStream(
+  conversationId: string | null | undefined,
+  confirmedLive: boolean | null,
+): boolean {
+  return Boolean(conversationId) && confirmedLive !== false;
+}
+
+export function resolveConversationLiveSession(input: {
+  streamBlockCount: number;
+  isStreaming: boolean;
+  confirmedLive: boolean | null;
+}): boolean {
+  return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
+}
 
 export function resolveConversationPendingStatusLabel(input: {
   isLiveSession: boolean;
@@ -215,6 +231,114 @@ export function replaceConversationMetaInSessionList(
   return changed ? updatedSessions : sessions;
 }
 
+export function mergeConversationSessionMeta(
+  detailMeta: SessionMeta | null | undefined,
+  sessionSnapshot: SessionMeta | null | undefined,
+): SessionMeta | null {
+  if (detailMeta && sessionSnapshot && detailMeta.id === sessionSnapshot.id) {
+    return {
+      ...sessionSnapshot,
+      ...detailMeta,
+      isRunning: detailMeta.isRunning ?? sessionSnapshot.isRunning,
+      isLive: detailMeta.isLive ?? sessionSnapshot.isLive,
+      lastActivityAt: detailMeta.lastActivityAt ?? sessionSnapshot.lastActivityAt,
+      needsAttention: detailMeta.needsAttention ?? sessionSnapshot.needsAttention,
+      attentionUpdatedAt: detailMeta.attentionUpdatedAt ?? sessionSnapshot.attentionUpdatedAt,
+      attentionUnreadMessageCount: detailMeta.attentionUnreadMessageCount ?? sessionSnapshot.attentionUnreadMessageCount,
+      attentionUnreadActivityCount: detailMeta.attentionUnreadActivityCount ?? sessionSnapshot.attentionUnreadActivityCount,
+      attentionActivityIds: detailMeta.attentionActivityIds ?? sessionSnapshot.attentionActivityIds,
+      deferredResumes: detailMeta.deferredResumes ?? sessionSnapshot.deferredResumes,
+    };
+  }
+
+  return detailMeta ?? sessionSnapshot ?? null;
+}
+
+export function formatConversationBackgroundRunStatusLabel(status: string | undefined): string {
+  if (status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering') {
+    return status;
+  }
+
+  return typeof status === 'string' && status.trim().length > 0 ? status : 'active';
+}
+
+export function buildConversationBackgroundRunIndicatorText(
+  runs: DurableRunRecord[],
+  lookups: RunPresentationLookups = {},
+): string {
+  if (runs.length === 0) {
+    return '';
+  }
+
+  const latestRun = runs[0]!;
+  const latestTitle = getRunHeadline(latestRun, lookups).title;
+  if (runs.length === 1) {
+    return `${formatConversationBackgroundRunStatusLabel(latestRun.status?.status)} · ${latestTitle}`;
+  }
+
+  return `${runs.length} active · latest ${latestTitle}`;
+}
+
+export function resolveConversationInitialHistoricalWarmupTarget(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  liveDecision: boolean | null | undefined;
+  historicalTotalBlocks: number;
+  historicalHasOlderBlocks: boolean;
+}): number | null {
+  if (
+    input.draft
+    || !input.conversationId
+    || input.liveDecision !== false
+    || !input.historicalHasOlderBlocks
+    || input.historicalTotalBlocks <= 0
+  ) {
+    return null;
+  }
+
+  // Keep the first paint small when switching threads. Older history can load
+  // lazily in the background or on demand instead of blocking open.
+  return null;
+}
+
+export function hasConversationLoadedHistoricalTailBlocks(
+  detail: Pick<SessionDetail, 'blocks' | 'totalBlocks'> | null | undefined,
+  targetTailBlocks: number | null,
+): boolean {
+  if (!detail || typeof targetTailBlocks !== 'number' || targetTailBlocks <= 0) {
+    return false;
+  }
+
+  return detail.blocks.length >= Math.min(targetTailBlocks, detail.totalBlocks);
+}
+
+export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
+  warmupActive: boolean;
+  targetTailBlocks: number | null;
+  currentTailBlocks: number;
+  loadedTailBlocks: boolean;
+}): boolean {
+  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || input.targetTailBlocks <= 0) {
+    return false;
+  }
+
+  return input.currentTailBlocks < input.targetTailBlocks || !input.loadedTailBlocks;
+}
+
+export function shouldShowConversationBootstrapLoadingState(input: {
+  draft: boolean;
+  conversationId: string | null | undefined;
+  conversationBootstrapLoading: boolean;
+  hasRenderableMessages: boolean;
+  hasVisibleSessionDetail: boolean;
+}): boolean {
+  return !input.draft
+    && Boolean(input.conversationId)
+    && input.conversationBootstrapLoading
+    && !input.hasRenderableMessages
+    && !input.hasVisibleSessionDetail;
+}
+
 export function resolveConversationStreamTitleSync<T extends { id: string; title: string }>(input: {
   draft: boolean;
   conversationId: string | null | undefined;
@@ -275,6 +399,49 @@ export function shouldShowConversationInlineLoadingState(input: {
   hasVisibleTranscript: boolean;
 }): boolean {
   return input.showConversationLoadingState && input.hasVisibleTranscript;
+}
+
+export function resolveConversationVisibleScrollBinding(input: {
+  draft: boolean;
+  routeConversationId: string | null | undefined;
+  realMessages: MessageBlock[] | undefined;
+  stableTranscriptState: {
+    conversationId: string;
+    messages: MessageBlock[];
+  } | null;
+  showConversationLoadingState: boolean;
+  initialScrollKey: string | null;
+  isStreaming: boolean;
+}): {
+  conversationId: string | null;
+  messages: MessageBlock[] | undefined;
+  initialScrollKey: string | null;
+  isStreaming: boolean;
+  usingStableTranscript: boolean;
+} {
+  const hasRenderableMessages = (input.realMessages?.length ?? 0) > 0;
+  const usingStableTranscript = !hasRenderableMessages
+    && input.showConversationLoadingState
+    && !input.draft
+    && Boolean(input.stableTranscriptState);
+
+  if (usingStableTranscript) {
+    return {
+      conversationId: input.stableTranscriptState?.conversationId ?? null,
+      messages: input.stableTranscriptState?.messages,
+      initialScrollKey: null,
+      isStreaming: false,
+      usingStableTranscript: true,
+    };
+  }
+
+  return {
+    conversationId: input.routeConversationId ?? null,
+    messages: input.realMessages,
+    initialScrollKey: input.initialScrollKey,
+    isStreaming: input.isStreaming,
+    usingStableTranscript: false,
+  };
 }
 
 export function resolveConversationPerformanceMode(input: {

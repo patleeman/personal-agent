@@ -1,15 +1,23 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
+  buildConversationBackgroundRunIndicatorText,
+  hasConversationLoadedHistoricalTailBlocks,
+  mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
+  resolveConversationLiveSession,
   resolveConversationPerformanceMode,
+  resolveConversationVisibleScrollBinding,
   resolveConversationStreamTitleSync,
   resolveDisplayedConversationPendingStatusLabel,
   shouldDeferConversationFileRefresh,
+  shouldEnableConversationLiveStream,
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
   shouldRenderConversationRail,
+  shouldShowConversationBootstrapLoadingState,
+  shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowMissingConversationState,
   shouldUseHealthyDesktopConversationState,
 } from './conversationPageState';
@@ -112,6 +120,32 @@ describe('conversation page state helpers', () => {
     expect(replaceConversationMetaInSessionList(next, 'conv-1', next?.[0])).toBe(next);
   });
 
+  it('merges detail and list metadata while preserving list-only fallback fields', () => {
+    const sessionSnapshot: SessionMeta = {
+      id: 'conv-1',
+      file: '/tmp/conv-1.jsonl',
+      timestamp: '2026-01-01T00:00:00.000Z',
+      cwd: '/repo',
+      cwdSlug: '-repo',
+      model: 'model-a',
+      title: 'List title',
+      messageCount: 4,
+      isRunning: true,
+      needsAttention: true,
+    };
+
+    expect(mergeConversationSessionMeta({
+      ...sessionSnapshot,
+      title: 'Detail title',
+      isRunning: undefined,
+      needsAttention: undefined,
+    }, sessionSnapshot)).toMatchObject({
+      title: 'Detail title',
+      isRunning: true,
+      needsAttention: true,
+    });
+  });
+
   it('keeps title synchronization immutable and normalized', () => {
     const sessions = [{ id: 'conv-1', title: 'Old title' }];
 
@@ -160,5 +194,62 @@ describe('conversation page state helpers', () => {
       realMessages: [{ type: 'text', ts: '2026-01-01T00:00:00.000Z', text: 'hello' }],
       performanceMode: 'default',
     })).toBe(true);
+  });
+
+  it('keeps live-stream and transcript loading decisions explicit', () => {
+    expect(shouldEnableConversationLiveStream('conv-1', null)).toBe(true);
+    expect(shouldEnableConversationLiveStream('conv-1', false)).toBe(false);
+    expect(resolveConversationLiveSession({
+      streamBlockCount: 0,
+      isStreaming: false,
+      confirmedLive: true,
+    })).toBe(true);
+
+    expect(hasConversationLoadedHistoricalTailBlocks({ blocks: [{ id: 'a' }], totalBlocks: 1 }, 10)).toBe(true);
+    expect(shouldShowConversationInitialHistoricalWarmupLoader({
+      warmupActive: true,
+      targetTailBlocks: 10,
+      currentTailBlocks: 5,
+      loadedTailBlocks: false,
+    })).toBe(true);
+    expect(shouldShowConversationBootstrapLoadingState({
+      draft: false,
+      conversationId: 'conv-1',
+      conversationBootstrapLoading: true,
+      hasRenderableMessages: false,
+      hasVisibleSessionDetail: false,
+    })).toBe(true);
+  });
+
+  it('uses stable transcript bindings while a saved conversation is loading', () => {
+    const stableMessages = [{ type: 'text' as const, ts: '2026-01-01T00:00:00.000Z', text: 'cached' }];
+    expect(resolveConversationVisibleScrollBinding({
+      draft: false,
+      routeConversationId: 'conv-2',
+      realMessages: undefined,
+      stableTranscriptState: { conversationId: 'conv-1', messages: stableMessages },
+      showConversationLoadingState: true,
+      initialScrollKey: 'tail:conv-2',
+      isStreaming: true,
+    })).toEqual({
+      conversationId: 'conv-1',
+      messages: stableMessages,
+      initialScrollKey: null,
+      isStreaming: false,
+      usingStableTranscript: true,
+    });
+  });
+
+  it('formats connected background-run indicators from latest run status', () => {
+    expect(buildConversationBackgroundRunIndicatorText([])).toBe('');
+    expect(buildConversationBackgroundRunIndicatorText([{
+      runId: 'run-1',
+      conversationId: 'conv-1',
+      manifest: {
+        kind: 'background-run',
+        spec: { metadata: { taskSlug: 'task-a' } },
+      },
+      status: { status: 'running' },
+    }])).toBe('running · task-a');
   });
 });

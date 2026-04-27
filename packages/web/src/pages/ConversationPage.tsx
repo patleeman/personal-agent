@@ -38,18 +38,28 @@ import {
 import { truncateConversationCwdFromFront } from '../conversation/conversationCwdHistory';
 import { NEW_CONVERSATION_TITLE } from '../conversation/conversationTitle';
 import {
+  buildConversationBackgroundRunIndicatorText,
+  formatConversationBackgroundRunStatusLabel,
+  hasConversationLoadedHistoricalTailBlocks,
+  mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
+  resolveConversationInitialHistoricalWarmupTarget,
+  resolveConversationLiveSession,
   resolveConversationPageTitle,
   resolveConversationPendingStatusLabel,
   resolveConversationPerformanceMode,
   resolveConversationStreamTitleSync,
+  resolveConversationVisibleScrollBinding,
   resolveDisplayedConversationPendingStatusLabel,
   shouldDeferConversationFileRefresh,
+  shouldEnableConversationLiveStream,
   shouldFetchConversationAttachments,
   shouldFetchConversationLiveSessionGitContext,
   shouldLoadConversationModels,
   shouldRenderConversationRail,
+  shouldShowConversationBootstrapLoadingState,
+  shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationInlineLoadingState,
   shouldShowMissingConversationState,
   shouldUseHealthyDesktopConversationState,
@@ -326,21 +336,6 @@ function formatParallelJobContextSummary(input: {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function shouldEnableConversationLiveStream(
-  conversationId: string | null | undefined,
-  confirmedLive: boolean | null,
-): boolean {
-  return Boolean(conversationId) && confirmedLive !== false;
-}
-
-function resolveConversationLiveSession(input: {
-  streamBlockCount: number;
-  isStreaming: boolean;
-  confirmedLive: boolean | null;
-}): boolean {
-  return input.streamBlockCount > 0 || input.isStreaming || input.confirmedLive === true;
-}
-
 function isConversationSessionNotLiveError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   const normalized = message.trim().toLowerCase();
@@ -349,160 +344,10 @@ function isConversationSessionNotLiveError(error: unknown): boolean {
     || normalized.startsWith('session ') && normalized.endsWith(' is not live');
 }
 
-function mergeConversationSessionMeta(
-  detailMeta: SessionMeta | null | undefined,
-  sessionSnapshot: SessionMeta | null | undefined,
-): SessionMeta | null {
-  if (detailMeta && sessionSnapshot && detailMeta.id === sessionSnapshot.id) {
-    return {
-      ...sessionSnapshot,
-      ...detailMeta,
-      isRunning: detailMeta.isRunning ?? sessionSnapshot.isRunning,
-      isLive: detailMeta.isLive ?? sessionSnapshot.isLive,
-      lastActivityAt: detailMeta.lastActivityAt ?? sessionSnapshot.lastActivityAt,
-      needsAttention: detailMeta.needsAttention ?? sessionSnapshot.needsAttention,
-      attentionUpdatedAt: detailMeta.attentionUpdatedAt ?? sessionSnapshot.attentionUpdatedAt,
-      attentionUnreadMessageCount: detailMeta.attentionUnreadMessageCount ?? sessionSnapshot.attentionUnreadMessageCount,
-      attentionUnreadActivityCount: detailMeta.attentionUnreadActivityCount ?? sessionSnapshot.attentionUnreadActivityCount,
-      attentionActivityIds: detailMeta.attentionActivityIds ?? sessionSnapshot.attentionActivityIds,
-      deferredResumes: detailMeta.deferredResumes ?? sessionSnapshot.deferredResumes,
-    };
-  }
-
-  return detailMeta ?? sessionSnapshot ?? null;
-}
-
-function formatConversationBackgroundRunStatusLabel(status: string | undefined): string {
-  if (status === 'queued' || status === 'waiting' || status === 'running' || status === 'recovering') {
-    return status;
-  }
-
-  return typeof status === 'string' && status.trim().length > 0 ? status : 'active';
-}
-
-function buildConversationBackgroundRunIndicatorText(
-  runs: DurableRunRecord[],
-  lookups: RunPresentationLookups = {},
-): string {
-  if (runs.length === 0) {
-    return '';
-  }
-
-  const latestRun = runs[0]!;
-  const latestTitle = getRunHeadline(latestRun, lookups).title;
-  if (runs.length === 1) {
-    return `${formatConversationBackgroundRunStatusLabel(latestRun.status?.status)} · ${latestTitle}`;
-  }
-
-  return `${runs.length} active · latest ${latestTitle}`;
-}
-
 const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
-function resolveConversationInitialHistoricalWarmupTarget(input: {
-  draft: boolean;
-  conversationId: string | null | undefined;
-  liveDecision: boolean | null | undefined;
-  historicalTotalBlocks: number;
-  historicalHasOlderBlocks: boolean;
-}): number | null {
-  if (
-    input.draft
-    || !input.conversationId
-    || input.liveDecision !== false
-    || !input.historicalHasOlderBlocks
-    || input.historicalTotalBlocks <= 0
-  ) {
-    return null;
-  }
-
-  // Keep the first paint small when switching threads. Older history can load
-  // lazily in the background or on demand instead of blocking open.
-  return null;
-}
-
-function hasConversationLoadedHistoricalTailBlocks(
-  detail: Pick<SessionDetail, 'blocks' | 'totalBlocks'> | null | undefined,
-  targetTailBlocks: number | null,
-): boolean {
-  if (!detail || typeof targetTailBlocks !== 'number' || targetTailBlocks <= 0) {
-    return false;
-  }
-
-  return detail.blocks.length >= Math.min(targetTailBlocks, detail.totalBlocks);
-}
-
-function shouldShowConversationInitialHistoricalWarmupLoader(input: {
-  warmupActive: boolean;
-  targetTailBlocks: number | null;
-  currentTailBlocks: number;
-  loadedTailBlocks: boolean;
-}): boolean {
-  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || input.targetTailBlocks <= 0) {
-    return false;
-  }
-
-  return input.currentTailBlocks < input.targetTailBlocks || !input.loadedTailBlocks;
-}
-
-function shouldShowConversationBootstrapLoadingState(input: {
-  draft: boolean;
-  conversationId: string | null | undefined;
-  conversationBootstrapLoading: boolean;
-  hasRenderableMessages: boolean;
-  hasVisibleSessionDetail: boolean;
-}): boolean {
-  return !input.draft
-    && Boolean(input.conversationId)
-    && input.conversationBootstrapLoading
-    && !input.hasRenderableMessages
-    && !input.hasVisibleSessionDetail;
-}
-
-function resolveConversationVisibleScrollBinding(input: {
-  draft: boolean;
-  routeConversationId: string | null | undefined;
-  realMessages: MessageBlock[] | undefined;
-  stableTranscriptState: {
-    conversationId: string;
-    messages: MessageBlock[];
-  } | null;
-  showConversationLoadingState: boolean;
-  initialScrollKey: string | null;
-  isStreaming: boolean;
-}): {
-  conversationId: string | null;
-  messages: MessageBlock[] | undefined;
-  initialScrollKey: string | null;
-  isStreaming: boolean;
-  usingStableTranscript: boolean;
-} {
-  const hasRenderableMessages = (input.realMessages?.length ?? 0) > 0;
-  const usingStableTranscript = !hasRenderableMessages
-    && input.showConversationLoadingState
-    && !input.draft
-    && Boolean(input.stableTranscriptState);
-
-  if (usingStableTranscript) {
-    return {
-      conversationId: input.stableTranscriptState?.conversationId ?? null,
-      messages: input.stableTranscriptState?.messages,
-      initialScrollKey: null,
-      isStreaming: false,
-      usingStableTranscript: true,
-    };
-  }
-
-  return {
-    conversationId: input.routeConversationId ?? null,
-    messages: input.realMessages,
-    initialScrollKey: input.initialScrollKey,
-    isStreaming: input.isStreaming,
-    usingStableTranscript: false,
-  };
-}
 
 // ── Model picker ──────────────────────────────────────────────────────────────
 
