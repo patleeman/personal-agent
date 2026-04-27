@@ -109,6 +109,10 @@ import {
   startComposerDictationCapture,
   type ComposerDictationCapture,
 } from '../conversation/conversationComposerDictation';
+import {
+  canNavigateComposerHistoryValue,
+  insertTextAtComposerSelection,
+} from '../conversation/conversationComposerEditing';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import {
   hasSelectableModelId,
@@ -2695,32 +2699,24 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, []);
 
   const insertTextIntoComposer = useCallback((text: string) => {
-    const normalizedText = text.trim();
-    if (!normalizedText) {
+    const insertion = insertTextAtComposerSelection({
+      currentInput: textareaRef.current?.value ?? input,
+      selection: composerSelectionRef.current,
+      text,
+    });
+    if (!insertion) {
       return;
     }
 
-    const currentInput = textareaRef.current?.value ?? input;
-    const selection = composerSelectionRef.current;
-    const start = Math.max(0, Math.min(selection.start, currentInput.length));
-    const end = Math.max(start, Math.min(selection.end, currentInput.length));
-    const before = currentInput.slice(0, start);
-    const after = currentInput.slice(end);
-    const leadingSpace = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
-    const trailingSpace = after.length > 0 && !/^\s/.test(after) ? ' ' : '';
-    const inserted = `${leadingSpace}${normalizedText}${trailingSpace}`;
-    const nextInput = `${before}${inserted}${after}`;
-    const nextCaret = before.length + inserted.length;
-
-    setInput(nextInput);
+    setInput(insertion.nextInput);
     window.requestAnimationFrame(() => {
       const el = textareaRef.current;
       if (!el) {
         return;
       }
       el.focus();
-      el.setSelectionRange(nextCaret, nextCaret);
-      composerSelectionRef.current = { start: nextCaret, end: nextCaret };
+      el.setSelectionRange(insertion.nextCaret, insertion.nextCaret);
+      composerSelectionRef.current = { start: insertion.nextCaret, end: insertion.nextCaret };
       scheduleComposerResize();
     });
   }, [input, scheduleComposerResize, setInput]);
@@ -5222,14 +5218,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function canNavigateComposerHistory(textarea: HTMLTextAreaElement, key: 'ArrowUp' | 'ArrowDown'): boolean {
-    if (textarea.selectionStart !== textarea.selectionEnd) {
-      return false;
-    }
-
-    const caret = textarea.selectionStart;
-    return key === 'ArrowUp'
-      ? !textarea.value.slice(0, caret).includes('\n')
-      : !textarea.value.slice(caret).includes('\n');
+    return canNavigateComposerHistoryValue({
+      value: textarea.value,
+      selectionStart: textarea.selectionStart,
+      selectionEnd: textarea.selectionEnd,
+      key,
+    });
   }
 
   // Keyboard handling
