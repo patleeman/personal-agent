@@ -71,6 +71,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted composer metadata row — execution target, workspace/cwd controls, git summary, and context usage — into `ConversationComposerMeta` with server-render tests.
    - Extracted draft empty-state workspace selector and related-thread suggestions into `ConversationDraftEmptyAction` with server-render tests.
    - Extracted dictation/send/stop/question-submit composer action controls into `ConversationComposerActions` with server-render tests.
+   - Extracted composer textarea, attachment/screenshot/drawing controls, preference-row wiring, and action controls into `ConversationComposerInputControls` with server-render tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

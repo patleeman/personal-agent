@@ -4,16 +4,15 @@ import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationActivityShelf } from '../components/conversation/ConversationActivityShelf';
-import { ConversationComposerActions } from '../components/conversation/ConversationComposerActions';
 import {
   resolveConversationComposerShellStateClassName,
 } from '../components/conversation/ConversationComposerChrome';
+import { ConversationComposerInputControls } from '../components/conversation/ConversationComposerInputControls';
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
 import { ConversationComposerMeta } from '../components/conversation/ConversationComposerMeta';
 import { ConversationContextShelf } from '../components/conversation/ConversationContextShelf';
 import type { ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationDraftEmptyAction, DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS } from '../components/conversation/ConversationDraftEmptyAction';
-import { ConversationPreferencesRow } from '../components/conversation/ConversationPreferencesRow';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
@@ -251,7 +250,6 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 
-const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 680;
 function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
 }
@@ -5933,142 +5931,59 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               </div>
             )}
 
-            {/* Textarea */}
-            <div className="px-3 pt-2.5 pb-2.5">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*,.excalidraw,application/json"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const files = Array.from(e.target.files ?? []);
-                  if (files.length > 0) {
-                    void addComposerFiles(files);
-                  }
-                  e.target.value = '';
-                }}
-              />
-
-              <div className="flex flex-col gap-0">
-                  <div className="px-3 pt-1">
-                    <textarea
-                      ref={textareaRef}
-                      value={input}
-                      onChange={e => {
-                        setInput(e.target.value);
-                        setSlashIdx(0);
-                        setMentionIdx(0);
-                        rememberComposerSelection(e.target);
-                      }}
-                      onSelect={e => { rememberComposerSelection(e.currentTarget); }}
-                      onClick={e => { rememberComposerSelection(e.currentTarget); }}
-                      onKeyUp={e => { rememberComposerSelection(e.currentTarget); }}
-                      onFocus={e => { rememberComposerSelection(e.currentTarget); }}
-                      onKeyDown={handleKeyDown}
-                      onPaste={handlePaste}
-                      rows={1}
-                      disabled={composerDisabled}
-                      className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
-                      placeholder={pendingAskUserQuestion
-                        ? 'Answer 1-9, or type to skip…'
-                        : 'Message… / commands, @ notes'}
-                      title={pendingAskUserQuestion
-                        ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                        : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-                      style={{ minHeight: '44px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' }}
-                    />
-                  </div>
-
-                  <div className="flex flex-nowrap items-center gap-1.5 px-3 py-0.5">
-                    <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={openFilePicker}
-                        disabled={composerDisabled}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-                        title="Attach image or file"
-                        aria-label="Attach image or file"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 5v14" />
-                          <path d="M5 12h14" />
-                        </svg>
-                      </button>
-                      {screenshotCaptureAvailable && (
-                        <button
-                          type="button"
-                          onClick={() => { void captureComposerScreenshot(); }}
-                          disabled={composerDisabled || screenshotCaptureBusy}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-                          title="Capture screenshot"
-                          aria-label="Capture screenshot"
-                        >
-                          {screenshotCaptureBusy ? (
-                            <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
-                          ) : (
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M4 7.5A2.5 2.5 0 0 1 6.5 5h11A2.5 2.5 0 0 1 20 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5Z" />
-                              <path d="M9 5 10.5 3.5h3L15 5" />
-                              <circle cx="12" cy="12" r="3.25" />
-                            </svg>
-                          )}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={openDrawingEditor}
-                        disabled={composerDisabled || stream.isStreaming}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-secondary transition-colors hover:bg-elevated/60 hover:text-primary disabled:opacity-40"
-                        title="Create drawing"
-                        aria-label="Create drawing"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 20h9" />
-                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                        </svg>
-                      </button>
-                      <ConversationPreferencesRow
-                        models={models}
-                        currentModel={currentModel || model || defaultModel}
-                        currentThinkingLevel={currentThinkingLevel}
-                        currentServiceTier={currentServiceTier}
-                        savingPreference={savingPreference}
-                        showAutoModeToggle={Boolean(draft || id)}
-                        autoModeEnabled={conversationAutoModeEnabled}
-                        autoModeBusy={conversationAutoModeBusy}
-                        onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
-                        onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
-                        onSelectServiceTier={(enableFastMode) => { void saveServiceTierPreference(enableFastMode); }}
-                        onToggleAutoMode={() => { void toggleConversationAutoMode(); }}
-                        compact={(composerShellWidth ?? Number.POSITIVE_INFINITY) < COMPOSER_PREFERENCES_MENU_WIDTH_PX}
-                      />
-                    </div>
-
-                    <ConversationComposerActions
-                      dictationState={dictationState}
-                      composerDisabled={composerDisabled}
-                      streamIsStreaming={stream.isStreaming}
-                      conversationNeedsTakeover={conversationNeedsTakeover}
-                      composerHasContent={composerHasContent}
-                      composerShowsQuestionSubmit={composerShowsQuestionSubmit}
-                      composerQuestionCanSubmit={composerQuestionCanSubmit}
-                      composerQuestionSubmitting={composerQuestionSubmitting}
-                      composerSubmitLabel={composerSubmit.label}
-                      composerAltHeld={composerAltHeld}
-                      composerParallelHeld={composerParallelHeld}
-                      onDictationPointerDown={handleDictationPointerDown}
-                      onDictationPointerUp={handleDictationPointerUp}
-                      onDictationPointerCancel={handleDictationPointerCancel}
-                      onSubmitComposerQuestion={() => { void submitComposerQuestionIfReady(); }}
-                      onSubmitComposerActionForModifiers={(altKeyHeld, parallelKeyHeld) => {
-                        void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);
-                      }}
-                      onAbortStream={() => { void stream.abort(); }}
-                    />
-                  </div>
-                </div>
-            </div>
+            <ConversationComposerInputControls
+              fileInputRef={fileInputRef}
+              textareaRef={textareaRef}
+              input={input}
+              pendingAskUserQuestion={Boolean(pendingAskUserQuestion)}
+              composerDisabled={composerDisabled}
+              composerShellWidth={composerShellWidth}
+              screenshotCaptureAvailable={screenshotCaptureAvailable}
+              screenshotCaptureBusy={screenshotCaptureBusy}
+              streamIsStreaming={stream.isStreaming}
+              models={models}
+              currentModel={currentModel || model || defaultModel}
+              currentThinkingLevel={currentThinkingLevel}
+              currentServiceTier={currentServiceTier}
+              savingPreference={savingPreference}
+              showAutoModeToggle={Boolean(draft || id)}
+              conversationAutoModeEnabled={conversationAutoModeEnabled}
+              conversationAutoModeBusy={conversationAutoModeBusy}
+              dictationState={dictationState}
+              conversationNeedsTakeover={conversationNeedsTakeover}
+              composerHasContent={composerHasContent}
+              composerShowsQuestionSubmit={composerShowsQuestionSubmit}
+              composerQuestionCanSubmit={composerQuestionCanSubmit}
+              composerQuestionSubmitting={composerQuestionSubmitting}
+              composerSubmitLabel={composerSubmit.label}
+              composerAltHeld={composerAltHeld}
+              composerParallelHeld={composerParallelHeld}
+              onFilesSelected={(files) => { void addComposerFiles(files); }}
+              onInputChange={(value, textarea) => {
+                setInput(value);
+                setSlashIdx(0);
+                setMentionIdx(0);
+                rememberComposerSelection(textarea);
+              }}
+              onRememberComposerSelection={rememberComposerSelection}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              onOpenFilePicker={openFilePicker}
+              onCaptureScreenshot={() => { void captureComposerScreenshot(); }}
+              onOpenDrawingEditor={openDrawingEditor}
+              onSelectModel={(modelId) => { void saveModelPreference(modelId); }}
+              onSelectThinkingLevel={(thinkingLevel) => { void saveThinkingLevelPreference(thinkingLevel); }}
+              onSelectServiceTier={(enableFastMode) => { void saveServiceTierPreference(enableFastMode); }}
+              onToggleAutoMode={() => { void toggleConversationAutoMode(); }}
+              onDictationPointerDown={handleDictationPointerDown}
+              onDictationPointerUp={handleDictationPointerUp}
+              onDictationPointerCancel={handleDictationPointerCancel}
+              onSubmitComposerQuestion={() => { void submitComposerQuestionIfReady(); }}
+              onSubmitComposerActionForModifiers={(altKeyHeld, parallelKeyHeld) => {
+                void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);
+              }}
+              onAbortStream={() => { void stream.abort(); }}
+            />
           </div>
 
           {showComposerMeta ? (
