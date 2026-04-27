@@ -429,9 +429,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pendingInitialPromptDispatching,
     hasPendingInitialPromptInFlight,
   });
+  const deferredConversationFileVersion = deferredConversationFileVersionRef.current;
   const effectiveConversationEventVersion = deferConversationFileRefresh
-    && deferredConversationFileVersionRef.current?.conversationId === id
-    ? deferredConversationFileVersionRef.current.version
+    && deferredConversationFileVersion !== null
+    && deferredConversationFileVersion.conversationId === id
+    ? deferredConversationFileVersion.version
     : conversationEventVersion;
 
   const [historicalTailBlocks, setHistoricalTailBlocks] = useState(INITIAL_HISTORICAL_TAIL_BLOCKS);
@@ -1327,7 +1329,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       } satisfies ConversationContextUsageTokens;
     }
 
-    if (!visibleSessionDetail) return undefined;
+    if (!visibleSessionDetail) return null;
 
     const historicalUsage = visibleSessionDetail.contextUsage;
     const modelInfo = models.find(m => m.id === (historicalUsage?.modelId || currentModel || model));
@@ -3535,7 +3537,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           const detail = await api.sessionDetail(liveConversationId, {
             tailBlocks: Math.max(realMessages.length, 1),
           });
-          entryId = resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail);
+          entryId = 'blocks' in detail
+            ? resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail)
+            : null;
         }
         if (entryId) {
           target = { entryId, beforeEntry: false, promptDraft: null };
@@ -3592,7 +3596,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const detail = await api.sessionDetail(liveConversationId, {
           tailBlocks: Math.max(realMessages.length, 1),
         });
-        entryId = resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail);
+        entryId = 'blocks' in detail
+          ? resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail)
+          : null;
       }
       if (!entryId) {
         throw new Error('The selected assistant message is not ready to branch yet. Try again in a moment.');
@@ -3879,13 +3885,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (result.cancelled || !result.image) {
         return;
       }
+      const { image } = result;
 
       setAttachments((current) => [
         ...current,
         base64ToFile(
-          result.image.data,
-          result.image.mimeType,
-          result.image.name?.trim() || 'Screenshot.png',
+          image.data,
+          image.mimeType,
+          image.name?.trim() || 'Screenshot.png',
         ),
       ]);
       textareaRef.current?.focus();
@@ -5547,7 +5554,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             {visibleTranscriptHasOlderBlocks && (
               <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border-subtle/30 pt-3">
                 <div className="min-w-0 text-[11px] text-secondary/80">
-                  Showing latest <span className="font-medium text-primary/85">{realMessages?.length ?? visibleTranscriptMessages.length}</span> of{' '}
+                  Showing latest <span className="font-medium text-primary/85">{realMessages?.length ?? visibleTranscriptMessages?.length ?? 0}</span> of{' '}
                   <span className="font-medium text-primary/85">{historicalTotalBlocks}</span> blocks.
                 </div>
                 <button
