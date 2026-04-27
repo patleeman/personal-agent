@@ -3,8 +3,6 @@ import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
 import { buildChatRenderChunks, CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT, formatWindowingCount, resolveChunkIndexForOffset, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
-import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
-import { collectTraceClusterLinkedRuns } from './linkedRuns.js';
 import { ErrorBlock, SubagentBlock, ThinkingBlock, TraceClusterBlock } from './TraceBlocks.js';
 import { ImageBlock, ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
 import { AssistantMessage, ContextMessage, SummaryMessage, UserMessage } from './MessageBlocks.js';
@@ -12,6 +10,7 @@ import { getStreamingStatusLabel, shouldAutoOpenConversationBlock } from './tool
 import { ToolBlock } from './ToolBlock.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
+import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
@@ -89,59 +88,7 @@ export const ChatView = memo(function ChatView({
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
-  const [expandedInlineRunKeys, setExpandedInlineRunKeys] = useState<ReadonlySet<string>>(() => new Set());
-  const visibleInlineRunKeySet = useMemo(() => {
-    const next = new Set<string>();
-
-    for (const item of renderItems) {
-      if (item.type !== 'trace_cluster') {
-        continue;
-      }
-
-      for (const run of collectTraceClusterLinkedRuns(item.blocks)) {
-        next.add(buildInlineRunExpansionKey(item.startIndex, run.runId));
-      }
-    }
-
-    return next;
-  }, [renderItems]);
-
-  useEffect(() => {
-    setExpandedInlineRunKeys((current) => {
-      if (current.size === 0) {
-        return current;
-      }
-
-      let changed = false;
-      const next = new Set<string>();
-      for (const inlineRunKey of current) {
-        if (visibleInlineRunKeySet.has(inlineRunKey)) {
-          next.add(inlineRunKey);
-        } else {
-          changed = true;
-        }
-      }
-
-      return changed ? next : current;
-    });
-  }, [visibleInlineRunKeySet]);
-
-  const isInlineRunExpanded = useCallback(
-    (inlineRunKey: string) => expandedInlineRunKeys.has(inlineRunKey),
-    [expandedInlineRunKeys],
-  );
-
-  const toggleInlineRun = useCallback((inlineRunKey: string) => {
-    setExpandedInlineRunKeys((current) => {
-      const next = new Set(current);
-      if (next.has(inlineRunKey)) {
-        next.delete(inlineRunKey);
-      } else {
-        next.add(inlineRunKey);
-      }
-      return next;
-    });
-  }, []);
+  const { isInlineRunExpanded, toggleInlineRun } = useInlineTraceRunExpansion(renderItems);
 
   const streamingStatusLabel = isCompacting
     ? 'Compacting context…'
