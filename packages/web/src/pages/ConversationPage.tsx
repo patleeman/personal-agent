@@ -40,6 +40,7 @@ import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperat
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
+import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from '../conversation/toolAutoOpen';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
 import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
@@ -872,50 +873,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     if (!artifactAutoOpenSeededRef.current) {
-      const completedArtifactIds = new Set<string>();
-      for (const [index, block] of realMessages.entries()) {
-        if (block.type !== 'tool_use') {
-          continue;
-        }
-
-        const artifact = readArtifactPresentation(block);
-        const blockKey = block._toolCallId ?? block.id ?? `artifact-${index}`;
-        if (artifact && block.status !== 'running' && !block.running) {
-          completedArtifactIds.add(blockKey);
-        }
-      }
-
-      processedArtifactAutoOpenIdsRef.current = completedArtifactIds;
+      processedArtifactAutoOpenIdsRef.current = collectCompletedToolAutoOpenBlockKeys(
+        realMessages,
+        readArtifactPresentation,
+        'artifact',
+      );
       artifactAutoOpenSeededRef.current = true;
       return;
     }
 
-    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
-      const block = realMessages[index];
-      if (block?.type !== 'tool_use') {
-        continue;
-      }
-
-      const artifact = readArtifactPresentation(block);
-      if (!artifact || !artifact.openRequested || block.status === 'running' || block.running) {
-        continue;
-      }
-
-      const blockKey = block._toolCallId ?? block.id ?? `artifact-${index}`;
-      if (processedArtifactAutoOpenIdsRef.current.has(blockKey)) {
-        continue;
-      }
-
+    const nextArtifact = findRequestedToolPresentationToOpen({
+      messages: realMessages,
+      processedBlockKeys: processedArtifactAutoOpenIdsRef.current,
+      autoOpenStartedAt: artifactAutoOpenStartedAtRef.current,
+      readPresentation: readArtifactPresentation,
+      getTargetId: (artifact) => artifact.artifactId,
+      keyPrefix: 'artifact',
+    });
+    for (const blockKey of nextArtifact.processedBlockKeys) {
       processedArtifactAutoOpenIdsRef.current.add(blockKey);
-
-      const artifactCreatedAt = Date.parse(block.ts);
-      const autoOpenStartedAt = Date.parse(artifactAutoOpenStartedAtRef.current);
-      if (!Number.isFinite(artifactCreatedAt) || !Number.isFinite(autoOpenStartedAt) || artifactCreatedAt < autoOpenStartedAt) {
-        continue;
-      }
-
-      openArtifact(artifact.artifactId);
-      break;
+    }
+    if (nextArtifact.targetId) {
+      openArtifact(nextArtifact.targetId);
     }
   }, [openArtifact, realMessages]);
 
@@ -925,50 +904,28 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     if (!checkpointAutoOpenSeededRef.current) {
-      const completedCheckpointIds = new Set<string>();
-      for (const [index, block] of realMessages.entries()) {
-        if (block.type !== 'tool_use') {
-          continue;
-        }
-
-        const checkpoint = readCheckpointPresentation(block);
-        const blockKey = block._toolCallId ?? block.id ?? `checkpoint-${index}`;
-        if (checkpoint && block.status !== 'running' && !block.running) {
-          completedCheckpointIds.add(blockKey);
-        }
-      }
-
-      processedCheckpointAutoOpenIdsRef.current = completedCheckpointIds;
+      processedCheckpointAutoOpenIdsRef.current = collectCompletedToolAutoOpenBlockKeys(
+        realMessages,
+        readCheckpointPresentation,
+        'checkpoint',
+      );
       checkpointAutoOpenSeededRef.current = true;
       return;
     }
 
-    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
-      const block = realMessages[index];
-      if (block?.type !== 'tool_use') {
-        continue;
-      }
-
-      const checkpoint = readCheckpointPresentation(block);
-      if (!checkpoint || !checkpoint.openRequested || block.status === 'running' || block.running) {
-        continue;
-      }
-
-      const blockKey = block._toolCallId ?? block.id ?? `checkpoint-${index}`;
-      if (processedCheckpointAutoOpenIdsRef.current.has(blockKey)) {
-        continue;
-      }
-
+    const nextCheckpoint = findRequestedToolPresentationToOpen({
+      messages: realMessages,
+      processedBlockKeys: processedCheckpointAutoOpenIdsRef.current,
+      autoOpenStartedAt: checkpointAutoOpenStartedAtRef.current,
+      readPresentation: readCheckpointPresentation,
+      getTargetId: (checkpoint) => checkpoint.checkpointId,
+      keyPrefix: 'checkpoint',
+    });
+    for (const blockKey of nextCheckpoint.processedBlockKeys) {
       processedCheckpointAutoOpenIdsRef.current.add(blockKey);
-
-      const checkpointCreatedAt = Date.parse(block.ts);
-      const autoOpenStartedAt = Date.parse(checkpointAutoOpenStartedAtRef.current);
-      if (!Number.isFinite(checkpointCreatedAt) || !Number.isFinite(autoOpenStartedAt) || checkpointCreatedAt < autoOpenStartedAt) {
-        continue;
-      }
-
-      openCheckpoint(checkpoint.checkpointId);
-      break;
+    }
+    if (nextCheckpoint.targetId) {
+      openCheckpoint(nextCheckpoint.targetId);
     }
   }, [openCheckpoint, realMessages]);
 
