@@ -422,11 +422,11 @@ export function AskUserQuestionToolBlock({
             mode === 'composer' ? (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[15px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
                 <div className="mt-2.5 space-y-1.5">
                   {presentation.questions.map((question, index) => (
-                    <p key={question.id} className="flex items-start gap-2.5 text-[15px] leading-relaxed text-secondary">
+                    <p key={question.id} className="flex items-start gap-2.5 text-[18px] leading-relaxed text-secondary">
                       <span className="mt-px w-5 shrink-0 text-[13px] font-mono text-dim">{index + 1}.</span>
                       <span className="min-w-0 break-words">{question.label}</span>
                     </p>
@@ -439,7 +439,7 @@ export function AskUserQuestionToolBlock({
             ) : (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[15px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
 
                 <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Question navigation">
@@ -496,9 +496,9 @@ export function AskUserQuestionToolBlock({
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
                       </p>
                     )}
-                    <p className="mt-1 text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+                    <p className="mt-1.5 text-[22px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
                     {activeQuestion.details && (
-                      <p className="mt-1 text-[15px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+                      <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
                     )}
 
                     {activeQuestion.options.length > 0 ? (

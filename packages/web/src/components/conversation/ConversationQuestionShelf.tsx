@@ -61,9 +61,9 @@ export function ConversationQuestionShelf({
       )}
 
       <div className="mt-2.5">
-        <p className="text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+        <p className="text-[22px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
         {activeQuestion.details && (
-          <p className="mt-1 text-[15px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+          <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
         )}
       </div>
 
