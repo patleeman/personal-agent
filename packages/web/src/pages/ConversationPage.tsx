@@ -4,8 +4,8 @@ import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
 import { ConversationActivityShelf } from '../components/conversation/ConversationActivityShelf';
+import { ConversationComposerActions } from '../components/conversation/ConversationComposerActions';
 import {
-  ComposerActionIcon,
   resolveConversationComposerShellStateClassName,
 } from '../components/conversation/ConversationComposerChrome';
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
@@ -89,7 +89,6 @@ import {
 } from '../conversation/conversationInitialState';
 import {
   dedupeConversationContextDocs,
-  formatComposerActionLabel,
   isAttachableMentionItem,
   mentionItemToConversationContextDoc,
   resolveConversationAutocompleteCatalogDemand,
@@ -6046,146 +6045,27 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                       />
                     </div>
 
-                    <div className="ml-auto flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onPointerDown={handleDictationPointerDown}
-                        onPointerUp={handleDictationPointerUp}
-                        onPointerCancel={handleDictationPointerCancel}
-                        disabled={composerDisabled || dictationState === 'transcribing'}
-                        className={cx(
-                          'flex h-8 w-8 shrink-0 touch-none items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
-                          dictationState === 'recording'
-                            ? 'bg-danger/15 text-danger hover:bg-danger/25'
-                            : dictationState === 'transcribing'
-                              ? 'bg-elevated text-accent'
-                              : 'text-secondary hover:bg-elevated/60 hover:text-primary',
-                        )}
-                        title={dictationState === 'recording'
-                          ? 'Recording dictation — release after a hold to stop, or click again to toggle off'
-                          : dictationState === 'transcribing'
-                            ? 'Transcribing…'
-                            : 'Dictate. Hold to record while held, or click to toggle.'}
-                        aria-label={dictationState === 'recording' ? 'Stop dictation' : 'Start dictation'}
-                      >
-                        {dictationState === 'transcribing' ? (
-                          <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
-                        ) : (
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v5a3 3 0 0 0 3 3Z" />
-                            <path d="M19 11a7 7 0 0 1-14 0" />
-                            <path d="M12 18v3" />
-                            <path d="M8 21h8" />
-                          </svg>
-                        )}
-                      </button>
-                      {stream.isStreaming ? (
-                        <>
-                          {composerHasContent ? (
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                void submitComposerActionForModifiers(
-                                  composerAltHeld || event.altKey,
-                                  composerParallelHeld || event.ctrlKey || event.metaKey,
-                                );
-                              }}
-                              disabled={composerDisabled}
-                              className={cx(
-                                'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default disabled:opacity-40',
-                                composerSubmit.label === 'Parallel'
-                                  ? 'bg-steel/12 text-steel hover:bg-steel/20'
-                                  : composerSubmit.label === 'Follow up'
-                                    ? 'bg-elevated text-primary hover:bg-elevated/80'
-                                    : 'bg-warning/15 text-warning hover:bg-warning/25',
-                              )}
-                              title={composerSubmit.label === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : composerSubmit.label}
-                              aria-label={composerSubmit.label}
-                            >
-                              {composerSubmit.label !== 'Send' ? (
-                                <>
-                                  <ComposerActionIcon label={composerSubmit.label} className="shrink-0" />
-                                  <span>{formatComposerActionLabel(composerSubmit.label)}</span>
-                                </>
-                              ) : null}
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => { void stream.abort(); }}
-                            disabled={conversationNeedsTakeover}
-                            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-danger/15 text-danger transition-colors hover:bg-danger/25 disabled:cursor-default disabled:opacity-60"
-                            title={conversationNeedsTakeover ? 'Take over this conversation before stopping' : 'Stop'}
-                            aria-label="Stop"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-                              <rect x="3.25" y="3.25" width="9.5" height="9.5" rx="1.2" />
-                            </svg>
-                          </button>
-                        </>
-                      ) : composerShowsQuestionSubmit ? (
-                        <button
-                          type="button"
-                          onClick={() => { void submitComposerQuestionIfReady(); }}
-                          disabled={composerDisabled || !composerQuestionCanSubmit || composerQuestionSubmitting}
-                          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-[11px] font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-default disabled:opacity-40"
-                          title={composerQuestionCanSubmit ? 'Submit answers' : 'Answer all questions to submit'}
-                          aria-label="Submit answers"
-                        >
-                          <span aria-hidden="true">✓</span>
-                          <span>{composerQuestionSubmitting ? 'Submitting…' : 'Submit'}</span>
-                        </button>
-                      ) : composerHasContent ? (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            void submitComposerActionForModifiers(
-                              composerAltHeld || event.altKey,
-                              composerParallelHeld || event.ctrlKey || event.metaKey,
-                            );
-                          }}
-                          disabled={composerDisabled}
-                          className={cx(
-                            'flex shrink-0 items-center justify-center rounded-full transition-colors disabled:cursor-default disabled:opacity-40',
-                            composerSubmit.label === 'Send'
-                              ? 'h-8 w-8 bg-accent text-white hover:bg-accent/90'
-                              : 'h-9 gap-1.5 px-3 text-[11px] font-medium',
-                            composerSubmit.label === 'Steer'
-                              ? 'bg-warning/15 text-warning hover:bg-warning/25'
-                              : composerSubmit.label === 'Follow up'
-                                ? 'bg-elevated text-primary hover:bg-elevated/80'
-                                : composerSubmit.label === 'Parallel'
-                                  ? 'bg-steel/12 text-steel hover:bg-steel/20'
-                                  : '',
-                          )}
-                          title={composerSubmit.label === 'Parallel' ? 'Parallel (Ctrl/⌘+Enter)' : composerSubmit.label}
-                          aria-label={composerSubmit.label}
-                        >
-                          {composerSubmit.label === 'Send' ? (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="m18 15-6-6-6 6" />
-                            </svg>
-                          ) : (
-                            <>
-                              <ComposerActionIcon label={composerSubmit.label} className="shrink-0" />
-                              <span>{formatComposerActionLabel(composerSubmit.label)}</span>
-                            </>
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={true}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border-default/70 bg-surface/65 text-dim/70"
-                          title="Send"
-                          aria-label="Send"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="m18 15-6-6-6 6" />
-                          </svg>
-                        </button>
-                      )}
-                    </div>
+                    <ConversationComposerActions
+                      dictationState={dictationState}
+                      composerDisabled={composerDisabled}
+                      streamIsStreaming={stream.isStreaming}
+                      conversationNeedsTakeover={conversationNeedsTakeover}
+                      composerHasContent={composerHasContent}
+                      composerShowsQuestionSubmit={composerShowsQuestionSubmit}
+                      composerQuestionCanSubmit={composerQuestionCanSubmit}
+                      composerQuestionSubmitting={composerQuestionSubmitting}
+                      composerSubmitLabel={composerSubmit.label}
+                      composerAltHeld={composerAltHeld}
+                      composerParallelHeld={composerParallelHeld}
+                      onDictationPointerDown={handleDictationPointerDown}
+                      onDictationPointerUp={handleDictationPointerUp}
+                      onDictationPointerCancel={handleDictationPointerCancel}
+                      onSubmitComposerQuestion={() => { void submitComposerQuestionIfReady(); }}
+                      onSubmitComposerActionForModifiers={(altKeyHeld, parallelKeyHeld) => {
+                        void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);
+                      }}
+                      onAbortStream={() => { void stream.abort(); }}
+                    />
                   </div>
                 </div>
             </div>
