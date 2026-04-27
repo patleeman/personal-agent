@@ -3,6 +3,7 @@ import { Link, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { ChatView } from '../components/chat/ChatView';
 import { ComposerAttachmentShelf } from '../components/chat/ComposerAttachmentShelf';
 import { ConversationRail } from '../components/chat/ConversationRailOverlay';
+import { ConversationActivityShelf } from '../components/conversation/ConversationActivityShelf';
 import {
   BrowsePathButton,
   ChatBubbleIcon,
@@ -52,7 +53,6 @@ import { truncateConversationCwdFromFront } from '../conversation/conversationCw
 import { NEW_CONVERSATION_TITLE } from '../conversation/conversationTitle';
 import {
   buildConversationBackgroundRunIndicatorText,
-  formatConversationBackgroundRunStatusLabel,
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
@@ -131,7 +131,7 @@ import {
 import { buildSlashMenuItems, parseSlashInput } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
 import { buildDeferredResumeAutoResumeKey, shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
-import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus, formatDeferredResumeWhen } from '../deferred-resume/deferredResumeIndicator';
+import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
   findPendingAskUserQuestion,
@@ -192,7 +192,6 @@ import {
   getConversationResumeState,
 } from '../conversation/conversationResume';
 import {
-  getRunHeadline,
   isRunActive,
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
@@ -6105,138 +6104,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                   </div>
                 )}
 
-                {!draft && activeConversationBackgroundRuns.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <span className="inline-flex h-3 w-3 shrink-0 items-center justify-center text-accent" aria-hidden="true">
-                          <span className="h-2.5 w-2.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
-                        </span>
-                        <span className="shrink-0 text-secondary">Background Work</span>
-                        <span className="truncate text-dim">{backgroundRunIndicatorText}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3 text-[11px]">
-                        <button
-                          type="button"
-                          onClick={() => { setShowBackgroundRunDetails((open) => !open); }}
-                          className="text-dim transition-colors hover:text-primary"
-                        >
-                          {showActiveBackgroundRunDetails ? 'hide' : 'details'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {showActiveBackgroundRunDetails && (
-                      <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
-                        {activeConversationBackgroundRuns.map((run) => {
-                          const headline = getRunHeadline(run, runLookups);
-                          const summary = headline.summary === 'Background run'
-                            ? `Run ${run.runId}`
-                            : headline.summary;
-                          const statusLabel = formatConversationBackgroundRunStatusLabel(run.status?.status);
-                          const statusClass = run.status?.status === 'recovering'
-                            ? 'text-warning'
-                            : run.status?.status === 'queued' || run.status?.status === 'waiting'
-                              ? 'text-dim'
-                              : 'text-accent';
-
-                          return (
-                            <div key={run.runId} className="flex items-start gap-3 text-[12px]">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <span className={cx('shrink-0 font-medium', statusClass)}>{statusLabel}</span>
-                                  <span className="truncate text-primary">{headline.title}</span>
-                                </div>
-                                <div className="mt-0.5 text-[11px] text-dim">{summary}</div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Deferred resume indicator */}
-                {!draft && orderedDeferredResumes.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between gap-3 border-b border-border-subtle px-3 py-2 text-[11px]">
-                      <div className="min-w-0 flex items-center gap-2">
-                        <span className={cx(
-                          'shrink-0',
-                          hasReadyDeferredResumes ? 'text-warning' : 'text-dim',
-                        )}>
-                          ⏰
-                        </span>
-                        <span className="shrink-0 text-secondary">Wakeups</span>
-                        <span className="truncate text-dim">{deferredResumeIndicatorText}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3 text-[11px]">
-                        {hasReadyDeferredResumes && !isLiveSession && (
-                          <button
-                            type="button"
-                            onClick={() => { void continueDeferredResumesNow(); }}
-                            className="text-accent transition-colors hover:text-accent/80"
-                          >
-                            continue now
-                          </button>
-                        )}
-                        {deferredResumesBusy && <span className="text-dim">updating…</span>}
-                        <button
-                          type="button"
-                          onClick={() => { setShowDeferredResumeDetails((open) => !open); }}
-                          className="text-dim transition-colors hover:text-primary"
-                        >
-                          {showDeferredResumeDetails ? 'hide' : 'details'}
-                        </button>
-                      </div>
-                    </div>
-
-                    {showDeferredResumeDetails && (
-                      <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
-                        {orderedDeferredResumes.map((resume) => (
-                          <div key={resume.id} className="flex items-start gap-3 text-[12px]">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <span className={cx(
-                                  'shrink-0 font-medium',
-                                  resume.status === 'ready' ? 'text-warning' : 'text-secondary',
-                                )}>
-                                  {describeDeferredResumeStatus(resume, deferredResumeNowMs)}
-                                </span>
-                                <span className="truncate text-primary">{resume.title ?? resume.prompt}</span>
-                              </div>
-                              <div className="mt-0.5 text-[11px] text-dim">
-                                {resume.kind === 'reminder' ? 'Reminder' : resume.kind === 'task-callback' ? 'Task callback' : 'Wakeup'}
-                                {resume.behavior === 'followUp' ? ' · follow-up' : ''} · {resume.status === 'ready' ? 'Ready' : 'Due'} {formatDeferredResumeWhen(resume)}
-                                {resume.attempts > 0 ? ` · retries ${resume.attempts}` : ''}
-                              </div>
-                            </div>
-                            <div className="flex shrink-0 items-center gap-3">
-                              {resume.status === 'scheduled' && (
-                                <button
-                                  type="button"
-                                  onClick={() => { void fireDeferredResumeNow(resume.id); }}
-                                  className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:opacity-40"
-                                  disabled={deferredResumesBusy}
-                                >
-                                  fire now
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => { void cancelDeferredResume(resume.id); }}
-                                className="text-[11px] text-dim transition-colors hover:text-danger disabled:opacity-40"
-                                disabled={deferredResumesBusy}
-                              >
-                                cancel
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                {!draft && (
+                  <ConversationActivityShelf
+                    backgroundRuns={activeConversationBackgroundRuns}
+                    backgroundRunIndicatorText={backgroundRunIndicatorText}
+                    showBackgroundRunDetails={showActiveBackgroundRunDetails}
+                    runLookups={runLookups}
+                    onToggleBackgroundRunDetails={() => { setShowBackgroundRunDetails((open) => !open); }}
+                    deferredResumes={orderedDeferredResumes}
+                    deferredResumeIndicatorText={deferredResumeIndicatorText}
+                    deferredResumeNowMs={deferredResumeNowMs}
+                    hasReadyDeferredResumes={hasReadyDeferredResumes}
+                    isLiveSession={isLiveSession}
+                    deferredResumesBusy={deferredResumesBusy}
+                    showDeferredResumeDetails={showDeferredResumeDetails}
+                    onContinueDeferredResumesNow={() => { void continueDeferredResumesNow(); }}
+                    onToggleDeferredResumeDetails={() => { setShowDeferredResumeDetails((open) => !open); }}
+                    onFireDeferredResumeNow={(resumeId) => { void fireDeferredResumeNow(resumeId); }}
+                    onCancelDeferredResume={(resumeId) => { void cancelDeferredResume(resumeId); }}
+                  />
                 )}
 
                 {pendingAskUserQuestion && composerActiveQuestion && (
