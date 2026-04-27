@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
 import {
   hasConversationTranscriptAcceptedPendingInitialPrompt,
+  normalizePendingRelatedConversationIds,
   shouldAutoDispatchPendingInitialPrompt,
   shouldClaimPendingInitialPromptForSession,
   shouldKeepStoredPendingInitialPromptDuringDispatch,
@@ -92,6 +93,13 @@ describe('pendingInitialPromptLogic', () => {
       ...prompt,
       relatedConversationIds: ['related-1'],
     })).toBe(true);
+  });
+
+  it('normalizes related conversation ids before dispatching', () => {
+    expect(normalizePendingRelatedConversationIds({
+      ...prompt,
+      relatedConversationIds: [' related-1 ', '', 'related-2', 'related-1'],
+    })).toEqual(['related-1', 'related-2']);
   });
 
   it('detects transcript acceptance by text and image count', () => {

@@ -35,6 +35,16 @@ export function shouldKeepStoredPendingInitialPromptDuringDispatch(
   return (prompt.relatedConversationIds?.length ?? 0) > 0;
 }
 
+export function normalizePendingRelatedConversationIds(
+  prompt: PendingConversationPrompt,
+): string[] {
+  return Array.from(new Set(
+    (prompt.relatedConversationIds ?? [])
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ));
+}
+
 export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
   messages: MessageBlock[] | undefined;
   prompt: PendingConversationPrompt | null | undefined;

@@ -123,6 +123,7 @@ import { parseWholeLineBashCommand } from '../conversation/conversationBashComma
 import { parseConversationSlashCommand, type ConversationSlashCommand } from '../conversation/conversationSlashCommand';
 import {
   hasConversationTranscriptAcceptedPendingInitialPrompt,
+  normalizePendingRelatedConversationIds,
   shouldAutoDispatchPendingInitialPrompt,
   shouldClaimPendingInitialPromptForSession,
   shouldKeepStoredPendingInitialPromptDuringDispatch,
@@ -3292,12 +3293,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setConversationCwdEditorOpen(false);
   }, [currentCwd]);
 
-  const normalizePendingRelatedConversationIds = useCallback((prompt: PendingConversationPrompt): string[] => Array.from(new Set(
-    (prompt.relatedConversationIds ?? [])
-      .map((value) => value.trim())
-      .filter(Boolean),
-  )), []);
-
   useEffect(() => {
     if (!shouldAutoDispatchPendingInitialPrompt({
       draft,
@@ -3378,7 +3373,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pendingInitialPrompt,
     pendingInitialPromptDispatching,
     allowQueuedPrompts,
-    normalizePendingRelatedConversationIds,
     realMessages?.length,
     stream.hasSnapshot,
     stream.send,
