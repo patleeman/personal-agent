@@ -81,7 +81,7 @@ export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFile
       originator: 'Codex Desktop',
       'Content-Type': contentType,
     },
-    body: body as unknown as BodyInit,
+    body: body as unknown as RequestInit['body'],
   });
 
   const text = await response.text();
