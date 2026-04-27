@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StorageLike } from '../local/reloadState';
 import type { MessageBlock } from '../shared/types';
-import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveForkEntryForMessage, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from './forking';
+import { buildConversationComposerStorageKey, clearConversationComposerDraft, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveBranchEntryIdFromSessionDetailResult, resolveForkEntryForMessage, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from './forking';
 
 function createStorage(): StorageLike & { getItem(key: string): string | null } {
   const data = new Map<string, string>();
@@ -100,6 +100,34 @@ describe('resolveBranchEntryIdForMessage', () => {
           { type: 'thinking', id: 'assistant-123-t3', ts: '2026-03-29T11:59:58.000Z', text: 'Thinking…' },
           { type: 'text', id: 'assistant-999-x4', ts: '2026-03-29T11:59:59.000Z', text: 'Something else' },
           { type: 'text', id: 'assistant-123-x5', ts: '2026-03-29T12:00:01.000Z', text: 'Latest reply' },
+        ],
+      },
+    )).toBe('assistant-123');
+  });
+});
+
+describe('resolveBranchEntryIdFromSessionDetailResult', () => {
+  it('ignores unchanged session detail responses that do not include blocks', () => {
+    expect(resolveBranchEntryIdFromSessionDetailResult(
+      { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'Reply' },
+      3,
+      { unchanged: true, sessionId: 'session-1', signature: 'sig-1' },
+    )).toBeNull();
+  });
+
+  it('uses append-only session detail responses when they include matching blocks', () => {
+    expect(resolveBranchEntryIdFromSessionDetailResult(
+      { type: 'text', ts: '2026-03-29T12:00:00.000Z', text: 'Reply' },
+      4,
+      {
+        appendOnly: true,
+        meta: { id: 'session-1', title: 'Session' },
+        blockOffset: 4,
+        totalBlocks: 5,
+        contextUsage: null,
+        signature: 'sig-2',
+        blocks: [
+          { type: 'text', id: 'assistant-123-x4', ts: '2026-03-29T12:00:00.000Z', text: 'Reply' },
         ],
       },
     )).toBe('assistant-123');

@@ -1,5 +1,5 @@
 import { getSessionStorage, type StorageLike } from '../local/reloadState';
-import type { DisplayBlock, MessageBlock } from '../shared/types';
+import type { DisplayBlock, MessageBlock, SessionDetailResult } from '../shared/types';
 
 interface ForkableMessageEntry {
   entryId: string;
@@ -105,6 +105,18 @@ export function resolveBranchEntryIdForMessage(
   }
 
   return null;
+}
+
+export function resolveBranchEntryIdFromSessionDetailResult(
+  block: MessageBlock | undefined,
+  absoluteMessageIndex: number,
+  detail: SessionDetailResult,
+): string | null {
+  if (!('blocks' in detail)) {
+    return null;
+  }
+
+  return resolveBranchEntryIdForMessage(block, absoluteMessageIndex, detail);
 }
 
 export function resolveRewindTargetForMessage(

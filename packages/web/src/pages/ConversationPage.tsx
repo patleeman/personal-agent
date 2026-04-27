@@ -142,7 +142,7 @@ import {
   type AskUserQuestionAnswers,
   type AskUserQuestionPresentation,
 } from '../transcript/askUserQuestions';
-import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdForMessage, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from '../conversation/forking';
+import { buildConversationComposerStorageKey, persistForkPromptDraft, resolveBranchEntryIdFromSessionDetailResult, resolveRewindTargetForMessage, resolveSessionEntryIdFromBlockId } from '../conversation/forking';
 import {
   beginDraftConversationAttachmentsMutation,
   buildDraftConversationComposerStorageKey,
@@ -3537,9 +3537,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           const detail = await api.sessionDetail(liveConversationId, {
             tailBlocks: Math.max(realMessages.length, 1),
           });
-          entryId = 'blocks' in detail
-            ? resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail)
-            : null;
+          entryId = resolveBranchEntryIdFromSessionDetailResult(clickedBlock, messageIndex, detail);
         }
         if (entryId) {
           target = { entryId, beforeEntry: false, promptDraft: null };
@@ -3596,9 +3594,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         const detail = await api.sessionDetail(liveConversationId, {
           tailBlocks: Math.max(realMessages.length, 1),
         });
-        entryId = 'blocks' in detail
-          ? resolveBranchEntryIdForMessage(clickedBlock, messageIndex, detail)
-          : null;
+        entryId = resolveBranchEntryIdFromSessionDetailResult(clickedBlock, messageIndex, detail);
       }
       if (!entryId) {
         throw new Error('The selected assistant message is not ready to branch yet. Try again in a moment.');

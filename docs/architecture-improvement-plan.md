@@ -78,6 +78,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Expanded `pendingInitialPromptLogic` to own pending-prompt claim/retain decisions with focused tests, tightening the auto-dispatch effect in `ConversationPage`.
    - Tightened `ConversationPage` controller type boundaries for deferred file refresh, session-detail branching, screenshot capture, transcript counts, and context-token props so the page type-checks cleanly.
    - Restored the tested pending related-thread status label in `conversationPageState`, keeping this controller presentation rule outside `ConversationPage`.
+   - Moved branch/rewind session-detail result narrowing into `forking` so `ConversationPage` no longer knows the session-detail transport union shape.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
