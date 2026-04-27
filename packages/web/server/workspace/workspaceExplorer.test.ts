@@ -1,10 +1,10 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { listWorkspaceDirectory, readWorkspaceDiffOverlay, readWorkspaceFile, __workspaceExplorerInternals } from './workspaceExplorer.js';
+import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readWorkspaceDiffOverlay, readWorkspaceFile, renameWorkspacePath, writeWorkspaceFile, __workspaceExplorerInternals } from './workspaceExplorer.js';
 
 function git(args: string[], cwd: string): string {
   return execFileSync('git', args, { cwd, encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] });
@@ -75,5 +75,26 @@ describe('workspace explorer', () => {
     expect(overlay.gitStatus).toBe('untracked');
     expect(overlay.addedLines).toEqual([1, 2, 3]);
     expect(overlay.deletedBlocks).toEqual([]);
+  });
+
+  it('writes, creates, renames, moves, and deletes workspace paths safely', () => {
+    const repo = createRepo();
+
+    const written = writeWorkspaceFile(repo, 'notes/todo.txt', 'ship it\r\n');
+    expect(written.path).toBe('notes/todo.txt');
+    expect(readFileSync(join(repo, 'notes', 'todo.txt'), 'utf-8')).toBe('ship it\n');
+
+    const folder = createWorkspaceFolder(repo, 'docs');
+    expect(folder.kind).toBe('directory');
+
+    const renamed = renameWorkspacePath(repo, 'notes/todo.txt', 'done.txt');
+    expect(renamed.path).toBe('notes/done.txt');
+
+    const moved = moveWorkspacePath(repo, 'notes/done.txt', 'docs');
+    expect(moved.path).toBe('docs/done.txt');
+
+    deleteWorkspacePath(repo, 'docs/done.txt');
+    expect(existsSync(join(repo, 'docs', 'done.txt'))).toBe(false);
+    expect(() => writeWorkspaceFile(repo, '../escape.txt', 'nope')).toThrow(/escapes workspace root/i);
   });
 });

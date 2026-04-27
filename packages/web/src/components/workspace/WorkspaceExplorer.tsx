@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from 'react';
-import { FileTree as TreesModel } from '@pierre/trees';
+import { FileTree as TreesModel, type ContextMenuItem as FileTreeContextMenuItem, type ContextMenuOpenContext as FileTreeContextMenuOpenContext, type FileTreeRenameEvent } from '@pierre/trees';
 import { FileTree as TreesFileTree } from '@pierre/trees/react';
 import CodeMirror from '@uiw/react-codemirror';
 import { EditorView, Decoration, ViewPlugin, WidgetType, type DecorationSet } from '@codemirror/view';
@@ -24,6 +24,7 @@ interface WorkspaceExplorerProps {
   cwd: string | null;
   onDraftPrompt: (prompt: string) => void;
   onOpenFile?: (file: { cwd: string; path: string }) => void;
+  activeFilePath?: string | null;
   railOnly?: boolean;
 }
 
@@ -43,6 +44,8 @@ interface DiffDecorationSpec {
 
 const WORKSPACE_EXPLORER_OPEN_KEY = 'pa:workspace-explorer-open';
 const WORKSPACE_EXPLORER_DIFF_KEY = 'pa:workspace-explorer-diff-overlay';
+const WORKSPACE_OPEN_FILES_KEY_PREFIX = 'pa:workspace-open-files:';
+const MAX_WORKSPACE_OPEN_FILES = 24;
 const WATCH_DEBOUNCE_MS = 180;
 const GIT_REFRESH_DEBOUNCE_MS = 450;
 const STATUS_LABELS: Record<WorkspaceGitStatusChange, string> = {
@@ -65,6 +68,24 @@ const STATUS_TITLES: Record<WorkspaceGitStatusChange, string> = {
   typechange: 'Type changed',
   untracked: 'Untracked',
   conflicted: 'Conflicted',
+};
+
+function Ico({ d, size = 14 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" className="shrink-0" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
+const ICON = {
+  file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
+  folderPlus: 'M12 10.5v6m3-3H9m4.06-7.19-2.12-2.12a1.5 1.5 0 0 0-1.061-.44H4.5A2.25 2.25 0 0 0 2.25 6v12a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18V9a2.25 2.25 0 0 0-2.25-2.25h-5.379a1.5 1.5 0 0 1-1.06-.44Z',
+  folderOpen: 'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
+  pencil: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
+  move: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
+  trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
+  x: 'M6 18 18 6M6 6l12 12',
 };
 
 const tokyoNightHighlightStyle = HighlightStyle.define([
@@ -297,6 +318,113 @@ function buildWorkspaceBreadcrumbs(path: string): string[] {
   return ['…', ...parts.slice(-3)];
 }
 
+function workspaceOpenFilesKey(cwd: string): string {
+  return `${WORKSPACE_OPEN_FILES_KEY_PREFIX}${cwd}`;
+}
+
+function readWorkspaceOpenFiles(cwd: string | null): string[] {
+  if (!cwd) return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem(workspaceOpenFilesKey(cwd)) ?? '[]');
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string').slice(0, MAX_WORKSPACE_OPEN_FILES) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeWorkspaceOpenFiles(cwd: string | null, paths: readonly string[]): void {
+  if (!cwd) return;
+  try { localStorage.setItem(workspaceOpenFilesKey(cwd), JSON.stringify([...new Set(paths)].slice(0, MAX_WORKSPACE_OPEN_FILES))); } catch { /* ignore */ }
+}
+
+function addWorkspaceOpenFile(paths: readonly string[], path: string): string[] {
+  return [path, ...paths.filter((value) => value !== path)].slice(0, MAX_WORKSPACE_OPEN_FILES);
+}
+
+function removeWorkspaceOpenFile(paths: readonly string[], path: string): string[] {
+  return paths.filter((value) => value !== path);
+}
+
+function parentDirectory(path: string): string {
+  const parts = path.split('/').filter(Boolean);
+  parts.pop();
+  return parts.join('/');
+}
+
+function WorkspaceOpenFilesSection({
+  openFilePaths,
+  activePath,
+  onSelect,
+  onClose,
+  onCloseAll,
+}: {
+  openFilePaths: readonly string[];
+  activePath: string | null;
+  onSelect: (path: string) => void;
+  onClose: (path: string) => void;
+  onCloseAll: () => void;
+}) {
+  return (
+    <div className="flex flex-col px-2 pb-2 pt-1.5">
+      <div className="flex shrink-0 items-center justify-between gap-2 px-1 pb-1">
+        <p className="ui-section-label">Open Files</p>
+        {openFilePaths.length > 0 ? (
+          <button type="button" aria-label="Close all open files" title="Close all open files" className="ui-icon-button ui-icon-button-compact text-dim hover:text-primary" onClick={onCloseAll}>
+            <Ico d={ICON.x} size={11} />
+          </button>
+        ) : null}
+      </div>
+      {openFilePaths.length === 0 ? (
+        <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
+      ) : (
+        <div className="max-h-44 min-h-0 space-y-1 overflow-y-auto">
+          {openFilePaths.map((path) => {
+            const isActive = activePath === path;
+            const fileName = path.split('/').filter(Boolean).pop() ?? path;
+            return (
+              <div key={path} className="group relative">
+                <button type="button" title={path} className={cx('flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1.5 pr-9 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/35', isActive ? 'bg-accent/15 text-primary' : 'text-secondary hover:bg-accent/8 hover:text-primary')} onClick={() => onSelect(path)}>
+                  <span className="shrink-0 text-dim"><Ico d={ICON.file} size={12} /></span>
+                  <span className="block min-w-0 flex-1 truncate text-[12px] font-medium">{fileName}</span>
+                </button>
+                <div className="pointer-events-none absolute inset-y-0 right-1 flex items-center">
+                  <button type="button" aria-label={`Close file ${path}`} className="pointer-events-auto ui-icon-button ui-icon-button-compact shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" onClick={(event) => { event.preventDefault(); event.stopPropagation(); onClose(path); }}>
+                    <Ico d={ICON.x} size={10} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceTreeContextMenu({ onCreateFile, onCreateFolder, onDelete, onOpenInFinder, onMove, onRename }: {
+  onCreateFile: () => void;
+  onCreateFolder: () => void;
+  onDelete: () => void;
+  onOpenInFinder?: () => void;
+  onMove: () => void;
+  onRename: () => void;
+}) {
+  return (
+    <div className="ui-menu-shell ui-context-menu-shell absolute bottom-auto left-0 right-auto top-0 mb-0 min-w-[224px]" role="menu" aria-label="Workspace entry actions">
+      <div className="space-y-px">
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFile} role="menuitem"><Ico d={ICON.file} size={12} />New File</button>
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onCreateFolder} role="menuitem"><Ico d={ICON.folderPlus} size={12} />New Folder</button>
+        <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+        {onOpenInFinder ? <><button type="button" className="ui-context-menu-item gap-2" onClick={onOpenInFinder} role="menuitem"><Ico d={ICON.folderOpen} size={12} />Open in Finder</button><div className="my-1 h-px bg-border-subtle" aria-hidden="true" /></> : null}
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onRename} role="menuitem"><Ico d={ICON.pencil} size={12} />Rename</button>
+        <button type="button" className="ui-context-menu-item gap-2" onClick={onMove} role="menuitem"><Ico d={ICON.move} size={12} />Move to…</button>
+        <div className="my-1 h-px bg-border-subtle" aria-hidden="true" />
+        <button type="button" className="ui-context-menu-item gap-2 text-danger hover:bg-danger/10 focus-visible:bg-danger/10" onClick={onDelete} role="menuitem"><Ico d={ICON.trash} size={12} />Delete</button>
+      </div>
+    </div>
+  );
+}
+
 function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') {
   return [
     diffDecorationsField,
@@ -470,23 +598,33 @@ function WorkspaceTreeBranch(props: Parameters<typeof WorkspaceTreeRow>[0]) {
   return <WorkspaceTreeRow {...props} />;
 }
 
-export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = false }: WorkspaceExplorerProps) {
+export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePath = null, railOnly = false }: WorkspaceExplorerProps) {
   const { theme } = useTheme();
   const [open, setOpen] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_OPEN_KEY, true));
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [rootListing, setRootListing] = useState<LoadState<WorkspaceDirectoryListing>>({ status: 'idle', data: null, error: null });
   const [nodes, setNodes] = useState<Record<string, TreeNodeState>>({});
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [openFilePaths, setOpenFilePaths] = useState<string[]>(() => readWorkspaceOpenFiles(cwd));
   const [fileState, setFileState] = useState<LoadState<WorkspaceFileContent>>({ status: 'idle', data: null, error: null });
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
   const refreshSerial = useRef(0);
   const refreshTimer = useRef<number | null>(null);
   const selectionChangeRef = useRef<(paths: readonly string[]) => void>(() => {});
+  const renameRef = useRef<(event: FileTreeRenameEvent) => void>(() => {});
+  const nativeContextMenuOpenRef = useRef<(item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => void>(() => {});
+  const useNativeWorkspaceContextMenu = shouldUseNativeAppContextMenus();
   const model = useMemo(() => new TreesModel({
     paths: [],
     search: false,
+    composition: {
+      contextMenu: useNativeWorkspaceContextMenu
+        ? { enabled: true, triggerMode: 'right-click', onOpen: (item, context) => nativeContextMenuOpenRef.current(item, context) }
+        : { triggerMode: 'right-click' },
+    },
     onSelectionChange: (paths) => selectionChangeRef.current(paths),
-  }), []);
+    renaming: { onRename: (event) => renameRef.current(event) },
+  }), [useNativeWorkspaceContextMenu]);
 
   const loadRoot = useCallback(async () => {
     if (!cwd) return;
@@ -512,10 +650,20 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
   useEffect(() => {
     setNodes({});
     setSelectedPath(null);
+    setOpenFilePaths(readWorkspaceOpenFiles(cwd));
     setFileState({ status: 'idle', data: null, error: null });
     setDiffState({ status: 'idle', data: null, error: null });
     void loadRoot();
-  }, [loadRoot]);
+  }, [cwd, loadRoot]);
+
+  useEffect(() => {
+    if (!cwd || !activeFilePath) return;
+    setOpenFilePaths((current) => {
+      const next = addWorkspaceOpenFile(current, activeFilePath);
+      writeWorkspaceOpenFiles(cwd, next);
+      return next;
+    });
+  }, [activeFilePath, cwd]);
 
   useEffect(() => () => {
     if (refreshTimer.current !== null) window.clearTimeout(refreshTimer.current);
@@ -560,6 +708,79 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
       setFileState({ status: 'idle', data: null, error: error instanceof Error ? error.message : String(error) });
     }
   }, [cwd]);
+
+  const openWorkspaceFile = useCallback((path: string) => {
+    if (!cwd) return;
+    setOpenFilePaths((current) => {
+      const next = addWorkspaceOpenFile(current, path);
+      writeWorkspaceOpenFiles(cwd, next);
+      return next;
+    });
+    if (onOpenFile) {
+      onOpenFile({ cwd, path });
+      return;
+    }
+    onDraftPrompt(buildPrompt(rootListing.data?.root ?? cwd, 'inspect this file', path));
+  }, [cwd, onDraftPrompt, onOpenFile, rootListing.data?.root]);
+
+  const closeWorkspaceFile = useCallback((path: string) => {
+    setOpenFilePaths((current) => {
+      const next = removeWorkspaceOpenFile(current, path);
+      writeWorkspaceOpenFiles(cwd, next);
+      return next;
+    });
+  }, [cwd]);
+
+  const closeAllWorkspaceFiles = useCallback(() => {
+    setOpenFilePaths([]);
+    writeWorkspaceOpenFiles(cwd, []);
+  }, [cwd]);
+
+  const createPath = useCallback(async (kind: 'file' | 'folder', directory: string) => {
+    if (!cwd) return;
+    const label = kind === 'file' ? 'New file name' : 'New folder name';
+    const fallback = kind === 'file' ? 'untitled.txt' : 'New Folder';
+    const name = window.prompt(label, fallback)?.trim();
+    if (!name) return;
+    const path = [directory, name].filter(Boolean).join('/');
+    if (kind === 'file') {
+      await api.createWorkspaceFile(cwd, path, '');
+      openWorkspaceFile(path);
+    } else {
+      await api.createWorkspaceFolder(cwd, path);
+    }
+    await loadRoot();
+    if (directory) await loadDirectory(directory);
+  }, [cwd, loadDirectory, loadRoot, openWorkspaceFile]);
+
+  const deletePath = useCallback(async (entry: WorkspaceEntry) => {
+    if (!cwd) return;
+    if (!window.confirm(`Delete ${entry.path}? This cannot be undone.`)) return;
+    await api.deleteWorkspacePath(cwd, entry.path);
+    setOpenFilePaths((current) => {
+      const next = entry.kind === 'directory' ? current.filter((path) => !path.startsWith(`${entry.path}/`)) : removeWorkspaceOpenFile(current, entry.path);
+      writeWorkspaceOpenFiles(cwd, next);
+      return next;
+    });
+    await loadRoot();
+    const parent = parentDirectory(entry.path);
+    if (parent) await loadDirectory(parent);
+  }, [cwd, loadDirectory, loadRoot]);
+
+  const movePath = useCallback(async (entry: WorkspaceEntry) => {
+    if (!cwd) return;
+    const targetDir = window.prompt('Move to folder (blank for workspace root)', parentDirectory(entry.path));
+    if (targetDir === null) return;
+    const moved = await api.moveWorkspacePath(cwd, entry.path, targetDir.trim());
+    setOpenFilePaths((current) => {
+      const next = current.map((path) => path === entry.path ? moved.path : path.startsWith(`${entry.path}/`) ? `${moved.path}/${path.slice(entry.path.length + 1)}` : path);
+      writeWorkspaceOpenFiles(cwd, next);
+      return next;
+    });
+    await loadRoot();
+    await loadDirectory(parentDirectory(entry.path));
+    if (targetDir.trim()) await loadDirectory(targetDir.trim());
+  }, [cwd, loadDirectory, loadRoot]);
 
   const root = rootListing.data?.root ?? null;
   const changes = rootListing.data?.changes ?? [];
@@ -622,12 +843,60 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
         return;
       }
       if (cwd && onOpenFile) {
-        onOpenFile({ cwd, path: entry.path });
+        openWorkspaceFile(entry.path);
         return;
       }
       onDraftPrompt(buildPrompt(root, 'inspect this file', entry.path));
     };
-  }, [cwd, loadDirectory, model, nodes, onDraftPrompt, onOpenFile, root, workspaceEntryMap]);
+  }, [cwd, loadDirectory, model, nodes, onDraftPrompt, onOpenFile, openWorkspaceFile, root, workspaceEntryMap]);
+
+  useEffect(() => {
+    renameRef.current = ({ sourcePath, destinationPath }: FileTreeRenameEvent) => {
+      if (!cwd) return;
+      const entry = workspaceEntryMap.get(treePathToWorkspacePath(sourcePath));
+      const nextName = destinationPath.split('/').filter(Boolean).pop()?.trim() ?? '';
+      if (!entry || !nextName || nextName === entry.name) return;
+      void api.renameWorkspacePath(cwd, entry.path, nextName)
+        .then((renamed) => {
+          setOpenFilePaths((current) => {
+            const next = current.map((path) => path === entry.path ? renamed.path : path.startsWith(`${entry.path}/`) ? `${renamed.path}/${path.slice(entry.path.length + 1)}` : path);
+            writeWorkspaceOpenFiles(cwd, next);
+            return next;
+          });
+          void loadRoot();
+          const parent = parentDirectory(entry.path);
+          if (parent) void loadDirectory(parent);
+        })
+        .catch((error) => window.alert(error instanceof Error ? error.message : String(error)));
+    };
+  }, [cwd, loadDirectory, loadRoot, workspaceEntryMap]);
+
+  useEffect(() => {
+    nativeContextMenuOpenRef.current = (item, context) => {
+      const entry = workspaceEntryMap.get(treePathToWorkspacePath(item.path));
+      if (!entry || !cwd) return;
+      const desktopBridge = getDesktopBridge();
+      if (!desktopBridge?.showKnowledgeEntryContextMenu) return;
+      context.close({ restoreFocus: false });
+      void desktopBridge.showKnowledgeEntryContextMenu({
+        x: context.anchorRect.left,
+        y: context.anchorRect.bottom,
+        canCreateFile: true,
+        canCreateFolder: true,
+        canOpenInFinder: Boolean(desktopBridge.openPath),
+        canRename: true,
+        canMove: true,
+        canDelete: true,
+      }).then(({ action }) => {
+        if (action === 'new-file') void createPath('file', entry.kind === 'directory' ? entry.path : parentDirectory(entry.path));
+        if (action === 'new-folder') void createPath('folder', entry.kind === 'directory' ? entry.path : parentDirectory(entry.path));
+        if (action === 'open-in-finder') void desktopBridge.openPath(entry.kind === 'directory' ? `${root ?? cwd}/${entry.path}` : `${root ?? cwd}/${parentDirectory(entry.path)}`);
+        if (action === 'rename') model.startRenaming(workspaceEntryToTreePath(entry));
+        if (action === 'move') void movePath(entry);
+        if (action === 'delete') void deletePath(entry);
+      });
+    };
+  }, [createPath, cwd, deletePath, model, movePath, root, workspaceEntryMap]);
 
   useEffect(() => {
     if (!railOnly) return;
@@ -658,6 +927,14 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
   if (railOnly) {
     return (
       <div className="flex h-full flex-col bg-base/96 text-sm">
+        <WorkspaceOpenFilesSection
+          openFilePaths={openFilePaths}
+          activePath={activeFilePath}
+          onSelect={openWorkspaceFile}
+          onClose={closeWorkspaceFile}
+          onCloseAll={closeAllWorkspaceFiles}
+        />
+        <div className="mx-2 h-px shrink-0 bg-border-subtle" aria-hidden="true" />
         <div className="px-3 pt-1 pb-1 shrink-0 rounded-md">
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">File Explorer</p>
@@ -671,7 +948,29 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, railOnly = f
           ) : rootListing.error ? (
             <EmptyState title="Workspace unavailable" body={rootListing.error} className="px-3 py-8" />
           ) : (
-            <TreesFileTree className="h-full" model={model} style={TREE_HOST_STYLE} />
+            <TreesFileTree
+              className="h-full"
+              model={model}
+              {...(!useNativeWorkspaceContextMenu ? {
+                renderContextMenu: (item: FileTreeContextMenuItem, context: FileTreeContextMenuOpenContext) => {
+                  const entry = workspaceEntryMap.get(treePathToWorkspacePath(item.path));
+                  if (!entry) return null;
+                  const directory = entry.kind === 'directory' ? entry.path : parentDirectory(entry.path);
+                  const desktopBridge = getDesktopBridge();
+                  return (
+                    <WorkspaceTreeContextMenu
+                      onCreateFile={() => { context.close(); void createPath('file', directory); }}
+                      onCreateFolder={() => { context.close(); void createPath('folder', directory); }}
+                      onOpenInFinder={desktopBridge?.openPath ? () => { context.close(); void desktopBridge.openPath(entry.kind === 'directory' ? `${root ?? cwd}/${entry.path}` : `${root ?? cwd}/${directory}`); } : undefined}
+                      onRename={() => { context.close({ restoreFocus: false }); window.setTimeout(() => model.startRenaming(workspaceEntryToTreePath(entry)), 0); }}
+                      onMove={() => { context.close(); void movePath(entry); }}
+                      onDelete={() => { context.close(); void deletePath(entry); }}
+                    />
+                  );
+                },
+              } : {})}
+              style={TREE_HOST_STYLE}
+            />
           )}
         </div>
       </div>
@@ -786,6 +1085,8 @@ export function WorkspaceFileDocument({
   const [showDiff, setShowDiff] = useState(() => readStoredBoolean(WORKSPACE_EXPLORER_DIFF_KEY, true));
   const [fileState, setFileState] = useState<LoadState<WorkspaceFileContent>>({ status: 'loading', data: null, error: null });
   const [diffState, setDiffState] = useState<LoadState<WorkspaceDiffOverlay>>({ status: 'idle', data: null, error: null });
+  const [draftContent, setDraftContent] = useState('');
+  const [saveState, setSaveState] = useState<{ status: 'idle' | 'saving'; error: string | null }>({ status: 'idle', error: null });
   const [selectionContextMenu, setSelectionContextMenu] = useState<{ x: number; y: number; text: string } | null>(null);
   const editorContainerRef = useRef<HTMLDivElement | null>(null);
   const selectionContextMenuRef = useRef<HTMLDivElement | null>(null);
@@ -796,6 +1097,8 @@ export function WorkspaceFileDocument({
     try {
       const file = await api.workspaceFile(cwd, path, { force: options?.force });
       setFileState({ status: 'idle', data: file, error: null });
+      setDraftContent(file.content ?? '');
+      setSaveState({ status: 'idle', error: null });
       if (file.gitStatus && !file.binary && !file.tooLarge) {
         setDiffState({ status: 'loading', data: null, error: null });
         const diff = await api.workspaceDiff(cwd, path);
@@ -805,6 +1108,26 @@ export function WorkspaceFileDocument({
       setFileState({ status: 'idle', data: null, error: error instanceof Error ? error.message : String(error) });
     }
   }, [cwd, path]);
+
+  const selectedFile = fileState.data;
+  const dirty = Boolean(selectedFile && !selectedFile.binary && !(selectedFile.tooLarge && !selectedFile.content) && draftContent !== (selectedFile.content ?? ''));
+
+  const saveFile = useCallback(async () => {
+    if (!selectedFile || selectedFile.binary || (selectedFile.tooLarge && !selectedFile.content) || saveState.status === 'saving') return;
+    setSaveState({ status: 'saving', error: null });
+    try {
+      const saved = await api.writeWorkspaceFile(cwd, selectedFile.path, draftContent);
+      setFileState({ status: 'idle', data: saved, error: null });
+      setDraftContent(saved.content ?? draftContent);
+      setSaveState({ status: 'idle', error: null });
+      if (saved.gitStatus && !saved.binary && !saved.tooLarge) {
+        const diff = await api.workspaceDiff(cwd, saved.path);
+        setDiffState({ status: 'idle', data: diff, error: null });
+      }
+    } catch (error) {
+      setSaveState({ status: 'idle', error: error instanceof Error ? error.message : String(error) });
+    }
+  }, [cwd, draftContent, saveState.status, selectedFile]);
 
   useEffect(() => {
     void loadFile();
@@ -857,7 +1180,6 @@ export function WorkspaceFileDocument({
     };
   }, [closeSelectionContextMenu, selectionContextMenu]);
 
-  const selectedFile = fileState.data;
   const diffSpec = showDiff && diffState.data ? diffState.data : { addedLines: [], deletedBlocks: [] };
   const editorExtensions = useMemo(
     () => createWorkspaceEditorExtensions(selectedFile?.path ?? path, theme),
@@ -955,8 +1277,14 @@ export function WorkspaceFileDocument({
             {showDiff ? 'Diff on' : 'Diff off'}
           </button>
         )}
+        {!selectedFile.binary && !(selectedFile.tooLarge && !selectedFile.content) ? (
+          <button type="button" className={cx('ui-toolbar-button px-2 text-[10px]', dirty && 'text-accent')} onClick={() => { void saveFile(); }} disabled={!dirty || saveState.status === 'saving'}>
+            {saveState.status === 'saving' ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+          </button>
+        ) : null}
         <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh file" onClick={() => { void loadFile(); }}>↻</button>
       </div>
+      {saveState.error ? <div className="border-b border-border-subtle px-3 py-1 text-[11px] text-danger">{saveState.error}</div> : null}
       <div ref={editorContainerRef} className="min-h-0 flex-1 overflow-hidden" onContextMenu={handleEditorContextMenu}>
         {selectedFile.binary || (selectedFile.tooLarge && !selectedFile.content) ? (
           <EmptyState
@@ -969,13 +1297,14 @@ export function WorkspaceFileDocument({
           />
         ) : (
           <CodeMirror
-            value={selectedFile.content ?? ''}
+            value={draftContent}
             height="100%"
             theme="none"
             basicSetup={{ lineNumbers: true, foldGutter: true, highlightActiveLine: false, highlightActiveLineGutter: false }}
-            editable={false}
-            readOnly={true}
+            editable={true}
+            readOnly={false}
             extensions={editorExtensions}
+            onChange={setDraftContent}
             onCreateEditor={onEditorCreate}
             style={{ backgroundColor: 'rgb(var(--color-base))', color: 'rgb(var(--color-primary))', height: '100%' }}
             key={`${selectedFile.path}:${showDiff}:${diffState.data?.addedLines.length ?? 0}:${diffState.data?.deletedBlocks.length ?? 0}`}

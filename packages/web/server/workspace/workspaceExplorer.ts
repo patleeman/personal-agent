@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { closeSync, existsSync, openSync, readFileSync, readSync, readdirSync, realpathSync, statSync, type Stats } from 'node:fs';
-import { basename, relative, resolve, sep } from 'node:path';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync, type Stats } from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { readGitRepoInfo, readGitStatusSummary, type GitStatusChangeKind } from './gitStatus.js';
 
 export type WorkspaceEntryKind = 'file' | 'directory' | 'symlink' | 'other';
@@ -230,6 +230,90 @@ export function readWorkspaceFile(cwd: string, relativePath: string, force = fal
     truncated,
     content,
     gitStatus: statusForPath(snapshot, path),
+  };
+}
+
+export function writeWorkspaceFile(cwd: string, relativePath: string, content: string): WorkspaceFileContent {
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  const path = normalizeRelativePath(relativePath);
+  if (!path) {
+    throw new Error('path required');
+  }
+  const absolutePath = assertSafeWorkspacePath(snapshot.root, path);
+  mkdirSync(dirname(absolutePath), { recursive: true });
+  writeFileSync(absolutePath, content.replace(/\r\n?/g, '\n'), 'utf-8');
+  return readWorkspaceFile(cwd, path, true);
+}
+
+export function createWorkspaceFolder(cwd: string, relativePath: string): WorkspaceEntry {
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  const path = normalizeRelativePath(relativePath);
+  if (!path) {
+    throw new Error('path required');
+  }
+  const absolutePath = assertSafeWorkspacePath(snapshot.root, path);
+  mkdirSync(absolutePath, { recursive: true });
+  return workspaceEntryForPath(snapshot, path);
+}
+
+export function deleteWorkspacePath(cwd: string, relativePath: string): { ok: true } {
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  const path = normalizeRelativePath(relativePath);
+  if (!path) {
+    throw new Error('Refusing to delete workspace root');
+  }
+  rmSync(assertSafeWorkspacePath(snapshot.root, path), { recursive: true, force: true });
+  return { ok: true };
+}
+
+export function renameWorkspacePath(cwd: string, relativePath: string, newName: string): WorkspaceEntry {
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  const path = normalizeRelativePath(relativePath);
+  const normalizedName = normalizeRelativePath(newName);
+  if (!path || !normalizedName || normalizedName.includes('/')) {
+    throw new Error('Invalid rename target');
+  }
+  const source = assertSafeWorkspacePath(snapshot.root, path);
+  const targetPath = normalizeRelativePath(join(dirname(path), normalizedName));
+  const target = assertSafeWorkspacePath(snapshot.root, targetPath);
+  renameSync(source, target);
+  return workspaceEntryForPath(snapshot, targetPath);
+}
+
+export function moveWorkspacePath(cwd: string, relativePath: string, targetDir: string): WorkspaceEntry {
+  const snapshot = readWorkspaceRootSnapshot(cwd);
+  const path = normalizeRelativePath(relativePath);
+  const destinationDir = normalizeRelativePath(targetDir);
+  if (!path) {
+    throw new Error('Refusing to move workspace root');
+  }
+  const source = assertSafeWorkspacePath(snapshot.root, path);
+  const targetPath = normalizeRelativePath(join(destinationDir, basename(path)));
+  if (path === targetPath) {
+    return workspaceEntryForPath(snapshot, path);
+  }
+  if (targetPath.startsWith(`${path}/`)) {
+    throw new Error('Cannot move a folder into itself');
+  }
+  const target = assertSafeWorkspacePath(snapshot.root, targetPath);
+  mkdirSync(dirname(target), { recursive: true });
+  renameSync(source, target);
+  return workspaceEntryForPath(snapshot, targetPath);
+}
+
+function workspaceEntryForPath(snapshot: WorkspaceRootSnapshot, relativePath: string): WorkspaceEntry {
+  const path = normalizeRelativePath(relativePath);
+  const absolutePath = assertSafeWorkspacePath(snapshot.root, path);
+  const stats = statSync(absolutePath);
+  const kind = statKind(stats);
+  return {
+    name: basename(path),
+    path,
+    kind,
+    size: stats.isFile() ? stats.size : null,
+    modifiedAt: stats.mtime.toISOString(),
+    gitStatus: statusForPath(snapshot, path),
+    descendantGitStatusCount: kind === 'directory' ? descendantStatusCount(snapshot, path) : 0,
   };
 }
 

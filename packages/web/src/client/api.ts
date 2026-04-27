@@ -573,6 +573,20 @@ export const api = {
     const params = new URLSearchParams({ cwd, path });
     return get<WorkspaceDiffOverlay>(`/workspace/diff?${params.toString()}`);
   },
+  writeWorkspaceFile: async (cwd: string, path: string, content: string) =>
+    put<WorkspaceFileContent>('/workspace/file', { cwd, path, content }),
+  createWorkspaceFile: async (cwd: string, path: string, content = '') =>
+    put<WorkspaceFileContent>('/workspace/file', { cwd, path, content }),
+  createWorkspaceFolder: async (cwd: string, path: string) =>
+    post<WorkspaceEntry>('/workspace/folder', { cwd, path }),
+  deleteWorkspacePath: async (cwd: string, path: string) => {
+    const params = new URLSearchParams({ cwd, path });
+    return del<{ ok: boolean }>(`/workspace/path?${params.toString()}`);
+  },
+  renameWorkspacePath: async (cwd: string, path: string, newName: string) =>
+    post<WorkspaceEntry>('/workspace/rename', { cwd, path, newName }),
+  moveWorkspacePath: async (cwd: string, path: string, targetDir: string) =>
+    post<WorkspaceEntry>('/workspace/move', { cwd, path, targetDir }),
   conversationBootstrap: async (id: string, options?: {
     tailBlocks?: number;
     knownSessionSignature?: string;

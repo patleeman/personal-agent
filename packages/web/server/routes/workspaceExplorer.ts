@@ -1,7 +1,7 @@
 import type { Express } from 'express';
 import { watch } from 'node:fs';
 import type { ServerRouteContext } from './context.js';
-import { listWorkspaceDirectory, readWorkspaceDiffOverlay, readWorkspaceFile, readWorkspaceRootSnapshot } from '../workspace/workspaceExplorer.js';
+import { createWorkspaceFolder, deleteWorkspacePath, listWorkspaceDirectory, moveWorkspacePath, readWorkspaceDiffOverlay, readWorkspaceFile, readWorkspaceRootSnapshot, renameWorkspacePath, writeWorkspaceFile } from '../workspace/workspaceExplorer.js';
 import { logError } from '../shared/logging.js';
 
 function resolveRequestCwd(context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>, cwd: unknown): string {
@@ -24,7 +24,7 @@ function writeWorkspaceError(res: { status: (code: number) => { json: (body: unk
 }
 
 export function registerWorkspaceExplorerRoutes(
-  router: Pick<Express, 'get'>,
+  router: Pick<Express, 'delete' | 'get' | 'post' | 'put'>,
   context: Pick<ServerRouteContext, 'getDefaultWebCwd' | 'resolveRequestedCwd'>,
 ): void {
   router.get('/api/workspace/tree', (req, res) => {
@@ -48,6 +48,84 @@ export function registerWorkspaceExplorerRoutes(
       res.json(readWorkspaceFile(cwd, path, req.query.force === '1'));
     } catch (error) {
       logError('workspace file request failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.put('/api/workspace/file', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.body?.cwd);
+      const path = readQueryString(req.body?.path);
+      const content = typeof req.body?.content === 'string' ? req.body.content : null;
+      if (!path || content === null) {
+        res.status(400).json({ error: 'cwd, path, and content required' });
+        return;
+      }
+      res.json(writeWorkspaceFile(cwd, path, content));
+    } catch (error) {
+      logError('workspace file write failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.delete('/api/workspace/path', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.query.cwd);
+      const path = readQueryString(req.query.path);
+      if (!path) {
+        res.status(400).json({ error: 'path required' });
+        return;
+      }
+      res.json(deleteWorkspacePath(cwd, path));
+    } catch (error) {
+      logError('workspace path delete failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.post('/api/workspace/folder', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.body?.cwd);
+      const path = readQueryString(req.body?.path);
+      if (!path) {
+        res.status(400).json({ error: 'path required' });
+        return;
+      }
+      res.json(createWorkspaceFolder(cwd, path));
+    } catch (error) {
+      logError('workspace folder create failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.post('/api/workspace/rename', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.body?.cwd);
+      const path = readQueryString(req.body?.path);
+      const newName = readQueryString(req.body?.newName);
+      if (!path || !newName) {
+        res.status(400).json({ error: 'path and newName required' });
+        return;
+      }
+      res.json(renameWorkspacePath(cwd, path, newName));
+    } catch (error) {
+      logError('workspace path rename failed', { message: error instanceof Error ? error.message : String(error) });
+      writeWorkspaceError(res, error);
+    }
+  });
+
+  router.post('/api/workspace/move', (req, res) => {
+    try {
+      const cwd = resolveRequestCwd(context, req.body?.cwd);
+      const path = readQueryString(req.body?.path);
+      const targetDir = typeof req.body?.targetDir === 'string' ? req.body.targetDir : '';
+      if (!path) {
+        res.status(400).json({ error: 'path required' });
+        return;
+      }
+      res.json(moveWorkspacePath(cwd, path, targetDir));
+    } catch (error) {
+      logError('workspace path move failed', { message: error instanceof Error ? error.message : String(error) });
       writeWorkspaceError(res, error);
     }
   });

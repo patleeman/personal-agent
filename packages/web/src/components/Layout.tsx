@@ -503,9 +503,11 @@ function WorkbenchDocumentPane({
 
 function WorkbenchKnowledgeRail({
   workspaceCwd,
+  activeWorkspaceFile,
   onWorkspaceFileSelect,
 }: {
   workspaceCwd: string | null;
+  activeWorkspaceFile: { cwd: string; path: string } | null;
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -552,6 +554,7 @@ function WorkbenchKnowledgeRail({
               <WorkspaceExplorer
                 cwd={workspaceCwd}
                 railOnly
+                activeFilePath={activeWorkspaceFile?.cwd === workspaceCwd ? activeWorkspaceFile.path : null}
                 onOpenFile={handleWorkspaceFileSelect}
                 onDraftPrompt={(prompt) => {
                   window.dispatchEvent(new CustomEvent(WORKSPACE_DRAFT_PROMPT_EVENT, { detail: { prompt } }));
@@ -794,7 +797,7 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden bg-surface select-text"
                     aria-label="Workbench sidebar"
                   >
-                    <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} onWorkspaceFileSelect={setActiveWorkspaceFile} />
+                    <WorkbenchKnowledgeRail workspaceCwd={activeWorkspaceCwd} activeWorkspaceFile={activeWorkspaceFile} onWorkspaceFileSelect={setActiveWorkspaceFile} />
                   </aside>
                 </>
               ) : null}
