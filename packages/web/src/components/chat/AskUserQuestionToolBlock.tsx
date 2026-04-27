@@ -406,13 +406,13 @@ export function AskUserQuestionToolBlock({
           <span className="ui-chat-avatar-mark">?</span>
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-            <span className="text-[13px] font-medium text-primary">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="text-[15px] font-medium text-primary">
               {presentation.questions.length === 1 ? 'Question for you' : 'Questions for you'}
             </span>
-            <Pill tone={statusTone}>{statusLabel}</Pill>
+            <Pill tone={statusTone} className="px-2.5 py-0.5 text-[12px]">{statusLabel}</Pill>
             {mode === 'inline' && state.status === 'pending' && presentation.questions.length > 1 && (
-              <span className="text-[10px] uppercase tracking-[0.14em] text-dim/65">
+              <span className="text-[12px] uppercase tracking-[0.12em] text-dim/65">
                 {answeredCount}/{presentation.questions.length} answered
               </span>
             )}
@@ -422,27 +422,27 @@ export function AskUserQuestionToolBlock({
             mode === 'composer' ? (
               <>
                 {presentation.details && (
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[15px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
-                <div className="mt-2 space-y-1">
+                <div className="mt-2.5 space-y-1.5">
                   {presentation.questions.map((question, index) => (
-                    <p key={question.id} className="flex items-start gap-2 text-[13px] leading-relaxed text-secondary">
-                      <span className="mt-px w-4 shrink-0 text-[11px] font-mono text-dim">{index + 1}.</span>
+                    <p key={question.id} className="flex items-start gap-2.5 text-[15px] leading-relaxed text-secondary">
+                      <span className="mt-px w-5 shrink-0 text-[13px] font-mono text-dim">{index + 1}.</span>
                       <span className="min-w-0 break-words">{question.label}</span>
                     </p>
                   ))}
                 </div>
-                <p className="mt-2 text-[12px] text-dim">
+                <p className="mt-2.5 text-[13px] leading-relaxed text-dim">
                   Answer using the composer below. Type 1-9 to select, or send a normal message to skip.
                 </p>
               </>
             ) : (
               <>
                 {presentation.details && (
-                  <p className="mt-1.5 text-[12px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[15px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
 
-                <div className="mt-2.5 flex min-w-0 flex-wrap items-center gap-1" role="tablist" aria-label="Question navigation">
+                <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Question navigation">
                   {presentation.questions.map((question, index) => {
                     const answered = (answers[question.id]?.length ?? 0) > 0;
                     const active = index === activeQuestionIndex;
@@ -457,7 +457,7 @@ export function AskUserQuestionToolBlock({
                         onClick={() => activateQuestion(index)}
                         onKeyDown={(event) => handleQuestionTabKeyDown(index, event)}
                         className={cx(
-                          'ui-action-button min-w-0 px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                          'ui-action-button min-w-0 px-2 py-1 text-[13px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                           active
                             ? 'text-primary hover:text-primary'
                             : answered
@@ -465,7 +465,7 @@ export function AskUserQuestionToolBlock({
                               : 'text-dim',
                         )}
                       >
-                        <span aria-hidden="true" className={cx('shrink-0 text-[11px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
+                        <span aria-hidden="true" className={cx('shrink-0 text-[13px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
                           {answered ? '✓' : active ? '•' : '○'}
                         </span>
                         <span className="truncate">{question.label}</span>
@@ -490,20 +490,20 @@ export function AskUserQuestionToolBlock({
                 </div>
 
                 {activeQuestion && (
-                  <div id={`ask-user-question-panel-${activeQuestion.id}`} role="tabpanel" className="mt-2.5 border-t border-border-subtle pt-2.5">
+                  <div id={`ask-user-question-panel-${activeQuestion.id}`} role="tabpanel" className="mt-3 border-t border-border-subtle pt-3">
                     {presentation.questions.length > 1 && (
-                      <p className="text-[10px] uppercase tracking-[0.14em] text-dim/65">
+                      <p className="text-[12px] uppercase tracking-[0.12em] text-dim/65">
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
                       </p>
                     )}
-                    <p className="mt-0.5 text-[14px] font-medium text-primary break-words">{activeQuestion.label}</p>
+                    <p className="mt-1 text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
                     {activeQuestion.details && (
-                      <p className="mt-0.5 text-[13px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+                      <p className="mt-1 text-[15px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
                     )}
 
                     {activeQuestion.options.length > 0 ? (
                       <div
-                        className="mt-0.5 -mx-0.5"
+                        className="mt-2 -mx-0.5"
                         role={activeQuestion.style === 'check' ? 'group' : 'radiogroup'}
                         aria-label={activeQuestion.label}
                       >
@@ -525,18 +525,18 @@ export function AskUserQuestionToolBlock({
                               onClick={() => handleOptionSelect(activeQuestionIndex, optionIndex)}
                               onKeyDown={(event) => handleOptionKeyDown(optionIndex, event)}
                               className={cx(
-                                'ui-list-row -mx-0.5 w-full items-start gap-2 px-2.5 py-1 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                                'ui-list-row -mx-0.5 w-full items-start gap-3 px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
                                 checked ? 'ui-list-row-selected' : 'ui-list-row-hover',
                                 submitting && 'cursor-default opacity-60',
                               )}
                             >
-                              <span className={cx('mt-px w-3 shrink-0 text-[12px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              <span className={cx('mt-0.5 w-5 shrink-0 text-[15px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
                                 {indicator}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="ui-row-title block break-words text-[14px]">{option.label}</span>
+                                <span className="ui-row-title block break-words text-[18px] leading-snug">{option.label}</span>
                                 {option.details && (
-                                  <span className="ui-row-summary block break-words text-[13px]">{option.details}</span>
+                                  <span className="ui-row-summary block break-words text-[15px] leading-relaxed">{option.details}</span>
                                 )}
                               </span>
                             </button>
@@ -544,14 +544,14 @@ export function AskUserQuestionToolBlock({
                         })}
                       </div>
                     ) : (
-                      <p className="mt-1.5 text-[13px] leading-relaxed text-secondary">
+                      <p className="mt-2 text-[15px] leading-relaxed text-secondary">
                         Send a normal message in the composer to answer this question.
                       </p>
                     )}
                   </div>
                 )}
 
-                <p className="mt-2.5 text-[11px] text-dim">
+                <p className="mt-3 text-[13px] leading-relaxed text-dim">
                   1-9 selects · n/p switches questions · ↑/↓ moves · Esc exits · send a normal message to skip
                 </p>
               </>
