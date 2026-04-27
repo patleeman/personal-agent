@@ -128,6 +128,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 10. [done] Extract tool metadata, disclosure state, and streaming-status helpers into `toolPresentation.ts` with focused tests.
 11. [done] Extract generic tool block orchestration into `ToolBlock.tsx`.
 12. [done] Extract thinking, subagent, error, and trace-cluster rendering into `TraceBlocks.tsx`.
+13. [done] Extract transcript windowing constants, chunk helpers, and chunk renderer into `chatWindowing.tsx` with focused tests.
 
 ## Next action
 

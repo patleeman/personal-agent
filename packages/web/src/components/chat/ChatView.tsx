@@ -1,7 +1,8 @@
-import React, { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
+import { buildChatRenderChunks, CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT, formatWindowingCount, resolveChunkIndexForOffset, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
 import { getDesktopBridge, shouldUseNativeAppContextMenus } from '../../desktop/desktopBridge';
 import { findSelectionReplyScopeElement, findSelectionReplyScopeElements, readSelectedTextWithinElement } from './replySelection.js';
 import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
@@ -47,146 +48,6 @@ function StreamingIndicator({ label }: { label: string }) {
         <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse not-italic" />
         <span>{label}</span>
       </div>
-    </div>
-  );
-}
-
-type ChatViewPerformanceMode = 'default' | 'aggressive';
-const CHAT_VIEW_RENDERING_PROFILE: Record<ChatViewPerformanceMode, {
-  contentVisibilityThreshold: number;
-  windowingThreshold: number;
-  windowingChunkSize: number;
-  windowingOverscanChunks: number;
-}> = {
-  default: {
-    contentVisibilityThreshold: 120,
-    windowingThreshold: 240,
-    windowingChunkSize: 80,
-    windowingOverscanChunks: 2,
-  },
-  aggressive: {
-    contentVisibilityThreshold: 48,
-    windowingThreshold: 96,
-    windowingChunkSize: 40,
-    windowingOverscanChunks: 1,
-  },
-};
-
-const CHAT_WINDOWING_FALLBACK_SPAN_HEIGHT = 96;
-const CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX = 12;
-
-interface ChatRenderChunk {
-  key: string;
-  items: ChatRenderItem[];
-  startItemIndex: number;
-  endItemIndex: number;
-  startMessageIndex: number;
-  endMessageIndex: number;
-  spanCount: number;
-}
-
-function getChatRenderItemAbsoluteRange(item: ChatRenderItem, messageIndexOffset: number): { start: number; end: number } {
-  if (item.type === 'trace_cluster') {
-    return {
-      start: messageIndexOffset + item.startIndex,
-      end: messageIndexOffset + item.endIndex,
-    };
-  }
-
-  return {
-    start: messageIndexOffset + item.index,
-    end: messageIndexOffset + item.index,
-  };
-}
-
-function buildChatRenderChunks(
-  renderItems: ChatRenderItem[],
-  messageIndexOffset: number,
-  chunkSize: number,
-): ChatRenderChunk[] {
-  const chunks: ChatRenderChunk[] = [];
-
-  for (let startItemIndex = 0; startItemIndex < renderItems.length; startItemIndex += chunkSize) {
-    const items = renderItems.slice(startItemIndex, startItemIndex + chunkSize);
-    const startRange = getChatRenderItemAbsoluteRange(items[0], messageIndexOffset);
-    const endRange = getChatRenderItemAbsoluteRange(items[items.length - 1], messageIndexOffset);
-    const spanCount = items.reduce((count, item) => {
-      const range = getChatRenderItemAbsoluteRange(item, messageIndexOffset);
-      return count + (range.end - range.start + 1);
-    }, 0);
-    chunks.push({
-      key: `${startRange.start}-${endRange.end}-${items.length}`,
-      items,
-      startItemIndex,
-      endItemIndex: startItemIndex + items.length - 1,
-      startMessageIndex: startRange.start,
-      endMessageIndex: endRange.end,
-      spanCount,
-    });
-  }
-
-  return chunks;
-}
-
-function resolveChunkIndexForOffset(offset: number, chunkTops: number[], chunkHeights: number[]): number {
-  for (let index = 0; index < chunkTops.length; index += 1) {
-    if (offset < chunkTops[index] + chunkHeights[index]) {
-      return index;
-    }
-  }
-
-  return Math.max(0, chunkTops.length - 1);
-}
-
-function formatWindowingCount(value: number): string {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}m`;
-  }
-
-  if (value >= 1_000) {
-    return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
-  }
-
-  return String(value);
-}
-
-function WindowedChatChunk({
-  chunk,
-  renderItem,
-  onHeightChange,
-  includeTrailingGap,
-}: {
-  chunk: ChatRenderChunk;
-  renderItem: (item: ChatRenderItem, itemIndex: number) => ReactNode;
-  onHeightChange: (chunkKey: string, height: number) => void;
-  includeTrailingGap: boolean;
-}) {
-  const ref = useRef<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    const element = ref.current;
-    if (!element) {
-      return;
-    }
-
-    const measure = () => {
-      onHeightChange(chunk.key, element.getBoundingClientRect().height);
-    };
-
-    measure();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => measure())
-      : null;
-    observer?.observe(element);
-
-    return () => {
-      observer?.disconnect();
-    };
-  }, [chunk.key, includeTrailingGap, onHeightChange]);
-
-  return (
-    <div ref={ref} className={includeTrailingGap ? 'space-y-4 pb-4' : 'space-y-4'}>
-      {chunk.items.map((item, itemIndex) => renderItem(item, chunk.startItemIndex + itemIndex))}
     </div>
   );
 }
