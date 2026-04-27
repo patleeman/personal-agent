@@ -6,6 +6,7 @@ import {
   clearDraftConversationComposer,
   clearDraftConversationCwd,
   clearDraftConversationModel,
+  clearDraftConversationModelPreferences,
   clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
   hasConversationAttachments,
@@ -165,6 +166,22 @@ describe('draftConversation', () => {
     clearDraftConversationServiceTier(storage);
 
     expect(readDraftConversationServiceTier(storage)).toBe('');
+    expect(storage.getItem(DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY)).toBeNull();
+  });
+
+  it('clears draft model preferences together', () => {
+    const storage = createStorage();
+
+    persistDraftConversationModel('gpt-5.4', storage);
+    persistDraftConversationThinkingLevel('high', storage);
+    persistDraftConversationServiceTier('priority', storage);
+    clearDraftConversationModelPreferences(storage);
+
+    expect(readDraftConversationModel(storage)).toBe('');
+    expect(readDraftConversationThinkingLevel(storage)).toBe('');
+    expect(readDraftConversationServiceTier(storage)).toBe('');
+    expect(storage.getItem(DRAFT_CONVERSATION_MODEL_STORAGE_KEY)).toBeNull();
+    expect(storage.getItem(DRAFT_CONVERSATION_THINKING_LEVEL_STORAGE_KEY)).toBeNull();
     expect(storage.getItem(DRAFT_CONVERSATION_SERVICE_TIER_STORAGE_KEY)).toBeNull();
   });
 

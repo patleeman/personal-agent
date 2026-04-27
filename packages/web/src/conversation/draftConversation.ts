@@ -390,6 +390,15 @@ export function clearDraftConversationServiceTier(
   emitDraftConversationStateChanged();
 }
 
+export function clearDraftConversationModelPreferences(
+  storage: StorageLike | null = getSessionStorage(),
+): void {
+  clearStoredState(storage, buildDraftConversationModelStorageKey());
+  clearStoredState(storage, buildDraftConversationThinkingLevelStorageKey());
+  clearStoredState(storage, buildDraftConversationServiceTierStorageKey());
+  emitDraftConversationStateChanged();
+}
+
 export function readDraftConversationAttachments(
   storage: StorageLike | null = getSessionStorage(),
 ): DraftConversationAttachments {

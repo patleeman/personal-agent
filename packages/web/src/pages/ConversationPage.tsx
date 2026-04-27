@@ -150,6 +150,7 @@ import {
   clearDraftConversationContextDocs,
   clearDraftConversationCwd,
   clearDraftConversationModel,
+  clearDraftConversationModelPreferences,
   clearDraftConversationServiceTier,
   clearDraftConversationThinkingLevel,
   DRAFT_CONVERSATION_ROUTE,
@@ -3424,9 +3425,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     clearDraftConversationComposer();
     clearDraftConversationCwd();
-    clearDraftConversationModel();
-    clearDraftConversationThinkingLevel();
-    clearDraftConversationServiceTier();
+    clearDraftConversationModelPreferences();
 
     ensureConversationTabOpen(newId);
     navigate(`/conversations/${newId}`, {
@@ -4210,9 +4209,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     clearDraftConversationAttachments();
     clearDraftConversationComposer();
     clearDraftConversationCwd();
-    clearDraftConversationModel();
-    clearDraftConversationThinkingLevel();
-    clearDraftConversationServiceTier();
+    clearDraftConversationModelPreferences();
     setCurrentModel(defaultModel);
     setCurrentThinkingLevel(defaultThinkingLevel);
     setCurrentServiceTier(defaultServiceTier);
@@ -4600,9 +4597,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         clearDraftConversationComposer();
         clearDraftConversationAttachments();
         clearDraftConversationCwd();
-        clearDraftConversationModel();
-        clearDraftConversationThinkingLevel();
-        clearDraftConversationServiceTier();
+        clearDraftConversationModelPreferences();
       }
 
       if (conversationId !== id) {
@@ -4790,9 +4785,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
             clearDraftConversationCwd();
-            clearDraftConversationModel();
-            clearDraftConversationThinkingLevel();
-            clearDraftConversationServiceTier();
+            clearDraftConversationModelPreferences();
             setSelectedRelatedThreadIds([]);
 
             ensureConversationTabOpen(created.id);
@@ -4875,9 +4868,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           clearDraftConversationAttachments();
           clearDraftConversationContextDocs();
           clearDraftConversationCwd();
-          clearDraftConversationModel();
-          clearDraftConversationThinkingLevel();
-          clearDraftConversationServiceTier();
+          clearDraftConversationModelPreferences();
 
           ensureConversationTabOpen(newId);
           navigate(`/conversations/${newId}`, {
