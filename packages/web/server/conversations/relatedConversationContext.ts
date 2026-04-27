@@ -3,6 +3,10 @@ import {
   summarizeSessionFileForPrompt,
   type LiveSessionLoaderOptions,
 } from './liveSessions.js';
+import {
+  readCachedRelatedConversationSummary,
+  writeCachedRelatedConversationSummary,
+} from './relatedConversationSummaryCache.js';
 
 export const RELATED_THREADS_CONTEXT_CUSTOM_TYPE = 'related_threads_context';
 const MAX_RELATED_THREAD_SELECTIONS = 3;
@@ -103,7 +107,20 @@ export async function buildRelatedConversationContext(input: {
       throw new Error(`Conversation ${sessionId} not found.`);
     }
 
-    const summary = await summarizeSessionFileForPrompt(meta.file, meta.cwd, prompt, input.loaderOptions ?? {});
+    const cachedSummary = readCachedRelatedConversationSummary({
+      sessionId: meta.id,
+      sessionFile: meta.file,
+      prompt,
+    });
+    const summary = cachedSummary ?? await summarizeSessionFileForPrompt(meta.file, meta.cwd, prompt, input.loaderOptions ?? {});
+    if (!cachedSummary) {
+      writeCachedRelatedConversationSummary({
+        sessionId: meta.id,
+        sessionFile: meta.file,
+        prompt,
+        summary,
+      });
+    }
     summaries.push({
       sessionId: meta.id,
       title: meta.title,

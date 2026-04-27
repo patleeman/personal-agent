@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   readSessionMetaMock,
   summarizeSessionFileForPromptMock,
+  readCachedRelatedConversationSummaryMock,
+  writeCachedRelatedConversationSummaryMock,
 } = vi.hoisted(() => ({
   readSessionMetaMock: vi.fn(),
   summarizeSessionFileForPromptMock: vi.fn(),
+  readCachedRelatedConversationSummaryMock: vi.fn(),
+  writeCachedRelatedConversationSummaryMock: vi.fn(),
 }));
 
 vi.mock('./sessions.js', () => ({
@@ -16,6 +20,11 @@ vi.mock('./liveSessions.js', () => ({
   summarizeSessionFileForPrompt: summarizeSessionFileForPromptMock,
 }));
 
+vi.mock('./relatedConversationSummaryCache.js', () => ({
+  readCachedRelatedConversationSummary: readCachedRelatedConversationSummaryMock,
+  writeCachedRelatedConversationSummary: writeCachedRelatedConversationSummaryMock,
+}));
+
 import {
   RELATED_THREADS_CONTEXT_CUSTOM_TYPE,
   buildRelatedConversationContext,
@@ -24,6 +33,9 @@ import {
 beforeEach(() => {
   readSessionMetaMock.mockReset();
   summarizeSessionFileForPromptMock.mockReset();
+  readCachedRelatedConversationSummaryMock.mockReset();
+  readCachedRelatedConversationSummaryMock.mockReturnValue(null);
+  writeCachedRelatedConversationSummaryMock.mockReset();
 });
 
 describe('buildRelatedConversationContext', () => {
@@ -49,6 +61,12 @@ describe('buildRelatedConversationContext', () => {
       { initialModel: 'openai/gpt-5' },
     );
     expect(result.summaries.map((summary) => summary.sessionId)).toEqual(['conv-1', 'conv-2']);
+    expect(writeCachedRelatedConversationSummaryMock).toHaveBeenCalledWith({
+      sessionId: 'conv-1',
+      sessionFile: '/sessions/conv-1.jsonl',
+      prompt: 'Ship the release flow fix.',
+      summary: 'Keep the notarization mapping fix.',
+    });
     expect(result.contextMessages).toEqual([
       expect.objectContaining({
         customType: RELATED_THREADS_CONTEXT_CUSTOM_TYPE,
@@ -92,5 +110,25 @@ describe('buildRelatedConversationContext', () => {
 
     expect(readSessionMetaMock).toHaveBeenCalledTimes(1);
     expect(result.summaries).toHaveLength(1);
+  });
+
+  it('reuses cached summaries instead of summarizing the same session again', async () => {
+    readSessionMetaMock.mockReturnValue({
+      id: 'conv-1',
+      file: '/sessions/conv-1.jsonl',
+      cwd: '/repo/a',
+      timestamp: '2026-04-10T10:00:00.000Z',
+      title: 'Release signing',
+    });
+    readCachedRelatedConversationSummaryMock.mockReturnValue('Cached notarization context.');
+
+    const result = await buildRelatedConversationContext({
+      sessionIds: ['conv-1'],
+      prompt: 'Ship the release flow fix.',
+    });
+
+    expect(summarizeSessionFileForPromptMock).not.toHaveBeenCalled();
+    expect(writeCachedRelatedConversationSummaryMock).not.toHaveBeenCalled();
+    expect(result.summaries[0]?.summary).toBe('Cached notarization context.');
   });
 });
