@@ -73,6 +73,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted dictation/send/stop/question-submit composer action controls into `ConversationComposerActions` with server-render tests.
    - Extracted composer textarea, attachment/screenshot/drawing controls, preference-row wiring, and action controls into `ConversationComposerInputControls` with server-render tests.
    - Extracted artifact/checkpoint tool auto-open selection into `toolAutoOpen` with focused tests, removing duplicate scan/processed-key logic from `ConversationPage`.
+   - Extracted draft model/thinking/service-tier preference normalization into `conversationModelPreferences` with focused tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

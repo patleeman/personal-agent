@@ -77,7 +77,6 @@ import {
   shouldUseHealthyDesktopConversationState,
 } from '../conversation/conversationPageState';
 import {
-  DRAFT_SERVICE_TIER_DISABLED_SENTINEL,
   buildConversationInitialModelPreferenceState,
   buildConversationServiceTierPreferenceInput,
   resolveConversationDraftHydrationState,
@@ -87,6 +86,11 @@ import {
   resolveFastModeToggleServiceTier,
   type ConversationLocationState,
 } from '../conversation/conversationInitialState';
+import {
+  resolveDraftModelPreferenceUpdate,
+  resolveDraftServiceTierPreferenceUpdate,
+  resolveDraftThinkingPreferenceUpdate,
+} from '../conversation/conversationModelPreferences';
 import {
   dedupeConversationContextDocs,
   isAttachableMentionItem,
@@ -3598,12 +3602,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setSavingPreference('model');
     try {
       if (draft) {
-        if (modelId === defaultModel) {
+        const update = resolveDraftModelPreferenceUpdate({ modelId, defaultModel });
+        if (update.storage.kind === 'clear') {
           clearDraftConversationModel();
         } else {
-          persistDraftConversationModel(modelId);
+          persistDraftConversationModel(update.storage.value);
         }
-        setCurrentModel(modelId);
+        setCurrentModel(update.currentModel);
       } else if (id) {
         if (isLiveSession && !ensureConversationCanControl('change the model')) {
           return;
@@ -3637,12 +3642,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       let savedThinkingLevel = thinkingLevel || defaultThinkingLevel;
 
       if (draft) {
-        if (!thinkingLevel || thinkingLevel === defaultThinkingLevel) {
+        const update = resolveDraftThinkingPreferenceUpdate({ thinkingLevel, defaultThinkingLevel });
+        if (update.storage.kind === 'clear') {
           clearDraftConversationThinkingLevel();
         } else {
-          persistDraftConversationThinkingLevel(thinkingLevel);
+          persistDraftConversationThinkingLevel(update.storage.value);
         }
-        setCurrentThinkingLevel(savedThinkingLevel);
+        setCurrentThinkingLevel(update.currentThinkingLevel);
+        savedThinkingLevel = update.currentThinkingLevel;
       } else if (id) {
         if (isLiveSession && !ensureConversationCanControl('change the thinking level')) {
           return;
@@ -3679,19 +3686,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       let savedServiceTier = enableFastMode ? 'priority' : '';
 
       if (draft) {
-        if (serviceTier === null) {
-          persistDraftConversationServiceTier(DRAFT_SERVICE_TIER_DISABLED_SENTINEL);
-          setCurrentServiceTier('');
-          setHasExplicitServiceTier(true);
-        } else if (!serviceTier || serviceTier === defaultServiceTier) {
+        const update = resolveDraftServiceTierPreferenceUpdate({ enableFastMode, defaultServiceTier });
+        if (update.storage.kind === 'clear') {
           clearDraftConversationServiceTier();
-          setCurrentServiceTier(serviceTier || defaultServiceTier);
-          setHasExplicitServiceTier(false);
         } else {
-          persistDraftConversationServiceTier(serviceTier);
-          setCurrentServiceTier(serviceTier);
-          setHasExplicitServiceTier(true);
+          persistDraftConversationServiceTier(update.storage.value);
         }
+        setCurrentServiceTier(update.currentServiceTier);
+        setHasExplicitServiceTier(update.hasExplicitServiceTier);
+        savedServiceTier = update.savedServiceTierLabel;
       } else if (id) {
         if (isLiveSession && !ensureConversationCanControl('change the service tier')) {
           return;
