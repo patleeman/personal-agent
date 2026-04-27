@@ -1,17 +1,15 @@
-import React, { memo, useCallback, useEffect, useMemo, useState, type RefObject } from 'react';
+import React, { memo, useEffect, useMemo, useState, type RefObject } from 'react';
 import type { AskUserQuestionAnswers, AskUserQuestionPresentation } from '../../transcript/askUserQuestions';
 import type { MessageBlock } from '../../shared/types';
 import { buildChatRenderItems, type ChatRenderItem } from './transcriptItems.js';
 import { CHAT_VIEW_RENDERING_PROFILE, CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX, formatWindowingCount, WindowedChatChunk, type ChatViewPerformanceMode } from './chatWindowing.js';
-import { ErrorBlock, SubagentBlock, ThinkingBlock, TraceClusterBlock } from './TraceBlocks.js';
-import { ImageBlock, ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
-import { AssistantMessage, ContextMessage, SummaryMessage, UserMessage } from './MessageBlocks.js';
-import { getStreamingStatusLabel, shouldAutoOpenConversationBlock } from './toolPresentation.js';
-import { ToolBlock } from './ToolBlock.js';
+import { ImageInspectModal, type InspectableImage } from './ImageMessageBlocks.js';
+import { getStreamingStatusLabel } from './toolPresentation.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { useChatReplySelection } from './useChatReplySelection.js';
 import { useInlineTraceRunExpansion } from './useInlineTraceRunExpansion.js';
 import { useChatWindowing } from './useChatWindowing.js';
+import { ChatRenderItemView } from './ChatRenderItemView.js';
 
 // ── ToolBlock ─────────────────────────────────────────────────────────────────
 
@@ -165,142 +163,41 @@ export const ChatView = memo(function ChatView({
     };
   }, [selectedImage]);
 
-  const renderChatItem = useCallback((item: ChatRenderItem, itemIndex: number) => {
-    const isTailItem = itemIndex === renderItems.length - 1;
-
-    if (item.type === 'trace_cluster') {
-      const live = isStreaming && isTailItem;
-
-      return (
-        <div
-          key={`trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`}
-          data-chat-tail={isTailItem ? '1' : undefined}
-          style={contentVisibilityStyle}
-        >
-          {item.blocks.map((_, offset) => {
-            const absoluteIndex = messageIndexOffset + item.startIndex + offset;
-            return <span key={`anchor-${absoluteIndex}`} id={`msg-${absoluteIndex}`} className="block h-0 overflow-hidden" aria-hidden />;
-          })}
-          <TraceClusterBlock
-            clusterStartIndex={item.startIndex}
-            blocks={item.blocks}
-            summary={item.summary}
-            live={live}
-            onOpenArtifact={onOpenArtifact}
-            activeArtifactId={activeArtifactId}
-            onOpenCheckpoint={onOpenCheckpoint}
-            activeCheckpointId={activeCheckpointId}
-            onOpenFilePath={onOpenFilePath}
-            onResume={isTailItem ? onResumeConversation : undefined}
-            resumeBusy={resumeConversationBusy}
-            resumeTitle={resumeConversationTitle}
-            resumeLabel={resumeConversationLabel}
-            isInlineRunExpanded={isInlineRunExpanded}
-            onToggleInlineRun={toggleInlineRun}
-          />
-        </div>
-      );
-    }
-
-    const block = item.block;
-    const markerKind = block.type === 'user'
-      ? 'user'
-      : block.type === 'text' || (block.type === 'tool_use' && block.tool === 'ask_user_question')
-        ? 'assistant'
-        : undefined;
-    const absoluteIndex = messageIndexOffset + item.index;
-    const autoOpen = shouldAutoOpenConversationBlock(block, item.index, messages.length, isStreaming);
-    const showStreamingCursor = isStreaming && block.type === 'text' && item.index === messages.length - 1;
-
-    const el = (() => {
-      switch (block.type) {
-        case 'user':
-          return (
-            <UserMessage
-              block={block}
-              messageIndex={absoluteIndex}
-              onRewindMessage={onRewindMessage}
-              onHydrateMessage={onHydrateMessage}
-              hydratingMessageBlockIds={hydratingMessageBlockIds}
-              onOpenFilePath={onOpenFilePath}
-              onOpenCheckpoint={onOpenCheckpoint}
-              onInspectImage={setSelectedImage}
-              layout={layout}
-            />
-          );
-        case 'text':
-          return (
-            <AssistantMessage
-              block={block}
-              messageIndex={absoluteIndex}
-              showCursor={showStreamingCursor}
-              onRewindMessage={onRewindMessage}
-              onForkMessage={onForkMessage}
-              onOpenFilePath={onOpenFilePath}
-              onOpenCheckpoint={onOpenCheckpoint}
-              onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
-              layout={layout}
-            />
-          );
-        case 'context':
-          return <ContextMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
-        case 'summary':
-          return <SummaryMessage block={block} messageIndex={absoluteIndex} onOpenFilePath={onOpenFilePath} onOpenCheckpoint={onOpenCheckpoint} onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined} />;
-        case 'thinking':
-          return <ThinkingBlock block={block} autoOpen={autoOpen} />;
-        case 'tool_use':
-          return (
-            <ToolBlock
-              block={block}
-              autoOpen={autoOpen}
-              onOpenArtifact={onOpenArtifact}
-              activeArtifactId={activeArtifactId}
-              onOpenCheckpoint={onOpenCheckpoint}
-              activeCheckpointId={activeCheckpointId}
-              onOpenFilePath={onOpenFilePath}
-              onHydrateMessage={onHydrateMessage}
-              hydratingMessageBlockIds={hydratingMessageBlockIds}
-              messages={messages}
-              messageIndex={item.index}
-              onSubmitAskUserQuestion={onSubmitAskUserQuestion}
-              askUserQuestionDisplayMode={askUserQuestionDisplayMode}
-            />
-          );
-        case 'subagent':
-          return <SubagentBlock block={block} />;
-        case 'image':
-          return <ImageBlock block={block} onHydrateMessage={onHydrateMessage} hydratingMessageBlockIds={hydratingMessageBlockIds} onInspectImage={setSelectedImage} />;
-        case 'error':
-          return (
-            <ErrorBlock
-              block={block}
-              messageIndex={absoluteIndex}
-              onResume={isTailItem ? onResumeConversation : undefined}
-              resumeBusy={resumeConversationBusy}
-              resumeTitle={resumeConversationTitle}
-              resumeLabel={resumeConversationLabel}
-              onOpenFilePath={onOpenFilePath}
-              onSelectionGesture={onReplyToSelection ? scheduleReplySelectionSync : undefined}
-            />
-          );
-        default:
-          return null;
-      }
-    })();
-
-    return el ? (
-      <div
-        key={absoluteIndex}
-        id={`msg-${absoluteIndex}`}
-        data-message-index={absoluteIndex}
-        data-chat-tail={isTailItem ? '1' : undefined}
-        data-conversation-rail-kind={markerKind}
-        style={contentVisibilityStyle}
-      >
-        {el}
-      </div>
-    ) : null;
-  }, [activeArtifactId, activeCheckpointId, askUserQuestionDisplayMode, contentVisibilityStyle, hydratingMessageBlockIds, isInlineRunExpanded, isStreaming, layout, messageIndexOffset, messages, messages.length, onForkMessage, onHydrateMessage, onOpenArtifact, onOpenCheckpoint, onOpenFilePath, onReplyToSelection, onSubmitAskUserQuestion, onResumeConversation, onRewindMessage, renderItems.length, resumeConversationBusy, resumeConversationLabel, resumeConversationTitle, scheduleReplySelectionSync, toggleInlineRun]);
+  const renderChatItem = (item: ChatRenderItem, itemIndex: number) => (
+    <ChatRenderItemView
+      key={item.type === 'trace_cluster'
+        ? `trace-${messageIndexOffset + item.startIndex}-${messageIndexOffset + item.endIndex}`
+        : messageIndexOffset + item.index}
+      item={item}
+      itemIndex={itemIndex}
+      renderItemsLength={renderItems.length}
+      messageIndexOffset={messageIndexOffset}
+      messages={messages}
+      isStreaming={isStreaming}
+      contentVisibilityStyle={contentVisibilityStyle}
+      layout={layout}
+      onForkMessage={onForkMessage}
+      onRewindMessage={onRewindMessage}
+      onReplyToSelection={onReplyToSelection}
+      onHydrateMessage={onHydrateMessage}
+      hydratingMessageBlockIds={hydratingMessageBlockIds}
+      onOpenArtifact={onOpenArtifact}
+      activeArtifactId={activeArtifactId}
+      onOpenCheckpoint={onOpenCheckpoint}
+      activeCheckpointId={activeCheckpointId}
+      onOpenFilePath={onOpenFilePath}
+      onSubmitAskUserQuestion={onSubmitAskUserQuestion}
+      askUserQuestionDisplayMode={askUserQuestionDisplayMode}
+      onResumeConversation={onResumeConversation}
+      resumeConversationBusy={resumeConversationBusy}
+      resumeConversationTitle={resumeConversationTitle}
+      resumeConversationLabel={resumeConversationLabel}
+      isInlineRunExpanded={isInlineRunExpanded}
+      onToggleInlineRun={toggleInlineRun}
+      onInspectImage={setSelectedImage}
+      onSelectionGesture={scheduleReplySelectionSync}
+    />
+  );
 
   const fullTranscript = (
     <div className="space-y-4">

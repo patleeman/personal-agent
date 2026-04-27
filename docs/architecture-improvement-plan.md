@@ -132,6 +132,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
 14. [done] Extract reply-selection synchronization and context-menu behavior into `useChatReplySelection.ts` with focused menu-position tests.
 15. [done] Extract inline trace-run expansion state into `useInlineTraceRunExpansion.ts` with focused tests.
 16. [done] Extract transcript windowing state/effects into `useChatWindowing.ts` with focused tests.
+17. [done] Extract per-item chat rendering into `ChatRenderItemView.tsx` with focused rail-kind tests.
 
 ## Next action
 
