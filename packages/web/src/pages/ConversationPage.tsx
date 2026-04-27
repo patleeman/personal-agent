@@ -9,12 +9,12 @@ import {
   ChatBubbleIcon,
   ComposerActionIcon,
   FolderIcon,
-  RemoteExecutionIcon,
   resolveConversationComposerShellStateClassName,
 } from '../components/conversation/ConversationComposerChrome';
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
+import { ConversationComposerMeta } from '../components/conversation/ConversationComposerMeta';
 import { ConversationContextShelf } from '../components/conversation/ConversationContextShelf';
-import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
+import type { ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationPreferencesRow } from '../components/conversation/ConversationPreferencesRow';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
@@ -6263,177 +6263,53 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           </div>
 
           {showComposerMeta ? (
-            <div className="conversation-composer-meta mt-1.5 flex min-h-4 flex-row items-center justify-between gap-2 overflow-visible px-3 text-[10px] text-dim">
-              <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-2 overflow-hidden">
-                {showExecutionTargetPicker ? (
-                  <label className="relative inline-flex min-w-0 items-center">
-                    <span className="sr-only">Execution target</span>
-                    <RemoteExecutionIcon className="pointer-events-none absolute left-2 text-dim/70" />
-                    <select
-                      value={selectedExecutionTargetId}
-                      onChange={(event) => { void handleContinueConversationInHost(event.target.value); }}
-                      disabled={continueInBusy}
-                      aria-label="Execution target"
-                      className="h-7 min-w-[8.25rem] max-w-[12rem] appearance-none rounded-md bg-transparent pl-6 pr-7 text-[11px] font-medium text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary disabled:opacity-50"
-                    >
-                      {executionTargetOptions.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                    <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-2 text-dim/70">
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </label>
-                ) : null}
-
-                {remoteOperationInlineStatus ? (
-                  <span className={cx(
-                    remoteOperationStatus?.status === 'error' ? 'text-danger/85' : 'text-accent/80',
-                  )}>
-                    {remoteOperationInlineStatus}
-                  </span>
-                ) : null}
-
-                {draft ? (
-                  <div className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none">
-                    {hasDraftCwd ? <FolderIcon className="shrink-0 text-dim/70" /> : <ChatBubbleIcon className="shrink-0 text-dim/70" />}
-                    {selectedExecutionTargetIsRemote ? (
-                      <>
-                        <label className="sr-only" htmlFor="draft-composer-remote-cwd">Remote workspace path</label>
-                        <input
-                          id="draft-composer-remote-cwd"
-                          value={draftCwdValue}
-                          onChange={(event) => {
-                            setDraftConversationCwd(event.target.value);
-                            if (draftCwdError) {
-                              setDraftCwdError(null);
-                            }
-                          }}
-                          placeholder="~/workingdir/project"
-                          spellCheck={false}
-                          className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
-                          aria-label="Remote workspace path"
-                        />
-                        <BrowsePathButton
-                          busy={draftCwdPickBusy}
-                          onClick={() => { void pickDraftConversationCwd(); }}
-                          title={draftCwdPickBusy ? 'Choosing folder…' : `Choose directory on ${selectedExecutionTargetLabel}`}
-                          ariaLabel={`Choose directory on ${selectedExecutionTargetLabel}`}
-                        />
-                      </>
-                    ) : (
-                      <>
-                        <label className="sr-only" htmlFor="draft-composer-cwd">Workspace folder</label>
-                        <div className="relative min-w-0 flex-1 xl:max-w-[22rem]">
-                          <select
-                            id="draft-composer-cwd"
-                            value={draftCwdValue}
-                            onChange={(event) => {
-                              const nextWorkspacePath = event.target.value.trim();
-                              if (!nextWorkspacePath) {
-                                clearDraftConversationCwdSelection();
-                                return;
-                              }
-                              selectDraftConversationWorkspace(nextWorkspacePath);
-                            }}
-                            className="h-7 w-full min-w-0 truncate appearance-none rounded-md bg-transparent pl-1 pr-6 text-[11px] font-mono text-secondary outline-none transition-colors hover:bg-surface/45 hover:text-primary focus-visible:bg-surface/55 focus-visible:text-primary"
-                          >
-                            <option value="">Chat</option>
-                            {availableDraftWorkspacePaths.map((workspacePath) => (
-                              <option key={workspacePath} value={workspacePath}>{workspacePath}</option>
-                            ))}
-                          </select>
-                          <svg aria-hidden="true" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-dim/70">
-                            <path d="m6 9 6 6 6-6" />
-                          </svg>
-                        </div>
-                        <BrowsePathButton
-                          busy={draftCwdPickBusy}
-                          onClick={() => { void pickDraftConversationCwd(); }}
-                          title={draftCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                          ariaLabel="Choose folder"
-                        />
-                      </>
-                    )}
-                  </div>
-                ) : conversationCwdEditorOpen ? (
-                  <form
-                    className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 xl:max-w-[26rem] xl:flex-none"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void submitConversationCwdChange();
-                    }}
-                  >
-                    <FolderIcon className="shrink-0 text-dim/70" />
-                    <input
-                      autoFocus
-                      value={conversationCwdDraft}
-                      onChange={(event) => {
-                        setConversationCwdDraft(event.target.value);
-                        if (conversationCwdError) {
-                          setConversationCwdError(null);
-                        }
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
-                          event.preventDefault();
-                          cancelConversationCwdEdit();
-                        }
-                      }}
-                      placeholder={currentCwd ?? '~/workingdir/repo'}
-                      spellCheck={false}
-                      aria-label="Conversation working directory"
-                      className="h-7 min-w-0 w-full rounded-md border border-border-subtle bg-surface/45 px-2 text-[11px] font-mono text-primary outline-none transition-colors focus:border-accent/50 xl:max-w-[22rem]"
-                      disabled={conversationCwdBusy || conversationCwdPickBusy}
-                    />
-                    <BrowsePathButton
-                      busy={conversationCwdBusy || conversationCwdPickBusy}
-                      onClick={() => { void pickConversationCwd(); }}
-                      title={conversationCwdPickBusy ? 'Choosing folder…' : 'Choose folder'}
-                      ariaLabel="Choose folder"
-                    />
-                    <button type="submit" className="h-7 rounded-md px-2 text-[10px] text-accent transition-colors hover:bg-surface/45 disabled:opacity-50" disabled={conversationCwdBusy || conversationCwdPickBusy}>
-                      {conversationCwdBusy ? 'Switching…' : 'Switch'}
-                    </button>
-                    <button type="button" className="h-7 rounded-md px-2 text-[10px] text-secondary transition-colors hover:bg-surface/45 hover:text-primary disabled:opacity-50" onClick={cancelConversationCwdEdit} disabled={conversationCwdBusy || conversationCwdPickBusy}>
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={beginConversationCwdEdit}
-                    className="flex min-w-0 max-w-full flex-1 items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-secondary transition-colors hover:bg-surface/45 hover:text-primary xl:w-[26rem] xl:flex-none"
-                    title={currentCwd ? `Working directory: ${currentCwd}` : 'Set working directory'}
-                  >
-                    <FolderIcon className="shrink-0 text-dim/70" />
-                    <span className="ui-truncate-start min-w-0 flex-1 font-mono text-[11px]">{currentCwdLabel || 'Set working directory'}</span>
-                  </button>
-                )}
-
-                {(draft ? draftCwdError : conversationCwdError) ? (
-                  <span className="text-danger/85">{draft ? draftCwdError : conversationCwdError}</span>
-                ) : null}
-              </div>
-
-              <div className="flex shrink-0 items-center justify-end gap-2 text-right">
-                {!draft && branchLabel ? (
-                  <span className="max-w-[8rem] truncate font-mono" title={branchLabel}>{branchLabel}</span>
-                ) : null}
-                {!draft && hasGitSummary ? (
-                  gitSummaryPresentation.kind === 'diff' ? (
-                    <span className="font-mono tabular-nums">
-                      <span className="text-success">{gitSummaryPresentation.added}</span>
-                      <span className="text-dim"> / </span>
-                      <span className="text-danger">{gitSummaryPresentation.deleted}</span>
-                    </span>
-                  ) : (
-                    <span className="font-mono tabular-nums">{gitSummaryPresentation.text}</span>
-                  )
-                ) : null}
-                {sessionTokens ? <ConversationContextUsageIndicator tokens={sessionTokens} /> : null}
-              </div>
-            </div>
+            <ConversationComposerMeta
+              showExecutionTargetPicker={showExecutionTargetPicker}
+              selectedExecutionTargetId={selectedExecutionTargetId}
+              executionTargetOptions={executionTargetOptions}
+              continueInBusy={continueInBusy}
+              onSelectExecutionTarget={(targetId) => { void handleContinueConversationInHost(targetId); }}
+              remoteOperationInlineStatus={remoteOperationInlineStatus}
+              remoteOperationStatusKind={remoteOperationStatus?.status === 'error' ? 'error' : remoteOperationInlineStatus ? 'info' : null}
+              draft={draft}
+              hasDraftCwd={hasDraftCwd}
+              selectedExecutionTargetIsRemote={selectedExecutionTargetIsRemote}
+              selectedExecutionTargetLabel={selectedExecutionTargetLabel}
+              draftCwdValue={draftCwdValue}
+              draftCwdError={draftCwdError}
+              draftCwdPickBusy={draftCwdPickBusy}
+              availableDraftWorkspacePaths={availableDraftWorkspacePaths}
+              onDraftRemoteCwdChange={(value) => {
+                setDraftConversationCwd(value);
+                if (draftCwdError) {
+                  setDraftCwdError(null);
+                }
+              }}
+              onClearDraftCwdSelection={clearDraftConversationCwdSelection}
+              onSelectDraftWorkspace={selectDraftConversationWorkspace}
+              onPickDraftCwd={() => { void pickDraftConversationCwd(); }}
+              conversationCwdEditorOpen={conversationCwdEditorOpen}
+              currentCwd={currentCwd}
+              currentCwdLabel={currentCwdLabel}
+              conversationCwdDraft={conversationCwdDraft}
+              conversationCwdError={conversationCwdError}
+              conversationCwdBusy={conversationCwdBusy}
+              conversationCwdPickBusy={conversationCwdPickBusy}
+              onConversationCwdDraftChange={(value) => {
+                setConversationCwdDraft(value);
+                if (conversationCwdError) {
+                  setConversationCwdError(null);
+                }
+              }}
+              onSubmitConversationCwdChange={() => { void submitConversationCwdChange(); }}
+              onCancelConversationCwdEdit={cancelConversationCwdEdit}
+              onPickConversationCwd={() => { void pickConversationCwd(); }}
+              onBeginConversationCwdEdit={beginConversationCwdEdit}
+              branchLabel={branchLabel}
+              gitSummaryPresentation={gitSummaryPresentation}
+              hasGitSummary={hasGitSummary}
+              sessionTokens={sessionTokens}
+            />
           ) : null}
         </div>
       </div>
