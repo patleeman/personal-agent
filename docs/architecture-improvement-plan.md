@@ -60,6 +60,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted model, slash-command, and mention autocomplete menu rendering into `ConversationComposerMenus` with server-render tests.
    - Extracted context-usage indicator rendering into `ConversationContextUsageIndicator` with server-render tests.
    - Extracted composer chrome icons, browse-path button, action icons, and shell state-class resolution into `ConversationComposerChrome` with server-render/pure tests.
+   - Extracted browser dictation capture and base64 audio encoding into `conversationComposerDictation` with focused boundary tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
