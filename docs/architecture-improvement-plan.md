@@ -67,6 +67,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted attached-context and prompt-reference shelf rendering into `ConversationContextShelf` with server-render tests.
    - Extracted background-run and deferred-resume shelf rendering into `ConversationActivityShelf` with server-render tests.
    - Extracted queued-prompt and parallel-job shelf rendering into `ConversationQueueShelf` with server-render tests.
+   - Extracted ask-user-question composer shelf rendering into `ConversationQuestionShelf` with server-render tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

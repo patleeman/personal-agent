@@ -17,6 +17,7 @@ import { ConversationContextShelf } from '../components/conversation/Conversatio
 import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationPreferencesRow } from '../components/conversation/ConversationPreferencesRow';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
+import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
 import { ConversationSavedHeader } from '../components/ConversationSavedHeader';
 import { DraftRelatedThreadsPanel } from '../components/DraftRelatedThreadsPanel';
@@ -5989,89 +5990,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 )}
 
                 {pendingAskUserQuestion && composerActiveQuestion && (
-                  <div className="border-b border-border-subtle px-3 py-2.5">
-                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      <span className="ui-section-label">Answer below</span>
-                      <Pill tone="warning">{composerQuestionAnsweredCount}/{pendingAskUserQuestion.presentation.questions.length}</Pill>
-                    </div>
-
-                    {pendingAskUserQuestion.presentation.questions.length > 1 && (
-                      <div className="mt-1.5 flex min-w-0 flex-wrap items-center gap-1">
-                        {pendingAskUserQuestion.presentation.questions.map((question, index) => {
-                          const answered = (composerQuestionAnswers[question.id]?.length ?? 0) > 0;
-                          const active = index === composerQuestionIndex;
-                          return (
-                            <button
-                              key={question.id}
-                              type="button"
-                              onClick={() => activateComposerQuestion(index)}
-                              className={cx(
-                                'ui-action-button min-w-0 px-1.5 py-0.5 text-[11px]',
-                                active
-                                  ? 'text-primary'
-                                  : answered
-                                    ? 'text-secondary'
-                                    : 'text-dim',
-                              )}
-                            >
-                              <span aria-hidden="true" className={cx('shrink-0 text-[11px]', answered ? 'text-success' : active ? 'text-accent' : 'text-dim/70')}>
-                                {answered ? '✓' : active ? '•' : '○'}
-                              </span>
-                              <span className="truncate">{question.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    <div className="mt-1.5">
-                      <p className="text-[13px] font-medium text-primary break-words">{composerActiveQuestion.label}</p>
-                      {composerActiveQuestion.details && (
-                        <p className="mt-0.5 text-[12px] leading-relaxed text-secondary break-words">{composerActiveQuestion.details}</p>
-                      )}
-                    </div>
-
-                    <div
-                      className="mt-1 -mx-0.5"
-                      role={composerActiveQuestion.style === 'check' ? 'group' : 'radiogroup'}
-                      aria-label={composerActiveQuestion.label}
-                    >
-                      {composerActiveQuestion.options.map((option, optionIndex) => {
-                        const selectedValues = composerQuestionAnswers[composerActiveQuestion.id] ?? [];
-                        const checked = selectedValues.includes(option.value);
-                        const active = optionIndex === composerQuestionOptionIndex;
-                        const indicator = composerActiveQuestion.style === 'check'
-                          ? (checked ? '☑' : '☐')
-                          : (checked ? '◉' : '◯');
-                        return (
-                          <button
-                            key={`${composerActiveQuestion.id}:${option.value}`}
-                            type="button"
-                            disabled={composerQuestionSubmitting}
-                            onClick={() => handleComposerQuestionOptionSelect(composerQuestionIndex, optionIndex)}
-                            className={cx(
-                              'ui-list-row -mx-0.5 w-full items-start gap-2 px-2.5 py-1 text-left disabled:opacity-40',
-                              checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
-                            )}
-                          >
-                            <span className={cx('mt-px w-8 shrink-0 text-[12px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
-                              {optionIndex + 1}. {indicator}
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="ui-row-title block break-words text-[14px]">{option.label}</span>
-                              {option.details && (
-                                <span className="ui-row-summary block break-words text-[13px]">{option.details}</span>
-                              )}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    <p className="mt-1.5 text-[11px] text-dim">
-                      Type 1-9 to select · Tab/Shift+Tab or ←/→ switches questions · ↑/↓ moves · Enter selects or submits · type a normal message to skip
-                    </p>
-                  </div>
+                  <ConversationQuestionShelf
+                    presentation={pendingAskUserQuestion.presentation}
+                    activeQuestion={composerActiveQuestion}
+                    activeQuestionIndex={composerQuestionIndex}
+                    activeOptionIndex={composerQuestionOptionIndex}
+                    answers={composerQuestionAnswers}
+                    submitting={composerQuestionSubmitting}
+                    answeredCount={composerQuestionAnsweredCount}
+                    onActivateQuestion={activateComposerQuestion}
+                    onSelectOption={handleComposerQuestionOptionSelect}
+                  />
                 )}
               </div>
             )}
