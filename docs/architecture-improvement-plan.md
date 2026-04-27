@@ -54,6 +54,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted pure page state decisions for pending status, loading gates, title/session-list sync, desktop-state selection, model loading, attachment loading, and transcript rail mode into `conversationPageState` with focused tests.
    - Expanded `conversationPageState` to own live-session detection, session-meta merging, background-run indicator text, historical warmup/loading gates, bootstrap loading, and stable-transcript scroll binding.
    - Extracted initial navigation/draft hydration state, model preference carry-over, and service-tier override decisions into `conversationInitialState` with focused tests.
+   - Extracted composer presentation decisions for autocomplete catalog demand, mention-to-context-doc mapping, queued/parallel prompt summaries, composer action labels, and git summary chips into `conversationComposerPresentation` with focused tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
