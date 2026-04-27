@@ -64,6 +64,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Extracted conversation model-list loading into `useConversationModels`, and moved deferred-resume timestamp formatting into `deferredResumeIndicator` with coverage.
    - Extracted related-thread visible-result merging and selection toggling into `relatedThreadSelection` with focused tests.
    - Extracted composer text insertion and history-navigation predicates into `conversationComposerEditing` with focused tests.
+   - Extracted attached-context and prompt-reference shelf rendering into `ConversationContextShelf` with server-render tests.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

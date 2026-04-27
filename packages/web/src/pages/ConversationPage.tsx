@@ -12,6 +12,7 @@ import {
   resolveConversationComposerShellStateClassName,
 } from '../components/conversation/ConversationComposerChrome';
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
+import { ConversationContextShelf } from '../components/conversation/ConversationContextShelf';
 import { ConversationContextUsageIndicator, type ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationPreferencesRow } from '../components/conversation/ConversationPreferencesRow';
 import type { ExcalidrawEditorSavePayload } from '../components/ExcalidrawEditorModal';
@@ -5950,57 +5951,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             {hasComposerShelfContent && (
               <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
-                {attachedContextDocs.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                    <span className="ui-section-label">Attached context</span>
-                    {attachedContextDocs.map((doc) => (
-                      <span
-                        key={doc.path}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
-                        title={doc.summary ? `${doc.path}\n\n${doc.summary}` : doc.path}
-                      >
-                        <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{doc.kind}</span>
-                        <span className="max-w-[18rem] truncate text-secondary">{doc.title}</span>
-                        <button
-                          type="button"
-                          onClick={() => { void removeAttachedContextDoc(doc.path); }}
-                          disabled={contextDocsBusy}
-                          className="ui-icon-button ui-icon-button-compact ml-0.5 shrink-0 leading-none disabled:opacity-50"
-                          title={`Remove ${doc.title} from attached context`}
-                        >
-                          ×
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Prompt references */}
-                {draftMentionItems.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-3 pt-3 pb-2.5">
-                    <span className="ui-section-label">Prompt references</span>
-                    {unattachedDraftMentionItems.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => { void attachMentionedDocsToConversation(unattachedDraftMentionItems); }}
-                        disabled={contextDocsBusy}
-                        className="text-[11px] text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:opacity-50"
-                      >
-                        {contextDocsBusy ? 'attaching…' : `attach ${unattachedDraftMentionItems.length}`}
-                      </button>
-                    )}
-                    {draftMentionItems.map((item) => (
-                      <span
-                        key={`${item.kind}:${item.id}`}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-elevated px-2 py-1 text-[11px] text-secondary"
-                        title={item.summary || item.title || item.id}
-                      >
-                        <span className="text-[10px] uppercase tracking-[0.14em] text-dim/70">{item.kind}</span>
-                        <span className="font-mono text-accent">{item.id}</span>
-                      </span>
-                    ))}
-                  </div>
-                )}
+                <ConversationContextShelf
+                  attachedContextDocs={attachedContextDocs}
+                  draftMentionItems={draftMentionItems}
+                  unattachedDraftMentionItems={unattachedDraftMentionItems}
+                  contextDocsBusy={contextDocsBusy}
+                  onRemoveAttachedContextDoc={(path) => { void removeAttachedContextDoc(path); }}
+                  onAttachMentionedDocs={(items) => { void attachMentionedDocsToConversation(items); }}
+                />
 
                 {/* Pending steer / follow-up queue */}
                 {pendingQueue.length > 0 && (
