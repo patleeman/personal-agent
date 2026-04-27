@@ -1671,6 +1671,22 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, id, pendingInitialPrompt, pendingInitialPromptDispatching, realMessages]);
 
   useEffect(() => {
+    if (
+      draft
+      || !id
+      || !pendingInitialPrompt
+      || pendingInitialPromptDispatching
+      || (realMessages?.length ?? 0) === 0
+    ) {
+      return;
+    }
+
+    clearPendingConversationPrompt(id);
+    setPendingInitialPrompt(null);
+    setPendingInitialPromptDispatchingState(false);
+  }, [draft, id, pendingInitialPrompt, pendingInitialPromptDispatching, realMessages]);
+
+  useEffect(() => {
     if (!id || !pendingInitialPrompt) {
       pendingInitialPromptFailureSessionIdRef.current = null;
     }
@@ -3296,6 +3312,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       hasPendingInitialPrompt: Boolean(pendingInitialPrompt),
       pendingInitialPromptDispatching,
       hasStreamSnapshot: stream.hasSnapshot,
+      hasTranscriptMessages: (realMessages?.length ?? 0) > 0,
     })) {
       return;
     }
@@ -3370,6 +3387,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     pendingInitialPromptDispatching,
     allowQueuedPrompts,
     preparePendingConversationPromptWithRelatedContext,
+    realMessages?.length,
     stream.hasSnapshot,
     stream.send,
     showNotice,

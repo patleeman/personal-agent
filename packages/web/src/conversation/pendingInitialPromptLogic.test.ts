@@ -21,6 +21,7 @@ describe('pendingInitialPromptLogic', () => {
       hasPendingInitialPrompt: true,
       pendingInitialPromptDispatching: false,
       hasStreamSnapshot: true,
+      hasTranscriptMessages: false,
     })).toBe(true);
 
     expect(shouldAutoDispatchPendingInitialPrompt({
@@ -29,6 +30,7 @@ describe('pendingInitialPromptLogic', () => {
       hasPendingInitialPrompt: true,
       pendingInitialPromptDispatching: false,
       hasStreamSnapshot: true,
+      hasTranscriptMessages: false,
     })).toBe(false);
     expect(shouldAutoDispatchPendingInitialPrompt({
       draft: false,
@@ -36,6 +38,7 @@ describe('pendingInitialPromptLogic', () => {
       hasPendingInitialPrompt: true,
       pendingInitialPromptDispatching: false,
       hasStreamSnapshot: true,
+      hasTranscriptMessages: false,
     })).toBe(false);
     expect(shouldAutoDispatchPendingInitialPrompt({
       draft: false,
@@ -43,6 +46,15 @@ describe('pendingInitialPromptLogic', () => {
       hasPendingInitialPrompt: true,
       pendingInitialPromptDispatching: true,
       hasStreamSnapshot: true,
+      hasTranscriptMessages: false,
+    })).toBe(false);
+    expect(shouldAutoDispatchPendingInitialPrompt({
+      draft: false,
+      conversationId: 'session-1',
+      hasPendingInitialPrompt: true,
+      pendingInitialPromptDispatching: false,
+      hasStreamSnapshot: true,
+      hasTranscriptMessages: true,
     })).toBe(false);
   });
 

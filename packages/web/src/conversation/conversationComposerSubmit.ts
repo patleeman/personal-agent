@@ -4,6 +4,26 @@ interface ConversationComposerSubmitState {
   behavior?: 'followUp';
 }
 
+interface ConversationComposerSubmitLock {
+  current: boolean;
+}
+
+export async function runConversationComposerSubmitOnce<T>(
+  lock: ConversationComposerSubmitLock,
+  submit: () => Promise<T>,
+): Promise<T | undefined> {
+  if (lock.current) {
+    return undefined;
+  }
+
+  lock.current = true;
+  try {
+    return await submit();
+  } finally {
+    lock.current = false;
+  }
+}
+
 export function shouldShowQuestionSubmitAsPrimaryComposerAction(
   hasPendingQuestion: boolean,
   composerHasContent: boolean,

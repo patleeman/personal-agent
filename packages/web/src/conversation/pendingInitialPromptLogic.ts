@@ -7,12 +7,14 @@ export function shouldAutoDispatchPendingInitialPrompt(input: {
   hasPendingInitialPrompt: boolean;
   pendingInitialPromptDispatching: boolean;
   hasStreamSnapshot: boolean;
+  hasTranscriptMessages: boolean;
 }): boolean {
   return !input.draft
     && Boolean(input.conversationId)
     && input.hasPendingInitialPrompt
     && !input.pendingInitialPromptDispatching
-    && input.hasStreamSnapshot;
+    && input.hasStreamSnapshot
+    && !input.hasTranscriptMessages;
 }
 
 export function shouldClaimPendingInitialPromptForSession(input: {

@@ -2,8 +2,47 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
+  runConversationComposerSubmitOnce,
   shouldShowQuestionSubmitAsPrimaryComposerAction,
 } from './conversationComposerSubmit.js';
+
+describe('runConversationComposerSubmitOnce', () => {
+  it('drops overlapping composer submissions and unlocks after completion', async () => {
+    const lock = { current: false };
+    let resolveFirst: (() => void) | null = null;
+    let calls = 0;
+
+    const first = runConversationComposerSubmitOnce(lock, async () => {
+      calls += 1;
+      await new Promise<void>((resolve) => {
+        resolveFirst = resolve;
+      });
+      return 'first';
+    });
+    const second = runConversationComposerSubmitOnce(lock, async () => {
+      calls += 1;
+      return 'second';
+    });
+
+    await expect(second).resolves.toBeUndefined();
+    expect(calls).toBe(1);
+
+    resolveFirst?.();
+    await expect(first).resolves.toBe('first');
+    await expect(runConversationComposerSubmitOnce(lock, async () => 'third')).resolves.toBe('third');
+    expect(calls).toBe(1);
+  });
+
+  it('unlocks after failed submissions', async () => {
+    const lock = { current: false };
+
+    await expect(runConversationComposerSubmitOnce(lock, async () => {
+      throw new Error('boom');
+    })).rejects.toThrow('boom');
+
+    await expect(runConversationComposerSubmitOnce(lock, async () => 'recovered')).resolves.toBe('recovered');
+  });
+});
 
 describe('shouldShowQuestionSubmitAsPrimaryComposerAction', () => {
   it('uses the primary composer slot for questionnaire submission while the composer is otherwise empty', () => {
