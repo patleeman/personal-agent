@@ -44,3 +44,50 @@ export function insertTextAtComposerSelection(input: {
 
   return { nextInput, nextCaret };
 }
+
+export function resolveComposerHistoryNavigation(input: {
+  direction: 'older' | 'newer';
+  history: string[];
+  currentIndex: number | null;
+  currentInput: string;
+  draftInput: string;
+}): {
+  nextIndex: number | null;
+  nextInput: string;
+  nextDraftInput: string;
+} | null {
+  if (input.history.length === 0) {
+    return null;
+  }
+
+  if (input.direction === 'older') {
+    const nextIndex = input.currentIndex === null
+      ? input.history.length - 1
+      : Math.max(0, input.currentIndex - 1);
+
+    return {
+      nextIndex,
+      nextInput: input.history[nextIndex] ?? '',
+      nextDraftInput: input.currentIndex === null ? input.currentInput : input.draftInput,
+    };
+  }
+
+  if (input.currentIndex === null) {
+    return null;
+  }
+
+  if (input.currentIndex >= input.history.length - 1) {
+    return {
+      nextIndex: null,
+      nextInput: input.draftInput,
+      nextDraftInput: '',
+    };
+  }
+
+  const nextIndex = input.currentIndex + 1;
+  return {
+    nextIndex,
+    nextInput: input.history[nextIndex] ?? '',
+    nextDraftInput: input.draftInput,
+  };
+}

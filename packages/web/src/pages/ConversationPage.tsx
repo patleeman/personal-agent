@@ -110,6 +110,7 @@ import {
 import {
   canNavigateComposerHistoryValue,
   insertTextAtComposerSelection,
+  resolveComposerHistoryNavigation,
 } from '../conversation/conversationComposerEditing';
 import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
 import {
@@ -2942,40 +2943,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [composerQuestionAnswers, composerQuestionCanSubmit, composerQuestionSubmitting, pendingAskUserQuestion, submitAskUserQuestion]);
 
   const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
-    if (composerHistory.length === 0) {
+    const next = resolveComposerHistoryNavigation({
+      direction,
+      history: composerHistory,
+      currentIndex: composerHistoryIndex,
+      currentInput: input,
+      draftInput: composerHistoryDraftRef.current,
+    });
+    if (!next) {
       return false;
     }
 
-    if (direction === 'older') {
-      const nextIndex = composerHistoryIndex === null
-        ? composerHistory.length - 1
-        : Math.max(0, composerHistoryIndex - 1);
-
-      if (composerHistoryIndex === null) {
-        composerHistoryDraftRef.current = input;
-      }
-
-      setComposerHistoryIndex(nextIndex);
-      setInput(composerHistory[nextIndex]);
-      moveComposerCaretToEnd();
-      return true;
-    }
-
-    if (composerHistoryIndex === null) {
-      return false;
-    }
-
-    if (composerHistoryIndex >= composerHistory.length - 1) {
-      setComposerHistoryIndex(null);
-      setInput(composerHistoryDraftRef.current);
-      composerHistoryDraftRef.current = '';
-      moveComposerCaretToEnd();
-      return true;
-    }
-
-    const nextIndex = composerHistoryIndex + 1;
-    setComposerHistoryIndex(nextIndex);
-    setInput(composerHistory[nextIndex]);
+    setComposerHistoryIndex(next.nextIndex);
+    setInput(next.nextInput);
+    composerHistoryDraftRef.current = next.nextDraftInput;
     moveComposerCaretToEnd();
     return true;
   }, [composerHistory, composerHistoryIndex, input, moveComposerCaretToEnd, setInput]);

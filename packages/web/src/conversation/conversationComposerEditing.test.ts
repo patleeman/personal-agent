@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canNavigateComposerHistoryValue,
   insertTextAtComposerSelection,
+  resolveComposerHistoryNavigation,
 } from './conversationComposerEditing';
 
 describe('conversation composer editing helpers', () => {
@@ -70,5 +71,73 @@ describe('conversation composer editing helpers', () => {
       nextInput: 'bye',
       nextCaret: 3,
     });
+  });
+
+  it('resolves composer history navigation without owning React state', () => {
+    expect(resolveComposerHistoryNavigation({
+      direction: 'older',
+      history: ['first', 'second'],
+      currentIndex: null,
+      currentInput: 'draft',
+      draftInput: '',
+    })).toEqual({
+      nextIndex: 1,
+      nextInput: 'second',
+      nextDraftInput: 'draft',
+    });
+
+    expect(resolveComposerHistoryNavigation({
+      direction: 'older',
+      history: ['first', 'second'],
+      currentIndex: 1,
+      currentInput: 'second',
+      draftInput: 'draft',
+    })).toEqual({
+      nextIndex: 0,
+      nextInput: 'first',
+      nextDraftInput: 'draft',
+    });
+
+    expect(resolveComposerHistoryNavigation({
+      direction: 'newer',
+      history: ['first', 'second'],
+      currentIndex: 0,
+      currentInput: 'first',
+      draftInput: 'draft',
+    })).toEqual({
+      nextIndex: 1,
+      nextInput: 'second',
+      nextDraftInput: 'draft',
+    });
+
+    expect(resolveComposerHistoryNavigation({
+      direction: 'newer',
+      history: ['first', 'second'],
+      currentIndex: 1,
+      currentInput: 'second',
+      draftInput: 'draft',
+    })).toEqual({
+      nextIndex: null,
+      nextInput: 'draft',
+      nextDraftInput: '',
+    });
+  });
+
+  it('does not navigate composer history when there is nowhere to go', () => {
+    expect(resolveComposerHistoryNavigation({
+      direction: 'older',
+      history: [],
+      currentIndex: null,
+      currentInput: 'draft',
+      draftInput: '',
+    })).toBeNull();
+
+    expect(resolveComposerHistoryNavigation({
+      direction: 'newer',
+      history: ['first'],
+      currentIndex: null,
+      currentInput: 'draft',
+      draftInput: '',
+    })).toBeNull();
   });
 });
