@@ -44,7 +44,7 @@ function resolvePendingConversationPreparationStatusLabel(
     return null;
   }
 
-  return `Preparing ${relatedThreadCount} related conversation pointer${relatedThreadCount === 1 ? '' : 's'}…`;
+  return `Summarizing ${relatedThreadCount} related thread${relatedThreadCount === 1 ? '' : 's'}…`;
 }
 
 export function resolveDisplayedConversationPendingStatusLabel(input: {
