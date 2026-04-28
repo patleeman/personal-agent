@@ -6,6 +6,7 @@ import { listProfileActivityEntries, loadDeferredResumeState, setTaskCallbackBin
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import {
+  appendAutomationActivityEntry,
   closeAutomationDbs,
   createStoredAutomation,
   listAutomationActivityEntries,
@@ -180,6 +181,42 @@ describe('tasks module scheduling', () => {
       timeoutSeconds: 1.5,
       prompt: 'Run maintenance.',
     })).toThrow('timeoutSeconds must be a positive integer.');
+  });
+
+  it('does not floor fractional automation activity limits', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'activity-limit',
+      profile: 'assistant',
+      title: 'Activity limit',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+
+    appendAutomationActivityEntry('activity-limit', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath });
+    appendAutomationActivityEntry('activity-limit', {
+      kind: 'missed',
+      createdAt: '2026-03-02T11:00:00.000Z',
+      count: 1,
+      firstScheduledAt: '2026-03-02T11:00:00.000Z',
+      lastScheduledAt: '2026-03-02T11:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T11:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath });
+
+    expect(listAutomationActivityEntries('activity-limit', { dbPath, limit: 1.5 })).toHaveLength(2);
   });
 
   it('retries one-time tasks up to 3 attempts and resolves on success', async () => {
