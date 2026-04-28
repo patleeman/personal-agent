@@ -60,7 +60,7 @@ function readApplicationCommandLock(filePath: string): ApplicationCommandLock | 
 }
 
 function isProcessRunning(pid: number | undefined): boolean {
-  if (!Number.isInteger(pid) || (pid as number) <= 0) {
+  if (!Number.isSafeInteger(pid) || (pid as number) <= 0) {
     return false;
   }
 
@@ -213,7 +213,7 @@ function requestApplicationCommand(input: {
       },
     });
 
-    if (!Number.isInteger(child.pid) || (child.pid as number) <= 0) {
+    if (!Number.isSafeInteger(child.pid) || (child.pid as number) <= 0) {
       throw new Error(`Detached ${commandLabel(input.action)} process did not return a valid pid.`);
     }
 
