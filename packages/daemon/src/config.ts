@@ -57,6 +57,24 @@ function getDefaultTasksDir(): string {
   return getDurableTasksDir();
 }
 
+function readCompanionPort(value: unknown, fallback = 3843): number {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 65535) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (/^\d+$/.test(normalized)) {
+      const parsed = Number.parseInt(normalized, 10);
+      if (parsed >= 0 && parsed <= 65535) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+}
+
 function expandConfigPaths(config: DaemonConfig): DaemonConfig {
   return {
     ...config,
@@ -67,7 +85,7 @@ function expandConfigPaths(config: DaemonConfig): DaemonConfig {
     companion: {
       enabled: config.companion?.enabled !== false,
       host: config.companion?.host ? String(config.companion.host).trim() || '127.0.0.1' : '127.0.0.1',
-      port: Number.isInteger(config.companion?.port) ? Number(config.companion?.port) : Number.parseInt(String(config.companion?.port), 10) || 3843,
+      port: readCompanionPort(config.companion?.port),
     },
     modules: {
       ...config.modules,
@@ -143,7 +161,7 @@ export function getDefaultDaemonConfig(): DaemonConfig {
     companion: {
       enabled: process.env.PERSONAL_AGENT_COMPANION_ENABLED !== '0',
       host: process.env.PERSONAL_AGENT_COMPANION_HOST?.trim() || '127.0.0.1',
-      port: Number.parseInt(process.env.PERSONAL_AGENT_COMPANION_PORT?.trim() || '3843', 10),
+      port: readCompanionPort(process.env.PERSONAL_AGENT_COMPANION_PORT),
     },
     modules: {
       maintenance: {
