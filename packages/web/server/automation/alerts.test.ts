@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getAlert, upsertAlert } from '@personal-agent/core';
 import { createReadyDeferredResumeForSessionFile, listDeferredResumesForSessionFile } from './deferredResumes.js';
 import {
@@ -28,6 +28,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -193,6 +194,50 @@ describe('alerts server helpers', () => {
     expect(getAlert({ stateRoot, profile: 'shared', alertId: 'wakeup-alert-1' })).toEqual(
       expect.objectContaining({ status: 'acknowledged' }),
     );
+  });
+
+  it('falls back to the current clock for invalid snooze Date inputs', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-26T14:00:00.000Z'));
+    const stateRoot = createTempDir('pa-web-alerts-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const reminder = createReadyDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/conv-invalid-now.jsonl',
+      prompt: 'Watch the prod gates.',
+      title: 'Watch the prod gates',
+      kind: 'reminder',
+      notify: 'disruptive',
+      requireAck: true,
+      autoResumeIfOpen: false,
+      dueAt: '2026-03-26T14:00:00.000Z',
+      readyAt: '2026-03-26T14:00:00.000Z',
+      createdAt: '2026-03-26T14:00:00.000Z',
+      source: { kind: 'reminder-tool', id: 'reminder-invalid-now' },
+    });
+
+    upsertAlert({
+      stateRoot,
+      profile: 'shared',
+      alert: createAlert({
+        id: 'wakeup-alert-invalid-now',
+        conversationId: 'conv-invalid-now',
+        wakeupId: reminder.id,
+        sourceId: 'reminder-invalid-now',
+      }),
+    });
+
+    const result = await snoozeAlertForProfile('shared', 'wakeup-alert-invalid-now', {
+      delay: '15m',
+      now: new Date(Number.NaN),
+    });
+
+    expect(result?.resume.dueAt).toBe('2026-03-26T14:15:00.000Z');
+    expect(result?.alert).toEqual(expect.objectContaining({
+      id: 'wakeup-alert-invalid-now',
+      status: 'acknowledged',
+      updatedAt: '2026-03-26T14:00:00.000Z',
+    }));
   });
 
   it('supports explicit snooze timestamps', async () => {

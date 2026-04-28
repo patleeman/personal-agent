@@ -38,8 +38,12 @@ function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
+function resolveValidNow(input?: Date): Date {
+  return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
+}
+
 function resolveSnoozeDueAt(input: { delay?: string; at?: string; now?: Date }): string {
-  const now = input.now ?? new Date();
+  const now = resolveValidNow(input.now);
 
   if (input.delay && input.at) {
     throw new Error('Specify only one of delay or at when snoozing an alert.');
@@ -102,7 +106,7 @@ export async function snoozeAlertForProfile(
   alertId: string,
   input: { delay?: string; at?: string; now?: Date },
 ): Promise<SnoozedAlertResult | undefined> {
-  const now = input.now ?? new Date();
+  const now = resolveValidNow(input.now);
   const alert = getAlert({ profile, alertId });
   if (!alert) {
     return undefined;
