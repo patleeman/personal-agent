@@ -17,6 +17,8 @@ export type AutomationThreadMode = 'dedicated' | 'existing' | 'none';
 export type AutomationTargetType = 'background-agent' | 'conversation';
 export type AutomationConversationBehavior = 'steer' | 'followUp';
 
+const MAX_AUTOMATION_DURATION_SECONDS = 7 * 24 * 60 * 60;
+
 export interface StoredAutomation extends ParsedTaskDefinition {
   title: string;
   targetType: AutomationTargetType;
@@ -172,12 +174,12 @@ function readAutomationActivityTimestamp(value: string | null | undefined, label
   return normalized;
 }
 
-function readOptionalPositiveInteger(value: number | null | undefined): number | undefined {
+function readOptionalPositiveInteger(value: number | null | undefined, max = Number.MAX_SAFE_INTEGER): number | undefined {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
     return undefined;
   }
 
-  return value > 0 ? value : undefined;
+  return value > 0 && value <= max ? value : undefined;
 }
 
 function parseJsonRecord(value: string | null | undefined): Record<string, unknown> | undefined {
@@ -600,7 +602,7 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
 
   const timeoutSeconds = input.timeoutSeconds == null
     ? loadDaemonConfig().modules.tasks.defaultTimeoutSeconds
-    : readOptionalPositiveInteger(input.timeoutSeconds);
+    : readOptionalPositiveInteger(input.timeoutSeconds, MAX_AUTOMATION_DURATION_SECONDS);
   if (!timeoutSeconds) {
     throw new Error('timeoutSeconds must be a positive integer.');
   }
@@ -622,7 +624,7 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
     : undefined;
   const catchUpWindowSeconds = !cron || input.catchUpWindowSeconds == null
     ? undefined
-    : readOptionalPositiveInteger(input.catchUpWindowSeconds);
+    : readOptionalPositiveInteger(input.catchUpWindowSeconds, MAX_AUTOMATION_DURATION_SECONDS);
 
   if (input.catchUpWindowSeconds != null && cron && !catchUpWindowSeconds) {
     throw new Error('catchUpWindowSeconds must be a positive integer.');

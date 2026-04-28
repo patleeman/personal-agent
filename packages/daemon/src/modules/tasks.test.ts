@@ -200,6 +200,17 @@ describe('tasks module scheduling', () => {
 
     expect(() => createStoredAutomation({
       dbPath,
+      id: 'huge-timeout',
+      profile: 'assistant',
+      title: 'Huge timeout',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: Number.MAX_SAFE_INTEGER,
+      prompt: 'Run maintenance.',
+    })).toThrow('timeoutSeconds must be a positive integer.');
+
+    expect(() => createStoredAutomation({
+      dbPath,
       id: 'unsafe-catch-up',
       profile: 'assistant',
       title: 'Unsafe catch-up',
@@ -207,6 +218,18 @@ describe('tasks module scheduling', () => {
       cron: '0 * * * *',
       timeoutSeconds: 60,
       catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
+      prompt: 'Run maintenance.',
+    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+
+    expect(() => createStoredAutomation({
+      dbPath,
+      id: 'huge-catch-up',
+      profile: 'assistant',
+      title: 'Huge catch-up',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: 60,
+      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
       prompt: 'Run maintenance.',
     })).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
