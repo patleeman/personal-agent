@@ -368,7 +368,7 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
 
   return {
     attachmentId,
-    ...(Number.isInteger(revision) && Number(revision) > 0 ? { revision: Number(revision) } : {}),
+    ...(Number.isSafeInteger(revision) && Number(revision) > 0 ? { revision: Number(revision) } : {}),
   };
 }
 
