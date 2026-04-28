@@ -251,7 +251,7 @@ function parseStep(raw: string, label: string): number {
   }
 
   const parsed = Number.parseInt(raw, 10);
-  if (parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`Invalid ${label} step value: ${raw}`);
   }
 

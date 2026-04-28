@@ -74,6 +74,11 @@ hello
     })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
   });
 
+  it('rejects unsafe cron step values', () => {
+    expect(() => parseCronExpression(`*/${Number.MAX_SAFE_INTEGER + 1} * * * *`))
+      .toThrow(`Invalid minute step value: ${Number.MAX_SAFE_INTEGER + 1}`);
+  });
+
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {
     const expression = parseCronExpression('0 9 15 * 1');
 
