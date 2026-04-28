@@ -36,7 +36,12 @@ export function readStoredOpenFilesSectionHeight(storage?: StorageLike): number 
       return DEFAULT_OPEN_FILES_SECTION_HEIGHT;
     }
 
-    return clampOpenFilesSectionHeight(Number.parseInt(raw, 10));
+    const normalized = raw.trim();
+    if (!/^\d+$/.test(normalized)) {
+      return DEFAULT_OPEN_FILES_SECTION_HEIGHT;
+    }
+
+    return clampOpenFilesSectionHeight(Number.parseInt(normalized, 10));
   } catch {
     return DEFAULT_OPEN_FILES_SECTION_HEIGHT;
   }

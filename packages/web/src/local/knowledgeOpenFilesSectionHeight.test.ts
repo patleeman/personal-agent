@@ -54,6 +54,9 @@ describe('knowledgeOpenFilesSectionHeight', () => {
     localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, 'not-a-number');
     expect(readStoredOpenFilesSectionHeight()).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
 
+    localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, '224px');
+    expect(readStoredOpenFilesSectionHeight()).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
+
     writeStoredOpenFilesSectionHeight(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
     expect(localStorage.getItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY)).toBeNull();
   });
