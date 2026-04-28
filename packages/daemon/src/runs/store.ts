@@ -236,7 +236,7 @@ function parseCheckpoint(value: unknown): DurableRunCheckpointFile | undefined {
   }
 
   const runId = toString(value.runId);
-  const updatedAt = toTimestampString(value.updatedAt);
+  const updatedAt = toTimestampStringOrNow(value.updatedAt);
   const payload = isRecord(value.payload) ? value.payload : undefined;
 
   if (!runId || !updatedAt) {

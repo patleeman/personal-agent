@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
 import { deliverBackgroundRunCallbackWakeup } from './background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './background-run-deferred-resumes.js';
-import { loadDurableRunCheckpoint, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot, saveDurableRunStatus } from './store.js';
+import { loadDurableRunCheckpoint, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot, saveDurableRunCheckpoint, saveDurableRunStatus } from './store.js';
 
 function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -184,6 +184,54 @@ describe('background run callbacks', () => {
       triggerRunId: run.runId,
       now: new Date('2026-04-04T01:10:00.000Z'),
     })).resolves.toEqual({ surfacedRunIds: [] });
+  });
+
+  it('preserves checkpoint payloads when checkpoint timestamps are malformed', async () => {
+    const daemonRoot = createTempDir('pa-background-run-callback-daemon-');
+    const stateRoot = createTempDir('pa-background-run-callback-state-');
+    const runsRoot = join(daemonRoot, 'runs');
+    const sessionFile = '/tmp/conversations/callback-checkpoint-invalid.jsonl';
+
+    const run = await createFinishedBackgroundRun({
+      daemonRoot,
+      sessionFile,
+      taskSlug: 'checkpoint-invalid-callback',
+      endedAt: '2026-04-04T01:10:00.000Z',
+    });
+
+    const delivered = await deliverBackgroundRunCallbackWakeup({
+      daemonRoot,
+      stateRoot,
+      runsRoot,
+      runId: run.runId,
+    });
+    expect(delivered.delivered).toBe(true);
+
+    const checkpoint = loadDurableRunCheckpoint(run.checkpointPath)!;
+    saveDurableRunCheckpoint(run.checkpointPath, {
+      ...checkpoint,
+      updatedAt: 'not-a-date',
+    });
+
+    await expect(deliverBackgroundRunCallbackWakeup({
+      daemonRoot,
+      stateRoot,
+      runsRoot,
+      runId: run.runId,
+    })).resolves.toEqual({
+      delivered: true,
+      wakeupId: delivered.wakeupId,
+      conversationId: 'conv-123',
+    });
+
+    expect(loadDurableRunCheckpoint(run.checkpointPath)?.payload).toEqual(expect.objectContaining({
+      metadata: expect.objectContaining({
+        resumeParentOnExit: true,
+      }),
+      backgroundRunCallback: expect.objectContaining({
+        wakeupId: delivered.wakeupId,
+      }),
+    }));
   });
 
   it('does not create callback wakeups for cancelled runs', async () => {
