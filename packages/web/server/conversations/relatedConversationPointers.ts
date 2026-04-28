@@ -174,6 +174,11 @@ function buildPointer(input: {
   };
 }
 
+function pointerActivityMs(pointer: RelatedConversationPointer): number {
+  const parsed = Date.parse(pointer.lastActivityAt ?? pointer.timestamp);
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
 function formatPointerContext(pointers: RelatedConversationPointer[]): string {
   const lines = [
     'Potentially related previous conversations are available as pointers only.',
@@ -238,7 +243,7 @@ export function buildRelatedConversationPointers(input: {
       .filter((meta) => meta.id !== input.currentConversationId && !used.has(meta.id) && meta.messageCount > 0)
       .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto' }))
       .filter((pointer) => pointer.score >= AUTO_POINTER_MIN_SCORE)
-      .sort((a, b) => b.score - a.score || Date.parse(b.lastActivityAt ?? b.timestamp) - Date.parse(a.lastActivityAt ?? a.timestamp));
+      .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
 
     for (const pointer of autoCandidates) {
       if (pointers.length >= limit) {

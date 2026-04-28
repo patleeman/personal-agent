@@ -123,4 +123,21 @@ describe('buildRelatedConversationPointers', () => {
       'manual-4',
     ]);
   });
+
+  it('sorts auto candidates with malformed activity timestamps last', () => {
+    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readSessionSearchTextMock.mockReturnValue('release signing fix');
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'invalid-time', title: 'Release signing invalid', timestamp: 'not-a-date', lastActivityAt: 'not-a-date', messageCount: 6 },
+      { ...baseMeta, id: 'valid-time', title: 'Release signing valid', timestamp: '2026-02-01T10:00:00.000Z', lastActivityAt: '2026-02-01T10:00:00.000Z', messageCount: 6 },
+    ]);
+
+    const result = buildRelatedConversationPointers({
+      prompt: 'Fix the release signing flow',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time', 'invalid-time']);
+  });
 });
