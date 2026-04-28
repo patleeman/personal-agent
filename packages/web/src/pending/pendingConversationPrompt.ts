@@ -78,6 +78,28 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
     }));
 }
 
+function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((image): image is PromptImageInput => (
+      !!image
+      && typeof image === 'object'
+      && typeof image.mimeType === 'string'
+      && image.mimeType.trim().length > 0
+      && typeof image.data === 'string'
+      && image.data.length > 0
+    ))
+    .map((image) => ({
+      mimeType: image.mimeType.trim(),
+      data: image.data,
+      ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
+      ...(typeof image.previewUrl === 'string' && image.previewUrl.trim().length > 0 ? { previewUrl: image.previewUrl.trim() } : {}),
+    }));
+}
+
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
 
 export interface PendingConversationPromptChangedDetail {
@@ -146,17 +168,18 @@ export function persistPendingConversationPrompt(
   const contextMessages = normalizePendingPromptContextMessages(prompt.contextMessages);
   const relatedConversationIds = normalizePendingRelatedConversationIds(prompt.relatedConversationIds);
   const attachmentRefs = normalizePendingPromptAttachmentRefs(prompt.attachmentRefs);
+  const images = normalizePendingPromptImages(prompt.images);
   const nextPrompt: PendingConversationPrompt = {
     text: prompt.text,
     ...(prompt.behavior ? { behavior: prompt.behavior } : {}),
-    images: prompt.images,
+    images,
     attachmentRefs,
     ...(contextMessages.length > 0 ? { contextMessages } : {}),
     ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
   };
 
   const shouldPersist = nextPrompt.text.trim().length > 0
-    || nextPrompt.images.length > 0
+    || images.length > 0
     || attachmentRefs.length > 0
     || contextMessages.length > 0
     || relatedConversationIds.length > 0;
@@ -198,22 +221,7 @@ export function readPendingConversationPrompt(
         return null;
       }
 
-      const images = Array.isArray(parsed.images)
-        ? parsed.images
-          .filter((image): image is PromptImageInput => (
-            !!image
-            && typeof image === 'object'
-            && typeof image.mimeType === 'string'
-            && typeof image.data === 'string'
-          ))
-          .map((image) => ({
-            mimeType: image.mimeType,
-            data: image.data,
-            ...(typeof image.name === 'string' ? { name: image.name } : {}),
-            ...(typeof image.previewUrl === 'string' ? { previewUrl: image.previewUrl } : {}),
-          }))
-        : [];
-
+      const images = normalizePendingPromptImages(parsed.images);
       const attachmentRefs = normalizePendingPromptAttachmentRefs(parsed.attachmentRefs);
       const contextMessages = normalizePendingPromptContextMessages(parsed.contextMessages);
       const relatedConversationIds = normalizePendingRelatedConversationIds(parsed.relatedConversationIds);

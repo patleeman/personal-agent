@@ -84,6 +84,26 @@ describe('pendingConversationPrompt helpers', () => {
     clearPendingConversationPrompt('session-refs', null);
   });
 
+  it('normalizes images before caching pending prompts in memory', () => {
+    persistPendingConversationPrompt('session-images', {
+      text: '',
+      images: [
+        { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
+        { mimeType: '', data: 'missing-mime' },
+        { mimeType: 'image/png', data: '' },
+      ],
+      attachmentRefs: [],
+    }, null);
+
+    expect(readPendingConversationPrompt('session-images', null)).toEqual({
+      text: '',
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' }],
+      attachmentRefs: [],
+    });
+
+    clearPendingConversationPrompt('session-images', null);
+  });
+
   it('keeps prompts available in memory even when storage is unavailable', () => {
     persistPendingConversationPrompt('session-in-memory', {
       text: 'hello world',
