@@ -393,8 +393,8 @@ describe('registerConversationStateRoutes', () => {
       params: { id: 'conversation-1' },
       query: {
         knownSessionSignature: ' sig-old ',
-        knownBlockOffset: '3abc',
-        knownTotalBlocks: '9abc',
+        knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
+        knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
         knownLastBlockId: ' block-1 ',
       },
     }, res);
