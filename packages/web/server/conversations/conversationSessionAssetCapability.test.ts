@@ -63,6 +63,23 @@ describe('conversationSessionAssetCapability', () => {
     expect(readSessionImageAssetMock).toHaveBeenNthCalledWith(2, 'conversation-1', 'user-block-1', 1);
   });
 
+  it('uses the inlined session asset mime type over stale user-image metadata', () => {
+    readSessionImageAssetMock.mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('first-image') });
+
+    const block = {
+      id: 'user-block-1',
+      type: 'user' as const,
+      text: 'with images',
+      ts: '2026-04-10T12:00:00.000Z',
+      images: [{ alt: 'First', src: '/api/sessions/conversation-1/blocks/user-block-1/images/0', mimeType: 'text/plain' }],
+    };
+
+    expect(inlineConversationSessionBlockAssetsCapability('conversation-1', block)).toEqual({
+      ...block,
+      images: [{ alt: 'First', src: 'data:image/png;base64,Zmlyc3QtaW1hZ2U=', mimeType: 'image/png' }],
+    });
+  });
+
   it('inlines tool-result image blocks as data urls', () => {
     readSessionImageAssetMock.mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('tool-image') });
 
@@ -80,6 +97,25 @@ describe('conversationSessionAssetCapability', () => {
       mimeType: 'image/png',
     });
     expect(readSessionImageAssetMock).toHaveBeenCalledWith('conversation-1', 'tool-block-1-i0');
+  });
+
+  it('uses the inlined session asset mime type over stale image-block metadata', () => {
+    readSessionImageAssetMock.mockReturnValueOnce({ mimeType: 'image/png', data: Buffer.from('tool-image') });
+
+    const block = {
+      id: 'tool-block-1-i0',
+      type: 'image' as const,
+      alt: 'Tool image result',
+      src: '/api/sessions/conversation-1/blocks/tool-block-1-i0/image',
+      mimeType: 'text/plain',
+      ts: '2026-04-10T12:00:00.000Z',
+    };
+
+    expect(inlineConversationSessionBlockAssetsCapability('conversation-1', block)).toEqual({
+      ...block,
+      src: 'data:image/png;base64,dG9vbC1pbWFnZQ==',
+      mimeType: 'image/png',
+    });
   });
 
   it('leaves session-image blocks alone when they are already inlined', () => {

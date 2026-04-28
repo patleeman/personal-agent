@@ -30,7 +30,7 @@ function inlineSessionUserBlockImages(sessionId: string, block: Extract<DisplayB
     return {
       ...image,
       src: toDataUrl(asset.mimeType, asset.data),
-      mimeType: image.mimeType ?? asset.mimeType,
+      mimeType: asset.mimeType,
     };
   });
 
@@ -50,7 +50,7 @@ function inlineSessionImageBlock(sessionId: string, block: Extract<DisplayBlock,
   return {
     ...block,
     src: toDataUrl(asset.mimeType, asset.data),
-    mimeType: block.mimeType ?? asset.mimeType,
+    mimeType: asset.mimeType,
   };
 }
 
