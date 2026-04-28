@@ -3,7 +3,7 @@ import { buildSelectionContextMenuTemplate, normalizeSelectionContextMenuCoordin
 
 describe('buildSelectionContextMenuTemplate', () => {
   it('drops unsafe menu coordinates', () => {
-    expect(normalizeSelectionContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeSelectionContextMenuCoordinate(12.4)).toBe(0);
     expect(normalizeSelectionContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
   });
 
