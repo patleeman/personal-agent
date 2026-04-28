@@ -89,6 +89,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved attached context-doc append/remove transitions into `conversationComposerPresentation`, leaving `ConversationPage` to persist the resolved document list.
    - Moved paste/drop transfer file extraction into `promptAttachments`, so `ConversationPage` only handles event prevention and dispatch.
    - Moved context-usage token presentation resolution into `conversationComposerPresentation`, removing model/window fallback rules from `ConversationPage`.
+   - Moved latest copyable assistant-text selection into `conversationPageState`, keeping transcript search rules covered outside `ConversationPage`.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

@@ -63,6 +63,7 @@ import {
   resolveConversationStreamTitleSync,
   resolveConversationVisibleScrollBinding,
   resolveDisplayedConversationPendingStatusLabel,
+  findLastCopyableAgentText,
   shouldDeferConversationFileRefresh,
   shouldEnableConversationLiveStream,
   shouldFetchConversationAttachments,
@@ -2310,20 +2311,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     [orderedDeferredResumes, deferredResumeNowMs],
   );
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
-  const lastCopyableAgentText = useMemo(() => {
-    if (!realMessages) {
-      return null;
-    }
-
-    for (let index = realMessages.length - 1; index >= 0; index -= 1) {
-      const block = realMessages[index];
-      if ((block.type === 'text' || block.type === 'summary') && block.text.trim().length > 0) {
-        return block.text;
-      }
-    }
-
-    return null;
-  }, [realMessages]);
+  const lastCopyableAgentText = useMemo(() => findLastCopyableAgentText(realMessages), [realMessages]);
   const conversationResumeState = useMemo(() => getConversationResumeState({
     run: conversationRun,
     isLiveSession,

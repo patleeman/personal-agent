@@ -84,6 +84,21 @@ export function resolveDisplayedConversationPendingStatusLabel(input: {
   return null;
 }
 
+export function findLastCopyableAgentText(messages: MessageBlock[] | undefined): string | null {
+  if (!messages) {
+    return null;
+  }
+
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const block = messages[index];
+    if ((block.type === 'text' || block.type === 'summary') && block.text.trim().length > 0) {
+      return block.text;
+    }
+  }
+
+  return null;
+}
+
 export function shouldShowMissingConversationState(input: {
   draft: boolean;
   conversationId: string | null | undefined;

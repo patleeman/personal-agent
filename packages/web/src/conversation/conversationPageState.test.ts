@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
   buildConversationBackgroundRunIndicatorText,
+  findLastCopyableAgentText,
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
@@ -59,6 +60,20 @@ describe('conversation page state helpers', () => {
       isLiveSession: true,
       hasVisibleSessionDetail: false,
     })).toBeNull();
+  });
+
+  it('finds the latest copyable assistant text or summary block', () => {
+    expect(findLastCopyableAgentText(undefined)).toBeNull();
+    expect(findLastCopyableAgentText([
+      { type: 'user', ts: '2026-01-01T00:00:00.000Z', text: 'prompt' },
+      { type: 'text', ts: '2026-01-01T00:00:01.000Z', text: '  ' },
+      { type: 'summary', ts: '2026-01-01T00:00:02.000Z', kind: 'branch', title: 'Summary', text: 'summary text' },
+      { type: 'tool_use', ts: '2026-01-01T00:00:03.000Z', tool: 'bash', input: {}, output: 'ignored' },
+    ])).toBe('summary text');
+    expect(findLastCopyableAgentText([
+      { type: 'summary', ts: '2026-01-01T00:00:00.000Z', kind: 'branch', title: 'Summary', text: 'summary text' },
+      { type: 'text', ts: '2026-01-01T00:00:01.000Z', text: 'latest assistant text' },
+    ])).toBe('latest assistant text');
   });
 
   it('gates expensive conversation reads during pending initial prompt work', () => {
