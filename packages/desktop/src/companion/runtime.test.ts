@@ -151,6 +151,7 @@ describe('desktop companion runtime', () => {
       dispatchApiRequest: vi
         .fn()
         .mockResolvedValueOnce(jsonResponse({ results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }] }))
+        .mockResolvedValueOnce(jsonResponse({ results: [] }))
         .mockResolvedValueOnce(jsonResponse({ id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md' }))
         .mockResolvedValueOnce(jsonResponse({ ok: true }))
         .mockResolvedValueOnce(jsonResponse({ id: '_attachments/photo.png', url: '/api/vault/asset?id=_attachments%2Fphoto.png' }))
@@ -168,6 +169,7 @@ describe('desktop companion runtime', () => {
 
     const runtime = createDesktopCompanionRuntime(hostManager);
     await expect(runtime.searchKnowledge({ query: 'release', limit: 7 })).resolves.toEqual({ results: [{ id: 'notes/release-checklist.md', title: 'Release checklist' }] });
+    await expect(runtime.searchKnowledge({ query: 'release', limit: 7.5 })).resolves.toEqual({ results: [] });
     await expect(runtime.renameKnowledgeEntry({ id: 'Inbox/original.md', newName: 'renamed.md' })).resolves.toEqual({
       id: 'Inbox/renamed.md', kind: 'file', name: 'renamed.md',
     });
@@ -192,15 +194,19 @@ describe('desktop companion runtime', () => {
       path: '/api/vault/note-search?limit=7&q=release',
     });
     expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(2, {
+      method: 'GET',
+      path: '/api/vault/note-search?limit=20&q=release',
+    });
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(3, {
       method: 'POST',
       path: '/api/vault/rename',
       body: { id: 'Inbox/original.md', newName: 'renamed.md' },
     });
-    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(3, {
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(4, {
       method: 'DELETE',
       path: '/api/vault/file?id=Inbox%2Frenamed.md',
     });
-    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(4, {
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(5, {
       method: 'POST',
       path: '/api/vault/image',
       body: {
@@ -208,7 +214,7 @@ describe('desktop companion runtime', () => {
         dataUrl: 'data:image/png;base64,Zm9v',
       },
     });
-    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(5, {
+    expect(localController.dispatchApiRequest).toHaveBeenNthCalledWith(6, {
       method: 'POST',
       path: '/api/vault/share-import',
       body: {
