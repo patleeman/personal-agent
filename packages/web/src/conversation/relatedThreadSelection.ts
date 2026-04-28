@@ -3,6 +3,7 @@ import type { RelatedConversationSearchResult } from './relatedConversationSearc
 
 const MIN_AUTO_PRESELECT_QUERY_LENGTH = 3;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 100;
+const MAX_AUTO_RELATED_THREAD_SELECTIONS = 5;
 
 function normalizeVisibleRelatedThreadLimit(value: number): number {
   return Number.isSafeInteger(value) && value >= 0
@@ -164,7 +165,7 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
   const selectedSet = new Set(input.selectedThreadIds);
   const autoSelectedSet = new Set(input.autoSelectedThreadIds);
   const maxAutoSelections = Number.isSafeInteger(input.maxAutoSelections) && input.maxAutoSelections >= 0
-    ? input.maxAutoSelections
+    ? Math.min(MAX_AUTO_RELATED_THREAD_SELECTIONS, input.maxAutoSelections)
     : 0;
   const hasManualSelection = input.selectedThreadIds.some((sessionId) => !autoSelectedSet.has(sessionId));
   const prunedAutoSelectedThreadIds = input.autoSelectedThreadIds.filter((sessionId) => selectedSet.has(sessionId));

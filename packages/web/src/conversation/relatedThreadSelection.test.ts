@@ -330,5 +330,22 @@ describe('related thread selection helpers', () => {
       autoSelectedThreadIds: [],
       changed: false,
     });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'matching prompt context',
+      selectedThreadIds: [],
+      autoSelectedThreadIds: [],
+      searchResults: Array.from({ length: 12 }, (_, index) => ({
+        ...strongResult,
+        sessionId: `result-${index}`,
+        title: `Result ${index}`,
+      })),
+      maxAutoSelections: Number.MAX_SAFE_INTEGER,
+    })).toEqual({
+      selectedThreadIds: ['result-0', 'result-1', 'result-2', 'result-3', 'result-4'],
+      autoSelectedThreadIds: ['result-0', 'result-1', 'result-2', 'result-3', 'result-4'],
+      changed: true,
+    });
   });
 });
