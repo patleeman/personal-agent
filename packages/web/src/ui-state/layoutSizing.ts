@@ -69,6 +69,10 @@ function getMainViewportWidth(input: {
   resizeHandleWidth?: number;
 }): number {
   const resizeHandleWidth = input.resizeHandleWidth ?? RESIZE_HANDLE_WIDTH;
+  if (![input.viewportWidth, input.sidebarWidth, resizeHandleWidth].every(Number.isSafeInteger)) {
+    return 0;
+  }
+
   return Math.max(0, input.viewportWidth - input.sidebarWidth - (resizeHandleWidth * 2));
 }
 

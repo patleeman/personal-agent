@@ -55,4 +55,13 @@ describe('layout sizing helpers', () => {
       railMinWidth: 220,
     })).toBe(220);
   });
+
+  it('falls back to the rail minimum for malformed viewport geometry', () => {
+    expect(getRailMaxWidth({
+      viewportWidth: 1600.5,
+      sidebarWidth: 224,
+      railMinWidth: 220,
+      mainMinWidth: 320,
+    })).toBe(220);
+  });
 });
