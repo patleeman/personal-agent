@@ -198,6 +198,16 @@ function readOptionalNonNegativeInteger(input: unknown, field: string): number |
   return value;
 }
 
+function readOptionalPositiveIntegerQuery(input: string | null): number | undefined {
+  const normalized = input?.trim();
+  if (!normalized || !/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(normalized, 10);
+  return Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function normalizeSurfaceType(input: unknown): CompanionSurfaceType | undefined {
   return input === 'desktop_ui' || input === 'ios_native'
     ? input
@@ -715,7 +725,7 @@ export class DaemonCompanionServer {
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
       sendJson(response, 200, await runtime.searchKnowledge({
         query: requestUrl.searchParams.get('q'),
-        limit: requestUrl.searchParams.get('limit') ? Number.parseInt(requestUrl.searchParams.get('limit') || '', 10) : undefined,
+        limit: readOptionalPositiveIntegerQuery(requestUrl.searchParams.get('limit')),
       }));
       return;
     }

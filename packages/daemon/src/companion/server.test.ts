@@ -312,6 +312,22 @@ describe('daemon companion server', () => {
       }],
     });
 
+    const malformedKnowledgeSearchResponse = await fetch(`${baseUrl}/companion/v1/knowledge/search?q=release&limit=5abc`, {
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+      },
+    });
+    expect(malformedKnowledgeSearchResponse.status).toBe(200);
+    expect(await readJson(malformedKnowledgeSearchResponse)).toEqual({
+      results: [{
+        id: 'notes/release-checklist.md',
+        name: 'release-checklist.md',
+        title: 'release',
+        excerpt: 'Release checklist',
+        limit: undefined,
+      }],
+    });
+
     const knowledgeWriteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/file`, {
       method: 'PUT',
       headers: {
