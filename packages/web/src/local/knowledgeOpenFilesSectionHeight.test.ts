@@ -40,6 +40,7 @@ describe('knowledgeOpenFilesSectionHeight', () => {
     expect(clampOpenFilesSectionHeight(24)).toBe(88);
     expect(clampOpenFilesSectionHeight(512)).toBe(512);
     expect(clampOpenFilesSectionHeight(Number.MAX_SAFE_INTEGER + 1)).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
+    expect(clampOpenFilesSectionHeight(224.5)).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
   });
 
   it('persists non-default heights and restores them', () => {
