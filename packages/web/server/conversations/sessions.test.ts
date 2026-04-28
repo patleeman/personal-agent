@@ -271,6 +271,33 @@ describe('sessions', () => {
     expect(secondRead.telemetry?.durationMs).toBeGreaterThanOrEqual(0);
   });
 
+  it('ignores unsafe archived transcript tail read limits', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-unsafe-tail',
+      title: 'Unsafe tail test',
+      assistantTexts: ['Reply 1', 'Reply 2'],
+    });
+
+    const read = readSessionBlocksWithTelemetry('session-unsafe-tail', { tailBlocks: Number.MAX_SAFE_INTEGER + 1 });
+    expect(read.detail?.blocks.map((block) => block.type === 'text' ? block.text : block.type)).toEqual([
+      'user',
+      'Reply 1',
+      'Reply 2',
+    ]);
+    expect(read.telemetry).toMatchObject({
+      cache: 'miss',
+      loader: 'full',
+      totalBlocks: 3,
+      blockOffset: 0,
+      contextUsageIncluded: true,
+    });
+    expect(read.telemetry).not.toHaveProperty('requestedTailBlocks');
+  });
+
   it('invalidates cached archived transcript detail when the session file changes', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

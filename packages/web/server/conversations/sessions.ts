@@ -2144,11 +2144,17 @@ export function clearStoredSessionRemoteTargetByFile(filePath: string): SessionM
 }
 
 function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: number): number | null {
-  if (!Number.isInteger(tailBlocks) || typeof tailBlocks !== 'number' || tailBlocks <= 0) {
+  if (!Number.isSafeInteger(tailBlocks) || typeof tailBlocks !== 'number' || tailBlocks <= 0) {
     return null;
   }
 
   return Math.min(tailBlocks, totalBlocks);
+}
+
+function normalizeTailBlockRequest(tailBlocks: number | undefined): number | undefined {
+  return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0
+    ? tailBlocks
+    : undefined;
 }
 
 function buildSessionDetailCacheKey(filePath: string, tailBlocks?: number): string {
@@ -2176,7 +2182,8 @@ export function readSessionBlocksByFileWithTelemetry(
     return { detail: null, telemetry: null };
   }
 
-  const cacheKey = buildSessionDetailCacheKey(filePath, options?.tailBlocks);
+  const requestedTailBlocks = normalizeTailBlockRequest(options?.tailBlocks);
+  const cacheKey = buildSessionDetailCacheKey(filePath, requestedTailBlocks);
   const cachedDetail = sessionDetailCache.get(cacheKey);
   if (cachedDetail?.signature === signature) {
     sessionDetailCache.delete(cacheKey);
@@ -2187,9 +2194,9 @@ export function readSessionBlocksByFileWithTelemetry(
         : { ...cachedDetail.detail, signature },
       telemetry: {
         cache: 'hit',
-        loader: cachedDetail.detail.contextUsage === null && typeof options?.tailBlocks === 'number' ? 'fast-tail' : 'full',
+        loader: cachedDetail.detail.contextUsage === null && typeof requestedTailBlocks === 'number' ? 'fast-tail' : 'full',
         durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
-        ...(typeof options?.tailBlocks === 'number' ? { requestedTailBlocks: options.tailBlocks } : {}),
+        ...(typeof requestedTailBlocks === 'number' ? { requestedTailBlocks } : {}),
         totalBlocks: cachedDetail.detail.totalBlocks,
         blockOffset: cachedDetail.detail.blockOffset,
         contextUsageIncluded: cachedDetail.detail.contextUsage !== null,
@@ -2200,7 +2207,6 @@ export function readSessionBlocksByFileWithTelemetry(
   const meta = readCachedSessionMeta(filePath, resolveSessionFileCwdSlug(filePath));
   if (!meta) return { detail: null, telemetry: null };
 
-  const requestedTailBlocks = options?.tailBlocks;
   const fastTailDetail = typeof requestedTailBlocks === 'number' && requestedTailBlocks > 0
     ? tryReadSessionTailBlocksByFile(meta.file, meta, requestedTailBlocks)
     : null;
@@ -2229,7 +2235,7 @@ export function readSessionBlocksByFileWithTelemetry(
   const branchEntries = buildDisplayMessageEntriesFromSessionEntries(manager.getBranch());
   const allBlocks = decorateSessionAssetUrls(buildDisplayBlocksFromEntries(branchEntries), meta.id);
   const totalBlocks = allBlocks.length;
-  const tailBlockLimit = resolveTailBlockLimit(options?.tailBlocks, totalBlocks);
+  const tailBlockLimit = resolveTailBlockLimit(requestedTailBlocks, totalBlocks);
   const blockOffset = tailBlockLimit === null ? 0 : Math.max(0, totalBlocks - tailBlockLimit);
   const slicedBlocks = blockOffset > 0 ? allBlocks.slice(blockOffset) : allBlocks;
   const blocks = blockOffset > 0
@@ -2253,7 +2259,7 @@ export function readSessionBlocksByFileWithTelemetry(
       cache: 'miss',
       loader: 'full',
       durationMs: Number(process.hrtime.bigint() - startedAt) / 1_000_000,
-      ...(typeof options?.tailBlocks === 'number' ? { requestedTailBlocks: options.tailBlocks } : {}),
+      ...(typeof requestedTailBlocks === 'number' ? { requestedTailBlocks } : {}),
       totalBlocks: detail.totalBlocks,
       blockOffset: detail.blockOffset,
       contextUsageIncluded: true,
