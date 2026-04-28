@@ -346,7 +346,7 @@ function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefi
       const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string'
         ? (image as { mimeType: string }).mimeType.trim()
         : '';
-      if (!data || !mimeType) {
+      if (!data || !mimeType.toLowerCase().startsWith('image/')) {
         return [];
       }
 
