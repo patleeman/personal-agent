@@ -192,7 +192,7 @@ function readOptionalNonNegativeNumber(value: unknown): number | undefined {
 }
 
 function readOptionalPositiveInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 function readOptionalStringRecord(value: unknown): Record<string, string> | undefined {

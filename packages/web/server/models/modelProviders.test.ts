@@ -208,6 +208,30 @@ describe('upsertModelProviderModel', () => {
     expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('maxTokens');
   });
 
+  it('does not persist unsafe model token limits', () => {
+    const dir = createTempDir();
+
+    upsertModelProvider('assistant', 'desktop', {
+      baseUrl: 'http://desktop:8000/v1',
+      api: 'openai-completions',
+    }, { profilesDir: dir });
+
+    const state = upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
+      name: 'Qwen REAP',
+      contextWindow: Number.MAX_SAFE_INTEGER + 1,
+      maxTokens: Number.MAX_SAFE_INTEGER + 1,
+    }, { profilesDir: dir });
+
+    expect(state.providers[0]?.models[0]).toMatchObject({
+      id: 'qwen-reap',
+      name: 'Qwen REAP',
+      contextWindow: undefined,
+      maxTokens: undefined,
+    });
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('contextWindow');
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('maxTokens');
+  });
+
   it('does not persist negative model costs', () => {
     const dir = createTempDir();
 
