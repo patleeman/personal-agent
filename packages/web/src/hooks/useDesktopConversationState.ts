@@ -24,9 +24,11 @@ type DesktopConversationStateEnvelope = {
   };
 };
 
+const MAX_DESKTOP_CONVERSATION_STATE_TAIL_BLOCKS = 1000;
+
 export function normalizeDesktopConversationStateTailBlocks(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(MAX_DESKTOP_CONVERSATION_STATE_TAIL_BLOCKS, value)
     : undefined;
 }
 
