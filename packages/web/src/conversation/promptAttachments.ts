@@ -364,7 +364,7 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
 
   const revision = typeof attachment.revision === 'number'
     ? attachment.revision
-    : (typeof attachment.revision === 'string' ? Number.parseInt(attachment.revision, 10) : undefined);
+    : (typeof attachment.revision === 'string' && /^\d+$/.test(attachment.revision.trim()) ? Number.parseInt(attachment.revision.trim(), 10) : undefined);
 
   return {
     attachmentId,
