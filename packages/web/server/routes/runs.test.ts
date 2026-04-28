@@ -201,6 +201,10 @@ describe('registerRunRoutes', () => {
     expect(getDurableRunLogMock).toHaveBeenCalledWith('run-1', 25);
     expect(res.json).toHaveBeenCalledWith({ path: '/tmp/run.log', log: 'tail' });
 
+    const cappedTailRes = createJsonResponse();
+    await logHandler({ params: { id: 'run-1' }, query: { tail: '5000' } }, cappedTailRes);
+    expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 1000);
+
     const malformedTailRes = createJsonResponse();
     await logHandler({ params: { id: 'run-1' }, query: { tail: '25abc' } }, malformedTailRes);
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', undefined);

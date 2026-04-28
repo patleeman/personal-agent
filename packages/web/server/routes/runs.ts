@@ -28,7 +28,7 @@ function parseRunLogTail(queryTail: unknown): number | undefined {
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return undefined;
   }
-  return parsed;
+  return Math.min(1000, parsed);
 }
 
 export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'>): void {
