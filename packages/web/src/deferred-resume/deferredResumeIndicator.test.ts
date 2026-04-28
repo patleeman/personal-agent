@@ -62,6 +62,18 @@ describe('deferredResumeIndicator', () => {
     ]);
   });
 
+  it('sorts malformed resume timestamps after valid targets', () => {
+    const resumes = [
+      scheduled('bad', 'not-a-date'),
+      scheduled('soon', '2026-03-12T13:05:00.000Z'),
+    ];
+
+    expect([...resumes].sort(compareDeferredResumes).map((resume) => resume.id)).toEqual([
+      'soon',
+      'bad',
+    ]);
+  });
+
   it('builds a compact indicator for scheduled resumes', () => {
     expect(buildDeferredResumeIndicatorText([
       scheduled('one', '2026-03-12T13:08:00.000Z'),

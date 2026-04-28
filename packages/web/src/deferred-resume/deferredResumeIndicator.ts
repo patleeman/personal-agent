@@ -2,9 +2,10 @@ import type { DeferredResumeSummary } from '../shared/types';
 import { buildDeferredResumeAutoResumeKey } from './deferredResumeAutoResume';
 
 function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
-  return Date.parse(resume.status === 'ready'
+  const parsed = Date.parse(resume.status === 'ready'
     ? resume.readyAt ?? resume.dueAt
     : resume.dueAt);
+  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
 }
 
 export function compareDeferredResumes(left: DeferredResumeSummary, right: DeferredResumeSummary): number {
