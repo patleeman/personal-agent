@@ -3,7 +3,7 @@ import { buildKnowledgeEntryContextMenuTemplate, normalizeKnowledgeEntryContextM
 
 describe('buildKnowledgeEntryContextMenuTemplate', () => {
   it('drops unsafe menu coordinates', () => {
-    expect(normalizeKnowledgeEntryContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeKnowledgeEntryContextMenuCoordinate(12.4)).toBe(0);
     expect(normalizeKnowledgeEntryContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
   });
 

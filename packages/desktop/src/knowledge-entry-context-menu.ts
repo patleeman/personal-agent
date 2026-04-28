@@ -15,11 +15,11 @@ export interface KnowledgeEntryContextMenuInput {
 
 export function normalizeKnowledgeEntryContextMenuCoordinate(value: number | undefined): number {
   const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isSafeInteger(Math.round(numericValue))) {
+  if (!Number.isSafeInteger(numericValue)) {
     return 0;
   }
 
-  return Math.max(0, Math.round(numericValue));
+  return Math.max(0, numericValue);
 }
 
 function joinMenuSections(sections: MenuItemConstructorOptions[][]): MenuItemConstructorOptions[] {
