@@ -115,6 +115,10 @@ function toTimestampString(value: unknown): string | undefined {
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
 }
 
+function toTimestampStringOrNow(value: unknown): string {
+  return toTimestampString(value) ?? new Date().toISOString();
+}
+
 function toPositiveInteger(value: unknown): number | undefined {
   if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) {
     return value;
@@ -510,7 +514,7 @@ export function createDurableRunManifest(input: {
     id: input.id,
     kind: input.kind,
     resumePolicy: input.resumePolicy,
-    createdAt: new Date(input.createdAt ?? Date.now()).toISOString(),
+    createdAt: toTimestampStringOrNow(input.createdAt),
     spec: input.spec ?? {},
     parentId: input.parentId,
     rootId: input.rootId,
@@ -529,17 +533,17 @@ export function createInitialDurableRunStatus(input: {
   checkpointKey?: string;
   lastError?: string;
 }): DurableRunStatusFile {
-  const createdAt = new Date(input.createdAt ?? Date.now()).toISOString();
+  const createdAt = toTimestampStringOrNow(input.createdAt);
 
   return {
     version: 1,
     runId: input.runId,
     status: input.status ?? 'queued',
     createdAt,
-    updatedAt: new Date(input.updatedAt ?? createdAt).toISOString(),
+    updatedAt: toTimestampString(input.updatedAt) ?? createdAt,
     activeAttempt: input.activeAttempt ?? 0,
-    startedAt: input.startedAt ? new Date(input.startedAt).toISOString() : undefined,
-    completedAt: input.completedAt ? new Date(input.completedAt).toISOString() : undefined,
+    startedAt: toTimestampString(input.startedAt),
+    completedAt: toTimestampString(input.completedAt),
     checkpointKey: input.checkpointKey,
     lastError: input.lastError,
   };

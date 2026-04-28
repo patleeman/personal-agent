@@ -3,7 +3,7 @@ import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { openSqliteDatabase } from '@personal-agent/core';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   appendDurableRunEvent,
   closeDurableRunStoreConnections,
@@ -36,6 +36,7 @@ function createTempDir(prefix: string): string {
 
 describe('durable run store', () => {
   afterEach(async () => {
+    vi.useRealTimers();
     closeDurableRunStoreConnections();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
@@ -57,6 +58,31 @@ describe('durable run store', () => {
       checkpointKey: undefined,
       lastError: undefined,
     });
+  });
+
+  it('falls back to the current clock for invalid run record timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-12T18:00:00.000Z'));
+
+    expect(createDurableRunManifest({
+      id: 'run-invalid-manifest-time',
+      kind: 'workflow',
+      resumePolicy: 'continue',
+      createdAt: 'not-a-date',
+    }).createdAt).toBe('2026-03-12T18:00:00.000Z');
+
+    expect(createInitialDurableRunStatus({
+      runId: 'run-invalid-status-time',
+      createdAt: 'not-a-date',
+      updatedAt: 'also-not-a-date',
+      startedAt: 'bad-start',
+      completedAt: 'bad-complete',
+    })).toEqual(expect.objectContaining({
+      createdAt: '2026-03-12T18:00:00.000Z',
+      updatedAt: '2026-03-12T18:00:00.000Z',
+      startedAt: undefined,
+      completedAt: undefined,
+    }));
   });
 
   it('resolves the durable runs root under the daemon root', () => {
