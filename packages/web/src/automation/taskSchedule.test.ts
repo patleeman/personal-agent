@@ -49,6 +49,26 @@ describe('taskSchedule helpers', () => {
     })).toBe('30 8 * * 1,3,5');
   });
 
+  it('does not clamp unsafe builder values into maximum schedule fields', () => {
+    expect(buildCronFromEasyTaskSchedule({
+      cadence: 'daily',
+      minute: Number.MAX_SAFE_INTEGER + 1,
+      hour: Number.MAX_SAFE_INTEGER + 1,
+      intervalHours: 4,
+      weekdays: [1],
+      dayOfMonth: 1,
+    })).toBe('0 0 * * *');
+
+    expect(buildCronFromEasyTaskSchedule({
+      cadence: 'interval',
+      minute: 12.5,
+      hour: 0,
+      intervalHours: Number.MAX_SAFE_INTEGER + 1,
+      weekdays: [1],
+      dayOfMonth: 1,
+    })).toBe('0 */1 * * *');
+  });
+
   it('formats supported schedules for display', () => {
     expect(formatTaskSchedule({ cron: '11 */4 * * *' })).toBe('every 4h at :11');
     expect(formatTaskSchedule({ cron: '0 */4 * * *' })).toBe('every 4h on the hour');

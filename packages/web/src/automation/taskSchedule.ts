@@ -27,6 +27,10 @@ export interface CronEditorState {
 }
 
 function clamp(value: number, min: number, max: number): number {
+  if (!Number.isSafeInteger(value)) {
+    return min;
+  }
+
   return Math.min(max, Math.max(min, Math.floor(value)));
 }
 
