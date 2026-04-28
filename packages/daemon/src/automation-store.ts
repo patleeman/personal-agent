@@ -596,8 +596,13 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
   if (cron) {
     parseCronExpression(cron);
   }
-  if (at && !Number.isFinite(Date.parse(at))) {
-    throw new Error(`Invalid at timestamp: ${at}`);
+  let normalizedAt: string | undefined;
+  if (at) {
+    const atMs = Date.parse(at);
+    if (!Number.isFinite(atMs)) {
+      throw new Error(`Invalid at timestamp: ${at}`);
+    }
+    normalizedAt = new Date(atMs).toISOString();
   }
 
   const targetType = normalizeAutomationTargetTypeForSelection(input.targetType ?? undefined);
@@ -619,7 +624,7 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
     prompt,
     enabled: input.enabled ?? true,
     cron,
-    at,
+    at: normalizedAt,
     modelRef: readOptionalString(input.modelRef ?? undefined),
     thinkingLevel: readOptionalString(input.thinkingLevel ?? undefined),
     cwd: readOptionalString(input.cwd ?? undefined),

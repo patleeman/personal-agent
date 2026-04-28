@@ -211,6 +211,27 @@ describe('tasks module scheduling', () => {
     })).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
 
+  it('normalizes one-time automation timestamps when storing tasks', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    const automation = createStoredAutomation({
+      dbPath,
+      id: 'normalized-at',
+      profile: 'assistant',
+      title: 'Normalized at',
+      enabled: true,
+      at: '2026-03-02T10:00:00Z',
+      timeoutSeconds: 60,
+      prompt: 'Run maintenance.',
+    });
+
+    expect(automation.schedule).toEqual(expect.objectContaining({
+      type: 'at',
+      at: '2026-03-02T10:00:00.000Z',
+    }));
+  });
+
   it('does not floor fractional automation activity limits', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
