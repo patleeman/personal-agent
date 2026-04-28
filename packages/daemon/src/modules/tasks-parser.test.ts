@@ -94,6 +94,17 @@ hello
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
+
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/huge-timeout.task.md',
+      rawContent: `---
+cron: "0 * * * *"
+timeoutSeconds: ${Number.MAX_SAFE_INTEGER}
+---
+hello
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
   });
 
   it('rejects unsafe cron step values', () => {

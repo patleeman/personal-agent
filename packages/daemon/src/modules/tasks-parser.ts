@@ -5,6 +5,7 @@ import { parseDocument } from 'yaml';
 const FRONTMATTER_DELIMITER = '---';
 const DEFAULT_PROFILE = 'shared';
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/;
+const MAX_TASK_TIMEOUT_SECONDS = 7 * 24 * 60 * 60;
 
 interface ParsedCronField {
   values: Set<number>;
@@ -245,7 +246,7 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
   }
 
   if (typeof raw === 'number') {
-    if (!Number.isSafeInteger(raw) || raw <= 0) {
+    if (!Number.isSafeInteger(raw) || raw <= 0 || raw > MAX_TASK_TIMEOUT_SECONDS) {
       throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
     }
 
@@ -254,7 +255,7 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
 
   if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) {
     const parsed = Number.parseInt(raw.trim(), 10);
-    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+    if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_TASK_TIMEOUT_SECONDS) {
       throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
     }
 
