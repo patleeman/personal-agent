@@ -2,12 +2,13 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readSavedUiPreferences, writeSavedUiPreferences } from './uiPreferences.js';
 
 const tempDirs: string[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -124,6 +125,24 @@ describe('writeSavedUiPreferences', () => {
         { id: 'shared-skills', name: 'Shared skills', search: '?q=type:skill', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:01:00.000Z' },
       ],
     });
+  });
+
+  it('falls back to valid node browser view timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'));
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      ui: {
+        nodeBrowserViews: [
+          { id: 'docs', name: 'Docs', search: '', createdAt: 'not-a-date', updatedAt: 'also-not-a-date' },
+        ],
+      },
+    }));
+
+    expect(readSavedUiPreferences(file).nodeBrowserViews).toEqual([
+      { id: 'docs', name: 'Docs', search: '', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' },
+    ]);
   });
 
   it('removes the nested keys when given empty lists', () => {

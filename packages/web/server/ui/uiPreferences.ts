@@ -21,6 +21,18 @@ function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
 }
 
+function readTimestampString(value: unknown, fallback?: string): string {
+  const raw = readNonEmptyString(value);
+  if (raw) {
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return fallback ?? new Date().toISOString();
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
@@ -105,8 +117,8 @@ function normalizeNodeBrowserView(entry: unknown): SavedNodeBrowserViewPreferenc
   const id = readNonEmptyString(entry.id);
   const name = readNonEmptyString(entry.name);
   const search = typeof entry.search === 'string' ? entry.search.trim() : '';
-  const createdAt = readNonEmptyString(entry.createdAt) || new Date().toISOString();
-  const updatedAt = readNonEmptyString(entry.updatedAt) || createdAt;
+  const createdAt = readTimestampString(entry.createdAt);
+  const updatedAt = readTimestampString(entry.updatedAt, createdAt);
   if (!id || !name) {
     return null;
   }
