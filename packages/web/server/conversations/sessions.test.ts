@@ -527,6 +527,54 @@ describe('sessions', () => {
     }));
   });
 
+  it('keeps tool image block ids aligned when malformed image blocks are skipped', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-mixed-tool-images.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-mixed-tool-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-mixed-tool-images-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'text', text: 'capture a screenshot' }] },
+      }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-mixed-tool-images-tool-1',
+        parentId: 'session-mixed-tool-images-user-1',
+        timestamp: '2026-03-11T12:00:01.000Z',
+        message: {
+          role: 'toolResult',
+          toolCallId: 'tool-1',
+          toolName: 'screenshot',
+          content: [
+            { type: 'image', data: '   ', mimeType: 'image/png', name: 'bad.png' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+          ],
+        },
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-mixed-tool-images');
+    const imageBlock = detail?.blocks.find((block) => block.type === 'image');
+    expect(imageBlock).toEqual(expect.objectContaining({
+      type: 'image',
+      id: expect.stringMatching(/-i0$/),
+    }));
+    expect(imageBlock && 'src' in imageBlock ? imageBlock.src : undefined)
+      .toBe(`/api/sessions/session-mixed-tool-images/blocks/${imageBlock?.id}/image`);
+    expect(imageBlock ? readSessionImageAsset('session-mixed-tool-images', imageBlock.id) : null).toEqual(expect.objectContaining({
+      mimeType: 'image/png',
+      fileName: 'hello.png',
+      data: Buffer.from('aGVsbG8=', 'base64'),
+    }));
+  });
+
   it('defers heavy tool output and image payloads in partial archived transcript loads', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

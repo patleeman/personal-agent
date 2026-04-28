@@ -1106,15 +1106,18 @@ function buildDisplayBlocksInternal(
         blocks[idx] = { ...existing, output: resultText, durationMs: duration, details };
       }
 
+      let resultImageIndex = 0;
       const resultImages = contentBlocks
         .filter((block) => block.type === 'image')
-        .flatMap((block, imageIndex) => {
+        .flatMap((block) => {
           const src = imageSrc(block);
           const mimeType = imageMimeType(block);
           if (!src || !mimeType) {
             return [];
           }
 
+          const imageIndex = resultImageIndex;
+          resultImageIndex += 1;
           return [{
             type: 'image' as const,
             id: `${baseId}-i${imageIndex}`,
