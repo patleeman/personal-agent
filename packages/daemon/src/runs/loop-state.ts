@@ -171,7 +171,7 @@ export function shouldRetry(
  * Check if a loop has exceeded max iterations.
  */
 export function hasExceededMaxIterations(runsRoot: string, loopRunId: string, maxIterations?: number): boolean {
-  if (!maxIterations) {
+  if (!Number.isSafeInteger(maxIterations) || (maxIterations as number) <= 0) {
     return false;
   }
 
@@ -185,5 +185,5 @@ export function hasExceededMaxIterations(runsRoot: string, loopRunId: string, ma
       return status?.status === 'completed';
     }).length;
 
-  return completedIterations >= maxIterations;
+  return completedIterations >= (maxIterations as number);
 }

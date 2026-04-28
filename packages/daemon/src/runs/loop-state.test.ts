@@ -244,4 +244,22 @@ describe('hasExceededMaxIterations', () => {
     const runsRoot = createTempDir();
     expect(hasExceededMaxIterations(runsRoot, 'loop-1', undefined)).toBe(false);
   });
+
+  it('ignores malformed max iteration limits', () => {
+    const runsRoot = createTempDir();
+
+    const childPaths = join(runsRoot, 'child-1');
+    saveDurableRunManifest(join(childPaths, 'manifest.json'), createDurableRunManifest({
+      id: 'child-1',
+      kind: 'background-run',
+      resumePolicy: 'manual',
+      parentId: 'loop-1',
+    }));
+    saveDurableRunStatus(join(childPaths, 'status.json'), createInitialDurableRunStatus({
+      runId: 'child-1',
+      status: 'completed',
+    }));
+
+    expect(hasExceededMaxIterations(runsRoot, 'loop-1', 0.5)).toBe(false);
+  });
 });
