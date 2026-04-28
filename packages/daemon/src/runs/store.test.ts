@@ -85,6 +85,31 @@ describe('durable run store', () => {
     }));
   });
 
+  it('falls back to the current clock for non-ISO run record timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-12T18:00:00.000Z'));
+
+    expect(createDurableRunManifest({
+      id: 'run-non-iso-manifest-time',
+      kind: 'workflow',
+      resumePolicy: 'continue',
+      createdAt: '1',
+    }).createdAt).toBe('2026-03-12T18:00:00.000Z');
+
+    expect(createInitialDurableRunStatus({
+      runId: 'run-non-iso-status-time',
+      createdAt: '1',
+      updatedAt: '1',
+      startedAt: '1',
+      completedAt: '1',
+    })).toEqual(expect.objectContaining({
+      createdAt: '2026-03-12T18:00:00.000Z',
+      updatedAt: '2026-03-12T18:00:00.000Z',
+      startedAt: undefined,
+      completedAt: undefined,
+    }));
+  });
+
   it('resolves the durable runs root under the daemon root', () => {
     const daemonRoot = createTempDir('durable-runs-store-root-');
     expect(resolveDurableRunsRoot(daemonRoot)).toBe(join(daemonRoot, 'runs'));
