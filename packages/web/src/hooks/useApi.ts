@@ -88,6 +88,9 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
   }, []);
 
   useEffect(() => {
+    dataRef.current = null;
+    setData(null);
+    setError(null);
     void runFetch({ resetLoading: true });
   }, [key, runFetch]);
 
