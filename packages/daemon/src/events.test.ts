@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DAEMON_EVENT_VERSION, createDaemonEvent, isDaemonEvent } from './events.js';
 
 describe('daemon events', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('creates daemon events with defaults', () => {
     const event = createDaemonEvent({ type: 'task.started', source: 'tasks' });
 
@@ -29,6 +33,17 @@ describe('daemon events', () => {
     });
   });
 
+  it('falls back to the current clock for malformed explicit timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    expect(createDaemonEvent({
+      type: 'task.done',
+      source: 'runner',
+      timestamp: 'not-a-date',
+    }).timestamp).toBe('2026-01-01T00:00:00.000Z');
+  });
+
   it('rejects non-daemon event shapes', () => {
     expect(isDaemonEvent(null)).toBe(false);
     expect(isDaemonEvent({})).toBe(false);
@@ -38,6 +53,14 @@ describe('daemon events', () => {
       type: 't',
       source: 's',
       timestamp: 'now',
+      payload: {},
+    })).toBe(false);
+    expect(isDaemonEvent({
+      id: 'x',
+      version: 1,
+      type: 't',
+      source: 's',
+      timestamp: '2026-01-01T00:00:00.000Z',
       payload: null,
     })).toBe(false);
   });
