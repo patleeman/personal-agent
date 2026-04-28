@@ -212,6 +212,7 @@ import { completeConversationOpenPhase, ensureConversationOpenStart } from '../c
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
 import {
+  buildRelatedThreadCandidateLookup,
   pruneRelatedThreadSelectionIds,
   resolveRelatedThreadPreselectionUpdate,
   selectMissingRelatedThreadSearchIndexIds,
@@ -2026,14 +2027,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : [],
     [draft, draftCwdValue, sessions],
   );
-  const relatedThreadCandidateById = useMemo(
-    () => new Map(relatedThreadCandidates.map((session) => [session.id, session] as const)),
+  const relatedThreadCandidateLookup = useMemo(
+    () => buildRelatedThreadCandidateLookup(relatedThreadCandidates),
     [relatedThreadCandidates],
   );
-  const relatedThreadCandidateIds = useMemo(
-    () => relatedThreadCandidates.map((session) => session.id),
-    [relatedThreadCandidates],
-  );
+  const relatedThreadCandidateById = relatedThreadCandidateLookup.candidateById;
+  const relatedThreadCandidateIds = relatedThreadCandidateLookup.candidateIds;
   const relatedThreadSearchResults = useMemo(
     () => rankRelatedConversationSessions({
       sessions: relatedThreadCandidates,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
+  buildRelatedThreadCandidateLookup,
   pruneRelatedThreadSelectionIds,
   resolveRelatedThreadPreselectionUpdate,
   selectMissingRelatedThreadSearchIndexIds,
@@ -24,6 +25,17 @@ function session(id: string, overrides: Partial<SessionMeta> = {}): SessionMeta 
 }
 
 describe('related thread selection helpers', () => {
+  it('builds candidate lookup data from session candidates', () => {
+    const first = session('a');
+    const second = session('b');
+
+    const lookup = buildRelatedThreadCandidateLookup([first, second]);
+
+    expect(lookup.candidateIds).toEqual(['a', 'b']);
+    expect(lookup.candidateById.get('a')).toBe(first);
+    expect(lookup.candidateById.get('b')).toBe(second);
+  });
+
   it('keeps selected threads visible even when they are missing from base results', () => {
     const candidate = session('selected', { lastActivityAt: '2026-04-02T00:00:00.000Z' });
     const visible = selectVisibleRelatedThreadResults({

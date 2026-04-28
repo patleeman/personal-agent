@@ -1,6 +1,16 @@
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 import { pickHighConfidenceRelatedConversation, type RelatedConversationSearchResult } from './relatedConversationSearch';
 
+export function buildRelatedThreadCandidateLookup(candidates: SessionMeta[]): {
+  candidateById: Map<string, SessionMeta>;
+  candidateIds: string[];
+} {
+  return {
+    candidateById: new Map(candidates.map((session) => [session.id, session] as const)),
+    candidateIds: candidates.map((session) => session.id),
+  };
+}
+
 export function selectVisibleRelatedThreadResults(input: {
   selectedRelatedThreadIds: string[];
   query: string;
