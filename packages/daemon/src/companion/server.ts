@@ -57,6 +57,7 @@ import {
 const DEFAULT_DAEMON_VERSION = '0.0.0';
 const JSON_LIMIT_BYTES = 12 * 1024 * 1024;
 const MAX_COMPANION_RUN_LOG_TAIL = 1000;
+const MAX_COMPANION_TAIL_BLOCKS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -207,6 +208,11 @@ function readOptionalPositiveIntegerQuery(input: string | null): number | undefi
 
   const value = Number.parseInt(normalized, 10);
   return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+}
+
+function readOptionalTailBlocks(input: unknown): number | undefined {
+  const value = readOptionalPositiveInteger(input, 'tailBlocks');
+  return value === undefined ? undefined : Math.min(MAX_COMPANION_TAIL_BLOCKS, value);
 }
 
 function readNonNegativeIntegerPath(input: string): number | undefined {
@@ -1571,7 +1577,7 @@ export class DaemonCompanionServer {
       case 'conversation.bootstrap': {
         const input: CompanionConversationBootstrapInput = {
           conversationId: readRequiredString(payload.conversationId, 'conversationId'),
-          tailBlocks: readOptionalPositiveInteger(payload.tailBlocks, 'tailBlocks'),
+          tailBlocks: readOptionalTailBlocks(payload.tailBlocks),
           knownSessionSignature: readOptionalString(payload.knownSessionSignature),
           knownBlockOffset: readOptionalNonNegativeInteger(payload.knownBlockOffset, 'knownBlockOffset'),
           knownTotalBlocks: readOptionalNonNegativeInteger(payload.knownTotalBlocks, 'knownTotalBlocks'),
@@ -1689,7 +1695,7 @@ export class DaemonCompanionServer {
       conversationId,
       surfaceId: readOptionalString(payload.surfaceId),
       surfaceType: normalizeSurfaceType(payload.surfaceType),
-      tailBlocks: readOptionalPositiveInteger(payload.tailBlocks, 'tailBlocks'),
+      tailBlocks: readOptionalTailBlocks(payload.tailBlocks),
     };
 
     return runtime.subscribeConversation(input, (event) => {

@@ -94,7 +94,7 @@ describe('daemon companion server', () => {
       deleteSshTarget: async (targetId) => ({ ok: true, deleted: true, targetId }),
       testSshTarget: async (input) => ({ ok: true, sshTarget: input.sshTarget, os: 'linux', arch: 'arm64', platformKey: 'linux-arm64', homeDirectory: '/home/patrick', tempDirectory: '/tmp', cacheDirectory: '/tmp/.cache', message: 'reachable' }),
       readRemoteDirectory: async (input) => ({ path: input.path ?? '/repo', parent: '/', entries: [] }),
-      readConversationBootstrap: async (input) => ({ conversationId: input.conversationId, bootstrap: true }),
+      readConversationBootstrap: async (input) => ({ conversationId: input.conversationId, bootstrap: true, tailBlocks: input.tailBlocks }),
       createConversation: async () => ({ conversationId: 'created-1' }),
       resumeConversation: async () => ({ conversationId: 'resumed-1' }),
       promptConversation: async (input) => ({ ok: true, conversationId: input.conversationId }),
@@ -480,6 +480,14 @@ describe('daemon companion server', () => {
         sessions: [{ id: 'conv-1', title: 'Conversation 1' }],
         ordering: { sessionIds: ['conv-1'], pinnedSessionIds: ['conv-1'], archivedSessionIds: [], workspacePaths: [] },
       },
+    });
+
+    socket.send(JSON.stringify({ id: '1b', type: 'command', name: 'conversation.bootstrap', payload: { conversationId: 'conv-1', tailBlocks: 5000 } }));
+    expect(await readSocketMessage(socket)).toEqual({
+      id: '1b',
+      type: 'response',
+      ok: true,
+      result: { conversationId: 'conv-1', bootstrap: true, tailBlocks: 1000 },
     });
 
     socket.send(JSON.stringify({ id: '2', type: 'subscribe', topic: 'app' }));
