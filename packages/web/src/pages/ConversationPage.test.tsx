@@ -479,7 +479,7 @@ describe('conversation live state helpers', () => {
       hasPendingInitialPromptInFlight: false,
       isLiveSession: true,
       hasVisibleSessionDetail: false,
-    })).toBe('Preparing 2 related conversation pointers…');
+    })).toBe('Summarizing 2 related threads…');
 
     expect(resolveDisplayedConversationPendingStatusLabel({
       explicitLabel: null,
