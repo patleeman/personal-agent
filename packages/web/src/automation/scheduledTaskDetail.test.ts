@@ -60,6 +60,26 @@ describe('scheduledTaskDetail helpers', () => {
     })).toBe(false);
 
     expect(isScheduledTaskDetail({
+      id: 'huge-timeout',
+      running: false,
+      enabled: true,
+      scheduleType: 'cron',
+      prompt: 'Run cleanup.',
+      threadMode: 'dedicated',
+      timeoutSeconds: Number.MAX_SAFE_INTEGER,
+    })).toBe(false);
+
+    expect(isScheduledTaskDetail({
+      id: 'huge-catch-up',
+      running: false,
+      enabled: true,
+      scheduleType: 'cron',
+      prompt: 'Run cleanup.',
+      threadMode: 'dedicated',
+      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
+    })).toBe(false);
+
+    expect(isScheduledTaskDetail({
       id: 'unsafe-activity-count',
       running: false,
       enabled: true,

@@ -1,11 +1,18 @@
 import type { ScheduledTaskDetail } from '../shared/types';
 
+const MAX_SCHEDULED_TASK_DURATION_SECONDS = 7 * 24 * 60 * 60;
+
 function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string';
 }
 
 function isOptionalPositiveInteger(value: unknown): value is number | undefined {
-  return value === undefined || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
+  return value === undefined || (
+    typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value > 0
+    && value <= MAX_SCHEDULED_TASK_DURATION_SECONDS
+  );
 }
 
 function isOptionalActivity(value: unknown): boolean {
