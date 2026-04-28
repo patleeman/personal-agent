@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decodeVaultImageDataUrl } from './vaultEditor.js';
+import { buildVaultImageUploadFileName, decodeVaultImageDataUrl } from './vaultEditor.js';
 
 describe('vaultEditor image uploads', () => {
   it('rejects malformed image data urls before writing attachments', () => {
@@ -15,5 +15,10 @@ describe('vaultEditor image uploads', () => {
   it('rejects non-image data urls before writing attachments', () => {
     expect(() => decodeVaultImageDataUrl('data:text/plain;base64,aGVsbG8='))
       .toThrow('dataUrl must be an image data: URL');
+  });
+
+  it('uses the image data url extension when upload filenames have non-image extensions', () => {
+    expect(buildVaultImageUploadFileName('note.txt', 'data:image/png;base64,aGVsbG8=', 123))
+      .toBe('123-note.png');
   });
 });

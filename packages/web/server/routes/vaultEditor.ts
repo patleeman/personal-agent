@@ -16,7 +16,7 @@ import {
   type Stats,
 } from 'node:fs';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { lookup as mimeLookup } from 'mime-types';
+import { extension as mimeExtension, lookup as mimeLookup } from 'mime-types';
 import { getVaultRoot } from '@personal-agent/core';
 import { logError } from '../middleware/index.js';
 import { importVaultSharedItem } from './vaultShareImport.js';
@@ -79,6 +79,34 @@ export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
   }
 
   return decoded;
+}
+
+const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
+
+function readVaultImageDataUrlMimeType(dataUrl: string): string {
+  const commaIndex = dataUrl.indexOf(',');
+  const metadata = commaIndex >= 0 ? dataUrl.slice(0, commaIndex).toLowerCase() : dataUrl.toLowerCase();
+  if (!metadata.startsWith('data:image/')) {
+    throw new Error('dataUrl must be an image data: URL');
+  }
+
+  return metadata.slice('data:'.length).split(';')[0] ?? 'image/png';
+}
+
+function resolveVaultImageUploadExtension(filename: string, dataUrl: string): string {
+  const mimeExt = mimeExtension(readVaultImageDataUrlMimeType(dataUrl));
+  if (typeof mimeExt === 'string' && mimeExt.trim()) {
+    return mimeExt.trim();
+  }
+
+  const fileExt = extname(filename).trim().replace(/^\./, '').toLowerCase();
+  return IMAGE_FILE_EXTENSIONS.has(fileExt) ? fileExt : 'png';
+}
+
+export function buildVaultImageUploadFileName(filename: string, dataUrl: string, timestamp = Date.now()): string {
+  const originalName = basename(filename.trim());
+  const baseName = originalName.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9._-]/g, '-') || 'image';
+  return `${timestamp}-${baseName}.${resolveVaultImageUploadExtension(originalName, dataUrl)}`;
 }
 
 // ── Serialise a single entry ──────────────────────────────────────────────────
@@ -622,9 +650,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       const attachDir = join(root, '_attachments');
       mkdirSync(attachDir, { recursive: true });
       const buf = decodeVaultImageDataUrl(dataUrl);
-      const safeName = basename(filename.trim()).replace(/[^a-zA-Z0-9._-]/g, '-');
-      const ts = Date.now();
-      const outName = `${ts}-${safeName}`;
+      const outName = buildVaultImageUploadFileName(filename, dataUrl);
       const outPath = join(attachDir, outName);
       writeFileSync(outPath, buf);
       const id = `_attachments/${outName}`;
