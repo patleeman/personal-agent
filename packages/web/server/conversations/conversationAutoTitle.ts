@@ -62,7 +62,7 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
 }
 
 function readPositiveInteger(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : fallback;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
