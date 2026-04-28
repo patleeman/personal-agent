@@ -26,6 +26,8 @@ export interface CronEditorState {
   supported: boolean;
 }
 
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 function clamp(value: number, min: number, max: number): number {
   if (!Number.isSafeInteger(value)) {
     return min;
@@ -452,7 +454,8 @@ export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: 
   }
 
   if (task.at) {
-    const atMs = Date.parse(task.at);
+    const normalizedAt = task.at.trim();
+    const atMs = ISO_TIMESTAMP_PATTERN.test(normalizedAt) ? Date.parse(normalizedAt) : Number.NaN;
     return Number.isFinite(atMs) && atMs > nowMs ? new Date(atMs) : null;
   }
 

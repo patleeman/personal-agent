@@ -106,6 +106,11 @@ describe('taskSchedule helpers', () => {
     expect(getNextTaskRunAt({ enabled: true, at: '2026-03-18T09:00:00Z' }, now)?.toISOString()).toBe('2026-03-18T09:00:00.000Z');
   });
 
+  it('does not calculate next runs from malformed one-time schedule timestamps', () => {
+    const now = Date.parse('2026-03-18T08:00:00Z');
+    expect(getNextTaskRunAt({ enabled: true, at: '9999' }, now)).toBeNull();
+  });
+
   it('does not calculate next runs from unsafe clocks', () => {
     expect(getNextTaskRunAt({ enabled: true, at: '2026-03-18T09:00:00Z' }, -Number.MAX_SAFE_INTEGER - 1)).toBeNull();
     expect(getNextTaskRunAt({ enabled: true, cron: '* * * * *' }, Number.MAX_SAFE_INTEGER + 1)).toBeNull();
