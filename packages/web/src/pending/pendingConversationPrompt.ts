@@ -230,7 +230,8 @@ function readPendingConversationPromptDispatchingAt(
     fallback: null,
     storage,
     deserialize: (raw) => {
-      const parsed = Number.parseInt(raw, 10);
+      const normalized = raw.trim();
+      const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
       return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     },
   });

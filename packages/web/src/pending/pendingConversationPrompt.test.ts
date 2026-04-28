@@ -253,6 +253,10 @@ describe('pendingConversationPrompt helpers', () => {
     nowSpy.mockReturnValue(30_000);
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(true);
 
+    storage.setItem(key, '1000abc');
+    nowSpy.mockReturnValue(30_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+
     storage.setItem(key, '1000');
     nowSpy.mockReturnValue(200_000);
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
