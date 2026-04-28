@@ -42,6 +42,7 @@ const PARALLEL_JOBS_FILE_SUFFIX = '.parallel.json';
 const PARALLEL_PREVIEW_PATH_LIMIT = 5;
 const PARALLEL_PREVIEW_ATTACHMENT_LIMIT = 4;
 const PARALLEL_PREVIEW_SIDE_EFFECT_LIMIT = 3;
+const MAX_PARALLEL_PROMPT_IMAGE_COUNT = 100;
 
 export function resolveParallelJobsFile(sessionFile: string): string {
   return `${sessionFile}${PARALLEL_JOBS_FILE_SUFFIX}`;
@@ -51,6 +52,12 @@ function normalizeParallelPromptJobStatus(value: unknown): ParallelPromptJobStat
   return value === 'ready' || value === 'failed' || value === 'importing'
     ? value
     : 'running';
+}
+
+function normalizeParallelPromptImageCount(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PARALLEL_PROMPT_IMAGE_COUNT
+    ? value
+    : 0;
 }
 
 export function normalizeParallelPromptList(value: unknown, limit = 32): string[] {
@@ -117,7 +124,7 @@ function normalizeParallelPromptJob(candidate: unknown): ParallelPromptJob | nul
     status: normalizeParallelPromptJobStatus(job.status),
     createdAt,
     updatedAt,
-    imageCount: typeof job.imageCount === 'number' && Number.isSafeInteger(job.imageCount) && job.imageCount > 0 ? job.imageCount : 0,
+    imageCount: normalizeParallelPromptImageCount(job.imageCount),
     attachmentRefs: normalizeParallelPromptList(job.attachmentRefs, 12),
     touchedFiles: normalizeParallelPromptList(job.touchedFiles, 24),
     parentTouchedFiles: normalizeParallelPromptList(job.parentTouchedFiles, 24),
@@ -186,7 +193,7 @@ function buildParallelPromptPreview(job: ParallelPromptJob): ParallelPromptPrevi
     prompt: truncateParallelPreviewText(job.prompt),
     childConversationId: job.childConversationId,
     status: job.status,
-    imageCount: typeof job.imageCount === 'number' && Number.isSafeInteger(job.imageCount) && job.imageCount > 0 ? job.imageCount : 0,
+    imageCount: normalizeParallelPromptImageCount(job.imageCount),
     attachmentRefs: attachmentRefs.slice(0, PARALLEL_PREVIEW_ATTACHMENT_LIMIT),
     touchedFiles: touchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),
     parentTouchedFiles: parentTouchedFiles.slice(0, PARALLEL_PREVIEW_PATH_LIMIT),

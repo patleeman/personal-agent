@@ -39,6 +39,26 @@ describe('liveSessionParallelJobs', () => {
     ]);
   });
 
+  it('rejects absurd persisted parallel job image counts', () => {
+    const dir = createTempDir('pa-parallel-jobs-');
+    const sessionFile = join(dir, 'session.jsonl');
+    writeFileSync(resolveParallelJobsFile(sessionFile), JSON.stringify([
+      {
+        id: 'job-1',
+        prompt: 'Compare this screenshot.',
+        childConversationId: 'child-1',
+        status: 'ready',
+        createdAt: '2026-03-12T20:00:00.000Z',
+        updatedAt: '2026-03-12T20:01:00.000Z',
+        imageCount: Number.MAX_SAFE_INTEGER,
+      },
+    ]));
+
+    expect(readPersistedParallelJobs(sessionFile)).toEqual([
+      expect.objectContaining({ id: 'job-1', imageCount: 0 }),
+    ]);
+  });
+
   it('rejects unsafe parallel preview image counts', () => {
     const job: ParallelPromptJob = {
       id: 'job-unsafe',
@@ -58,6 +78,28 @@ describe('liveSessionParallelJobs', () => {
 
     expect(readParallelState([job])).toEqual([
       expect.objectContaining({ id: 'job-unsafe', imageCount: 0 }),
+    ]);
+  });
+
+  it('rejects absurd parallel preview image counts', () => {
+    const job: ParallelPromptJob = {
+      id: 'job-absurd',
+      prompt: 'Compare this screenshot.',
+      childConversationId: 'child-1',
+      status: 'ready',
+      createdAt: '2026-03-12T20:00:00.000Z',
+      updatedAt: '2026-03-12T20:01:00.000Z',
+      imageCount: Number.MAX_SAFE_INTEGER,
+      attachmentRefs: [],
+      touchedFiles: [],
+      parentTouchedFiles: [],
+      overlapFiles: [],
+      sideEffects: [],
+      worktreeDirtyPathsAtStart: [],
+    };
+
+    expect(readParallelState([job])).toEqual([
+      expect.objectContaining({ id: 'job-absurd', imageCount: 0 }),
     ]);
   });
 });
