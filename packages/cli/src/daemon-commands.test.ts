@@ -23,6 +23,7 @@ const { serviceMocks, daemonMocks } = vi.hoisted(() => ({
   daemonMocks: {
     startDaemonDetached: vi.fn(async () => undefined),
     stopDaemonGracefully: vi.fn(async () => undefined),
+    readDaemonPid: vi.fn(async () => undefined as number | undefined),
   },
 }));
 
@@ -32,6 +33,7 @@ vi.mock('@personal-agent/daemon', async () => {
     ...actual,
     getManagedDaemonServiceStatus: serviceMocks.getManagedDaemonServiceStatus,
     restartManagedDaemonServiceIfInstalled: serviceMocks.restartManagedDaemonServiceIfInstalled,
+    readDaemonPid: daemonMocks.readDaemonPid,
     startDaemonDetached: daemonMocks.startDaemonDetached,
     stopDaemonGracefully: daemonMocks.stopDaemonGracefully,
   };
@@ -63,6 +65,8 @@ beforeEach(() => {
     PERSONAL_AGENT_DISABLE_DAEMON_EVENTS: '1',
     PI_SESSION_DIR: createTempDir('pi-session-')
   };
+  delete process.env.PERSONAL_AGENT_CONFIG_FILE;
+  delete process.env.PERSONAL_AGENT_CONFIG_ROOT;
 
   serviceMocks.getManagedDaemonServiceStatus.mockReset();
   serviceMocks.getManagedDaemonServiceStatus.mockImplementation(() => ({
@@ -77,6 +81,8 @@ beforeEach(() => {
   daemonMocks.startDaemonDetached.mockImplementation(async () => undefined);
   daemonMocks.stopDaemonGracefully.mockReset();
   daemonMocks.stopDaemonGracefully.mockImplementation(async () => undefined);
+  daemonMocks.readDaemonPid.mockReset();
+  daemonMocks.readDaemonPid.mockImplementation(async () => undefined);
 });
 
 afterEach(async () => {
@@ -305,13 +311,10 @@ describe('daemon command matrix', () => {
     errorSpy.mockRestore();
   });
 
-  it('daemon logs shows pid from file when available', async () => {
+  it('daemon logs shows pid when available', async () => {
     const stateRoot = createTempDir('personal-agent-cli-state-');
-    const daemonDir = join(stateRoot, 'daemon');
-    mkdirSync(daemonDir, { recursive: true });
-    const pidFile = join(daemonDir, 'personal-agentd.pid');
-    writeFileSync(pidFile, '12345');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    daemonMocks.readDaemonPid.mockResolvedValue(12345);
 
     const logs: string[] = [];
     const logSpy = vi.spyOn(console, 'log').mockImplementation((message?: unknown) => {
