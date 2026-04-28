@@ -294,6 +294,13 @@ export function buildScheduledTaskMarkdown(input: {
     lines.push(`timeoutSeconds: ${input.timeoutSeconds}`);
   }
 
+  if (input.catchUpWindowSeconds !== undefined && input.catchUpWindowSeconds !== null) {
+    if (!Number.isInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0) {
+      throw new Error('catchUpWindowSeconds must be a positive integer.');
+    }
+    lines.push(`catchUpWindowSeconds: ${input.catchUpWindowSeconds}`);
+  }
+
   lines.push('---');
   lines.push(readRequiredString(input.prompt, 'prompt'));
 

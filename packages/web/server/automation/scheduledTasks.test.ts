@@ -95,8 +95,9 @@ describe('scheduledTasks', () => {
       model: 'openai-codex/gpt-5.4',
       cwd: '~/agent-workspace',
       timeoutSeconds: 900,
+      catchUpWindowSeconds: 300,
       prompt: 'Run maintenance.',
-    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\n---\nRun maintenance.\n`);
+    })).toBe(`---\nid: "daily-status"\nenabled: true\ncron: "11 */4 * * *"\nprofile: "assistant"\nmodel: "openai-codex/gpt-5.4"\ncwd: "~/agent-workspace"\ntimeoutSeconds: 900\ncatchUpWindowSeconds: 300\n---\nRun maintenance.\n`);
   });
 
   it('builds one-off task markdown and rejects invalid schedule or prompt input', () => {
@@ -142,6 +143,15 @@ describe('scheduledTasks', () => {
       timeoutSeconds: 1.5,
       prompt: 'Run maintenance.',
     })).toThrow('timeoutSeconds must be a positive integer.');
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'fractional-catch-up',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      catchUpWindowSeconds: 1.5,
+      prompt: 'Run maintenance.',
+    })).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
 
   it('lists nested task definition files and exposes runtime state from the automation database', () => {
