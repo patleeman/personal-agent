@@ -95,6 +95,18 @@ describe('liveSessionTranscript', () => {
     ]);
   });
 
+  it('does not collapse user images that only differ in the middle of a long data url', () => {
+    const prefix = `data:image/png;base64,${'a'.repeat(160)}`;
+    const suffix = 'z'.repeat(160);
+    const persisted = [userImageBlockWithCaption('user-old', `${prefix}old${suffix}`, 'same caption')];
+    const live = [userImageBlockWithCaption('user-new', `${prefix}new${suffix}`, 'same caption')];
+
+    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
+      userImageBlockWithCaption('user-old', `${prefix}old${suffix}`, 'same caption'),
+      userImageBlockWithCaption('user-new', `${prefix}new${suffix}`, 'same caption'),
+    ]);
+  });
+
   it('preserves persisted tool output when the live block only has a placeholder', () => {
     const persistedTool = toolBlock({ id: 'tool-old', toolCallId: 'call-1', output: 'done', durationMs: 123 });
     const liveTool = toolBlock({ id: 'tool-live', toolCallId: 'call-1', output: '' });

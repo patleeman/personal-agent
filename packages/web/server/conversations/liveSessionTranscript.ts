@@ -133,15 +133,11 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
   }
 }
 
-function fingerprintImageSrc(src: string | undefined): { length: number; prefix: string; suffix: string } | null {
+function fingerprintImageSrc(src: string | undefined): string | null {
   if (typeof src !== 'string') {
     return null;
   }
-  return {
-    length: src.length,
-    prefix: src.slice(0, 128),
-    suffix: src.slice(-128),
-  };
+  return src;
 }
 
 function mergeIdentityKey(block: DisplayBlock): string | null {
