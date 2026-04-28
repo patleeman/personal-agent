@@ -45,6 +45,11 @@ const electronBuilderConfig = {
     '!node_modules/@personal-agent/*/postcss.config.js',
     '!node_modules/@personal-agent/*/tailwind.config.js',
   ],
+  asarUnpack: [
+    'node_modules/better-sqlite3/**/*',
+    'node_modules/bindings/**/*',
+    'node_modules/file-uri-to-path/**/*',
+  ],
   extraMetadata: {
     main: './dist/main.js',
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error electron-builder config is plain ESM, not typed TS.
-import { desktopReleasePublishConfig } from '../../../../electron-builder.config.mjs';
+import electronBuilderConfig, { desktopReleasePublishConfig } from '../../../../electron-builder.config.mjs';
 import {
   buildDesktopReleaseAssetName,
   buildDesktopReleasePageUrl,
@@ -23,6 +23,14 @@ describe('desktop release config', () => {
       repo: DESKTOP_RELEASE_REPO_NAME,
       releaseType: 'release',
     });
+  });
+
+  it('unpacks native sqlite loader dependencies together', () => {
+    expect(electronBuilderConfig.asarUnpack).toEqual(expect.arrayContaining([
+      'node_modules/better-sqlite3/**/*',
+      'node_modules/bindings/**/*',
+      'node_modules/file-uri-to-path/**/*',
+    ]));
   });
 
   it('normalizes version tags and asset names for updater artifacts', () => {

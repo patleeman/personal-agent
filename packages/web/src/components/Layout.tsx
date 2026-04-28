@@ -162,7 +162,7 @@ function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
   }, [width, min, max, side, persistWidth]);
 
   useEffect(() => {
-    setDesiredWidth(readStoredWidth(storageKey, initial, min));
+    setDesiredWidth(readStoredPanelWidth(storageKey, initial, min));
   }, [storageKey, initial, min]);
 
   return { width, onMouseDown, reset };
