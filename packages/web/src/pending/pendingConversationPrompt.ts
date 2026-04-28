@@ -225,9 +225,20 @@ export function readPendingConversationPrompt(
       const attachmentRefs = normalizePendingPromptAttachmentRefs(parsed.attachmentRefs);
       const contextMessages = normalizePendingPromptContextMessages(parsed.contextMessages);
       const relatedConversationIds = normalizePendingRelatedConversationIds(parsed.relatedConversationIds);
+      const text = typeof parsed.text === 'string' ? parsed.text : '';
+
+      if (
+        text.trim().length === 0
+        && images.length === 0
+        && attachmentRefs.length === 0
+        && contextMessages.length === 0
+        && relatedConversationIds.length === 0
+      ) {
+        return null;
+      }
 
       return {
-        text: typeof parsed.text === 'string' ? parsed.text : '',
+        text,
         behavior: parsed.behavior === 'steer' || parsed.behavior === 'followUp'
           ? parsed.behavior
           : undefined,

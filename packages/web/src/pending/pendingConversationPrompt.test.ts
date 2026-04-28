@@ -174,6 +174,20 @@ describe('pendingConversationPrompt helpers', () => {
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });
 
+  it('drops stored prompts that normalize to empty content', () => {
+    const storage = createStorage();
+
+    storage.setItem(PENDING_CONVERSATION_PROMPT_STORAGE_KEY, JSON.stringify({
+      text: '   ',
+      images: [{ mimeType: '', data: 'missing-mime' }],
+      attachmentRefs: [{ attachmentId: '   ' }],
+      contextMessages: [],
+      relatedConversationIds: [],
+    }));
+
+    expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
+  });
+
   it('keeps related-thread staging metadata even before the prompt starts', () => {
     const storage = createStorage();
 
