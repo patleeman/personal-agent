@@ -42,11 +42,13 @@ describe('promptAttachments', () => {
   it('skips malformed restored image payloads instead of throwing', async () => {
     expect(restoreQueuedImageFiles([
       { data: '%%%', mimeType: 'image/png' },
+      { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
       { data: globalThis.btoa('hello'), mimeType: 'image/png' },
     ], 'steer', 0)).toHaveLength(1);
 
     expect(restoreComposerImageFiles([
       { data: '   ', mimeType: 'image/png' },
+      { data: globalThis.btoa('hello'), mimeType: 'text/plain' },
       { data: globalThis.btoa('hello'), mimeType: 'image/png' },
     ], 'draft-image')).toHaveLength(1);
   });

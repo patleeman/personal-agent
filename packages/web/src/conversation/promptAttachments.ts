@@ -165,12 +165,13 @@ export function base64ToFile(data: string, mimeType: string, name: string): File
 }
 
 function safeBase64ToFile(data: string, mimeType: string, name: string): File | null {
-  if (!data.trim() || !mimeType.trim()) {
+  const normalizedMimeType = mimeType.trim();
+  if (!data.trim() || !normalizedMimeType.toLowerCase().startsWith('image/')) {
     return null;
   }
 
   try {
-    return base64ToFile(data.trim(), mimeType.trim(), name);
+    return base64ToFile(data.trim(), normalizedMimeType, name);
   } catch {
     return null;
   }
