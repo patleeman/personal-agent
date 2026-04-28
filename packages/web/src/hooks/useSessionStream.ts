@@ -417,6 +417,19 @@ function wait(ms: number): Promise<void> {
   });
 }
 
+export function normalizeSurfaceRegistrationWaitOptions(input: {
+  timeoutMs?: number;
+  pollMs?: number;
+}): { timeoutMs: number; pollMs: number } {
+  const timeoutMs = Number.isSafeInteger(input.timeoutMs) && (input.timeoutMs as number) >= 0
+    ? input.timeoutMs as number
+    : 1_500;
+  const pollMs = Number.isSafeInteger(input.pollMs) && (input.pollMs as number) >= 10
+    ? input.pollMs as number
+    : 50;
+  return { timeoutMs, pollMs };
+}
+
 async function waitForSurfaceRegistration(input: {
   surfaceId: string;
   hasSurface: () => boolean;
@@ -435,8 +448,7 @@ async function waitForSurfaceRegistration(input: {
 
   input.reconnect?.();
 
-  const timeoutMs = Math.max(0, input.timeoutMs ?? 1_500);
-  const pollMs = Math.max(10, input.pollMs ?? 50);
+  const { timeoutMs, pollMs } = normalizeSurfaceRegistrationWaitOptions(input);
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {

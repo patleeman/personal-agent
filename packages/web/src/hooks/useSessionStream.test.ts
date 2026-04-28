@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   normalizePendingQueueItems,
+  normalizeSurfaceRegistrationWaitOptions,
   normalizeLiveSessionTailBlocks,
   removePendingQueueItemById,
   retryLiveSessionActionAfterTakeover,
@@ -186,6 +187,15 @@ describe('retryLiveSessionActionAfterTakeover', () => {
 
     expect(attemptAction).toHaveBeenCalledTimes(1);
     expect(takeOver).not.toHaveBeenCalled();
+  });
+});
+
+describe('normalizeSurfaceRegistrationWaitOptions', () => {
+  it('defaults fractional surface wait timers', () => {
+    expect(normalizeSurfaceRegistrationWaitOptions({ timeoutMs: 1.5, pollMs: 2.5 })).toEqual({
+      timeoutMs: 1_500,
+      pollMs: 50,
+    });
   });
 });
 
