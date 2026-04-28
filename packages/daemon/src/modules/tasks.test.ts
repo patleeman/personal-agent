@@ -328,6 +328,29 @@ describe('tasks module scheduling', () => {
     expect(module.timers[0]?.intervalMs).toBe(30_000);
   });
 
+  it('falls back to the current clock when the task clock returns an invalid Date', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-18T10:00:00.000Z'));
+    const taskDir = createTempDir('tasks-invalid-clock-');
+    const stateRoot = createTempDir('tasks-invalid-clock-state-');
+    const { context } = createContext(taskDir, stateRoot);
+    const module = createTasksModule(
+      {
+        enabled: true,
+        taskDir,
+        tickIntervalSeconds: 30,
+        maxRetries: 3,
+        reapAfterDays: 7,
+        defaultTimeoutSeconds: 1800,
+      },
+      { now: () => new Date(Number.NaN) },
+    );
+
+    await expect(module.start(context)).resolves.toBeUndefined();
+    expect(module.getStatus?.().lastTickAt).toBe('2026-04-18T10:00:00.000Z');
+    vi.useRealTimers();
+  });
+
   it('retries one-time tasks up to 3 attempts and resolves on success', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');

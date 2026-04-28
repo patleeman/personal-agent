@@ -68,6 +68,10 @@ interface RunningTaskHandle {
   promise: Promise<void>;
 }
 
+function resolveValidNow(input: Date): Date {
+  return Number.isFinite(input.getTime()) ? input : new Date();
+}
+
 interface TasksModuleState {
   knownTasks: number;
   parseErrors: number;
@@ -286,7 +290,7 @@ export function createTasksModule(
   config: TasksModuleConfig,
   dependencies: TasksModuleDependencies = {},
 ): DaemonModule {
-  const now = dependencies.now ?? (() => new Date());
+  const now = () => resolveValidNow(dependencies.now?.() ?? new Date());
   const runTask = dependencies.runTask ?? ((request: TaskRunRequest) => runTaskInIsolatedPi(request));
 
   const taskDir = resolve(config.taskDir);
