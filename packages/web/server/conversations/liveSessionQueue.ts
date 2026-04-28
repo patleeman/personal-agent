@@ -167,7 +167,7 @@ export function readQueuedPromptPreviews(
     for (let searchIndex = searchStartIndex; searchIndex < alignedInternalQueue.length; searchIndex += 1) {
       const queuedMessage = alignedInternalQueue[searchIndex];
       const extracted = extractQueuedPromptContent(queuedMessage, visibleText);
-      if (extracted.text !== visibleText) {
+      if (extracted.text.trim() !== visibleText.trim()) {
         continue;
       }
 

@@ -98,6 +98,28 @@ describe('liveSessionQueue', () => {
     expect(extracted).toEqual({ text: 'visible fallback', images: [] });
   });
 
+  it('matches internal queued prompts against trimmed visible queue text', () => {
+    const previews = readQueueState({
+      getSteeringMessages: () => ['Trim me'],
+      getFollowUpMessages: () => [],
+      agent: {
+        steeringQueue: [{
+          role: 'user',
+          content: [
+            { type: 'text', text: '  Trim me  ' },
+            { type: 'image', data: 'abc', mimeType: 'image/png' },
+          ],
+        }],
+      },
+    } as never);
+
+    expect(previews.steering).toEqual([{
+      id: expect.stringMatching(/^steer-queued-/),
+      text: 'Trim me',
+      imageCount: 1,
+    }]);
+  });
+
   it('restores by preview id without removing the wrong visible queued prompt when the index is stale', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = [
