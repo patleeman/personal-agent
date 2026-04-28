@@ -142,4 +142,26 @@ describe('vaultEditor search routes', () => {
       ]),
     });
   });
+
+  it('ignores unsafe search limits instead of clamping them', () => {
+    vaultRootMock.value = mkdtempSync(join(tmpdir(), 'pa-vault-search-unsafe-limit-'));
+    for (let index = 0; index < 21; index += 1) {
+      writeFileSync(join(vaultRootMock.value, `note-${String(index).padStart(2, '0')}.md`), 'needle');
+    }
+
+    const getHandlers = new Map<string, (req: unknown, res: unknown) => void>();
+    registerVaultEditorRoutes({
+      get: vi.fn((path: string, handler: (req: unknown, res: unknown) => void) => {
+        getHandlers.set(path, handler);
+      }),
+      put: vi.fn(),
+      delete: vi.fn(),
+      post: vi.fn(),
+    });
+    const json = vi.fn();
+
+    getHandlers.get('/api/vault/note-search')?.({ query: { q: 'needle', limit: String(Number.MAX_SAFE_INTEGER + 1) } }, { json, status: vi.fn() });
+
+    expect(json.mock.calls[0]?.[0].results).toHaveLength(20);
+  });
 });

@@ -247,7 +247,7 @@ function parseVaultSearchLimit(value: unknown): number {
     return 20;
   }
   const parsed = Number.parseInt(normalized, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
 }
 
 function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
