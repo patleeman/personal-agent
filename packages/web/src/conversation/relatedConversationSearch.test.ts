@@ -167,6 +167,20 @@ describe('listRecentConversationResults', () => {
     expect(results[0]?.sameWorkspace).toBe(true);
     expect(results[0]?.matchedTerms).toEqual([]);
   });
+
+  it('uses the default recent-result limit for malformed numeric limits', () => {
+    const sessions: SessionMeta[] = Array.from({ length: 3 }, (_, index) => buildSession({
+      id: `recent-${index}`,
+      title: `Recent ${index}`,
+      cwd: '/repo/current',
+      lastActivityAt: `2026-04-1${index}T09:00:00.000Z`,
+    }));
+
+    expect(listRecentConversationResults(sessions, {
+      workspaceCwd: '/repo/current',
+      limit: 1.5,
+    })).toHaveLength(3);
+  });
 });
 
 describe('rankRelatedConversationSessions', () => {
@@ -258,6 +272,21 @@ describe('rankRelatedConversationSessions', () => {
       searchIndex: { one: 'Thread one details' },
       query: '   ',
     })).toEqual([]);
+  });
+
+  it('uses the default ranked-result limit for unsafe numeric limits', () => {
+    const sessions: SessionMeta[] = Array.from({ length: 12 }, (_, index) => buildSession({
+      id: `match-${index}`,
+      title: `Release signing ${index}`,
+      cwd: '/repo/current',
+    }));
+
+    expect(rankRelatedConversationSessions({
+      sessions,
+      searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
+      query: 'release signing',
+      limit: Number.MAX_SAFE_INTEGER + 1,
+    })).toHaveLength(9);
   });
 
   it('uses generated summaries for ranking reasons and high-confidence preselection', () => {

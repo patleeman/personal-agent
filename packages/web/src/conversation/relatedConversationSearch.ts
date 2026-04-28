@@ -52,6 +52,12 @@ function normalizeField(value: string | undefined): string {
   return (value ?? '').replace(/\s+/g, ' ').trim();
 }
 
+function normalizePositiveIntegerLimit(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : fallback;
+}
+
 function scoreField(token: string, value: string | undefined, weight: number): number | null {
   const normalizedValue = normalizeField(value);
   if (!normalizedValue) {
@@ -246,7 +252,7 @@ export function selectRecentConversationCandidates(
       return Number.isFinite(timestamp) && nowMs - timestamp <= recentWindowMs;
     })
     .sort((left, right) => compareRecentConversationCandidates(left, right, workspaceCwd))
-    .slice(0, Math.max(1, options.limit ?? DEFAULT_CANDIDATE_LIMIT));
+    .slice(0, normalizePositiveIntegerLimit(options.limit, DEFAULT_CANDIDATE_LIMIT));
 }
 
 export function listRecentConversationResults(
@@ -261,7 +267,7 @@ export function listRecentConversationResults(
   } = {},
 ): RelatedConversationSearchResult[] {
   const workspaceCwd = normalizePath(options.workspaceCwd);
-  const limit = Math.max(1, options.limit ?? DEFAULT_RECENT_RESULTS_LIMIT);
+  const limit = normalizePositiveIntegerLimit(options.limit, DEFAULT_RECENT_RESULTS_LIMIT);
 
   return selectRecentConversationCandidates(sessions, {
     ...options,
@@ -302,7 +308,7 @@ export function rankRelatedConversationSessions(input: {
 
   const workspaceCwd = normalizePath(input.workspaceCwd);
   const nowMs = input.nowMs ?? Date.now();
-  const limit = Math.max(1, input.limit ?? 9);
+  const limit = normalizePositiveIntegerLimit(input.limit, 9);
 
   return input.sessions
     .map((session) => {
