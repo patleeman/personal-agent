@@ -132,6 +132,13 @@ describe('pendingInitialPromptLogic', () => {
     )).toBe(false);
   });
 
+  it('matches fallback image metadata with mime type casing differences', () => {
+    expect(pendingPromptImagesMatchMessageImages(
+      [{ data: 'abc', mimeType: 'IMAGE/PNG', name: 'ship.png' }],
+      [{ alt: 'ship.png', mimeType: 'image/png', caption: 'ship.png' }],
+    )).toBe(true);
+  });
+
   it('matches accepted transcript images by data url when pending previews used blob urls', () => {
     expect(pendingPromptImagesMatchMessageImages(
       [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'blob:ship' }],

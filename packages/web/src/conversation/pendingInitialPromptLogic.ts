@@ -96,12 +96,14 @@ export function pendingPromptImagesMatchMessageImages(
 
       const pendingName = pendingImage.name?.trim() || '';
       const messageCaption = messageImage.caption?.trim() || '';
+      const pendingMimeType = pendingImage.mimeType.trim().toLowerCase();
+      const messageMimeType = messageImage.mimeType?.trim().toLowerCase() || '';
       if (pendingName || messageCaption) {
-        return messageCaption === pendingName && messageImage.mimeType === pendingImage.mimeType;
+        return messageCaption === pendingName && messageMimeType === pendingMimeType;
       }
 
-      if (messageImage.mimeType || pendingImage.mimeType) {
-        return !messageImage.mimeType || messageImage.mimeType === pendingImage.mimeType;
+      if (messageMimeType || pendingMimeType) {
+        return !messageMimeType || messageMimeType === pendingMimeType;
       }
 
       return true;
