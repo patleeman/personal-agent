@@ -155,6 +155,12 @@ const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   files: 30,
 };
 
+function readEmptyQueryLimit(section: CommandPaletteSection, value: number | undefined): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : EMPTY_QUERY_LIMITS[section];
+}
+
 function tokenizeQuery(query: string): string[] {
   return query
     .trim()
@@ -266,9 +272,9 @@ export function searchCommandPaletteItems<TAction>(
       return [];
     }
 
-    const emptyQueryLimit = options.emptyQueryLimits?.[section] ?? EMPTY_QUERY_LIMITS[section];
+    const emptyQueryLimit = readEmptyQueryLimit(section, options.emptyQueryLimits?.[section]);
     const limited = emptyQuery
-      ? rankedItems.slice(0, Math.max(0, emptyQueryLimit))
+      ? rankedItems.slice(0, emptyQueryLimit)
       : rankedItems;
 
     return [{

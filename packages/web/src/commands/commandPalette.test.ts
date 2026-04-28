@@ -107,7 +107,7 @@ describe('command palette search', () => {
   });
 
   it('supports overriding empty-query limits for lazy-loaded thread history', () => {
-    const results = searchCommandPaletteItems([
+    const items = [
       ITEMS[1]!,
       {
         ...ITEMS[1]!,
@@ -115,7 +115,8 @@ describe('command palette search', () => {
         title: 'Gamma cleanup',
         order: 2,
       },
-    ], {
+    ];
+    const results = searchCommandPaletteItems(items, {
       query: '',
       scope: 'threads',
       emptyQueryLimits: { archived: 1 },
@@ -124,6 +125,13 @@ describe('command palette search', () => {
     expect(results).toHaveLength(1);
     expect(results[0]?.total).toBe(2);
     expect(results[0]?.items.map((item) => item.id)).toEqual(['archived:beta']);
+
+    const malformedLimitResults = searchCommandPaletteItems(items, {
+      query: '',
+      scope: 'threads',
+      emptyQueryLimits: { archived: 1.5 },
+    });
+    expect(malformedLimitResults[0]?.items.map((item) => item.id)).toEqual(['archived:beta', 'archived:gamma']);
   });
 
   it('bootstraps thread results when the palette opens before sessions load', () => {
