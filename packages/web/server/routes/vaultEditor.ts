@@ -49,6 +49,29 @@ function safePath(id: string): string | null {
   return abs;
 }
 
+export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
+  if (!dataUrl.startsWith('data:')) {
+    throw new Error('dataUrl must be a data: URL');
+  }
+
+  const commaIndex = dataUrl.indexOf(',');
+  if (commaIndex < 0) {
+    throw new Error('dataUrl must contain valid base64 image data');
+  }
+
+  const base64 = dataUrl.slice(commaIndex + 1).trim();
+  if (!base64 || base64.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+    throw new Error('dataUrl must contain valid base64 image data');
+  }
+
+  const decoded = Buffer.from(base64, 'base64');
+  if (decoded.length === 0) {
+    throw new Error('dataUrl must contain non-empty image data');
+  }
+
+  return decoded;
+}
+
 // ── Serialise a single entry ──────────────────────────────────────────────────
 
 interface VaultEntry {
@@ -589,9 +612,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       const root = getRoot();
       const attachDir = join(root, '_attachments');
       mkdirSync(attachDir, { recursive: true });
-      // Strip data URL header and decode
-      const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
-      const buf = Buffer.from(base64, 'base64');
+      const buf = decodeVaultImageDataUrl(dataUrl);
       const safeName = basename(filename.trim()).replace(/[^a-zA-Z0-9._-]/g, '-');
       const ts = Date.now();
       const outName = `${ts}-${safeName}`;
