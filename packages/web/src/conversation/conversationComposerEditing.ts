@@ -98,24 +98,27 @@ export function resolveComposerHistoryNavigation(input: {
   if (input.history.length === 0) {
     return null;
   }
+  const currentIndex = input.currentIndex === null || !Number.isSafeInteger(input.currentIndex)
+    ? null
+    : Math.max(0, Math.min(input.currentIndex, input.history.length - 1));
 
   if (input.direction === 'older') {
-    const nextIndex = input.currentIndex === null
+    const nextIndex = currentIndex === null
       ? input.history.length - 1
-      : Math.max(0, input.currentIndex - 1);
+      : Math.max(0, currentIndex - 1);
 
     return {
       nextIndex,
       nextInput: input.history[nextIndex] ?? '',
-      nextDraftInput: input.currentIndex === null ? input.currentInput : input.draftInput,
+      nextDraftInput: currentIndex === null ? input.currentInput : input.draftInput,
     };
   }
 
-  if (input.currentIndex === null) {
+  if (currentIndex === null) {
     return null;
   }
 
-  if (input.currentIndex >= input.history.length - 1) {
+  if (currentIndex >= input.history.length - 1) {
     return {
       nextIndex: null,
       nextInput: input.draftInput,
@@ -123,7 +126,7 @@ export function resolveComposerHistoryNavigation(input: {
     };
   }
 
-  const nextIndex = input.currentIndex + 1;
+  const nextIndex = currentIndex + 1;
   return {
     nextIndex,
     nextInput: input.history[nextIndex] ?? '',

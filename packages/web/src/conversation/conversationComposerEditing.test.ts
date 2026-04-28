@@ -169,6 +169,18 @@ describe('conversation composer editing helpers', () => {
       nextInput: 'draft',
       nextDraftInput: '',
     });
+
+    expect(resolveComposerHistoryNavigation({
+      direction: 'older',
+      history: ['first', 'second'],
+      currentIndex: 1.5,
+      currentInput: 'draft',
+      draftInput: '',
+    })).toEqual({
+      nextIndex: 1,
+      nextInput: 'second',
+      nextDraftInput: 'draft',
+    });
   });
 
   it('does not navigate composer history when there is nowhere to go', () => {
