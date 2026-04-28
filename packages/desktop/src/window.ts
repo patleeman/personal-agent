@@ -29,6 +29,7 @@ export type DesktopRendererShortcutAction =
   | 'toggle-sidebar'
   | 'toggle-right-rail'
   | 'toggle-layout-mode'
+  | 'cycle-view-mode'
   | 'toggle-conversation-pin'
   | 'toggle-conversation-archive'
   | 'focus-composer'

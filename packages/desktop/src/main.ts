@@ -405,6 +405,9 @@ async function bootstrapDesktopApp(): Promise<void> {
     onToggleLayoutMode: () => {
       windowController?.sendShortcutToFocusedWindow('toggle-layout-mode');
     },
+    onCycleViewMode: () => {
+      windowController?.sendShortcutToFocusedWindow('cycle-view-mode');
+    },
     onHideWindow: () => {
       windowController?.hideFocusedWindow();
     },

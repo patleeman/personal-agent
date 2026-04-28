@@ -19,6 +19,7 @@ function createActions() {
     onToggleSidebar: vi.fn(),
     onToggleRightRail: vi.fn(),
     onToggleLayoutMode: vi.fn(),
+    onCycleViewMode: vi.fn(),
     onHideWindow: vi.fn(),
     onSettings: vi.fn(),
     onCheckForUpdates: vi.fn(),
@@ -74,6 +75,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
       expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
       expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
       expect.objectContaining({ label: 'Toggle Layout Mode', accelerator: 'CommandOrControl+Alt+\\' }),
+      expect.objectContaining({ label: 'Cycle View Mode', accelerator: 'CommandOrControl+Shift+V' }),
     ]));
 
     const windowMenu = template[4];

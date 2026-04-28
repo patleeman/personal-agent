@@ -36,10 +36,10 @@ const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
-type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode';
+type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode' | 'cycle-view-mode';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
-  return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode';
+  return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode' || value === 'cycle-view-mode';
 }
 
 function isDesktopNavigateDetail(value: unknown): value is { route: string; replace?: boolean } {
@@ -733,6 +733,22 @@ export function Layout() {
         return;
       }
 
+      if (action === 'cycle-view-mode') {
+        if (zenMode) {
+          handleZenModeChange(false);
+          handleAppLayoutModeChange('compact');
+          return;
+        }
+
+        if (appLayoutMode === 'compact') {
+          handleAppLayoutModeChange('workbench');
+          return;
+        }
+
+        handleZenModeChange(true);
+        return;
+      }
+
       activeRightRailControl?.toggleRail();
     }
 
@@ -757,7 +773,7 @@ export function Layout() {
       window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
       window.removeEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
     };
-  }, [activeRightRailControl, appLayoutMode, handleAppLayoutModeChange, location.hash, location.pathname, location.search, navigate]);
+  }, [activeRightRailControl, appLayoutMode, handleAppLayoutModeChange, handleZenModeChange, location.hash, location.pathname, location.search, navigate, zenMode]);
 
   return (
     <>

@@ -17,6 +17,7 @@ export interface DesktopApplicationMenuActions {
   onToggleSidebar: () => void;
   onToggleRightRail: () => void;
   onToggleLayoutMode: () => void;
+  onCycleViewMode: () => void;
   onHideWindow: () => void;
   onSettings: () => void;
   onCheckForUpdates: () => void;
@@ -184,6 +185,11 @@ export function buildDesktopApplicationMenuTemplate(
         label: 'Toggle Layout Mode',
         accelerator: 'CommandOrControl+Alt+\\',
         click: actions.onToggleLayoutMode,
+      },
+      {
+        label: 'Cycle View Mode',
+        accelerator: 'CommandOrControl+Shift+V',
+        click: actions.onCycleViewMode,
       },
       { type: 'separator' },
       { role: 'togglefullscreen' },
