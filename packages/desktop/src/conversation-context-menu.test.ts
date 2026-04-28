@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildConversationContextMenuTemplate } from './conversation-context-menu.js';
+import { buildConversationContextMenuTemplate, normalizeConversationContextMenuCoordinate } from './conversation-context-menu.js';
 
 describe('buildConversationContextMenuTemplate', () => {
+  it('drops unsafe menu coordinates', () => {
+    expect(normalizeConversationContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeConversationContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
+  });
+
   it('groups conversation, creation, and copy actions with native separators', () => {
     const template = buildConversationContextMenuTemplate({
       pinAction: 'pin',
