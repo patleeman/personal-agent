@@ -6,6 +6,7 @@ describe('shouldDispatchReadonlyLocalApiInWorker', () => {
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/status', hostId: 'local' })).toBe(true);
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/sessions', hostId: 'local' })).toBe(true);
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'POST', path: '/api/sessions/search-index', hostId: 'local' })).toBe(true);
+    expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'POST', path: '/api/sessions/search', hostId: 'local' })).toBe(true);
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/live-sessions/session-1/context', hostId: 'local' })).toBe(true);
     expect(shouldDispatchReadonlyLocalApiInWorker({ method: 'GET', path: '/api/conversations/session-1/bootstrap', hostId: 'local' })).toBe(true);
   });

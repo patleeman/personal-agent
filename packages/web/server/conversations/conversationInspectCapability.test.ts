@@ -228,6 +228,41 @@ describe('conversationInspectCapability', () => {
     expect(formatConversationInspectSearchResult(result)).toContain('assistant-1 · text');
   });
 
+  it('can stop transcript search after enough matches for interactive UI queries', () => {
+    listConversationSessionsSnapshotMock.mockReturnValue([
+      {
+        id: 'conv-one',
+        title: 'First thread',
+        cwd: '/repo',
+        file: '/sessions/conv-one.jsonl',
+        timestamp: '2026-04-20T10:00:00.000Z',
+        isLive: true,
+        isRunning: false,
+        messageCount: 1,
+      },
+      {
+        id: 'conv-two',
+        title: 'Second thread',
+        cwd: '/repo',
+        file: '/sessions/conv-two.jsonl',
+        timestamp: '2026-04-20T09:00:00.000Z',
+        isLive: false,
+        isRunning: false,
+        messageCount: 1,
+      },
+    ]);
+    readSessionBlocksByFileMock.mockReturnValue({
+      blocks: [{ type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:00.000Z', text: 'needle' }],
+    });
+
+    const result = searchConversationInspectSessions({ query: 'needle', limit: 1, stopAfterLimit: true });
+
+    expect(result.returnedCount).toBe(1);
+    expect(result.totalMatching).toBe(1);
+    expect(result.matches[0]?.conversationId).toBe('conv-one');
+    expect(readSessionBlocksByFileMock).toHaveBeenCalledTimes(1);
+  });
+
   it('centers all-terms search snippets around the first matched term when the phrase is not contiguous', () => {
     listConversationSessionsSnapshotMock.mockReturnValue([
       {

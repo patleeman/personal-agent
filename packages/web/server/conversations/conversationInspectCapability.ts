@@ -780,6 +780,7 @@ export function searchConversationInspectSessions(input: {
   currentConversationId?: string;
   maxSnippetCharacters?: unknown;
   maxCharactersPerBlock?: unknown;
+  stopAfterLimit?: unknown;
 } = {}): SearchConversationInspectResult {
   const query = readOptionalString(input.query);
   if (!query) {
@@ -790,6 +791,7 @@ export function searchConversationInspectSessions(input: {
   const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
   const window = normalizePositiveInteger(input.window, DEFAULT_WINDOW, MAX_WINDOW);
   const includeAroundMatches = readOptionalBoolean(input.includeAroundMatches) ?? false;
+  const stopAfterLimit = readOptionalBoolean(input.stopAfterLimit) ?? false;
   const maxSnippetCharacters = normalizePositiveInteger(input.maxSnippetCharacters, 240, 2_000);
   const maxCharactersPerBlock = normalizePositiveInteger(
     input.maxCharactersPerBlock,
@@ -806,6 +808,10 @@ export function searchConversationInspectSessions(input: {
   const matches: SearchConversationInspectMatch[] = [];
 
   for (const session of sessions) {
+    if (stopAfterLimit && matches.length >= limit) {
+      break;
+    }
+
     const detail = readSessionBlocksByFile(session.file);
     if (!detail) {
       continue;

@@ -16,7 +16,7 @@ import {
 import { OPEN_COMMAND_PALETTE_EVENT, type OpenCommandPaletteDetail } from '../commands/commandPaletteEvents';
 import { buildCommandPaletteFileOpenRoute } from '../commands/commandPaletteNavigation';
 import { useConversations } from '../hooks/useConversations';
-import type { SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
+import type { ConversationContentSearchMatch, SessionMeta, VaultEntry, VaultSearchResult } from '../shared/types';
 import { timeAgo } from '../shared/utils';
 import { readAppLayoutMode } from '../ui-state/appLayoutMode';
 import { onKBEvent } from './knowledge/knowledgeEvents';
@@ -32,8 +32,10 @@ interface ScopedSessionMeta extends SessionMeta {
 }
 
 const THREADS_EMPTY_QUERY_PAGE_SIZE = 50;
+const CONVERSATION_CONTENT_SEARCH_LIMIT = 80;
 const FILE_SEARCH_LIMIT = 50;
 const FILE_CONTENT_SEARCH_DEBOUNCE_MS = 160;
+const CONVERSATION_CONTENT_SEARCH_DEBOUNCE_MS = 160;
 
 function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop:not([data-command-palette="true"])') !== null;
@@ -88,7 +90,6 @@ function fileLocation(id: string): string | undefined {
 function buildConversationItems(
   section: 'open' | 'archived',
   sessions: ScopedSessionMeta[],
-  conversationSearchIndex: Record<string, string> = {},
 ): CommandPaletteItem<CommandPaletteAction>[] {
   const orderedSessions = section === 'archived'
     ? [...sessions].sort((left, right) => {
@@ -124,7 +125,7 @@ function buildConversationItems(
       title: session.title,
       subtitle: session.cwd,
       meta: metaParts.join(' · '),
-      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug, conversationSearchIndex[session.id] ?? ''],
+      keywords: [session.id, session.file, session.cwd, session.model, session.cwdSlug],
       order: index,
       action: section === 'archived'
         ? { kind: 'restoreArchivedConversation', conversationId: session.id }
@@ -158,6 +159,21 @@ function buildFileSearchItems(results: VaultSearchResult[]): CommandPaletteItem<
     keywords: [result.id, result.name, result.excerpt],
     order: index,
     action: { kind: 'openFile', fileId: result.id },
+  }));
+}
+
+function buildConversationContentSearchItems(results: ConversationContentSearchMatch[], query: string): CommandPaletteItem<CommandPaletteAction>[] {
+  return results.map((result, index) => ({
+    id: `conversation-search:${result.conversationId}:${result.blockId}`,
+    section: result.isLive ? 'open' as const : 'archived' as const,
+    title: result.title,
+    subtitle: result.cwd,
+    meta: excerpt(result.snippet, 160),
+    keywords: [query, result.conversationId, result.cwd, result.snippet, result.blockId],
+    order: index,
+    action: result.isLive
+      ? { kind: 'navigate', to: `/conversations/${encodeURIComponent(result.conversationId)}` }
+      : { kind: 'restoreArchivedConversation', conversationId: result.conversationId },
   }));
 }
 
@@ -208,9 +224,9 @@ export function CommandPalette() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [archivedVisibleLimit, setArchivedVisibleLimit] = useState(THREADS_EMPTY_QUERY_PAGE_SIZE);
-  const [conversationSearchIndex, setConversationSearchIndex] = useState<Record<string, string>>({});
-  const [conversationSearchLoading, setConversationSearchLoading] = useState(false);
-  const [conversationSearchError, setConversationSearchError] = useState<string | null>(null);
+  const [conversationContentSearchResults, setConversationContentSearchResults] = useState<ConversationContentSearchMatch[]>([]);
+  const [conversationContentSearchLoading, setConversationContentSearchLoading] = useState(false);
+  const [conversationContentSearchError, setConversationContentSearchError] = useState<string | null>(null);
   const [vaultFiles, setVaultFiles] = useState<VaultEntry[]>([]);
   const [vaultFilesLoading, setVaultFilesLoading] = useState(false);
   const [vaultFilesError, setVaultFilesError] = useState<string | null>(null);
@@ -227,26 +243,35 @@ export function CommandPalette() {
   );
 
   const openConversationItems = useMemo(
-    () => buildConversationItems('open', openThreadSessions, conversationSearchIndex),
-    [conversationSearchIndex, openThreadSessions],
+    () => buildConversationItems('open', openThreadSessions),
+    [openThreadSessions],
   );
   const archivedConversationItems = useMemo(
-    () => buildConversationItems('archived', archivedSessions, conversationSearchIndex),
-    [archivedSessions, conversationSearchIndex],
+    () => buildConversationItems('archived', archivedSessions),
+    [archivedSessions],
   );
   const fileItems = useMemo(() => buildFileItems(vaultFiles), [vaultFiles]);
   const searchedFileItems = useMemo(() => buildFileSearchItems(vaultSearchResults), [vaultSearchResults]);
+  const searchedConversationItems = useMemo(
+    () => buildConversationContentSearchItems(conversationContentSearchResults, query.trim()),
+    [conversationContentSearchResults, query],
+  );
   const allItems = useMemo(() => {
     const filesForScope = scope === 'search' && query.trim().length > 0
       ? searchedFileItems
       : fileItems;
+    const conversationItemsForScope = (scope === 'threads' || scope === 'search') && query.trim().length > 0
+      ? searchedConversationItems
+      : [
+          ...openConversationItems,
+          ...archivedConversationItems,
+        ];
 
     return [
-      ...openConversationItems,
-      ...archivedConversationItems,
+      ...conversationItemsForScope,
       ...filesForScope,
     ];
-  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedFileItems]);
+  }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
 
   const emptyQueryLimits = useMemo(
     () => (scope === 'threads' && query.trim().length === 0
@@ -353,18 +378,6 @@ export function CommandPalette() {
     return () => offHandlers.forEach((off) => off());
   }, [loadVaultFiles, open]);
 
-  const searchableConversationIds = useMemo(
-    () => [
-      ...openThreadSessions,
-      ...archivedSessions,
-    ]
-      .filter((session) => typeof session.file === 'string' && session.file.trim().length > 0)
-      .map((session) => session.id),
-    [archivedSessions, openThreadSessions],
-  );
-  const shouldIndexConversationSearch = open
-    && query.trim().length > 0
-    && (scope === 'threads' || scope === 'search');
   const archivedGroup = useMemo(
     () => groups.find((group) => group.section === 'archived') ?? null,
     [groups],
@@ -394,67 +407,53 @@ export function CommandPalette() {
     setArchivedVisibleLimit((current) => current + THREADS_EMPTY_QUERY_PAGE_SIZE);
   }, [canLoadMoreArchivedThreads, groups]);
 
+  const shouldSearchFilesByContent = open
+    && scope === 'search'
+    && query.trim().length > 0;
+
+  const shouldSearchConversationsByContent = open
+    && (scope === 'threads' || scope === 'search')
+    && query.trim().length > 0;
+
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (searchableConversationIds.length === 0) {
-      setConversationSearchIndex({});
-      setConversationSearchError(null);
-      setConversationSearchLoading(false);
-      return;
-    }
-
-    if (!shouldIndexConversationSearch) {
-      setConversationSearchLoading(false);
-      return;
-    }
-
-    const missingSessionIds = searchableConversationIds
-      .filter((sessionId) => conversationSearchIndex[sessionId] === undefined)
-      .slice(0, 25);
-    if (missingSessionIds.length === 0) {
-      setConversationSearchLoading(false);
+    if (!shouldSearchConversationsByContent) {
+      setConversationContentSearchLoading(false);
+      setConversationContentSearchError(null);
+      setConversationContentSearchResults([]);
       return;
     }
 
     let cancelled = false;
-    setConversationSearchLoading(true);
-    setConversationSearchError(null);
+    setConversationContentSearchLoading(true);
+    setConversationContentSearchError(null);
 
-    api.sessionSearchIndex(missingSessionIds)
-      .then((result) => {
-        if (cancelled) {
-          return;
-        }
-
-        setConversationSearchIndex((current) => ({
-          ...current,
-          ...result.index,
-        }));
-      })
-      .catch((error) => {
-        if (cancelled) {
-          return;
-        }
-
-        setConversationSearchError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setConversationSearchLoading(false);
-        }
-      });
+    const handle = window.setTimeout(() => {
+      void api.conversationContentSearch(query.trim(), CONVERSATION_CONTENT_SEARCH_LIMIT)
+        .then((result) => {
+          if (cancelled) {
+            return;
+          }
+          setConversationContentSearchResults(result.matches);
+        })
+        .catch((error) => {
+          if (cancelled) {
+            return;
+          }
+          setConversationContentSearchError(error instanceof Error ? error.message : String(error));
+          setConversationContentSearchResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setConversationContentSearchLoading(false);
+          }
+        });
+    }, CONVERSATION_CONTENT_SEARCH_DEBOUNCE_MS);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(handle);
     };
-  }, [conversationSearchIndex, open, query, scope, searchableConversationIds, shouldIndexConversationSearch]);
-
-  const shouldSearchFilesByContent = open
-    && scope === 'search'
-    && query.trim().length > 0;
+  }, [query, shouldSearchConversationsByContent]);
 
   useEffect(() => {
     if (!shouldSearchFilesByContent) {
@@ -577,7 +576,7 @@ export function CommandPalette() {
       }
 
       const nextScope = isSearchAllHotkey(event)
-        ? 'search'
+        ? 'threads'
         : isFilePaletteHotkey(event)
           ? 'files'
           : isCommandPaletteHotkey(event)
@@ -692,7 +691,7 @@ export function CommandPalette() {
       }
     }
 
-    if (conversationSearchLoading && (scope === 'threads' || scope === 'search')) {
+    if (conversationContentSearchLoading && (scope === 'threads' || scope === 'search')) {
       sections.add('open');
       sections.add('archived');
     }
@@ -706,7 +705,7 @@ export function CommandPalette() {
     }
 
     return [...sections];
-  }, [conversationSearchLoading, fileItems.length, scope, sessions, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
+  }, [conversationContentSearchLoading, fileItems.length, scope, sessions, sessionsLoading, vaultFilesLoading, vaultSearchLoading]);
   const showSectionHeaders = groups.length > 1;
   const searchPlaceholder = scope === 'threads'
     ? 'Search threads…'
@@ -890,9 +889,9 @@ export function CommandPalette() {
             </section>
           ))}
 
-          {conversationSearchError && (scope === 'threads' || scope === 'search') && (
+          {conversationContentSearchError && (scope === 'threads' || scope === 'search') && (
             <section className="pb-2 last:pb-0">
-              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to index thread contents: {conversationSearchError}</p>
+              <p className="px-2.5 py-3 text-[12px] text-danger">Failed to search thread contents: {conversationContentSearchError}</p>
             </section>
           )}
 
@@ -908,7 +907,7 @@ export function CommandPalette() {
             </section>
           )}
 
-          {visibleCount === 0 && loadingSections.length === 0 && !(conversationSearchError && (scope === 'threads' || scope === 'search')) && !(vaultFilesError && (scope === 'files' || scope === 'search')) && !(vaultSearchError && scope === 'search') && (
+          {visibleCount === 0 && loadingSections.length === 0 && !(conversationContentSearchError && (scope === 'threads' || scope === 'search')) && !(vaultFilesError && (scope === 'files' || scope === 'search')) && !(vaultSearchError && scope === 'search') && (
             <p className="px-4 py-10 text-center font-mono text-[12px] text-dim">{emptyStateCopy(scope, query)}</p>
           )}
         </div>

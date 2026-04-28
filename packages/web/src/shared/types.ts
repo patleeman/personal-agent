@@ -516,6 +516,28 @@ export interface SessionDetailAppendOnlyResponse {
 
 export type SessionDetailResult = SessionDetail | SessionDetailUnchangedResponse | SessionDetailAppendOnlyResponse;
 
+export interface ConversationContentSearchMatch {
+  conversationId: string;
+  title: string;
+  cwd: string;
+  lastActivityAt: string;
+  isLive: boolean;
+  isRunning: boolean;
+  blockId: string;
+  blockType: string;
+  blockIndex: number;
+  snippet: string;
+}
+
+export interface ConversationContentSearchResult {
+  query: string;
+  mode: 'phrase' | 'allTerms' | 'anyTerm';
+  scope: 'all' | 'live' | 'running' | 'archived';
+  totalMatching: number;
+  returnedCount: number;
+  matches: ConversationContentSearchMatch[];
+}
+
 export type AppEventTopic =
   | 'sessions'
   | 'sessionFiles'

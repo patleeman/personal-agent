@@ -30,6 +30,7 @@ const {
   readSessionDetailForRouteMock,
   readSessionImageAssetMock,
   readSessionSearchTextMock,
+  searchConversationInspectSessionsMock,
   resolveConversationSessionFileMock,
   saveConversationAttachmentMock,
   addConversationCommitCheckpointCommentMock,
@@ -69,6 +70,7 @@ const {
   readSessionDetailForRouteMock: vi.fn(),
   readSessionImageAssetMock: vi.fn(),
   readSessionSearchTextMock: vi.fn(),
+  searchConversationInspectSessionsMock: vi.fn(),
   resolveConversationSessionFileMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
   addConversationCommitCheckpointCommentMock: vi.fn(),
@@ -159,6 +161,11 @@ vi.mock('../conversations/conversationService.js', () => ({
   resolveConversationSessionFile: resolveConversationSessionFileMock,
   setConversationServiceContext: setConversationServiceContextMock,
   toggleConversationAttention: toggleConversationAttentionMock,
+}));
+
+vi.mock('../conversations/conversationInspectCapability.js', () => ({
+  ConversationInspectCapabilityInputError: class ConversationInspectCapabilityInputError extends Error {},
+  searchConversationInspectSessions: searchConversationInspectSessionsMock,
 }));
 
 import { registerConversationRoutes } from './conversations.js';
@@ -271,6 +278,7 @@ describe('conversation routes', () => {
     readSessionDetailForRouteMock.mockReset();
     readSessionImageAssetMock.mockReset();
     readSessionSearchTextMock.mockReset();
+    searchConversationInspectSessionsMock.mockReset();
     resolveConversationSessionFileMock.mockReset();
     saveConversationAttachmentMock.mockReset();
     addConversationCommitCheckpointCommentMock.mockReset();
@@ -318,6 +326,7 @@ describe('conversation routes', () => {
       mimeType: 'image/png',
     });
     readSessionSearchTextMock.mockReturnValue('search text');
+    searchConversationInspectSessionsMock.mockReturnValue({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
     resolveConversationSessionFileMock.mockReturnValue('/sessions/session-1.jsonl');
     saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
     addConversationCommitCheckpointCommentMock.mockReturnValue({ id: 'checkpoint-1', commentCount: 1, comments: [{ id: 'comment-1', body: 'Ship it' }] });
@@ -440,6 +449,18 @@ describe('conversation routes', () => {
     postHandler('/api/sessions/search-index')(createRequest({ body: { sessionIds: ['session-1', ' ', 42] } }), searchRes);
     expect(readSessionSearchTextMock).toHaveBeenCalledWith('session-1');
     expect(searchRes.json).toHaveBeenCalledWith({ index: { 'session-1': 'search text' } });
+
+    const contentSearchRes = createResponse();
+    postHandler('/api/sessions/search')(createRequest({ body: { query: 'needle', limit: 25 } }), contentSearchRes);
+    expect(searchConversationInspectSessionsMock).toHaveBeenCalledWith({
+      query: 'needle',
+      limit: 25,
+      scope: 'all',
+      searchMode: 'allTerms',
+      maxSnippetCharacters: 220,
+      stopAfterLimit: true,
+    });
+    expect(contentSearchRes.json).toHaveBeenCalledWith({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
   });
 
   it('handles deferred resumes, artifacts, attachments, attention toggles, and plan state routes', async () => {
