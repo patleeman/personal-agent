@@ -18,10 +18,11 @@ import type { ConversationAutoModeState } from './conversationAutoMode.js';
 import type { LiveContextUsage } from './liveSessionEvents.js';
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
+const MAX_LIVE_SNAPSHOT_TAIL_BLOCKS = 1000;
 
 function normalizeLiveSnapshotTailBlocks(value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(MAX_LIVE_SNAPSHOT_TAIL_BLOCKS, value)
     : DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS;
 }
 

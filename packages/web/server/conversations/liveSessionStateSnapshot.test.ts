@@ -31,4 +31,18 @@ describe('liveSessionStateSnapshot', () => {
 
     expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 400 });
   });
+
+  it('caps expensive live snapshot tail block limits', async () => {
+    const { buildLiveSessionSnapshot } = await import('./liveSessionStateSnapshot.js');
+
+    buildLiveSessionSnapshot({
+      session: {
+        sessionFile: '/tmp/session.jsonl',
+        isStreaming: false,
+        state: { messages: [] },
+      },
+    } as never, 5000);
+
+    expect(readSessionBlocksByFileMock).toHaveBeenCalledWith('/tmp/session.jsonl', { tailBlocks: 1000 });
+  });
 });
