@@ -493,6 +493,16 @@ describe('live session routes', () => {
     expect(invalidImageRes.status).toHaveBeenCalledWith(400);
     expect(invalidImageRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
+    isLiveMock.mockReturnValueOnce(true);
+    const invalidBehaviorRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({
+      params: { id: 'live-1' },
+      body: { text: 'hello', behavior: 'bogus' },
+    }), invalidBehaviorRes);
+    expect(invalidBehaviorRes.json).toHaveBeenCalledWith(expect.objectContaining({ ok: true }));
+    expect(submitLocalPromptSessionMock).toHaveBeenCalledWith('live-1', 'hello', undefined, undefined, undefined);
+    submitLocalPromptSessionMock.mockClear();
+
     resolveConversationAttachmentPromptFilesMock.mockImplementationOnce(() => {
       throw new Error('Attachment not found');
     });

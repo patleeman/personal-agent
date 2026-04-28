@@ -342,6 +342,10 @@ function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefi
   return images.length > 0 ? images : undefined;
 }
 
+function normalizePromptBehavior(value: unknown): 'steer' | 'followUp' | undefined {
+  return value === 'steer' || value === 'followUp' ? value : undefined;
+}
+
 function buildConversationAttachmentsContext(
   attachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>,
 ): string {
@@ -720,6 +724,7 @@ export async function submitLiveSessionPromptCapability(
   relatedConversationPointerWarnings?: string[];
 }> {
   const prepared = await prepareLiveSessionPrompt(input, context);
+  const behavior = normalizePromptBehavior(input.behavior);
   const liveConversationId = await ensureConversationPromptTargetLive(prepared.conversationId, context);
   const recoveredLiveEntry = liveRegistry.get(liveConversationId);
   const promptContext = buildPromptContextMessagesForSubmit({
@@ -746,7 +751,7 @@ export async function submitLiveSessionPromptCapability(
       pendingOperation: {
         type: 'prompt',
         text: prepared.text,
-        ...(input.behavior ? { behavior: input.behavior } : {}),
+        ...(behavior ? { behavior } : {}),
         ...(prepared.promptImages && prepared.promptImages.length > 0
           ? { images: prepared.promptImages }
           : {}),
@@ -763,7 +768,7 @@ export async function submitLiveSessionPromptCapability(
   const submittedPrompt = await submitLocalPromptSession(
     liveConversationId,
     prepared.text,
-    input.behavior,
+    behavior,
     prepared.promptImages,
     prepared.surfaceId,
   );
