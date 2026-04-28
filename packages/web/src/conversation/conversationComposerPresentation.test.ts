@@ -118,8 +118,10 @@ describe('conversation composer presentation helpers', () => {
     expect(formatQueuedPromptShelfText('', 1)).toBe('(image only)');
     expect(formatQueuedPromptShelfText('  ', 0)).toBe('(empty queued prompt)');
     expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
+    expect(formatQueuedPromptImageSummary(1.5)).toBeNull();
     expect(formatParallelJobStatusLabel('importing')).toBe('appending');
     expect(formatParallelJobContextSummary({ imageCount: 1, attachmentRefs: ['a', 'b'] })).toBe('1 image · 2 attachments');
+    expect(formatParallelJobContextSummary({ imageCount: 1.5, attachmentRefs: [] })).toBeNull();
     expect(formatParallelJobContextSummary({ imageCount: 0, attachmentRefs: [] })).toBeNull();
   });
 

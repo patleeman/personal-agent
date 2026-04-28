@@ -121,7 +121,7 @@ export function formatQueuedPromptShelfText(text: string, imageCount: number): s
 }
 
 export function formatQueuedPromptImageSummary(imageCount: number): string | null {
-  if (imageCount <= 0) {
+  if (!Number.isSafeInteger(imageCount) || imageCount <= 0) {
     return null;
   }
 
@@ -146,7 +146,7 @@ export function formatParallelJobContextSummary(input: {
   attachmentRefs: string[];
 }): string | null {
   const parts: string[] = [];
-  if (input.imageCount > 0) {
+  if (Number.isSafeInteger(input.imageCount) && input.imageCount > 0) {
     parts.push(`${input.imageCount} image${input.imageCount === 1 ? '' : 's'}`);
   }
   if (input.attachmentRefs.length > 0) {
