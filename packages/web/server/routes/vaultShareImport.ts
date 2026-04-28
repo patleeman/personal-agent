@@ -35,6 +35,18 @@ function normalizeShareString(value: string | undefined): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function normalizeShareTimestamp(value: string | undefined): string {
+  const raw = normalizeShareString(value);
+  if (raw) {
+    const parsed = Date.parse(raw);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return new Date().toISOString();
+}
+
 function slugifyShareValue(value: string, fallback = 'shared-note'): string {
   return value
     .normalize('NFKD')
@@ -287,7 +299,7 @@ function buildSharedImageNote(input: {
 }
 
 export async function importVaultSharedItem(input: VaultKnowledgeShareImportInput): Promise<VaultKnowledgeShareImportResult> {
-  const createdAt = normalizeShareString(input.createdAt) ?? new Date().toISOString();
+  const createdAt = normalizeShareTimestamp(input.createdAt);
   mkdirSync(input.targetDirAbs, { recursive: true });
 
   let title: string;
