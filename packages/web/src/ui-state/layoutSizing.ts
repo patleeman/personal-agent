@@ -31,7 +31,7 @@ interface RailLayoutPrefs {
 }
 
 export function clampPanelWidth(width: number, min: number, max: number): number {
-  if (!Number.isSafeInteger(Math.round(width))) {
+  if (!Number.isSafeInteger(width)) {
     return min;
   }
 

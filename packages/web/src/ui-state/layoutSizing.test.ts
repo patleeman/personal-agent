@@ -8,6 +8,7 @@ describe('layout sizing helpers', () => {
     expect(clampPanelWidth(900, 220, 700)).toBe(700);
     expect(clampPanelWidth(Number.NaN, 220, 700)).toBe(220);
     expect(clampPanelWidth(Number.MAX_SAFE_INTEGER + 1, 220, Number.MAX_SAFE_INTEGER + 2)).toBe(220);
+    expect(clampPanelWidth(480.5, 220, 700)).toBe(220);
   });
 
   it('returns per-route rail preferences', () => {
