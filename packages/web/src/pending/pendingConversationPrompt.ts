@@ -164,7 +164,8 @@ function normalizePendingPromptImagePreviewUrl(value: unknown): string | undefin
     return undefined;
   }
 
-  return previewUrl.startsWith('blob:') || previewUrl.toLowerCase().startsWith('data:image/')
+  const lowerPreviewUrl = previewUrl.toLowerCase();
+  return previewUrl.startsWith('blob:') || (lowerPreviewUrl.startsWith('data:image/') && lowerPreviewUrl.includes(';base64,'))
     ? previewUrl
     : undefined;
 }

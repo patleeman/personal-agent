@@ -91,6 +91,7 @@ describe('pendingConversationPrompt helpers', () => {
       images: [
         { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
         { mimeType: 'image/png', data: 'aGVsbG8=', name: 'unsafe-preview.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain-data-url.png', previewUrl: 'data:image/png,aGVsbG8=' },
         { mimeType: '', data: 'missing-mime' },
         { mimeType: 'image/png', data: '' },
         { mimeType: 'image/png', data: '   ' },
@@ -105,6 +106,7 @@ describe('pendingConversationPrompt helpers', () => {
       images: [
         { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
         { mimeType: 'image/png', data: 'aGVsbG8=', name: 'unsafe-preview.png' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain-data-url.png' },
       ],
       attachmentRefs: [],
     });
