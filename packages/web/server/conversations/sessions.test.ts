@@ -856,6 +856,18 @@ describe('sessions', () => {
     ]);
   });
 
+  it('falls back for overflowed transcript entry timestamps', () => {
+    expect(buildDisplayBlocksFromEntries([
+      {
+        id: 'overflowed-timestamp',
+        timestamp: '2026-02-31T12:00:00.000Z',
+        message: { role: 'user', content: 'overflowed timestamp' },
+      },
+    ])).toEqual([
+      { type: 'user', id: 'overflowed-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'overflowed timestamp' },
+    ]);
+  });
+
   it('renders hidden related thread context as a visible summary event', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {

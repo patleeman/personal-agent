@@ -280,7 +280,7 @@ let loadedPersistentIndexKey: string | null = null;
 let persistedIndexJson: string | null = null;
 
 const MAX_SESSION_DETAIL_CACHE_ENTRIES = 24;
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/;
 
 // ── Parsing ────────────────────────────────────────────────────────────────────
 
@@ -607,7 +607,8 @@ function normalizeContent(content: unknown): RawContentBlock[] {
 function normalizeTimestamp(timestamp: string | number | undefined): string {
   if (typeof timestamp === 'string' && timestamp.trim()) {
     const normalized = timestamp.trim();
-    const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
+    const match = normalized.match(ISO_TIMESTAMP_PATTERN);
+    const parsed = match && hasValidIsoDateParts(match) ? Date.parse(normalized) : Number.NaN;
     return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date(0).toISOString();
   }
   if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
@@ -615,6 +616,24 @@ function normalizeTimestamp(timestamp: string | number | undefined): string {
     return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString();
   }
   return new Date(0).toISOString();
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function imageMimeType(block: RawContentBlock): string | undefined {
