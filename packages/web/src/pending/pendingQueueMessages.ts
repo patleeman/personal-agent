@@ -54,7 +54,7 @@ export function resolveRestoredQueuedPromptComposerUpdate(input: {
   noticeText: string;
 } {
   const hasRestoredText = input.restoredText.trim().length > 0;
-  const restoredFileCount = Number.isSafeInteger(input.restoredFileCount)
+  const restoredFileCount = Number.isSafeInteger(input.restoredFileCount) && input.restoredFileCount <= 100
     ? Math.max(0, input.restoredFileCount)
     : 0;
   const parts = [
