@@ -88,9 +88,28 @@ function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'l
 function parseSortableTimestamp(value: string | undefined): number {
   if (!value) return 0;
   const normalized = value.trim();
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(normalized)) return 0;
+  const match = normalized.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/);
+  if (!match || !hasValidIsoDateParts(match)) return 0;
   const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 export function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {

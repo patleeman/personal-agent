@@ -478,4 +478,29 @@ describe('sortAutomationRows', () => {
       },
     ]).map((task) => task.id)).toEqual(['good-time', 'bad-time']);
   });
+
+  it('sorts overflowed last run timestamps after valid timestamps', () => {
+    expect(sortAutomationRows([
+      {
+        id: 'bad-time',
+        title: 'Bad time',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        cron: '0 9 * * *',
+        prompt: 'bad',
+        lastRunAt: '2026-02-31T00:00:00.000Z',
+      },
+      {
+        id: 'good-time',
+        title: 'Good time',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        cron: '0 9 * * *',
+        prompt: 'good',
+        lastRunAt: '2026-03-01T00:00:00.000Z',
+      },
+    ]).map((task) => task.id)).toEqual(['good-time', 'bad-time']);
+  });
 });
