@@ -104,6 +104,10 @@ export function parseOptionalFiniteNumber(value: string, label: string): number 
     return undefined;
   }
 
+  if (!/^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(trimmed)) {
+    throw new Error(`${label} must be a valid number.`);
+  }
+
   const parsed = Number(trimmed);
   if (!Number.isFinite(parsed)) {
     throw new Error(`${label} must be a valid number.`);
