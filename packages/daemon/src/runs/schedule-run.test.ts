@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_LOOP_RETRY,
   deriveResumePolicy,
   deriveRunKind,
   formatDelay,
@@ -130,6 +131,22 @@ describe('resolveLoopOptions', () => {
     expect(result?.maxIterations).toBe(10);
     expect(result?.retry?.attempts).toBe(5);
     expect(result?.retry?.backoff).toBe('exponential'); // default
+  });
+
+  it('caps huge loop iteration and retry attempt counts', () => {
+    expect(resolveLoopOptions({
+      enabled: true,
+      maxIterations: Number.MAX_SAFE_INTEGER,
+      retry: { attempts: Number.MAX_SAFE_INTEGER },
+    })).toEqual({
+      enabled: true,
+      delay: '1h',
+      maxIterations: 1_000,
+      retry: {
+        ...DEFAULT_LOOP_RETRY,
+        attempts: 100,
+      },
+    });
   });
 });
 

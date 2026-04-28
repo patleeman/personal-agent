@@ -187,6 +187,9 @@ export const DEFAULT_LOOP_RETRY = {
   maxDelay: '10m',
 };
 
+const MAX_LOOP_ITERATIONS = 1_000;
+const MAX_LOOP_RETRY_ATTEMPTS = 100;
+
 /**
  * Merge user-provided loop options with defaults.
  */
@@ -195,10 +198,10 @@ export function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined
     return undefined;
   }
   const maxIterations = Number.isSafeInteger(input.maxIterations) && (input.maxIterations as number) > 0
-    ? input.maxIterations
+    ? Math.min(MAX_LOOP_ITERATIONS, input.maxIterations as number)
     : undefined;
   const retryAttempts = Number.isSafeInteger(input.retry?.attempts) && (input.retry?.attempts as number) > 0
-    ? input.retry?.attempts
+    ? Math.min(MAX_LOOP_RETRY_ATTEMPTS, input.retry?.attempts as number)
     : DEFAULT_LOOP_RETRY.attempts;
 
   return {
