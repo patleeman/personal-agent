@@ -50,7 +50,7 @@ function safePath(id: string): string | null {
 }
 
 export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
-  if (!dataUrl.startsWith('data:')) {
+  if (!dataUrl.trim().toLowerCase().startsWith('data:')) {
     throw new Error('dataUrl must be a data: URL');
   }
 
@@ -59,7 +59,7 @@ export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
     throw new Error('dataUrl must contain valid base64 image data');
   }
 
-  const metadata = dataUrl.slice(0, commaIndex).toLowerCase();
+  const metadata = dataUrl.slice(0, commaIndex).trim().toLowerCase();
   if (!metadata.startsWith('data:image/')) {
     throw new Error('dataUrl must be an image data: URL');
   }
@@ -85,7 +85,7 @@ const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'j
 
 function readVaultImageDataUrlMimeType(dataUrl: string): string {
   const commaIndex = dataUrl.indexOf(',');
-  const metadata = commaIndex >= 0 ? dataUrl.slice(0, commaIndex).toLowerCase() : dataUrl.toLowerCase();
+  const metadata = (commaIndex >= 0 ? dataUrl.slice(0, commaIndex) : dataUrl).trim().toLowerCase();
   if (!metadata.startsWith('data:image/')) {
     throw new Error('dataUrl must be an image data: URL');
   }

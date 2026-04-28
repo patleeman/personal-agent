@@ -21,4 +21,11 @@ describe('vaultEditor image uploads', () => {
     expect(buildVaultImageUploadFileName('note.txt', 'data:image/png;base64,aGVsbG8=', 123))
       .toBe('123-note.png');
   });
+
+  it('accepts image data urls with uppercase scheme and mime casing', () => {
+    expect(decodeVaultImageDataUrl('DATA:IMAGE/PNG;BASE64,aGVsbG8=').toString('utf-8'))
+      .toBe('hello');
+    expect(buildVaultImageUploadFileName('note.txt', 'DATA:IMAGE/PNG;BASE64,aGVsbG8=', 123))
+      .toBe('123-note.png');
+  });
 });
