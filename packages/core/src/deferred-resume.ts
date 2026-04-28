@@ -87,12 +87,12 @@ function normalizeKind(value: unknown): DeferredResumeKind {
   return 'continue';
 }
 
-function normalizeAlertLevel(value: unknown): DeferredResumeAlertLevel {
+function normalizeAlertLevel(value: unknown, fallback: DeferredResumeAlertLevel = 'none'): DeferredResumeAlertLevel {
   if (value === 'passive' || value === 'disruptive' || value === 'none') {
     return value;
   }
 
-  return 'none';
+  return fallback;
 }
 
 function normalizeBehavior(value: unknown): DeferredResumeBehavior | undefined {
@@ -124,7 +124,7 @@ function parseDelivery(value: unknown, kind: DeferredResumeKind): DeferredResume
   }
 
   return {
-    alertLevel: normalizeAlertLevel(value.alertLevel),
+    alertLevel: normalizeAlertLevel(value.alertLevel, defaults.alertLevel),
     autoResumeIfOpen: typeof value.autoResumeIfOpen === 'boolean' ? value.autoResumeIfOpen : defaults.autoResumeIfOpen,
     requireAck: typeof value.requireAck === 'boolean' ? value.requireAck : defaults.requireAck,
   };
@@ -501,15 +501,11 @@ export function scheduleDeferredResume(
   },
 ): DeferredResumeRecord {
   const kind = entry.kind ?? 'continue';
-  const defaults = parseDelivery(undefined, kind);
+  const delivery = parseDelivery(entry.delivery, kind);
   const record: DeferredResumeRecord = {
     ...entry,
     kind,
-    delivery: {
-      alertLevel: entry.delivery?.alertLevel ?? defaults.alertLevel,
-      autoResumeIfOpen: entry.delivery?.autoResumeIfOpen ?? defaults.autoResumeIfOpen,
-      requireAck: entry.delivery?.requireAck ?? defaults.requireAck,
-    },
+    delivery,
     status: 'scheduled',
   };
 
@@ -526,16 +522,12 @@ export function createReadyDeferredResume(
   },
 ): DeferredResumeRecord {
   const kind = entry.kind ?? 'continue';
-  const defaults = parseDelivery(undefined, kind);
+  const delivery = parseDelivery(entry.delivery, kind);
   const readyAt = normalizeIsoTimestamp(entry.readyAt ?? entry.dueAt) ?? entry.dueAt;
   const record: DeferredResumeRecord = {
     ...entry,
     kind,
-    delivery: {
-      alertLevel: entry.delivery?.alertLevel ?? defaults.alertLevel,
-      autoResumeIfOpen: entry.delivery?.autoResumeIfOpen ?? defaults.autoResumeIfOpen,
-      requireAck: entry.delivery?.requireAck ?? defaults.requireAck,
-    },
+    delivery,
     status: 'ready',
     readyAt,
   };

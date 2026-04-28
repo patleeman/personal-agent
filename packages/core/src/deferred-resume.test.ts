@@ -122,6 +122,31 @@ describe('deferred resume state', () => {
     expect(removeDeferredResume(state, 'resume-1')).toBe(false);
   });
 
+  it('normalizes invalid delivery options when scheduling resumes', () => {
+    const state = createEmptyDeferredResumeState();
+
+    const scheduled = scheduleDeferredResume(state, {
+      id: 'resume-invalid-delivery',
+      sessionFile: '/tmp/sessions/current.jsonl',
+      prompt: 'continue',
+      dueAt: '2026-03-08T12:00:00.000Z',
+      createdAt: '2026-03-08T11:50:00.000Z',
+      attempts: 0,
+      kind: 'reminder',
+      delivery: {
+        alertLevel: 'loud',
+        autoResumeIfOpen: 'yes',
+        requireAck: 'sure',
+      } as never,
+    });
+
+    expect(scheduled.delivery).toEqual({
+      alertLevel: 'disruptive',
+      autoResumeIfOpen: true,
+      requireAck: true,
+    });
+  });
+
   it('persists normalized state to disk', () => {
     const dir = createTempDir('deferred-resume-save-');
     const stateFile = join(dir, 'state.json');
