@@ -318,26 +318,47 @@ function normalizePromptContextMessages(value: unknown): Array<{ customType: str
   return messages;
 }
 
+function normalizeBase64ImageData(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return undefined;
+  }
+
+  return Buffer.from(normalized, 'base64').length > 0 ? normalized : undefined;
+}
+
 function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
   const images = value
-    .filter((image): image is { data: string; mimeType: string; name?: string } => (
-      !!image
-      && typeof image === 'object'
-      && typeof (image as { data?: unknown }).data === 'string'
-      && (image as { data: string }).data.trim().length > 0
-      && typeof (image as { mimeType?: unknown }).mimeType === 'string'
-      && (image as { mimeType: string }).mimeType.trim().length > 0
-    ))
-    .map((image) => ({
-      type: 'image' as const,
-      data: image.data.trim(),
-      mimeType: image.mimeType.trim(),
-      ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
-    }));
+    .flatMap((image) => {
+      if (!image || typeof image !== 'object') {
+        return [];
+      }
+
+      const data = normalizeBase64ImageData((image as { data?: unknown }).data);
+      const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string'
+        ? (image as { mimeType: string }).mimeType.trim()
+        : '';
+      if (!data || !mimeType) {
+        return [];
+      }
+
+      return [{
+        type: 'image' as const,
+        data,
+        mimeType,
+        ...(typeof (image as { name?: unknown }).name === 'string' && (image as { name: string }).name.trim().length > 0
+          ? { name: (image as { name: string }).name.trim() }
+          : {}),
+      }];
+    });
 
   return images.length > 0 ? images : undefined;
 }
