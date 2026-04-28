@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   normalizePendingQueueItems,
+  normalizeLiveSessionTailBlocks,
   removePendingQueueItemById,
   retryLiveSessionActionAfterTakeover,
   shouldReplaceOptimisticUserBlock,
@@ -30,6 +31,13 @@ function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
     ...overrides,
   };
 }
+
+describe('normalizeLiveSessionTailBlocks', () => {
+  it('drops unsafe live stream tail block limits', () => {
+    expect(normalizeLiveSessionTailBlocks(20)).toBe(20);
+    expect(normalizeLiveSessionTailBlocks(Number.MAX_SAFE_INTEGER + 1)).toBeUndefined();
+  });
+});
 
 describe('userMessageBlocksMatchForStreamDedupe', () => {
   it('requires matching image identity, not just matching image counts', () => {

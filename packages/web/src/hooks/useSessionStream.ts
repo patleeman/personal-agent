@@ -40,6 +40,12 @@ export interface StreamState {
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
+export function normalizeLiveSessionTailBlocks(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 function createEmptyLiveSessionPresenceState(): LiveSessionPresenceState {
   return {
     surfaces: [],
@@ -700,8 +706,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
 
     function connect() {
       const params = new URLSearchParams();
-      if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
-        params.set('tailBlocks', String(options.tailBlocks));
+      const tailBlocks = normalizeLiveSessionTailBlocks(options?.tailBlocks);
+      if (tailBlocks !== undefined) {
+        params.set('tailBlocks', String(tailBlocks));
       }
       if (registerSurface) {
         params.set('surfaceId', surfaceId);
