@@ -196,6 +196,12 @@ function normalizeTailBlocksParam(value: unknown): number | undefined {
     : undefined;
 }
 
+export function normalizeDurableRunLogTailParam(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(1000, value)
+    : undefined;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => get<AppStatus>('/status'),
@@ -509,7 +515,10 @@ export const api = {
   },
   runs: async () => get<DurableRunListResult>('/runs'),
   durableRun: async (id: string) => get<DurableRunDetailResult>(`/runs/${encodeURIComponent(id)}`),
-  durableRunLog: async (id: string, tail?: number) => get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${tail ? `?tail=${encodeURIComponent(String(tail))}` : ''}`),
+  durableRunLog: async (id: string, tail?: number) => {
+    const normalizedTail = normalizeDurableRunLogTailParam(tail);
+    return get<{ log: string; path: string }>(`/runs/${encodeURIComponent(id)}/log${normalizedTail ? `?tail=${encodeURIComponent(String(normalizedTail))}` : ''}`);
+  },
   markDurableRunAttentionRead: async (id: string, read = true) => {
     const desktopBridge = getDesktopBridge();
     if (desktopBridge && await shouldUseDesktopLocalCapabilities()) {
