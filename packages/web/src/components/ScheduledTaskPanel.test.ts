@@ -30,6 +30,7 @@ describe('ScheduledTaskPanel status presentation', () => {
 describe('ScheduledTaskPanel editor capabilities', () => {
   it('rejects unsafe catch-up window minute values', () => {
     expect(parseCatchUpWindowMinutes(String(Number.MAX_SAFE_INTEGER + 1))).toBeNaN();
+    expect(parseCatchUpWindowMinutes(String(Math.floor(Number.MAX_SAFE_INTEGER / 60) + 1))).toBeNaN();
   });
 
   it('allows thread automations to choose a model', () => {

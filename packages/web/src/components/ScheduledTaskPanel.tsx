@@ -159,7 +159,7 @@ export function parseCatchUpWindowMinutes(value: string): number | undefined {
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 && Number.isSafeInteger(parsed * 60) ? parsed : Number.NaN;
 }
 
 function formatCatchUpWindowLabel(seconds: number | undefined): string {
