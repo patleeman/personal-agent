@@ -131,4 +131,8 @@ describe('DesktopCompanionSettingsPanel', () => {
     expect(formatCompanionTimestamp('1')).toBe('1');
     expect(formatCompanionTimestamp('9999')).toBe('9999');
   });
+
+  it('does not format overflowed companion timestamps as dates', () => {
+    expect(formatCompanionTimestamp('2026-04-31T09:00:00.000Z')).toBe('2026-04-31T09:00:00.000Z');
+  });
 });
