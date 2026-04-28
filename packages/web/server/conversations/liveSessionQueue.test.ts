@@ -73,6 +73,22 @@ describe('liveSessionQueue', () => {
     expect(isVisibleQueueFallbackPreviewId('steer', 'steer-visible-0')).toBe(true);
   });
 
+  it('drops malformed queued prompt image attachments when restoring content', () => {
+    const extracted = extractQueuedPromptContent({
+      role: 'user',
+      content: [
+        { type: 'image', data: 'abc', mimeType: ' image/png ', name: ' shot.png ' },
+        { type: 'image', data: '', mimeType: 'image/png' },
+        { type: 'image', data: 'missing-mime', mimeType: '' },
+      ],
+    }, 'fallback');
+
+    expect(extracted).toEqual({
+      text: 'fallback',
+      images: [{ type: 'image', data: 'abc', mimeType: 'image/png', name: 'shot.png' }],
+    });
+  });
+
   it('restores by preview id without removing the wrong visible queued prompt when the index is stale', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = [
