@@ -12,6 +12,8 @@ import {
   type StoredAutomation,
 } from '@personal-agent/daemon';
 
+const MAX_SCHEDULED_TASK_DURATION_SECONDS = 7 * 24 * 60 * 60;
+
 export interface TaskRuntimeEntry {
   id?: string;
   filePath: string;
@@ -289,14 +291,14 @@ export function buildScheduledTaskMarkdown(input: {
   }
 
   if (input.timeoutSeconds !== undefined && input.timeoutSeconds !== null) {
-    if (!Number.isSafeInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0) {
+    if (!Number.isSafeInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0 || input.timeoutSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS) {
       throw new Error('timeoutSeconds must be a positive integer.');
     }
     lines.push(`timeoutSeconds: ${input.timeoutSeconds}`);
   }
 
   if (input.catchUpWindowSeconds !== undefined && input.catchUpWindowSeconds !== null) {
-    if (!Number.isSafeInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0) {
+    if (!Number.isSafeInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0 || input.catchUpWindowSeconds > MAX_SCHEDULED_TASK_DURATION_SECONDS) {
       throw new Error('catchUpWindowSeconds must be a positive integer.');
     }
     lines.push(`catchUpWindowSeconds: ${input.catchUpWindowSeconds}`);

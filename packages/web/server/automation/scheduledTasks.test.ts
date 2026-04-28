@@ -163,11 +163,29 @@ describe('scheduledTasks', () => {
     })).toThrow('timeoutSeconds must be a positive integer.');
 
     expect(() => buildScheduledTaskMarkdown({
+      taskId: 'huge-timeout',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: Number.MAX_SAFE_INTEGER,
+      prompt: 'Run maintenance.',
+    })).toThrow('timeoutSeconds must be a positive integer.');
+
+    expect(() => buildScheduledTaskMarkdown({
       taskId: 'unsafe-catch-up',
       profile: 'assistant',
       enabled: true,
       cron: '0 * * * *',
       catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
+      prompt: 'Run maintenance.',
+    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'huge-catch-up',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER,
       prompt: 'Run maintenance.',
     })).toThrow('catchUpWindowSeconds must be a positive integer.');
   });
