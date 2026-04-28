@@ -293,12 +293,17 @@ function messageBlockImagesMatch(
 
       const previousSrc = previousImage.src ?? '';
       const nextSrc = image.src ?? '';
-      const bridgesPreviewToTranscriptData = (previousSrc.startsWith('blob:') && nextSrc.startsWith('data:'))
-        || (previousSrc.startsWith('data:') && nextSrc.startsWith('blob:'));
+      const bridgesPreviewToTranscriptData = (previousSrc.startsWith('blob:') && isImageBase64DataUrl(nextSrc))
+        || (isImageBase64DataUrl(previousSrc) && nextSrc.startsWith('blob:'));
       return bridgesPreviewToTranscriptData
         && previousImage.mimeType === image.mimeType
         && previousImage.caption === image.caption;
     });
+}
+
+function isImageBase64DataUrl(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  return normalized.startsWith('data:image/') && normalized.includes(';base64,');
 }
 
 export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | undefined, next: MessageBlock): boolean {
