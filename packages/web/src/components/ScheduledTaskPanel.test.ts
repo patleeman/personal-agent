@@ -31,10 +31,12 @@ describe('ScheduledTaskPanel editor capabilities', () => {
   it('rejects unsafe catch-up window minute values', () => {
     expect(parseCatchUpWindowMinutes(String(Number.MAX_SAFE_INTEGER + 1))).toBeNaN();
     expect(parseCatchUpWindowMinutes(String(Math.floor(Number.MAX_SAFE_INTEGER / 60) + 1))).toBeNaN();
+    expect(parseCatchUpWindowMinutes('10081')).toBeNaN();
   });
 
   it('treats unsafe persisted catch-up windows as disabled', () => {
     expect(formatCatchUpWindowLabel(Number.MAX_SAFE_INTEGER + 1)).toBe('Disabled');
+    expect(formatCatchUpWindowLabel((7 * 24 * 60 * 60) + 60)).toBe('Disabled');
     expect(formatCatchUpWindowLabel(90.5)).toBe('Disabled');
   });
 

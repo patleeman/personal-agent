@@ -32,6 +32,8 @@ const INLINE_INPUT_CLASS = INLINE_FIELD_CLASS;
 const INLINE_SELECT_CLASS = `${INLINE_FIELD_CLASS} appearance-none pr-6`;
 const FIELD_LABEL_CLASS = 'text-[11px] font-semibold uppercase tracking-[0.14em] text-dim';
 const FIELD_HELP_CLASS = 'text-[12px] leading-relaxed text-secondary';
+const MAX_SCHEDULED_TASK_DURATION_SECONDS = 7 * 24 * 60 * 60;
+const MAX_CATCH_UP_WINDOW_MINUTES = MAX_SCHEDULED_TASK_DURATION_SECONDS / 60;
 
 interface TaskFormState {
   title: string;
@@ -159,11 +161,11 @@ export function parseCatchUpWindowMinutes(value: string): number | undefined {
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  return Number.isSafeInteger(parsed) && parsed > 0 && Number.isSafeInteger(parsed * 60) ? parsed : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= MAX_CATCH_UP_WINDOW_MINUTES ? parsed : Number.NaN;
 }
 
 export function formatCatchUpWindowLabel(seconds: number | undefined): string {
-  if (!Number.isSafeInteger(seconds) || !seconds || seconds <= 0) {
+  if (!Number.isSafeInteger(seconds) || !seconds || seconds <= 0 || seconds > MAX_SCHEDULED_TASK_DURATION_SECONDS) {
     return 'Disabled';
   }
 
