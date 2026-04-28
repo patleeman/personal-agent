@@ -489,6 +489,44 @@ describe('sessions', () => {
     }));
   });
 
+  it('keeps user image asset indexes aligned when malformed image blocks are skipped', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-mixed-images.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-mixed-images', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-mixed-images-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Here is a valid image after a bad one' },
+            { type: 'image', data: '   ', mimeType: 'image/png', name: 'bad.png' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+          ],
+        },
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-mixed-images');
+    const userBlock = detail?.blocks.find((block) => block.type === 'user');
+    expect(userBlock).toEqual(expect.objectContaining({
+      type: 'user',
+      images: [expect.objectContaining({ src: `/api/sessions/session-mixed-images/blocks/${userBlock?.id}/images/0` })],
+    }));
+    expect(userBlock ? readSessionImageAsset('session-mixed-images', userBlock.id, 0) : null).toEqual(expect.objectContaining({
+      mimeType: 'image/png',
+      fileName: 'hello.png',
+      data: Buffer.from('aGVsbG8=', 'base64'),
+    }));
+  });
+
   it('defers heavy tool output and image payloads in partial archived transcript loads', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

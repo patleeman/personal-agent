@@ -2323,15 +2323,27 @@ export function readSessionBlock(sessionId: string, blockId: string): DisplayBlo
 
 function buildSessionImageAsset(block: RawContentBlock): { mimeType: string; data: Buffer; fileName?: string } | null {
   const mimeType = imageMimeType(block);
-  if (!mimeType || !block.data) {
+  const data = typeof block.data === 'string' ? block.data.trim() : '';
+  if (!mimeType || !data) {
     return null;
   }
 
   return {
     mimeType,
-    data: Buffer.from(block.data, 'base64'),
+    data: Buffer.from(data, 'base64'),
     fileName: typeof block.name === 'string' && block.name.trim().length > 0 ? block.name.trim() : undefined,
   };
+}
+
+function buildSessionImageAssets(blocks: RawContentBlock[]): Array<{ block: RawContentBlock; asset: { mimeType: string; data: Buffer; fileName?: string } }> {
+  return blocks.flatMap((block) => {
+    if (block.type !== 'image') {
+      return [];
+    }
+
+    const asset = buildSessionImageAsset(block);
+    return asset ? [{ block, asset }] : [];
+  });
 }
 
 export function readSessionImageAsset(
@@ -2356,22 +2368,21 @@ export function readSessionImageAsset(
         return null;
       }
 
-      const images = contentBlocks.filter((block) => block.type === 'image');
-      const image = images[imageIndex];
-      return image ? buildSessionImageAsset(image) : null;
+      const image = buildSessionImageAssets(contentBlocks)[imageIndex];
+      return image?.asset ?? null;
     }
 
     if (entry.message.role !== 'toolResult') {
       continue;
     }
 
-    const images = contentBlocks.filter((block) => block.type === 'image');
+    const images = buildSessionImageAssets(contentBlocks);
     for (const [candidateIndex, image] of images.entries()) {
       if (`${entry.id}-i${candidateIndex}` !== blockId) {
         continue;
       }
 
-      return buildSessionImageAsset(image);
+      return image.asset;
     }
   }
 
