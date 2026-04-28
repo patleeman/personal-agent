@@ -1,5 +1,7 @@
 import type { ModelProviderConfig, ModelProviderModelConfig } from '../shared/types';
 
+const MAX_MODEL_TOKEN_LIMIT = 10_000_000;
+
 export interface ProviderEditorDraft {
   id: string;
   baseUrl: string;
@@ -122,7 +124,7 @@ export function parseOptionalPositiveInteger(value: string, label: string): numb
     return undefined;
   }
 
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0 || parsed > MAX_MODEL_TOKEN_LIMIT) {
     throw new Error(`${label} must be a positive integer.`);
   }
 
