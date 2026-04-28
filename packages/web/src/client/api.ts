@@ -202,6 +202,12 @@ export function normalizeDurableRunLogTailParam(value: unknown): number | undefi
     : undefined;
 }
 
+export function normalizeConversationContentSearchLimit(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(100, value)
+    : 80;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => get<AppStatus>('/status'),
@@ -238,7 +244,7 @@ export const api = {
   },
   sessionBlock: async (id: string, blockId: string) => get<DisplayBlock>(`/sessions/${encodeURIComponent(id)}/blocks/${encodeURIComponent(blockId)}`),
   sessionSearchIndex: async (sessionIds: string[]) => post<{ index: Record<string, string> }>('/sessions/search-index', { sessionIds }),
-  conversationContentSearch: async (query: string, limit = 80) => post<ConversationContentSearchResult>('/sessions/search', { query, limit }),
+  conversationContentSearch: async (query: string, limit = 80) => post<ConversationContentSearchResult>('/sessions/search', { query, limit: normalizeConversationContentSearchLimit(limit) }),
   conversationSummaries: async (sessionIds: string[]) => post<{ summaries: Record<string, ConversationSummaryRecord> }>('/conversation-summaries', { sessionIds }),
   skillFolders: async () => get<SkillFoldersState>('/skill-folders'),
   updateSkillFolders: async (skillDirs: string[]) => patch<SkillFoldersState>('/skill-folders', { skillDirs }),
