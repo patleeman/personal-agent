@@ -82,6 +82,10 @@ function resolveScheduledAt(input: { defer?: string; at?: string }): string | un
     return undefined;
   }
 
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(input.at)) {
+    throw new Error(`Invalid at timestamp: ${input.at}`);
+  }
+
   const atMs = Date.parse(input.at);
   if (!Number.isFinite(atMs)) {
     throw new Error(`Invalid at timestamp: ${input.at}`);

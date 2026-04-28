@@ -329,6 +329,29 @@ describe('run agent extension', () => {
     }
   });
 
+  it('rejects malformed scheduled agent at timestamps', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'monitor-build',
+        prompt: 'Watch the deployment and report back.',
+        at: '9999',
+      },
+      undefined,
+      undefined,
+      createToolContext('conv-loop', ''),
+    );
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0]?.text).toContain('Invalid at timestamp: 9999');
+    expect(createStoredAutomationMock).not.toHaveBeenCalled();
+    expect(startBackgroundRunMock).not.toHaveBeenCalled();
+  });
+
   it('binds scheduled automations back to the current conversation when requested', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-10T08:00:00Z'));
