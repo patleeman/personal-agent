@@ -855,8 +855,8 @@ export function listAutomationActivityEntries(
 ): AutomationActivityEntry[] {
   const normalizedAutomationId = readRequiredString(automationId, 'automationId');
   const db = openAutomationDb(options.dbPath);
-  const limit = Number.isInteger(options.limit) && Number(options.limit) > 0
-    ? Math.min(200, Number(options.limit))
+  const limit = typeof options.limit === 'number' && Number.isSafeInteger(options.limit) && options.limit > 0
+    ? Math.min(200, options.limit)
     : 20;
   const rows = db.prepare(`
     SELECT seq, automation_id, kind, created_at, payload_json
