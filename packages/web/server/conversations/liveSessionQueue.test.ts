@@ -89,6 +89,15 @@ describe('liveSessionQueue', () => {
     });
   });
 
+  it('falls back to visible queued text when internal queued text is blank', () => {
+    const extracted = extractQueuedPromptContent({
+      role: 'user',
+      content: [{ type: 'text', text: '   ' }],
+    }, 'visible fallback');
+
+    expect(extracted).toEqual({ text: 'visible fallback', images: [] });
+  });
+
   it('restores by preview id without removing the wrong visible queued prompt when the index is stale', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steeringQueue = [

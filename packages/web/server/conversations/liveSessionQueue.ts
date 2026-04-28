@@ -270,8 +270,10 @@ export function extractQueuedPromptContent(
     }
   }
 
+  const text = textParts.join('');
+
   return {
-    text: textParts.join('') || fallbackText,
+    text: text.trim().length > 0 ? text : fallbackText,
     images,
   };
 }
