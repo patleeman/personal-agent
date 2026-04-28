@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
+  pruneRelatedThreadSelectionIds,
   resolveRelatedThreadPreselectionUpdate,
+  selectMissingRelatedThreadSearchIndexIds,
+  selectMissingRelatedThreadSummaryIds,
   selectVisibleRelatedThreadResults,
   toggleRelatedThreadSelectionIds,
 } from './relatedThreadSelection';
@@ -97,6 +100,49 @@ describe('related thread selection helpers', () => {
       sessionId: 'c',
       maxSelections: 2,
     })).toEqual({ next: ['a', 'b'], rejected: true });
+  });
+
+  it('keeps selected related threads constrained to available candidates', () => {
+    expect(pruneRelatedThreadSelectionIds(
+      ['a', 'missing', 'b'],
+      new Map([['a', session('a')], ['b', session('b')]]),
+    )).toEqual(['a', 'b']);
+  });
+
+  it('selects missing related-thread search and summary metadata ids', () => {
+    expect(selectMissingRelatedThreadSearchIndexIds({
+      draft: true,
+      inputText: 'find context',
+      selectedThreadIds: [],
+      candidateIds: ['a', 'b', 'c'],
+      searchIndex: { a: 'indexed', c: '' },
+    })).toEqual(['b']);
+
+    expect(selectMissingRelatedThreadSearchIndexIds({
+      draft: true,
+      inputText: ' ',
+      selectedThreadIds: [],
+      candidateIds: ['a'],
+      searchIndex: {},
+    })).toEqual([]);
+
+    expect(selectMissingRelatedThreadSummaryIds({
+      draft: true,
+      candidateIds: ['a', 'b'],
+      summaries: {
+        a: {
+          sessionId: 'a',
+          displaySummary: 'A summary',
+          generatedAt: '2026-04-01T00:00:00.000Z',
+        },
+      },
+    })).toEqual(['b']);
+
+    expect(selectMissingRelatedThreadSummaryIds({
+      draft: false,
+      candidateIds: ['a'],
+      summaries: {},
+    })).toEqual([]);
   });
 
   it('auto-selects, preserves manual choices, and clears stale related-thread preselection', () => {

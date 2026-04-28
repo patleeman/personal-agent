@@ -92,6 +92,43 @@ export function toggleRelatedThreadSelectionIds(input: {
   return { next: [...input.current, input.sessionId], rejected: false };
 }
 
+export function pruneRelatedThreadSelectionIds(
+  current: string[],
+  candidateById: ReadonlyMap<string, unknown>,
+): string[] {
+  return current.filter((sessionId) => candidateById.has(sessionId));
+}
+
+export function selectMissingRelatedThreadSearchIndexIds(input: {
+  draft: boolean;
+  inputText: string;
+  selectedThreadIds: string[];
+  candidateIds: string[];
+  searchIndex: Record<string, string>;
+}): string[] {
+  if (
+    !input.draft
+    || (input.inputText.trim().length === 0 && input.selectedThreadIds.length === 0)
+    || input.candidateIds.length === 0
+  ) {
+    return [];
+  }
+
+  return input.candidateIds.filter((sessionId) => input.searchIndex[sessionId] === undefined);
+}
+
+export function selectMissingRelatedThreadSummaryIds(input: {
+  draft: boolean;
+  candidateIds: string[];
+  summaries: Record<string, ConversationSummaryRecord>;
+}): string[] {
+  if (!input.draft || input.candidateIds.length === 0) {
+    return [];
+  }
+
+  return input.candidateIds.filter((sessionId) => input.summaries[sessionId] === undefined);
+}
+
 export function resolveRelatedThreadPreselectionUpdate(input: {
   draft: boolean;
   query: string;

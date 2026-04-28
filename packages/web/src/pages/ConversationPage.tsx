@@ -208,7 +208,14 @@ import { closeConversationTab, ensureConversationTabOpen } from '../session/sess
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
 import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
-import { resolveRelatedThreadPreselectionUpdate, selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } from '../conversation/relatedThreadSelection';
+import {
+  pruneRelatedThreadSelectionIds,
+  resolveRelatedThreadPreselectionUpdate,
+  selectMissingRelatedThreadSearchIndexIds,
+  selectMissingRelatedThreadSummaryIds,
+  selectVisibleRelatedThreadResults,
+  toggleRelatedThreadSelectionIds,
+} from '../conversation/relatedThreadSelection';
 import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
@@ -2105,7 +2112,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [input]);
 
   useEffect(() => {
-    setSelectedRelatedThreadIds((current) => current.filter((sessionId) => relatedThreadCandidateById.has(sessionId)));
+    setSelectedRelatedThreadIds((current) => pruneRelatedThreadSelectionIds(current, relatedThreadCandidateById));
   }, [relatedThreadCandidateById]);
 
   useRelatedThreadHotkeys({
@@ -2115,13 +2122,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
 
   useEffect(() => {
-    if (!draft || (input.trim().length === 0 && selectedRelatedThreadIds.length === 0) || relatedThreadCandidateIds.length === 0) {
-      setRelatedThreadSearchLoading(false);
-      setRelatedThreadSearchError(null);
-      return;
-    }
-
-    const missingSessionIds = relatedThreadCandidateIds.filter((sessionId) => relatedThreadSearchIndex[sessionId] === undefined);
+    const missingSessionIds = selectMissingRelatedThreadSearchIndexIds({
+      draft,
+      inputText: input,
+      selectedThreadIds: selectedRelatedThreadIds,
+      candidateIds: relatedThreadCandidateIds,
+      searchIndex: relatedThreadSearchIndex,
+    });
     if (missingSessionIds.length === 0) {
       setRelatedThreadSearchLoading(false);
       setRelatedThreadSearchError(null);
@@ -2162,11 +2169,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, input, relatedThreadCandidateIds, relatedThreadSearchIndex, selectedRelatedThreadIds.length]);
 
   useEffect(() => {
-    if (!draft || relatedThreadCandidateIds.length === 0) {
-      return;
-    }
-
-    const missingSessionIds = relatedThreadCandidateIds.filter((sessionId) => relatedThreadSummaries[sessionId] === undefined);
+    const missingSessionIds = selectMissingRelatedThreadSummaryIds({
+      draft,
+      candidateIds: relatedThreadCandidateIds,
+      summaries: relatedThreadSummaries,
+    });
     if (missingSessionIds.length === 0) {
       return;
     }
