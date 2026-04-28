@@ -1,5 +1,19 @@
 import { useEffect, useState } from 'react';
 
+export function resolveVisualViewportKeyboardInset(input: {
+  innerHeight: number;
+  viewportHeight: number;
+  viewportOffsetTop: number;
+}): number {
+  const { innerHeight, viewportHeight, viewportOffsetTop } = input;
+  if (![innerHeight, viewportHeight, viewportOffsetTop].every(Number.isFinite)) {
+    return 0;
+  }
+
+  const rounded = Math.round(innerHeight - (viewportHeight + viewportOffsetTop));
+  return Number.isSafeInteger(rounded) ? Math.max(0, rounded) : 0;
+}
+
 export function useVisualViewportKeyboardInset(): number {
   const [keyboardInset, setKeyboardInset] = useState(0);
 
@@ -11,10 +25,11 @@ export function useVisualViewportKeyboardInset(): number {
         return;
       }
 
-      const nextInset = Math.max(
-        0,
-        Math.round(window.innerHeight - (visualViewport.height + visualViewport.offsetTop)),
-      );
+      const nextInset = resolveVisualViewportKeyboardInset({
+        innerHeight: window.innerHeight,
+        viewportHeight: visualViewport.height,
+        viewportOffsetTop: visualViewport.offsetTop,
+      });
       setKeyboardInset((current) => (current === nextInset ? current : nextInset));
     };
 
