@@ -71,4 +71,16 @@ describe('localApiStreams', () => {
 
     expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), {});
   });
+
+  it('caps live stream tailBlocks before subscribing', async () => {
+    const unsubscribe = vi.fn();
+    subscribeLiveSessionMock.mockReturnValue(unsubscribe);
+
+    await subscribeDesktopLocalApiStreamByUrl(
+      new URL('http://local.test/api/live-sessions/session-1/events?tailBlocks=5000'),
+      vi.fn(),
+    );
+
+    expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), { tailBlocks: 1000 });
+  });
 });

@@ -8,6 +8,8 @@ import { subscribe as subscribeLiveSession } from '../conversations/liveSessions
 import { subscribeProviderOAuthLogin } from '../models/providerAuth.js';
 import type { DisplayBlock } from '../conversations/sessions.js';
 
+const MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS = 1000;
+
 export type DesktopLocalApiStreamEvent =
   | { type: 'open' }
   | { type: 'message'; data: string }
@@ -59,7 +61,9 @@ async function subscribeDesktopLiveSessionStream(
     throw new Error('Live session id is required.');
   }
 
-  const tailBlocks = parsePositiveInteger(url.searchParams.get('tailBlocks'));
+  const tailBlocks = parsePositiveInteger(url.searchParams.get('tailBlocks'), {
+    maximum: MAX_DESKTOP_LOCAL_API_STREAM_TAIL_BLOCKS,
+  });
   const surfaceId = url.searchParams.get('surfaceId')?.trim() ?? '';
   const surfaceType = url.searchParams.get('surfaceType') === 'mobile_web'
     ? 'mobile_web'
