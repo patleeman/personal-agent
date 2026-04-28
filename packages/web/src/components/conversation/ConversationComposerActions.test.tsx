@@ -13,6 +13,7 @@ const baseProps: React.ComponentProps<typeof ConversationComposerActions> = {
   composerHasContent: false,
   composerShowsQuestionSubmit: false,
   composerQuestionCanSubmit: false,
+  composerQuestionRemainingCount: 0,
   composerQuestionSubmitting: false,
   composerSubmitLabel: 'Send',
   composerAltHeld: false,
@@ -66,5 +67,16 @@ describe('ConversationComposerActions', () => {
     expect(html).toContain('Transcribing…');
     expect(html).toContain('Submitting…');
     expect(html).toContain('aria-label="Submit answers"');
+  });
+
+  it('shows why question submit is disabled when answers are missing', () => {
+    const html = renderActions({
+      composerShowsQuestionSubmit: true,
+      composerQuestionCanSubmit: false,
+      composerQuestionRemainingCount: 2,
+    });
+
+    expect(html).toContain('2 left');
+    expect(html).toContain('Answer 2 more questions to submit');
   });
 });

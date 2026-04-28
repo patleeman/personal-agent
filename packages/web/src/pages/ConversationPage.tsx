@@ -2784,6 +2784,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const composerQuestionCanSubmit = pendingAskUserQuestion
     ? isAskUserQuestionComplete(pendingAskUserQuestion.presentation, composerQuestionAnswers)
     : false;
+  const composerQuestionRemainingCount = pendingAskUserQuestion
+    ? Math.max(0, pendingAskUserQuestion.presentation.questions.length - composerQuestionAnsweredCount)
+    : 0;
 
   const activateComposerQuestion = useCallback((index: number) => {
     if (!pendingAskUserQuestion) {
@@ -5797,6 +5800,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               composerHasContent={composerHasContent}
               composerShowsQuestionSubmit={composerShowsQuestionSubmit}
               composerQuestionCanSubmit={composerQuestionCanSubmit}
+              composerQuestionRemainingCount={composerQuestionRemainingCount}
               composerQuestionSubmitting={composerQuestionSubmitting}
               composerSubmitLabel={composerSubmit.label}
               composerAltHeld={composerAltHeld}

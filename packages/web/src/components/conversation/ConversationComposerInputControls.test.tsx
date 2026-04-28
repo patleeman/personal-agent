@@ -39,6 +39,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       composerHasContent={false}
       composerShowsQuestionSubmit={false}
       composerQuestionCanSubmit={false}
+      composerQuestionRemainingCount={0}
       composerQuestionSubmitting={false}
       composerSubmitLabel="Send"
       composerAltHeld={false}

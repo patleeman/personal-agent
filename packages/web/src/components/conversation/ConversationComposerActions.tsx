@@ -13,6 +13,7 @@ export function ConversationComposerActions({
   composerHasContent,
   composerShowsQuestionSubmit,
   composerQuestionCanSubmit,
+  composerQuestionRemainingCount,
   composerQuestionSubmitting,
   composerSubmitLabel,
   composerAltHeld,
@@ -31,6 +32,7 @@ export function ConversationComposerActions({
   composerHasContent: boolean;
   composerShowsQuestionSubmit: boolean;
   composerQuestionCanSubmit: boolean;
+  composerQuestionRemainingCount: number;
   composerQuestionSubmitting: boolean;
   composerSubmitLabel: ConversationComposerSubmitLabel;
   composerAltHeld: boolean;
@@ -125,12 +127,19 @@ export function ConversationComposerActions({
           type="button"
           onClick={onSubmitComposerQuestion}
           disabled={composerDisabled || !composerQuestionCanSubmit || composerQuestionSubmitting}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-full bg-accent px-3 text-[11px] font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-default disabled:opacity-40"
-          title={composerQuestionCanSubmit ? 'Submit answers' : 'Answer all questions to submit'}
+          className={cx(
+            'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium transition-colors disabled:cursor-default',
+            composerQuestionCanSubmit && !composerQuestionSubmitting
+              ? 'bg-accent text-white hover:bg-accent/90'
+              : 'bg-elevated text-dim',
+          )}
+          title={composerQuestionCanSubmit
+            ? 'Submit answers'
+            : `Answer ${composerQuestionRemainingCount} more ${composerQuestionRemainingCount === 1 ? 'question' : 'questions'} to submit`}
           aria-label="Submit answers"
         >
           <span aria-hidden="true">✓</span>
-          <span>{composerQuestionSubmitting ? 'Submitting…' : 'Submit'}</span>
+          <span>{composerQuestionSubmitting ? 'Submitting…' : composerQuestionCanSubmit ? 'Submit' : `${composerQuestionRemainingCount} left`}</span>
         </button>
       ) : composerHasContent ? (
         <button

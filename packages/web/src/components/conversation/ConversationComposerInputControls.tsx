@@ -28,6 +28,7 @@ export function ConversationComposerInputControls({
   composerHasContent,
   composerShowsQuestionSubmit,
   composerQuestionCanSubmit,
+  composerQuestionRemainingCount,
   composerQuestionSubmitting,
   composerSubmitLabel,
   composerAltHeld,
@@ -73,6 +74,7 @@ export function ConversationComposerInputControls({
   composerHasContent: boolean;
   composerShowsQuestionSubmit: boolean;
   composerQuestionCanSubmit: boolean;
+  composerQuestionRemainingCount: number;
   composerQuestionSubmitting: boolean;
   composerSubmitLabel: ConversationComposerSubmitLabel;
   composerAltHeld: boolean;
@@ -211,6 +213,7 @@ export function ConversationComposerInputControls({
             composerHasContent={composerHasContent}
             composerShowsQuestionSubmit={composerShowsQuestionSubmit}
             composerQuestionCanSubmit={composerQuestionCanSubmit}
+            composerQuestionRemainingCount={composerQuestionRemainingCount}
             composerQuestionSubmitting={composerQuestionSubmitting}
             composerSubmitLabel={composerSubmitLabel}
             composerAltHeld={composerAltHeld}
