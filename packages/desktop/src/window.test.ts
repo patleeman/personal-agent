@@ -158,6 +158,30 @@ describe('window desktop navigation helpers', () => {
     });
   });
 
+  it('falls back from unsafe saved window bounds', () => {
+    expect(constrainDesktopWindowBounds(
+      {
+        x: Number.MAX_SAFE_INTEGER + 1,
+        y: 40,
+        width: Number.MAX_SAFE_INTEGER + 1,
+        height: 700,
+      },
+      [
+        {
+          x: 0,
+          y: 0,
+          width: 1512,
+          height: 982,
+        },
+      ],
+    )).toEqual({
+      x: 36,
+      y: 141,
+      width: 1440,
+      height: 700,
+    });
+  });
+
   it('preserves visible bounds and offsets remote windows without leaving the display', () => {
     expect(constrainDesktopWindowBounds(
       {

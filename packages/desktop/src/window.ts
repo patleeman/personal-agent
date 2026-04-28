@@ -148,36 +148,47 @@ function centerBoundsInArea(bounds: DesktopWindowBounds, area: DesktopRectangle)
   };
 }
 
+function normalizeWindowBound(value: number | undefined, fallback: number): number {
+  const rounded = typeof value === 'number' ? Math.round(value) : fallback;
+  return Number.isSafeInteger(rounded) && rounded > 0 ? rounded : fallback;
+}
+
+function normalizeWindowPosition(value: number | undefined): number | undefined {
+  const rounded = typeof value === 'number' ? Math.round(value) : Number.NaN;
+  return Number.isSafeInteger(rounded) ? rounded : undefined;
+}
+
 export function constrainDesktopWindowBounds(
   windowState: DesktopWindowBounds | undefined,
   displayAreas: DesktopRectangle[],
   remoteOffset = 0,
 ): DesktopWindowBounds {
-  const normalizedWidth = Math.max(720, Math.round(windowState?.width ?? DEFAULT_WINDOW_WIDTH));
-  const normalizedHeight = Math.max(520, Math.round(windowState?.height ?? DEFAULT_WINDOW_HEIGHT));
+  const normalizedWidth = Math.max(720, normalizeWindowBound(windowState?.width, DEFAULT_WINDOW_WIDTH));
+  const normalizedHeight = Math.max(520, normalizeWindowBound(windowState?.height, DEFAULT_WINDOW_HEIGHT));
   const fallbackArea = displayAreas[0];
   if (!fallbackArea) {
+    const normalizedX = normalizeWindowPosition(windowState?.x);
+    const normalizedY = normalizeWindowPosition(windowState?.y);
     return {
       width: normalizedWidth,
       height: normalizedHeight,
-      ...(typeof windowState?.x === 'number' ? { x: Math.round(windowState.x) + remoteOffset } : {}),
-      ...(typeof windowState?.y === 'number' ? { y: Math.round(windowState.y) + remoteOffset } : {}),
+      ...(normalizedX !== undefined ? { x: normalizedX + remoteOffset } : {}),
+      ...(normalizedY !== undefined ? { y: normalizedY + remoteOffset } : {}),
     };
   }
 
-  const hasSavedPosition = typeof windowState?.x === 'number' && typeof windowState.y === 'number';
+  const normalizedX = normalizeWindowPosition(windowState?.x);
+  const normalizedY = normalizeWindowPosition(windowState?.y);
+  const hasSavedPosition = normalizedX !== undefined && normalizedY !== undefined;
   if (!hasSavedPosition) {
     const width = Math.min(normalizedWidth, fallbackArea.width);
     const height = Math.min(normalizedHeight, fallbackArea.height);
     return centerBoundsInArea({ width, height }, fallbackArea);
   }
 
-  const savedWindowState = windowState as DesktopWindowBounds & { x: number; y: number };
-  const savedX = Math.round(savedWindowState.x);
-  const savedY = Math.round(savedWindowState.y);
   const desiredBounds: DesktopRectangle = {
-    x: savedX + remoteOffset,
-    y: savedY + remoteOffset,
+    x: normalizedX + remoteOffset,
+    y: normalizedY + remoteOffset,
     width: normalizedWidth,
     height: normalizedHeight,
   };
