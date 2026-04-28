@@ -2,7 +2,7 @@
 import React, { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DesktopCompanionSettingsPanel } from './SettingsPage';
+import { DesktopCompanionSettingsPanel, formatCompanionTimestamp } from './SettingsPage';
 import type { PersonalAgentDesktopBridge } from '../desktop/desktopBridge';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
@@ -125,5 +125,10 @@ describe('DesktopCompanionSettingsPanel', () => {
     expect(container.textContent).toContain('Phone access enabled. Setup QR created.');
     expect(container.textContent).toContain('PAIR-TEST-0001');
     expect(container.textContent).toContain('http://192.168.1.2:3843');
+  });
+
+  it('does not format non-ISO companion timestamps as dates', () => {
+    expect(formatCompanionTimestamp('1')).toBe('1');
+    expect(formatCompanionTimestamp('9999')).toBe('9999');
   });
 });

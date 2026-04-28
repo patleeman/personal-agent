@@ -465,8 +465,13 @@ async function requestCompanionJson<T>(method: 'GET' | 'POST' | 'PATCH' | 'DELET
   return response.json() as Promise<T>;
 }
 
-function formatCompanionTimestamp(value: string): string {
-  const parsed = Date.parse(value);
+export function formatCompanionTimestamp(value: string): string {
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(normalized)) {
+    return value;
+  }
+
+  const parsed = Date.parse(normalized);
   if (!Number.isFinite(parsed)) {
     return value;
   }
