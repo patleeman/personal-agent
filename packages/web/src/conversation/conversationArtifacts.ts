@@ -90,7 +90,7 @@ export function readArtifactPresentation(block: Extract<MessageBlock, { type: 't
     artifactId,
     title,
     kind,
-    revision: typeof details?.revision === 'number' ? details.revision : undefined,
+    revision: typeof details?.revision === 'number' && Number.isSafeInteger(details.revision) && details.revision > 0 ? details.revision : undefined,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
     openRequested: typeof details?.openRequested === 'boolean'
       ? details.openRequested
