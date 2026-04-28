@@ -20,6 +20,9 @@ describe('conversation cwd history helpers', () => {
     expect(truncateConversationCwdFromFront(cwd, Number.MAX_SAFE_INTEGER + 1)).toBe(
       truncateConversationCwdFromFront(cwd),
     );
+    expect(truncateConversationCwdFromFront(cwd, Number.MAX_SAFE_INTEGER)).toBe(
+      truncateConversationCwdFromFront(cwd),
+    );
     expect(truncateConversationCwdFromFront(cwd, 24.5)).toBe(
       truncateConversationCwdFromFront(cwd),
     );
