@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRecord, ScheduledTaskDetail, SessionMeta } from '../shared/types';
-import { buildTaskExistingThreadOptions, buildTaskProjectOptions, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
+import { buildTaskExistingThreadOptions, buildTaskProjectOptions, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -103,5 +103,28 @@ describe('ScheduledTaskPanel editor capabilities', () => {
     })).toEqual([
       { id: 'local-thread', label: 'Local thread', cwd: '/tmp/worktree' },
     ]);
+  });
+
+  it('keeps an existing thread selection while sessions are still loading', () => {
+    expect(shouldClearMissingExistingThreadSelection({
+      threadMode: 'existing',
+      threadConversationId: 'thread-1',
+      existingThreadOptions: [],
+      sessionsLoaded: false,
+    })).toBe(false);
+
+    expect(shouldClearMissingExistingThreadSelection({
+      threadMode: 'existing',
+      threadConversationId: 'thread-1',
+      existingThreadOptions: [],
+      sessionsLoaded: true,
+    })).toBe(true);
+
+    expect(shouldClearMissingExistingThreadSelection({
+      threadMode: 'existing',
+      threadConversationId: 'thread-1',
+      existingThreadOptions: [{ id: 'thread-1' }],
+      sessionsLoaded: true,
+    })).toBe(false);
   });
 });

@@ -518,6 +518,19 @@ export function buildTaskExistingThreadOptions(input: {
   return entries.sort((left, right) => left.label.localeCompare(right.label));
 }
 
+export function shouldClearMissingExistingThreadSelection(input: {
+  threadMode: TaskFormState['threadMode'];
+  threadConversationId: string;
+  existingThreadOptions: Array<{ id: string }>;
+  sessionsLoaded: boolean;
+}): boolean {
+  if (!input.sessionsLoaded || input.threadMode !== 'existing' || !input.threadConversationId.trim()) {
+    return false;
+  }
+
+  return !input.existingThreadOptions.some((option) => option.id === input.threadConversationId);
+}
+
 function formatTargetTypeLabel(targetType: TaskFormState['targetType'] | string | undefined): string {
   return targetType === 'conversation' ? 'Thread' : 'Job';
 }
@@ -816,16 +829,15 @@ function TaskEditorForm({
   const visibleError = error ?? (submitAttempted ? validationError : null);
 
   useEffect(() => {
-    if (value.threadMode !== 'existing' || !value.threadConversationId.trim()) {
-      return;
+    if (shouldClearMissingExistingThreadSelection({
+      threadMode: value.threadMode,
+      threadConversationId: value.threadConversationId,
+      existingThreadOptions,
+      sessionsLoaded: sessions !== null,
+    })) {
+      onChange({ threadConversationId: '' });
     }
-
-    if (existingThreadOptions.some((option) => option.id === value.threadConversationId)) {
-      return;
-    }
-
-    onChange({ threadConversationId: '' });
-  }, [existingThreadOptions, onChange, value.threadConversationId, value.threadMode]);
+  }, [existingThreadOptions, onChange, sessions, value.threadConversationId, value.threadMode]);
 
   return (
     <form
