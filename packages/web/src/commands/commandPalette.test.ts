@@ -134,6 +134,23 @@ describe('command palette search', () => {
     expect(malformedLimitResults[0]?.items.map((item) => item.id)).toEqual(['archived:beta', 'archived:gamma']);
   });
 
+  it('caps excessive empty-query limit overrides', () => {
+    const items = Array.from({ length: 150 }, (_, index) => ({
+      ...ITEMS[1]!,
+      id: `archived:${index}`,
+      title: `Archived ${index}`,
+      order: index,
+    }));
+
+    const results = searchCommandPaletteItems(items, {
+      query: '',
+      scope: 'threads',
+      emptyQueryLimits: { archived: 5000 },
+    });
+
+    expect(results[0]?.items).toHaveLength(100);
+  });
+
   it('bootstraps thread results when the palette opens before sessions load', () => {
     expect(shouldBootstrapCommandPaletteThreads({
       open: true,

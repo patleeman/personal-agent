@@ -154,10 +154,11 @@ const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   archived: 8,
   files: 30,
 };
+const MAX_EMPTY_QUERY_LIMIT = 100;
 
 function readEmptyQueryLimit(section: CommandPaletteSection, value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-    ? value
+    ? Math.min(MAX_EMPTY_QUERY_LIMIT, value)
     : EMPTY_QUERY_LIMITS[section];
 }
 
