@@ -251,7 +251,7 @@ export function extractQueuedPromptContent(
     if ((part as { type?: unknown }).type === 'image'
       && typeof (part as { data?: unknown }).data === 'string'
       && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
-      const data = (part as { data: string }).data;
+      const data = (part as { data: string }).data.trim();
       const mimeType = (part as { mimeType: string }).mimeType.trim();
       if (!data || !mimeType) {
         continue;

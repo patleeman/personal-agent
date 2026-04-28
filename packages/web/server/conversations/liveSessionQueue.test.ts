@@ -79,6 +79,7 @@ describe('liveSessionQueue', () => {
       content: [
         { type: 'image', data: 'abc', mimeType: ' image/png ', name: ' shot.png ' },
         { type: 'image', data: '', mimeType: 'image/png' },
+        { type: 'image', data: '   ', mimeType: 'image/png' },
         { type: 'image', data: 'missing-mime', mimeType: '' },
       ],
     }, 'fallback');
