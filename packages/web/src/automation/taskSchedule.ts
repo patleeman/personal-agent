@@ -447,6 +447,10 @@ export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: 
     return null;
   }
 
+  if (!Number.isSafeInteger(nowMs)) {
+    return null;
+  }
+
   if (task.at) {
     const atMs = Date.parse(task.at);
     return Number.isFinite(atMs) && atMs > nowMs ? new Date(atMs) : null;

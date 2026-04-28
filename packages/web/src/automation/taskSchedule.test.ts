@@ -106,6 +106,11 @@ describe('taskSchedule helpers', () => {
     expect(getNextTaskRunAt({ enabled: true, at: '2026-03-18T09:00:00Z' }, now)?.toISOString()).toBe('2026-03-18T09:00:00.000Z');
   });
 
+  it('does not calculate next runs from unsafe clocks', () => {
+    expect(getNextTaskRunAt({ enabled: true, at: '2026-03-18T09:00:00Z' }, -Number.MAX_SAFE_INTEGER - 1)).toBeNull();
+    expect(getNextTaskRunAt({ enabled: true, cron: '* * * * *' }, Number.MAX_SAFE_INTEGER + 1)).toBeNull();
+  });
+
   it('formats next-run countdowns with second-level precision near the run', () => {
     const now = Date.parse('2026-03-18T08:58:30Z');
     expect(formatTaskNextRunCountdown(new Date('2026-03-18T08:59:05Z'), now)).toBe('in 35s');
