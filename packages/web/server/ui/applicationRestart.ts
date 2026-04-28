@@ -133,6 +133,15 @@ function buildAlreadyRunningMessage(action: ApplicationCommand, requestedAt?: st
   return `Application ${commandLabel(action)} already in progress${suffix}.`;
 }
 
+function parseApplicationCommandTimestamp(value: string | undefined): number {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 function ensureApplicationCommandNotRunning(lockFile: string): void {
   const current = readApplicationCommandLock(lockFile);
   if (!current) {
@@ -142,9 +151,7 @@ function ensureApplicationCommandNotRunning(lockFile: string): void {
     return;
   }
 
-  const requestedAtMs = typeof current.requestedAt === 'string'
-    ? Date.parse(current.requestedAt)
-    : Number.NaN;
+  const requestedAtMs = parseApplicationCommandTimestamp(current.requestedAt);
   const staleByAge = Number.isFinite(requestedAtMs)
     ? (Date.now() - requestedAtMs) > RESTART_LOCK_MAX_AGE_MS
     : true;

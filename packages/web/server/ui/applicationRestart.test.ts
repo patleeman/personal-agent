@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   closeSyncMock,
@@ -48,6 +48,10 @@ describe('application restart requests', () => {
     openSyncMock.mockReturnValue(42);
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('rejects unsafe detached child pids', () => {
     const child = { pid: Number.MAX_SAFE_INTEGER + 1, unref: vi.fn() };
     spawnMock.mockReturnValue(child);
@@ -57,5 +61,22 @@ describe('application restart requests', () => {
 
     expect(child.unref).not.toHaveBeenCalled();
     expect(rmSyncMock).toHaveBeenCalledWith('/tmp/pa-state/web/app-restart.lock.json', { force: true });
+  });
+
+  it('treats malformed running lock timestamps as stale', () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const child = { pid: 1234, unref: vi.fn() };
+    spawnMock.mockReturnValue(child);
+    readFileSyncMock.mockReturnValue(JSON.stringify({
+      action: 'restart',
+      pid: 4321,
+      requestedAt: '9999',
+    }));
+
+    expect(() => requestApplicationRestart({ repoRoot: '/tmp/repo', profile: 'default' }))
+      .not.toThrow();
+
+    expect(rmSyncMock).toHaveBeenCalledWith('/tmp/pa-state/web/app-restart.lock.json', { force: true });
+    expect(child.unref).toHaveBeenCalled();
   });
 });
