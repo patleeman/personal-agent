@@ -318,6 +318,30 @@ function normalizePromptContextMessages(value: unknown): Array<{ customType: str
   return messages;
 }
 
+function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const images = value
+    .filter((image): image is { data: string; mimeType: string; name?: string } => (
+      !!image
+      && typeof image === 'object'
+      && typeof (image as { data?: unknown }).data === 'string'
+      && (image as { data: string }).data.length > 0
+      && typeof (image as { mimeType?: unknown }).mimeType === 'string'
+      && (image as { mimeType: string }).mimeType.trim().length > 0
+    ))
+    .map((image) => ({
+      type: 'image' as const,
+      data: image.data,
+      mimeType: image.mimeType.trim(),
+      ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
+    }));
+
+  return images.length > 0 ? images : undefined;
+}
+
 function buildConversationAttachmentsContext(
   attachments: ReturnType<typeof resolveConversationAttachmentPromptFiles>,
 ): string {
@@ -561,7 +585,8 @@ async function prepareLiveSessionPrompt(
   const text = typeof input.text === 'string' ? input.text : '';
   const normalizedAttachmentRefs = normalizePromptAttachmentRefs(input.attachmentRefs);
   const promptContextMessages = normalizePromptContextMessages(input.contextMessages);
-  if (!text && (!input.images || input.images.length === 0) && normalizedAttachmentRefs.length === 0) {
+  const promptImages = normalizePromptImages(input.images);
+  if (!text && (!promptImages || promptImages.length === 0) && normalizedAttachmentRefs.length === 0) {
     throw new LiveSessionCapabilityInputError('text, images, or attachmentRefs required');
   }
 
@@ -675,12 +700,7 @@ async function prepareLiveSessionPrompt(
     referencedVaultFiles: referencedVaultFiles.map((file) => ({ id: file.id, path: file.path })),
     referencedAttachments,
     normalizedContextMessages,
-    promptImages: input.images?.map((image) => ({
-      type: 'image',
-      data: image.data,
-      mimeType: image.mimeType,
-      ...(image.name ? { name: image.name } : {}),
-    })),
+    promptImages,
     backgroundRunContextEntries,
     sourceSessionFile: sessionFile,
   };
@@ -727,15 +747,8 @@ export async function submitLiveSessionPromptCapability(
         type: 'prompt',
         text: prepared.text,
         ...(input.behavior ? { behavior: input.behavior } : {}),
-        ...(input.images && input.images.length > 0
-          ? {
-              images: input.images.map((image) => ({
-                type: 'image' as const,
-                data: image.data,
-                mimeType: image.mimeType,
-                ...(image.name ? { name: image.name } : {}),
-              })),
-            }
+        ...(prepared.promptImages && prepared.promptImages.length > 0
+          ? { images: prepared.promptImages }
           : {}),
         ...(promptContextMessages.length > 0
           ? {
