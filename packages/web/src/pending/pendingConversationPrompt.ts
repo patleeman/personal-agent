@@ -141,6 +141,7 @@ function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
       if (!mimeType.toLowerCase().startsWith('image/') || !data) {
         return [];
       }
+      const previewUrl = normalizePendingPromptImagePreviewUrl((image as { previewUrl?: unknown }).previewUrl);
 
       return [{
         mimeType,
@@ -148,11 +149,24 @@ function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
         ...(typeof (image as { name?: unknown }).name === 'string' && (image as { name: string }).name.trim().length > 0
           ? { name: (image as { name: string }).name.trim() }
           : {}),
-        ...(typeof (image as { previewUrl?: unknown }).previewUrl === 'string' && (image as { previewUrl: string }).previewUrl.trim().length > 0
-          ? { previewUrl: (image as { previewUrl: string }).previewUrl.trim() }
-          : {}),
+        ...(previewUrl ? { previewUrl } : {}),
       }];
     });
+}
+
+function normalizePendingPromptImagePreviewUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const previewUrl = value.trim();
+  if (!previewUrl) {
+    return undefined;
+  }
+
+  return previewUrl.startsWith('blob:') || previewUrl.toLowerCase().startsWith('data:image/')
+    ? previewUrl
+    : undefined;
 }
 
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';

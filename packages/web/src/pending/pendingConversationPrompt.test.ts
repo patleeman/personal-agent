@@ -90,6 +90,7 @@ describe('pendingConversationPrompt helpers', () => {
       text: '',
       images: [
         { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'unsafe-preview.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
         { mimeType: '', data: 'missing-mime' },
         { mimeType: 'image/png', data: '' },
         { mimeType: 'image/png', data: '   ' },
@@ -101,7 +102,10 @@ describe('pendingConversationPrompt helpers', () => {
 
     expect(readPendingConversationPrompt('session-images', null)).toEqual({
       text: '',
-      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' }],
+      images: [
+        { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'unsafe-preview.png' },
+      ],
       attachmentRefs: [],
     });
 
