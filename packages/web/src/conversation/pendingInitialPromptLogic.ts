@@ -54,7 +54,7 @@ export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
   }
 
   const pendingText = input.prompt.text.trim();
-  const pendingImageCount = input.prompt.images.length;
+  const pendingImages = input.prompt.images;
 
   return input.messages.some((message) => {
     if (message.type !== 'user') {
@@ -62,15 +62,44 @@ export function hasConversationTranscriptAcceptedPendingInitialPrompt(input: {
     }
 
     const messageText = message.text.trim();
-    const messageImageCount = message.images?.length ?? 0;
-    if (messageImageCount !== pendingImageCount) {
+    if (!pendingPromptImagesMatchMessageImages(pendingImages, message.images ?? [])) {
       return false;
     }
 
     if (pendingText.length === 0) {
-      return pendingImageCount > 0;
+      return pendingImages.length > 0;
     }
 
     return messageText === pendingText;
   });
+}
+
+export function pendingPromptImagesMatchMessageImages(
+  pendingImages: PendingConversationPrompt['images'],
+  messageImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
+): boolean {
+  return pendingImages.length === messageImages.length
+    && pendingImages.every((pendingImage, index) => {
+      const messageImage = messageImages[index];
+      if (!messageImage) {
+        return false;
+      }
+
+      const pendingPreviewUrl = pendingImage.previewUrl?.trim() || '';
+      if (pendingPreviewUrl || messageImage.src) {
+        return messageImage.src === pendingPreviewUrl;
+      }
+
+      const pendingName = pendingImage.name?.trim() || '';
+      const messageCaption = messageImage.caption?.trim() || '';
+      if (pendingName || messageCaption) {
+        return messageCaption === pendingName && messageImage.mimeType === pendingImage.mimeType;
+      }
+
+      if (messageImage.mimeType || pendingImage.mimeType) {
+        return !messageImage.mimeType || messageImage.mimeType === pendingImage.mimeType;
+      }
+
+      return true;
+    });
 }

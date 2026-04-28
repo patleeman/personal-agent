@@ -3,6 +3,7 @@ import type { PendingConversationPrompt } from '../pending/pendingConversationPr
 import {
   hasConversationTranscriptAcceptedPendingInitialPrompt,
   normalizePendingRelatedConversationIds,
+  pendingPromptImagesMatchMessageImages,
   shouldAutoDispatchPendingInitialPrompt,
   shouldClaimPendingInitialPromptForSession,
   shouldKeepStoredPendingInitialPromptDuringDispatch,
@@ -102,15 +103,32 @@ describe('pendingInitialPromptLogic', () => {
     })).toEqual(['related-1', 'related-2']);
   });
 
-  it('detects transcript acceptance by text and image count', () => {
+  it('detects transcript acceptance by text and matching image identity', () => {
     expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
-      prompt: { ...prompt, images: [{ data: 'abc', mimeType: 'image/png' }] },
-      messages: [{ type: 'user', ts: '2026-01-01T00:00:00.000Z', text: 'Ship it', images: [{ data: 'def', mimeType: 'image/png' }] }],
+      prompt: { ...prompt, images: [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'blob:ship' }] },
+      messages: [{ type: 'user', ts: '2026-01-01T00:00:00.000Z', text: 'Ship it', images: [{ alt: 'ship.png', src: 'blob:ship', mimeType: 'image/png', caption: 'ship.png' }] }],
     })).toBe(true);
+
+    expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
+      prompt: { ...prompt, images: [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'blob:ship' }] },
+      messages: [{ type: 'user', ts: '2026-01-01T00:00:00.000Z', text: 'Ship it', images: [{ alt: 'other.png', src: 'blob:other', mimeType: 'image/png', caption: 'other.png' }] }],
+    })).toBe(false);
 
     expect(hasConversationTranscriptAcceptedPendingInitialPrompt({
       prompt,
       messages: [{ type: 'user', ts: '2026-01-01T00:00:00.000Z', text: 'Different' }],
     })).toBe(false);
+  });
+
+  it('falls back to image metadata when pending preview urls are unavailable', () => {
+    expect(pendingPromptImagesMatchMessageImages(
+      [{ data: 'abc', mimeType: 'image/png', name: 'ship.png' }],
+      [{ alt: 'ship.png', mimeType: 'image/png', caption: 'ship.png' }],
+    )).toBe(true);
+
+    expect(pendingPromptImagesMatchMessageImages(
+      [{ data: 'abc', mimeType: 'image/png', name: 'ship.png' }],
+      [{ alt: 'other.png', mimeType: 'image/png', caption: 'other.png' }],
+    )).toBe(false);
   });
 });
