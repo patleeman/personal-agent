@@ -71,7 +71,7 @@ describe('deferredResumeIndicator', () => {
 
   it('sorts malformed resume timestamps after valid targets', () => {
     const resumes = [
-      scheduled('bad', 'not-a-date'),
+      scheduled('bad', '1'),
       scheduled('soon', '2026-03-12T13:05:00.000Z'),
     ];
 

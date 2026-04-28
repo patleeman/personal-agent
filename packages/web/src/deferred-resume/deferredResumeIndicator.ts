@@ -1,8 +1,17 @@
 import type { DeferredResumeSummary } from '../shared/types';
 import { buildDeferredResumeAutoResumeKey } from './deferredResumeAutoResume';
 
+function parseIsoTimestamp(value: string | undefined): number {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
-  const parsed = Date.parse(resume.status === 'ready'
+  const parsed = parseIsoTimestamp(resume.status === 'ready'
     ? resume.readyAt ?? resume.dueAt
     : resume.dueAt);
   return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
@@ -21,7 +30,7 @@ export function describeDeferredResumeStatus(resume: DeferredResumeSummary, nowM
     return 'due now';
   }
 
-  const deltaMs = Date.parse(resume.dueAt) - nowMs;
+  const deltaMs = parseIsoTimestamp(resume.dueAt) - nowMs;
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     return 'due now';
   }
