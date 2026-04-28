@@ -105,6 +105,50 @@ export function isCommandPaletteThreadDataLoading(options: {
   return options.sessions === null || options.sessionsLoading;
 }
 
+function dedupeCommandPaletteItems<TAction>(items: CommandPaletteItem<TAction>[]): CommandPaletteItem<TAction>[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.id)) {
+      return false;
+    }
+
+    seen.add(item.id);
+    return true;
+  });
+}
+
+export function selectCommandPaletteScopedItems<TAction>(input: {
+  scope: CommandPaletteScope;
+  query: string;
+  openConversationItems: CommandPaletteItem<TAction>[];
+  archivedConversationItems: CommandPaletteItem<TAction>[];
+  fileItems: CommandPaletteItem<TAction>[];
+  searchedConversationItems: CommandPaletteItem<TAction>[];
+  searchedFileItems: CommandPaletteItem<TAction>[];
+}): CommandPaletteItem<TAction>[] {
+  const hasQuery = input.query.trim().length > 0;
+  const conversationItems = [
+    ...input.openConversationItems,
+    ...input.archivedConversationItems,
+    ...(hasQuery ? input.searchedConversationItems : []),
+  ];
+  const fileItems = [
+    ...input.fileItems,
+    ...(hasQuery ? input.searchedFileItems : []),
+  ];
+
+  switch (input.scope) {
+    case 'threads':
+      return dedupeCommandPaletteItems(conversationItems);
+    case 'files':
+      return dedupeCommandPaletteItems(fileItems);
+    case 'search':
+      return dedupeCommandPaletteItems([...conversationItems, ...fileItems]);
+    default:
+      return [];
+  }
+}
+
 const EMPTY_QUERY_LIMITS: Record<CommandPaletteSection, number> = {
   open: 12,
   archived: 8,

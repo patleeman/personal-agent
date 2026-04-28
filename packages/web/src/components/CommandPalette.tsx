@@ -9,6 +9,7 @@ import {
   isCommandPaletteThreadDataLoading,
   resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
+  selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
   type CommandPaletteItem,
   type CommandPaletteScope,
@@ -238,20 +239,15 @@ export function CommandPalette() {
     [conversationContentSearchResults, query],
   );
   const allItems = useMemo(() => {
-    const filesForScope = scope === 'search' && query.trim().length > 0
-      ? searchedFileItems
-      : fileItems;
-    const conversationItemsForScope = (scope === 'threads' || scope === 'search') && query.trim().length > 0
-      ? searchedConversationItems
-      : [
-          ...openConversationItems,
-          ...archivedConversationItems,
-        ];
-
-    return [
-      ...conversationItemsForScope,
-      ...filesForScope,
-    ];
+    return selectCommandPaletteScopedItems({
+      scope,
+      query,
+      openConversationItems,
+      archivedConversationItems,
+      fileItems,
+      searchedConversationItems,
+      searchedFileItems,
+    });
   }, [archivedConversationItems, fileItems, openConversationItems, query, scope, searchedConversationItems, searchedFileItems]);
 
   const emptyQueryLimits = useMemo(

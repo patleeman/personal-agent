@@ -3,6 +3,7 @@ import {
   isCommandPaletteThreadDataLoading,
   resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
+  selectCommandPaletteScopedItems,
   shouldBootstrapCommandPaletteThreads,
   type CommandPaletteItem,
 } from './commandPalette';
@@ -72,6 +73,37 @@ describe('command palette search', () => {
       'archived',
       'files',
     ]);
+  });
+
+  it('keeps local thread and file title matches while adding content-search results', () => {
+    const scoped = selectCommandPaletteScopedItems({
+      scope: 'search',
+      query: 'workspace',
+      openConversationItems: [ITEMS[0]!],
+      archivedConversationItems: [ITEMS[1]!],
+      fileItems: [ITEMS[2]!],
+      searchedConversationItems: [{
+        ...ITEMS[1]!,
+        id: 'conversation-search:beta:block-1',
+        title: 'Matched transcript block',
+      }],
+      searchedFileItems: [{
+        ...ITEMS[2]!,
+        id: 'file-search:guide',
+        title: 'Workspace file excerpt',
+      }],
+    });
+
+    expect(scoped.map((item) => item.id)).toEqual([
+      'open:alpha',
+      'archived:beta',
+      'conversation-search:beta:block-1',
+      'file:guide',
+      'file-search:guide',
+    ]);
+
+    const results = searchCommandPaletteItems(scoped, { query: 'workspace', scope: 'search' });
+    expect(results.flatMap((group) => group.items.map((item) => item.id))).toContain('file:guide');
   });
 
   it('supports overriding empty-query limits for lazy-loaded thread history', () => {
