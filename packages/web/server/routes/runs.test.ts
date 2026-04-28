@@ -205,6 +205,10 @@ describe('registerRunRoutes', () => {
     await logHandler({ params: { id: 'run-1' }, query: { tail: '25abc' } }, malformedTailRes);
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', undefined);
 
+    const unsafeTailRes = createJsonResponse();
+    await logHandler({ params: { id: 'run-1' }, query: { tail: String(Number.MAX_SAFE_INTEGER + 1) } }, unsafeTailRes);
+    expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', undefined);
+
     const invalidTailRes = createJsonResponse();
     await logHandler({ params: { id: 'run-1' }, query: { tail: ['not-a-string'] } }, invalidTailRes);
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', undefined);

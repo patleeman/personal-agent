@@ -25,7 +25,7 @@ function parseRunLogTail(queryTail: unknown): number | undefined {
     return undefined;
   }
   const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return undefined;
   }
   return parsed;
