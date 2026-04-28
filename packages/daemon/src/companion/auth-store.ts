@@ -56,8 +56,13 @@ function parseTimestamp(value: unknown): string | undefined {
     return undefined;
   }
 
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return undefined;
+  }
+
   const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+  const normalized = Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+  return normalized === value ? normalized : undefined;
 }
 
 function hashSecret(value: string): string {

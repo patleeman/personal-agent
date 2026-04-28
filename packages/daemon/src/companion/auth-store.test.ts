@@ -102,4 +102,30 @@ describe('companion auth store', () => {
       now: new Date('2026-04-18T10:00:00.000Z'),
     })).toEqual({ pendingPairings: [], devices: [] });
   });
+
+  it('drops persisted auth entries with non-ISO lifecycle timestamps', () => {
+    const stateRoot = createTempDir('pa-companion-auth-');
+    const authFile = resolveCompanionAuthStateFile(stateRoot);
+    mkdirSync(join(stateRoot, 'companion'), { recursive: true });
+    writeFileSync(authFile, JSON.stringify({
+      pairingCodes: [{
+        id: 'pair-1',
+        codeHash: 'hash',
+        createdAt: '1',
+        expiresAt: '2026-04-18T10:10:00.000Z',
+      }],
+      devices: [{
+        id: 'device-1',
+        deviceLabel: 'Phone',
+        tokenHash: 'hash',
+        createdAt: '2026-04-18T10:00:00.000Z',
+        lastUsedAt: '1',
+        expiresAt: '2026-05-18T10:10:00.000Z',
+      }],
+    }), 'utf-8');
+
+    expect(readCompanionDeviceAdminState(stateRoot, {
+      now: new Date('2026-04-18T10:00:00.000Z'),
+    })).toEqual({ pendingPairings: [], devices: [] });
+  });
 });
