@@ -208,6 +208,16 @@ function readOptionalPositiveIntegerQuery(input: string | null): number | undefi
   return Number.isInteger(value) && value > 0 ? value : undefined;
 }
 
+function readNonNegativeIntegerPath(input: string): number | undefined {
+  const normalized = input.trim();
+  if (!/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+
+  const value = Number.parseInt(normalized, 10);
+  return Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
 function normalizeSurfaceType(input: unknown): CompanionSurfaceType | undefined {
   return input === 'desktop_ui' || input === 'ios_native'
     ? input
@@ -1139,7 +1149,7 @@ export class DaemonCompanionServer {
       }
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
-      const imageIndex = readOptionalNonNegativeInteger(decodeURIComponent(conversationBlockIndexedImageMatch[3] || ''), 'imageIndex');
+      const imageIndex = readNonNegativeIntegerPath(decodeURIComponent(conversationBlockIndexedImageMatch[3] || ''));
       if (typeof imageIndex !== 'number') {
         sendError(response, 400, 'imageIndex must be a non-negative integer.');
         return;

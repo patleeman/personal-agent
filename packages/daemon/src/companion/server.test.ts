@@ -245,6 +245,12 @@ describe('daemon companion server', () => {
     expect(indexedBlockImageResponse.headers.get('content-type')).toBe('image/png');
     expect(await indexedBlockImageResponse.text()).toBe('image-2');
 
+    const malformedIndexedBlockImageResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/blocks/block-1/images/2abc`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(malformedIndexedBlockImageResponse.status).toBe(400);
+    expect(await readJson(malformedIndexedBlockImageResponse)).toEqual({ error: 'imageIndex must be a non-negative integer.' });
+
     const assetResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
     });
