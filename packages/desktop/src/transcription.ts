@@ -26,10 +26,18 @@ export interface DesktopTranscriptionResult {
 }
 
 function decodeBase64(input: string): Buffer {
-  if (!input.trim()) {
+  const normalized = input.trim();
+  if (!normalized) {
     throw new Error('dataBase64 is required for transcription.');
   }
-  return Buffer.from(input, 'base64');
+  if (normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new Error('dataBase64 must contain valid base64 data.');
+  }
+  const decoded = Buffer.from(normalized, 'base64');
+  if (decoded.length === 0) {
+    throw new Error('dataBase64 must decode to non-empty data.');
+  }
+  return decoded;
 }
 
 async function readOpenAICodexAccessToken(): Promise<string> {
