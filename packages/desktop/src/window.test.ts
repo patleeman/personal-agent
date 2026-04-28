@@ -182,6 +182,30 @@ describe('window desktop navigation helpers', () => {
     });
   });
 
+  it('falls back from fractional saved window bounds', () => {
+    expect(constrainDesktopWindowBounds(
+      {
+        x: 12.5,
+        y: 40.5,
+        width: 1000.5,
+        height: 700.5,
+      },
+      [
+        {
+          x: 0,
+          y: 0,
+          width: 1512,
+          height: 982,
+        },
+      ],
+    )).toEqual({
+      x: 36,
+      y: 11,
+      width: 1440,
+      height: 960,
+    });
+  });
+
   it('preserves visible bounds and offsets remote windows without leaving the display', () => {
     expect(constrainDesktopWindowBounds(
       {

@@ -149,13 +149,11 @@ function centerBoundsInArea(bounds: DesktopWindowBounds, area: DesktopRectangle)
 }
 
 function normalizeWindowBound(value: number | undefined, fallback: number): number {
-  const rounded = typeof value === 'number' ? Math.round(value) : fallback;
-  return Number.isSafeInteger(rounded) && rounded > 0 ? rounded : fallback;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
 function normalizeWindowPosition(value: number | undefined): number | undefined {
-  const rounded = typeof value === 'number' ? Math.round(value) : Number.NaN;
-  return Number.isSafeInteger(rounded) ? rounded : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
 }
 
 export function constrainDesktopWindowBounds(
