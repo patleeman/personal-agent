@@ -31,7 +31,7 @@ export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
   stopReason: null,
   updatedAt: null,
 };
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
   'Auto mode review for this conversation.',
@@ -63,12 +63,31 @@ function normalizeUpdatedAt(value: unknown): string | null {
   if (!normalized) {
     return null;
   }
-  if (!ISO_TIMESTAMP_PATTERN.test(normalized)) {
+  const match = normalized.match(ISO_TIMESTAMP_PATTERN);
+  if (!match || !hasValidIsoDateParts(match)) {
     return null;
   }
 
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function normalizeStopReason(value: unknown): string | null {

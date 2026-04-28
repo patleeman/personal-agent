@@ -40,6 +40,16 @@ describe('conversation auto mode state', () => {
     });
   });
 
+  it('drops overflowed auto mode state timestamps', () => {
+    expect(readConversationAutoModeStateFromEntries([
+      { type: 'custom', customType: 'conversation-auto-mode', data: { enabled: true, updatedAt: '2026-02-31T10:00:00.000Z' } },
+    ])).toEqual({
+      enabled: true,
+      stopReason: null,
+      updatedAt: null,
+    });
+  });
+
   it('writes normalized state entries back through the session manager', () => {
     const appendCustomEntry = vi.fn();
     const state = writeConversationAutoModeState({
