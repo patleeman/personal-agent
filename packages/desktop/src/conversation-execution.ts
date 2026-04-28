@@ -206,7 +206,16 @@ function buildPromptFallbackConversationTitle(body: unknown): string {
 
   const candidate = body as { text?: unknown; images?: unknown };
   const text = typeof candidate.text === 'string' ? candidate.text : '';
-  const imageCount = Array.isArray(candidate.images) ? candidate.images.length : 0;
+  const imageCount = Array.isArray(candidate.images)
+    ? candidate.images.filter((image) => (
+        !!image
+        && typeof image === 'object'
+        && typeof (image as { data?: unknown }).data === 'string'
+        && (image as { data: string }).data.length > 0
+        && typeof (image as { mimeType?: unknown }).mimeType === 'string'
+        && (image as { mimeType: string }).mimeType.trim().length > 0
+      )).length
+    : 0;
   return formatFallbackConversationTitle(text, imageCount);
 }
 

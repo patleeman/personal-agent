@@ -221,6 +221,22 @@ describe('conversation-execution remote routing', () => {
     }));
   });
 
+  it('does not title remote conversations from malformed prompt images', async () => {
+    const { hostManager, localController, remoteController } = createHostManagerMock();
+
+    await dispatchConversationExecutionRequest(hostManager, {
+      method: 'POST',
+      path: '/api/live-sessions/local-conversation/prompt',
+      body: { images: [null, { data: '', mimeType: '' }] },
+    });
+
+    expect(localController.renameConversation).not.toHaveBeenCalled();
+    expect(remoteController.dispatchApiRequest).not.toHaveBeenCalledWith(expect.objectContaining({
+      method: 'PATCH',
+      path: '/api/conversations/remote-conversation/title',
+    }));
+  });
+
   it('syncs remote title_update stream events back into the local conversation title', async () => {
     const { hostManager, localController, remoteController } = createHostManagerMock();
 
