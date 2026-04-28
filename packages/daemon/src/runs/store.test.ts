@@ -350,4 +350,20 @@ describe('durable run store', () => {
       },
     });
   });
+
+  it('rejects unsafe durable run status attempts', () => {
+    const runsRoot = createTempDir('durable-runs-store-unsafe-attempt-');
+    const paths = resolveDurableRunPaths(runsRoot, 'run-unsafe');
+
+    saveDurableRunStatus(paths.statusPath, {
+      version: 1,
+      runId: 'run-unsafe',
+      status: 'running',
+      createdAt: '2026-03-12T18:00:00.000Z',
+      updatedAt: '2026-03-12T18:01:00.000Z',
+      activeAttempt: 9007199254740993,
+    });
+
+    expect(loadDurableRunStatus(paths.statusPath)).toBeUndefined();
+  });
 });
