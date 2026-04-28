@@ -25,6 +25,39 @@ function RightRailToggleIcon({ open }: { open: boolean }) {
   );
 }
 
+function CompactViewIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
+      <rect x="2" y="2.5" width="10" height="9" rx="1.8" />
+      <path d="M4.5 5h5" />
+      <path d="M4.5 7h4" />
+      <path d="M4.5 9h3" />
+    </svg>
+  );
+}
+
+function WorkbenchViewIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
+      <rect x="1.7" y="2.3" width="10.6" height="9.4" rx="1.7" />
+      <path d="M4.8 2.3v9.4" />
+      <path d="M9.1 2.3v9.4" />
+    </svg>
+  );
+}
+
+function ZenViewIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.25" aria-hidden="true">
+      <path d="M7 2.2v2" />
+      <path d="M7 9.8v2" />
+      <path d="M2.2 7h2" />
+      <path d="M9.8 7h2" />
+      <circle cx="7" cy="7" r="2.4" />
+    </svg>
+  );
+}
+
 function readBrowserNavigationState(): DesktopNavigationState {
   if (typeof window === 'undefined') {
     return { canGoBack: false, canGoForward: false };
@@ -186,7 +219,8 @@ export function DesktopTopBar({
               onLayoutModeChange('compact');
             }}
           >
-            Compact
+            <CompactViewIcon />
+            <span>Compact</span>
           </button>
           <button
             type="button"
@@ -199,7 +233,8 @@ export function DesktopTopBar({
               onLayoutModeChange('workbench');
             }}
           >
-            Workbench
+            <WorkbenchViewIcon />
+            <span>Workbench</span>
           </button>
           <button
             type="button"
@@ -209,7 +244,8 @@ export function DesktopTopBar({
             title="Zen view"
             onClick={() => onZenModeChange?.(true)}
           >
-            Zen
+            <ZenViewIcon />
+            <span>Zen</span>
           </button>
         </div>
         {showRailToggle ? (
