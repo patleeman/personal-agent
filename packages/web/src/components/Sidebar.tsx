@@ -86,6 +86,7 @@ const PATH = {
   sparkles: 'M12 3.75l1.07 3.43a1.5 1.5 0 0 0 .93.94l3.43 1.07-3.43 1.07a1.5 1.5 0 0 0-.93.93L12 15.62l-1.07-3.43a1.5 1.5 0 0 0-.93-.93L6.57 10.19 10 9.12a1.5 1.5 0 0 0 .93-.94L12 3.75Zm6 10.5.54 1.71a.75.75 0 0 0 .47.47l1.71.54-1.71.54a.75.75 0 0 0-.47.47L18 20.69l-.54-1.71a.75.75 0 0 0-.47-.47l-1.71-.54 1.71-.54a.75.75 0 0 0 .47-.47L18 14.25Z',
   chatBubble: 'M4.5 6.75A2.25 2.25 0 0 1 6.75 4.5h10.5a2.25 2.25 0 0 1 2.25 2.25v6.75a2.25 2.25 0 0 1-2.25 2.25H12l-4.5 3v-3H6.75A2.25 2.25 0 0 1 4.5 13.5V6.75Z',
   check: 'm5 12.75 4.5 4.5L19 7.75',
+  pin: 'm15.75 3.75 4.5 4.5-3 3v3l-2.25 2.25-7.5-7.5L9.75 6.75h3l3-3ZM9.75 14.25 4.5 19.5',
 };
 
 const THREADS_COLLAPSED_CWD_GROUPS_STORAGE_KEY = buildSidebarNavSectionStorageKey('threads-collapsed-cwd-groups');
@@ -1671,6 +1672,15 @@ function OpenConversationRow({
             {isAutomation ? (
               <span className="shrink-0 text-[10px] uppercase tracking-[0.14em] text-accent/75" title={automationTitle ? `Automation thread: ${automationTitle}` : 'Automation thread'}>
                 auto
+              </span>
+            ) : null}
+            {pinned ? (
+              <span
+                className="ui-sidebar-pinned-icon shrink-0"
+                title="Pinned chat"
+                aria-label="Pinned chat"
+              >
+                <Ico d={PATH.pin} size={11} />
               </span>
             ) : null}
             <p className="ui-row-title truncate text-[12px] leading-tight">{session.title}</p>

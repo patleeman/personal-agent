@@ -385,6 +385,10 @@
     @apply relative mx-1 flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-secondary transition-colors hover:bg-steel/5 hover:text-primary;
   }
 
+  .ui-sidebar-pinned-icon {
+    @apply inline-flex items-center justify-center text-steel/70;
+  }
+
   .ui-sidebar-session-row-active {
     @apply text-primary ring-1 ring-accent/20;
     background-color: rgb(var(--color-accent) / 0.12);

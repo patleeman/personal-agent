@@ -160,7 +160,7 @@ describe('Sidebar', () => {
     expect(html).not.toContain('href="/knowledge"');
   });
 
-  it('keeps pinned conversations in the main conversation list without separate pin chrome', () => {
+  it('keeps pinned conversations in the main conversation list with a subtle pin indicator', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify([]));
     storage.setItem(PINNED_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-123']));
     storage.setItem(PINNED_NOTE_IDS_STORAGE_KEY, JSON.stringify(['note-index']));
@@ -169,7 +169,7 @@ describe('Sidebar', () => {
 
     expect(html).not.toContain('Pinned Conversations');
     expect(html).toContain('Clarify background run link');
-    expect(html).not.toContain('aria-label="Pinned"');
+    expect(html).toContain('aria-label="Pinned chat"');
     expect(html).not.toContain('aria-label="Pin"');
   });
 
