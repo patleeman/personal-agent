@@ -40,16 +40,15 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function normalizePort(port: number): number {
-  if (!Number.isFinite(port)) {
+  if (!Number.isInteger(port)) {
     throw new Error(`Invalid Tailscale Serve port: ${String(port)}`);
   }
 
-  const parsed = Math.floor(port);
-  if (parsed <= 0 || parsed > 65535) {
+  if (port <= 0 || port > 65535) {
     throw new Error(`Invalid Tailscale Serve port: ${String(port)}`);
   }
 
-  return parsed;
+  return port;
 }
 
 function normalizeServePath(path?: string): string {

@@ -71,6 +71,13 @@ describe('readTailscaleServeProxyState', () => {
 });
 
 describe('syncTailscaleServeProxy', () => {
+  it('rejects fractional ports instead of flooring them', () => {
+    expect(() => syncTailscaleServeProxy({ enabled: true, port: 8390.5, path: '/codex' })).toThrow(
+      'Invalid Tailscale Serve port: 8390.5',
+    );
+    expect(mocks.spawnSync).not.toHaveBeenCalled();
+  });
+
   it('supports mounting a reverse proxy on a custom path', () => {
     mocks.spawnSync
       .mockReturnValueOnce({ status: 0, stdout: '', stderr: '' })
