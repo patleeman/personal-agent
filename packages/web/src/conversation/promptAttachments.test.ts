@@ -7,6 +7,8 @@ import {
   fileExtensionForMimeType,
   isPotentialExcalidrawFile,
   prepareComposerFiles,
+  removeComposerDrawingAttachmentByLocalId,
+  removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
   screenshotCaptureImageToFile,
@@ -88,6 +90,18 @@ describe('promptAttachments', () => {
     expect(result.drawingAttachments).toEqual([]);
     expect(result.drawingParseFailures).toEqual([]);
     expect(result.rejectedFileNames).toEqual([]);
+  });
+
+  it('removes composer image and drawing attachments by stable identity', () => {
+    const firstImage = new File(['one'], 'one.png', { type: 'image/png' });
+    const secondImage = new File(['two'], 'two.png', { type: 'image/png' });
+    const firstDrawing = { localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment;
+    const secondDrawing = { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment;
+
+    expect(removeComposerImageFileAtIndex([firstImage, secondImage], 0)).toEqual([secondImage]);
+    expect(removeComposerImageFileAtIndex([firstImage, secondImage], 9)).toEqual([firstImage, secondImage]);
+    expect(removeComposerDrawingAttachmentByLocalId([firstDrawing, secondDrawing], 'drawing-2')).toEqual([firstDrawing]);
+    expect(removeComposerDrawingAttachmentByLocalId([firstDrawing], 'missing')).toEqual([firstDrawing]);
   });
 
   it('converts drawing attachments to prompt image and attachment references', () => {

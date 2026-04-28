@@ -219,6 +219,8 @@ import {
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
   prepareComposerFiles,
+  removeComposerDrawingAttachmentByLocalId,
+  removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
   screenshotCaptureImageToFile,
@@ -3868,7 +3870,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function removeDrawingAttachment(localId: string) {
-    setDrawingAttachments((current) => current.filter((attachment) => attachment.localId !== localId));
+    setDrawingAttachments((current) => removeComposerDrawingAttachmentByLocalId(current, localId));
   }
 
   async function saveDrawingFromEditor(payload: ExcalidrawEditorSavePayload) {
@@ -5315,7 +5317,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
   function removeAttachment(i: number) {
-    setAttachments(prev => prev.filter((_, j) => j !== i));
+    setAttachments(prev => removeComposerImageFileAtIndex(prev, i));
   }
 
   async function saveAttachedContextDocs(nextDocs: ConversationContextDocRef[]) {

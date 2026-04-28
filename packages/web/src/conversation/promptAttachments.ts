@@ -255,6 +255,17 @@ export async function prepareComposerFiles(
   };
 }
 
+export function removeComposerImageFileAtIndex(files: File[], indexToRemove: number): File[] {
+  return files.filter((_, index) => index !== indexToRemove);
+}
+
+export function removeComposerDrawingAttachmentByLocalId(
+  attachments: ComposerDrawingAttachment[],
+  localId: string,
+): ComposerDrawingAttachment[] {
+  return attachments.filter((attachment) => attachment.localId !== localId);
+}
+
 export function createComposerDrawingLocalId(): string {
   return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
