@@ -301,6 +301,16 @@ export function findPendingAskUserQuestion(messages: MessageBlock[] | undefined)
   return null;
 }
 
+export function buildPendingAskUserQuestionKey(pending: PendingAskUserQuestion | null | undefined): string {
+  if (!pending) {
+    return '';
+  }
+
+  const blockKey = pending.block.id ?? `${pending.messageIndex}`;
+  const questionKey = pending.presentation.questions.map((question) => question.id).join('|');
+  return `${blockKey}:${questionKey}`;
+}
+
 function resolveAskUserQuestionAnswerLabels(
   question: AskUserQuestionPrompt,
   selectedValues: string[],

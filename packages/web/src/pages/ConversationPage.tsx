@@ -137,6 +137,7 @@ import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveM
 import { shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
 import { describeDeferredResumeStatus, resolveDeferredResumePresentationState } from '../deferred-resume/deferredResumeIndicator';
 import {
+  buildPendingAskUserQuestionKey,
   buildAskUserQuestionReplyText,
   countAnsweredAskUserQuestions,
   findPendingAskUserQuestion,
@@ -841,15 +842,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => findPendingAskUserQuestion(realMessages),
     [realMessages],
   );
-  const pendingAskUserQuestionKey = useMemo(() => {
-    if (!pendingAskUserQuestion) {
-      return '';
-    }
-
-    const blockKey = pendingAskUserQuestion.block.id ?? `${pendingAskUserQuestion.messageIndex}`;
-    const questionKey = pendingAskUserQuestion.presentation.questions.map((question) => question.id).join('|');
-    return `${blockKey}:${questionKey}`;
-  }, [pendingAskUserQuestion]);
+  const pendingAskUserQuestionKey = useMemo(
+    () => buildPendingAskUserQuestionKey(pendingAskUserQuestion),
+    [pendingAskUserQuestion],
+  );
   const [composerQuestionIndex, setComposerQuestionIndex] = useState(0);
   const [composerQuestionOptionIndex, setComposerQuestionOptionIndex] = useState(0);
   const [composerQuestionAnswers, setComposerQuestionAnswers] = useState<AskUserQuestionAnswers>({});

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../shared/types';
 import {
+  buildPendingAskUserQuestionKey,
   buildAskUserQuestionReplyText,
   countAnsweredAskUserQuestions,
   findPendingAskUserQuestion,
@@ -136,6 +137,28 @@ describe('ask user questions', () => {
         text: 'Yes',
       },
     ])).toBeNull();
+  });
+
+  it('builds a stable pending question key from block and question ids', () => {
+    const pending = findPendingAskUserQuestion([
+      {
+        type: 'tool_use',
+        id: 'block-1',
+        ts: '2026-03-21T00:00:00.000Z',
+        tool: 'ask_user_question',
+        input: {
+          questions: [
+            { id: 'target', label: 'Target?', options: ['A'] },
+            { id: 'notify', label: 'Notify?', options: ['Email'] },
+          ],
+        },
+        output: '',
+        status: 'ok',
+      },
+    ]);
+
+    expect(buildPendingAskUserQuestionKey(pending)).toBe('block-1:target|notify');
+    expect(buildPendingAskUserQuestionKey(null)).toBe('');
   });
 
   it('formats single radio answers as a direct reply and multiple answers as a structured list', () => {
