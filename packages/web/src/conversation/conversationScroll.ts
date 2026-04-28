@@ -149,9 +149,16 @@ export function shouldContinueConversationBottomSettle(
     maxFrames?: number;
   },
 ): boolean {
-  const minFrames = Math.max(0, state.minFrames ?? 0);
-  const stableFrameCount = Math.max(1, state.stableFrameCount ?? DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT);
-  const maxFrames = Math.max(minFrames, state.maxFrames ?? DEFAULT_BOTTOM_SETTLE_MAX_FRAMES);
+  const minFrames = typeof state.minFrames === 'number' && Number.isSafeInteger(state.minFrames) && state.minFrames >= 0
+    ? state.minFrames
+    : 0;
+  const stableFrameCount = typeof state.stableFrameCount === 'number' && Number.isSafeInteger(state.stableFrameCount) && state.stableFrameCount > 0
+    ? state.stableFrameCount
+    : DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT;
+  const maxFramesCandidate = typeof state.maxFrames === 'number' && Number.isSafeInteger(state.maxFrames) && state.maxFrames >= 0
+    ? state.maxFrames
+    : DEFAULT_BOTTOM_SETTLE_MAX_FRAMES;
+  const maxFrames = Math.max(minFrames, maxFramesCandidate);
 
   if (state.frameCount >= maxFrames) {
     return false;

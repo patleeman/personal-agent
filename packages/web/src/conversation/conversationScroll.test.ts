@@ -239,4 +239,30 @@ describe('conversation scroll helpers', () => {
       maxFrames: 45,
     })).toBe(false);
   });
+
+  it('defaults fractional bottom-settle frame limits instead of honoring them', () => {
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 2,
+      stableFrames: 2,
+      minFrames: 6.5,
+      stableFrameCount: 2,
+      maxFrames: 45,
+    })).toBe(false);
+
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 2,
+      stableFrames: 0,
+      minFrames: 0,
+      stableFrameCount: 1.5,
+      maxFrames: 45,
+    })).toBe(true);
+
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 2,
+      stableFrames: 0,
+      minFrames: 0,
+      stableFrameCount: 2,
+      maxFrames: 1.5,
+    })).toBe(true);
+  });
 });
