@@ -182,7 +182,9 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     });
   });
   const stateRecords = new Map<MonitoredInternalService, ServiceAttentionStateRecord>();
-  const issueGraceMs = Math.max(0, options.issueGraceMs ?? DEFAULT_ISSUE_GRACE_MS);
+  const issueGraceMs = typeof options.issueGraceMs === 'number' && Number.isSafeInteger(options.issueGraceMs) && options.issueGraceMs >= 0
+    ? options.issueGraceMs
+    : DEFAULT_ISSUE_GRACE_MS;
   let intervalHandle: ReturnType<typeof setInterval> | undefined;
 
   const handleTransition = (

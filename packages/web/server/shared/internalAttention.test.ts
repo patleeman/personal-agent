@@ -124,6 +124,31 @@ describe('internalAttention', () => {
     expect(writeEntry).not.toHaveBeenCalled();
   });
 
+  it('defaults fractional daemon issue grace periods instead of honoring sub-millisecond thresholds', async () => {
+    let nowMs = Date.parse('2026-03-13T12:00:00.000Z');
+    const writeEntry = vi.fn();
+    const snapshots = [
+      createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] }),
+      createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] }),
+    ];
+
+    const monitor = createServiceAttentionMonitor({
+      repoRoot: '/repo',
+      stateRoot: '/state',
+      getCurrentProfile: () => 'assistant',
+      readDaemonState: vi.fn(async () => snapshots.shift() ?? createDaemonSnapshot({ running: false, warnings: ['Daemon runtime is not responding on the local socket.'] })),
+      writeEntry,
+      now: () => new Date(nowMs),
+      issueGraceMs: 0.5,
+    });
+
+    await monitor.tick();
+    nowMs += 1;
+    await monitor.tick();
+
+    expect(writeEntry).not.toHaveBeenCalled();
+  });
+
   it('suppresses daemon issue and recovery entries until the suppression window expires', async () => {
     let nowMs = Date.parse('2026-03-13T12:00:00.000Z');
     const writeEntry = vi.fn();
