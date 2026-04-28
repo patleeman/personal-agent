@@ -429,6 +429,43 @@ describe('tasks module scheduling', () => {
     }));
   });
 
+  it('sanitizes non-ISO persisted automation runtime timestamps', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'non-iso-runtime-state',
+      profile: 'assistant',
+      title: 'Non ISO runtime state',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+    openSqliteDatabase(dbPath).prepare(`
+      INSERT INTO automation_state (
+        automation_id, running_started_at, last_run_at, last_success_at,
+        last_failure_at, one_time_resolved_at, one_time_completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'non-iso-runtime-state',
+      '1',
+      '1',
+      '1',
+      '1',
+      '1',
+      '1',
+    );
+
+    expect(loadAutomationRuntimeStateMap({ dbPath })['non-iso-runtime-state']).toEqual(expect.objectContaining({
+      runningStartedAt: undefined,
+      lastRunAt: undefined,
+      lastSuccessAt: undefined,
+      lastFailureAt: undefined,
+      oneTimeResolvedAt: undefined,
+      oneTimeCompletedAt: undefined,
+    }));
+  });
+
   it('drops malformed persisted automation scheduler timestamps', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
