@@ -104,7 +104,7 @@ function parseNonNegativeIntegerPath(value: string): number | null {
     return null;
   }
   const parsed = Number.parseInt(trimmed, 10);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
 function parsePositiveIntegerQuery(rawValue: unknown): number | undefined {
