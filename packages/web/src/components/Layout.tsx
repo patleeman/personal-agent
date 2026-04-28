@@ -106,7 +106,7 @@ export function readStoredPanelWidth(storageKey: string, initial: number, min: n
     if (stored) {
       const normalized = stored.trim();
       const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
-      if (Number.isFinite(parsed)) {
+      if (Number.isSafeInteger(parsed)) {
         return Math.max(min, parsed);
       }
     }

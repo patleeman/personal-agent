@@ -43,5 +43,8 @@ describe('Layout panel sizing', () => {
     storage.set('panel-width', '320px');
 
     expect(readStoredPanelWidth('panel-width', 280, 180, localStorage)).toBe(280);
+
+    storage.set('panel-width', String(Number.MAX_SAFE_INTEGER + 1));
+    expect(readStoredPanelWidth('panel-width', 280, 180, localStorage)).toBe(280);
   });
 });
