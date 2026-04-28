@@ -47,6 +47,33 @@ describe('appendPendingInitialPromptBlock', () => {
     ]);
   });
 
+  it('does not hide a pending image prompt behind a different trailing image', () => {
+    const promptWithImage: PendingConversationPrompt = {
+      text: 'same text',
+      images: [{ mimeType: 'image/png', data: 'bmV3', name: 'new.png', previewUrl: 'blob:new' }],
+      attachmentRefs: [],
+    };
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-24T00:00:00.000Z',
+        text: 'same text',
+        images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
+      },
+    ];
+
+    expect(appendPendingInitialPromptBlock(messages, promptWithImage, '2026-03-24T00:00:02.000Z')).toEqual([
+      ...messages,
+      {
+        type: 'user',
+        id: 'pending-initial-prompt',
+        ts: '2026-03-24T00:00:02.000Z',
+        text: 'same text',
+        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+      },
+    ]);
+  });
+
   it('builds typed conversation pending queue items from stream previews', () => {
     expect(buildConversationPendingQueueItems({
       steering: [

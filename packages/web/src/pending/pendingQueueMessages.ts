@@ -84,11 +84,17 @@ export function appendPendingInitialPromptBlock(
 
   const existingMessages = messages ?? [];
   const lastMessage = existingMessages[existingMessages.length - 1];
-  const lastImageCount = lastMessage?.type === 'user' ? lastMessage.images?.length ?? 0 : -1;
-  const nextImageCount = images.length;
+  const lastImages = lastMessage?.type === 'user' ? lastMessage.images ?? [] : [];
+  const imagesMatch = lastImages.length === images.length
+    && images.every((image, index) => {
+      const lastImage = lastImages[index];
+      return lastImage?.src === image.src
+        && lastImage?.mimeType === image.mimeType
+        && lastImage?.caption === image.caption;
+    });
   const alreadyVisible = lastMessage?.type === 'user'
     && lastMessage.text === text
-    && lastImageCount === nextImageCount;
+    && imagesMatch;
 
   if (alreadyVisible) {
     return existingMessages;
