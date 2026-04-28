@@ -98,6 +98,22 @@ function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
     : undefined;
 }
 
+function parsePositiveIntegerQuery(rawValue: unknown): number | undefined {
+  const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+  if (typeof candidate === 'number') {
+    return Number.isInteger(candidate) && candidate > 0 ? candidate : Number.NaN;
+  }
+  if (typeof candidate !== 'string') {
+    return undefined;
+  }
+  const trimmed = candidate.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return Number.NaN;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+}
+
 function parseTrimmedQueryString(rawValue: unknown): string | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
   if (typeof candidate !== 'string') {
@@ -672,9 +688,7 @@ export function registerConversationRoutes(
 
   router.get('/api/conversations/:id/attachments/:attachmentId/download/:asset', (req, res) => {
     try {
-      const revisionQuery = typeof req.query.revision === 'string'
-        ? Number.parseInt(req.query.revision, 10)
-        : undefined;
+      const revisionQuery = parsePositiveIntegerQuery(req.query.revision);
       const asset = req.params.asset === 'source' || req.params.asset === 'preview'
         ? req.params.asset
         : 'invalid';

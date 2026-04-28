@@ -653,6 +653,14 @@ describe('conversation routes', () => {
     expect(badRevisionRes.status).toHaveBeenCalledWith(400);
     expect(badRevisionRes.json).toHaveBeenCalledWith({ error: 'revision must be a positive integer when provided.' });
 
+    const malformedRevisionRes = createResponse();
+    getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
+      params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
+      query: { revision: '2abc' },
+    }), malformedRevisionRes);
+    expect(malformedRevisionRes.status).toHaveBeenCalledWith(400);
+    expect(malformedRevisionRes.json).toHaveBeenCalledWith({ error: 'revision must be a positive integer when provided.' });
+
     const downloadRes = createResponse();
     getHandler('/api/conversations/:id/attachments/:attachmentId/download/:asset')(createRequest({
       params: { id: 'session-1', attachmentId: 'attachment-1', asset: 'preview' },
