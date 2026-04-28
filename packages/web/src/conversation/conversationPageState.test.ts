@@ -346,5 +346,15 @@ describe('conversation page state helpers', () => {
       draftCwd: '',
       messageCount: 1,
     })).toBe('Draft conversation · default-model · unset cwd · 1 block');
+
+    expect(buildConversationSessionSummaryNotice({
+      draft: false,
+      title: 'Recovered thread',
+      isLiveSession: false,
+      currentModel: '   ',
+      fallbackModel: 'default-model',
+      cwd: '',
+      messageCount: 0,
+    })).toBe('Recovered thread · default-model · unknown cwd · 0 blocks');
   });
 });

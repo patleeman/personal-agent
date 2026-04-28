@@ -334,10 +334,12 @@ export function buildConversationSessionSummaryNotice(input: {
   messageCount: number;
   contextUsage?: { total: number | null; contextWindow: number } | null;
 }): string {
+  const currentModel = input.currentModel?.trim() || '';
+  const fallbackModel = input.fallbackModel?.trim() || '';
   const cwd = input.draft
-    ? (input.draftCwd || 'unset cwd')
-    : (input.cwd ?? 'unknown cwd');
-  const modelLabel = input.currentModel || input.fallbackModel || 'unknown model';
+    ? (input.draftCwd?.trim() || 'unset cwd')
+    : (input.cwd?.trim() || 'unknown cwd');
+  const modelLabel = currentModel || fallbackModel || 'unknown model';
   const details = [
     input.draft ? 'Draft conversation' : input.title,
     input.isLiveSession ? 'active session' : null,
