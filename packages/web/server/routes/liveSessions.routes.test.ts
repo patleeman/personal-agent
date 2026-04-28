@@ -493,6 +493,14 @@ describe('live session routes', () => {
     expect(invalidImageRes.status).toHaveBeenCalledWith(400);
     expect(invalidImageRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
+    const unsafeAttachmentRefRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({
+      params: { id: 'live-1' },
+      body: { attachmentRefs: [{ attachmentId: 'att-1', revision: Number.MAX_SAFE_INTEGER + 1 }] },
+    }), unsafeAttachmentRefRes);
+    expect(unsafeAttachmentRefRes.status).toHaveBeenCalledWith(400);
+    expect(unsafeAttachmentRefRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
+
     isLiveMock.mockReturnValueOnce(true);
     const invalidBehaviorRes = createResponse();
     await handleLiveSessionPrompt(createRequest({

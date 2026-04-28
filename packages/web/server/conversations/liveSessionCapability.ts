@@ -264,7 +264,10 @@ function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput
     }
 
     const revisionCandidate = (candidate as { revision?: unknown }).revision;
-    const revision = Number.isInteger(revisionCandidate) && (revisionCandidate as number) > 0
+    if (revisionCandidate !== undefined && (!Number.isSafeInteger(revisionCandidate) || (revisionCandidate as number) <= 0)) {
+      continue;
+    }
+    const revision = Number.isSafeInteger(revisionCandidate) && (revisionCandidate as number) > 0
       ? revisionCandidate as number
       : undefined;
 
