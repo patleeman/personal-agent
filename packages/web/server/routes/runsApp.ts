@@ -22,7 +22,8 @@ const ACTIVE_RUN_LOG_POLL_INTERVAL_MS = 250;
 const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 
 function parseRunLogTail(raw: unknown): number {
-  const parsed = typeof raw === 'string' ? Number.parseInt(raw, 10) : undefined;
+  const normalized = typeof raw === 'string' ? raw.trim() : '';
+  const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : undefined;
   return Number.isFinite(parsed) && (parsed as number) > 0
     ? Math.min(1000, parsed as number)
     : 120;

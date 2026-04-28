@@ -265,6 +265,10 @@ describe('registerRunAppRoutes', () => {
     expect(getDurableRunLogMock).toHaveBeenCalledWith('run-1', 120);
     expect(res.json).toHaveBeenCalledWith({ path: '/tmp/run.log', log: 'tail' });
 
+    const malformedRes = createJsonResponse();
+    await logHandler({ params: { id: 'run-1' }, query: { tail: '25abc' } }, malformedRes);
+    expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 120);
+
     getDurableRunLogMock.mockResolvedValue(undefined);
     const missingRes = createJsonResponse();
     await logHandler({ params: { id: 'missing' }, query: { tail: '10' } }, missingRes);
