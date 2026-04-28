@@ -90,21 +90,16 @@
     @apply relative z-10 flex items-center justify-end gap-1;
   }
 
-  .ui-desktop-layout-menu {
-    @apply absolute right-0 top-full z-[80] mt-1.5 w-56 rounded-xl border border-border-default bg-surface/95 p-0.5 shadow-2xl backdrop-blur-md;
+  .ui-desktop-layout-switcher {
+    @apply flex items-center gap-0.5 rounded-lg border border-border-subtle bg-surface/55 p-0.5;
   }
 
-  .ui-desktop-layout-menu__item {
-    @apply flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-1.5 text-left transition-colors hover:bg-elevated/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/25;
+  .ui-desktop-layout-switcher__button {
+    @apply h-6 rounded-md px-2 text-[11px] font-medium text-secondary transition-colors hover:bg-elevated/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-steel/25;
   }
 
-  .ui-desktop-layout-menu__item[aria-checked="true"] {
-    @apply bg-steel/10;
-  }
-
-  .ui-desktop-layout-menu__item[aria-checked="true"] span:first-child::after {
-    content: ' ✓';
-    color: rgb(var(--color-steel));
+  .ui-desktop-layout-switcher__button[aria-checked="true"] {
+    @apply bg-steel/10 text-primary shadow-sm;
   }
 
   .ui-toolbar-button.ui-desktop-top-bar__action-button {

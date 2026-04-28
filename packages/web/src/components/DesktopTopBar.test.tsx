@@ -80,11 +80,11 @@ describe('DesktopTopBar', () => {
 
     expect(html.indexOf('Hide sidebar')).toBeLessThan(html.indexOf('Go back'));
     expect(html.indexOf('Go back')).toBeLessThan(html.indexOf('Go forward'));
-    expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('Choose layout'));
-    expect(html.indexOf('Choose layout')).toBeLessThan(html.indexOf('Hide right sidebar'));
+    expect(html.indexOf('Go forward')).toBeLessThan(html.indexOf('View mode'));
+    expect(html.indexOf('View mode')).toBeLessThan(html.indexOf('Hide right sidebar'));
   });
 
-  it('shows the active layout in the top-right layout control', () => {
+  it('shows the view mode switcher in the top-right controls', () => {
     const html = renderTopBar({
       isElectron: true,
       activeHostId: 'local',
@@ -96,10 +96,12 @@ describe('DesktopTopBar', () => {
     }, { layoutMode: 'workbench' });
 
     expect(html).toContain('Workbench');
-    expect(html).toContain('Choose layout');
+    expect(html).toContain('Compact');
+    expect(html).toContain('Zen');
+    expect(html).toContain('aria-checked="true"');
   });
 
-  it('keeps zen windows focused by hiding layout and sidebar controls', () => {
+  it('keeps zen windows focused by hiding sidebar controls and marking zen active', () => {
     const html = renderTopBar({
       isElectron: true,
       activeHostId: 'local',
@@ -112,7 +114,8 @@ describe('DesktopTopBar', () => {
 
     expect(html).toContain('>Zen<');
     expect(html).not.toContain('Hide sidebar');
-    expect(html).not.toContain('Choose layout');
+    expect(html).toContain('title="Zen view"');
+    expect(html).toContain('aria-checked="true"');
   });
 
   it('does not render desktop chrome outside the desktop shell', () => {

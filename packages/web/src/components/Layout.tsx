@@ -700,6 +700,18 @@ export function Layout() {
     writeAppLayoutMode(mode);
   }, []);
 
+  const handleZenModeChange = useCallback((enabled: boolean) => {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      if (enabled) {
+        next.set('view', 'zen');
+      } else {
+        next.delete('view');
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   useEffect(() => {
     function handleDesktopShortcut(event: Event) {
       if (hasBlockingOverlayOpen()) {
@@ -760,6 +772,7 @@ export function Layout() {
             onToggleRail={activeRightRailControl?.toggleRail ?? (() => {})}
             layoutMode={appLayoutMode}
             onLayoutModeChange={handleAppLayoutModeChange}
+            onZenModeChange={handleZenModeChange}
             zenMode={zenMode}
           />
           <div className="flex min-h-0 flex-1 overflow-hidden">
