@@ -100,11 +100,12 @@ interface ResizeOptions {
   side: 'left' | 'right'; // which side of the handle the panel is on
 }
 
-function readStoredWidth(storageKey: string, initial: number, min: number): number {
+export function readStoredPanelWidth(storageKey: string, initial: number, min: number, storage: Pick<Storage, 'getItem'> = localStorage): number {
   try {
-    const stored = localStorage.getItem(storageKey);
+    const stored = storage.getItem(storageKey);
     if (stored) {
-      const parsed = parseInt(stored, 10);
+      const normalized = stored.trim();
+      const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
       if (Number.isFinite(parsed)) {
         return Math.max(min, parsed);
       }
@@ -115,7 +116,7 @@ function readStoredWidth(storageKey: string, initial: number, min: number): numb
 }
 
 function useResize({ initial, min, max, storageKey, side }: ResizeOptions) {
-  const [desiredWidth, setDesiredWidth] = useState(() => readStoredWidth(storageKey, initial, min));
+  const [desiredWidth, setDesiredWidth] = useState(() => readStoredPanelWidth(storageKey, initial, min));
 
   const dragging = useRef(false);
   const startX   = useRef(0);
