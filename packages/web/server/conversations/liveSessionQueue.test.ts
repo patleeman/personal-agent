@@ -146,6 +146,19 @@ describe('liveSessionQueue', () => {
     expect(steeringQueue.map((message) => message.__personalAgentQueuedPromptId)).toEqual(['first']);
   });
 
+  it('rejects unsafe queued prompt restore indexes', async () => {
+    await expect(restoreLiveSessionQueuedMessage({
+      session: {
+        agent: { steeringQueue: [], followUpQueue: [] },
+        getSteeringMessages: () => [],
+        getFollowUpMessages: () => [],
+        clearQueue: () => ({ steering: [], followUp: [] }),
+        steer: async () => undefined,
+        followUp: async () => undefined,
+      },
+    }, 'steer', Number.MAX_SAFE_INTEGER + 1)).rejects.toThrow('Queued message index must be a non-negative integer');
+  });
+
   it('restores visible-only queued prompts by preview id when the index is stale', async () => {
     const steeringMessages = ['first queued prompt', 'second queued prompt'];
     const steer = async (text: string) => {

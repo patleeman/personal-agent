@@ -51,7 +51,7 @@ export async function restoreLiveSessionQueuedMessage(
   index: number,
   previewId?: string,
 ): Promise<{ text: string; images: PromptImageAttachment[] }> {
-  if (!Number.isInteger(index) || index < 0) {
+  if (!Number.isSafeInteger(index) || index < 0) {
     throw new Error('Queued message index must be a non-negative integer');
   }
 
