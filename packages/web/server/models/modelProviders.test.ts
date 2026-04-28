@@ -183,6 +183,30 @@ describe('upsertModelProviderModel', () => {
       maxTokens: 16384,
     });
   });
+
+  it('does not persist fractional model token limits', () => {
+    const dir = createTempDir();
+
+    upsertModelProvider('assistant', 'desktop', {
+      baseUrl: 'http://desktop:8000/v1',
+      api: 'openai-completions',
+    }, { profilesDir: dir });
+
+    const state = upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
+      name: 'Qwen REAP',
+      contextWindow: 131072.5,
+      maxTokens: 16384.5,
+    }, { profilesDir: dir });
+
+    expect(state.providers[0]?.models[0]).toMatchObject({
+      id: 'qwen-reap',
+      name: 'Qwen REAP',
+      contextWindow: undefined,
+      maxTokens: undefined,
+    });
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('contextWindow');
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('maxTokens');
+  });
 });
 
 describe('removeModelProvider', () => {

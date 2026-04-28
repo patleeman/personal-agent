@@ -191,6 +191,10 @@ function readOptionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
+function readOptionalPositiveInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? value : undefined;
+}
+
 function readOptionalStringRecord(value: unknown): Record<string, string> | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -265,8 +269,8 @@ function readModelConfig(modelId: string, value: unknown): ModelProviderModelCon
     baseUrl: readOptionalString(value.baseUrl),
     reasoning: value.reasoning === true,
     input: readModelInputs(value.input),
-    contextWindow: readOptionalNumber(value.contextWindow),
-    maxTokens: readOptionalNumber(value.maxTokens),
+    contextWindow: readOptionalPositiveInteger(value.contextWindow),
+    maxTokens: readOptionalPositiveInteger(value.maxTokens),
     headers: readOptionalStringRecord(value.headers),
     cost: readCost(value.cost),
     compat: readOptionalObject(value.compat),
@@ -360,8 +364,8 @@ function applyModelUpdate(target: JsonRecord, modelId: string, update: EditableM
   const api = readOptionalString(update.api) as ModelProviderApi | undefined;
   const baseUrl = readOptionalString(update.baseUrl);
   const input = readModelInputs(update.input);
-  const contextWindow = readOptionalNumber(update.contextWindow);
-  const maxTokens = readOptionalNumber(update.maxTokens);
+  const contextWindow = readOptionalPositiveInteger(update.contextWindow);
+  const maxTokens = readOptionalPositiveInteger(update.maxTokens);
   const headers = readOptionalStringRecord(update.headers);
   const compat = readOptionalObject(update.compat);
   const cost = readCost(update.cost);
