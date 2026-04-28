@@ -57,6 +57,17 @@ function resolveValidDate(input?: Date): Date {
   return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
 }
 
+function resolveValidTimestamp(input?: string): string {
+  if (typeof input === 'string') {
+    const parsed = Date.parse(input);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return new Date().toISOString();
+}
+
 function readCheckpointPayload(checkpoint: DurableRunCheckpointFile | undefined): Record<string, unknown> {
   return isRecord(checkpoint?.payload) ? checkpoint.payload : {};
 }
@@ -364,7 +375,7 @@ export function markBackgroundRunResultsDelivered(input: {
   }
 
   const targetIds = new Set(resultIds);
-  const deliveredAt = new Date(input.deliveredAt ?? Date.now()).toISOString();
+  const deliveredAt = resolveValidTimestamp(input.deliveredAt);
   const marked = new Set<string>();
 
   for (const run of scanDurableRunsForRecovery(input.runsRoot)) {
