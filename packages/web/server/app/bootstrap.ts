@@ -81,7 +81,7 @@ export function startDeferredResumeLoop(options: {
 }
 
 export function normalizeDeferredResumePollMs(value: number): number {
-  return Number.isSafeInteger(value) && value > 0 ? value : 5_000;
+  return Number.isSafeInteger(value) && value > 0 ? Math.min(60_000, value) : 5_000;
 }
 
 export function startConversationRecovery(options: {

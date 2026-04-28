@@ -60,6 +60,7 @@ describe('bootstrap monitor helpers', () => {
   it('defaults malformed deferred resume poll intervals', () => {
     expect(normalizeDeferredResumePollMs(1.5)).toBe(5_000);
     expect(normalizeDeferredResumePollMs(Number.MAX_SAFE_INTEGER + 1)).toBe(5_000);
+    expect(normalizeDeferredResumePollMs(Number.MAX_SAFE_INTEGER)).toBe(60_000);
   });
 
   it('starts bootstrap monitors and reloads session auth after completed OAuth logins', () => {
