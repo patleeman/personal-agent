@@ -187,8 +187,8 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function readOptionalNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+function readOptionalNonNegativeNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | undefined {
@@ -240,10 +240,10 @@ function readCost(value: unknown): ModelProviderCostConfig | undefined {
     return undefined;
   }
 
-  const input = readOptionalNumber(value.input);
-  const output = readOptionalNumber(value.output);
-  const cacheRead = readOptionalNumber(value.cacheRead);
-  const cacheWrite = readOptionalNumber(value.cacheWrite);
+  const input = readOptionalNonNegativeNumber(value.input);
+  const output = readOptionalNonNegativeNumber(value.output);
+  const cacheRead = readOptionalNonNegativeNumber(value.cacheRead);
+  const cacheWrite = readOptionalNonNegativeNumber(value.cacheWrite);
 
   if (input === undefined && output === undefined && cacheRead === undefined && cacheWrite === undefined) {
     return undefined;

@@ -207,6 +207,36 @@ describe('upsertModelProviderModel', () => {
     expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('contextWindow');
     expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0]).not.toHaveProperty('maxTokens');
   });
+
+  it('does not persist negative model costs', () => {
+    const dir = createTempDir();
+
+    upsertModelProvider('assistant', 'desktop', {
+      baseUrl: 'http://desktop:8000/v1',
+      api: 'openai-completions',
+    }, { profilesDir: dir });
+
+    const state = upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
+      name: 'Qwen REAP',
+      cost: {
+        input: -1,
+        output: 0,
+      },
+    }, { profilesDir: dir });
+
+    expect(state.providers[0]?.models[0]?.cost).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+    expect(JSON.parse(readFileSync(join(dir, 'shared', 'models.json'), 'utf-8')).providers.desktop.models[0].cost).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
+  });
 });
 
 describe('removeModelProvider', () => {
