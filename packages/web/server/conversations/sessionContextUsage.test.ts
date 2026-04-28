@@ -138,4 +138,32 @@ describe('readSessionContextUsageFromFile', () => {
     }));
     expect(sumSegments(usage?.segments)).toBe(14800);
   });
+
+  it('omits unsafe context token totals restored from transcript usage', () => {
+    const file = createTempSessionFile([
+      { type: 'session', id: 'session-1', timestamp: '2026-03-10T20:00:00.000Z', cwd: '/tmp/project', version: 3 },
+      { type: 'model_change', id: 'm1', parentId: null, timestamp: '2026-03-10T20:00:01.000Z', provider: 'openai-codex', modelId: 'gpt-5.4' },
+      { type: 'message', id: 'u1', parentId: 'm1', timestamp: '2026-03-10T20:00:02.000Z', message: { role: 'user', content: [{ type: 'text', text: 'hello' }], timestamp: Date.parse('2026-03-10T20:00:02.000Z') } },
+      {
+        type: 'message',
+        id: 'a1',
+        parentId: 'u1',
+        timestamp: '2026-03-10T20:00:03.000Z',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'hi' }],
+          provider: 'openai-codex',
+          model: 'gpt-5.4',
+          usage: { input: Number.MAX_SAFE_INTEGER + 1, output: 100, cacheRead: 0, cacheWrite: 0, totalTokens: Number.MAX_SAFE_INTEGER + 101, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+          stopReason: 'stop',
+          timestamp: Date.parse('2026-03-10T20:00:03.000Z'),
+        },
+      },
+    ]);
+
+    expect(readSessionContextUsageFromFile(file)).toEqual({
+      tokens: null,
+      modelId: 'gpt-5.4',
+    });
+  });
 });

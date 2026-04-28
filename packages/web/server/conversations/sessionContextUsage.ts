@@ -304,6 +304,13 @@ export function readSessionContextUsageFromEntries(entries: SessionEntry[]): Ses
   }
 
   const tokens = estimateSessionContextTokens(context.messages);
+  if (!Number.isSafeInteger(tokens) || tokens < 0) {
+    return {
+      tokens: null,
+      modelId: context.model?.modelId,
+    };
+  }
+
   return {
     tokens,
     modelId: context.model?.modelId,
