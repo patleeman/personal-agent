@@ -72,6 +72,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
 
     const viewMenu = template[3];
     expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'toggleDevTools' }),
       expect.objectContaining({ label: 'Toggle Sidebar', accelerator: 'CommandOrControl+\\' }),
       expect.objectContaining({ label: 'Toggle Right Rail', accelerator: 'CommandOrControl+Shift+\\' }),
       expect.objectContaining({ label: 'Toggle Layout Mode', accelerator: 'CommandOrControl+Alt+\\' }),
@@ -120,6 +121,11 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     const editMenu = template[1];
     expect(editMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'Find on Page', accelerator: 'CommandOrControl+F' }),
+    ]));
+
+    const viewMenu = template[2];
+    expect(viewMenu?.submenu).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'toggleDevTools' }),
     ]));
   });
 });
