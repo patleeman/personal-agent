@@ -614,13 +614,15 @@ function normalizeTimestamp(timestamp: string | number | undefined): string {
 }
 
 function imageMimeType(block: RawContentBlock): string | undefined {
-  return block.mimeType ?? block.mediaType;
+  const mimeType = block.mimeType ?? block.mediaType;
+  return typeof mimeType === 'string' && mimeType.trim().length > 0 ? mimeType.trim() : undefined;
 }
 
 function imageSrc(block: RawContentBlock): string | undefined {
   const mimeType = imageMimeType(block);
-  if (!mimeType || !block.data) return undefined;
-  return `data:${mimeType};base64,${block.data}`;
+  const data = typeof block.data === 'string' ? block.data.trim() : '';
+  if (!mimeType || !data) return undefined;
+  return `data:${mimeType};base64,${data}`;
 }
 
 function extractUserContent(content: unknown): { text: string; images: DisplayImage[] } {
@@ -632,16 +634,24 @@ function extractUserContent(content: unknown): { text: string; images: DisplayIm
     .trim();
   const images = blocks
     .filter((block) => block.type === 'image')
-    .map((block) => ({
-      alt: typeof block.name === 'string' && block.name.trim().length > 0
-        ? `Attached image: ${block.name.trim()}`
-        : 'Attached image',
-      src: imageSrc(block),
-      mimeType: imageMimeType(block),
-      ...(typeof block.name === 'string' && block.name.trim().length > 0
-        ? { caption: block.name.trim() }
-        : {}),
-    }));
+    .flatMap((block) => {
+      const src = imageSrc(block);
+      const mimeType = imageMimeType(block);
+      if (!src || !mimeType) {
+        return [];
+      }
+
+      return [{
+        alt: typeof block.name === 'string' && block.name.trim().length > 0
+          ? `Attached image: ${block.name.trim()}`
+          : 'Attached image',
+        src,
+        mimeType,
+        ...(typeof block.name === 'string' && block.name.trim().length > 0
+          ? { caption: block.name.trim() }
+          : {}),
+      }];
+    });
   return { text, images };
 }
 
@@ -1098,15 +1108,23 @@ function buildDisplayBlocksInternal(
 
       const resultImages = contentBlocks
         .filter((block) => block.type === 'image')
-        .map((block, imageIndex) => ({
-          type: 'image' as const,
-          id: `${baseId}-i${imageIndex}`,
-          ts,
-          alt: toolName ? `${toolName} image result` : 'Tool image result',
-          src: imageSrc(block),
-          mimeType: imageMimeType(block),
-          caption: toolName,
-        }));
+        .flatMap((block, imageIndex) => {
+          const src = imageSrc(block);
+          const mimeType = imageMimeType(block);
+          if (!src || !mimeType) {
+            return [];
+          }
+
+          return [{
+            type: 'image' as const,
+            id: `${baseId}-i${imageIndex}`,
+            ts,
+            alt: toolName ? `${toolName} image result` : 'Tool image result',
+            src,
+            mimeType,
+            caption: toolName,
+          }];
+        });
       blocks.push(...resultImages);
     }
   }

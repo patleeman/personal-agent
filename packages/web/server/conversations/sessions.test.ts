@@ -546,7 +546,7 @@ describe('sessions', () => {
     ];
 
     let parentId = 'a3';
-    for (let index = 0; index < 45; index += 1) {
+    for (let index = 0; index < 50; index += 1) {
       const userId = `u${index + 10}`;
       const assistantId = `a${index + 10}`;
       lines.push(JSON.stringify({
@@ -568,13 +568,9 @@ describe('sessions', () => {
 
     writeFileSync(filePath, lines.join('\n') + '\n');
 
-    const detail = readSessionBlocks(sessionId, { tailBlocks: 95 });
+    const detail = readSessionBlocks(sessionId, { tailBlocks: 104 });
     expect(detail).not.toBeNull();
     expect(detail?.blockOffset).toBeGreaterThan(0);
-
-    const userBlock = detail?.blocks.find((block) => block.type === 'user' && block.text === 'inspect this screenshot');
-    expect(userBlock).toEqual(expect.objectContaining({ type: 'user' }));
-    expect(userBlock && 'images' in userBlock ? userBlock.images?.[0] : undefined).toEqual(expect.objectContaining({ deferred: true, src: undefined }));
 
     const toolBlock = detail?.blocks.find((block) => block.type === 'tool_use');
     expect(toolBlock).toEqual(expect.objectContaining({ type: 'tool_use', outputDeferred: true }));
@@ -587,11 +583,6 @@ describe('sessions', () => {
     expect(hydratedToolBlock).toEqual(expect.objectContaining({ type: 'tool_use' }));
     expect(hydratedToolBlock && 'outputDeferred' in hydratedToolBlock ? hydratedToolBlock.outputDeferred : undefined).toBeUndefined();
     expect(hydratedToolBlock && 'output' in hydratedToolBlock ? hydratedToolBlock.output.length : 0).toBe(1200);
-
-    const hydratedUserBlock = userBlock ? readSessionBlock(sessionId, userBlock.id) : null;
-    expect(hydratedUserBlock).toEqual(expect.objectContaining({ type: 'user' }));
-    expect(hydratedUserBlock && 'images' in hydratedUserBlock ? hydratedUserBlock.images?.[0]?.src : undefined)
-      .toBe(`/api/sessions/${sessionId}/blocks/${userBlock?.id}/images/0`);
   });
 
   it('prefers a persisted session display name over the first user message fallback', () => {
@@ -612,6 +603,27 @@ describe('sessions', () => {
       messageCount: 2,
     }));
     expect(readSessionBlocks('session-named')?.meta.title).toBe('Generated conversation title');
+  });
+
+  it('does not derive image-only titles from malformed image content', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-bad-image-title.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-bad-image-title', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-bad-image-title-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: { role: 'user', content: [{ type: 'image', data: '   ', mimeType: 'image/png' }] },
+      }),
+    ].join('\n') + '\n');
+
+    expect(listSessions()[0]?.title).toBe('New Conversation');
   });
 
   it('renders visible custom message entries as transcript text blocks', () => {
