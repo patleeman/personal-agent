@@ -17,6 +17,10 @@ export function describeDeferredResumeStatus(resume: DeferredResumeSummary, nowM
     return 'ready now';
   }
 
+  if (!Number.isSafeInteger(nowMs)) {
+    return 'due now';
+  }
+
   const deltaMs = Date.parse(resume.dueAt) - nowMs;
   if (!Number.isFinite(deltaMs) || deltaMs <= 0) {
     return 'due now';

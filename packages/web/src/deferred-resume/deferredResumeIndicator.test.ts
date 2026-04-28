@@ -41,6 +41,13 @@ describe('deferredResumeIndicator', () => {
     )).toBe('in 8m 30s');
   });
 
+  it('does not render absurd resume timing for unsafe clocks', () => {
+    expect(describeDeferredResumeStatus(
+      scheduled('one', '2026-03-12T13:08:30.000Z'),
+      -Number.MAX_SAFE_INTEGER - 1,
+    )).toBe('due now');
+  });
+
   it('treats ready resumes as ready now', () => {
     expect(describeDeferredResumeStatus(
       ready('one', '2026-03-12T13:00:00.000Z'),
