@@ -71,6 +71,25 @@ describe('desktop-config', () => {
     });
   });
 
+  it('drops non-positive persisted window dimensions', () => {
+    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
+      version: 2,
+      windowState: {
+        x: -120,
+        y: 40,
+        width: -800,
+        height: 0,
+      },
+    }, null, 2)}\n`, 'utf-8');
+
+    expect(loadDesktopConfig().windowState).toEqual({
+      x: -120,
+      y: 40,
+      width: 1440,
+      height: 960,
+    });
+  });
+
   it('defaults desktop app preferences and persists updates', () => {
     const initial = loadDesktopConfig();
     expect(readDesktopAppPreferences(initial)).toEqual({

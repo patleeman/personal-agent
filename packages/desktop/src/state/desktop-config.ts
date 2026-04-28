@@ -18,6 +18,11 @@ function readSafeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
 }
 
+function readPositiveSafeNumber(value: unknown): number | undefined {
+  const number = readSafeNumber(value);
+  return number !== undefined && number > 0 ? number : undefined;
+}
+
 function normalizeSshHostRecord(host: unknown): Extract<DesktopHostRecord, { kind: 'ssh' }> | null {
   if (!host || typeof host !== 'object') {
     return null;
@@ -85,8 +90,8 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
       ? {
           x: readSafeNumber(input.windowState.x),
           y: readSafeNumber(input.windowState.y),
-          width: readSafeNumber(input.windowState.width) ?? DEFAULT_WINDOW_STATE.width,
-          height: readSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
+          width: readPositiveSafeNumber(input.windowState.width) ?? DEFAULT_WINDOW_STATE.width,
+          height: readPositiveSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
         }
       : { ...DEFAULT_WINDOW_STATE },
     hosts,
