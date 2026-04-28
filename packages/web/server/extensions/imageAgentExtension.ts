@@ -207,10 +207,16 @@ function readImageBlocks(content: unknown): ImageContent[] {
       return [];
     }
 
+    const data = candidate.data.trim();
+    const mimeType = candidate.mimeType.trim().toLowerCase();
+    if (!data || !mimeType.startsWith('image/')) {
+      return [];
+    }
+
     return [{
       type: 'image' as const,
-      data: candidate.data,
-      mimeType: candidate.mimeType,
+      data,
+      mimeType,
     } satisfies ImageContent];
   });
 }

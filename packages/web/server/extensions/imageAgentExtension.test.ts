@@ -289,6 +289,53 @@ describe('image agent extension', () => {
     });
   });
 
+  it('skips non-image source blocks when editing from conversation context', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse({ text: 'Edited image.' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await imageTool.execute(
+      'tool-1',
+      {
+        prompt: 'Turn the attached photo into a flat sticker illustration.',
+        source: 'latest-user',
+      },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: codexModel,
+        models: [codexModel],
+        authByProvider: {
+          'openai-codex': { apiKey: token },
+        },
+        sessionMessages: [{
+          role: 'user',
+          content: [
+            { type: 'image', data: 'bm90LWltYWdl', mimeType: 'text/plain' },
+            { type: 'image', data: 'dXNlci1pbWFnZQ==', mimeType: 'image/png' },
+          ],
+          timestamp: Date.now(),
+        }],
+      }),
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      input: Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>;
+    };
+
+    expect(body.input[0]?.content.filter((part) => part.type === 'input_image')).toEqual([
+      expect.objectContaining({ image_url: 'data:image/png;base64,dXNlci1pbWFnZQ==' }),
+    ]);
+  });
+
   it('infers latest-generated edit mode from a last-generated variant prompt', async () => {
     const imageTool = registerImageTool();
     const codexModel = createModel({
