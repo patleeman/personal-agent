@@ -282,9 +282,22 @@ function messageBlockImagesMatch(
   return previousImages.length === nextImages.length
     && nextImages.every((image, index) => {
       const previousImage = previousImages[index];
-      return previousImage?.src === image.src
-        && previousImage?.mimeType === image.mimeType
-        && previousImage?.caption === image.caption;
+      if (!previousImage) {
+        return false;
+      }
+
+      if (previousImage.src === image.src) {
+        return previousImage.mimeType === image.mimeType
+          && previousImage.caption === image.caption;
+      }
+
+      const previousSrc = previousImage.src ?? '';
+      const nextSrc = image.src ?? '';
+      const bridgesPreviewToTranscriptData = (previousSrc.startsWith('blob:') && nextSrc.startsWith('data:'))
+        || (previousSrc.startsWith('data:') && nextSrc.startsWith('blob:'));
+      return bridgesPreviewToTranscriptData
+        && previousImage.mimeType === image.mimeType
+        && previousImage.caption === image.caption;
     });
 }
 

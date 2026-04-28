@@ -62,6 +62,21 @@ describe('userMessageBlocksMatchForStreamDedupe', () => {
         images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
       },
     )).toBe(true);
+
+    expect(userMessageBlocksMatchForStreamDedupe(
+      {
+        type: 'user',
+        ts: '2026-04-01T00:00:00.000Z',
+        text: 'same text',
+        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+      },
+      {
+        type: 'user',
+        ts: '2026-04-01T00:00:01.000Z',
+        text: 'same text',
+        images: [{ alt: 'new.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'new.png' }],
+      },
+    )).toBe(true);
   });
 });
 
