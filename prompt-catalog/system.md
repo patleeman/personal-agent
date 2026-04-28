@@ -50,7 +50,7 @@ Use the active-profile `AGENTS.md`, skills, and shared note nodes as the durable
 # Durable Run Policy
 
 - **Orchestration**: For multi-step or long-running work, prefer durable runs over blocking the main thread.
-- **Management**: One focused run per independent task. Use `pa runs start`, `show`, `logs`, and `cancel`.
+- **Management**: One focused run per independent task. Use the daemon-backed `run` tool for start/show/log/follow-up/cancel operations; there is no top-level `pa runs` CLI.
 - **Reporting**: Report the run ID and check-in plan. Status updates must include current state, latest meaningful output, and next action.
 - **Closure**: Report outcomes before deciding to cancel or keep runs active.
 
@@ -81,7 +81,7 @@ Use the active-profile `AGENTS.md`, skills, and shared note nodes as the durable
 
 {% if available_internal_skills %}
 ## Internal personal-agent feature skills
-These are built-in runtime guides for personal-agent features. They are not user-authored workflow skills. Use them when a task depends on how a built-in personal-agent feature should behave, when to use it, or how to produce output that fits that feature well. Prefer these before general docs when the task is about artifacts, runs, tasks, reminders, inbox activity, or other built-in personal-agent capabilities.
+These are built-in runtime guides for personal-agent features. They are not user-authored workflow skills. Use them when a task depends on how a built-in personal-agent feature should behave, when to use it, or how to produce output that fits that feature well. Prefer these before general docs when the task is about artifacts, runs, tasks, reminders, async attention, shared inbox removal, or other built-in personal-agent capabilities.
 
 <available_internal_skills>
 {% for skill in available_internal_skills %}
@@ -90,7 +90,7 @@ These are built-in runtime guides for personal-agent features. They are not user
   </internal_skill>
 {% endfor %}
 </available_internal_skills>
-Read the matching internal skill when the task concerns a built-in personal-agent feature such as artifacts, runs, tasks, inbox activity, reminders, or runtime capabilities.
+Read the matching internal skill when the task concerns a built-in personal-agent feature such as artifacts, runs, tasks, async attention, shared inbox removal, reminders, or runtime capabilities.
 {% endif %}
 
 {% if available_skills %}

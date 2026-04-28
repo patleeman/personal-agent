@@ -57,7 +57,7 @@ pa tui
 npm run desktop:start
 ```
 
-Electron serves the renderer through `personal-agent://app/`.
+`npm run desktop:start` builds the Electron shell and opens the app. `npm run desktop:dev` is currently the same dev launcher. Electron serves the renderer through `personal-agent://app/`; there is no general-purpose local web UI server to open in a browser.
 
 ## Core mental model
 
@@ -81,7 +81,7 @@ If something should still matter next week, do not leave the only copy in a conv
 # health / setup
 pa doctor
 pa status
-pa profile list
+pa help
 
 # interfaces
 pa tui
@@ -98,6 +98,8 @@ pa mcp info <server>/<tool>
 
 Use `pa help <command>` for exact flags.
 
+There are intentionally no top-level `pa runs`, `pa tasks`, `pa profile`, `pa note`, or `pa node` commands. Runs and automations are managed through the desktop app, daemon APIs, or the runtime tools exposed inside conversations.
+
 ## Repo layout
 
 ### Workspace packages
@@ -108,14 +110,14 @@ Use `pa help <command>` for exact flags.
 - `packages/web` — React renderer and local API modules used by Electron
 - `packages/desktop` — Electron app shell
 
-### Shipped runtime resources
+### Shipped resources and clients
 
 - `defaults/agent/` — repo-managed Pi defaults
 - `extensions/` — built-in runtime extensions
 - `internal-skills/` — built-in feature behavior docs
 - `prompt-catalog/` — prompt text owned by this repo
 - `docs/` — product semantics and current behavior
-- `apps/ios/` — iOS companion app
+- `apps/ios/PersonalAgentCompanion/` — native iOS companion app
 
 ## Development
 
@@ -170,6 +172,7 @@ Start here:
 - [`docs/knowledge-system.md`](docs/knowledge-system.md) — docs, instruction files, skills, and projects
 - [`docs/conversations.md`](docs/conversations.md) — conversation model, auto mode, async follow-through
 - [`docs/desktop-app.md`](docs/desktop-app.md) — desktop app runtime and UI surface
+- [`docs/ios-companion.md`](docs/ios-companion.md) — native iOS companion app and host API model
 - [`docs/command-line.md`](docs/command-line.md) — `pa` command map
 - [`docs/repo-layout.md`](docs/repo-layout.md) — where code should live
 - [`internal-skills/README.md`](internal-skills/README.md) — built-in runtime feature docs

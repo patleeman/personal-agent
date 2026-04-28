@@ -39,6 +39,8 @@ A conversation can carry:
 
 Durable session files live under `<state-root>/sync/pi-agent/sessions/`.
 
+Attached context-doc references live under `<state-root>/pi-agent/state/conversation-context-docs/`.
+
 ## One thread, many durable connections
 
 A conversation often owns or links to other durable surfaces:
@@ -84,6 +86,12 @@ Common follow-up surfaces:
 - `scheduled_task` — unattended later or recurring work
 
 Use the owning thread as the default place where async outcomes remain visible.
+
+## UI routes
+
+- `/conversations` redirects to the best current conversation target.
+- `/conversations/new` opens the draft conversation.
+- `/conversations/:id` opens a saved conversation.
 
 ## Practical rules
 

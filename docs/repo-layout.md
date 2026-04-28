@@ -9,6 +9,7 @@ This monorepo intentionally keeps package boundaries small.
 - `packages/cli` — `pa`
 - `packages/web` — browser UI plus server routes
 - `packages/desktop` — Electron shell
+- `apps/ios/PersonalAgentCompanion` — native iOS companion app outside the npm workspace graph
 
 Default rule: add a folder before adding a package.
 
@@ -42,6 +43,8 @@ These are shipped runtime inputs, not workspace packages:
 - browser transport and API helpers → `packages/web/src/client/`
 - server routes and backend wiring → `packages/web/server/`
 
+Current renderer routes are owned in `packages/web/src/app/App.tsx`: conversations, Knowledge, Automations, and Settings.
+
 Do not drop new feature files at the root of `src/` if they already have an obvious home.
 
 ## Built-in extensions
@@ -60,7 +63,7 @@ If you change product behavior, update the relevant docs.
 
 ## Other shipped clients
 
-- `apps/ios/` — iOS companion app, outside the TypeScript workspace graph
+- `apps/ios/PersonalAgentCompanion/` — native iOS companion app. Its detailed README is the source for Xcode, simulator, mock-mode, and live-host workflows.
 
 ## Related docs
 

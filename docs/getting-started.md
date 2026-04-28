@@ -51,6 +51,8 @@ pa tui
 npm run desktop:start
 ```
 
+`npm run desktop:dev` uses the same Electron dev launcher today. Prefer `desktop:start` in setup docs and smoke checks because it is the stable repo-level entry point.
+
 ### Browser validation in this repo
 
 When you validate the local desktop app with `agent-browser`, use the repo wrapper so Playwright sessions do not pile up:
@@ -72,6 +74,8 @@ Create a markdown file anywhere under `<vault-root>`, for example:
 ```
 
 Then select it in Settings or add it to `<config-root>/config.json` under `instructionFiles`.
+
+Profile-scoped settings and models live under `<config-root>/profiles/<profile>/`, not in the shared vault.
 
 ### 2. Durable knowledge doc
 
@@ -104,7 +108,7 @@ pa mcp list --probe
 - open **Conversations** for live work
 - open **Knowledge** to edit files under `<vault-root>`
 - open **Automations** to inspect scheduled background work
-- open **Settings** to set defaults, instruction files, skill folders, and provider auth
+- open **Settings** to set defaults, instruction files, skill folders, provider auth, Knowledge base sync, companion pairing, transcription, and title-generation settings
 
 ## If the vault root looks wrong
 

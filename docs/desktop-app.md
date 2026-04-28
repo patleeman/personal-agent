@@ -7,6 +7,12 @@ It serves the React renderer through Electron's `personal-agent://app/` protocol
 ## Start locally
 
 ```bash
+npm run desktop:start
+```
+
+`desktop:start` and `desktop:dev` currently both build the Electron shell and launch it through `packages/desktop/scripts/launch-dev-app.mjs`:
+
+```bash
 npm run desktop:dev
 ```
 
@@ -15,8 +21,10 @@ For packaged builds, launch `Personal Agent.app`.
 ## Runtime model
 
 - Electron owns the local UI surface through `personal-agent://app/`.
+- The renderer routes are `/conversations`, `/conversations/new`, `/conversations/:id`, `/knowledge`, `/automations`, `/automations/:id`, and `/settings`.
 - The daemon still owns durable background behavior: runs, automations, wakeups, reminders, and companion pairing.
 - The companion API still exposes HTTP/WebSocket on its configured port because phones and Tailnet clients need a public endpoint.
+- The desktop app consumes server-pushed app events for sessions, runs, tasks, daemon status, and invalidation; API snapshots are the fallback when the event stream is not available.
 
 ## Layout modes
 
@@ -42,3 +50,4 @@ npm run ab:run -- --session desktop-check --command "ab open personal-agent://ap
 - [Daemon](./daemon.md)
 - [Command-Line Guide](./command-line.md)
 - [Agent Browser](./agent-browser.md)
+- [iOS Companion](./ios-companion.md)

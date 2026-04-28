@@ -10,6 +10,7 @@ These aliases are used throughout the docs:
 
 - `<state-root>` — machine-local runtime state. Default: `~/.local/state/personal-agent`
 - `<config-root>` — machine-local config. Default: `<state-root>/config`
+- `<profiles-root>` — machine-local profile config. Default: `<config-root>/profiles`
 - `<vault-root>` — effective durable knowledge root
 
 `<vault-root>` resolves in this order:
@@ -43,6 +44,7 @@ In a managed knowledge-base setup, `<vault-root>` is usually the managed mirror 
 
 - [Command-Line Guide (`pa`)](./command-line.md)
 - [Desktop App](./desktop-app.md)
+- [iOS Companion](./ios-companion.md)
 - [Daemon](./daemon.md)
 - [Configuration](./configuration.md)
 - [MCP](./mcp.md)
@@ -77,6 +79,7 @@ These live under `internal-skills/` because they describe runtime features rathe
 | Where should reusable knowledge live? | [Knowledge System](./knowledge-system.md) | [Projects](./projects.md) when structure matters |
 | How should a conversation keep durable context? | [Conversation Context](./conversation-context.md) | [Conversations](./conversations.md) |
 | How do I operate the app locally? | [Getting Started](./getting-started.md) | [Command-Line Guide (`pa`)](./command-line.md), [Desktop App](./desktop-app.md), [Agent Browser in this repo](./agent-browser.md) |
+| How does the phone app connect? | [iOS Companion](./ios-companion.md) | [Daemon](./daemon.md), [Configuration](./configuration.md) |
 | How do background jobs and automations work? | [Daemon](./daemon.md) | [Runs](../internal-skills/runs/INDEX.md), [Scheduled Tasks](../internal-skills/scheduled-tasks/INDEX.md), [Auto Mode](../internal-skills/auto-mode/INDEX.md) |
 | Where should code for a new feature live? | [Repo Layout](./repo-layout.md) | package-local files it links to |
 | How do MCP servers fit in? | [MCP](./mcp.md) | `pa mcp help` for exact CLI flags |

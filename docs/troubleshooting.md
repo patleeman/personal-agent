@@ -40,6 +40,7 @@ Common fixes:
 - build artifacts are missing → `npm run build`
 - another process already owns the daemon socket or companion port
 - the desktop app is blocked by an external daemon ownership conflict
+- Electron native module cache is stale → remove `<repo-root>/dist/dev-desktop/native-modules/` and relaunch
 
 ## Daemon is unhealthy
 
@@ -102,7 +103,7 @@ Check the desktop logs:
 <state-root>/desktop/logs/
 ```
 
-Also check whether another process already owns the local web or daemon resources.
+Also check whether another process already owns the daemon socket or companion port. The desktop renderer itself uses `personal-agent://app/`, not a normal localhost web server.
 
 The desktop shell may own the daemon directly; a separately managed daemon can still interfere depending on startup state.
 
@@ -136,9 +137,9 @@ Common causes:
 
 ```text
 <state-root>/daemon/logs/daemon.log
-<state-root>/web/logs/web.log
 <state-root>/desktop/logs/main.log
 <state-root>/desktop/logs/daemon.log
+<state-root>/companion/auth.json
 ```
 
 ## Related docs

@@ -29,6 +29,8 @@ Important pieces:
 - `runtime.db` — run metadata, automation definitions, scheduler state
 - `runs/<run-id>/` — per-run logs and result blobs
 
+Companion auth and host state live under `<state-root>/companion/`. Scheduled task source files default to `<state-root>/sync/tasks`, while task runtime/activity state lives in the daemon database.
+
 ## When you need it
 
 Keep the daemon running when you use:
@@ -54,6 +56,18 @@ pa daemon service uninstall
 ```
 
 Managed services use `launchd` on macOS and `systemd --user` on Linux.
+
+## Companion API
+
+The daemon also serves the native companion API when companion support is enabled.
+
+Defaults:
+
+- host: `127.0.0.1`
+- port: `3843`
+- API root: `/companion/v1`
+
+The iOS local-dev host uses port `3845` through repo scripts. Use Settings in the desktop app for pairing and host reachability checks.
 
 ## Desktop shell note
 

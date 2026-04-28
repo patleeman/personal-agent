@@ -17,9 +17,12 @@ pa restart
 pa update
 pa daemon
 pa mcp
+pa help [command]
 ```
 
 Use `pa help <command>` for exact flags.
+
+Removed or intentionally unsupported top-level commands: `pa runs`, `pa tasks`, `pa profile`, `pa note`, and `pa node`. Use the desktop app, daemon-backed conversation tools, or Pi passthrough via `pa tui -- ...` instead.
 
 ## Launch Pi
 
@@ -36,6 +39,7 @@ Everything after `--` is passed through to Pi.
 ```bash
 pa status
 pa doctor
+pa doctor --json
 ```
 
 Use these before debugging anything more specific.
@@ -63,6 +67,7 @@ npm run desktop:start
 ```bash
 pa daemon
 pa daemon status
+pa daemon status --json
 pa daemon start
 pa daemon stop
 pa daemon restart
@@ -104,6 +109,15 @@ pa daemon start
 ```bash
 pa mcp list --probe -d
 ```
+
+### Pass raw arguments to Pi
+
+```bash
+pa tui -- --help
+pa tui -- -p "summarize this repo"
+```
+
+Do not call old passthrough aliases such as `pa node`; unknown top-level commands fail by design so mistakes are obvious.
 
 ## Related docs
 

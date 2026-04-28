@@ -36,9 +36,10 @@ This is where reusable knowledge belongs.
 Important subtrees:
 
 - `<config-root>/config.json` — machine config
+- `<config-root>/profiles/` — machine-local profile settings and model config
 - `<config-root>/local/` — machine-local settings/model/provider overrides
 - `<state-root>/daemon/` — daemon socket, runtime DB, run logs
-- `<state-root>/web/` — web runtime state and pairing state
+- `<state-root>/companion/` — companion host/device auth state
 - `<state-root>/desktop/` — desktop state and logs
 - `<state-root>/sync/` — durable session files and compatibility storage
 - `<state-root>/knowledge-base/repo` — managed KB mirror when KB sync is enabled
@@ -68,6 +69,14 @@ When `pa` launches Pi or the desktop app creates a live session, the runtime is 
 | reminder | tell-me-later wakeup | reminder + wakeup state |
 | conversation artifact | rendered output tied to one thread | conversation artifact state |
 | project artifact | durable deliverable tied to a project | `<vault-root>/projects/<projectId>/artifacts/` |
+
+## Supported operator surfaces
+
+- `pa tui` launches Pi in the terminal with the materialized Personal Agent runtime.
+- The Electron desktop app is the supported local operator UI and serves routes through `personal-agent://app/`.
+- The iOS companion app talks to the daemon companion API under `/companion/v1` after pairing.
+
+There is no supported standalone browser UI server for day-to-day operation.
 
 ## Invariants
 
