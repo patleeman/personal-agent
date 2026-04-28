@@ -15,6 +15,11 @@ describe('conversation header helpers', () => {
     expect(formatContextWindowLabel(1_500_000)).toBe('1.5M');
   });
 
+  it('omits unsafe context window labels', () => {
+    expect(formatContextWindowLabel(Number.MAX_SAFE_INTEGER + 1)).toBe('unknown');
+    expect(formatContextWindowLabel(272_000.5)).toBe('unknown');
+  });
+
 
   it('formats current context usage labels, including unknown post-compaction state', () => {
     expect(formatContextUsageLabel(27_200, 272_000)).toBe('10.0% of 272k ctx');

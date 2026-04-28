@@ -4,6 +4,10 @@ export function formatThinkingLevelLabel(level?: string): string {
 }
 
 export function formatContextWindowLabel(contextWindow: number): string {
+  if (!Number.isSafeInteger(contextWindow) || contextWindow <= 0) {
+    return 'unknown';
+  }
+
   if (contextWindow >= 1_000_000) {
     const millions = contextWindow / 1_000_000;
     return Number.isInteger(millions) ? `${millions}M` : `${millions.toFixed(1)}M`;
