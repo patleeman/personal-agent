@@ -55,6 +55,25 @@ export function dedupeConversationContextDocs(docs: ConversationContextDocRef[])
   return next;
 }
 
+export function appendMentionedConversationContextDocs(
+  currentDocs: ConversationContextDocRef[],
+  items: Array<MentionItem & { path: string }>,
+): ConversationContextDocRef[] {
+  return dedupeConversationContextDocs([
+    ...currentDocs,
+    ...items.map((item) => mentionItemToConversationContextDoc(item)),
+  ]);
+}
+
+export function removeConversationContextDocByPath(
+  currentDocs: ConversationContextDocRef[],
+  pathToRemove: string,
+): ConversationContextDocRef[] {
+  return dedupeConversationContextDocs(
+    currentDocs.filter((doc) => doc.path !== pathToRemove),
+  );
+}
+
 export function truncateConversationShelfText(
   text: string,
   options: { maxChars?: number; maxLines?: number } = {},

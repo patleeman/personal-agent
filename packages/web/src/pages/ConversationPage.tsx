@@ -92,9 +92,10 @@ import {
   resolveDraftThinkingPreferenceUpdate,
 } from '../conversation/conversationModelPreferences';
 import {
+  appendMentionedConversationContextDocs,
   dedupeConversationContextDocs,
   isAttachableMentionItem,
-  mentionItemToConversationContextDoc,
+  removeConversationContextDocByPath,
   resolveConversationAutocompleteCatalogDemand,
   resolveConversationGitSummaryPresentation,
 } from '../conversation/conversationComposerPresentation';
@@ -5347,10 +5348,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     try {
-      await saveAttachedContextDocs([
-        ...attachedContextDocs,
-        ...items.map((item) => mentionItemToConversationContextDoc(item)),
-      ]);
+      await saveAttachedContextDocs(appendMentionedConversationContextDocs(attachedContextDocs, items));
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
@@ -5358,7 +5356,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
   async function removeAttachedContextDoc(path: string) {
     try {
-      await saveAttachedContextDocs(attachedContextDocs.filter((doc) => doc.path !== path));
+      await saveAttachedContextDocs(removeConversationContextDocByPath(attachedContextDocs, path));
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }

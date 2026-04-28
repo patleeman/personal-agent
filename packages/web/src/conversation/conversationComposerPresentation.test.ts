@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendMentionedConversationContextDocs,
   dedupeConversationContextDocs,
   formatComposerActionLabel,
   formatParallelJobContextSummary,
@@ -8,6 +9,7 @@ import {
   formatQueuedPromptShelfText,
   isAttachableMentionItem,
   mentionItemToConversationContextDoc,
+  removeConversationContextDocByPath,
   resolveConversationAutocompleteCatalogDemand,
   resolveConversationGitSummaryPresentation,
   truncateConversationShelfText,
@@ -68,6 +70,30 @@ describe('conversation composer presentation helpers', () => {
       { path: '/b.md', title: 'Bee', kind: 'doc' },
     ])).toEqual([
       { path: '/a.md', title: '/a.md', kind: 'file' },
+      { path: '/b.md', title: 'Bee', kind: 'doc' },
+    ]);
+
+    expect(appendMentionedConversationContextDocs([
+      { path: '/a.md', title: 'A', kind: 'file' },
+    ], [{
+      kind: 'note',
+      id: 'note:b',
+      label: 'Bee',
+      path: ' /b.md ',
+    }, {
+      kind: 'file',
+      id: 'file:a',
+      label: 'Duplicate A',
+      path: '/a.md',
+    }])).toEqual([
+      { path: '/a.md', title: 'A', kind: 'file' },
+      { path: '/b.md', title: 'Bee', kind: 'doc', mentionId: 'note:b' },
+    ]);
+
+    expect(removeConversationContextDocByPath([
+      { path: '/a.md', title: 'A', kind: 'file' },
+      { path: '/b.md', title: 'Bee', kind: 'doc' },
+    ], '/a.md')).toEqual([
       { path: '/b.md', title: 'Bee', kind: 'doc' },
     ]);
   });
