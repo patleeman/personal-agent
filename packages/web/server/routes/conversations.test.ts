@@ -372,10 +372,10 @@ describe('conversation routes', () => {
     await getHandler('/api/sessions/:id')(createRequest({
       params: { id: 'session-1' },
       query: {
-        knownBlockOffset: '3',
+        knownBlockOffset: '3abc',
         knownLastBlockId: 'block-3',
         knownSessionSignature: 'sig-old',
-        knownTotalBlocks: '4',
+        knownTotalBlocks: '4abc',
         tailBlocks: '10',
       },
     }), appendOnlyRes);
@@ -386,9 +386,9 @@ describe('conversation routes', () => {
     });
     expect(buildAppendOnlySessionDetailResponseMock).toHaveBeenCalledWith({
       detail: { id: 'session-1', signature: 'sig-next' },
-      knownBlockOffset: 3,
+      knownBlockOffset: undefined,
       knownLastBlockId: 'block-3',
-      knownTotalBlocks: 4,
+      knownTotalBlocks: undefined,
     });
     expect(appendOnlyRes.json).toHaveBeenCalledWith({ appended: true, sessionId: 'session-1' });
 

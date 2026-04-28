@@ -393,8 +393,8 @@ describe('registerConversationStateRoutes', () => {
       params: { id: 'conversation-1' },
       query: {
         knownSessionSignature: ' sig-old ',
-        knownBlockOffset: '3',
-        knownTotalBlocks: '9',
+        knownBlockOffset: '3abc',
+        knownTotalBlocks: '9abc',
         knownLastBlockId: ' block-1 ',
       },
     }, res);
@@ -404,8 +404,8 @@ describe('registerConversationStateRoutes', () => {
         signature: 'sig-new',
         blocks: [{ id: 'block-2' }],
       },
-      knownBlockOffset: 3,
-      knownTotalBlocks: 9,
+      knownBlockOffset: undefined,
+      knownTotalBlocks: undefined,
       knownLastBlockId: 'block-1',
     });
     expect(res.json).toHaveBeenCalledWith({
