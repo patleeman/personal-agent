@@ -36,6 +36,8 @@ export interface ConversationPlanWorkspaceState extends ConversationPlanDefaults
   presetLibrary: ConversationPlanLibraryState;
 }
 
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -63,7 +65,8 @@ function normalizeTimestamp(value: unknown, fallback: string): string {
     return fallback;
   }
 
-  const parsed = Date.parse(value.trim());
+  const normalized = value.trim();
+  const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
 }
 
