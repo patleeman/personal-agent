@@ -261,6 +261,32 @@ describe('upsertModelProviderModel', () => {
       cacheWrite: 0,
     });
   });
+
+  it('does not persist unsafe model costs', () => {
+    const dir = createTempDir();
+
+    upsertModelProvider('assistant', 'desktop', {
+      baseUrl: 'http://desktop:8000/v1',
+      api: 'openai-completions',
+    }, { profilesDir: dir });
+
+    const state = upsertModelProviderModel('assistant', 'desktop', 'qwen-reap', {
+      name: 'Qwen REAP',
+      cost: {
+        input: Number.MAX_SAFE_INTEGER + 1,
+        output: 0.25,
+        cacheRead: Number.MAX_SAFE_INTEGER + 1,
+        cacheWrite: 0.5,
+      },
+    }, { profilesDir: dir });
+
+    expect(state.providers[0]?.models[0]?.cost).toEqual({
+      input: 0,
+      output: 0.25,
+      cacheRead: 0,
+      cacheWrite: 0.5,
+    });
+  });
 });
 
 describe('removeModelProvider', () => {

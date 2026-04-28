@@ -188,7 +188,7 @@ function readOptionalString(value: unknown): string | undefined {
 }
 
 function readOptionalNonNegativeNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && value >= 0 ? value : undefined;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | undefined {
