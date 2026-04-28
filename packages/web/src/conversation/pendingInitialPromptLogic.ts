@@ -86,8 +86,11 @@ export function pendingPromptImagesMatchMessageImages(
       }
 
       const pendingPreviewUrl = pendingImage.previewUrl?.trim() || '';
+      const pendingDataUrl = pendingImage.data
+        ? `data:${pendingImage.mimeType};base64,${pendingImage.data}`
+        : '';
       if (pendingPreviewUrl || messageImage.src) {
-        return messageImage.src === pendingPreviewUrl;
+        return messageImage.src === pendingPreviewUrl || messageImage.src === pendingDataUrl;
       }
 
       const pendingName = pendingImage.name?.trim() || '';

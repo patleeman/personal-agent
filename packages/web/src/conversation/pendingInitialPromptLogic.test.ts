@@ -131,4 +131,11 @@ describe('pendingInitialPromptLogic', () => {
       [{ alt: 'other.png', mimeType: 'image/png', caption: 'other.png' }],
     )).toBe(false);
   });
+
+  it('matches accepted transcript images by data url when pending previews used blob urls', () => {
+    expect(pendingPromptImagesMatchMessageImages(
+      [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'blob:ship' }],
+      [{ alt: 'ship.png', src: 'data:image/png;base64,abc', mimeType: 'image/png', caption: 'ship.png' }],
+    )).toBe(true);
+  });
 });
