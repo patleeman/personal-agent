@@ -93,22 +93,22 @@ function parseTaskRecord(_key: string, value: unknown): TaskRuntimeState | undef
     filePath,
     scheduleType: toScheduleType(value.scheduleType),
     running: toBoolean(value.running) ?? false,
-    runningStartedAt: toString(value.runningStartedAt),
+    runningStartedAt: toTimestampString(value.runningStartedAt),
     activeRunId: toString(value.activeRunId),
     lastRunId: toString(value.lastRunId),
     lastStatus: toTaskRunStatus(value.lastStatus),
-    lastRunAt: toString(value.lastRunAt),
-    lastSuccessAt: toString(value.lastSuccessAt),
-    lastFailureAt: toString(value.lastFailureAt),
+    lastRunAt: toTimestampString(value.lastRunAt),
+    lastSuccessAt: toTimestampString(value.lastSuccessAt),
+    lastFailureAt: toTimestampString(value.lastFailureAt),
     lastError: toString(value.lastError),
     lastLogPath: toString(value.lastLogPath),
     lastScheduledMinute: toString(value.lastScheduledMinute),
     lastAttemptCount: typeof value.lastAttemptCount === 'number'
       ? value.lastAttemptCount
       : undefined,
-    oneTimeResolvedAt: toString(value.oneTimeResolvedAt),
+    oneTimeResolvedAt: toTimestampString(value.oneTimeResolvedAt),
     oneTimeResolvedStatus: toOneTimeStatus(value.oneTimeResolvedStatus),
-    oneTimeCompletedAt: toString(value.oneTimeCompletedAt),
+    oneTimeCompletedAt: toTimestampString(value.oneTimeCompletedAt),
   };
 }
 

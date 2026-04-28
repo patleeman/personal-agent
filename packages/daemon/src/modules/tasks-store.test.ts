@@ -85,10 +85,15 @@ describe('tasks-store', () => {
           filePath: '/tmp/malformed.task.md',
           scheduleType: 'invalid',
           running: 'yes',
+          lastRunAt: 'not-a-date',
+          lastSuccessAt: 'also-not-a-date',
+          lastFailureAt: 'still-not-a-date',
           lastStatus: 'unexpected',
           lastError: '',
           lastAttemptCount: '5',
+          oneTimeResolvedAt: 'bad-time',
           oneTimeResolvedStatus: 'bad-value',
+          oneTimeCompletedAt: 'bad-completed-time',
         },
       },
     }, null, 2));
@@ -117,9 +122,14 @@ describe('tasks-store', () => {
       running: false,
       runningStartedAt: undefined,
       lastStatus: undefined,
+      lastRunAt: undefined,
+      lastSuccessAt: undefined,
+      lastFailureAt: undefined,
       lastError: undefined,
       lastAttemptCount: undefined,
+      oneTimeResolvedAt: undefined,
       oneTimeResolvedStatus: undefined,
+      oneTimeCompletedAt: undefined,
     });
   });
 
