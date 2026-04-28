@@ -984,6 +984,48 @@ describe('sessions', () => {
     expect(detail?.meta.workspaceCwd).toBeNull();
   });
 
+  it('uses legacy cwd tool results to associate old cwd-less chats with the requested workspace', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+    const stateRoot = join(sessionsDir, 'state');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+    const chatCwd = join(stateRoot, 'pi-agent-runtime', 'chat-workspaces', 'shared');
+
+    const filePath = writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-legacy-cwd-tool',
+      cwd: chatCwd,
+      title: 'Move from chat',
+    });
+
+    appendConversationWorkspaceMetadata({
+      sessionFile: filePath,
+      cwd: chatCwd,
+      workspaceCwd: null,
+    });
+    appendFileSync(filePath, `${JSON.stringify({
+      type: 'message',
+      id: 'legacy-cwd-tool-result',
+      parentId: 'session-legacy-cwd-tool-assistant-1',
+      timestamp: '2026-03-11T12:00:03.000Z',
+      message: {
+        role: 'toolResult',
+        toolCallId: 'call-cwd',
+        toolName: 'change_working_directory',
+        content: [{ type: 'text', text: 'Queued working directory change to /tmp/project.' }],
+        details: {
+          action: 'queue',
+          cwd: '/tmp/project',
+          queued: true,
+        },
+      },
+    })}\n`, 'utf-8');
+
+    const detail = readSessionBlocks('session-legacy-cwd-tool');
+    expect(detail?.meta.cwd).toBe('/tmp/project');
+    expect(detail?.meta.workspaceCwd).toBe('/tmp/project');
+  });
+
   it('ignores a stale chat workspace marker when metadata points at a project cwd', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
@@ -1113,9 +1155,15 @@ describe('sessions', () => {
       title: 'Persistent title',
       assistantTexts: ['Persisted reply'],
     });
+    appendConversationWorkspaceMetadata({
+      sessionFile: filePath,
+      cwd: '/tmp/persistent-project',
+      workspaceCwd: '/tmp/persistent-project',
+    });
 
     const first = listSessions();
     expect(first[0]?.title).toBe('Persistent title');
+    expect(first[0]?.workspaceCwd).toBe('/tmp/persistent-project');
     expect(existsSync(indexFile)).toBe(true);
     expect(readFileSync(indexFile, 'utf-8')).toContain('session-persist');
 
@@ -1129,6 +1177,8 @@ describe('sessions', () => {
         id: 'session-persist',
         title: 'Persistent title',
         messageCount: 2,
+        cwd: '/tmp/persistent-project',
+        workspaceCwd: '/tmp/persistent-project',
       }));
     } finally {
       chmodSync(filePath, 0o644);

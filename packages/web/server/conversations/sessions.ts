@@ -193,6 +193,11 @@ interface ConversationWorkspaceMetadata {
   workspaceCwd?: string | null;
 }
 
+interface LegacyToolWorkspaceMetadata {
+  cwd: string;
+  workspaceCwd: string;
+}
+
 export interface SessionDetail {
   meta: SessionMeta;
   blocks: DisplayBlock[];
@@ -1320,6 +1325,27 @@ function readConversationWorkspaceMetadata(line: RawCustomEntry): ConversationWo
   };
 }
 
+function readLegacyToolWorkspaceMetadata(line: RawMessage): LegacyToolWorkspaceMetadata | null {
+  if (line.message.role !== 'toolResult' || line.message.toolName !== 'change_working_directory') {
+    return null;
+  }
+
+  const details = line.message.details;
+  if (!details || typeof details !== 'object') {
+    return null;
+  }
+
+  const data = details as Record<string, unknown>;
+  const action = typeof data.action === 'string' ? data.action.trim() : '';
+  const queued = data.queued === true;
+  const cwd = typeof data.cwd === 'string' && data.cwd.trim().length > 0 ? data.cwd.trim() : '';
+  if (action !== 'queue' || !queued || !cwd) {
+    return null;
+  }
+
+  return { cwd, workspaceCwd: cwd };
+}
+
 export function appendConversationWorkspaceMetadata(input: {
   sessionFile: string;
   cwd?: string;
@@ -1411,6 +1437,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
   let sawSessionInfo = false;
   let messageCount = 0;
   let workspaceMetadata: ConversationWorkspaceMetadata | null = null;
+  let legacyToolWorkspaceMetadata: LegacyToolWorkspaceMetadata | null = null;
 
   for (const rawLine of raw.split('\n')) {
     if (!rawLine.trim()) {
@@ -1458,6 +1485,7 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
 
     const message = line as RawMessage;
     messageCount += 1;
+    legacyToolWorkspaceMetadata = readLegacyToolWorkspaceMetadata(message) ?? legacyToolWorkspaceMetadata;
 
     if (fallbackTitle === null) {
       fallbackTitle = extractTitleFromMessage(message.message);
@@ -1481,14 +1509,17 @@ function readSessionMetaFromFile(filePath: string, cwdSlug: string): SessionMeta
     : null;
 
   const headerCwd = sessionRecord.cwd ?? slugToCwd(cwdSlug);
-  const cwd = workspaceMetadata?.cwd ?? headerCwd;
-  const workspaceCwd = workspaceMetadata && 'workspaceCwd' in workspaceMetadata
+  const inferredLegacyWorkspaceMetadata = workspaceMetadata?.workspaceCwd === null && legacyToolWorkspaceMetadata
+    ? legacyToolWorkspaceMetadata
+    : null;
+  const cwd = inferredLegacyWorkspaceMetadata?.cwd ?? workspaceMetadata?.cwd ?? headerCwd;
+  const workspaceCwd = inferredLegacyWorkspaceMetadata?.workspaceCwd ?? (workspaceMetadata && 'workspaceCwd' in workspaceMetadata
     ? workspaceMetadata.workspaceCwd === null
       ? isNeutralChatWorkspaceCwd(cwd) ? null : undefined
       : workspaceMetadata.workspaceCwd
     : isNeutralChatWorkspaceCwd(cwd)
       ? null
-      : undefined;
+      : undefined);
 
   return {
     id: sessionRecord.id,
@@ -1559,6 +1590,13 @@ function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndex
   const remoteConversationId = typeof meta.remoteConversationId === 'string' && meta.remoteConversationId.trim().length > 0
     ? meta.remoteConversationId.trim()
     : undefined;
+  const workspaceCwd = Object.prototype.hasOwnProperty.call(meta, 'workspaceCwd')
+    ? meta.workspaceCwd === null
+      ? null
+      : typeof meta.workspaceCwd === 'string' && meta.workspaceCwd.trim().length > 0
+        ? meta.workspaceCwd.trim()
+        : undefined
+    : undefined;
 
   return {
     filePath: entry.filePath,
@@ -1572,6 +1610,7 @@ function loadPersistentSessionIndexEntry(value: unknown): PersistentSessionIndex
       model: meta.model,
       title: meta.title,
       messageCount: meta.messageCount,
+      ...(workspaceCwd !== undefined ? { workspaceCwd } : {}),
       ...(remoteHostId ? { remoteHostId } : {}),
       ...(remoteHostLabel ? { remoteHostLabel } : {}),
       ...(remoteConversationId ? { remoteConversationId } : {}),
