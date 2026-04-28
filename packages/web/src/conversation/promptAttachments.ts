@@ -10,6 +10,7 @@ import {
 export type ComposerDrawingAttachment = DraftConversationDrawingAttachment;
 
 export const MAX_PROMPT_IMAGE_DIMENSION = 2000;
+const MAX_COMPOSER_DRAWING_REVISION = 1_000_000;
 
 function readBlobAsDataUrl(blob: Blob, label: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -372,7 +373,7 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
 
   return {
     attachmentId,
-    ...(Number.isSafeInteger(revision) && Number(revision) > 0 ? { revision: Number(revision) } : {}),
+    ...(Number.isSafeInteger(revision) && Number(revision) > 0 && Number(revision) <= MAX_COMPOSER_DRAWING_REVISION ? { revision: Number(revision) } : {}),
   };
 }
 

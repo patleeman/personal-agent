@@ -188,6 +188,7 @@ describe('promptAttachments', () => {
     expect(drawingAttachmentToPromptRef({ ...drawing, revision: 'not-a-number' } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
     expect(drawingAttachmentToPromptRef({ ...drawing, revision: '2abc' } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
     expect(drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER + 1) } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
+    expect(drawingAttachmentToPromptRef({ ...drawing, revision: String(Number.MAX_SAFE_INTEGER) } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
   });
 
   it('keeps small binary helpers boring and predictable', async () => {
