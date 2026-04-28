@@ -408,6 +408,17 @@ describe('tasks module scheduling', () => {
     }));
   });
 
+  it('drops malformed persisted automation scheduler timestamps', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    saveAutomationSchedulerState({ lastEvaluatedAt: '2026-03-02T10:00:00.000Z' }, { dbPath });
+    openSqliteDatabase(dbPath)
+      .prepare('UPDATE automation_scheduler_state SET value = ? WHERE key = ?')
+      .run('not-a-date', 'lastEvaluatedAt');
+
+    expect(loadAutomationSchedulerState({ dbPath })).toEqual({});
+  });
+
   it('does not floor fractional task module timer config', () => {
     const module = createTasksModule({
       enabled: true,

@@ -820,7 +820,7 @@ export function loadAutomationSchedulerState(options: { dbPath?: string } = {}):
   const output: AutomationSchedulerState = {};
   for (const row of rows) {
     if (row.key === 'lastEvaluatedAt') {
-      output.lastEvaluatedAt = readOptionalString(row.value);
+      output.lastEvaluatedAt = readOptionalTimestamp(row.value);
     }
   }
   return output;
