@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -15,7 +15,7 @@ import {
   saveDurableRunStatus,
   type DaemonConfig,
 } from '@personal-agent/daemon';
-import { clearDurableRunsListCache, getDurableRun, listDurableRunsWithTelemetry } from './durableRuns.js';
+import { clearDurableRunsListCache, getDurableRun, listDurableRunsWithTelemetry, readDurableRunLogDelta } from './durableRuns.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -56,6 +56,19 @@ describe('durable run reads', () => {
   afterEach(async () => {
     process.env = originalEnv;
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
+  });
+
+  it('does not floor fractional durable run log cursors', () => {
+    const dir = createTempDir('pa-web-durable-run-log-delta-');
+    const logPath = join(dir, 'run.log');
+    writeFileSync(logPath, 'abcdef');
+
+    expect(readDurableRunLogDelta(logPath, 1.5)).toEqual({
+      path: logPath,
+      delta: 'abcdef',
+      nextCursor: 6,
+      reset: false,
+    });
   });
 
   it('reports cache telemetry when durable runs fall back to filesystem scanning', async () => {
