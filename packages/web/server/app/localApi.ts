@@ -801,7 +801,7 @@ function shouldRefreshDesktopConversationStateForAppEvent(
 
 export function normalizeDesktopLocalApiTailBlocks(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(1000, value)
     : undefined;
 }
 
