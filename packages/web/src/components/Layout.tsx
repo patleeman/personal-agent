@@ -12,7 +12,7 @@ import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/d
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
 import { isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
-import type { DesktopEnvironmentState } from '../shared/types';
+import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache } from '../hooks/useSessions';
@@ -54,6 +54,22 @@ function isDesktopNavigateDetail(value: unknown): value is { route: string; repl
 
   const replace = (value as { replace?: unknown }).replace;
   return replace === undefined || typeof replace === 'boolean';
+}
+
+export function resolveActiveWorkspaceCwd(
+  sessions: SessionMeta[] | null | undefined,
+  activeConversationId: string | null | undefined,
+): string | null {
+  if (!activeConversationId) {
+    return null;
+  }
+
+  const session = sessions?.find((entry) => entry.id === activeConversationId) ?? null;
+  if (!session || session.remoteHostId?.trim() || session.remoteConversationId?.trim()) {
+    return null;
+  }
+
+  return session.cwd ?? null;
 }
 
 function hasBlockingOverlayOpen(): boolean {
@@ -675,9 +691,7 @@ export function Layout() {
   );
   const activeConversationId = getActiveConversationId(location.pathname);
   const activeWorkbenchKnowledgeFileId = showWorkbench ? searchParams.get('file') : null;
-  const activeWorkspaceCwd = activeConversationId
-    ? sessions?.find((session) => session.id === activeConversationId && !session.remoteHostId)?.cwd ?? null
-    : null;
+  const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
 
   useEffect(() => {
     setActiveWorkspaceFile((current) => (
