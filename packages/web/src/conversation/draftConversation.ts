@@ -102,6 +102,21 @@ function normalizeDraftConversationImageData(value: unknown): string | null {
   return data;
 }
 
+function normalizeDraftConversationImagePreviewUrl(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const previewUrl = value.trim();
+  if (!previewUrl) {
+    return null;
+  }
+
+  return previewUrl.startsWith('blob:') || previewUrl.toLowerCase().startsWith('data:image/')
+    ? previewUrl
+    : null;
+}
+
 function normalizeDraftConversationImage(value: unknown): PromptImageInput | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -114,6 +129,7 @@ function normalizeDraftConversationImage(value: unknown): PromptImageInput | nul
 
   const mimeType = image.mimeType.trim();
   const data = normalizeDraftConversationImageData(image.data);
+  const previewUrl = normalizeDraftConversationImagePreviewUrl(image.previewUrl);
   if (!mimeType.toLowerCase().startsWith('image/') || !data) {
     return null;
   }
@@ -122,7 +138,7 @@ function normalizeDraftConversationImage(value: unknown): PromptImageInput | nul
     mimeType,
     data,
     ...(typeof image.name === 'string' && image.name.trim() ? { name: image.name.trim() } : {}),
-    ...(typeof image.previewUrl === 'string' && image.previewUrl.trim() ? { previewUrl: image.previewUrl.trim() } : {}),
+    ...(previewUrl ? { previewUrl } : {}),
   };
 }
 

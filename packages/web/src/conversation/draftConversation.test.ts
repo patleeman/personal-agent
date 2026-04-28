@@ -229,7 +229,7 @@ describe('draftConversation', () => {
 
     persistDraftConversationAttachments({
       images: [
-        { mimeType: 'image/png', data: 'abc', name: 'diagram.png' },
+        { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
         { mimeType: 'text/plain', data: 'aGVsbG8=', name: 'note.txt' },
         { mimeType: 'image/png', data: 'not-valid-base64!', name: 'bad.png' },
         { mimeType: 'image/png', data: '   ', name: 'blank.png' },
