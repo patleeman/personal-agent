@@ -95,4 +95,25 @@ describe('liveSessionQueue', () => {
     expect(steeringMessages).toEqual(['first queued prompt']);
     expect(steeringQueue.map((message) => message.__personalAgentQueuedPromptId)).toEqual(['first']);
   });
+
+  it('restores visible-only queued prompts by preview id when the index is stale', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const steer = async (text: string) => {
+      steeringMessages.push(text);
+    };
+
+    const restored = await restoreLiveSessionQueuedMessage({
+      session: {
+        agent: {},
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        clearQueue: () => ({ steering: steeringMessages.splice(0), followUp: [] }),
+        steer,
+        followUp: async () => undefined,
+      },
+    }, 'steer', 0, 'steer-visible-1');
+
+    expect(restored.text).toBe('second queued prompt');
+    expect(steeringMessages).toEqual(['first queued prompt']);
+  });
 });

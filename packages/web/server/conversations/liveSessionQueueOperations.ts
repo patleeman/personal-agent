@@ -62,23 +62,29 @@ export async function restoreLiveSessionQueuedMessage(
     : internalAgent.followUpQueue);
 
   if (!Array.isArray(internalQueue) || isVisibleQueueFallbackPreviewId(behavior, previewId)) {
-    if (index >= visibleQueue.length) {
+    const normalizedPreviewId = previewId?.trim() || '';
+    const previews = visibleQueue.map((text, previewIndex) => createVisibleQueueFallbackPreview(behavior, previewIndex, text));
+    const previewIndex = normalizedPreviewId
+      ? previews.findIndex((preview) => preview.id === normalizedPreviewId)
+      : -1;
+    const restoreIndex = previewIndex >= 0 ? previewIndex : index;
+
+    if (restoreIndex >= visibleQueue.length) {
       throw new Error('Queued prompt changed before it could be restored. Try again.');
     }
 
-    const previews = visibleQueue.map((text, previewIndex) => createVisibleQueueFallbackPreview(behavior, previewIndex, text));
-    if (previewId && previews[index]?.id !== previewId) {
+    if (normalizedPreviewId && previewIndex < 0) {
       throw new Error('Queued prompt changed before it could be restored. Try again.');
     }
 
     const cleared = host.session.clearQueue();
     const restoreQueue = behavior === 'steer' ? cleared.steering : cleared.followUp;
-    const restoredText = restoreQueue[index] ?? visibleQueue[index] ?? '';
+    const restoredText = restoreQueue[restoreIndex] ?? visibleQueue[restoreIndex] ?? '';
     const remainingSteering = behavior === 'steer'
-      ? cleared.steering.filter((_, queueIndex) => queueIndex !== index)
+      ? cleared.steering.filter((_, queueIndex) => queueIndex !== restoreIndex)
       : cleared.steering;
     const remainingFollowUp = behavior === 'followUp'
-      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== index)
+      ? cleared.followUp.filter((_, queueIndex) => queueIndex !== restoreIndex)
       : cleared.followUp;
 
     await replayQueues(host, remainingSteering, remainingFollowUp);
