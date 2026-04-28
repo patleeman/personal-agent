@@ -90,11 +90,11 @@ function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
       && typeof image.mimeType === 'string'
       && image.mimeType.trim().length > 0
       && typeof image.data === 'string'
-      && image.data.length > 0
+      && image.data.trim().length > 0
     ))
     .map((image) => ({
       mimeType: image.mimeType.trim(),
-      data: image.data,
+      data: image.data.trim(),
       ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
       ...(typeof image.previewUrl === 'string' && image.previewUrl.trim().length > 0 ? { previewUrl: image.previewUrl.trim() } : {}),
     }));

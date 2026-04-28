@@ -91,6 +91,7 @@ describe('pendingConversationPrompt helpers', () => {
         { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'blob:diagram' },
         { mimeType: '', data: 'missing-mime' },
         { mimeType: 'image/png', data: '' },
+        { mimeType: 'image/png', data: '   ' },
       ],
       attachmentRefs: [],
     }, null);
