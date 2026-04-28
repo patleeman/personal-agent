@@ -24,6 +24,12 @@ type DesktopConversationStateEnvelope = {
   };
 };
 
+export function normalizeDesktopConversationStateTailBlocks(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 function mergeDesktopConversationState(
   previous: DesktopConversationState | null,
   next: DesktopConversationState,
@@ -154,10 +160,11 @@ export function useDesktopConversationState(
 
     window.addEventListener(DESKTOP_CONVERSATION_STATE_EVENT, handleStateEvent as EventListener);
 
+    const tailBlocks = normalizeDesktopConversationStateTailBlocks(options?.tailBlocks);
     void bridge.subscribeConversationState({
       conversationId,
-      ...(typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0
-        ? { tailBlocks: options.tailBlocks }
+      ...(tailBlocks !== undefined
+        ? { tailBlocks }
         : {}),
       surfaceId,
       surfaceType,
