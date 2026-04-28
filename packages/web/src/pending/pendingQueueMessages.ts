@@ -73,7 +73,7 @@ export function appendPendingInitialPromptBlock(
   const text = pendingPrompt.text.trim();
   const images = pendingPrompt.images.map((image, index) => ({
     alt: image.name?.trim() || `Pending image ${index + 1}`,
-    src: image.previewUrl,
+    src: image.previewUrl ?? `data:${image.mimeType};base64,${image.data}`,
     mimeType: image.mimeType,
     caption: image.name,
   }));
