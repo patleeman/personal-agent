@@ -362,9 +362,13 @@ export function drawingAttachmentToPromptRef(attachment: ComposerDrawingAttachme
     return null;
   }
 
+  const revision = typeof attachment.revision === 'number'
+    ? attachment.revision
+    : (typeof attachment.revision === 'string' ? Number.parseInt(attachment.revision, 10) : undefined);
+
   return {
     attachmentId,
-    ...(attachment.revision ? { revision: attachment.revision } : {}),
+    ...(Number.isInteger(revision) && Number(revision) > 0 ? { revision: Number(revision) } : {}),
   };
 }
 

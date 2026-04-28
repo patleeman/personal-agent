@@ -175,8 +175,9 @@ describe('promptAttachments', () => {
       data: 'abc',
       previewUrl: 'data:image/png;base64,abc',
     });
-    expect(drawingAttachmentToPromptRef(drawing)).toEqual({ attachmentId: 'attachment-1', revision: '2' });
+    expect(drawingAttachmentToPromptRef(drawing)).toEqual({ attachmentId: 'attachment-1', revision: 2 });
     expect(drawingAttachmentToPromptRef({ ...drawing, attachmentId: undefined })).toBeNull();
+    expect(drawingAttachmentToPromptRef({ ...drawing, revision: 'not-a-number' } as ComposerDrawingAttachment)).toEqual({ attachmentId: 'attachment-1' });
   });
 
   it('keeps small binary helpers boring and predictable', async () => {
