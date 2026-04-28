@@ -90,6 +90,9 @@ describe('durableRunCapability', () => {
 
     await expect(readDurableRunLogCapability({ runId: 'run-1', tail: 0 })).resolves.toEqual({ path: '/tmp/run-1.log', log: 'tail' });
     expect(getDurableRunLogMock).toHaveBeenCalledWith('run-1', 120);
+
+    await expect(readDurableRunLogCapability({ runId: 'run-1', tail: Number.MAX_SAFE_INTEGER + 1 })).resolves.toEqual({ path: '/tmp/run-1.log', log: 'tail' });
+    expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 120);
   });
 
   it('cancels durable runs and validates the id', async () => {

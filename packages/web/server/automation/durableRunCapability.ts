@@ -41,7 +41,7 @@ export async function readDurableRunLogCapability(input: {
     throw new DurableRunCapabilityInputError('runId required');
   }
 
-  const tail = Number.isInteger(input.tail) && (input.tail as number) > 0
+  const tail = typeof input.tail === 'number' && Number.isSafeInteger(input.tail) && input.tail > 0
     ? input.tail as number
     : 120;
   const result = await getDurableRunLog(normalizedRunId, tail);
