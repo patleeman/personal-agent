@@ -22,7 +22,7 @@ export function formatContextWindowLabel(contextWindow: number): string {
 }
 
 export function getContextUsagePercent(tokens: number | null, contextWindow: number): number | null {
-  if (tokens === null || contextWindow <= 0) {
+  if (tokens === null || !Number.isSafeInteger(tokens) || tokens < 0 || !Number.isSafeInteger(contextWindow) || contextWindow <= 0) {
     return null;
   }
 
@@ -34,6 +34,9 @@ export function formatContextUsageLabel(tokens: number | null, contextWindow: nu
     return `? of ${formatContextWindowLabel(contextWindow)} ctx`;
   }
 
-  const pct = getContextUsagePercent(tokens, contextWindow) ?? 0;
+  const pct = getContextUsagePercent(tokens, contextWindow);
+  if (pct === null) {
+    return `? of ${formatContextWindowLabel(contextWindow)} ctx`;
+  }
   return `${pct.toFixed(1)}% of ${formatContextWindowLabel(contextWindow)} ctx`;
 }
