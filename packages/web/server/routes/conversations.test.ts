@@ -372,10 +372,10 @@ describe('conversation routes', () => {
     await getHandler('/api/sessions/:id')(createRequest({
       params: { id: 'session-1' },
       query: {
-        knownBlockOffset: '3abc',
+        knownBlockOffset: String(Number.MAX_SAFE_INTEGER + 1),
         knownLastBlockId: 'block-3',
         knownSessionSignature: 'sig-old',
-        knownTotalBlocks: '4abc',
+        knownTotalBlocks: String(Number.MAX_SAFE_INTEGER + 1),
         tailBlocks: '10',
       },
     }), appendOnlyRes);
