@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRecord, ScheduledTaskDetail, SessionMeta } from '../shared/types';
-import { buildTaskExistingThreadOptions, buildTaskProjectOptions, parseCatchUpWindowMinutes, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
+import { buildTaskExistingThreadOptions, buildTaskProjectOptions, formatCatchUpWindowLabel, parseCatchUpWindowMinutes, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -31,6 +31,11 @@ describe('ScheduledTaskPanel editor capabilities', () => {
   it('rejects unsafe catch-up window minute values', () => {
     expect(parseCatchUpWindowMinutes(String(Number.MAX_SAFE_INTEGER + 1))).toBeNaN();
     expect(parseCatchUpWindowMinutes(String(Math.floor(Number.MAX_SAFE_INTEGER / 60) + 1))).toBeNaN();
+  });
+
+  it('treats unsafe persisted catch-up windows as disabled', () => {
+    expect(formatCatchUpWindowLabel(Number.MAX_SAFE_INTEGER + 1)).toBe('Disabled');
+    expect(formatCatchUpWindowLabel(90.5)).toBe('Disabled');
   });
 
   it('allows thread automations to choose a model', () => {

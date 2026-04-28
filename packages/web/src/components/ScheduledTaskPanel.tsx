@@ -162,8 +162,8 @@ export function parseCatchUpWindowMinutes(value: string): number | undefined {
   return Number.isSafeInteger(parsed) && parsed > 0 && Number.isSafeInteger(parsed * 60) ? parsed : Number.NaN;
 }
 
-function formatCatchUpWindowLabel(seconds: number | undefined): string {
-  if (!seconds || seconds <= 0) {
+export function formatCatchUpWindowLabel(seconds: number | undefined): string {
+  if (!Number.isSafeInteger(seconds) || !seconds || seconds <= 0) {
     return 'Disabled';
   }
 
