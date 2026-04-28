@@ -1380,6 +1380,19 @@ describe('api desktop transport', () => {
     });
   });
 
+  it('caps expensive session detail tail block query params in HTTP requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ id: 'session-1', blocks: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    await api.sessionDetail('session-1', { tailBlocks: 5000 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1?tailBlocks=1000', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  });
+
   it('omits unsafe bootstrap numeric query params from HTTP requests', async () => {
     const fetchMock = vi.fn().mockResolvedValue(createJsonResponse(createBootstrapState({ conversationId: 'conversation-1' })));
     vi.stubGlobal('fetch', fetchMock);
@@ -1393,6 +1406,19 @@ describe('api desktop transport', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledWith('/api/conversations/conversation-1/bootstrap?knownSessionSignature=sig-1', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  });
+
+  it('caps expensive bootstrap tail block query params in HTTP requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse(createBootstrapState({ conversationId: 'conversation-1' })));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    await api.conversationBootstrap('conversation-1', { tailBlocks: 5000 });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/conversations/conversation-1/bootstrap?tailBlocks=1000', {
       method: 'GET',
       cache: 'no-store',
     });

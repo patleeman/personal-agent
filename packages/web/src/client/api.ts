@@ -190,6 +190,12 @@ async function shouldUseDesktopLocalConversationCapabilities(conversationId: str
   }
 }
 
+function normalizeTailBlocksParam(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(1000, value)
+    : undefined;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => get<AppStatus>('/status'),
@@ -204,8 +210,9 @@ export const api = {
     knownLastBlockId?: string;
   }) => {
     const params = new URLSearchParams();
-    if (typeof options?.tailBlocks === 'number' && Number.isSafeInteger(options.tailBlocks) && options.tailBlocks > 0) {
-      params.set('tailBlocks', String(options.tailBlocks));
+    const tailBlocks = normalizeTailBlocksParam(options?.tailBlocks);
+    if (tailBlocks !== undefined) {
+      params.set('tailBlocks', String(tailBlocks));
     }
     if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
       params.set('knownSessionSignature', options.knownSessionSignature.trim());
@@ -596,8 +603,9 @@ export const api = {
     knownLastBlockId?: string;
   }) => {
     const params = new URLSearchParams();
-    if (typeof options?.tailBlocks === 'number' && Number.isSafeInteger(options.tailBlocks) && options.tailBlocks > 0) {
-      params.set('tailBlocks', String(options.tailBlocks));
+    const tailBlocks = normalizeTailBlocksParam(options?.tailBlocks);
+    if (tailBlocks !== undefined) {
+      params.set('tailBlocks', String(tailBlocks));
     }
     if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
       params.set('knownSessionSignature', options.knownSessionSignature.trim());
