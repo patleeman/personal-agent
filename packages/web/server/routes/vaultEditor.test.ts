@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -111,5 +111,35 @@ describe('vaultEditor image uploads', () => {
 
     expect(status).toHaveBeenCalledWith(400);
     expect(json).toHaveBeenCalledWith({ error: 'Shared image data must be valid base64.' });
+  });
+});
+
+describe('vaultEditor search routes', () => {
+  it('ignores malformed search limits instead of partially parsing them', () => {
+    vaultRootMock.value = mkdtempSync(join(tmpdir(), 'pa-vault-search-limit-'));
+    writeFileSync(join(vaultRootMock.value, 'alpha.md'), 'needle alpha');
+    writeFileSync(join(vaultRootMock.value, 'bravo.md'), 'needle bravo');
+    writeFileSync(join(vaultRootMock.value, 'charlie.md'), 'needle charlie');
+
+    const getHandlers = new Map<string, (req: unknown, res: unknown) => void>();
+    registerVaultEditorRoutes({
+      get: vi.fn((path: string, handler: (req: unknown, res: unknown) => void) => {
+        getHandlers.set(path, handler);
+      }),
+      put: vi.fn(),
+      delete: vi.fn(),
+      post: vi.fn(),
+    });
+    const json = vi.fn();
+
+    getHandlers.get('/api/vault/note-search')?.({ query: { q: 'needle', limit: '2abc' } }, { json, status: vi.fn() });
+
+    expect(json).toHaveBeenCalledWith({
+      results: expect.arrayContaining([
+        expect.objectContaining({ id: 'alpha.md' }),
+        expect.objectContaining({ id: 'bravo.md' }),
+        expect.objectContaining({ id: 'charlie.md' }),
+      ]),
+    });
   });
 });

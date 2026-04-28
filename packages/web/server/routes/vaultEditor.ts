@@ -237,6 +237,19 @@ function buildSearchExcerpt(content: string, index: number, matchLength: number)
   return excerpt;
 }
 
+function parseVaultSearchLimit(value: unknown): number {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (typeof candidate !== 'string' && typeof candidate !== 'number') {
+    return 20;
+  }
+  const normalized = String(candidate).trim();
+  if (!/^\d+$/.test(normalized)) {
+    return 20;
+  }
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(50, parsed) : 20;
+}
+
 function searchVaultNotes(root: string, query: string, limit: number): Array<Omit<VaultNoteSearchResult, 'score'>> {
   const normalized = query.trim().toLowerCase();
   const results: VaultNoteSearchResult[] = [];
@@ -513,7 +526,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
   router.get('/api/vault/note-search', (req, res) => {
     try {
       const q = typeof req.query.q === 'string' ? req.query.q : '';
-      const limit = Math.min(50, parseInt(String(req.query.limit ?? '20'), 10) || 20);
+      const limit = parseVaultSearchLimit(req.query.limit);
       const root = getRoot();
       res.json({ results: searchVaultNotes(root, q, limit) });
     } catch (err) {
@@ -527,7 +540,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
     try {
       const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
       if (!q) { res.json({ results: [] }); return; }
-      const limit = Math.min(50, parseInt(String(req.query.limit ?? '20'), 10) || 20);
+      const limit = parseVaultSearchLimit(req.query.limit);
       const root = getRoot();
       const files = collectAllMarkdownFiles(root);
       const lower = q.toLowerCase();
