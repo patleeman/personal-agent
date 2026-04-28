@@ -17,13 +17,15 @@ export interface SavedUiPreferences {
   nodeBrowserViews: SavedNodeBrowserViewPreference[];
 }
 
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
 function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
 }
 
 function readTimestampString(value: unknown, fallback?: string): string {
   const raw = readNonEmptyString(value);
-  if (raw) {
+  if (raw && ISO_TIMESTAMP_PATTERN.test(raw)) {
     const parsed = Date.parse(raw);
     if (Number.isFinite(parsed)) {
       return new Date(parsed).toISOString();

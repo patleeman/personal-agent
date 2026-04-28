@@ -145,6 +145,24 @@ describe('writeSavedUiPreferences', () => {
     ]);
   });
 
+  it('falls back for non-ISO node browser view timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'));
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      ui: {
+        nodeBrowserViews: [
+          { id: 'docs', name: 'Docs', search: '', createdAt: '1', updatedAt: '9999' },
+        ],
+      },
+    }));
+
+    expect(readSavedUiPreferences(file).nodeBrowserViews).toEqual([
+      { id: 'docs', name: 'Docs', search: '', createdAt: '2026-04-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' },
+    ]);
+  });
+
   it('removes the nested keys when given empty lists', () => {
     const dir = createTempDir();
     const file = join(dir, 'settings.json');
