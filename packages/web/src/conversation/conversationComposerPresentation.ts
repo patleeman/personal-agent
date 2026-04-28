@@ -1,4 +1,4 @@
-import type { ConversationContextDocRef, LiveSessionContext } from '../shared/types';
+import type { ContextUsageSegment, ConversationContextDocRef, LiveSessionContext, ModelInfo, SessionContextUsage } from '../shared/types';
 import { parseSlashInput } from '../commands/slashMenu';
 import type { MentionItem } from './conversationMentions';
 
@@ -143,6 +143,36 @@ export function formatParallelJobContextSummary(input: {
 
 export function formatComposerActionLabel(label: 'Steer' | 'Follow up' | 'Parallel'): string {
   return label === 'Follow up' ? 'followup' : label.toLowerCase();
+}
+
+export interface ConversationContextUsageTokensPresentation {
+  total: number | null;
+  contextWindow: number;
+  segments?: ContextUsageSegment[];
+}
+
+export function resolveConversationContextUsageTokens(input: {
+  isLiveSession: boolean;
+  liveUsage: SessionContextUsage | null | undefined;
+  historicalUsage: SessionContextUsage | null | undefined;
+  models: ModelInfo[];
+  currentModel: string | null | undefined;
+  routeModel: string | null | undefined;
+}): ConversationContextUsageTokensPresentation | null {
+  const usage = input.isLiveSession ? input.liveUsage : input.historicalUsage;
+  if (!input.isLiveSession && !usage) {
+    return null;
+  }
+
+  const modelId = usage?.modelId || input.currentModel || input.routeModel;
+  const modelInfo = input.models.find((model) => model.id === modelId);
+  const fallbackContextWindow = input.isLiveSession ? 200_000 : 128_000;
+
+  return {
+    total: usage?.tokens ?? null,
+    contextWindow: usage?.contextWindow ?? modelInfo?.context ?? fallbackContextWindow,
+    segments: usage?.segments,
+  };
 }
 
 export function resolveConversationGitSummaryPresentation(git: LiveSessionContext['git']):

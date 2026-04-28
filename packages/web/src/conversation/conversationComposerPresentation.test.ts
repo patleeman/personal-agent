@@ -11,6 +11,7 @@ import {
   mentionItemToConversationContextDoc,
   removeConversationContextDocByPath,
   resolveConversationAutocompleteCatalogDemand,
+  resolveConversationContextUsageTokens,
   resolveConversationGitSummaryPresentation,
   truncateConversationShelfText,
 } from './conversationComposerPresentation';
@@ -127,5 +128,55 @@ describe('conversation composer presentation helpers', () => {
       linesAdded: 1234,
       linesDeleted: 56,
     })).toEqual({ kind: 'diff', added: '+1,234', deleted: '-56' });
+  });
+
+  it('resolves context usage tokens for live and historical sessions', () => {
+    const models = [{
+      id: 'model-a',
+      provider: 'Provider',
+      name: 'Model A',
+      context: 100000,
+      supportedServiceTiers: [],
+    }];
+
+    expect(resolveConversationContextUsageTokens({
+      isLiveSession: true,
+      liveUsage: { tokens: 5000, modelId: 'model-a', segments: [{ label: 'input', tokens: 4000 }] },
+      historicalUsage: null,
+      models,
+      currentModel: null,
+      routeModel: null,
+    })).toEqual({
+      total: 5000,
+      contextWindow: 100000,
+      segments: [{ label: 'input', tokens: 4000 }],
+    });
+
+    expect(resolveConversationContextUsageTokens({
+      isLiveSession: true,
+      liveUsage: null,
+      historicalUsage: null,
+      models: [],
+      currentModel: null,
+      routeModel: null,
+    })).toEqual({ total: null, contextWindow: 200000, segments: undefined });
+
+    expect(resolveConversationContextUsageTokens({
+      isLiveSession: false,
+      liveUsage: null,
+      historicalUsage: null,
+      models,
+      currentModel: 'model-a',
+      routeModel: null,
+    })).toBeNull();
+
+    expect(resolveConversationContextUsageTokens({
+      isLiveSession: false,
+      liveUsage: null,
+      historicalUsage: { tokens: null, modelId: 'missing-model' },
+      models,
+      currentModel: null,
+      routeModel: null,
+    })).toEqual({ total: null, contextWindow: 128000, segments: undefined });
   });
 });

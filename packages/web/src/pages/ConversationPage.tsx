@@ -11,7 +11,6 @@ import { ConversationComposerInputControls } from '../components/conversation/Co
 import { MentionMenu, ModelPicker, SlashMenu } from '../components/conversation/ConversationComposerMenus';
 import { ConversationComposerMeta } from '../components/conversation/ConversationComposerMeta';
 import { ConversationContextShelf } from '../components/conversation/ConversationContextShelf';
-import type { ConversationContextUsageTokens } from '../components/conversation/ConversationContextUsageIndicator';
 import { ConversationDraftEmptyAction, DRAFT_EMPTY_STATE_CONTENT_WIDTH_CLASS } from '../components/conversation/ConversationDraftEmptyAction';
 import { ConversationQueueShelf } from '../components/conversation/ConversationQueueShelf';
 import { ConversationQuestionShelf } from '../components/conversation/ConversationQuestionShelf';
@@ -97,6 +96,7 @@ import {
   isAttachableMentionItem,
   removeConversationContextDocByPath,
   resolveConversationAutocompleteCatalogDemand,
+  resolveConversationContextUsageTokens,
   resolveConversationGitSummaryPresentation,
 } from '../conversation/conversationComposerPresentation';
 import {
@@ -1326,26 +1326,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const conversationAutoModeEnabled = effectiveConversationAutoModeState?.enabled === true;
 
   // Current context usage (compaction-aware)
-  const sessionTokens = useMemo(() => {
-    if (isLiveSession) {
-      const modelInfo = models.find(m => m.id === (stream.contextUsage?.modelId || currentModel || model));
-      return {
-        total: stream.contextUsage?.tokens ?? null,
-        contextWindow: stream.contextUsage?.contextWindow ?? modelInfo?.context ?? 200_000,
-        segments: stream.contextUsage?.segments,
-      } satisfies ConversationContextUsageTokens;
-    }
-
-    if (!visibleSessionDetail) return null;
-
-    const historicalUsage = visibleSessionDetail.contextUsage;
-    const modelInfo = models.find(m => m.id === (historicalUsage?.modelId || currentModel || model));
-    return {
-      total: historicalUsage?.tokens ?? null,
-      contextWindow: modelInfo?.context ?? 128_000,
-      segments: historicalUsage?.segments,
-    } satisfies ConversationContextUsageTokens;
-  }, [isLiveSession, stream.contextUsage, visibleSessionDetail, models, currentModel, model]);
+  const sessionTokens = useMemo(() => resolveConversationContextUsageTokens({
+    isLiveSession,
+    liveUsage: stream.contextUsage,
+    historicalUsage: visibleSessionDetail?.contextUsage,
+    models,
+    currentModel,
+    routeModel: model,
+  }), [currentModel, isLiveSession, model, models, stream.contextUsage, visibleSessionDetail?.contextUsage]);
 
   const [liveSessionContext, setLiveSessionContext] = useState<LiveSessionContext | null>(null);
 
