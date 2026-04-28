@@ -94,6 +94,7 @@ describe('pendingConversationPrompt helpers', () => {
         { mimeType: 'image/png', data: '' },
         { mimeType: 'image/png', data: '   ' },
         { mimeType: 'image/png', data: 'not-valid-base64!' },
+        { mimeType: 'text/plain', data: 'aGVsbG8=' },
       ],
       attachmentRefs: [],
     }, null);

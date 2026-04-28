@@ -138,7 +138,7 @@ function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
         ? (image as { mimeType: string }).mimeType.trim()
         : '';
       const data = normalizePendingPromptImageData((image as { data?: unknown }).data);
-      if (!mimeType || !data) {
+      if (!mimeType.toLowerCase().startsWith('image/') || !data) {
         return [];
       }
 
