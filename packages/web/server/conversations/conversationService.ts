@@ -476,7 +476,7 @@ export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined
       : undefined;
 
   return Number.isSafeInteger(parsed) && (parsed as number) > 0
-    ? parsed as number
+    ? Math.min(MAX_SESSION_DETAIL_TAIL_BLOCKS, parsed as number)
     : undefined;
 }
 
