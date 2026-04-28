@@ -461,10 +461,10 @@ type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelem
 
 export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
   const candidate = Array.isArray(rawTailBlocks) ? rawTailBlocks[0] : rawTailBlocks;
-  const parsed = typeof candidate === 'string'
-    ? Number.parseInt(candidate, 10)
-    : typeof candidate === 'number'
-      ? candidate
+  const parsed = typeof candidate === 'number'
+    ? candidate
+    : typeof candidate === 'string' && /^\d+$/.test(candidate.trim())
+      ? Number.parseInt(candidate.trim(), 10)
       : undefined;
 
   return Number.isInteger(parsed) && (parsed as number) > 0

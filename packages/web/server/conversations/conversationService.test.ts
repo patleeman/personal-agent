@@ -247,6 +247,7 @@ describe('conversationService', () => {
     expect(parseTailBlocksQuery('8')).toBe(8);
     expect(parseTailBlocksQuery(['3'])).toBe(3);
     expect(parseTailBlocksQuery('0')).toBeUndefined();
+    expect(parseTailBlocksQuery('8abc')).toBeUndefined();
   });
 
   it('publishes deduped session meta change events', () => {
