@@ -3,6 +3,7 @@ import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;
+const MAX_RECENT_WINDOW_DAYS = 365;
 const DEFAULT_CANDIDATE_LIMIT = 48;
 const DEFAULT_RECENT_RESULTS_LIMIT = 10;
 const MAX_RELATED_CONVERSATION_LIMIT = 100;
@@ -65,7 +66,7 @@ function normalizeRecentWindowDays(value: number | null | undefined): number | n
   }
 
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
-    ? value
+    ? Math.min(MAX_RECENT_WINDOW_DAYS, value)
     : DEFAULT_RECENT_WINDOW_DAYS;
 }
 

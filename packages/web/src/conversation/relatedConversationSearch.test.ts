@@ -156,6 +156,29 @@ describe('selectRecentConversationCandidates', () => {
     }).map((session) => session.id)).toEqual(['recent-current']);
   });
 
+  it('caps huge recent window day values', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'ancient-current',
+        title: 'Ancient current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2020-03-01T09:00:00.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      recentWindowDays: Number.MAX_SAFE_INTEGER,
+    }).map((session) => session.id)).toEqual(['recent-current']);
+  });
+
   it('uses the current clock for unsafe current-time values', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-04-13T09:00:00.000Z'));
