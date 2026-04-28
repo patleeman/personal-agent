@@ -20,11 +20,20 @@ vi.mock('@personal-agent/core', async () => {
   };
 });
 
-import { dispatchDesktopLocalApiRequest } from './localApi.js';
+import { dispatchDesktopLocalApiRequest, rollbackDesktopConversation } from './localApi.js';
 
 function readJsonBody(response: Awaited<ReturnType<typeof dispatchDesktopLocalApiRequest>>) {
   return JSON.parse(Buffer.from(response.body).toString('utf-8')) as Record<string, unknown>;
 }
+
+describe('desktop local API conversation actions', () => {
+  it('rejects unsafe rollback turn counts before resolving conversation state', async () => {
+    await expect(rollbackDesktopConversation({
+      conversationId: 'conversation-1',
+      numTurns: Number.MAX_SAFE_INTEGER + 1,
+    })).rejects.toThrow('numTurns must be a positive integer.');
+  });
+});
 
 describe('desktop local API vault routes', () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'pa-local-api-vault-'));

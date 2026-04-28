@@ -2188,7 +2188,7 @@ export async function rollbackDesktopConversation(input: {
   conversationId: string;
   numTurns: number;
 }): Promise<{ id: string; sessionFile: string }> {
-  if (!Number.isInteger(input.numTurns) || input.numTurns <= 0) {
+  if (!Number.isSafeInteger(input.numTurns) || input.numTurns <= 0) {
     throw new Error('numTurns must be a positive integer.');
   }
 
