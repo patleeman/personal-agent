@@ -3,6 +3,7 @@ import { api } from '../../client/api';
 import type { DurableRunDetailResult } from '../../shared/types';
 
 export const INLINE_RUN_LOG_TAIL_LINES = 240;
+export const MAX_INLINE_RUN_LOG_TAIL_LINES = 1000;
 export const INLINE_RUN_POLL_INTERVAL_MS = 2200;
 
 export interface PolledRunSnapshotState {
@@ -25,6 +26,19 @@ export function buildInlineRunExpansionKey(clusterStartIndex: number, runId: str
   return `${clusterStartIndex}:${runId}`;
 }
 
+export function normalizeInlineRunPollingOptions(options?: {
+  tail?: number;
+  pollIntervalMs?: number;
+}): { tail: number; pollIntervalMs: number } {
+  const tail = Number.isSafeInteger(options?.tail) && (options?.tail as number) > 0
+    ? Math.min(MAX_INLINE_RUN_LOG_TAIL_LINES, options?.tail as number)
+    : INLINE_RUN_LOG_TAIL_LINES;
+  const pollIntervalMs = Number.isSafeInteger(options?.pollIntervalMs) && (options?.pollIntervalMs as number) > 0
+    ? options?.pollIntervalMs as number
+    : INLINE_RUN_POLL_INTERVAL_MS;
+  return { tail, pollIntervalMs };
+}
+
 export function usePolledDurableRunSnapshot(
   runId: string | null,
   enabled: boolean,
@@ -33,8 +47,7 @@ export function usePolledDurableRunSnapshot(
     pollIntervalMs?: number;
   },
 ): PolledRunSnapshotState {
-  const tail = options?.tail ?? INLINE_RUN_LOG_TAIL_LINES;
-  const pollIntervalMs = options?.pollIntervalMs ?? INLINE_RUN_POLL_INTERVAL_MS;
+  const { tail, pollIntervalMs } = normalizeInlineRunPollingOptions(options);
   const [state, setState] = useState<PolledRunSnapshotState>(EMPTY_POLLED_RUN_SNAPSHOT_STATE);
 
   useEffect(() => {
