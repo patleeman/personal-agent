@@ -1,3 +1,5 @@
+const MAX_SUMMARY_PREVIEW_LINES = 8;
+
 export function stripPreviewMarkdownWrappers(line: string) {
   if ((line.startsWith('**') && line.endsWith('**')) || (line.startsWith('__') && line.endsWith('__'))) {
     return line.slice(2, -2).trim();
@@ -25,6 +27,9 @@ export function formatSummaryPreviewLine(line: string) {
 }
 
 export function buildSummaryPreview(text: string, maxLines: number) {
+  const lineLimit = Number.isSafeInteger(maxLines) && maxLines > 0
+    ? Math.min(MAX_SUMMARY_PREVIEW_LINES, maxLines)
+    : 1;
   const previewLines: string[] = [];
 
   for (const rawLine of text.split('\n')) {
@@ -34,7 +39,7 @@ export function buildSummaryPreview(text: string, maxLines: number) {
     }
 
     previewLines.push(formatSummaryPreviewLine(trimmed));
-    if (previewLines.length >= maxLines) {
+    if (previewLines.length >= lineLimit) {
       break;
     }
   }
