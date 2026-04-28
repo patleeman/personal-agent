@@ -1,10 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   normalizePendingQueueItems,
+  removePendingQueueItemById,
   retryLiveSessionActionAfterTakeover,
   shouldReplaceOptimisticUserBlock,
   userMessageBlocksMatchForStreamDedupe,
 } from './useSessionStream';
+
+import type { StreamState } from './useSessionStream';
+
+function createStreamState(overrides: Partial<StreamState> = {}): StreamState {
+  return {
+    blocks: [],
+    blockOffset: 0,
+    totalBlocks: 0,
+    hasSnapshot: false,
+    isStreaming: false,
+    isCompacting: false,
+    error: null,
+    title: null,
+    tokens: null,
+    cost: null,
+    contextUsage: null,
+    pendingQueue: { steering: [], followUp: [] },
+    parallelJobs: [],
+    presence: { surfaces: [], controllerSurfaceId: null, controllerSurfaceType: null, controllerAcquiredAt: null },
+    autoModeState: null,
+    cwdChange: null,
+    ...overrides,
+  };
+}
 
 describe('userMessageBlocksMatchForStreamDedupe', () => {
   it('requires matching image identity, not just matching image counts', () => {
@@ -87,6 +112,24 @@ describe('retryLiveSessionActionAfterTakeover', () => {
 
     expect(attemptAction).toHaveBeenCalledTimes(1);
     expect(takeOver).not.toHaveBeenCalled();
+  });
+});
+
+describe('removePendingQueueItemById', () => {
+  it('removes the failed optimistic queued prompt by id when duplicate text exists', () => {
+    const state = createStreamState({
+      pendingQueue: {
+        steering: [
+          { id: 'failed', text: 'same', imageCount: 0, pending: true },
+          { id: 'later', text: 'same', imageCount: 0, pending: true },
+        ],
+        followUp: [],
+      },
+    });
+
+    expect(removePendingQueueItemById(state, 'steer', 'failed').pendingQueue.steering).toEqual([
+      { id: 'later', text: 'same', imageCount: 0, pending: true },
+    ]);
   });
 });
 

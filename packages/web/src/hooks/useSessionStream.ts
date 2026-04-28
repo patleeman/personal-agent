@@ -175,15 +175,14 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
 function appendPendingQueueItem(
   state: StreamState,
   behavior: 'steer' | 'followUp',
-  text: string,
-  imageCount = 0,
+  item: QueuedPromptPreview,
 ): StreamState {
   if (behavior === 'steer') {
     return {
       ...state,
       pendingQueue: {
         ...state.pendingQueue,
-        steering: [...state.pendingQueue.steering, createOptimisticPendingQueueItem(text, imageCount)],
+        steering: [...state.pendingQueue.steering, item],
       },
     };
   }
@@ -192,19 +191,24 @@ function appendPendingQueueItem(
     ...state,
     pendingQueue: {
       ...state.pendingQueue,
-      followUp: [...state.pendingQueue.followUp, createOptimisticPendingQueueItem(text, imageCount)],
+      followUp: [...state.pendingQueue.followUp, item],
     },
   };
 }
 
-function removePendingQueueItem(
+export function removePendingQueueItemById(
   state: StreamState,
   behavior: 'steer' | 'followUp',
-  text: string,
+  itemId: string,
 ): StreamState {
+  const normalizedItemId = itemId.trim();
+  if (!normalizedItemId) {
+    return state;
+  }
+
   const key = behavior === 'steer' ? 'steering' : 'followUp';
   const queue = state.pendingQueue[key];
-  const index = queue.findLastIndex((item) => item.text === text);
+  const index = queue.findIndex((item) => item.id === normalizedItemId);
   if (index < 0) {
     return state;
   }
@@ -517,6 +521,7 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
     ensureRequestedSubscription();
 
     let optimisticUserBlockId: string | null = null;
+    let optimisticQueueItemId: string | null = null;
 
     if (!behavior) {
       const ts = new Date().toISOString();
@@ -540,7 +545,9 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
       blocksRef.current = [...blocksRef.current, userBlock];
       setState((s) => ({ ...s, blocks: blocksRef.current }));
     } else {
-      setState((s) => appendPendingQueueItem(s, behavior, text, images?.length ?? 0));
+      const optimisticQueueItem = createOptimisticPendingQueueItem(text, images?.length ?? 0);
+      optimisticQueueItemId = optimisticQueueItem.id;
+      setState((s) => appendPendingQueueItem(s, behavior, optimisticQueueItem));
     }
 
     try {
@@ -550,8 +557,8 @@ export function useSessionStream(sessionId: string | null, options?: { tailBlock
         takeOverSessionControl: () => api.takeoverLiveSession(normalizedSessionId, surfaceId),
       });
     } catch (error) {
-      if (behavior) {
-        setState((s) => removePendingQueueItem(s, behavior, text));
+      if (behavior && optimisticQueueItemId) {
+        setState((s) => removePendingQueueItemById(s, behavior, optimisticQueueItemId ?? ''));
       } else if (optimisticUserBlockId) {
         setState((s) => {
           const next = removeOptimisticUserBlock(s, optimisticUserBlockId ?? '');
