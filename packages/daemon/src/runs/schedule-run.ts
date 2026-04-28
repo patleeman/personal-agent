@@ -306,7 +306,8 @@ export function parseDelayToMs(delay: string): number | undefined {
     return undefined;
   }
 
-  return Math.round(value * multiplier);
+  const delayMs = Math.round(value * multiplier);
+  return Number.isSafeInteger(delayMs) && delayMs > 0 ? delayMs : undefined;
 }
 
 /**

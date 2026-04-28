@@ -163,6 +163,7 @@ describe('parseDelayToMs', () => {
     expect(parseDelayToMs('1x')).toBeUndefined();
     expect(parseDelayToMs('')).toBeUndefined();
     expect(parseDelayToMs('1')).toBeUndefined();
+    expect(parseDelayToMs(`${Number.MAX_SAFE_INTEGER}d`)).toBeUndefined();
   });
 });
 
