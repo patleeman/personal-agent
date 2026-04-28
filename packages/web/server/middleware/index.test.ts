@@ -37,9 +37,21 @@ describe('server middleware helpers', () => {
     expect(res.locals.timingMeta).toEqual({ route: 'conversation' });
   });
 
+  it('defaults unsafe Server-Timing durations to zero', () => {
+    const setHeader = vi.fn();
+    const res = { setHeader, locals: {} } as unknown as { setHeader: typeof setHeader; locals: Record<string, unknown> };
+
+    setServerTimingHeaders(res as never, [
+      { name: 'unsafe', durationMs: Number.MAX_SAFE_INTEGER + 1 },
+    ]);
+
+    expect(setHeader).toHaveBeenCalledWith('Server-Timing', 'unsafe;dur=0.0');
+  });
+
   it('logs only slow conversation perf events', () => {
     logSlowConversationPerf('conversation.fast', { durationMs: 149 });
     logSlowConversationPerf('conversation.slow', { durationMs: 150, route: '/app' });
+    logSlowConversationPerf('conversation.unsafe', { durationMs: Number.MAX_SAFE_INTEGER + 1 });
 
     expect(logInfoMock).toHaveBeenCalledTimes(1);
     expect(logInfoMock).toHaveBeenCalledWith('conversation.slow', { durationMs: 150, route: '/app' });

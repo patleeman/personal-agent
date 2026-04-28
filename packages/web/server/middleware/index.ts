@@ -33,7 +33,9 @@ export interface ServerTimingMetric {
 }
 
 function formatServerTimingMetric(metric: ServerTimingMetric): string {
-  const dur = Number.isFinite(metric.durationMs) ? Math.max(0, metric.durationMs) : 0;
+  const dur = Number.isFinite(metric.durationMs) && Math.abs(metric.durationMs) <= Number.MAX_SAFE_INTEGER
+    ? Math.max(0, metric.durationMs)
+    : 0;
   const parts = [`${metric.name};dur=${dur.toFixed(1)}`];
   if (metric.description) {
     parts.push(`desc="${metric.description.replace(/"/g, '')}"`);
@@ -52,7 +54,7 @@ export function setServerTimingHeaders(res: Response, metrics: ServerTimingMetri
 
 export function logSlowConversationPerf(label: string, fields: Record<string, unknown>): void {
   const durationMs = typeof fields.durationMs === 'number' ? fields.durationMs : 0;
-  if (durationMs < 150) {
+  if (!Number.isFinite(durationMs) || Math.abs(durationMs) > Number.MAX_SAFE_INTEGER || durationMs < 150) {
     return;
   }
 
