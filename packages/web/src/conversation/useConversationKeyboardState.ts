@@ -6,12 +6,11 @@ export function resolveVisualViewportKeyboardInset(input: {
   viewportOffsetTop: number;
 }): number {
   const { innerHeight, viewportHeight, viewportOffsetTop } = input;
-  if (![innerHeight, viewportHeight, viewportOffsetTop].every(Number.isFinite)) {
+  if (![innerHeight, viewportHeight, viewportOffsetTop].every(Number.isSafeInteger)) {
     return 0;
   }
 
-  const rounded = Math.round(innerHeight - (viewportHeight + viewportOffsetTop));
-  return Number.isSafeInteger(rounded) ? Math.max(0, rounded) : 0;
+  return Math.max(0, innerHeight - (viewportHeight + viewportOffsetTop));
 }
 
 export function useVisualViewportKeyboardInset(): number {
