@@ -94,6 +94,7 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.repoRoot).toBe(resourcesPath);
     expect(result.nodeCommand).toBe('/Applications/Personal Agent.app/Contents/MacOS/Personal Agent');
     expect(result.useElectronRunAsNode).toBe(true);
+    expect(result.desktopNativeModulesDir).toBe(join(resourcesPath, 'app.asar.unpacked'));
     expect(result.daemonEntryFile).toBe(join(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js'));
     expect(result.webDistDir).toBe(join(appRoot, 'node_modules', '@personal-agent', 'web', 'dist'));
     expect(result.trayTemplateIconFile).toBe(join(appRoot, 'assets', 'iconTemplate.png'));

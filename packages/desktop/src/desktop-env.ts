@@ -8,6 +8,7 @@ export interface DesktopRuntimePaths {
   repoRoot: string;
   nodeCommand: string;
   useElectronRunAsNode: boolean;
+  desktopNativeModulesDir?: string;
   daemonEntryFile: string;
   webDistDir: string;
   desktopStateDir: string;
@@ -92,6 +93,9 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
   const nodeCommand = isPackaged
     ? execPath
     : env.PERSONAL_AGENT_NODE_PATH?.trim() || 'node';
+  const desktopNativeModulesDir = isPackaged
+    ? resolve(repoRoot, 'app.asar.unpacked')
+    : env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR?.trim() || undefined;
 
   const daemonEntryFile = resolveExistingFile('daemon entry file', isPackaged
     ? [resolve(appRoot, 'node_modules', '@personal-agent', 'daemon', 'dist', 'index.js')]
@@ -110,6 +114,7 @@ export function resolveDesktopRuntimePathsForContext(context: DesktopRuntimePath
     repoRoot,
     nodeCommand,
     useElectronRunAsNode: isPackaged,
+    desktopNativeModulesDir,
     daemonEntryFile,
     webDistDir,
     desktopStateDir,

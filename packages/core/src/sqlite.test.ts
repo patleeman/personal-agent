@@ -190,4 +190,38 @@ describe('openSqliteDatabase', () => {
     expect(externalRequire).toHaveBeenCalledWith('better-sqlite3');
     expect(calls).toEqual(['PRAGMA journal_mode = WAL', 'close']);
   });
+
+  it('does not fall back to the repo better-sqlite3 when the desktop native module fails to load', async () => {
+    const rootRequire = vi.fn((id: string) => {
+      if (id === 'node:sqlite') {
+        throw new Error('missing');
+      }
+
+      throw new Error(`Unexpected root require: ${id}`);
+    });
+    const externalRequire = vi.fn(() => {
+      throw new Error('ABI mismatch');
+    });
+    const createRequireMock = vi.fn((value: string) => {
+      if (value === '/tmp/electron-native/package.json') {
+        return externalRequire;
+      }
+
+      return rootRequire;
+    });
+
+    vi.resetModules();
+    process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR = '/tmp/electron-native';
+    vi.doMock('node:module', () => ({
+      createRequire: createRequireMock,
+    }));
+
+    const { openSqliteDatabase } = await import('./sqlite.js');
+
+    expect(() => openSqliteDatabase('/tmp/external.db')).toThrow(
+      'Could not load Electron-native better-sqlite3 from /tmp/electron-native: ABI mismatch',
+    );
+    expect(externalRequire).toHaveBeenCalledWith('better-sqlite3');
+    expect(rootRequire).not.toHaveBeenCalledWith('better-sqlite3');
+  });
 });

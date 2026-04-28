@@ -206,6 +206,9 @@ function configureDesktopRuntimeEnvironment(): void {
   const runtime = resolveDesktopRuntimePaths();
   process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = '1';
   process.env.PERSONAL_AGENT_REPO_ROOT = runtime.repoRoot;
+  if (runtime.desktopNativeModulesDir) {
+    process.env.PERSONAL_AGENT_DESKTOP_NATIVE_MODULES_DIR = runtime.desktopNativeModulesDir;
+  }
   process.env.PERSONAL_AGENT_DESKTOP_DAEMON_LOG_FILE = `${runtime.desktopLogsDir}/daemon.log`;
 }
 

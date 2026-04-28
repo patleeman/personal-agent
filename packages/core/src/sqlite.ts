@@ -73,8 +73,9 @@ function loadSqliteDatabaseCtor(): SqliteDatabaseCtor {
     try {
       const desktopRequire = createRequire(resolve(desktopNativeModulesDir, 'package.json'));
       return desktopRequire('better-sqlite3') as SqliteDatabaseCtor;
-    } catch {
-      // Fall through to the normal resolution path.
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Could not load Electron-native better-sqlite3 from ${desktopNativeModulesDir}: ${message}`);
     }
   }
 
