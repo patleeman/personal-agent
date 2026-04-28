@@ -170,6 +170,17 @@ describe('image agent extension', () => {
     });
   });
 
+  it('rejects malformed image-generation SSE image data', () => {
+    expect(() => parseImageGenerationSse([
+      'event: response.output_item.done',
+      'data: {"item":{"type":"image_generation_call","result":"not-valid-base64!","output_format":"png"}}',
+      '',
+      'event: response.completed',
+      'data: {"response":{"id":"resp_123"}}',
+      '',
+    ].join('\n'))).toThrow('Image generation returned malformed image data.');
+  });
+
   it('executes against the codex responses backend and returns an inline image', async () => {
     const imageTool = registerImageTool();
     const codexModel = createModel({

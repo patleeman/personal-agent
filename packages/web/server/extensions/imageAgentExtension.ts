@@ -561,6 +561,9 @@ export function parseImageGenerationSse(raw: string): ParsedImageGenerationSse {
   if (!imageBase64) {
     throw new Error('Image generation completed without returning an image.');
   }
+  if (!isValidImageSourceBase64(imageBase64)) {
+    throw new Error('Image generation returned malformed image data.');
+  }
 
   return {
     assistantText: assistantTextParts.join('\n\n').trim(),
