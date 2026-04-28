@@ -153,13 +153,23 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
   autoSelectedThreadIds: string[];
   changed: boolean;
 } {
+  const selectedSet = new Set(input.selectedThreadIds);
   const autoSelectedSet = new Set(input.autoSelectedThreadIds);
   const hasManualSelection = input.selectedThreadIds.some((sessionId) => !autoSelectedSet.has(sessionId));
+  const prunedAutoSelectedThreadIds = input.autoSelectedThreadIds.filter((sessionId) => selectedSet.has(sessionId));
   const clearAutoSelections = () => ({
     selectedThreadIds: input.selectedThreadIds.filter((sessionId) => !autoSelectedSet.has(sessionId)),
     autoSelectedThreadIds: [],
     changed: input.autoSelectedThreadIds.length > 0,
   });
+
+  if (prunedAutoSelectedThreadIds.length !== input.autoSelectedThreadIds.length) {
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadIds: prunedAutoSelectedThreadIds,
+      changed: true,
+    };
+  }
 
   if (input.selectedThreadIds.length === 0 && input.autoSelectedThreadIds.length > 0) {
     return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };

@@ -245,5 +245,18 @@ describe('related thread selection helpers', () => {
       autoSelectedThreadIds: [],
       changed: true,
     });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'matching prompt context',
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadIds: ['strong'],
+      searchResults: [strongResult],
+      maxAutoSelections: 5,
+    })).toEqual({
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadIds: [],
+      changed: true,
+    });
   });
 });
