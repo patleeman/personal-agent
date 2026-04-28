@@ -197,7 +197,7 @@ describe('startServerListeners', () => {
     });
 
     expect(appListen).toHaveBeenCalledWith(3000, '127.0.0.1', expect.any(Function));
-    expect(logInfoMock).toHaveBeenCalledWith('web ui started', {
+    expect(logInfoMock).toHaveBeenCalledWith('desktop renderer server started', {
       url: 'http://127.0.0.1:3000',
       profile: 'assistant',
       repoRoot: '/repo',
