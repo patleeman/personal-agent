@@ -107,7 +107,9 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function positiveFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(value))
+    ? value
+    : null;
 }
 
 function resolvePreviewBackgroundColor(appState: ExcalidrawAppState): string {
@@ -147,7 +149,7 @@ async function loadImageFromBlob(blob: Blob): Promise<HTMLImageElement> {
   });
 }
 
-function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState | null | undefined): ExcalidrawPreviewFrameSize | null {
+export function resolveExcalidrawPreviewFrameSize(appState: ExcalidrawAppState | null | undefined): ExcalidrawPreviewFrameSize | null {
   if (!appState || typeof appState !== 'object') {
     return null;
   }
