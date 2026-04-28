@@ -8,10 +8,11 @@ export interface CommandResult {
 
 const GRACEFUL_SHUTDOWN_MS = 5000;
 const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
+const MAX_COMMAND_TIMEOUT_MS = 10 * 60_000;
 
 export function normalizeCommandTimeoutMs(value: number | undefined): number {
   return Number.isSafeInteger(value) && (value as number) > 0
-    ? value as number
+    ? Math.min(MAX_COMMAND_TIMEOUT_MS, value as number)
     : DEFAULT_COMMAND_TIMEOUT_MS;
 }
 
