@@ -163,14 +163,6 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
     changed: input.autoSelectedThreadIds.length > 0,
   });
 
-  if (prunedAutoSelectedThreadIds.length !== input.autoSelectedThreadIds.length) {
-    return {
-      selectedThreadIds: input.selectedThreadIds,
-      autoSelectedThreadIds: prunedAutoSelectedThreadIds,
-      changed: true,
-    };
-  }
-
   if (input.selectedThreadIds.length === 0 && input.autoSelectedThreadIds.length > 0) {
     return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
   }
@@ -198,6 +190,14 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
       selectedThreadIds: input.selectedThreadIds,
       autoSelectedThreadIds: input.autoSelectedThreadIds,
       changed: false,
+    };
+  }
+
+  if (prunedAutoSelectedThreadIds.length !== input.autoSelectedThreadIds.length) {
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadIds: prunedAutoSelectedThreadIds,
+      changed: true,
     };
   }
 

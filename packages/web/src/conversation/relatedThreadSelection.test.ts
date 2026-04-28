@@ -235,6 +235,19 @@ describe('related thread selection helpers', () => {
 
     expect(resolveRelatedThreadPreselectionUpdate({
       draft: true,
+      query: 'hi',
+      selectedThreadIds: ['strong', 'manual'],
+      autoSelectedThreadIds: ['strong', 'missing'],
+      searchResults: [strongResult],
+      maxAutoSelections: 5,
+    })).toEqual({
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadIds: [],
+      changed: true,
+    });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
       query: 'matching prompt context',
       selectedThreadIds: [],
       autoSelectedThreadIds: ['strong'],
