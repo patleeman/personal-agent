@@ -149,8 +149,8 @@ function readOptionalBoolean(value: unknown): boolean | undefined {
 }
 
 function normalizePositiveInteger(value: unknown, fallback: number, max: number): number {
-  const parsed = typeof value === 'number'
-    ? Math.floor(value)
+  const parsed = typeof value === 'number' && Number.isInteger(value)
+    ? value
     : typeof value === 'string' && /^\d+$/.test(value.trim())
       ? Number.parseInt(value.trim(), 10)
       : Number.NaN;
