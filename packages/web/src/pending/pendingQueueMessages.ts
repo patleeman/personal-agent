@@ -119,7 +119,17 @@ function safePendingImagePreviewUrl(previewUrl: string | undefined): string | un
   }
 
   const lowerPreviewUrl = normalized.toLowerCase();
-  return normalized.startsWith('blob:') || (lowerPreviewUrl.startsWith('data:image/') && lowerPreviewUrl.includes(';base64,'))
+  if (normalized.startsWith('blob:')) {
+    return normalized;
+  }
+  if (!lowerPreviewUrl.startsWith('data:image/') || !lowerPreviewUrl.includes(';base64,')) {
+    return undefined;
+  }
+  const commaIndex = normalized.indexOf(',');
+  const base64 = commaIndex >= 0 ? normalized.slice(commaIndex + 1).trim() : '';
+  return base64
+    && base64.length % 4 !== 1
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
     ? normalized
     : undefined;
 }

@@ -89,6 +89,7 @@ describe('appendPendingInitialPromptBlock', () => {
       images: [
         { mimeType: 'image/png', data: 'ZmFrZQ==', name: 'stored.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
         { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain.png', previewUrl: 'data:image/png,aGVsbG8=' },
+        { mimeType: 'image/png', data: 'b2s=', name: 'malformed.png', previewUrl: 'data:image/png;base64,not-valid-base64!' },
       ],
       attachmentRefs: [],
     };
@@ -102,6 +103,7 @@ describe('appendPendingInitialPromptBlock', () => {
         images: [
           { alt: 'stored.png', src: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png', caption: 'stored.png' },
           { alt: 'plain.png', src: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png', caption: 'plain.png' },
+          { alt: 'malformed.png', src: 'data:image/png;base64,b2s=', mimeType: 'image/png', caption: 'malformed.png' },
         ],
       },
     ]);
