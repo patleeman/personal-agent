@@ -178,6 +178,11 @@ describe('shouldRetry', () => {
     const options = { enabled: true };
     expect(shouldRetry(options, 0)).toEqual({ retry: false });
   });
+
+  it('defaults malformed retry attempt limits', () => {
+    const options = { enabled: true, retry: { attempts: 1.5 } };
+    expect(shouldRetry(options, 2)).toEqual({ retry: true, delayMs: expect.any(Number) });
+  });
 });
 
 describe('hasExceededMaxIterations', () => {

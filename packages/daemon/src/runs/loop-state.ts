@@ -151,7 +151,9 @@ export function shouldRetry(
     return { retry: false };
   }
 
-  const maxAttempts = options.retry.attempts ?? 3;
+  const maxAttempts = Number.isSafeInteger(options.retry.attempts) && (options.retry.attempts as number) > 0
+    ? options.retry.attempts as number
+    : 3;
   if (attempt >= maxAttempts) {
     return { retry: false };
   }
