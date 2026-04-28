@@ -157,7 +157,7 @@ describe('related thread selection helpers', () => {
     })).toEqual([]);
   });
 
-  it('auto-selects, preserves manual choices, and clears stale related-thread preselection', () => {
+  it('auto-selects ranked results, preserves manual choices, and clears stale related-thread preselection', () => {
     const strongResult = {
       sessionId: 'strong',
       title: 'Strong',
@@ -174,16 +174,23 @@ describe('related thread selection helpers', () => {
       },
       reason: 'Strong semantic match',
     } as const;
+    const secondResult = {
+      ...strongResult,
+      sessionId: 'second',
+      title: 'Second',
+      score: 420,
+    } as const;
 
     expect(resolveRelatedThreadPreselectionUpdate({
       draft: true,
       query: 'matching prompt context',
       selectedThreadIds: [],
-      autoSelectedThreadId: null,
-      searchResults: [strongResult],
+      autoSelectedThreadIds: [],
+      searchResults: [strongResult, secondResult],
+      maxAutoSelections: 5,
     })).toEqual({
-      selectedThreadIds: ['strong'],
-      autoSelectedThreadId: 'strong',
+      selectedThreadIds: ['strong', 'second'],
+      autoSelectedThreadIds: ['strong', 'second'],
       changed: true,
     });
 
@@ -191,35 +198,38 @@ describe('related thread selection helpers', () => {
       draft: true,
       query: 'matching prompt context',
       selectedThreadIds: ['manual'],
-      autoSelectedThreadId: null,
+      autoSelectedThreadIds: [],
       searchResults: [strongResult],
+      maxAutoSelections: 5,
     })).toEqual({
       selectedThreadIds: ['manual'],
-      autoSelectedThreadId: null,
+      autoSelectedThreadIds: [],
       changed: false,
     });
 
     expect(resolveRelatedThreadPreselectionUpdate({
       draft: true,
-      query: 'short',
+      query: 'hi',
       selectedThreadIds: ['strong'],
-      autoSelectedThreadId: 'strong',
+      autoSelectedThreadIds: ['strong'],
       searchResults: [strongResult],
+      maxAutoSelections: 5,
     })).toEqual({
       selectedThreadIds: [],
-      autoSelectedThreadId: null,
+      autoSelectedThreadIds: [],
       changed: true,
     });
 
     expect(resolveRelatedThreadPreselectionUpdate({
       draft: true,
       query: 'matching prompt context',
-      selectedThreadIds: ['strong'],
-      autoSelectedThreadId: 'strong',
+      selectedThreadIds: [],
+      autoSelectedThreadIds: ['strong'],
       searchResults: [strongResult],
+      maxAutoSelections: 5,
     })).toEqual({
-      selectedThreadIds: ['strong'],
-      autoSelectedThreadId: 'strong',
+      selectedThreadIds: [],
+      autoSelectedThreadIds: ['strong'],
       changed: false,
     });
   });

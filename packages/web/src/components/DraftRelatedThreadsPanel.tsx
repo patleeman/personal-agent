@@ -22,7 +22,7 @@ export function DraftRelatedThreadsPanel({
   query,
   results,
   selectedSessionIds,
-  autoSelectedSessionId,
+  autoSelectedSessionIds,
   selectedCount,
   loading,
   busy,
@@ -34,7 +34,7 @@ export function DraftRelatedThreadsPanel({
   query: string;
   results: RelatedConversationSearchResult[];
   selectedSessionIds: string[];
-  autoSelectedSessionId?: string | null;
+  autoSelectedSessionIds?: string[];
   selectedCount: number;
   loading: boolean;
   busy: boolean;
@@ -73,7 +73,7 @@ export function DraftRelatedThreadsPanel({
         <div className="mt-2 space-y-0.5">
           {results.map((result, index) => {
             const checked = selectedSessionIds.includes(result.sessionId);
-            const autoSelected = checked && autoSelectedSessionId === result.sessionId;
+            const autoSelected = checked && (autoSelectedSessionIds ?? []).includes(result.sessionId);
             const inputId = `draft-related-thread-${result.sessionId}`;
             const matchedTerms = formatMatchedTerms(result);
             const hotkey = formatRowHotkey(index, hotkeyLimit);
@@ -111,6 +111,7 @@ export function DraftRelatedThreadsPanel({
                       {autoSelected && (
                         <span className="text-accent/80"> · auto-selected</span>
                       )}
+                      <span className={cx('text-dim', checked && 'text-accent/70')}>{` · score ${Math.round(result.score)}`}</span>
                     </span>
                     {(detail || reason) && (
                       <span className={cx('mt-0.5 block min-w-0 truncate text-[11px] text-secondary', checked && 'text-accent/70')}>

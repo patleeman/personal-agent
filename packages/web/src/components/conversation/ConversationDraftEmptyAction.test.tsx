@@ -18,7 +18,7 @@ const baseProps: React.ComponentProps<typeof ConversationDraftEmptyAction> = {
   relatedThreadQuery: '',
   relatedThreadResults: [],
   selectedRelatedThreadIds: [],
-  autoSelectedRelatedThreadId: null,
+  autoSelectedRelatedThreadIds: [],
   relatedThreadSearchLoading: false,
   preparingRelatedThreadContext: false,
   relatedThreadSearchError: null,

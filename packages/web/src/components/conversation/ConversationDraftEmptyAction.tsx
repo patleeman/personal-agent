@@ -20,7 +20,7 @@ export function ConversationDraftEmptyAction({
   relatedThreadQuery,
   relatedThreadResults,
   selectedRelatedThreadIds,
-  autoSelectedRelatedThreadId,
+  autoSelectedRelatedThreadIds,
   relatedThreadSearchLoading,
   preparingRelatedThreadContext,
   relatedThreadSearchError,
@@ -43,7 +43,7 @@ export function ConversationDraftEmptyAction({
   relatedThreadQuery: string;
   relatedThreadResults: RelatedConversationSearchResult[];
   selectedRelatedThreadIds: string[];
-  autoSelectedRelatedThreadId: string | null;
+  autoSelectedRelatedThreadIds: string[];
   relatedThreadSearchLoading: boolean;
   preparingRelatedThreadContext: boolean;
   relatedThreadSearchError: string | null;
@@ -135,7 +135,7 @@ export function ConversationDraftEmptyAction({
         query={relatedThreadQuery}
         results={relatedThreadResults}
         selectedSessionIds={selectedRelatedThreadIds}
-        autoSelectedSessionId={autoSelectedRelatedThreadId}
+        autoSelectedSessionIds={autoSelectedRelatedThreadIds}
         selectedCount={selectedRelatedThreadIds.length}
         loading={relatedThreadSearchLoading}
         busy={preparingRelatedThreadContext}

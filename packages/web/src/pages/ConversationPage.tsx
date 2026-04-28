@@ -279,7 +279,7 @@ const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorM
 
 const INITIAL_HISTORICAL_TAIL_BLOCKS = 120;
 const HISTORICAL_TAIL_BLOCKS_STEP = 400;
-const MAX_RELATED_THREAD_SELECTIONS = 3;
+const MAX_RELATED_THREAD_SELECTIONS = 5;
 const MAX_VISIBLE_RELATED_THREAD_RESULTS = 10;
 const RELATED_THREAD_RECENT_WINDOW_DAYS = 3;
 const MAX_RELATED_THREAD_CANDIDATES = 24;
@@ -1442,7 +1442,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [relatedThreadSearchLoading, setRelatedThreadSearchLoading] = useState(false);
   const [relatedThreadSearchError, setRelatedThreadSearchError] = useState<string | null>(null);
   const [selectedRelatedThreadIds, setSelectedRelatedThreadIds] = useState<string[]>([]);
-  const [autoSelectedRelatedThreadId, setAutoSelectedRelatedThreadId] = useState<string | null>(null);
+  const [autoSelectedRelatedThreadIds, setAutoSelectedRelatedThreadIds] = useState<string[]>([]);
   const [preparingRelatedThreadContext, setPreparingRelatedThreadContext] = useState(false);
   const [slashIdx, setSlashIdx] = useState(0);
   const [mentionIdx, setMentionIdx] = useState(0);
@@ -2182,15 +2182,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       draft,
       query: debouncedRelatedThreadsQuery,
       selectedThreadIds: selectedRelatedThreadIds,
-      autoSelectedThreadId: autoSelectedRelatedThreadId,
+      autoSelectedThreadIds: autoSelectedRelatedThreadIds,
       searchResults: relatedThreadSearchResults,
+      maxAutoSelections: MAX_RELATED_THREAD_SELECTIONS,
     });
     if (!update.changed) {
       return;
     }
     setSelectedRelatedThreadIds(update.selectedThreadIds);
-    setAutoSelectedRelatedThreadId(update.autoSelectedThreadId);
-  }, [autoSelectedRelatedThreadId, debouncedRelatedThreadsQuery, draft, relatedThreadSearchResults, selectedRelatedThreadIds]);
+    setAutoSelectedRelatedThreadIds(update.autoSelectedThreadIds);
+  }, [autoSelectedRelatedThreadIds, debouncedRelatedThreadsQuery, draft, relatedThreadSearchResults, selectedRelatedThreadIds]);
 
   useEffect(() => {
     if (draft) {
@@ -5497,7 +5498,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
                 relatedThreadQuery={debouncedRelatedThreadsQuery}
                 relatedThreadResults={visibleRelatedThreadResults}
                 selectedRelatedThreadIds={selectedRelatedThreadIds}
-                autoSelectedRelatedThreadId={autoSelectedRelatedThreadId}
+                autoSelectedRelatedThreadIds={autoSelectedRelatedThreadIds}
                 relatedThreadSearchLoading={relatedThreadSearchLoading}
                 preparingRelatedThreadContext={preparingRelatedThreadContext}
                 relatedThreadSearchError={relatedThreadSearchError}
