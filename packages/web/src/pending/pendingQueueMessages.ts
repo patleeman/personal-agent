@@ -89,7 +89,7 @@ export function appendPendingInitialPromptBlock(
     && images.every((image, index) => {
       const lastImage = lastImages[index];
       return lastImage?.src === image.src
-        && lastImage?.mimeType === image.mimeType
+        && (lastImage?.mimeType?.trim().toLowerCase() || '') === image.mimeType.trim().toLowerCase()
         && lastImage?.caption === image.caption;
     });
   const alreadyVisible = lastMessage?.type === 'user'

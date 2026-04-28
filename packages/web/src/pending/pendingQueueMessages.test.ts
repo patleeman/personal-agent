@@ -29,6 +29,24 @@ describe('appendPendingInitialPromptBlock', () => {
     expect(appendPendingInitialPromptBlock(messages, pendingPrompt, '2026-03-24T00:00:01.000Z')).toEqual(messages);
   });
 
+  it('does not duplicate a trailing pending image block when mime casing differs', () => {
+    const promptWithImage: PendingConversationPrompt = {
+      text: 'first prompt still on the way',
+      images: [{ mimeType: 'IMAGE/PNG', data: 'ZmFrZQ==', name: 'draft.png', previewUrl: 'blob:preview' }],
+      attachmentRefs: [],
+    };
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-24T00:00:00.000Z',
+        text: 'first prompt still on the way',
+        images: [{ alt: 'draft.png', src: 'blob:preview', mimeType: 'image/png', caption: 'draft.png' }],
+      },
+    ];
+
+    expect(appendPendingInitialPromptBlock(messages, promptWithImage, '2026-03-24T00:00:01.000Z')).toEqual(messages);
+  });
+
   it('preserves pending prompt image previews', () => {
     const promptWithImage: PendingConversationPrompt = {
       text: '',
