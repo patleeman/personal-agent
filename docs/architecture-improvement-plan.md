@@ -87,6 +87,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved composer image/drawing attachment removal rules into `promptAttachments`, keeping attachment identity behavior covered outside `ConversationPage`.
    - Moved composer file-preparation notice formatting into `promptAttachments`, so `ConversationPage` only applies prepared attachment state and emits returned notices.
    - Moved attached context-doc append/remove transitions into `conversationComposerPresentation`, leaving `ConversationPage` to persist the resolved document list.
+   - Moved paste/drop transfer file extraction into `promptAttachments`, so `ConversationPage` only handles event prevention and dispatch.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

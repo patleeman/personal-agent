@@ -221,6 +221,7 @@ import {
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
   prepareComposerFiles,
+  readComposerTransferFiles,
   removeComposerDrawingAttachmentByLocalId,
   removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
@@ -5128,7 +5129,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
-    const files = Array.from(e.clipboardData.files);
+    const files = readComposerTransferFiles(e.clipboardData.files);
     if (files.length === 0) {
       return;
     }
@@ -5310,7 +5311,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     e.preventDefault();
     setDragOver(false);
 
-    const files = Array.from(e.dataTransfer.files);
+    const files = readComposerTransferFiles(e.dataTransfer.files);
     if (files.length > 0) {
       void addComposerFiles(files);
     }

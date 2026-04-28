@@ -219,6 +219,16 @@ export interface ComposerFilePreparationNotice {
   durationMs?: number;
 }
 
+export type ComposerTransferFileList = Iterable<File> | ArrayLike<File> | null | undefined;
+
+export function readComposerTransferFiles(files: ComposerTransferFileList): File[] {
+  return files ? Array.from(files) : [];
+}
+
+export function hasComposerTransferFiles(files: ComposerTransferFileList): boolean {
+  return readComposerTransferFiles(files).length > 0;
+}
+
 export async function prepareComposerFiles(
   files: File[],
   buildDrawing: (file: File) => Promise<ComposerDrawingAttachment> = buildComposerDrawingFromFile,

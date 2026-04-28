@@ -8,6 +8,8 @@ import {
   fileExtensionForMimeType,
   isPotentialExcalidrawFile,
   prepareComposerFiles,
+  hasComposerTransferFiles,
+  readComposerTransferFiles,
   removeComposerDrawingAttachmentByLocalId,
   removeComposerImageFileAtIndex,
   restoreComposerImageFiles,
@@ -78,6 +80,17 @@ describe('promptAttachments', () => {
     expect(result.drawingAttachments).toEqual([drawing]);
     expect(result.drawingParseFailures).toEqual([{ fileName: 'broken.excalidraw', message: 'Invalid scene' }]);
     expect(result.rejectedFileNames).toEqual(['notes.txt']);
+  });
+
+  it('reads files from paste/drop transfer file lists', () => {
+    const first = new File(['one'], 'one.png', { type: 'image/png' });
+    const second = new File(['two'], 'two.png', { type: 'image/png' });
+    const fileListLike = { 0: first, 1: second, length: 2 };
+
+    expect(readComposerTransferFiles(fileListLike)).toEqual([first, second]);
+    expect(readComposerTransferFiles(null)).toEqual([]);
+    expect(hasComposerTransferFiles(fileListLike)).toBe(true);
+    expect(hasComposerTransferFiles({ length: 0 })).toBe(false);
   });
 
   it('falls back to image attachment when png drawing parsing fails', async () => {
