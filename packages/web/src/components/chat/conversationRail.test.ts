@@ -127,6 +127,17 @@ describe('conversation rail turns', () => {
     ]);
   });
 
+  it('caps huge snippet limits instead of rendering oversized rail text', () => {
+    const text = Array.from({ length: 40 }, (_, index) => `word${index}`).join(' ');
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-10T20:00:00.000Z', text },
+    ];
+
+    expect(getConversationRailTurns(messages, Number.MAX_SAFE_INTEGER)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'word0 word1 word2 word3 word4 word5 word6 word7 word8 word9 word10 word11 word12 word13 word14…' },
+    ]);
+  });
+
   it('can offset marker indexes for windowed transcript slices', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-10T20:00:00.000Z', text: 'Windowed user turn' },

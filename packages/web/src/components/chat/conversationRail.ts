@@ -37,7 +37,7 @@ function collapseWhitespace(value: string): string {
 
 function truncateSnippet(value: string, maxLength = DEFAULT_SNIPPET_LIMIT): string {
   const limit = Number.isSafeInteger(maxLength) && maxLength > 0
-    ? maxLength
+    ? Math.min(DEFAULT_SNIPPET_LIMIT, maxLength)
     : DEFAULT_SNIPPET_LIMIT;
   if (value.length <= limit) {
     return value;
