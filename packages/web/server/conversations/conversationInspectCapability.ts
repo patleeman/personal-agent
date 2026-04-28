@@ -336,8 +336,8 @@ function splitSearchTerms(query: string): string[] {
 }
 
 function matchesSearchText(text: string, query: string, mode: ConversationInspectSearchMode): boolean {
-  const haystack = text.toLowerCase();
-  const phrase = query.toLowerCase().trim();
+  const haystack = text.replace(/\s+/g, ' ').trim().toLowerCase();
+  const phrase = query.replace(/\s+/g, ' ').trim().toLowerCase();
   if (!phrase) {
     return false;
   }
