@@ -285,11 +285,9 @@ export function applyDesktopConversationStreamEvent(
     case 'user_message': {
       const nextBlock = displayBlockToMessageBlock(event.block);
       const last = blocks.at(-1);
-      const lastImageCount = last?.type === 'user' ? last.images?.length ?? 0 : -1;
-      const nextImageCount = nextBlock.type === 'user' ? nextBlock.images?.length ?? 0 : -1;
       const sameUserBlock = last?.type === 'user' && nextBlock.type === 'user'
         && (last.text ?? '') === (nextBlock.text ?? '')
-        && lastImageCount === nextImageCount;
+        && desktopUserBlockImagesMatch(last.images ?? [], nextBlock.images ?? []);
       if (sameUserBlock) {
         blocks[blocks.length - 1] = nextBlock;
       } else {
@@ -423,6 +421,21 @@ export function applyDesktopConversationStreamEvent(
     default:
       return prev;
   }
+}
+
+function desktopUserBlockImagesMatch(
+  previousImages: NonNullable<DesktopConversationMessageBlock['images']>,
+  nextImages: NonNullable<DesktopConversationMessageBlock['images']>,
+): boolean {
+  return previousImages.length === nextImages.length
+    && nextImages.every((image, index) => {
+      const previousImage = previousImages[index];
+      return Boolean(previousImage)
+        && (previousImage.src ?? '') === (image.src ?? '')
+        && (previousImage.mimeType?.trim().toLowerCase() ?? '') === (image.mimeType?.trim().toLowerCase() ?? '')
+        && (previousImage.caption ?? '') === (image.caption ?? '')
+        && (previousImage.alt ?? '') === (image.alt ?? '');
+    });
 }
 
 export async function readDesktopConversationState(input: {

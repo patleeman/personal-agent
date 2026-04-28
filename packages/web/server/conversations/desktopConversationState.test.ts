@@ -27,6 +27,39 @@ afterEach(() => {
 });
 
 describe('desktopConversationState reducer', () => {
+  it('does not replace same-text user image blocks when image identity differs', async () => {
+    const {
+      applyDesktopConversationStreamEvent,
+      createEmptyDesktopConversationStreamState,
+    } = await import('./desktopConversationState.js');
+
+    let state = createEmptyDesktopConversationStreamState();
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'user_message',
+      block: {
+        type: 'user',
+        id: 'user-1',
+        text: 'same text',
+        images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
+      },
+    } as never);
+    state = applyDesktopConversationStreamEvent(state, {
+      type: 'user_message',
+      block: {
+        type: 'user',
+        id: 'user-2',
+        text: 'same text',
+        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+      },
+    } as never);
+
+    expect(state.blocks).toHaveLength(2);
+    expect(state.blocks).toEqual([
+      expect.objectContaining({ type: 'user', images: [expect.objectContaining({ src: 'blob:old' })] }),
+      expect.objectContaining({ type: 'user', images: [expect.objectContaining({ src: 'blob:new' })] }),
+    ]);
+  });
+
   it('updates streaming tool blocks and queue state from live events', async () => {
     const {
       applyDesktopConversationStreamEvent,
