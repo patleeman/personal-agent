@@ -844,6 +844,18 @@ describe('sessions', () => {
     ]);
   });
 
+  it('falls back for non-ISO transcript entry timestamps', () => {
+    expect(buildDisplayBlocksFromEntries([
+      {
+        id: 'bad-string-timestamp',
+        timestamp: '1',
+        message: { role: 'user', content: 'bad string timestamp' },
+      },
+    ])).toEqual([
+      { type: 'user', id: 'bad-string-timestamp', ts: '1970-01-01T00:00:00.000Z', text: 'bad string timestamp' },
+    ]);
+  });
+
   it('renders hidden related thread context as a visible summary event', () => {
     const blocks = buildDisplayBlocksFromEntries([
       {

@@ -280,6 +280,7 @@ let loadedPersistentIndexKey: string | null = null;
 let persistedIndexJson: string | null = null;
 
 const MAX_SESSION_DETAIL_CACHE_ENTRIES = 24;
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 // ── Parsing ────────────────────────────────────────────────────────────────────
 
@@ -605,7 +606,8 @@ function normalizeContent(content: unknown): RawContentBlock[] {
 
 function normalizeTimestamp(timestamp: string | number | undefined): string {
   if (typeof timestamp === 'string' && timestamp.trim()) {
-    const parsed = Date.parse(timestamp);
+    const normalized = timestamp.trim();
+    const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
     return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date(0).toISOString();
   }
   if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
