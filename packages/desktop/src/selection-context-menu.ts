@@ -9,9 +9,9 @@ export interface SelectionContextMenuInput {
   canCopy?: boolean;
 }
 
-function normalizeCoordinate(value: number | undefined): number {
+export function normalizeSelectionContextMenuCoordinate(value: number | undefined): number {
   const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
+  if (!Number.isSafeInteger(Math.round(numericValue))) {
     return 0;
   }
 
@@ -74,8 +74,8 @@ export async function showSelectionContextMenu(
 
     menu.popup({
       ...(targetWindow ? { window: targetWindow } : {}),
-      x: normalizeCoordinate(input.x),
-      y: normalizeCoordinate(input.y),
+      x: normalizeSelectionContextMenuCoordinate(input.x),
+      y: normalizeSelectionContextMenuCoordinate(input.y),
       callback: finish,
     });
   });
