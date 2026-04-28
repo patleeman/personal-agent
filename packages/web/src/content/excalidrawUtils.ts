@@ -107,7 +107,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function positiveFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0 && Number.isSafeInteger(Math.round(value))
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     ? value
     : null;
 }

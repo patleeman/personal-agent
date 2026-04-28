@@ -12,4 +12,15 @@ describe('resolveExcalidrawPreviewFrameSize', () => {
       height: Number.MAX_SAFE_INTEGER + 1,
     } as never)).toBeNull();
   });
+
+  it('rejects fractional persisted canvas dimensions', () => {
+    expect(resolveExcalidrawPreviewFrameSize({
+      width: 1280.5,
+      height: 720,
+    } as never)).toBeNull();
+    expect(resolveExcalidrawPreviewFrameSize({
+      width: 1280,
+      height: 720.5,
+    } as never)).toBeNull();
+  });
 });
