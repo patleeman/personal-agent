@@ -376,12 +376,12 @@ describe('TasksPage', () => {
 
     expect(html).toContain('aria-label="Create automation"');
     expect(html).toContain('Automation title');
-    expect(html).toContain('Select project');
     expect(html).toContain('Worktree');
+    expect(html).toContain('Chat');
     expect(html).toContain('No automations yet.');
   });
 
-  it('uses existing conversation workspaces as project options in the create form', () => {
+  it('keeps project options hidden until worktree mode is enabled', () => {
     const html = renderToString(
       <MemoryRouter initialEntries={['/automations?new=1']}>
         <SseConnectionContext.Provider value={{ status: 'open' }}>
@@ -421,7 +421,9 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('>alpha-worktree<');
-    expect(html).toContain('>beta-worktree<');
+    expect(html).toContain('Worktree');
+    expect(html).toContain('Chat');
+    expect(html).not.toContain('>alpha-worktree<');
+    expect(html).not.toContain('>beta-worktree<');
   });
 });
