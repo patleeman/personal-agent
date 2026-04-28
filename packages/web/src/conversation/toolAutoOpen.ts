@@ -19,6 +19,15 @@ function isCompletedToolBlock(block: ToolBlock): boolean {
   return block.status !== 'running' && !block.running;
 }
 
+function parseIsoTimestamp(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 export function collectCompletedToolAutoOpenBlockKeys<TPresentation>(
   messages: MessageBlock[],
   readPresentation: (block: ToolBlock) => TPresentation | null,
@@ -75,8 +84,8 @@ export function findRequestedToolPresentationToOpen<TPresentation extends ToolAu
 
     nextProcessedBlockKeys.push(blockKey);
 
-    const toolCreatedAt = Date.parse(block.ts);
-    const startedAt = Date.parse(autoOpenStartedAt);
+    const toolCreatedAt = parseIsoTimestamp(block.ts);
+    const startedAt = parseIsoTimestamp(autoOpenStartedAt);
     if (!Number.isFinite(toolCreatedAt) || !Number.isFinite(startedAt) || toolCreatedAt < startedAt) {
       continue;
     }

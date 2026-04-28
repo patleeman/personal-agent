@@ -77,6 +77,21 @@ describe('toolAutoOpen', () => {
     expect(result).toEqual({ targetId: null, processedBlockKeys: ['stale'] });
   });
 
+  it('marks malformed timestamp presentations processed without opening them', () => {
+    const result = findRequestedToolPresentationToOpen({
+      messages: [
+        toolBlock({ id: 'malformed', ts: '9999', details: { id: 'malformed-target', openRequested: true } }),
+      ],
+      processedBlockKeys: new Set(),
+      autoOpenStartedAt: '2026-01-01T00:00:00.000Z',
+      readPresentation,
+      getTargetId: (presentation) => presentation.id,
+      keyPrefix: 'artifact',
+    });
+
+    expect(result).toEqual({ targetId: null, processedBlockKeys: ['malformed'] });
+  });
+
   it('skips already processed, running, and non-requested presentations', () => {
     const result = findRequestedToolPresentationToOpen({
       messages: [
