@@ -114,8 +114,8 @@ export function filterMentionItems(
     });
 
   const limit = options.limit;
-  if (typeof limit === 'number' && Number.isInteger(limit) && limit >= 0) {
-    return filtered.slice(0, limit);
+  if (typeof limit === 'number' && Number.isSafeInteger(limit) && limit >= 0) {
+    return filtered.slice(0, Math.min(MAX_MENTION_MENU_ITEMS, limit));
   }
 
   return filtered;
