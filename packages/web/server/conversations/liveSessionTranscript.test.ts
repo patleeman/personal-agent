@@ -20,6 +20,16 @@ function userImageBlock(id: string, imageSrc: string): DisplayBlock {
   } as DisplayBlock;
 }
 
+function userImageBlockWithCaption(id: string, imageSrc: string, caption: string): DisplayBlock {
+  return {
+    id,
+    type: 'user',
+    text: 'same text',
+    ts: '2026-04-26T12:00:00.000Z',
+    images: [{ alt: 'image', src: imageSrc, mimeType: 'image/png', caption }],
+  } as DisplayBlock;
+}
+
 function toolBlock(input: {
   id: string;
   toolCallId: string;
@@ -71,6 +81,17 @@ describe('liveSessionTranscript', () => {
     expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
       userImageBlock('user-old', 'blob:old'),
       userImageBlock('user-new', 'blob:new'),
+    ]);
+  });
+
+  it('does not collapse user images that differ after a long shared data url prefix', () => {
+    const sharedPrefix = `data:image/png;base64,${'a'.repeat(180)}`;
+    const persisted = [userImageBlockWithCaption('user-old', `${sharedPrefix}old`, 'same caption')];
+    const live = [userImageBlockWithCaption('user-new', `${sharedPrefix}new`, 'same caption')];
+
+    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
+      userImageBlockWithCaption('user-old', `${sharedPrefix}old`, 'same caption'),
+      userImageBlockWithCaption('user-new', `${sharedPrefix}new`, 'same caption'),
     ]);
   });
 

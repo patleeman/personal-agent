@@ -93,7 +93,7 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
         ts: block.ts,
         text: block.text,
         images: (block.images ?? []).map((image) => ({
-          src: image.src?.slice(0, 128) ?? null,
+          src: fingerprintImageSrc(image.src),
           mimeType: image.mimeType?.trim().toLowerCase() ?? null,
           caption: image.caption ?? null,
           alt: image.alt ?? null,
@@ -121,7 +121,7 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
         alt: block.alt,
         mimeType: block.mimeType,
         caption: block.caption,
-        src: block.src?.slice(0, 128),
+        src: fingerprintImageSrc(block.src),
       });
     case 'error':
       return JSON.stringify({
@@ -131,6 +131,17 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
         message: block.message,
       });
   }
+}
+
+function fingerprintImageSrc(src: string | undefined): { length: number; prefix: string; suffix: string } | null {
+  if (typeof src !== 'string') {
+    return null;
+  }
+  return {
+    length: src.length,
+    prefix: src.slice(0, 128),
+    suffix: src.slice(-128),
+  };
 }
 
 function mergeIdentityKey(block: DisplayBlock): string | null {
