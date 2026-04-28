@@ -288,6 +288,19 @@ const HISTORICAL_TAIL_BLOCKS_JUMP_PADDING = 40;
 const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
+const EMPTY_ASK_USER_QUESTION_ANSWERS: AskUserQuestionAnswers = {};
+
+function buildComposerQuestionAnswersStorageKey(conversationId: string | undefined, pendingQuestionKey: string): string | null {
+  if (!conversationId || !pendingQuestionKey) {
+    return null;
+  }
+
+  return `pa:conversation-question-answers:${conversationId}:${pendingQuestionKey}`;
+}
+
+function hasAskUserQuestionAnswers(answers: AskUserQuestionAnswers): boolean {
+  return Object.values(answers).some((values) => values.length > 0);
+}
 
 export function resolveConversationExecutionOverride(
   meta: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null | undefined,
@@ -858,9 +871,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => buildPendingAskUserQuestionKey(pendingAskUserQuestion),
     [pendingAskUserQuestion],
   );
+  const composerQuestionAnswersStorageKey = useMemo(
+    () => buildComposerQuestionAnswersStorageKey(id, pendingAskUserQuestionKey),
+    [id, pendingAskUserQuestionKey],
+  );
   const [composerQuestionIndex, setComposerQuestionIndex] = useState(0);
   const [composerQuestionOptionIndex, setComposerQuestionOptionIndex] = useState(0);
-  const [composerQuestionAnswers, setComposerQuestionAnswers] = useState<AskUserQuestionAnswers>({});
+  const [composerQuestionAnswers, setComposerQuestionAnswers, clearComposerQuestionAnswers] = useReloadState<AskUserQuestionAnswers>({
+    storageKey: composerQuestionAnswersStorageKey,
+    initialValue: EMPTY_ASK_USER_QUESTION_ANSWERS,
+    shouldPersist: hasAskUserQuestionAnswers,
+  });
   const [composerQuestionSubmitting, setComposerQuestionSubmitting] = useState(false);
   const artifactAutoOpenSeededRef = useRef(false);
   const artifactAutoOpenStartedAtRef = useRef(new Date().toISOString());
@@ -1816,7 +1837,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   useEffect(() => {
     setComposerQuestionIndex(0);
     setComposerQuestionOptionIndex(0);
-    setComposerQuestionAnswers({});
     setComposerQuestionSubmitting(false);
   }, [pendingAskUserQuestionKey]);
 
@@ -2849,11 +2869,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setComposerQuestionSubmitting(true);
     try {
       await submitAskUserQuestion(pendingAskUserQuestion.presentation, composerQuestionAnswers);
+      clearComposerQuestionAnswers();
       return true;
     } finally {
       setComposerQuestionSubmitting(false);
     }
-  }, [composerQuestionAnswers, composerQuestionCanSubmit, composerQuestionSubmitting, pendingAskUserQuestion, submitAskUserQuestion]);
+  }, [clearComposerQuestionAnswers, composerQuestionAnswers, composerQuestionCanSubmit, composerQuestionSubmitting, pendingAskUserQuestion, submitAskUserQuestion]);
 
   const navigateComposerHistory = useCallback((direction: 'older' | 'newer') => {
     const next = resolveComposerHistoryNavigation({
