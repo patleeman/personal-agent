@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   existsSyncMock,
@@ -57,7 +57,10 @@ import {
 } from './manage.js';
 
 describe('daemon manage helpers', () => {
+  const originalDesktopRuntime = process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
+
   beforeEach(() => {
+    delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
     existsSyncMock.mockReset();
     openSyncMock.mockReset();
     readFileSyncMock.mockReset();
@@ -76,6 +79,14 @@ describe('daemon manage helpers', () => {
     });
     existsSyncMock.mockImplementation((path: string) => path.endsWith('/index.js'));
     openSyncMock.mockReturnValue(42);
+  });
+
+  afterEach(() => {
+    if (originalDesktopRuntime === undefined) {
+      delete process.env.PERSONAL_AGENT_DESKTOP_RUNTIME;
+    } else {
+      process.env.PERSONAL_AGENT_DESKTOP_RUNTIME = originalDesktopRuntime;
+    }
   });
 
   it('does not respawn the daemon when it is already reachable', async () => {
@@ -103,9 +114,11 @@ describe('daemon manage helpers', () => {
       [expect.stringMatching(/index\.js$/), '--foreground'],
       {
         detached: true,
+        env: expect.any(Object),
         stdio: ['ignore', 42, 42],
       },
     );
+    expect(spawnMock.mock.calls[0]?.[2]?.env?.PERSONAL_AGENT_DESKTOP_RUNTIME).toBeUndefined();
     expect(child.unref).toHaveBeenCalledTimes(1);
   });
 
