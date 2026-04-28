@@ -184,7 +184,7 @@ async function shouldUseDesktopLocalConversationCapabilities(conversationId: str
 
   try {
     const meta = await get<SessionMeta>(`/sessions/${encodeURIComponent(conversationId)}/meta`);
-    return !(meta.remoteHostId && meta.remoteConversationId);
+    return !(meta.remoteHostId || meta.remoteConversationId);
   } catch {
     return true;
   }
