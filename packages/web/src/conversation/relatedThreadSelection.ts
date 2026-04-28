@@ -155,15 +155,19 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
 } {
   const autoSelectedSet = new Set(input.autoSelectedThreadIds);
   const hasManualSelection = input.selectedThreadIds.some((sessionId) => !autoSelectedSet.has(sessionId));
-  const onlyAutoSelected = input.selectedThreadIds.length > 0 && !hasManualSelection;
+  const clearAutoSelections = () => ({
+    selectedThreadIds: input.selectedThreadIds.filter((sessionId) => !autoSelectedSet.has(sessionId)),
+    autoSelectedThreadIds: [],
+    changed: input.autoSelectedThreadIds.length > 0,
+  });
 
   if (input.selectedThreadIds.length === 0 && input.autoSelectedThreadIds.length > 0) {
     return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
   }
 
   if (!input.draft || input.query.trim().length < MIN_AUTO_PRESELECT_QUERY_LENGTH) {
-    if (onlyAutoSelected) {
-      return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
+    if (input.autoSelectedThreadIds.length > 0) {
+      return clearAutoSelections();
     }
     return {
       selectedThreadIds: input.selectedThreadIds,
@@ -177,8 +181,8 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
     .map((result) => result.sessionId);
 
   if (autoSelectedThreadIds.length === 0) {
-    if (onlyAutoSelected) {
-      return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
+    if (input.autoSelectedThreadIds.length > 0) {
+      return clearAutoSelections();
     }
     return {
       selectedThreadIds: input.selectedThreadIds,
