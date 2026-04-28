@@ -540,6 +540,7 @@ function isClosedSession(session: SessionMeta): boolean {
 }
 
 export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit = MAX_BACKFILL_PER_CALL): void {
+  const normalizedLimit = Number.isSafeInteger(limit) && limit > 0 ? limit : MAX_BACKFILL_PER_CALL;
   let queued = 0;
   for (const session of sessions) {
     if (!isClosedSession(session)) {
@@ -553,10 +554,27 @@ export function queueConversationSummaryBackfill(sessions: SessionMeta[], limit 
     }
     queueConversationSummaryRefresh(session);
     queued += 1;
-    if (queued >= limit) {
+    if (queued >= normalizedLimit) {
       break;
     }
   }
+}
+
+export function normalizeConversationSummaryBackfillLoopOptions(input: {
+  initialDelayMs?: number;
+  intervalMs?: number;
+  limit?: number;
+}): { initialDelayMs: number; intervalMs: number; limit: number } {
+  const initialDelayMs = Number.isSafeInteger(input.initialDelayMs) && (input.initialDelayMs as number) >= 0
+    ? input.initialDelayMs as number
+    : DEFAULT_BACKFILL_INITIAL_DELAY_MS;
+  const intervalMs = Number.isSafeInteger(input.intervalMs) && (input.intervalMs as number) >= 5_000
+    ? input.intervalMs as number
+    : DEFAULT_BACKFILL_INTERVAL_MS;
+  const limit = Number.isSafeInteger(input.limit) && (input.limit as number) > 0
+    ? input.limit as number
+    : MAX_BACKFILL_PER_CALL;
+  return { initialDelayMs, intervalMs, limit };
 }
 
 export function startConversationSummaryBackfillLoop(input: {
@@ -572,7 +590,7 @@ export function startConversationSummaryBackfillLoop(input: {
 
   const runBackfillTick = () => {
     try {
-      queueConversationSummaryBackfill(input.listSessions(), input.limit ?? MAX_BACKFILL_PER_CALL);
+      queueConversationSummaryBackfill(input.listSessions(), options.limit);
     } catch (error) {
       logWarn('conversation summary backfill tick failed', {
         message: error instanceof Error ? error.message : String(error),
@@ -580,11 +598,10 @@ export function startConversationSummaryBackfillLoop(input: {
     }
   };
 
-  const initialDelay = Math.max(0, input.initialDelayMs ?? DEFAULT_BACKFILL_INITIAL_DELAY_MS);
-  const intervalMs = Math.max(5_000, input.intervalMs ?? DEFAULT_BACKFILL_INTERVAL_MS);
-  const initialTimer = setTimeout(runBackfillTick, initialDelay);
+  const options = normalizeConversationSummaryBackfillLoopOptions(input);
+  const initialTimer = setTimeout(runBackfillTick, options.initialDelayMs);
   initialTimer.unref?.();
-  const interval = setInterval(runBackfillTick, intervalMs);
+  const interval = setInterval(runBackfillTick, options.intervalMs);
   interval.unref?.();
 }
 
