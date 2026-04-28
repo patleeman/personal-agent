@@ -434,6 +434,44 @@ describe('run agent extension', () => {
     });
   });
 
+  it('rejects unsafe loop iteration limits before starting durable agent runs', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+
+    const runTool = registerRunTool();
+    const fractional = await runTool.execute(
+      'tool-1',
+      {
+        action: 'start_agent',
+        taskSlug: 'loop-watch',
+        prompt: 'Keep watching.',
+        loop: true,
+        loopMaxIterations: 2.5,
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+    const unsafe = await runTool.execute(
+      'tool-2',
+      {
+        action: 'start_agent',
+        taskSlug: 'loop-watch',
+        prompt: 'Keep watching.',
+        loop: true,
+        loopMaxIterations: Number.MAX_SAFE_INTEGER + 1,
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+
+    expect(fractional.isError).toBe(true);
+    expect(fractional.content[0]?.text).toContain('loopMaxIterations must be a positive integer.');
+    expect(unsafe.isError).toBe(true);
+    expect(unsafe.content[0]?.text).toContain('loopMaxIterations must be a positive integer.');
+    expect(startBackgroundRunMock).not.toHaveBeenCalled();
+  });
+
   it('requires a persisted conversation when opting into result delivery', async () => {
     ensureDaemonAvailableMock.mockResolvedValue(undefined);
 

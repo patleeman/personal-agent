@@ -56,6 +56,18 @@ function normalizeRunLogTail(value: unknown): number {
     : 120;
 }
 
+function readOptionalPositiveInteger(value: unknown, label: string): number | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+
+  return value;
+}
+
 function resolveScheduledAt(input: { defer?: string; at?: string }): string | undefined {
   if (input.defer) {
     const delayMs = parseDeferredResumeDelayMs(input.defer);
@@ -283,7 +295,7 @@ export function createRunAgentExtension(options: {
               const at = readOptionalString(params.at);
               const loop = params.loop === true;
               const loopDelay = readOptionalString(params.loopDelay);
-              const loopMaxIterations = params.loopMaxIterations;
+              const loopMaxIterations = readOptionalPositiveInteger(params.loopMaxIterations, 'loopMaxIterations');
               const scheduleCount = Number(Boolean(defer)) + Number(Boolean(cron)) + Number(Boolean(at));
 
               if (scheduleCount > 1) {
