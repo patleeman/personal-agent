@@ -46,6 +46,16 @@ function readRequiredString(value: string | undefined, label: string): string {
   return normalized;
 }
 
+function normalizeRunLogTail(value: unknown): number {
+  if (value === undefined || value === null) {
+    return 120;
+  }
+
+  return typeof value === 'number' && Number.isInteger(value) && value > 0
+    ? Math.min(1000, value)
+    : 120;
+}
+
 function resolveScheduledAt(input: { defer?: string; at?: string }): string | undefined {
   if (input.defer) {
     const delayMs = parseDeferredResumeDelayMs(input.defer);
@@ -166,7 +176,7 @@ export function createRunAgentExtension(options: {
 
             case 'logs': {
               const runId = readRequiredString(params.runId, 'runId');
-              const tail = Math.max(1, Math.min(1000, Math.floor(params.tail ?? 120)));
+              const tail = normalizeRunLogTail(params.tail);
               const result = await getDurableRunLog(runId, tail);
               if (!result) {
                 throw new Error(`Run not found: ${runId}`);
