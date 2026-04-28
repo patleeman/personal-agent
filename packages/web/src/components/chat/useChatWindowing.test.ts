@@ -62,6 +62,34 @@ describe('useChatWindowing helpers', () => {
     expect(range?.chunks.map((chunk) => chunk.key)).toEqual(['5-5-1']);
   });
 
+  it('rejects absurd overscan chunks instead of mounting the whole transcript', () => {
+    const manyChunks: ChatRenderChunk[] = Array.from({ length: 20 }, (_, index) => ({
+      key: `${index}-${index}-1`,
+      items: [],
+      startItemIndex: index,
+      endItemIndex: index,
+      startMessageIndex: index,
+      endMessageIndex: index,
+      spanCount: 1,
+    }));
+    const layouts = buildChatRenderChunkLayouts(manyChunks, {}, 100);
+    const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: null, overscanChunks: Number.MAX_SAFE_INTEGER, viewport: null });
+
+    expect(range?.chunks.map((chunk) => chunk.key)).toEqual([
+      '9-9-1',
+      '10-10-1',
+      '11-11-1',
+      '12-12-1',
+      '13-13-1',
+      '14-14-1',
+      '15-15-1',
+      '16-16-1',
+      '17-17-1',
+      '18-18-1',
+      '19-19-1',
+    ]);
+  });
+
   it('keeps a focused message mounted even outside the viewport', () => {
     const layouts = buildChatRenderChunkLayouts(chunks, {}, 100);
     const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: 0, overscanChunks: 0, viewport: { scrollTop: 500, clientHeight: 40 } });

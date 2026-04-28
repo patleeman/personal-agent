@@ -9,6 +9,8 @@ import {
   type ChatWindowingProfile,
 } from './chatWindowing.js';
 
+const MAX_OVERSCAN_CHUNKS = 10;
+
 export function calculateAverageSpanHeight(
   renderChunks: ChatRenderChunk[],
   chunkHeights: Record<string, number>,
@@ -62,7 +64,7 @@ export function resolveVisibleChunkRange({
   }
 
   const normalizedOverscanChunks = Number.isSafeInteger(overscanChunks) && overscanChunks >= 0
-    ? overscanChunks
+    ? Math.min(MAX_OVERSCAN_CHUNKS, overscanChunks)
     : 0;
 
   const totalHeight = chunkLayouts[chunkLayouts.length - 1]?.bottom ?? 0;
