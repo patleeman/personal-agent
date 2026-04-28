@@ -58,18 +58,18 @@ function ZenViewIcon() {
   );
 }
 
-function readBrowserNavigationState(): DesktopNavigationState {
+export function readBrowserNavigationState(): DesktopNavigationState {
   if (typeof window === 'undefined') {
     return { canGoBack: false, canGoForward: false };
   }
 
   const rawIndex = (window.history.state as { idx?: unknown } | null | undefined)?.idx;
-  const currentIndex = typeof rawIndex === 'number' && Number.isFinite(rawIndex) ? rawIndex : 0;
+  const currentIndex = typeof rawIndex === 'number' && Number.isSafeInteger(rawIndex) && rawIndex >= 0 ? rawIndex : 0;
   let maxIndex = currentIndex;
 
   try {
     const stored = Number(window.sessionStorage.getItem('__pa_nav_max_idx__') ?? currentIndex);
-    if (Number.isFinite(stored)) {
+    if (Number.isSafeInteger(stored) && stored >= 0) {
       maxIndex = Math.max(currentIndex, stored);
     }
     window.sessionStorage.setItem('__pa_nav_max_idx__', String(maxIndex));

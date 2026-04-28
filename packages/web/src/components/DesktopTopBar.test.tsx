@@ -2,7 +2,7 @@ import React from 'react';
 import { renderToString } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DesktopTopBar } from './DesktopTopBar.js';
+import { DesktopTopBar, readBrowserNavigationState } from './DesktopTopBar.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -30,6 +30,21 @@ function renderTopBar(
 describe('DesktopTopBar', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  it('ignores unsafe persisted browser navigation indexes', () => {
+    const storage = new Map<string, string>([
+      ['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER + 1)],
+    ]);
+    vi.stubGlobal('window', {
+      history: { state: { idx: 0 } },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    });
+
+    expect(readBrowserNavigationState()).toEqual({ canGoBack: false, canGoForward: false });
   });
 
   it('keeps desktop navigation chrome visible in Electron shells even when the preload bridge is missing', () => {
