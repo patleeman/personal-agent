@@ -183,6 +183,12 @@ describe('shouldRetry', () => {
     const options = { enabled: true, retry: { attempts: 1.5 } };
     expect(shouldRetry(options, 2)).toEqual({ retry: true, delayMs: expect.any(Number) });
   });
+
+  it('caps huge retry attempt limits', () => {
+    const options = { enabled: true, retry: { attempts: Number.MAX_SAFE_INTEGER } };
+    expect(shouldRetry(options, 99)).toEqual({ retry: true, delayMs: expect.any(Number) });
+    expect(shouldRetry(options, 100)).toEqual({ retry: false });
+  });
 });
 
 describe('hasExceededMaxIterations', () => {

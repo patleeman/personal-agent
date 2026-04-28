@@ -18,6 +18,8 @@ import {
   type LoopOptions,
 } from './schedule-run.js';
 
+const MAX_LOOP_RETRY_ATTEMPTS = 100;
+
 export type LoopState = 'idle' | 'running' | 'scheduling' | 'waiting';
 
 /**
@@ -152,7 +154,7 @@ export function shouldRetry(
   }
 
   const maxAttempts = Number.isSafeInteger(options.retry.attempts) && (options.retry.attempts as number) > 0
-    ? options.retry.attempts as number
+    ? Math.min(MAX_LOOP_RETRY_ATTEMPTS, options.retry.attempts as number)
     : 3;
   if (attempt >= maxAttempts) {
     return { retry: false };
