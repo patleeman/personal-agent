@@ -100,12 +100,14 @@ export function appendPendingInitialPromptBlock(
     return existingMessages;
   }
 
+  const timestamp = Number.isFinite(Date.parse(now)) ? now : new Date().toISOString();
+
   return [
     ...existingMessages,
     {
       type: 'user',
       id: 'pending-initial-prompt',
-      ts: now,
+      ts: timestamp,
       text,
       ...(images.length > 0 ? { images } : {}),
     },

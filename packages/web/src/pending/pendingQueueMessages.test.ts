@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
 import type { MessageBlock } from '../shared/types';
 import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems, resolveRestoredQueuedPromptComposerUpdate } from './pendingQueueMessages';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('appendPendingInitialPromptBlock', () => {
   const pendingPrompt: PendingConversationPrompt = {
@@ -12,6 +16,20 @@ describe('appendPendingInitialPromptBlock', () => {
 
   it('appends a pending initial prompt to an empty transcript', () => {
     expect(appendPendingInitialPromptBlock(undefined, pendingPrompt, '2026-03-24T00:00:00.000Z')).toEqual([
+      {
+        type: 'user',
+        id: 'pending-initial-prompt',
+        ts: '2026-03-24T00:00:00.000Z',
+        text: 'first prompt still on the way',
+      },
+    ]);
+  });
+
+  it('falls back to the current clock for malformed pending prompt timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-24T00:00:00.000Z'));
+
+    expect(appendPendingInitialPromptBlock(undefined, pendingPrompt, 'not-a-date')).toEqual([
       {
         type: 'user',
         id: 'pending-initial-prompt',
