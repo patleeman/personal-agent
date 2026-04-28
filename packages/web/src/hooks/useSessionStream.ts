@@ -422,10 +422,10 @@ export function normalizeSurfaceRegistrationWaitOptions(input: {
   pollMs?: number;
 }): { timeoutMs: number; pollMs: number } {
   const timeoutMs = Number.isSafeInteger(input.timeoutMs) && (input.timeoutMs as number) >= 0
-    ? input.timeoutMs as number
+    ? Math.min(10_000, input.timeoutMs as number)
     : 1_500;
   const pollMs = Number.isSafeInteger(input.pollMs) && (input.pollMs as number) >= 10
-    ? input.pollMs as number
+    ? Math.min(1_000, input.pollMs as number)
     : 50;
   return { timeoutMs, pollMs };
 }

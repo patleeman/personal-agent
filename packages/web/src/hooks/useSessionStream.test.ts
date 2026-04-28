@@ -196,6 +196,10 @@ describe('normalizeSurfaceRegistrationWaitOptions', () => {
       timeoutMs: 1_500,
       pollMs: 50,
     });
+    expect(normalizeSurfaceRegistrationWaitOptions({ timeoutMs: Number.MAX_SAFE_INTEGER, pollMs: Number.MAX_SAFE_INTEGER })).toEqual({
+      timeoutMs: 10_000,
+      pollMs: 1_000,
+    });
   });
 });
 
