@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
   buildConversationBackgroundRunIndicatorText,
+  buildConversationSessionSummaryNotice,
   findLastCopyableAgentText,
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
@@ -324,5 +325,26 @@ describe('conversation page state helpers', () => {
     expect(state.connectedRuns.map((run) => run.runId)).toEqual(['run-active', 'run-done']);
     expect(state.activeRuns.map((run) => run.runId)).toEqual(['run-active']);
     expect(state.indicatorText).toBe('running · arch-pass');
+  });
+
+  it('builds compact session summary notices', () => {
+    expect(buildConversationSessionSummaryNotice({
+      draft: false,
+      title: 'Architecture pass',
+      isLiveSession: true,
+      currentModel: 'gpt-5.1',
+      cwd: '/repo',
+      messageCount: 2,
+      contextUsage: { total: 27_200, contextWindow: 272_000 },
+    })).toBe('Architecture pass · active session · gpt-5.1 · /repo · 2 blocks · 10.0% of 272k ctx');
+
+    expect(buildConversationSessionSummaryNotice({
+      draft: true,
+      title: 'Ignored title',
+      isLiveSession: false,
+      fallbackModel: 'default-model',
+      draftCwd: '',
+      messageCount: 1,
+    })).toBe('Draft conversation · default-model · unset cwd · 1 block');
   });
 });

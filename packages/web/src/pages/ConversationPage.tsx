@@ -46,7 +46,7 @@ import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConve
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from '../conversation/toolAutoOpen';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
-import { formatContextUsageLabel, formatThinkingLevelLabel } from '../conversation/conversationHeader';
+import { formatThinkingLevelLabel } from '../conversation/conversationHeader';
 import {
   getConversationInitialScrollKey,
   getConversationTailBlockKey,
@@ -56,6 +56,7 @@ import { truncateConversationCwdFromFront } from '../conversation/conversationCw
 import { NEW_CONVERSATION_TITLE } from '../conversation/conversationTitle';
 import {
   hasConversationLoadedHistoricalTailBlocks,
+  buildConversationSessionSummaryNotice,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
@@ -4204,20 +4205,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   });
 
   function showSessionSummary() {
-    const cwd = draft
-      ? (draftCwdValue || 'unset cwd')
-      : (currentSessionMeta?.cwd ?? 'unknown cwd');
-    const modelLabel = currentModel || model || 'unknown model';
-    const details = [
-      draft ? 'Draft conversation' : title,
-      isLiveSession ? 'active session' : null,
-      modelLabel,
-      cwd,
-      `${messageCount} ${messageCount === 1 ? 'block' : 'blocks'}`,
-      sessionTokens ? formatContextUsageLabel(sessionTokens.total, sessionTokens.contextWindow) : null,
-    ].filter((value): value is string => Boolean(value));
-
-    showNotice('accent', details.join(' · '), 5000);
+    showNotice('accent', buildConversationSessionSummaryNotice({
+      draft,
+      title,
+      isLiveSession,
+      currentModel,
+      fallbackModel: model,
+      cwd: currentSessionMeta?.cwd,
+      draftCwd: draftCwdValue,
+      messageCount,
+      contextUsage: sessionTokens,
+    }), 5000);
   }
 
   async function copyLastAgentMessage() {

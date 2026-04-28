@@ -1,6 +1,7 @@
 import type { DurableRunListResult, DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
 import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
+import { formatContextUsageLabel } from './conversationHeader';
 import { getRunHeadline, isRunActive, listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
 
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
@@ -320,6 +321,33 @@ export function resolveConversationBackgroundRunState(input: {
     activeRuns,
     indicatorText: buildConversationBackgroundRunIndicatorText(activeRuns, input.lookups),
   };
+}
+
+export function buildConversationSessionSummaryNotice(input: {
+  draft: boolean;
+  title: string;
+  isLiveSession: boolean;
+  currentModel?: string | null;
+  fallbackModel?: string | null;
+  cwd?: string | null;
+  draftCwd?: string | null;
+  messageCount: number;
+  contextUsage?: { total: number | null; contextWindow: number } | null;
+}): string {
+  const cwd = input.draft
+    ? (input.draftCwd || 'unset cwd')
+    : (input.cwd ?? 'unknown cwd');
+  const modelLabel = input.currentModel || input.fallbackModel || 'unknown model';
+  const details = [
+    input.draft ? 'Draft conversation' : input.title,
+    input.isLiveSession ? 'active session' : null,
+    modelLabel,
+    cwd,
+    `${input.messageCount} ${input.messageCount === 1 ? 'block' : 'blocks'}`,
+    input.contextUsage ? formatContextUsageLabel(input.contextUsage.total, input.contextUsage.contextWindow) : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return details.join(' · ');
 }
 
 export function resolveConversationInitialHistoricalWarmupTarget(input: {
