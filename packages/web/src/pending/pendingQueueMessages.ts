@@ -1,5 +1,38 @@
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
-import type { MessageBlock } from '../shared/types';
+import type { MessageBlock, QueuedPromptPreview } from '../shared/types';
+
+export interface ConversationPendingQueueItem {
+  id: string;
+  text: string;
+  imageCount: number;
+  restorable: boolean;
+  type: 'steer' | 'followUp';
+  queueIndex: number;
+}
+
+export function buildConversationPendingQueueItems(input: {
+  steering: QueuedPromptPreview[];
+  followUp: QueuedPromptPreview[];
+}): ConversationPendingQueueItem[] {
+  return [
+    ...input.steering.map((item, index) => ({
+      id: item.id,
+      text: item.text,
+      imageCount: item.imageCount,
+      restorable: item.restorable !== false,
+      type: 'steer' as const,
+      queueIndex: index,
+    })),
+    ...input.followUp.map((item, index) => ({
+      id: item.id,
+      text: item.text,
+      imageCount: item.imageCount,
+      restorable: item.restorable !== false,
+      type: 'followUp' as const,
+      queueIndex: index,
+    })),
+  ];
+}
 
 export function appendPendingInitialPromptBlock(
   messages: MessageBlock[] | undefined,

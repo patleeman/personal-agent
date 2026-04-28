@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
 import type { MessageBlock } from '../shared/types';
-import { appendPendingInitialPromptBlock } from './pendingQueueMessages';
+import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems } from './pendingQueueMessages';
 
 describe('appendPendingInitialPromptBlock', () => {
   const pendingPrompt: PendingConversationPrompt = {
@@ -43,6 +43,34 @@ describe('appendPendingInitialPromptBlock', () => {
         ts: '2026-03-24T00:00:02.000Z',
         text: '',
         images: [{ alt: 'draft.png', src: 'blob:preview', mimeType: 'image/png', caption: 'draft.png' }],
+      },
+    ]);
+  });
+
+  it('builds typed conversation pending queue items from stream previews', () => {
+    expect(buildConversationPendingQueueItems({
+      steering: [
+        { id: 'steer-1', text: 'steer me', imageCount: 1 },
+      ],
+      followUp: [
+        { id: 'follow-1', text: 'later', imageCount: 0, restorable: false },
+      ],
+    })).toEqual([
+      {
+        id: 'steer-1',
+        text: 'steer me',
+        imageCount: 1,
+        restorable: true,
+        type: 'steer',
+        queueIndex: 0,
+      },
+      {
+        id: 'follow-1',
+        text: 'later',
+        imageCount: 0,
+        restorable: false,
+        type: 'followUp',
+        queueIndex: 0,
       },
     ]);
   });

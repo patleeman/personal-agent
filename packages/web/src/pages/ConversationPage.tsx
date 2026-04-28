@@ -32,7 +32,7 @@ import { useConversationBootstrap } from '../hooks/useConversationBootstrap';
 import { primeSessionDetailCache, useSessionDetail } from '../hooks/useSessions';
 import { useConversationEventVersion } from '../hooks/useConversationEventVersion';
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
-import { normalizePendingQueueItems, retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
+import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
 import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
@@ -192,7 +192,7 @@ import {
   type PendingConversationPrompt,
   type PendingConversationPromptChangedDetail,
 } from '../pending/pendingConversationPrompt';
-import { appendPendingInitialPromptBlock } from '../pending/pendingQueueMessages';
+import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems } from '../pending/pendingQueueMessages';
 import {
   didConversationStopMidTurn,
   didConversationStopWithError,
@@ -718,29 +718,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   ), [hydratedHistoricalBlocks, stream.blocks]);
 
   // Pending steer/followup queue as reported by the live session.
-  const pendingQueue = useMemo(() => {
-    const steeringQueue = normalizePendingQueueItems(stream.pendingQueue?.steering);
-    const followUpQueue = normalizePendingQueueItems(stream.pendingQueue?.followUp);
-
-    return [
-      ...steeringQueue.map((item, index) => ({
-        id: item.id,
-        text: item.text,
-        imageCount: item.imageCount,
-        restorable: item.restorable !== false,
-        type: 'steer' as const,
-        queueIndex: index,
-      })),
-      ...followUpQueue.map((item, index) => ({
-        id: item.id,
-        text: item.text,
-        imageCount: item.imageCount,
-        restorable: item.restorable !== false,
-        type: 'followUp' as const,
-        queueIndex: index,
-      })),
-    ];
-  }, [stream.pendingQueue?.followUp, stream.pendingQueue?.steering]);
+  const pendingQueue = useMemo(
+    () => buildConversationPendingQueueItems(stream.pendingQueue),
+    [stream.pendingQueue],
+  );
   const parallelJobs = useMemo(() => Array.isArray(stream.parallelJobs) ? stream.parallelJobs : [], [stream.parallelJobs]);
 
   // Live sessions hydrate from the SSE snapshot; until that arrives, fall back to
