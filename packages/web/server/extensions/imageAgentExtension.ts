@@ -376,8 +376,8 @@ function resolveSourceImages(input: {
         throw new Error('No prior or attached images are available in the current conversation context.');
       }
 
-      const sourceCount = Number.isInteger(input.sourceCount) && Number(input.sourceCount) > 0
-        ? Math.min(MAX_SOURCE_IMAGE_COUNT, Number(input.sourceCount))
+      const sourceCount = typeof input.sourceCount === 'number' && Number.isSafeInteger(input.sourceCount) && input.sourceCount > 0
+        ? Math.min(MAX_SOURCE_IMAGE_COUNT, input.sourceCount)
         : 1;
       return {
         images: images.slice(-sourceCount),

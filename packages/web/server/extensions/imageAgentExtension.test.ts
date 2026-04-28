@@ -439,6 +439,51 @@ describe('image agent extension', () => {
     ]);
   });
 
+  it('ignores unsafe recent source counts instead of clamping them', async () => {
+    const imageTool = registerImageTool();
+    const codexModel = createModel({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      api: 'openai-codex-responses',
+      baseUrl: 'https://chatgpt.com/backend-api',
+    });
+    const token = createJwtWithAccountId('acct-123');
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse({ text: 'Edited image.' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await imageTool.execute(
+      'tool-1',
+      {
+        prompt: 'Use recent images as reference.',
+        source: 'recent',
+        sourceCount: Number.MAX_SAFE_INTEGER + 1,
+      },
+      undefined,
+      undefined,
+      createToolContext({
+        currentModel: codexModel,
+        models: [codexModel],
+        authByProvider: {
+          'openai-codex': { apiKey: token },
+        },
+        sessionMessages: [
+          { role: 'user', content: [{ type: 'image', data: 'aW1hZ2UtMQ==', mimeType: 'image/png' }], timestamp: Date.now() },
+          { role: 'user', content: [{ type: 'image', data: 'aW1hZ2UtMg==', mimeType: 'image/png' }], timestamp: Date.now() },
+          { role: 'user', content: [{ type: 'image', data: 'aW1hZ2UtMw==', mimeType: 'image/png' }], timestamp: Date.now() },
+        ],
+      }),
+    );
+
+    const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(request.body)) as {
+      input: Array<{ content: Array<{ type: string; image_url?: string; text?: string }> }>;
+    };
+
+    expect(body.input[0]?.content.filter((part) => part.type === 'input_image')).toEqual([
+      expect.objectContaining({ image_url: 'data:image/png;base64,aW1hZ2UtMw==' }),
+    ]);
+  });
+
   it('infers latest-generated edit mode from a last-generated variant prompt', async () => {
     const imageTool = registerImageTool();
     const codexModel = createModel({
