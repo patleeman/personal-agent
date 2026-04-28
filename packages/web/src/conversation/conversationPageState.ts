@@ -460,6 +460,16 @@ export function shouldUseHealthyDesktopConversationState(input: {
     && !input.desktopError;
 }
 
+export function shouldSubscribeToDesktopConversationState(input: {
+  draft: boolean;
+  remoteHostId?: string | null;
+  remoteConversationId?: string | null;
+}): boolean {
+  return !input.draft
+    && !input.remoteHostId?.trim()
+    && !input.remoteConversationId?.trim();
+}
+
 export function shouldFetchConversationAttachments(input: {
   draft: boolean;
   conversationId: string | null | undefined;

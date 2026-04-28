@@ -80,6 +80,7 @@ import {
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowConversationInlineLoadingState,
   shouldShowMissingConversationState,
+  shouldSubscribeToDesktopConversationState,
   shouldUseHealthyDesktopConversationState,
 } from '../conversation/conversationPageState';
 import {
@@ -457,7 +458,11 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [initialHistoricalWarmupConversationId, setInitialHistoricalWarmupConversationId] = useState<string | null>(null);
   const desktopConversation = useDesktopConversationState(id ?? null, {
     tailBlocks: historicalTailBlocks,
-    enabled: !draft && !(sessionSnapshot?.remoteHostId && sessionSnapshot?.remoteConversationId),
+    enabled: shouldSubscribeToDesktopConversationState({
+      draft,
+      remoteHostId: sessionSnapshot?.remoteHostId,
+      remoteConversationId: sessionSnapshot?.remoteConversationId,
+    }),
   });
   const desktopConversationChecking = !draft && Boolean(id) && desktopConversation.mode === 'checking';
   const useDesktopConversation = shouldUseHealthyDesktopConversationState({

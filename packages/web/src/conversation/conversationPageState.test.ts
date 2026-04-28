@@ -22,6 +22,7 @@ import {
   shouldShowConversationBootstrapLoadingState,
   shouldShowConversationInitialHistoricalWarmupLoader,
   shouldShowMissingConversationState,
+  shouldSubscribeToDesktopConversationState,
   shouldUseHealthyDesktopConversationState,
 } from './conversationPageState';
 
@@ -196,6 +197,11 @@ describe('conversation page state helpers', () => {
       conversationId: 'conv-1',
       drawingsPickerOpen: true,
     })).toBe(true);
+
+    expect(shouldSubscribeToDesktopConversationState({ draft: false })).toBe(true);
+    expect(shouldSubscribeToDesktopConversationState({ draft: true })).toBe(false);
+    expect(shouldSubscribeToDesktopConversationState({ draft: false, remoteHostId: 'bender' })).toBe(false);
+    expect(shouldSubscribeToDesktopConversationState({ draft: false, remoteConversationId: 'remote-1' })).toBe(false);
 
     expect(shouldShowMissingConversationState({
       draft: false,
