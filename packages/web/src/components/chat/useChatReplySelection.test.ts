@@ -20,6 +20,7 @@ describe('useChatReplySelection helpers', () => {
   it('falls back when context menu geometry is malformed', () => {
     expect(constrainSelectionContextMenuPosition(menu({ x: Number.NaN, y: Number.POSITIVE_INFINITY }), { width: 500, height: 300 })).toMatchObject({ x: 12, y: 12 });
     expect(constrainSelectionContextMenuPosition(menu({ x: Number.MAX_SAFE_INTEGER + 1, y: 100 }), { width: 500, height: 300 })).toMatchObject({ x: 12, y: 100 });
+    expect(constrainSelectionContextMenuPosition(menu({ x: 100.5, y: 120.5 }), { width: 500, height: 300 })).toMatchObject({ x: 12, y: 12 });
   });
 
   it('accounts for the taller menu when a reply action is available', () => {

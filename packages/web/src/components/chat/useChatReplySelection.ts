@@ -28,7 +28,7 @@ function clearWindowSelection() {
 }
 
 function readSafeGeometryNumber(value: number, fallback: number): number {
-  return Number.isFinite(value) && Number.isSafeInteger(Math.round(value)) ? value : fallback;
+  return Number.isSafeInteger(value) ? value : fallback;
 }
 
 export function constrainSelectionContextMenuPosition(
