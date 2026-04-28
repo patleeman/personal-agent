@@ -84,6 +84,8 @@ const ICON = {
   folderOpen: 'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
   pencil: 'M16.862 4.487l1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125',
   move: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
+  save: 'M4.5 3.75h12.19c.398 0 .779.158 1.06.44l2.06 2.06c.282.281.44.663.44 1.06v12.19a.75.75 0 0 1-.75.75h-15a.75.75 0 0 1-.75-.75v-15a.75.75 0 0 1 .75-.75Zm3 0v5.25h8.25V3.75M7.5 20.25v-6h9v6',
+  check: 'M4.5 12.75 9.75 18 19.5 6.75',
   trash: 'M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0',
   x: 'M6 18 18 6M6 6l12 12',
 };
@@ -455,7 +457,7 @@ function createWorkspaceEditorExtensions(path: string, theme: 'light' | 'dark') 
       '.cm-gutters': {
         background: 'rgb(var(--color-base))',
         color: 'rgb(var(--color-dim))',
-        borderRight: '1px solid rgb(var(--color-border-subtle) / 0.7)',
+        borderRight: '0',
         fontFamily: '"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
         fontSize: '11px',
       },
@@ -1018,9 +1020,9 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
           <EmptyState className="flex h-full flex-col justify-center px-5" title="File unavailable" body={fileState.error} />
         ) : selectedFile ? (
           <>
-            <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-2">
+            <div className="flex items-center gap-2 bg-base/70 px-3 py-2 text-secondary">
               <div className="min-w-0 flex-1">
-                <div className="truncate font-mono text-[12px] font-semibold text-primary" title={selectedFile.path}>{selectedFile.path}</div>
+                <div className="truncate font-mono text-[12px] font-medium text-secondary" title={selectedFile.path}>{selectedFile.path}</div>
                 <div className="text-[10px] text-dim">{formatBytes(selectedFile.size)} {selectedFile.binary ? '· binary' : ''} {selectedFile.tooLarge ? '· large' : ''}</div>
               </div>
               <WorkspaceStatusBadge status={selectedFile.gitStatus} />
@@ -1258,13 +1260,13 @@ export function WorkspaceFileDocument({
 
   return (
     <div className="flex h-full min-w-0 flex-col bg-base select-text">
-      <div className="flex items-center gap-2 border-b border-border-subtle px-3 py-1.5">
+      <div className="flex items-center gap-2 bg-base/70 px-3 py-1.5 text-secondary">
         <div className="min-w-0 flex flex-1 items-center gap-1 overflow-hidden font-mono text-[11px] leading-5 text-secondary">
           {breadcrumbs.map((segment, index) => (
             <div key={`${segment}-${index}`} className="flex min-w-0 items-center gap-1">
               {index > 0 ? <span className="shrink-0 text-dim/80">›</span> : null}
               <span
-                className={cx('truncate', index === breadcrumbs.length - 1 && 'text-primary')}
+                className="truncate"
                 title={index === breadcrumbs.length - 1 ? selectedFile.path : undefined}
               >
                 {segment}
@@ -1278,13 +1280,25 @@ export function WorkspaceFileDocument({
           </button>
         )}
         {!selectedFile.binary && !(selectedFile.tooLarge && !selectedFile.content) ? (
-          <button type="button" className={cx('ui-toolbar-button px-2 text-[10px]', dirty && 'text-accent')} onClick={() => { void saveFile(); }} disabled={!dirty || saveState.status === 'saving'}>
-            {saveState.status === 'saving' ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+          <button
+            type="button"
+            className={cx(
+              'ui-icon-button ui-icon-button-compact',
+              dirty && saveState.status !== 'saving' && 'text-accent hover:bg-accent/10',
+              saveState.status === 'saving' && 'text-warning animate-pulse',
+              !dirty && saveState.status !== 'saving' && 'text-dim opacity-60',
+            )}
+            title={saveState.status === 'saving' ? 'Saving…' : dirty ? 'Save file' : 'Saved'}
+            aria-label={saveState.status === 'saving' ? 'Saving file' : dirty ? 'Save file' : 'File saved'}
+            onClick={() => { void saveFile(); }}
+            disabled={!dirty || saveState.status === 'saving'}
+          >
+            <Ico d={dirty ? ICON.save : ICON.check} size={12} />
           </button>
         ) : null}
         <button type="button" className="ui-icon-button ui-icon-button-compact" title="Refresh file" onClick={() => { void loadFile(); }}>↻</button>
       </div>
-      {saveState.error ? <div className="border-b border-border-subtle px-3 py-1 text-[11px] text-danger">{saveState.error}</div> : null}
+      {saveState.error ? <div className="bg-danger/5 px-3 py-1 text-[11px] text-danger">{saveState.error}</div> : null}
       <div ref={editorContainerRef} className="min-h-0 flex-1 overflow-hidden" onContextMenu={handleEditorContextMenu}>
         {selectedFile.binary || (selectedFile.tooLarge && !selectedFile.content) ? (
           <EmptyState
