@@ -58,8 +58,13 @@ describe('desktop conversation state fallback', () => {
 
     expect(resolveConversationExecutionOverride({
       remoteHostId: ' host-1 ',
-      remoteHostLabel: 'Remote Host',
+      remoteHostLabel: ' Remote Host ',
     })).toEqual({ remoteHostId: 'host-1', remoteHostLabel: 'Remote Host' });
+
+    expect(resolveConversationExecutionOverride({
+      remoteHostId: 'host-1',
+      remoteHostLabel: '   ',
+    })).toEqual({ remoteHostId: 'host-1' });
 
     expect(resolveConversationExecutionOverride({})).toBeNull();
   });

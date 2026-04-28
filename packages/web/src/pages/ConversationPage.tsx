@@ -293,6 +293,7 @@ export function resolveConversationExecutionOverride(
   meta: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null | undefined,
 ): Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null {
   const remoteHostId = meta?.remoteHostId?.trim() || '';
+  const remoteHostLabel = meta?.remoteHostLabel?.trim() || '';
   const remoteConversationId = meta?.remoteConversationId?.trim() || '';
   if (!remoteHostId && !remoteConversationId) {
     return null;
@@ -300,7 +301,7 @@ export function resolveConversationExecutionOverride(
 
   return {
     ...(remoteHostId ? { remoteHostId } : {}),
-    ...(meta?.remoteHostLabel ? { remoteHostLabel: meta.remoteHostLabel } : {}),
+    ...(remoteHostLabel ? { remoteHostLabel } : {}),
     ...(remoteConversationId ? { remoteConversationId } : {}),
   };
 }
