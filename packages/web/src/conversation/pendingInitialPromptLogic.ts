@@ -116,5 +116,15 @@ function isSafePendingPromptImageUrl(value: string): boolean {
   }
 
   const normalized = value.trim().toLowerCase();
-  return value.startsWith('blob:') || (normalized.startsWith('data:image/') && normalized.includes(';base64,'));
+  if (value.startsWith('blob:')) {
+    return true;
+  }
+  if (!normalized.startsWith('data:image/') || !normalized.includes(';base64,')) {
+    return false;
+  }
+  const commaIndex = value.indexOf(',');
+  const base64 = commaIndex >= 0 ? value.slice(commaIndex + 1).trim() : '';
+  return Boolean(base64)
+    && base64.length % 4 !== 1
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }

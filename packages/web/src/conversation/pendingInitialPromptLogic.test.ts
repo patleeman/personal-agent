@@ -149,5 +149,10 @@ describe('pendingInitialPromptLogic', () => {
       [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' }],
       [{ alt: 'ship.png', src: 'data:text/html;base64,PHNjcmlwdA==', mimeType: 'image/png', caption: 'ship.png' }],
     )).toBe(false);
+
+    expect(pendingPromptImagesMatchMessageImages(
+      [{ data: 'abc', mimeType: 'image/png', name: 'ship.png', previewUrl: 'data:image/png;base64,not-valid-base64!' }],
+      [{ alt: 'ship.png', src: 'data:image/png;base64,not-valid-base64!', mimeType: 'image/png', caption: 'ship.png' }],
+    )).toBe(false);
   });
 });
