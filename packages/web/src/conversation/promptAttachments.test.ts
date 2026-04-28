@@ -6,6 +6,7 @@ import {
   drawingAttachmentToPromptRef,
   fileExtensionForMimeType,
   isPotentialExcalidrawFile,
+  prepareComposerFiles,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
   screenshotCaptureImageToFile,
@@ -38,6 +39,55 @@ describe('promptAttachments', () => {
     expect(isPotentialExcalidrawFile(new File(['{}'], 'scene.png', { type: 'image/png' }))).toBe(true);
     expect(isPotentialExcalidrawFile(new File(['{}'], 'scene.json', { type: 'application/json' }))).toBe(true);
     expect(isPotentialExcalidrawFile(new File(['text'], 'notes.txt', { type: 'text/plain' }))).toBe(false);
+  });
+
+  it('prepares mixed composer files into images, drawings, parse failures, and rejects', async () => {
+    const drawing = {
+      localId: 'drawing-1',
+      title: 'Sketch',
+      sourceData: '{}',
+      sourceMimeType: 'application/vnd.excalidraw+json',
+      sourceName: 'Sketch.excalidraw',
+      previewData: 'abc',
+      previewMimeType: 'image/png',
+      previewName: 'Sketch.png',
+      previewUrl: 'data:image/png;base64,abc',
+      dirty: true,
+    } as ComposerDrawingAttachment;
+    const image = new File(['image'], 'photo.jpg', { type: 'image/jpeg' });
+    const parsedDrawing = new File(['{}'], 'sketch.excalidraw', { type: '' });
+    const brokenDrawing = new File(['bad'], 'broken.excalidraw', { type: '' });
+    const rejected = new File(['notes'], 'notes.txt', { type: 'text/plain' });
+
+    const result = await prepareComposerFiles([
+      image,
+      parsedDrawing,
+      brokenDrawing,
+      rejected,
+    ], async (file) => {
+      if (file.name === 'broken.excalidraw') {
+        throw new Error('Invalid scene');
+      }
+      return drawing;
+    });
+
+    expect(result.imageFiles).toEqual([image]);
+    expect(result.drawingAttachments).toEqual([drawing]);
+    expect(result.drawingParseFailures).toEqual([{ fileName: 'broken.excalidraw', message: 'Invalid scene' }]);
+    expect(result.rejectedFileNames).toEqual(['notes.txt']);
+  });
+
+  it('falls back to image attachment when png drawing parsing fails', async () => {
+    const image = new File(['image'], 'maybe-drawing.png', { type: 'image/png' });
+
+    const result = await prepareComposerFiles([image], async () => {
+      throw new Error('No embedded scene');
+    });
+
+    expect(result.imageFiles).toEqual([image]);
+    expect(result.drawingAttachments).toEqual([]);
+    expect(result.drawingParseFailures).toEqual([]);
+    expect(result.rejectedFileNames).toEqual([]);
   });
 
   it('converts drawing attachments to prompt image and attachment references', () => {

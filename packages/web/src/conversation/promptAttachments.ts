@@ -206,6 +206,55 @@ export async function buildPromptImages(files: File[]): Promise<PromptImageInput
   return Promise.all(imageFiles.map((file) => preparePromptImage(file)));
 }
 
+export interface PreparedComposerFiles {
+  imageFiles: File[];
+  drawingAttachments: ComposerDrawingAttachment[];
+  rejectedFileNames: string[];
+  drawingParseFailures: Array<{ fileName: string; message: string }>;
+}
+
+export async function prepareComposerFiles(
+  files: File[],
+  buildDrawing: (file: File) => Promise<ComposerDrawingAttachment> = buildComposerDrawingFromFile,
+): Promise<PreparedComposerFiles> {
+  const imageFiles: File[] = [];
+  const drawingAttachments: ComposerDrawingAttachment[] = [];
+  const rejectedFileNames: string[] = [];
+  const drawingParseFailures: PreparedComposerFiles['drawingParseFailures'] = [];
+
+  for (const file of files) {
+    if (isPotentialExcalidrawFile(file)) {
+      try {
+        const drawing = await buildDrawing(file);
+        drawingAttachments.push(drawing);
+        continue;
+      } catch (error) {
+        if (file.name.trim().toLowerCase().endsWith('.excalidraw')) {
+          drawingParseFailures.push({
+            fileName: file.name,
+            message: error instanceof Error ? error.message : String(error),
+          });
+          continue;
+        }
+      }
+    }
+
+    if (file.type.startsWith('image/')) {
+      imageFiles.push(file);
+      continue;
+    }
+
+    rejectedFileNames.push(file.name || 'Unnamed file');
+  }
+
+  return {
+    imageFiles,
+    drawingAttachments,
+    rejectedFileNames,
+    drawingParseFailures,
+  };
+}
+
 export function createComposerDrawingLocalId(): string {
   return `drawing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }

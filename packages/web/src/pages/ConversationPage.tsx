@@ -214,12 +214,11 @@ import { selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } fr
 import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
-  buildComposerDrawingFromFile,
   buildPromptImages,
   createComposerDrawingLocalId,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
-  isPotentialExcalidrawFile,
+  prepareComposerFiles,
   restoreComposerImageFiles,
   restoreQueuedImageFiles,
   screenshotCaptureImageToFile,
@@ -3795,31 +3794,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }
 
   async function addComposerFiles(files: File[]) {
-    const nextImageFiles: File[] = [];
-    const nextDrawingAttachments: ComposerDrawingAttachment[] = [];
-    const rejectedFiles: string[] = [];
-
-    for (const file of files) {
-      if (isPotentialExcalidrawFile(file)) {
-        try {
-          const drawing = await buildComposerDrawingFromFile(file);
-          nextDrawingAttachments.push(drawing);
-          continue;
-        } catch (error) {
-          if (file.name.trim().toLowerCase().endsWith('.excalidraw')) {
-            showNotice('danger', `Failed to parse ${file.name}: ${error instanceof Error ? error.message : String(error)}`, 4000);
-            continue;
-          }
-        }
-      }
-
-      if (file.type.startsWith('image/')) {
-        nextImageFiles.push(file);
-        continue;
-      }
-
-      rejectedFiles.push(file.name || 'Unnamed file');
-    }
+    const {
+      imageFiles: nextImageFiles,
+      drawingAttachments: nextDrawingAttachments,
+      rejectedFileNames,
+      drawingParseFailures,
+    } = await prepareComposerFiles(files);
 
     if (nextImageFiles.length > 0) {
       addImageAttachments(nextImageFiles);
@@ -3830,9 +3810,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       showNotice('accent', `Attached ${nextDrawingAttachments.length} drawing${nextDrawingAttachments.length === 1 ? '' : 's'}.`);
     }
 
-    if (rejectedFiles.length > 0) {
-      const preview = rejectedFiles.slice(0, 3).join(', ');
-      const suffix = rejectedFiles.length > 3 ? `, +${rejectedFiles.length - 3} more` : '';
+    for (const failure of drawingParseFailures) {
+      showNotice('danger', `Failed to parse ${failure.fileName}: ${failure.message}`, 4000);
+    }
+
+    if (rejectedFileNames.length > 0) {
+      const preview = rejectedFileNames.slice(0, 3).join(', ');
+      const suffix = rejectedFileNames.length > 3 ? `, +${rejectedFileNames.length - 3} more` : '';
       showNotice('danger', `Unsupported file type: ${preview}${suffix}`, 4000);
     }
   }
