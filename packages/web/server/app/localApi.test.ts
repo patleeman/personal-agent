@@ -38,6 +38,11 @@ describe('desktop local API conversation actions', () => {
       conversationId: 'conversation-1',
       numTurns: Number.MAX_SAFE_INTEGER + 1,
     })).rejects.toThrow('numTurns must be a positive integer.');
+
+    await expect(rollbackDesktopConversation({
+      conversationId: 'conversation-1',
+      numTurns: Number.MAX_SAFE_INTEGER,
+    })).rejects.toThrow('numTurns must be a positive integer.');
   });
 });
 

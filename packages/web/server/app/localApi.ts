@@ -327,6 +327,7 @@ let localLiveSessionCapabilityContext: LiveSessionCapabilityContext | null = nul
 let localProviderDesktopCapabilityContext: ProviderDesktopCapabilityContext | null = null;
 
 const LOCAL_API_DEFERRED_RESUME_POLL_MS = 3_000;
+const MAX_DESKTOP_ROLLBACK_TURNS = 100;
 
 function resolveRepoRoot(): string {
   const defaultRepoRoot = fileURLToPath(new URL('../../..', import.meta.url));
@@ -2195,7 +2196,7 @@ export async function rollbackDesktopConversation(input: {
   conversationId: string;
   numTurns: number;
 }): Promise<{ id: string; sessionFile: string }> {
-  if (!Number.isSafeInteger(input.numTurns) || input.numTurns <= 0) {
+  if (!Number.isSafeInteger(input.numTurns) || input.numTurns <= 0 || input.numTurns > MAX_DESKTOP_ROLLBACK_TURNS) {
     throw new Error('numTurns must be a positive integer.');
   }
 
