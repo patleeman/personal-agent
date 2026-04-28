@@ -201,6 +201,7 @@ describe('draftConversation', () => {
         previewName: 'wireframe.png',
         previewUrl: 'data:image/png;base64,preview-data',
         scene: { elements: [], appState: {}, files: {} },
+        revision: Number.MAX_SAFE_INTEGER + 1,
         dirty: true,
       }],
     }, storage);

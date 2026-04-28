@@ -182,7 +182,7 @@ function normalizeDraftConversationDrawing(value: unknown): DraftConversationDra
     ...(typeof drawing.attachmentId === 'string' && drawing.attachmentId.trim().length > 0
       ? { attachmentId: drawing.attachmentId.trim() }
       : {}),
-    ...(Number.isInteger(drawing.revision) && Number(drawing.revision) > 0
+    ...(Number.isSafeInteger(drawing.revision) && Number(drawing.revision) > 0
       ? { revision: Number(drawing.revision) }
       : {}),
     sourceData: drawing.sourceData,
