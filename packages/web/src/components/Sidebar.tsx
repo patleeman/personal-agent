@@ -654,13 +654,18 @@ function resolveSidebarConversationHotkeyOrder<T,>(input: {
   ));
 }
 
-function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel'>): {
+export function isRemoteConversationSession(session: Pick<SessionMeta, 'remoteHostId' | 'remoteConversationId'>): boolean {
+  return Boolean(session.remoteHostId?.trim() || session.remoteConversationId?.trim());
+}
+
+export function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>): {
   key: string;
   label: string;
   isLocal: boolean;
 } {
   const remoteHostId = session.remoteHostId?.trim() || '';
-  if (!remoteHostId) {
+  const remoteConversationId = session.remoteConversationId?.trim() || '';
+  if (!remoteHostId && !remoteConversationId) {
     return {
       key: 'local',
       label: 'Local',
@@ -670,8 +675,8 @@ function resolveSessionExecutionTarget(session: Pick<SessionMeta, 'remoteHostId'
 
   const remoteHostLabel = session.remoteHostLabel?.trim();
   return {
-    key: remoteHostId,
-    label: remoteHostLabel || remoteHostId,
+    key: remoteHostId || `conversation:${remoteConversationId}`,
+    label: remoteHostLabel || remoteHostId || 'Remote',
     isLocal: false,
   };
 }
@@ -682,7 +687,7 @@ function getSessionWorkspaceCwd(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd
     : (session.cwd ?? null);
 }
 
-function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel'>): string {
+export function getLocalSessionWorkspacePath(session: Pick<SessionMeta, 'cwd' | 'workspaceCwd' | 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'>): string {
   const workspaceCwd = getSessionWorkspaceCwd(session);
   return resolveSessionExecutionTarget(session).isLocal ? workspaceCwd ?? '' : '';
 }
@@ -2389,7 +2394,7 @@ export function Sidebar({ hideKnowledgeNav = false }: { hideKnowledgeNav?: boole
     }
 
     const draggedSession = [...pinnedSessions, ...tabs].find((session) => session.id === draggedSessionId);
-    if (!draggedSession || draggedSession.remoteHostId) {
+    if (!draggedSession || isRemoteConversationSession(draggedSession)) {
       return false;
     }
 

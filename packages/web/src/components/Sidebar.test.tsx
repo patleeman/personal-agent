@@ -10,7 +10,7 @@ import {
   buildSidebarNavSectionStorageKey,
 } from '../local/localSettings.js';
 import type { DurableRunListResult, ScheduledTaskSummary, SessionMeta } from '../shared/types';
-import { Sidebar } from './Sidebar.js';
+import { getLocalSessionWorkspacePath, isRemoteConversationSession, resolveSessionExecutionTarget, Sidebar } from './Sidebar.js';
 
 const OPEN_NOTE_IDS_STORAGE_KEY = 'pa:open-note-ids';
 const OPEN_SKILL_IDS_STORAGE_KEY = 'pa:open-skill-ids';
@@ -447,6 +447,22 @@ describe('Sidebar', () => {
     expect(html.match(/title="New conversation in \/srv\/repos\/alpha"/g) ?? []).toHaveLength(1);
     expect(html.match(/title="New conversation in \/srv\/repos\/beta"/g) ?? []).toHaveLength(1);
     expect(html).not.toContain('No threads yet.');
+  });
+
+  it('treats conversations with only remote conversation ids as remote', () => {
+    const session = createSession({
+      id: 'conv-remote-partial',
+      cwd: '/srv/repos/partial',
+      remoteConversationId: 'remote-thread-1',
+    });
+
+    expect(isRemoteConversationSession(session)).toBe(true);
+    expect(resolveSessionExecutionTarget(session)).toEqual({
+      key: 'conversation:remote-thread-1',
+      label: 'Remote',
+      isLocal: false,
+    });
+    expect(getLocalSessionWorkspacePath(session)).toBe('');
   });
 
   it('renders saved custom cwd group labels when present', () => {
