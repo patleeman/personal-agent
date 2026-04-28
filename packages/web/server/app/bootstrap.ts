@@ -68,6 +68,7 @@ export function startDeferredResumeLoop(options: {
   flushLiveDeferredResumes: () => Promise<void>;
   pollMs: number;
 }): void {
+  const pollMs = normalizeDeferredResumePollMs(options.pollMs);
   void options.flushLiveDeferredResumes().catch((error) => {
     logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
   });
@@ -76,7 +77,11 @@ export function startDeferredResumeLoop(options: {
     void options.flushLiveDeferredResumes().catch((error) => {
       logWarn(`Deferred resume loop failed: ${(error as Error).message}`);
     });
-  }, options.pollMs);
+  }, pollMs);
+}
+
+export function normalizeDeferredResumePollMs(value: number): number {
+  return Number.isSafeInteger(value) && value > 0 ? value : 5_000;
 }
 
 export function startConversationRecovery(options: {
