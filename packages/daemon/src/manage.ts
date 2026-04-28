@@ -73,7 +73,7 @@ export async function readDaemonPid(): Promise<number | undefined> {
   }
 
   const value = readFileSync(paths.pidFile, 'utf-8').trim();
-  const parsed = Number(value);
+  const parsed = /^\d+$/.test(value) ? Number.parseInt(value, 10) : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     return undefined;
   }

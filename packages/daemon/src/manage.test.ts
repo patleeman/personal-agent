@@ -148,6 +148,10 @@ describe('daemon manage helpers', () => {
     await expect(readDaemonPid()).resolves.toBeUndefined();
 
     existsSyncMock.mockReturnValueOnce(true);
+    readFileSyncMock.mockReturnValueOnce('1e3');
+    await expect(readDaemonPid()).resolves.toBeUndefined();
+
+    existsSyncMock.mockReturnValueOnce(true);
     readFileSyncMock.mockReturnValueOnce(String(Number.MAX_SAFE_INTEGER + 1));
     await expect(readDaemonPid()).resolves.toBeUndefined();
   });
