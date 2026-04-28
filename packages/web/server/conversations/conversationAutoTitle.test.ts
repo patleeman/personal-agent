@@ -120,6 +120,24 @@ describe('buildConversationTitleTranscript', () => {
     ].join('\n'));
   });
 
+  it('does not derive transcript attachment labels from malformed image blocks', () => {
+    expect(buildConversationTitleTranscript([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Debug the title.' },
+          { type: 'image', data: '', mimeType: '' },
+          { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
+          { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
+        ],
+      },
+      { role: 'assistant', content: [{ type: 'text', text: 'I will check it.' }] },
+    ])).toBe([
+      'User: Debug the title.',
+      'Assistant: I will check it.',
+    ].join('\n'));
+  });
+
   it('returns an empty transcript until there is a visible assistant reply', () => {
     expect(buildConversationTitleTranscript([
       {

@@ -110,9 +110,9 @@ export function readConversationAutoTitleSettings(settingsFile: string): Convers
   };
 }
 
-function normalizeContent(content: unknown): Array<{ type?: string; text?: string }> {
+function normalizeContent(content: unknown): Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }> {
   if (Array.isArray(content)) {
-    return content as Array<{ type?: string; text?: string }>;
+    return content as Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }>;
   }
 
   if (typeof content === 'string' && content.length > 0) {
@@ -120,6 +120,23 @@ function normalizeContent(content: unknown): Array<{ type?: string; text?: strin
   }
 
   return [];
+}
+
+function hasValidImageContentBlock(block: { data?: unknown; mimeType?: unknown }): boolean {
+  if (typeof block.mimeType !== 'string' || !block.mimeType.trim().toLowerCase().startsWith('image/')) {
+    return false;
+  }
+
+  if (typeof block.data !== 'string') {
+    return false;
+  }
+
+  const data = block.data.trim();
+  if (!data || data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return false;
+  }
+
+  return Buffer.from(data, 'base64').length > 0;
 }
 
 function normalizeWhitespace(text: string): string {
@@ -144,7 +161,7 @@ function summarizeUserMessage(content: unknown): string {
     .map((block) => block.text ?? '')
     .join('\n')
     .trim();
-  const imageCount = blocks.filter((block) => block.type === 'image').length;
+  const imageCount = blocks.filter((block) => block.type === 'image' && hasValidImageContentBlock(block)).length;
 
   const attachmentLabel = imageCount === 1
     ? '(image attachment)'
