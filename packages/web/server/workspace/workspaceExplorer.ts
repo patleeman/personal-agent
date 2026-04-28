@@ -320,7 +320,7 @@ function workspaceEntryForPath(snapshot: WorkspaceRootSnapshot, relativePath: st
 function parseDiffOverlay(diff: string): { addedLines: number[]; deletedBlocks: Array<{ afterLine: number; lines: string[] }> } {
   const addedLines: number[] = [];
   const deletedBlocks: Array<{ afterLine: number; lines: string[] }> = [];
-  let newLine = 0;
+  let newLine: number | null = 0;
   let currentDeleted: { afterLine: number; lines: string[] } | null = null;
 
   const flushDeleted = () => {
@@ -331,12 +331,19 @@ function parseDiffOverlay(diff: string): { addedLines: number[]; deletedBlocks: 
   };
 
   for (const line of diff.split('\n')) {
-    const hunk = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
-    if (hunk) {
+    if (line.startsWith('@@ ')) {
       flushDeleted();
-      newLine = Number.parseInt(hunk[3] ?? '1', 10);
+      const hunk = line.match(/^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/);
+      if (!hunk) {
+        newLine = null;
+        continue;
+      }
+
+      const parsedNewLine = Number.parseInt(hunk[3] ?? '', 10);
+      newLine = Number.isSafeInteger(parsedNewLine) && parsedNewLine > 0 ? parsedNewLine : null;
       continue;
     }
+
     if (!line || line.startsWith('diff ') || line.startsWith('index ') || line.startsWith('--- ') || line.startsWith('+++ ')) {
       continue;
     }
@@ -345,11 +352,16 @@ function parseDiffOverlay(diff: string): { addedLines: number[]; deletedBlocks: 
     }
     if (line.startsWith('+')) {
       flushDeleted();
-      addedLines.push(newLine);
-      newLine += 1;
+      if (newLine !== null) {
+        addedLines.push(newLine);
+        newLine += 1;
+      }
       continue;
     }
     if (line.startsWith('-')) {
+      if (newLine === null) {
+        continue;
+      }
       const afterLine = Math.max(0, newLine - 1);
       if (!currentDeleted || currentDeleted.afterLine !== afterLine) {
         flushDeleted();
@@ -359,7 +371,7 @@ function parseDiffOverlay(diff: string): { addedLines: number[]; deletedBlocks: 
       continue;
     }
     flushDeleted();
-    if (line.startsWith(' ')) {
+    if (line.startsWith(' ') && newLine !== null) {
       newLine += 1;
     }
   }

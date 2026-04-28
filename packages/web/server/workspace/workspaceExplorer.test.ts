@@ -66,6 +66,19 @@ describe('workspace explorer', () => {
     expect(parsed.deletedBlocks).toEqual([{ afterLine: 1, lines: ['old'] }]);
   });
 
+  it('ignores malformed diff hunk line numbers', () => {
+    const parsed = __workspaceExplorerInternals.parseDiffOverlay([
+      `@@ -1,1 +${Number.MAX_SAFE_INTEGER + 1},1 @@`,
+      '+unsafe',
+      '@@ -1,1 +2abc,1 @@',
+      '+partial',
+      '@@ -1,1 +2,1 @@',
+      '+valid',
+    ].join('\n'));
+
+    expect(parsed.addedLines).toEqual([2]);
+  });
+
   it('treats untracked files as entirely added', () => {
     const repo = createRepo();
     writeFileSync(join(repo, 'new.txt'), 'a\nb\n');
