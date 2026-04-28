@@ -147,6 +147,27 @@ describe('deferred resume state', () => {
     });
   });
 
+  it('normalizes invalid deferred resume kinds when scheduling resumes', () => {
+    const state = createEmptyDeferredResumeState();
+
+    const scheduled = scheduleDeferredResume(state, {
+      id: 'resume-invalid-kind',
+      sessionFile: '/tmp/sessions/current.jsonl',
+      prompt: 'continue',
+      dueAt: '2026-03-08T12:00:00.000Z',
+      createdAt: '2026-03-08T11:50:00.000Z',
+      attempts: 0,
+      kind: 'bogus',
+    } as never);
+
+    expect(scheduled.kind).toBe('continue');
+    expect(scheduled.delivery).toEqual({
+      alertLevel: 'none',
+      autoResumeIfOpen: true,
+      requireAck: false,
+    });
+  });
+
   it('persists normalized state to disk', () => {
     const dir = createTempDir('deferred-resume-save-');
     const stateFile = join(dir, 'state.json');

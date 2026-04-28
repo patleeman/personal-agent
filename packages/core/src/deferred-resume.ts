@@ -500,7 +500,7 @@ export function scheduleDeferredResume(
     delivery?: Partial<DeferredResumeDelivery>;
   },
 ): DeferredResumeRecord {
-  const kind = entry.kind ?? 'continue';
+  const kind = normalizeKind(entry.kind);
   const delivery = parseDelivery(entry.delivery, kind);
   const record: DeferredResumeRecord = {
     ...entry,
@@ -521,7 +521,7 @@ export function createReadyDeferredResume(
     delivery?: Partial<DeferredResumeDelivery>;
   },
 ): DeferredResumeRecord {
-  const kind = entry.kind ?? 'continue';
+  const kind = normalizeKind(entry.kind);
   const delivery = parseDelivery(entry.delivery, kind);
   const readyAt = normalizeIsoTimestamp(entry.readyAt ?? entry.dueAt) ?? entry.dueAt;
   const record: DeferredResumeRecord = {
