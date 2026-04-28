@@ -230,6 +230,7 @@ describe('draftConversation', () => {
     persistDraftConversationAttachments({
       images: [
         { mimeType: 'image/png', data: 'abc', name: 'diagram.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain-data-url.png', previewUrl: 'data:image/png,aGVsbG8=' },
         { mimeType: 'text/plain', data: 'aGVsbG8=', name: 'note.txt' },
         { mimeType: 'image/png', data: 'not-valid-base64!', name: 'bad.png' },
         { mimeType: 'image/png', data: '   ', name: 'blank.png' },
@@ -238,7 +239,10 @@ describe('draftConversation', () => {
     }, storage);
 
     expect(readDraftConversationAttachments(storage)).toEqual({
-      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      images: [
+        { mimeType: 'image/png', data: 'abc', name: 'diagram.png' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain-data-url.png' },
+      ],
       drawings: [],
     });
   });

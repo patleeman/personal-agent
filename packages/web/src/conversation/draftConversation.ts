@@ -112,7 +112,8 @@ function normalizeDraftConversationImagePreviewUrl(value: unknown): string | nul
     return null;
   }
 
-  return previewUrl.startsWith('blob:') || previewUrl.toLowerCase().startsWith('data:image/')
+  const lowerPreviewUrl = previewUrl.toLowerCase();
+  return previewUrl.startsWith('blob:') || (lowerPreviewUrl.startsWith('data:image/') && lowerPreviewUrl.includes(';base64,'))
     ? previewUrl
     : null;
 }
