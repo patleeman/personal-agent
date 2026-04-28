@@ -48,6 +48,35 @@ describe('scheduledTaskDetail helpers', () => {
       threadMode: 'dedicated',
       timeoutSeconds: 1.5,
     })).toBe(false);
+
+    expect(isScheduledTaskDetail({
+      id: 'unsafe-timeout',
+      running: false,
+      enabled: true,
+      scheduleType: 'cron',
+      prompt: 'Run cleanup.',
+      threadMode: 'dedicated',
+      timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
+    })).toBe(false);
+
+    expect(isScheduledTaskDetail({
+      id: 'unsafe-activity-count',
+      running: false,
+      enabled: true,
+      scheduleType: 'cron',
+      prompt: 'Run cleanup.',
+      threadMode: 'dedicated',
+      activity: [{
+        id: 'unsafe-activity-count:1',
+        kind: 'missed',
+        createdAt: '2026-03-12T20:20:00.000Z',
+        count: Number.MAX_SAFE_INTEGER + 1,
+        firstScheduledAt: '2026-03-12T20:00:00.000Z',
+        lastScheduledAt: '2026-03-12T20:00:00.000Z',
+        exampleScheduledAt: ['2026-03-12T20:00:00.000Z'],
+        outcome: 'skipped',
+      }],
+    })).toBe(false);
   });
 
 });

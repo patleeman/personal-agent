@@ -5,7 +5,7 @@ function isOptionalString(value: unknown): value is string | undefined {
 }
 
 function isOptionalPositiveInteger(value: unknown): value is number | undefined {
-  return value === undefined || (typeof value === 'number' && Number.isInteger(value) && value > 0);
+  return value === undefined || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0);
 }
 
 function isOptionalActivity(value: unknown): boolean {
@@ -20,7 +20,7 @@ function isOptionalActivity(value: unknown): boolean {
       return typeof record.id === 'string'
         && record.kind === 'missed'
         && typeof record.createdAt === 'string'
-        && Number.isInteger(record.count)
+        && Number.isSafeInteger(record.count)
         && (record.count as number) > 0
         && typeof record.firstScheduledAt === 'string'
         && typeof record.lastScheduledAt === 'string'
