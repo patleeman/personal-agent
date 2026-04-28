@@ -19,6 +19,12 @@ import type { LiveContextUsage } from './liveSessionEvents.js';
 
 const DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS = 400;
 
+function normalizeLiveSnapshotTailBlocks(value: number | undefined): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS;
+}
+
 export interface LiveSessionSnapshotHost {
   session: AgentSession;
   activeHiddenTurnCustomType?: string | null;
@@ -72,7 +78,7 @@ export function buildLiveSessionSnapshot(entry: LiveSessionSnapshotHost, tailBlo
     };
   }
 
-  const persisted = readSessionBlocksByFile(sessionFile, { tailBlocks: tailBlocks ?? DEFAULT_LIVE_SNAPSHOT_TAIL_BLOCKS });
+  const persisted = readSessionBlocksByFile(sessionFile, { tailBlocks: normalizeLiveSnapshotTailBlocks(tailBlocks) });
   if (!persisted || persisted.blocks.length === 0) {
     return {
       blocks: applyLatestCompactionSummaryTitle(liveBlocks, entry.lastCompactionSummaryTitle),
