@@ -58,6 +58,7 @@ const DEFAULT_DAEMON_VERSION = '0.0.0';
 const JSON_LIMIT_BYTES = 12 * 1024 * 1024;
 const MAX_COMPANION_RUN_LOG_TAIL = 1000;
 const MAX_COMPANION_TAIL_BLOCKS = 1000;
+const MAX_COMPANION_KNOWLEDGE_SEARCH_LIMIT = 50;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -207,7 +208,9 @@ function readOptionalPositiveIntegerQuery(input: string | null): number | undefi
   }
 
   const value = Number.parseInt(normalized, 10);
-  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
+  return Number.isSafeInteger(value) && value > 0
+    ? Math.min(MAX_COMPANION_KNOWLEDGE_SEARCH_LIMIT, value)
+    : undefined;
 }
 
 function readOptionalTailBlocks(input: unknown): number | undefined {

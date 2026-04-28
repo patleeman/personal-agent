@@ -346,6 +346,22 @@ describe('daemon companion server', () => {
       }],
     });
 
+    const cappedKnowledgeSearchResponse = await fetch(`${baseUrl}/companion/v1/knowledge/search?q=release&limit=${Number.MAX_SAFE_INTEGER}`, {
+      headers: {
+        Authorization: `Bearer ${paired.bearerToken}`,
+      },
+    });
+    expect(cappedKnowledgeSearchResponse.status).toBe(200);
+    expect(await readJson(cappedKnowledgeSearchResponse)).toEqual({
+      results: [{
+        id: 'notes/release-checklist.md',
+        name: 'release-checklist.md',
+        title: 'release',
+        excerpt: 'Release checklist',
+        limit: 50,
+      }],
+    });
+
     const cappedRunLogResponse = await fetch(`${baseUrl}/companion/v1/runs/run-1/log?tail=5000`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
     });
