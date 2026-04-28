@@ -269,10 +269,11 @@ export function createReadyDeferredResumeForSessionFile(input: {
   const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : dueAt;
   const readyAt = input.readyAt ? new Date(input.readyAt).toISOString() : now.toISOString();
   const state = loadDeferredResumeState();
+  const prompt = input.prompt.trim() || DEFAULT_DEFERRED_RESUME_PROMPT;
   const record = createReadyDeferredResume(state, {
     id: createDeferredResumeId(now),
     sessionFile: input.sessionFile,
-    prompt: input.prompt.trim(),
+    prompt,
     dueAt,
     createdAt,
     readyAt,

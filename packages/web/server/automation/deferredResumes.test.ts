@@ -9,6 +9,7 @@ import {
   activateDueDeferredResumesForSessionFile,
   cancelDeferredResumeForSessionFile,
   completeDeferredResumeForSessionFile,
+  createReadyDeferredResumeForSessionFile,
   fireDeferredResumeNowForSessionFile,
   listDeferredResumesForSessionFile,
   retryDeferredResumeForSessionFile,
@@ -72,6 +73,18 @@ describe('deferredResumes', () => {
     });
 
     expect(scheduled.prompt).toBe(DEFAULT_DEFERRED_RESUME_PROMPT);
+  });
+
+  it('uses the default prompt for ready resumes with blank prompt text', () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const ready = createReadyDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/conv-123.jsonl',
+      prompt: '   ',
+    });
+
+    expect(ready.prompt).toBe(DEFAULT_DEFERRED_RESUME_PROMPT);
   });
 
   it('cancels only entries that belong to the requested session file', async () => {
