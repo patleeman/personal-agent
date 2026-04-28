@@ -8,6 +8,9 @@ const DEFAULT_REASONING: ThinkingLevel = 'minimal';
 const DEFAULT_MAX_MESSAGES = 8;
 const DEFAULT_MAX_TITLE_LENGTH = 80;
 const DEFAULT_MAX_MESSAGE_LENGTH = 1_200;
+const MAX_TITLE_SOURCE_MESSAGES = 32;
+const MAX_TITLE_LENGTH = 160;
+const MAX_TITLE_MESSAGE_LENGTH = 4_000;
 
 export interface ConversationAutoTitleSettings {
   enabled: boolean;
@@ -61,8 +64,10 @@ function readBoolean(value: unknown, fallback: boolean): boolean {
   return typeof value === 'boolean' ? value : fallback;
 }
 
-function readPositiveInteger(value: unknown, fallback: number): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+function readPositiveInteger(value: unknown, fallback: number, max: number): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(max, value)
+    : fallback;
 }
 
 function normalizeThinkingLevel(value: unknown): ThinkingLevel {
@@ -105,8 +110,8 @@ export function readConversationAutoTitleSettings(settingsFile: string): Convers
     provider: hasExplicitModel ? (explicitProvider || DEFAULT_PROVIDER) : DEFAULT_PROVIDER,
     model: hasExplicitModel ? modelId : DEFAULT_MODEL,
     reasoning: normalizeThinkingLevel(conversationTitles.reasoning),
-    maxMessages: readPositiveInteger(conversationTitles.maxMessages, DEFAULT_MAX_MESSAGES),
-    maxTitleLength: readPositiveInteger(conversationTitles.maxTitleLength, DEFAULT_MAX_TITLE_LENGTH),
+    maxMessages: readPositiveInteger(conversationTitles.maxMessages, DEFAULT_MAX_MESSAGES, MAX_TITLE_SOURCE_MESSAGES),
+    maxTitleLength: readPositiveInteger(conversationTitles.maxTitleLength, DEFAULT_MAX_TITLE_LENGTH, MAX_TITLE_LENGTH),
   };
 }
 
@@ -193,7 +198,7 @@ export function collectConversationTitleSourceMessages(
   maxMessages = DEFAULT_MAX_MESSAGES,
 ): ConversationTitleSourceMessage[] {
   const messageLimit = Number.isSafeInteger(maxMessages) && maxMessages > 0
-    ? maxMessages
+    ? Math.min(MAX_TITLE_SOURCE_MESSAGES, maxMessages)
     : DEFAULT_MAX_MESSAGES;
   const collected: ConversationTitleSourceMessage[] = [];
 
@@ -235,7 +240,7 @@ export function buildConversationTitleTranscript(
   }
 
   const maxMessageLength = Number.isSafeInteger(options.maxMessageLength) && (options.maxMessageLength as number) > 0
-    ? options.maxMessageLength as number
+    ? Math.min(MAX_TITLE_MESSAGE_LENGTH, options.maxMessageLength as number)
     : DEFAULT_MAX_MESSAGE_LENGTH;
   return sourceMessages
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${truncateText(message.text, maxMessageLength)}`)
@@ -285,7 +290,10 @@ export function normalizeGeneratedConversationTitle(title: string | null | undef
     return null;
   }
 
-  return truncateText(normalized, maxLength);
+  const titleLimit = Number.isSafeInteger(maxLength) && maxLength > 0
+    ? Math.min(MAX_TITLE_LENGTH, maxLength)
+    : DEFAULT_MAX_TITLE_LENGTH;
+  return truncateText(normalized, titleLimit);
 }
 
 function resolveConversationTitleModel(

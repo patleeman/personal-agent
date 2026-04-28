@@ -108,6 +108,24 @@ describe('readConversationAutoTitleSettings', () => {
       maxTitleLength: 80,
     });
   });
+
+  it('caps huge conversation title integer settings', () => {
+    const dir = createTempDir('pa-conversation-title-');
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      ui: {
+        conversationTitles: {
+          maxMessages: Number.MAX_SAFE_INTEGER,
+          maxTitleLength: Number.MAX_SAFE_INTEGER,
+        },
+      },
+    }));
+
+    expect(readConversationAutoTitleSettings(file)).toMatchObject({
+      maxMessages: 32,
+      maxTitleLength: 160,
+    });
+  });
 });
 
 describe('buildConversationTitleTranscript', () => {
