@@ -68,10 +68,11 @@ function normalizePromptImageMimeType(mimeType: string): string {
 }
 
 export function constrainPromptImageDimensions(width: number, height: number, maxDimension = MAX_PROMPT_IMAGE_DIMENSION): { width: number; height: number } {
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0
+    || !Number.isSafeInteger(Math.round(width)) || !Number.isSafeInteger(Math.round(height))) {
     return {
-      width: Math.max(1, Math.round(width) || 1),
-      height: Math.max(1, Math.round(height) || 1),
+      width: Number.isSafeInteger(Math.round(width)) ? Math.max(1, Math.round(width) || 1) : 1,
+      height: Number.isSafeInteger(Math.round(height)) ? Math.max(1, Math.round(height) || 1) : 1,
     };
   }
 

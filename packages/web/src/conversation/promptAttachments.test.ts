@@ -23,6 +23,7 @@ describe('promptAttachments', () => {
     expect(constrainPromptImageDimensions(1600, 900)).toEqual({ width: 1600, height: 900 });
     expect(constrainPromptImageDimensions(4000, 1000)).toEqual({ width: 2000, height: 500 });
     expect(constrainPromptImageDimensions(1200, 3600)).toEqual({ width: 667, height: 2000 });
+    expect(constrainPromptImageDimensions(Number.MAX_SAFE_INTEGER + 1, 900)).toEqual({ width: 1, height: 900 });
   });
 
   it('restores queued and composer images with stable fallback names', async () => {
