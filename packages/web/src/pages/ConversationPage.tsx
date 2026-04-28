@@ -215,6 +215,7 @@ import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
   buildPromptImages,
+  buildComposerFilePreparationNotices,
   createComposerDrawingLocalId,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
@@ -3809,17 +3810,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     if (nextDrawingAttachments.length > 0) {
       setDrawingAttachments((current) => [...current, ...nextDrawingAttachments]);
-      showNotice('accent', `Attached ${nextDrawingAttachments.length} drawing${nextDrawingAttachments.length === 1 ? '' : 's'}.`);
     }
 
-    for (const failure of drawingParseFailures) {
-      showNotice('danger', `Failed to parse ${failure.fileName}: ${failure.message}`, 4000);
-    }
-
-    if (rejectedFileNames.length > 0) {
-      const preview = rejectedFileNames.slice(0, 3).join(', ');
-      const suffix = rejectedFileNames.length > 3 ? `, +${rejectedFileNames.length - 3} more` : '';
-      showNotice('danger', `Unsupported file type: ${preview}${suffix}`, 4000);
+    for (const notice of buildComposerFilePreparationNotices({
+      drawingAttachments: nextDrawingAttachments,
+      drawingParseFailures,
+      rejectedFileNames,
+    })) {
+      showNotice(notice.tone, notice.text, notice.durationMs);
     }
   }
 

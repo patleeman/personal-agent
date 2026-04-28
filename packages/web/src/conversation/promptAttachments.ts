@@ -213,6 +213,12 @@ export interface PreparedComposerFiles {
   drawingParseFailures: Array<{ fileName: string; message: string }>;
 }
 
+export interface ComposerFilePreparationNotice {
+  tone: 'accent' | 'danger';
+  text: string;
+  durationMs?: number;
+}
+
 export async function prepareComposerFiles(
   files: File[],
   buildDrawing: (file: File) => Promise<ComposerDrawingAttachment> = buildComposerDrawingFromFile,
@@ -253,6 +259,39 @@ export async function prepareComposerFiles(
     rejectedFileNames,
     drawingParseFailures,
   };
+}
+
+export function buildComposerFilePreparationNotices(
+  prepared: Pick<PreparedComposerFiles, 'drawingAttachments' | 'drawingParseFailures' | 'rejectedFileNames'>,
+): ComposerFilePreparationNotice[] {
+  const notices: ComposerFilePreparationNotice[] = [];
+
+  if (prepared.drawingAttachments.length > 0) {
+    notices.push({
+      tone: 'accent',
+      text: `Attached ${prepared.drawingAttachments.length} drawing${prepared.drawingAttachments.length === 1 ? '' : 's'}.`,
+    });
+  }
+
+  for (const failure of prepared.drawingParseFailures) {
+    notices.push({
+      tone: 'danger',
+      text: `Failed to parse ${failure.fileName}: ${failure.message}`,
+      durationMs: 4000,
+    });
+  }
+
+  if (prepared.rejectedFileNames.length > 0) {
+    const preview = prepared.rejectedFileNames.slice(0, 3).join(', ');
+    const suffix = prepared.rejectedFileNames.length > 3 ? `, +${prepared.rejectedFileNames.length - 3} more` : '';
+    notices.push({
+      tone: 'danger',
+      text: `Unsupported file type: ${preview}${suffix}`,
+      durationMs: 4000,
+    });
+  }
+
+  return notices;
 }
 
 export function removeComposerImageFileAtIndex(files: File[], indexToRemove: number): File[] {

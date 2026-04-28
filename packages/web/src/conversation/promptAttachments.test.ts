@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   base64ToFile,
+  buildComposerFilePreparationNotices,
   constrainPromptImageDimensions,
   drawingAttachmentToPromptImage,
   drawingAttachmentToPromptRef,
@@ -102,6 +103,27 @@ describe('promptAttachments', () => {
     expect(removeComposerImageFileAtIndex([firstImage, secondImage], 9)).toEqual([firstImage, secondImage]);
     expect(removeComposerDrawingAttachmentByLocalId([firstDrawing, secondDrawing], 'drawing-2')).toEqual([firstDrawing]);
     expect(removeComposerDrawingAttachmentByLocalId([firstDrawing], 'missing')).toEqual([firstDrawing]);
+  });
+
+  it('builds composer file preparation notices from preparation results', () => {
+    expect(buildComposerFilePreparationNotices({
+      drawingAttachments: [{ localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment],
+      drawingParseFailures: [{ fileName: 'broken.excalidraw', message: 'Invalid scene' }],
+      rejectedFileNames: ['a.txt', 'b.mov', 'c.zip', 'd.bin'],
+    })).toEqual([
+      { tone: 'accent', text: 'Attached 1 drawing.' },
+      { tone: 'danger', text: 'Failed to parse broken.excalidraw: Invalid scene', durationMs: 4000 },
+      { tone: 'danger', text: 'Unsupported file type: a.txt, b.mov, c.zip, +1 more', durationMs: 4000 },
+    ]);
+
+    expect(buildComposerFilePreparationNotices({
+      drawingAttachments: [
+        { localId: 'drawing-1', title: 'One' } as ComposerDrawingAttachment,
+        { localId: 'drawing-2', title: 'Two' } as ComposerDrawingAttachment,
+      ],
+      drawingParseFailures: [],
+      rejectedFileNames: [],
+    })).toEqual([{ tone: 'accent', text: 'Attached 2 drawings.' }]);
   });
 
   it('converts drawing attachments to prompt image and attachment references', () => {
