@@ -243,6 +243,8 @@ function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
+const MAX_PROMPT_ATTACHMENT_REVISION = 1_000_000;
+
 function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput[] {
   if (!Array.isArray(value)) {
     return [];
@@ -264,10 +266,10 @@ function normalizePromptAttachmentRefs(value: unknown): PromptAttachmentRefInput
     }
 
     const revisionCandidate = (candidate as { revision?: unknown }).revision;
-    if (revisionCandidate !== undefined && (!Number.isSafeInteger(revisionCandidate) || (revisionCandidate as number) <= 0)) {
+    if (revisionCandidate !== undefined && (!Number.isSafeInteger(revisionCandidate) || (revisionCandidate as number) <= 0 || (revisionCandidate as number) > MAX_PROMPT_ATTACHMENT_REVISION)) {
       continue;
     }
-    const revision = Number.isSafeInteger(revisionCandidate) && (revisionCandidate as number) > 0
+    const revision = Number.isSafeInteger(revisionCandidate) && (revisionCandidate as number) > 0 && (revisionCandidate as number) <= MAX_PROMPT_ATTACHMENT_REVISION
       ? revisionCandidate as number
       : undefined;
 
