@@ -157,6 +157,10 @@ function decodeBase64(data: string, label: string): Buffer {
     throw new Error(`${label} must not be empty.`);
   }
 
+  if (normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new Error(`${label} must be valid base64.`);
+  }
+
   let decoded: Buffer;
   try {
     decoded = Buffer.from(normalized, 'base64');

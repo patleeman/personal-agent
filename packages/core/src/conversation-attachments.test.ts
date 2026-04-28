@@ -62,6 +62,19 @@ describe('conversation attachment paths', () => {
   it('rejects invalid attachment ids', () => {
     expect(() => validateConversationAttachmentId('bad/id')).toThrow('Invalid attachment id');
   });
+
+  it('rejects malformed attachment asset base64', () => {
+    const stateRoot = createTempStateRoot();
+
+    expect(() => saveConversationAttachment({
+      stateRoot,
+      profile: 'assistant',
+      conversationId: 'conv-bad-base64',
+      title: 'Bad asset',
+      sourceData: 'not-valid-base64!',
+      previewData: toBase64('preview'),
+    })).toThrow('Attachment source data must be valid base64.');
+  });
 });
 
 describe('conversation attachment storage', () => {
