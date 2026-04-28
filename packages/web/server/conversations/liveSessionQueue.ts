@@ -230,6 +230,19 @@ export function removeQueuedUserMessage(
   return undefined;
 }
 
+function normalizeQueuedPromptImageData(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const data = value.trim();
+  if (!data || data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return undefined;
+  }
+
+  return Buffer.from(data, 'base64').length > 0 ? data : undefined;
+}
+
 export function extractQueuedPromptContent(
   message: InternalQueuedAgentMessage | undefined,
   fallbackText: string,
@@ -251,7 +264,7 @@ export function extractQueuedPromptContent(
     if ((part as { type?: unknown }).type === 'image'
       && typeof (part as { data?: unknown }).data === 'string'
       && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
-      const data = (part as { data: string }).data.trim();
+      const data = normalizeQueuedPromptImageData((part as { data: string }).data);
       const mimeType = (part as { mimeType: string }).mimeType.trim();
       if (!data || !mimeType) {
         continue;

@@ -2400,7 +2400,7 @@ describe('queued prompt restore', () => {
           steeringQueue: {
             messages: [{
               role: 'user',
-              content: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+              content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
             }],
           },
           followUpQueue: {
@@ -2623,7 +2623,7 @@ describe('queued prompt restore', () => {
           role: 'user',
           content: [
             { type: 'text', text: 'second queued prompt' },
-            { type: 'image', data: 'b64-image', mimeType: 'image/png' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' },
           ],
         },
       ],
@@ -2665,7 +2665,7 @@ describe('queued prompt restore', () => {
 
     expect(restored).toEqual({
       text: 'second queued prompt',
-      images: [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+      images: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
     });
     expect(steeringMessages).toEqual(['first queued prompt']);
     expect(steeringQueue).toEqual({
@@ -3743,7 +3743,7 @@ describe('promptSession', () => {
       },
     });
 
-    const image = { type: 'image' as const, data: 'b64-image', mimeType: 'image/png' };
+    const image = { type: 'image' as const, data: 'aGVsbG8=', mimeType: 'image/png' };
     await promptSession('session-steer-image-fallback', 'continue with this screenshot', 'steer', [image]);
 
     expect(steer).toHaveBeenNthCalledWith(1, 'continue with this screenshot', [image]);
@@ -3777,7 +3777,7 @@ describe('promptSession', () => {
       'session-image-error',
       'continue with this screenshot',
       undefined,
-      [{ type: 'image', data: 'b64-image', mimeType: 'image/png' }],
+      [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
     )).rejects.toThrow('network unavailable');
     expect(prompt).toHaveBeenCalledTimes(1);
   });
