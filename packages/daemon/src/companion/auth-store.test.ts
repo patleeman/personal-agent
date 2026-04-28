@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,7 @@ import {
   readCompanionDeviceAdminState,
   readCompanionDeviceByToken,
   revokeCompanionDevice,
+  resolveCompanionAuthStateFile,
   updateCompanionDeviceLabel,
 } from './auth-store.js';
 
@@ -74,5 +75,31 @@ describe('companion auth store', () => {
 
     expect(pairing.createdAt).toBe('2026-04-18T10:00:00.000Z');
     expect(pairing.expiresAt).toBe('2026-04-18T10:10:00.000Z');
+  });
+
+  it('drops persisted auth entries with malformed lifecycle timestamps', () => {
+    const stateRoot = createTempDir('pa-companion-auth-');
+    const authFile = resolveCompanionAuthStateFile(stateRoot);
+    mkdirSync(join(stateRoot, 'companion'), { recursive: true });
+    writeFileSync(authFile, JSON.stringify({
+      pairingCodes: [{
+        id: 'pair-1',
+        codeHash: 'hash',
+        createdAt: 'not-a-date',
+        expiresAt: '2026-04-18T10:10:00.000Z',
+      }],
+      devices: [{
+        id: 'device-1',
+        deviceLabel: 'Phone',
+        tokenHash: 'hash',
+        createdAt: 'bad-created',
+        lastUsedAt: 'bad-last-used',
+        expiresAt: '2026-05-18T10:10:00.000Z',
+      }],
+    }), 'utf-8');
+
+    expect(readCompanionDeviceAdminState(stateRoot, {
+      now: new Date('2026-04-18T10:00:00.000Z'),
+    })).toEqual({ pendingPairings: [], devices: [] });
   });
 });

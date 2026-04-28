@@ -51,6 +51,15 @@ function toIso(input: Date): string {
   return input.toISOString();
 }
 
+function parseTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
 function hashSecret(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
@@ -112,16 +121,18 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
         return [];
       }
 
-      const expiresAtMs = Date.parse(candidate.expiresAt);
-      if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+      const createdAt = parseTimestamp(candidate.createdAt);
+      const expiresAt = parseTimestamp(candidate.expiresAt);
+      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+      if (!createdAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
         return [];
       }
 
       return [{
         id: candidate.id,
         codeHash: candidate.codeHash,
-        createdAt: candidate.createdAt,
-        expiresAt: candidate.expiresAt,
+        createdAt,
+        expiresAt,
       }];
     })
     : [];
@@ -144,8 +155,12 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
         return [];
       }
 
-      const expiresAtMs = Date.parse(candidate.expiresAt);
-      if (!Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
+      const createdAt = parseTimestamp(candidate.createdAt);
+      const lastUsedAt = parseTimestamp(candidate.lastUsedAt);
+      const expiresAt = parseTimestamp(candidate.expiresAt);
+      const revokedAt = parseTimestamp(candidate.revokedAt);
+      const expiresAtMs = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+      if (!createdAt || !lastUsedAt || !expiresAt || !Number.isFinite(expiresAtMs) || expiresAtMs <= nowMs) {
         return [];
       }
 
@@ -153,10 +168,10 @@ function normalizeStore(value: unknown, now: Date): CompanionAuthStore {
         id: candidate.id,
         deviceLabel: candidate.deviceLabel,
         tokenHash: candidate.tokenHash,
-        createdAt: candidate.createdAt,
-        lastUsedAt: candidate.lastUsedAt,
-        expiresAt: candidate.expiresAt,
-        ...(typeof candidate.revokedAt === 'string' ? { revokedAt: candidate.revokedAt } : {}),
+        createdAt,
+        lastUsedAt,
+        expiresAt,
+        ...(revokedAt ? { revokedAt } : {}),
       }];
     })
     : [];
