@@ -600,8 +600,12 @@ function getConversationItemSortTimestamp(session: SessionMeta, sortMode: Thread
   const source = sortMode === 'created'
     ? session.timestamp
     : session.lastActivityAt ?? session.attentionUpdatedAt ?? session.timestamp;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(source)) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
   const parsed = Date.parse(source);
-  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === source ? parsed : Number.NEGATIVE_INFINITY;
 }
 
 function compareConversationItems(left: SidebarConversationItem, right: SidebarConversationItem, sortMode: ThreadsSortMode): number {

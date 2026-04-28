@@ -574,6 +574,29 @@ describe('Sidebar', () => {
     expect(html.indexOf('Newer thread')).toBeLessThan(html.indexOf('Older thread'));
   });
 
+  it('sorts malformed thread activity timestamps after valid chronological items', () => {
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-valid', 'conv-malformed']));
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
+    storage.setItem(buildSidebarNavSectionStorageKey('threads-sort-by'), 'updated');
+
+    const html = renderSidebar('/conversations/new', {
+      sessions: [
+        createSession({
+          id: 'conv-malformed',
+          title: 'Malformed activity thread',
+          lastActivityAt: '9999',
+        }),
+        createSession({
+          id: 'conv-valid',
+          title: 'Valid activity thread',
+          lastActivityAt: '2026-03-16T09:55:00.000Z',
+        }),
+      ],
+    });
+
+    expect(html.indexOf('Valid activity thread')).toBeLessThan(html.indexOf('Malformed activity thread'));
+  });
+
   it('defaults to sorting threads by created time when no sort preference is saved', () => {
     storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-earlier', 'conv-later']));
     storage.setItem(buildSidebarNavSectionStorageKey('threads-organize'), 'chronological');
