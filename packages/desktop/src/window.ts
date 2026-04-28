@@ -42,6 +42,8 @@ type ManagedWindowRole = 'main' | 'remote' | 'popout';
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
 const DEFAULT_WINDOW_WIDTH = 1440;
 const DEFAULT_WINDOW_HEIGHT = 960;
+const MAX_SAVED_WINDOW_WIDTH = 4096;
+const MAX_SAVED_WINDOW_HEIGHT = 4096;
 const WINDOW_SHOW_FALLBACK_MS = 1500;
 const EXTERNAL_WINDOW_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
 
@@ -149,11 +151,12 @@ function centerBoundsInArea(bounds: DesktopWindowBounds, area: DesktopRectangle)
 }
 
 function normalizeWindowBound(value: number | undefined, fallback: number): number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : fallback;
+  const max = fallback === DEFAULT_WINDOW_HEIGHT ? MAX_SAVED_WINDOW_HEIGHT : MAX_SAVED_WINDOW_WIDTH;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= max ? value : fallback;
 }
 
 function normalizeWindowPosition(value: number | undefined): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && Math.abs(value) <= 100_000 ? value : undefined;
 }
 
 export function constrainDesktopWindowBounds(

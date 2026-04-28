@@ -182,6 +182,30 @@ describe('window desktop navigation helpers', () => {
     });
   });
 
+  it('falls back from absurd saved window bounds', () => {
+    expect(constrainDesktopWindowBounds(
+      {
+        x: Number.MAX_SAFE_INTEGER,
+        y: 40,
+        width: Number.MAX_SAFE_INTEGER,
+        height: 700,
+      },
+      [
+        {
+          x: 0,
+          y: 0,
+          width: 1512,
+          height: 982,
+        },
+      ],
+    )).toEqual({
+      x: 36,
+      y: 141,
+      width: 1440,
+      height: 700,
+    });
+  });
+
   it('falls back from fractional saved window bounds', () => {
     expect(constrainDesktopWindowBounds(
       {
