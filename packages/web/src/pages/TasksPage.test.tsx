@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, SseConnectionContext } from '../app/contexts.js';
-import { TasksPage } from './TasksPage.js';
+import { sortAutomationRows, TasksPage } from './TasksPage.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -425,5 +425,32 @@ describe('TasksPage', () => {
     expect(html).toContain('Chat');
     expect(html).not.toContain('>alpha-worktree<');
     expect(html).not.toContain('>beta-worktree<');
+  });
+});
+
+describe('sortAutomationRows', () => {
+  it('sorts malformed last run timestamps after valid timestamps', () => {
+    expect(sortAutomationRows([
+      {
+        id: 'bad-time',
+        title: 'Bad time',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        cron: '0 9 * * *',
+        prompt: 'bad',
+        lastRunAt: 'not-a-date',
+      },
+      {
+        id: 'good-time',
+        title: 'Good time',
+        scheduleType: 'cron',
+        running: false,
+        enabled: true,
+        cron: '0 9 * * *',
+        prompt: 'good',
+        lastRunAt: '2026-03-18T00:00:00.000Z',
+      },
+    ]).map((task) => task.id)).toEqual(['good-time', 'bad-time']);
   });
 });

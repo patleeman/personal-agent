@@ -85,13 +85,19 @@ function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'l
   return 3;
 }
 
-function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
+function parseSortableTimestamp(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function sortAutomationRows(tasks: ScheduledTaskSummary[]): ScheduledTaskSummary[] {
   return [...tasks].sort((left, right) => {
     const rankDiff = taskRowRank(left) - taskRowRank(right);
     if (rankDiff !== 0) return rankDiff;
 
-    const leftLastRun = left.lastRunAt ? Date.parse(left.lastRunAt) : 0;
-    const rightLastRun = right.lastRunAt ? Date.parse(right.lastRunAt) : 0;
+    const leftLastRun = parseSortableTimestamp(left.lastRunAt);
+    const rightLastRun = parseSortableTimestamp(right.lastRunAt);
     if (leftLastRun !== rightLastRun) return rightLastRun - leftLastRun;
 
     return formatTaskName(left).localeCompare(formatTaskName(right));
