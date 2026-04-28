@@ -90,10 +90,10 @@ export function truncateConversationShelfText(
 ): string {
   const normalized = text.replace(/\r\n?/g, '\n');
   const maxChars = typeof options.maxChars === 'number' && Number.isSafeInteger(options.maxChars) && options.maxChars > 0
-    ? options.maxChars
+    ? Math.min(COMPOSER_SHELF_TEXT_MAX_CHARS, options.maxChars)
     : COMPOSER_SHELF_TEXT_MAX_CHARS;
   const maxLines = typeof options.maxLines === 'number' && Number.isSafeInteger(options.maxLines) && options.maxLines > 0
-    ? options.maxLines
+    ? Math.min(COMPOSER_SHELF_TEXT_MAX_LINES, options.maxLines)
     : COMPOSER_SHELF_TEXT_MAX_LINES;
   const lines = normalized.split('\n');
   const truncatedByLines = lines.length > maxLines;

@@ -115,6 +115,8 @@ describe('conversation composer presentation helpers', () => {
     expect(truncateConversationShelfText('abcdef', { maxChars: 3 })).toBe('abc…');
     expect(truncateConversationShelfText('one\ntwo\nthree', { maxLines: 1.5 })).toBe('one\ntwo\nthree');
     expect(truncateConversationShelfText('abcdef', { maxChars: 3.5 })).toBe('abcdef');
+    expect(truncateConversationShelfText(Array.from({ length: 10 }, (_, index) => `line-${index}`).join('\n'), { maxLines: Number.MAX_SAFE_INTEGER })).toBe('line-0\nline-1\nline-2\nline-3\nline-4\nline-5\nline-6\nline-7…');
+    expect(truncateConversationShelfText('a'.repeat(700), { maxChars: Number.MAX_SAFE_INTEGER })).toBe(`${'a'.repeat(640)}…`);
     expect(formatQueuedPromptShelfText('', 1)).toBe('(image only)');
     expect(formatQueuedPromptShelfText('  ', 0)).toBe('(empty queued prompt)');
     expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');
