@@ -94,6 +94,7 @@ describe('conversationMentions', () => {
 
     expect(filterMentionItems(items, '@', { limit: MAX_MENTION_MENU_ITEMS }).map((item) => item.id)).toHaveLength(MAX_MENTION_MENU_ITEMS);
     expect(filterMentionItems(items, '@', { limit: 5 }).map((item) => item.id)).toHaveLength(5);
+    expect(filterMentionItems(items, '@', { limit: 5.5 }).map((item) => item.id)).toHaveLength(MAX_MENTION_MENU_ITEMS + 2);
   });
 
   it('resolves mentioned items in encounter order for path-style file and folder references', () => {

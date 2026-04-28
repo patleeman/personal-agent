@@ -114,7 +114,7 @@ export function filterMentionItems(
     });
 
   const limit = options.limit;
-  if (typeof limit === 'number' && Number.isFinite(limit) && limit >= 0) {
+  if (typeof limit === 'number' && Number.isInteger(limit) && limit >= 0) {
     return filtered.slice(0, limit);
   }
 
