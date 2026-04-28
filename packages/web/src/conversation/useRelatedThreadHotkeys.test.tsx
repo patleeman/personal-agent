@@ -81,4 +81,40 @@ describe('useRelatedThreadHotkeys', () => {
 
     expect(onToggle).toHaveBeenCalledWith('conv-2');
   });
+
+  it('falls back to the default hotkey limit for fractional limits', () => {
+    const onToggle = vi.fn();
+
+    function Harness() {
+      useRelatedThreadHotkeys({
+        enabled: true,
+        results: [buildResult('conv-1'), buildResult('conv-2')],
+        onToggle,
+        hotkeyLimit: 0.5,
+      });
+
+      return <textarea aria-label="Composer" />;
+    }
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    mountedRoots.push(root);
+
+    act(() => {
+      root.render(<Harness />);
+    });
+
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', {
+        key: '2',
+        code: 'Digit2',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      }));
+    });
+
+    expect(onToggle).toHaveBeenCalledWith('conv-2');
+  });
 });

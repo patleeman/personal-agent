@@ -18,6 +18,10 @@ export function resolveRelatedThreadHotkeyIndex(event: RelatedThreadHotkeyEvent)
   return /^[1-9]$/.test(event.key) ? Number(event.key) - 1 : -1;
 }
 
+function normalizeRelatedThreadHotkeyLimit(value: number | undefined): number {
+  return Number.isSafeInteger(value) && (value as number) > 0 ? value as number : MAX_RELATED_THREAD_HOTKEYS;
+}
+
 export function useRelatedThreadHotkeys(input: {
   enabled: boolean;
   results: RelatedConversationSearchResult[];
@@ -25,7 +29,7 @@ export function useRelatedThreadHotkeys(input: {
   hotkeyLimit?: number;
 }): void {
   const { enabled, results, onToggle } = input;
-  const hotkeyLimit = input.hotkeyLimit ?? MAX_RELATED_THREAD_HOTKEYS;
+  const hotkeyLimit = normalizeRelatedThreadHotkeyLimit(input.hotkeyLimit);
 
   useEffect(() => {
     if (!enabled || results.length === 0) {
