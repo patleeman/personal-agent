@@ -42,7 +42,7 @@ export async function readDurableRunLogCapability(input: {
   }
 
   const tail = typeof input.tail === 'number' && Number.isSafeInteger(input.tail) && input.tail > 0
-    ? input.tail as number
+    ? Math.min(1000, input.tail as number)
     : 120;
   const result = await getDurableRunLog(normalizedRunId, tail);
   if (!result) {
