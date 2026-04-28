@@ -87,7 +87,9 @@ function taskRowRank(task: Pick<ScheduledTaskSummary, 'running' | 'enabled' | 'l
 
 function parseSortableTimestamp(value: string | undefined): number {
   if (!value) return 0;
-  const parsed = Date.parse(value);
+  const normalized = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/.test(normalized)) return 0;
+  const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
