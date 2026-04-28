@@ -288,14 +288,14 @@ export function buildScheduledTaskMarkdown(input: {
   }
 
   if (input.timeoutSeconds !== undefined && input.timeoutSeconds !== null) {
-    if (!Number.isInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0) {
+    if (!Number.isSafeInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0) {
       throw new Error('timeoutSeconds must be a positive integer.');
     }
     lines.push(`timeoutSeconds: ${input.timeoutSeconds}`);
   }
 
   if (input.catchUpWindowSeconds !== undefined && input.catchUpWindowSeconds !== null) {
-    if (!Number.isInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0) {
+    if (!Number.isSafeInteger(input.catchUpWindowSeconds) || input.catchUpWindowSeconds <= 0) {
       throw new Error('catchUpWindowSeconds must be a positive integer.');
     }
     lines.push(`catchUpWindowSeconds: ${input.catchUpWindowSeconds}`);
