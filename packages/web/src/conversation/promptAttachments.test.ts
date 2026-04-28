@@ -25,6 +25,7 @@ describe('promptAttachments', () => {
     expect(constrainPromptImageDimensions(1200, 3600)).toEqual({ width: 667, height: 2000 });
     expect(constrainPromptImageDimensions(Number.MAX_SAFE_INTEGER + 1, 900)).toEqual({ width: 1, height: 900 });
     expect(constrainPromptImageDimensions(4000, 1000, Number.NaN)).toEqual({ width: 2000, height: 500 });
+    expect(constrainPromptImageDimensions(4000, 1000, Number.MAX_SAFE_INTEGER)).toEqual({ width: 2000, height: 500 });
   });
 
   it('does not round fractional prompt image dimensions', () => {

@@ -69,7 +69,7 @@ function normalizePromptImageMimeType(mimeType: string): string {
 
 export function constrainPromptImageDimensions(width: number, height: number, maxDimension = MAX_PROMPT_IMAGE_DIMENSION): { width: number; height: number } {
   const safeMaxDimension = Number.isSafeInteger(maxDimension) && maxDimension > 0
-    ? maxDimension
+    ? Math.min(MAX_PROMPT_IMAGE_DIMENSION, maxDimension)
     : MAX_PROMPT_IMAGE_DIMENSION;
 
   if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
