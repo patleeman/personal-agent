@@ -27,6 +27,11 @@ describe('promptAttachments', () => {
     expect(constrainPromptImageDimensions(4000, 1000, Number.NaN)).toEqual({ width: 2000, height: 500 });
   });
 
+  it('does not round fractional prompt image dimensions', () => {
+    expect(constrainPromptImageDimensions(1600.5, 900)).toEqual({ width: 1, height: 900 });
+    expect(constrainPromptImageDimensions(1600, 900.5)).toEqual({ width: 1600, height: 1 });
+  });
+
   it('restores queued and composer images with stable fallback names', async () => {
     const restoredQueued = restoreQueuedImageFiles([
       { data: globalThis.btoa('hello'), mimeType: 'image/jpeg', previewUrl: 'data:image/jpeg;base64,aGVsbG8=' },

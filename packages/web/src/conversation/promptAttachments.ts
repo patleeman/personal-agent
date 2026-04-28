@@ -72,19 +72,18 @@ export function constrainPromptImageDimensions(width: number, height: number, ma
     ? maxDimension
     : MAX_PROMPT_IMAGE_DIMENSION;
 
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0
-    || !Number.isSafeInteger(Math.round(width)) || !Number.isSafeInteger(Math.round(height))) {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) {
     return {
-      width: Number.isSafeInteger(Math.round(width)) ? Math.max(1, Math.round(width) || 1) : 1,
-      height: Number.isSafeInteger(Math.round(height)) ? Math.max(1, Math.round(height) || 1) : 1,
+      width: Number.isSafeInteger(width) ? Math.max(1, width) : 1,
+      height: Number.isSafeInteger(height) ? Math.max(1, height) : 1,
     };
   }
 
   const longSide = Math.max(width, height);
   if (longSide <= safeMaxDimension) {
     return {
-      width: Math.round(width),
-      height: Math.round(height),
+      width,
+      height,
     };
   }
 
