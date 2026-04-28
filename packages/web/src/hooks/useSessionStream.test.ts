@@ -37,6 +37,10 @@ describe('normalizeLiveSessionTailBlocks', () => {
     expect(normalizeLiveSessionTailBlocks(20)).toBe(20);
     expect(normalizeLiveSessionTailBlocks(Number.MAX_SAFE_INTEGER + 1)).toBeUndefined();
   });
+
+  it('caps expensive live stream tail block limits', () => {
+    expect(normalizeLiveSessionTailBlocks(5000)).toBe(1000);
+  });
 });
 
 describe('userMessageBlocksMatchForStreamDedupe', () => {

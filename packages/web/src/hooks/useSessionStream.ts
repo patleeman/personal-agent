@@ -40,9 +40,11 @@ export interface StreamState {
   cwdChange: { newConversationId: string; cwd: string; autoContinued: boolean } | null;
 }
 
+const MAX_LIVE_SESSION_TAIL_BLOCKS = 1000;
+
 export function normalizeLiveSessionTailBlocks(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(MAX_LIVE_SESSION_TAIL_BLOCKS, value)
     : undefined;
 }
 
