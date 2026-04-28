@@ -78,6 +78,7 @@ describe('modelProviderEditorDrafts', () => {
     expect(() => parseOptionalStringRecord('{"x":1}', 'Headers')).toThrow('Headers values must all be strings.');
     expect(() => parseOptionalFiniteNumber('nope', 'Context window')).toThrow('Context window must be a valid number.');
     expect(() => parseOptionalPositiveInteger('42.5', 'Context window')).toThrow('Context window must be a positive integer.');
+    expect(() => parseOptionalPositiveInteger(String(Number.MAX_SAFE_INTEGER + 1), 'Context window')).toThrow('Context window must be a positive integer.');
     expect(() => parseOptionalNonNegativeNumber('-1', 'Input cost')).toThrow('Input cost must be a non-negative number.');
   });
 });

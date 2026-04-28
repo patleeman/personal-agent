@@ -118,7 +118,7 @@ export function parseOptionalPositiveInteger(value: string, label: string): numb
     return undefined;
   }
 
-  if (!Number.isInteger(parsed) || parsed <= 0) {
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) {
     throw new Error(`${label} must be a positive integer.`);
   }
 
