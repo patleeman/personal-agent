@@ -51,7 +51,7 @@ function normalizeRunLogTail(value: unknown): number {
     return 120;
   }
 
-  return typeof value === 'number' && Number.isInteger(value) && value > 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     ? Math.min(1000, value)
     : 120;
 }

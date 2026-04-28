@@ -171,14 +171,17 @@ describe('run agent extension', () => {
     const detail = await runTool.execute('tool-1', { action: 'get', runId: 'run-123' }, undefined, undefined, createToolContext());
     const logs = await runTool.execute('tool-2', { action: 'logs', runId: 'run-123', tail: 5_000 }, undefined, undefined, createToolContext());
     const fractionalLogs = await runTool.execute('tool-3', { action: 'logs', runId: 'run-123', tail: 5.5 }, undefined, undefined, createToolContext());
+    const unsafeLogs = await runTool.execute('tool-4', { action: 'logs', runId: 'run-123', tail: Number.MAX_SAFE_INTEGER + 1 }, undefined, undefined, createToolContext());
 
     expect(detail.isError).not.toBe(true);
     expect(detail.content[0]?.text).toContain('source: tool (conv-123)');
     expect(detail.content[0]?.text).toContain('last error: boom');
     expect(getDurableRunLogMock).toHaveBeenCalledWith('run-123', 1_000);
+    expect(getDurableRunLogMock).toHaveBeenNthCalledWith(3, 'run-123', 120);
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-123', 120);
     expect(logs.content[0]?.text).toContain('(empty log)');
     expect(fractionalLogs.content[0]?.text).toContain('(empty log)');
+    expect(unsafeLogs.content[0]?.text).toContain('(empty log)');
   });
 
   it('starts a background run through the daemon without conversation callbacks by default', async () => {
