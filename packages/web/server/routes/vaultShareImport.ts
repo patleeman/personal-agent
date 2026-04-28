@@ -201,7 +201,7 @@ function decodeSharedBase64Payload(value: string): { buffer: Buffer; mimeType?: 
   const trimmed = value.trim();
   let base64 = trimmed;
   let mimeType: string | undefined;
-  if (trimmed.startsWith('data:')) {
+  if (trimmed.toLowerCase().startsWith('data:')) {
     const commaIndex = trimmed.indexOf(',');
     const metadata = commaIndex >= 0 ? trimmed.slice(0, commaIndex) : '';
     if (commaIndex < 0 || !metadata.toLowerCase().includes(';base64')) {

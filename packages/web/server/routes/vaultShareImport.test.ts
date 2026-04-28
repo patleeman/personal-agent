@@ -84,6 +84,24 @@ describe('vaultShareImport', () => {
     expect(readFileSync(imported.notePath, 'utf-8')).toContain('mime_type: image/png');
   });
 
+  it('accepts shared image data urls with uppercase scheme and mime casing', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-image-data-url-case-'));
+    const targetDirAbs = join(root, 'Inbox');
+    const imported = await importVaultSharedItem({
+      kind: 'image',
+      root,
+      targetDirAbs,
+      title: 'Screenshot',
+      mimeType: 'text/plain',
+      fileName: 'screenshot.txt',
+      dataBase64: `DATA:IMAGE/PNG;BASE64,${Buffer.from('image-bytes', 'utf-8').toString('base64')}`,
+      createdAt: '2026-04-22T12:00:00.000Z',
+    });
+
+    expect(imported.asset?.id).toMatch(/\.png$/);
+    expect(readFileSync(imported.notePath, 'utf-8')).toContain('mime_type: image/png');
+  });
+
   it('rejects malformed shared image base64', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-bad-image-'));
     const targetDirAbs = join(root, 'Inbox');
