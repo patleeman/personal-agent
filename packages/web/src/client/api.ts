@@ -653,7 +653,7 @@ export const api = {
     revision?: number,
   ): Promise<ConversationAttachmentAssetData> => {
     const params = new URLSearchParams();
-    if (typeof revision === 'number' && Number.isInteger(revision) && revision > 0) {
+    if (typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0) {
       params.set('revision', String(revision));
     }
     const requestPath = buildApiPath(`/conversations/${encodeURIComponent(id)}/attachments/${encodeURIComponent(attachmentId)}/download/${asset}${params.toString() ? `?${params.toString()}` : ''}`);

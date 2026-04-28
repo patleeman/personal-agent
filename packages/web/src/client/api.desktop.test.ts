@@ -1334,6 +1334,34 @@ describe('api desktop transport', () => {
     });
   });
 
+  it('omits unsafe conversation attachment asset revisions from HTTP requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('preview-bytes', {
+      status: 200,
+      headers: {
+        'Content-Type': 'image/png',
+        'Content-Disposition': 'inline; filename="preview.png"',
+      },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    Object.assign(window as { personalAgentDesktop?: unknown }, {
+      personalAgentDesktop: {
+        getEnvironment: vi.fn().mockResolvedValue({
+          isElectron: true,
+          activeHostId: 'web-1',
+          activeHostKind: 'web',
+        }),
+      },
+    });
+
+    const { api } = await import('./api');
+    await api.conversationAttachmentAsset('conversation-1', 'attachment-1', 'preview', Number.MAX_SAFE_INTEGER + 1);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/conversations/conversation-1/attachments/attachment-1/download/preview', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  });
+
   it('falls back to HTTP for desktop conversation deferred-resume bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }))
