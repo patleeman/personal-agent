@@ -72,12 +72,15 @@ export function writeStoredOpenFileIds(openFileIds: readonly string[], storage?:
 }
 
 export function addOpenFileId(openFileIds: readonly string[], fileId: string, maxOpenFileIds: number = MAX_OPEN_FILE_IDS): string[] {
+  const limit = Number.isSafeInteger(maxOpenFileIds) && maxOpenFileIds > 0
+    ? Math.min(MAX_OPEN_FILE_IDS, maxOpenFileIds)
+    : MAX_OPEN_FILE_IDS;
   const normalizedId = fileId.trim();
   if (!normalizedId || normalizedId.endsWith('/')) {
-    return normalizeOpenFileIds(openFileIds);
+    return normalizeOpenFileIds(openFileIds).slice(0, limit);
   }
 
-  return normalizeOpenFileIds([normalizedId, ...openFileIds.filter((openFileId) => openFileId !== normalizedId)]).slice(0, maxOpenFileIds);
+  return normalizeOpenFileIds([normalizedId, ...openFileIds.filter((openFileId) => openFileId !== normalizedId)]).slice(0, limit);
 }
 
 export function removeOpenFileId(openFileIds: readonly string[], id: string): string[] {

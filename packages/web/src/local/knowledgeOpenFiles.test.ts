@@ -53,6 +53,16 @@ describe('knowledgeOpenFiles', () => {
     expect(addOpenFileId(['README.md', 'notes/today.md'], 'notes/today.md')).toEqual(['notes/today.md', 'README.md']);
   });
 
+  it('defaults malformed open file limits instead of letting slice truncate them', () => {
+    const ids = Array.from({ length: 3 }, (_, index) => `note-${index}.md`);
+    expect(addOpenFileId(ids, 'latest.md', 1.5)).toHaveLength(4);
+  });
+
+  it('caps excessive open file limits', () => {
+    const ids = Array.from({ length: 30 }, (_, index) => `note-${index}.md`);
+    expect(addOpenFileId(ids, 'latest.md', 5000)).toHaveLength(20);
+  });
+
   it('removes renamed or deleted file ids', () => {
     expect(removeOpenFileId(['README.md', 'notes/today.md'], 'README.md')).toEqual(['notes/today.md']);
     expect(removeOpenFileId(['notes/today.md', 'notes/work/todo.md'], 'notes/')).toEqual([]);
