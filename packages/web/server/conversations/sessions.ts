@@ -615,7 +615,12 @@ function normalizeTimestamp(timestamp: string | number | undefined): string {
 
 function imageMimeType(block: RawContentBlock): string | undefined {
   const mimeType = block.mimeType ?? block.mediaType;
-  return typeof mimeType === 'string' && mimeType.trim().length > 0 ? mimeType.trim() : undefined;
+  if (typeof mimeType !== 'string') {
+    return undefined;
+  }
+
+  const normalized = mimeType.trim();
+  return normalized.toLowerCase().startsWith('image/') ? normalized : undefined;
 }
 
 function normalizeBase64ImageData(data: unknown): string | undefined {

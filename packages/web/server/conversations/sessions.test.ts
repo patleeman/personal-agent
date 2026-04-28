@@ -527,6 +527,44 @@ describe('sessions', () => {
     }));
   });
 
+  it('skips archived user image blocks with non-image mime types', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    const dir = join(sessionsDir, '--tmp-project--');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, '2026-03-11T12-00-00-000Z_session-non-image-mime.jsonl'), [
+      JSON.stringify({ type: 'session', id: 'session-non-image-mime', timestamp: '2026-03-11T12:00:00.000Z', cwd: '/tmp/project' }),
+      JSON.stringify({ type: 'model_change', modelId: 'test-model' }),
+      JSON.stringify({
+        type: 'message',
+        id: 'session-non-image-mime-user-1',
+        parentId: null,
+        timestamp: '2026-03-11T12:00:00.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Here is a valid image after a bad mime' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain', name: 'bad.txt' },
+            { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
+          ],
+        },
+      }),
+    ].join('\n') + '\n');
+
+    const detail = readSessionBlocks('session-non-image-mime');
+    const userBlock = detail?.blocks.find((block) => block.type === 'user');
+    expect(userBlock).toEqual(expect.objectContaining({
+      type: 'user',
+      images: [expect.objectContaining({ mimeType: 'image/png' })],
+    }));
+    expect(userBlock ? readSessionImageAsset('session-non-image-mime', userBlock.id, 0) : null).toEqual(expect.objectContaining({
+      mimeType: 'image/png',
+      fileName: 'hello.png',
+      data: Buffer.from('aGVsbG8=', 'base64'),
+    }));
+  });
+
   it('keeps tool image block ids aligned when malformed image blocks are skipped', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);
