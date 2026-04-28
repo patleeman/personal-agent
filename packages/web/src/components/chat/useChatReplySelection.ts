@@ -50,7 +50,7 @@ export function parseReplySelectionMessageIndex(value: string | undefined): numb
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  return Number.isInteger(parsed) ? parsed : null;
+  return Number.isSafeInteger(parsed) ? parsed : null;
 }
 
 export function useChatReplySelection({

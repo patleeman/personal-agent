@@ -24,5 +24,6 @@ describe('useChatReplySelection helpers', () => {
   it('rejects malformed reply selection message indexes', () => {
     expect(parseReplySelectionMessageIndex('12')).toBe(12);
     expect(parseReplySelectionMessageIndex('12abc')).toBeNull();
+    expect(parseReplySelectionMessageIndex(String(Number.MAX_SAFE_INTEGER + 1))).toBeNull();
   });
 });
