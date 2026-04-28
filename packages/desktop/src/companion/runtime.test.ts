@@ -317,6 +317,29 @@ describe('desktop companion runtime', () => {
     })).rejects.toThrow('Attachment asset payload must contain valid base64 data.');
   });
 
+  it('uses the companion attachment data url mime type for binary assets', async () => {
+    const localController = {
+      readConversationAttachmentAsset: vi.fn().mockResolvedValue({
+        dataUrl: 'data:image/png;base64,aGVsbG8=',
+        mimeType: 'text/plain',
+      }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.readConversationAttachmentAsset({
+      conversationId: 'conv-1',
+      attachmentId: 'drawing-1',
+      asset: 'preview',
+    })).resolves.toMatchObject({
+      mimeType: 'image/png',
+      disposition: 'inline',
+    });
+  });
+
   it('routes parallel prompts to the dedicated live-session endpoint', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' })),

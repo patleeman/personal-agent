@@ -118,9 +118,6 @@ function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
     ? input as { dataUrl?: unknown; mimeType?: unknown; fileName?: unknown }
     : {};
   const dataUrl = typeof candidate.dataUrl === 'string' ? candidate.dataUrl.trim() : '';
-  const mimeType = typeof candidate.mimeType === 'string' && candidate.mimeType.trim().length > 0
-    ? candidate.mimeType.trim()
-    : 'application/octet-stream';
   const fileName = typeof candidate.fileName === 'string' && candidate.fileName.trim().length > 0
     ? candidate.fileName.trim()
     : undefined;
@@ -129,6 +126,13 @@ function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
   if (!match) {
     throw new Error('Attachment asset payload is malformed.');
   }
+  const dataUrlMimeType = typeof match[1] === 'string' && match[1].trim().length > 0
+    ? match[1].trim()
+    : undefined;
+  const mimeType = dataUrlMimeType
+    ?? (typeof candidate.mimeType === 'string' && candidate.mimeType.trim().length > 0
+      ? candidate.mimeType.trim()
+      : 'application/octet-stream');
 
   const base64 = (match[2] || '').trim();
   if (!base64 || base64.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
