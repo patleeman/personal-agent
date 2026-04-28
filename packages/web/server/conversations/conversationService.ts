@@ -467,7 +467,7 @@ export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined
       ? Number.parseInt(candidate.trim(), 10)
       : undefined;
 
-  return Number.isInteger(parsed) && (parsed as number) > 0
+  return Number.isSafeInteger(parsed) && (parsed as number) > 0
     ? parsed as number
     : undefined;
 }

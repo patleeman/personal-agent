@@ -248,6 +248,7 @@ describe('conversationService', () => {
     expect(parseTailBlocksQuery(['3'])).toBe(3);
     expect(parseTailBlocksQuery('0')).toBeUndefined();
     expect(parseTailBlocksQuery('8abc')).toBeUndefined();
+    expect(parseTailBlocksQuery(String(Number.MAX_SAFE_INTEGER + 1))).toBeUndefined();
   });
 
   it('publishes deduped session meta change events', () => {
