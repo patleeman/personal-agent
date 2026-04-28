@@ -226,6 +226,27 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('caps companion bootstrap tail block requests before hitting local APIs', async () => {
+    const localController = {
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ conversationId: 'conv-1', sessionDetail: null })),
+      readSessionMeta: vi.fn().mockResolvedValue(null),
+      readConversationAttachments: vi.fn().mockResolvedValue({ attachments: [] }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await runtime.readConversationBootstrap({ conversationId: 'conv-1', tailBlocks: 5000 });
+
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'GET',
+      path: '/api/conversations/conv-1/bootstrap?tailBlocks=1000',
+    }));
+  });
+
   it('defaults unsafe knowledge search limits instead of clamping them', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ results: [] })),

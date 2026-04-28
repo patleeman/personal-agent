@@ -108,9 +108,16 @@ async function subscribeDesktopApiStream(
 }
 
 const DEFAULT_COMPANION_TAIL_BLOCKS = 120;
+const MAX_COMPANION_TAIL_BLOCKS = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeCompanionTailBlocks(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(MAX_COMPANION_TAIL_BLOCKS, value)
+    : undefined;
 }
 
 function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
@@ -374,8 +381,9 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
 
     async readConversationBootstrap(input: CompanionConversationBootstrapInput) {
       const localController = hostManager.getHostController('local');
+      const tailBlocks = normalizeCompanionTailBlocks(input.tailBlocks);
       const query = toQuery({
-        ...(typeof input.tailBlocks === 'number' ? { tailBlocks: String(input.tailBlocks) } : {}),
+        ...(tailBlocks ? { tailBlocks: String(tailBlocks) } : {}),
         ...(input.knownSessionSignature ? { knownSessionSignature: input.knownSessionSignature } : {}),
         ...(typeof input.knownBlockOffset === 'number' ? { knownBlockOffset: String(input.knownBlockOffset) } : {}),
         ...(typeof input.knownTotalBlocks === 'number' ? { knownTotalBlocks: String(input.knownTotalBlocks) } : {}),
@@ -986,10 +994,11 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
     },
 
     async subscribeConversation(input: CompanionConversationSubscriptionInput, onEvent: (event: unknown) => void) {
+      const tailBlocks = normalizeCompanionTailBlocks(input.tailBlocks);
       const query = toQuery({
         ...(input.surfaceId ? { surfaceId: input.surfaceId } : {}),
         ...(toInternalSurfaceType(input.surfaceType) ? { surfaceType: toInternalSurfaceType(input.surfaceType) } : {}),
-        ...(typeof input.tailBlocks === 'number' ? { tailBlocks: String(input.tailBlocks) } : {}),
+        ...(tailBlocks ? { tailBlocks: String(tailBlocks) } : {}),
       });
 
       return subscribeDesktopApiStream(
