@@ -108,7 +108,7 @@ type AutomationStateRow = {
   last_error: string | null;
   last_log_path: string | null;
   last_scheduled_minute: string | null;
-  last_attempt_count: number | null;
+  last_attempt_count: number | string | null;
   one_time_resolved_at: string | null;
   one_time_resolved_status: string | null;
   one_time_completed_at: string | null;
@@ -396,26 +396,61 @@ function rowToStoredAutomation(row: StoredAutomationRow): StoredAutomation {
   };
 }
 
+function readOptionalTimestamp(value: unknown): string | undefined {
+  const raw = typeof value === 'string' ? readOptionalString(value) : undefined;
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
+function readTaskRunStatus(value: unknown): TaskRuntimeState['lastStatus'] | undefined {
+  return value === 'running' || value === 'success' || value === 'failed' || value === 'skipped'
+    ? value
+    : undefined;
+}
+
+function readOneTimeResolvedStatus(value: unknown): TaskRuntimeState['oneTimeResolvedStatus'] | undefined {
+  return value === 'success' || value === 'failed' || value === 'skipped'
+    ? value
+    : undefined;
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value.trim())) {
+    const parsed = Number.parseInt(value.trim(), 10);
+    return Number.isSafeInteger(parsed) ? parsed : undefined;
+  }
+
+  return undefined;
+}
+
 function rowToRuntimeState(row: AutomationStateRow): TaskRuntimeState {
   return {
     id: row.automation_id,
     filePath: buildSyntheticAutomationFilePath(row.automation_id),
     scheduleType: 'cron',
     running: row.running === 1,
-    runningStartedAt: readOptionalString(row.running_started_at),
+    runningStartedAt: readOptionalTimestamp(row.running_started_at),
     activeRunId: readOptionalString(row.active_run_id),
     lastRunId: readOptionalString(row.last_run_id),
-    lastStatus: readOptionalString(row.last_status) as TaskRuntimeState['lastStatus'],
-    lastRunAt: readOptionalString(row.last_run_at),
-    lastSuccessAt: readOptionalString(row.last_success_at),
-    lastFailureAt: readOptionalString(row.last_failure_at),
+    lastStatus: readTaskRunStatus(row.last_status),
+    lastRunAt: readOptionalTimestamp(row.last_run_at),
+    lastSuccessAt: readOptionalTimestamp(row.last_success_at),
+    lastFailureAt: readOptionalTimestamp(row.last_failure_at),
     lastError: readOptionalString(row.last_error),
     lastLogPath: readOptionalString(row.last_log_path),
     lastScheduledMinute: readOptionalString(row.last_scheduled_minute),
-    lastAttemptCount: typeof row.last_attempt_count === 'number' ? row.last_attempt_count : undefined,
-    oneTimeResolvedAt: readOptionalString(row.one_time_resolved_at),
-    oneTimeResolvedStatus: readOptionalString(row.one_time_resolved_status) as TaskRuntimeState['oneTimeResolvedStatus'],
-    oneTimeCompletedAt: readOptionalString(row.one_time_completed_at),
+    lastAttemptCount: readNonNegativeInteger(row.last_attempt_count),
+    oneTimeResolvedAt: readOptionalTimestamp(row.one_time_resolved_at),
+    oneTimeResolvedStatus: readOneTimeResolvedStatus(row.one_time_resolved_status),
+    oneTimeCompletedAt: readOptionalTimestamp(row.one_time_completed_at),
   };
 }
 
@@ -763,7 +798,7 @@ export function deleteStoredAutomation(id: string, options: { profile?: string; 
 export function loadAutomationRuntimeStateMap(options: { dbPath?: string } = {}): Record<string, TaskRuntimeState> {
   const db = openAutomationDb(options.dbPath);
   const rows = db.prepare(`
-    SELECT automation_id, running, running_started_at, active_run_id, last_run_id, last_status, last_run_at, last_success_at, last_failure_at, last_error, last_log_path, last_scheduled_minute, last_attempt_count, one_time_resolved_at, one_time_resolved_status, one_time_completed_at
+    SELECT automation_id, running, running_started_at, active_run_id, last_run_id, last_status, last_run_at, last_success_at, last_failure_at, last_error, last_log_path, last_scheduled_minute, CAST(last_attempt_count AS TEXT) AS last_attempt_count, one_time_resolved_at, one_time_resolved_status, one_time_completed_at
     FROM automation_state
   `).all() as AutomationStateRow[];
 

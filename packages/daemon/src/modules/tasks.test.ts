@@ -364,6 +364,50 @@ describe('tasks module scheduling', () => {
     expect(listAutomationActivityEntries('corrupt-activity-time', { dbPath })).toEqual([]);
   });
 
+  it('sanitizes malformed persisted automation runtime state', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'corrupt-runtime-state',
+      profile: 'assistant',
+      title: 'Corrupt runtime state',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+    openSqliteDatabase(dbPath).prepare(`
+      INSERT INTO automation_state (
+        automation_id, running_started_at, last_status, last_run_at, last_success_at,
+        last_failure_at, last_attempt_count, one_time_resolved_at, one_time_resolved_status,
+        one_time_completed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'corrupt-runtime-state',
+      'not-a-date',
+      'weird',
+      'bad-last-run',
+      'bad-success',
+      'bad-failure',
+      Number.MAX_SAFE_INTEGER + 1,
+      'bad-resolved',
+      'weird-status',
+      'bad-completed',
+    );
+
+    expect(loadAutomationRuntimeStateMap({ dbPath })['corrupt-runtime-state']).toEqual(expect.objectContaining({
+      runningStartedAt: undefined,
+      lastStatus: undefined,
+      lastRunAt: undefined,
+      lastSuccessAt: undefined,
+      lastFailureAt: undefined,
+      lastAttemptCount: undefined,
+      oneTimeResolvedAt: undefined,
+      oneTimeResolvedStatus: undefined,
+      oneTimeCompletedAt: undefined,
+    }));
+  });
+
   it('does not floor fractional task module timer config', () => {
     const module = createTasksModule({
       enabled: true,
