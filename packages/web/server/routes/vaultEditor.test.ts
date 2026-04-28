@@ -11,4 +11,9 @@ describe('vaultEditor image uploads', () => {
     expect(() => decodeVaultImageDataUrl('data:image/png,aGVsbG8='))
       .toThrow('dataUrl must be a base64 data: URL');
   });
+
+  it('rejects non-image data urls before writing attachments', () => {
+    expect(() => decodeVaultImageDataUrl('data:text/plain;base64,aGVsbG8='))
+      .toThrow('dataUrl must be an image data: URL');
+  });
 });

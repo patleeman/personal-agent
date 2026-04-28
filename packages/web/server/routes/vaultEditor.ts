@@ -60,6 +60,10 @@ export function decodeVaultImageDataUrl(dataUrl: string): Buffer {
   }
 
   const metadata = dataUrl.slice(0, commaIndex).toLowerCase();
+  if (!metadata.startsWith('data:image/')) {
+    throw new Error('dataUrl must be an image data: URL');
+  }
+
   if (!metadata.includes(';base64')) {
     throw new Error('dataUrl must be a base64 data: URL');
   }
