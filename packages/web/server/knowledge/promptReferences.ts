@@ -167,7 +167,9 @@ export function expandPromptReferencesWithNodeGraph(input: {
   }
 
   const seedIds = [...new Set([...input.projectIds, ...input.memoryDocIds, ...input.skillNames])];
-  const maxRelatedPerSeed = input.maxRelatedPerSeed ?? 2;
+  const maxRelatedPerSeed = Number.isSafeInteger(input.maxRelatedPerSeed) && (input.maxRelatedPerSeed as number) >= 0
+    ? input.maxRelatedPerSeed as number
+    : 2;
   const projectIds = [...input.projectIds];
   const memoryDocIds = [...input.memoryDocIds];
   const skillNames = [...input.skillNames];

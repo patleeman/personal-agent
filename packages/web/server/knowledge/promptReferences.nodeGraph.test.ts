@@ -100,4 +100,41 @@ describe('expandPromptReferencesWithNodeGraph', () => {
 
     expect(loadUnifiedNodesMock).toHaveBeenCalledWith();
   });
+
+  it('defaults malformed related-node limits instead of honoring fractional values', () => {
+    loadUnifiedNodesMock.mockReturnValue({
+      nodes: [
+        {
+          id: 'seed',
+          type: 'note',
+          kinds: [],
+          links: {
+            related: [],
+            conversations: [],
+            relationships: [
+              { type: 'mentions', targetId: 'one' },
+              { type: 'mentions', targetId: 'two' },
+              { type: 'mentions', targetId: 'three' },
+            ],
+          },
+        },
+        ...['one', 'two', 'three'].map((id) => ({
+          id,
+          type: 'note',
+          kinds: [],
+          links: { related: [], conversations: [], relationships: [] },
+        })),
+      ],
+      parseErrors: [],
+    });
+
+    expect(expandPromptReferencesWithNodeGraph({
+      projectIds: [],
+      memoryDocIds: ['seed'],
+      skillNames: [],
+      maxRelatedPerSeed: 0.5,
+    })).toMatchObject({
+      memoryDocIds: ['seed', 'one', 'two'],
+    });
+  });
 });
