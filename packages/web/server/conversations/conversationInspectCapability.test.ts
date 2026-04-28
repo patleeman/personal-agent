@@ -228,6 +228,41 @@ describe('conversationInspectCapability', () => {
     expect(formatConversationInspectSearchResult(result)).toContain('assistant-1 · text');
   });
 
+  it('centers all-terms search snippets around the first matched term when the phrase is not contiguous', () => {
+    listConversationSessionsSnapshotMock.mockReturnValue([
+      {
+        id: 'conv-search',
+        title: 'Long retrieval thread',
+        cwd: '/repo',
+        file: '/sessions/conv-search.jsonl',
+        timestamp: '2026-04-20T09:59:00.000Z',
+        lastActivityAt: '2026-04-20T09:59:30.000Z',
+        isLive: true,
+        isRunning: false,
+        messageCount: 1,
+      },
+    ]);
+    readSessionBlocksByFileMock.mockReturnValue({
+      blocks: [
+        {
+          type: 'text',
+          id: 'assistant-1',
+          ts: '2026-04-20T10:00:01.000Z',
+          text: `${'intro '.repeat(40)}alpha middle beta conclusion`,
+        },
+      ],
+    });
+
+    const result = searchConversationInspectSessions({
+      query: 'alpha beta',
+      searchMode: 'allTerms',
+      maxSnippetCharacters: 48,
+    });
+
+    expect(result.matches[0]?.snippet).toContain('alpha');
+    expect(result.matches[0]?.snippet).toContain('beta');
+  });
+
   it('queries transcript blocks with type/tool/text filters', () => {
     readConversationSessionMetaMock.mockReturnValue({
       id: 'conv-2',

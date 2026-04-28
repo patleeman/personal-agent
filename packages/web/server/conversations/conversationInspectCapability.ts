@@ -559,28 +559,43 @@ function collectInspectableSessions(input: {
   return { scope, sessions };
 }
 
-function extractQuerySnippet(text: string, query: string, maxCharacters: number): string {
-  const normalizedText = text.replace(/\s+/g, ' ').trim();
-  const normalizedQuery = query.replace(/\s+/g, ' ').trim().toLowerCase();
-  if (!normalizedText || !normalizedQuery) {
-    return '';
+function findSnippetMatch(text: string, query: string, mode: ConversationInspectSearchMode): { index: number; length: number } | null {
+  const phrase = query.replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!phrase) {
+    return null;
   }
 
-  const lowerText = normalizedText.toLowerCase();
-  const matchIndex = lowerText.indexOf(normalizedQuery);
-  if (matchIndex < 0) {
-    return truncateText(normalizedText, maxCharacters).text;
+  if (mode === 'phrase') {
+    const index = text.toLowerCase().indexOf(phrase);
+    return index >= 0 ? { index, length: phrase.length } : null;
+  }
+
+  const lowerText = text.toLowerCase();
+  const matches = splitSearchTerms(query)
+    .map((term) => ({ term, index: lowerText.indexOf(term) }))
+    .filter((match) => match.index >= 0)
+    .sort((left, right) => left.index - right.index);
+
+  const firstMatch = matches[0];
+  return firstMatch ? { index: firstMatch.index, length: firstMatch.term.length } : null;
+}
+
+function extractQuerySnippet(text: string, query: string, mode: ConversationInspectSearchMode, maxCharacters: number): string {
+  const normalizedText = text.replace(/\s+/g, ' ').trim();
+  const match = findSnippetMatch(normalizedText, query, mode);
+  if (!normalizedText || !match) {
+    return '';
   }
 
   if (normalizedText.length <= maxCharacters) {
     return normalizedText;
   }
 
-  const remaining = Math.max(0, maxCharacters - normalizedQuery.length);
+  const remaining = Math.max(0, maxCharacters - match.length);
   const leftContext = Math.floor(remaining / 2);
   const rightContext = remaining - leftContext;
-  const start = Math.max(0, matchIndex - leftContext);
-  const end = Math.min(normalizedText.length, matchIndex + normalizedQuery.length + rightContext);
+  const start = Math.max(0, match.index - leftContext);
+  const end = Math.min(normalizedText.length, match.index + match.length + rightContext);
   const rawSnippet = normalizedText.slice(start, end).trim();
 
   return `${start > 0 ? '…' : ''}${rawSnippet}${end < normalizedText.length ? '…' : ''}`;
@@ -819,7 +834,7 @@ export function searchConversationInspectSessions(input: {
       blockId: matchEntry.block.id,
       blockType: matchEntry.block.type as ConversationInspectBlockType,
       blockIndex: matchEntry.index,
-      snippet: extractQuerySnippet(matchEntry.searchText, query, maxSnippetCharacters),
+      snippet: extractQuerySnippet(matchEntry.searchText, query, mode, maxSnippetCharacters),
       ...(includeAroundMatches ? { contextBlocks: sanitizeBlocks(contextEntries, maxCharactersPerBlock) } : {}),
     });
   }
