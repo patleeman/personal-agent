@@ -110,7 +110,7 @@ function parseNonNegativeIntegerPath(value: string): number | null {
 function parsePositiveIntegerQuery(rawValue: unknown): number | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
   if (typeof candidate === 'number') {
-    return Number.isInteger(candidate) && candidate > 0 ? candidate : Number.NaN;
+    return Number.isSafeInteger(candidate) && candidate > 0 ? candidate : Number.NaN;
   }
   if (typeof candidate !== 'string') {
     return undefined;
@@ -120,7 +120,7 @@ function parsePositiveIntegerQuery(rawValue: unknown): number | undefined {
     return Number.NaN;
   }
   const parsed = Number.parseInt(trimmed, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 function parseTrimmedQueryString(rawValue: unknown): string | undefined {
