@@ -58,6 +58,26 @@ function normalizePendingRelatedConversationIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentRefInput[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((attachmentRef): attachmentRef is { attachmentId: string; revision?: number } => (
+      !!attachmentRef
+      && typeof attachmentRef === 'object'
+      && typeof attachmentRef.attachmentId === 'string'
+      && attachmentRef.attachmentId.trim().length > 0
+      && (attachmentRef.revision === undefined
+        || (Number.isInteger(attachmentRef.revision) && attachmentRef.revision > 0))
+    ))
+    .map((attachmentRef) => ({
+      attachmentId: attachmentRef.attachmentId.trim(),
+      ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
+    }));
+}
+
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
 
 export interface PendingConversationPromptChangedDetail {
@@ -125,18 +145,19 @@ export function persistPendingConversationPrompt(
 
   const contextMessages = normalizePendingPromptContextMessages(prompt.contextMessages);
   const relatedConversationIds = normalizePendingRelatedConversationIds(prompt.relatedConversationIds);
+  const attachmentRefs = normalizePendingPromptAttachmentRefs(prompt.attachmentRefs);
   const nextPrompt: PendingConversationPrompt = {
     text: prompt.text,
     ...(prompt.behavior ? { behavior: prompt.behavior } : {}),
     images: prompt.images,
-    attachmentRefs: prompt.attachmentRefs,
+    attachmentRefs,
     ...(contextMessages.length > 0 ? { contextMessages } : {}),
     ...(relatedConversationIds.length > 0 ? { relatedConversationIds } : {}),
   };
 
   const shouldPersist = nextPrompt.text.trim().length > 0
     || nextPrompt.images.length > 0
-    || nextPrompt.attachmentRefs.length > 0
+    || attachmentRefs.length > 0
     || contextMessages.length > 0
     || relatedConversationIds.length > 0;
   if (!shouldPersist) {
@@ -193,21 +214,7 @@ export function readPendingConversationPrompt(
           }))
         : [];
 
-      const attachmentRefs = Array.isArray(parsed.attachmentRefs)
-        ? parsed.attachmentRefs
-          .filter((attachmentRef): attachmentRef is { attachmentId: string; revision?: number } => (
-            !!attachmentRef
-            && typeof attachmentRef === 'object'
-            && typeof attachmentRef.attachmentId === 'string'
-            && attachmentRef.attachmentId.trim().length > 0
-            && (attachmentRef.revision === undefined
-              || (Number.isInteger(attachmentRef.revision) && attachmentRef.revision > 0))
-          ))
-          .map((attachmentRef) => ({
-            attachmentId: attachmentRef.attachmentId.trim(),
-            ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
-          }))
-        : [];
+      const attachmentRefs = normalizePendingPromptAttachmentRefs(parsed.attachmentRefs);
       const contextMessages = normalizePendingPromptContextMessages(parsed.contextMessages);
       const relatedConversationIds = normalizePendingRelatedConversationIds(parsed.relatedConversationIds);
 

@@ -64,6 +64,26 @@ describe('pendingConversationPrompt helpers', () => {
     });
   });
 
+  it('normalizes attachment refs before caching pending prompts in memory', () => {
+    persistPendingConversationPrompt('session-refs', {
+      text: 'hello world',
+      images: [],
+      attachmentRefs: [
+        { attachmentId: ' diagram-1 ', revision: 2 },
+        { attachmentId: '   ' },
+        { attachmentId: 'bad-revision', revision: 0 },
+      ],
+    }, null);
+
+    expect(readPendingConversationPrompt('session-refs', null)).toEqual({
+      text: 'hello world',
+      images: [],
+      attachmentRefs: [{ attachmentId: 'diagram-1', revision: 2 }],
+    });
+
+    clearPendingConversationPrompt('session-refs', null);
+  });
+
   it('keeps prompts available in memory even when storage is unavailable', () => {
     persistPendingConversationPrompt('session-in-memory', {
       text: 'hello world',
