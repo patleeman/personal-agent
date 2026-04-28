@@ -56,4 +56,19 @@ describe('localApiStreams', () => {
       { type: 'message', data: JSON.stringify({ type: 'snapshot', blocks: [], blockOffset: 0, totalBlocks: 0, isStreaming: false }) },
     ]));
   });
+
+  it('ignores unsafe live stream tailBlocks', async () => {
+    const unsubscribe = vi.fn();
+    subscribeLiveSessionMock.mockImplementation((_sessionId, listener) => {
+      listener({ type: 'snapshot', blocks: [], blockOffset: 0, totalBlocks: 0, isStreaming: false });
+      return unsubscribe;
+    });
+
+    await subscribeDesktopLocalApiStreamByUrl(
+      new URL(`http://local.test/api/live-sessions/session-1/events?tailBlocks=${Number.MAX_SAFE_INTEGER + 1}`),
+      vi.fn(),
+    );
+
+    expect(subscribeLiveSessionMock).toHaveBeenCalledWith('session-1', expect.any(Function), {});
+  });
 });

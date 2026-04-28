@@ -32,7 +32,7 @@ function parsePositiveInteger(raw: string | null, options?: { minimum?: number; 
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  if (!Number.isInteger(parsed)) {
+  if (!Number.isSafeInteger(parsed)) {
     return undefined;
   }
 
