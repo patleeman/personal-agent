@@ -76,6 +76,10 @@ function toScheduleType(value: unknown): TaskRuntimeState['scheduleType'] {
   return 'cron';
 }
 
+function toNonNegativeInteger(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
 function parseTaskRecord(_key: string, value: unknown): TaskRuntimeState | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -103,9 +107,7 @@ function parseTaskRecord(_key: string, value: unknown): TaskRuntimeState | undef
     lastError: toString(value.lastError),
     lastLogPath: toString(value.lastLogPath),
     lastScheduledMinute: toString(value.lastScheduledMinute),
-    lastAttemptCount: typeof value.lastAttemptCount === 'number'
-      ? value.lastAttemptCount
-      : undefined,
+    lastAttemptCount: toNonNegativeInteger(value.lastAttemptCount),
     oneTimeResolvedAt: toTimestampString(value.oneTimeResolvedAt),
     oneTimeResolvedStatus: toOneTimeStatus(value.oneTimeResolvedStatus),
     oneTimeCompletedAt: toTimestampString(value.oneTimeCompletedAt),

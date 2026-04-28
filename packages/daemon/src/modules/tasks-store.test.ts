@@ -90,7 +90,7 @@ describe('tasks-store', () => {
           lastFailureAt: 'still-not-a-date',
           lastStatus: 'unexpected',
           lastError: '',
-          lastAttemptCount: '5',
+          lastAttemptCount: Number.MAX_SAFE_INTEGER + 1,
           oneTimeResolvedAt: 'bad-time',
           oneTimeResolvedStatus: 'bad-value',
           oneTimeCompletedAt: 'bad-completed-time',
