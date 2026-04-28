@@ -150,19 +150,27 @@ function getLiveSessionCapabilityContext(): LiveSessionCapabilityContext {
   };
 }
 
+function readPromptImages(value: unknown): Array<{ data: string; mimeType: string; name?: string }> | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  return value
+    .filter((image): image is { data?: unknown; mimeType?: unknown; name?: unknown } => !!image && typeof image === 'object')
+    .map((image) => ({
+      data: typeof image.data === 'string' ? image.data : '',
+      mimeType: typeof image.mimeType === 'string' ? image.mimeType : '',
+      ...(typeof image.name === 'string' ? { name: image.name } : {}),
+    }));
+}
+
 export async function handleLiveSessionPrompt(req: Request, res: Response): Promise<void> {
   try {
     const result = await submitLiveSessionPromptCapability({
       conversationId: req.params.id,
       text: typeof req.body?.text === 'string' ? req.body.text : '',
       behavior: req.body?.behavior,
-      images: Array.isArray(req.body?.images)
-        ? req.body.images.map((image: { data: string; mimeType: string; name?: string }) => ({
-            data: image.data,
-            mimeType: image.mimeType,
-            ...(image.name ? { name: image.name } : {}),
-          }))
-        : undefined,
+      images: readPromptImages(req.body?.images),
       attachmentRefs: req.body?.attachmentRefs,
       contextMessages: req.body?.contextMessages,
       relatedConversationIds: req.body?.relatedConversationIds,
@@ -190,13 +198,7 @@ export async function handleLiveSessionParallelPrompt(req: Request, res: Respons
     const result = await submitLiveSessionParallelPromptCapability({
       conversationId: req.params.id,
       text: typeof req.body?.text === 'string' ? req.body.text : '',
-      images: Array.isArray(req.body?.images)
-        ? req.body.images.map((image: { data: string; mimeType: string; name?: string }) => ({
-            data: image.data,
-            mimeType: image.mimeType,
-            ...(image.name ? { name: image.name } : {}),
-          }))
-        : undefined,
+      images: readPromptImages(req.body?.images),
       attachmentRefs: req.body?.attachmentRefs,
       contextMessages: req.body?.contextMessages,
       relatedConversationIds: req.body?.relatedConversationIds,
