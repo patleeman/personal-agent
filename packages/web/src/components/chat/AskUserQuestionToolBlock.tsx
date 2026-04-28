@@ -50,12 +50,36 @@ export function summarizeAskUserQuestionAnswer(block: Extract<MessageBlock, { ty
     return text.length > 180 ? `${text.slice(0, 179)}…` : text;
   }
 
-  const imageCount = block.images?.length ?? 0;
+  const imageCount = (block.images ?? []).filter(isValidAskUserQuestionAnswerImage).length;
   if (imageCount > 0) {
     return imageCount === 1 ? 'Sent 1 image attachment.' : `Sent ${imageCount} image attachments.`;
   }
 
   return null;
+}
+
+function isValidAskUserQuestionAnswerImage(image: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>[number]): boolean {
+  const mimeType = typeof image.mimeType === 'string' ? image.mimeType.trim().toLowerCase() : '';
+  if (!mimeType.startsWith('image/')) {
+    return false;
+  }
+
+  const src = typeof image.src === 'string' ? image.src.trim() : '';
+  if (!src) {
+    return true;
+  }
+  const normalized = src.toLowerCase();
+  if (src.startsWith('blob:')) {
+    return true;
+  }
+  if (!normalized.startsWith('data:image/') || !normalized.includes(';base64,')) {
+    return false;
+  }
+  const commaIndex = src.indexOf(',');
+  const base64 = commaIndex >= 0 ? src.slice(commaIndex + 1).trim() : '';
+  return Boolean(base64)
+    && base64.length % 4 !== 1
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }
 
 export function AskUserQuestionToolBlock({
