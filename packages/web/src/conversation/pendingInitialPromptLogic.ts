@@ -90,7 +90,8 @@ export function pendingPromptImagesMatchMessageImages(
         ? `data:${pendingImage.mimeType};base64,${pendingImage.data}`
         : '';
       if (pendingPreviewUrl || messageImage.src) {
-        return messageImage.src === pendingPreviewUrl || messageImage.src === pendingDataUrl;
+        return (isSafePendingPromptImageUrl(pendingPreviewUrl) && messageImage.src === pendingPreviewUrl)
+          || (isSafePendingPromptImageUrl(pendingDataUrl) && messageImage.src === pendingDataUrl);
       }
 
       const pendingName = pendingImage.name?.trim() || '';
@@ -105,4 +106,13 @@ export function pendingPromptImagesMatchMessageImages(
 
       return true;
     });
+}
+
+function isSafePendingPromptImageUrl(value: string): boolean {
+  if (!value) {
+    return false;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  return value.startsWith('blob:') || (normalized.startsWith('data:image/') && normalized.includes(';base64,'));
 }
