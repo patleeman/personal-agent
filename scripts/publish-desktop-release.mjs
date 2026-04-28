@@ -542,19 +542,27 @@ function notarizeDistributionContainers(env, files) {
   }
 }
 
-function requireSmokeTestApproval(env, releaseDir) {
+function requireSmokeTestApproval(env, releaseDir, buildRoot) {
   if (isTruthyEnv(env.PERSONAL_AGENT_RELEASE_SMOKE_TESTED)) {
     console.log('Release smoke test gate acknowledged via PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1.');
     return;
   }
 
   const appPath = resolve(releaseDir, 'mac-arm64', 'Personal Agent.app');
+  const smokeScriptPath = resolve(buildRoot, 'scripts', 'smoke-desktop-release.mjs');
+
+  if (!isTruthyEnv(env.PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE)) {
+    console.log('Running automated release smoke test against the built app with isolated daemon state...');
+    run('node', [smokeScriptPath, appPath], { cwd: buildRoot, env });
+    return;
+  }
 
   if (!process.stdin.isTTY) {
     fail([
       'Release smoke test is required before pushing/uploading artifacts.',
       `Test the built app at: ${appPath}`,
       'Then rerun with PERSONAL_AGENT_RELEASE_SMOKE_TESTED=1 once startup and core app flows pass.',
+      'Automated smoke was skipped by PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1.',
     ].join('\n'));
   }
 
@@ -591,7 +599,7 @@ validatePackagedRuntimeDependencies(buildRoot, releaseDir);
 
 const files = collectReleaseFiles(releaseDir, version);
 notarizeDistributionContainers(env, files);
-requireSmokeTestApproval(env, releaseDir);
+requireSmokeTestApproval(env, releaseDir, buildRoot);
 
 console.log(`Pushing ${tag} to GitHub...`);
 pushReleaseRef(tag);

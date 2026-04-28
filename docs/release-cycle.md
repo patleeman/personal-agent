@@ -35,7 +35,23 @@ npm run release:publish
 
 ## Built binary smoke test
 
-`npm run release:publish` stops after signing/notarization and before pushing the tag or uploading release assets. At that gate, test the built app from the release output, usually:
+`npm run release:publish` runs an automated smoke test after signing/notarization and before pushing the tag or uploading release assets. The smoke test launches the built `.app` with an isolated temporary `PERSONAL_AGENT_STATE_ROOT`, daemon socket, and companion port so an already-running user daemon cannot block the release check.
+
+The automated check verifies:
+
+1. the built app process starts
+2. the Electron renderer exposes a page over CDP
+3. the initial app route renders non-empty UI without startup-error text
+4. the Knowledge route renders
+5. the conversation route renders
+
+If you need to run the same check manually:
+
+```bash
+node scripts/smoke-desktop-release.mjs "<release-snapshot>/dist/release/mac-arm64/Personal Agent.app"
+```
+
+If the automated check is unavailable and you need to do the older manual gate, set `PERSONAL_AGENT_RELEASE_SKIP_AUTOMATED_SMOKE=1`. The script will stop and ask you to test the built app from the release output, usually:
 
 ```bash
 open -n "<release-snapshot>/dist/release/mac-arm64/Personal Agent.app"
