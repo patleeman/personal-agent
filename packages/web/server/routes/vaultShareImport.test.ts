@@ -65,6 +65,22 @@ describe('vaultShareImport', () => {
     })).rejects.toThrow('Shared image data must be valid base64.');
   });
 
+  it('rejects non-base64 shared image data urls', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-non-base64-image-'));
+    const targetDirAbs = join(root, 'Inbox');
+
+    await expect(importVaultSharedItem({
+      kind: 'image',
+      root,
+      targetDirAbs,
+      title: 'Bad Screenshot',
+      mimeType: 'image/png',
+      fileName: 'screenshot.png',
+      dataBase64: 'data:image/png,aGVsbG8=',
+      createdAt: '2026-04-22T12:00:00.000Z',
+    })).rejects.toThrow('Shared image data URL must be base64-encoded.');
+  });
+
   it('extracts readable markdown for shared URLs', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-url-'));
     const targetDirAbs = join(root, 'Inbox');

@@ -199,7 +199,14 @@ async function buildSharedUrlNote(input: {
 
 function decodeSharedBase64(value: string): Buffer {
   const trimmed = value.trim();
-  const base64 = trimmed.startsWith('data:') ? trimmed.slice(trimmed.indexOf(',') + 1) : trimmed;
+  let base64 = trimmed;
+  if (trimmed.startsWith('data:')) {
+    const commaIndex = trimmed.indexOf(',');
+    if (commaIndex < 0 || !trimmed.slice(0, commaIndex).toLowerCase().includes(';base64')) {
+      throw new Error('Shared image data URL must be base64-encoded.');
+    }
+    base64 = trimmed.slice(commaIndex + 1);
+  }
   const normalized = base64.trim();
   if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
     throw new Error('Shared image data must be valid base64.');
