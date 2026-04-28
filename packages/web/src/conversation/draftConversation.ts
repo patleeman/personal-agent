@@ -113,7 +113,17 @@ function normalizeDraftConversationImagePreviewUrl(value: unknown): string | nul
   }
 
   const lowerPreviewUrl = previewUrl.toLowerCase();
-  return previewUrl.startsWith('blob:') || (lowerPreviewUrl.startsWith('data:image/') && lowerPreviewUrl.includes(';base64,'))
+  if (previewUrl.startsWith('blob:')) {
+    return previewUrl;
+  }
+  if (!lowerPreviewUrl.startsWith('data:image/') || !lowerPreviewUrl.includes(';base64,')) {
+    return null;
+  }
+  const commaIndex = previewUrl.indexOf(',');
+  const base64 = commaIndex >= 0 ? previewUrl.slice(commaIndex + 1).trim() : '';
+  return base64
+    && base64.length % 4 !== 1
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)
     ? previewUrl
     : null;
 }
