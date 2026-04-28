@@ -45,6 +45,7 @@ import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperat
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
+import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from '../conversation/toolAutoOpen';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
 import { formatThinkingLevelLabel } from '../conversation/conversationHeader';
@@ -332,6 +333,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const navigate = useNavigate();
   const selectedArtifactId = getConversationArtifactIdFromSearch(location.search);
   const selectedCheckpointId = getConversationCheckpointIdFromSearch(location.search);
+  const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
+  const artifactOpensInWorkbenchPane = appLayoutMode === 'workbench' && new URLSearchParams(location.search).get('view') !== 'zen';
   const { versions } = useAppEvents();
   const { tasks, sessions, runs, setRuns, setSessions } = useAppData();
   const conversationEventVersion = useConversationEventVersion(id);
@@ -366,6 +369,19 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedCheckpointId]);
+
+  useEffect(() => {
+    function handleAppLayoutModeChanged() {
+      setAppLayoutMode(readAppLayoutMode());
+    }
+
+    window.addEventListener(APP_LAYOUT_MODE_CHANGED_EVENT, handleAppLayoutModeChanged);
+    window.addEventListener('storage', handleAppLayoutModeChanged);
+    return () => {
+      window.removeEventListener(APP_LAYOUT_MODE_CHANGED_EVENT, handleAppLayoutModeChanged);
+      window.removeEventListener('storage', handleAppLayoutModeChanged);
+    };
+  }, []);
 
   useEffect(() => {
     if (draft || !id) {
@@ -5925,7 +5941,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         />
       ) : null}
 
-      {selectedArtifactId && id && (
+      {selectedArtifactId && id && !artifactOpensInWorkbenchPane && (
         <Suspense fallback={null}>
           <ConversationArtifactModal conversationId={id} artifactId={selectedArtifactId} />
         </Suspense>
