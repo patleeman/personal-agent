@@ -82,6 +82,7 @@ describe('liveSessionQueue', () => {
         { type: 'image', data: '   ', mimeType: 'image/png' },
         { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
         { type: 'image', data: 'missing-mime', mimeType: '' },
+        { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
       ],
     }, 'fallback');
 

@@ -266,7 +266,7 @@ export function extractQueuedPromptContent(
       && typeof (part as { mimeType?: unknown }).mimeType === 'string') {
       const data = normalizeQueuedPromptImageData((part as { data: string }).data);
       const mimeType = (part as { mimeType: string }).mimeType.trim();
-      if (!data || !mimeType) {
+      if (!data || !mimeType.toLowerCase().startsWith('image/')) {
         continue;
       }
 
