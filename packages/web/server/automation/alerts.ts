@@ -42,6 +42,15 @@ function resolveValidNow(input?: Date): Date {
   return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
 }
 
+function normalizeIsoTimestamp(value: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
 function resolveSnoozeDueAt(input: { delay?: string; at?: string; now?: Date }): string {
   const now = resolveValidNow(input.now);
 
@@ -62,16 +71,16 @@ function resolveSnoozeDueAt(input: { delay?: string; at?: string; now?: Date }):
     return new Date(now.getTime() + delayMs).toISOString();
   }
 
-  const parsedAt = Date.parse(input.at as string);
-  if (!Number.isFinite(parsedAt)) {
+  const dueAt = normalizeIsoTimestamp(input.at as string);
+  if (!dueAt) {
     throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
   }
 
-  if (parsedAt <= now.getTime()) {
+  if (Date.parse(dueAt) <= now.getTime()) {
     throw new Error('Snooze time must be in the future.');
   }
 
-  return new Date(parsedAt).toISOString();
+  return dueAt;
 }
 
 export function listAlertsForProfile(profile: string): AlertSummary[] {

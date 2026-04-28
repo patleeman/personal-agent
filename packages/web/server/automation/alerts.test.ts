@@ -108,6 +108,10 @@ describe('alerts server helpers', () => {
       'Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.',
     );
 
+    await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', { at: '9999' })).rejects.toThrow(
+      'Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.',
+    );
+
     await expect(snoozeAlertForProfile('shared', 'wakeup-alert-1', {
       at: '2026-03-26T13:59:00.000Z',
       now: new Date('2026-03-26T14:00:00.000Z'),
