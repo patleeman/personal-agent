@@ -13,4 +13,10 @@ describe('shared time utilities', () => {
     expect(timeAgoCompact('1')).toBe('now');
     expect(formatDate('9999')).toBe('');
   });
+
+  it('does not render normalized date labels for overflowed timestamps', () => {
+    expect(timeAgo('2026-02-31T09:00:00.000Z')).toBe('just now');
+    expect(timeAgoCompact('2026-02-31T09:00:00.000Z')).toBe('now');
+    expect(formatDate('2026-02-31T09:00:00.000Z')).toBe('');
+  });
 });
