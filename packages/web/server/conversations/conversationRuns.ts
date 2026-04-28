@@ -41,8 +41,17 @@ function normalizeOptionalTimestamp(value: string | Date | undefined): string | 
     return undefined;
   }
 
+  if (typeof value === 'string' && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return undefined;
+  }
+
   const parsed = value instanceof Date ? value.getTime() : Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  const normalized = new Date(parsed).toISOString();
+  return typeof value === 'string' && normalized !== value ? undefined : normalized;
 }
 
 export async function syncWebLiveConversationRun(input: {
