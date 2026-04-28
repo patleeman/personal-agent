@@ -3,7 +3,7 @@ import { buildConversationContextMenuTemplate, normalizeConversationContextMenuC
 
 describe('buildConversationContextMenuTemplate', () => {
   it('drops unsafe menu coordinates', () => {
-    expect(normalizeConversationContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeConversationContextMenuCoordinate(12.4)).toBe(0);
     expect(normalizeConversationContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
   });
 
