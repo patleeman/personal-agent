@@ -68,6 +68,12 @@ function normalizeRecentWindowDays(value: number | null | undefined): number | n
     : DEFAULT_RECENT_WINDOW_DAYS;
 }
 
+function normalizeNowMs(value: number | undefined): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : Date.now();
+}
+
 function scoreField(token: string, value: string | undefined, weight: number): number | null {
   const normalizedValue = normalizeField(value);
   if (!normalizedValue) {
@@ -240,7 +246,7 @@ export function selectRecentConversationCandidates(
     closedOnly?: boolean;
   } = {},
 ): SessionMeta[] {
-  const nowMs = options.nowMs ?? Date.now();
+  const nowMs = normalizeNowMs(options.nowMs);
   const recentWindowDays = normalizeRecentWindowDays(options.recentWindowDays);
   const recentWindowMs = recentWindowDays === null
     ? null
@@ -315,7 +321,7 @@ export function rankRelatedConversationSessions(input: {
   }
 
   const workspaceCwd = normalizePath(input.workspaceCwd);
-  const nowMs = input.nowMs ?? Date.now();
+  const nowMs = normalizeNowMs(input.nowMs);
   const limit = normalizePositiveIntegerLimit(input.limit, 9);
 
   return input.sessions

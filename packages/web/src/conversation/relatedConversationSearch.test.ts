@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates } from './relatedConversationSearch';
 
@@ -34,6 +34,10 @@ function buildSummary(overrides: Partial<ConversationSummaryRecord> & Pick<Conve
     updatedAt: overrides.updatedAt ?? '2026-04-13T09:00:00.000Z',
   };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('selectRecentConversationCandidates', () => {
   it('keeps only recent conversations from the active workspace', () => {
@@ -149,6 +153,30 @@ describe('selectRecentConversationCandidates', () => {
       workspaceCwd: '/repo/current',
       nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
       recentWindowDays: Number.MAX_SAFE_INTEGER + 1,
+    }).map((session) => session.id)).toEqual(['recent-current']);
+  });
+
+  it('uses the current clock for unsafe current-time values', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-13T09:00:00.000Z'));
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'stale-current',
+        title: 'Stale current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-03-01T09:00:00.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: -Number.MAX_SAFE_INTEGER - 1,
     }).map((session) => session.id)).toEqual(['recent-current']);
   });
 });
