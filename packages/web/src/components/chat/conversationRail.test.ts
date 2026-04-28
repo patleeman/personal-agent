@@ -117,6 +117,16 @@ describe('conversation rail turns', () => {
     ]);
   });
 
+  it('defaults fractional snippet limits instead of letting slice truncate them', () => {
+    const messages: MessageBlock[] = [
+      { type: 'user', ts: '2026-03-10T20:00:00.000Z', text: 'Please keep this readable' },
+    ];
+
+    expect(getConversationRailTurns(messages, 3.5)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: 'Please keep this readable' },
+    ]);
+  });
+
   it('can offset marker indexes for windowed transcript slices', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-10T20:00:00.000Z', text: 'Windowed user turn' },

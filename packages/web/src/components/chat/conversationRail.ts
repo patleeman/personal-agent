@@ -36,13 +36,16 @@ function collapseWhitespace(value: string): string {
 }
 
 function truncateSnippet(value: string, maxLength = DEFAULT_SNIPPET_LIMIT): string {
-  if (value.length <= maxLength) {
+  const limit = Number.isSafeInteger(maxLength) && maxLength > 0
+    ? maxLength
+    : DEFAULT_SNIPPET_LIMIT;
+  if (value.length <= limit) {
     return value;
   }
 
-  const sliced = value.slice(0, Math.max(1, maxLength - 1));
+  const sliced = value.slice(0, Math.max(1, limit - 1));
   const boundary = sliced.lastIndexOf(' ');
-  const preferred = boundary >= Math.floor(maxLength * 0.6)
+  const preferred = boundary >= Math.floor(limit * 0.6)
     ? sliced.slice(0, boundary)
     : sliced;
 
