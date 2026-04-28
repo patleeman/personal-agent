@@ -5,6 +5,7 @@ const DEFAULT_PREVIEW_BACKGROUND = '#ffffff';
 const DEFAULT_PREVIEW_EXPORT_PADDING = 16;
 const MIN_PREVIEW_LONG_SIDE = 900;
 const MAX_PREVIEW_LONG_SIDE = 1600;
+const MAX_PERSISTED_CANVAS_DIMENSION = 16_000;
 const PREVIEW_FRAME_INSET_RATIO = 0.08;
 const MIN_PREVIEW_FRAME_INSET = 40;
 
@@ -107,7 +108,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 }
 
 function positiveFiniteNumber(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_PERSISTED_CANVAS_DIMENSION
     ? value
     : null;
 }
