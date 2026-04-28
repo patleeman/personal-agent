@@ -17,6 +17,7 @@ import {
   shouldFetchConversationAttachments,
   shouldRenderConversationRail,
   replaceConversationMetaInSessionList,
+  resolveConversationExecutionOverride,
 } from './ConversationPage.js';
 import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
 
@@ -50,6 +51,19 @@ function findFirstNodeByClass(node: ParsedNode, className: string): ParsedNode |
 }
 
 describe('desktop conversation state fallback', () => {
+  it('preserves partial remote execution identity overrides', () => {
+    expect(resolveConversationExecutionOverride({
+      remoteConversationId: ' remote-1 ',
+    })).toEqual({ remoteConversationId: 'remote-1' });
+
+    expect(resolveConversationExecutionOverride({
+      remoteHostId: ' host-1 ',
+      remoteHostLabel: 'Remote Host',
+    })).toEqual({ remoteHostId: 'host-1', remoteHostLabel: 'Remote Host' });
+
+    expect(resolveConversationExecutionOverride({})).toBeNull();
+  });
+
   it('syncs active conversation meta back into the session list', () => {
     const sessions = [{
       id: 'conv-123',

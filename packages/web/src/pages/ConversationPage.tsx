@@ -289,6 +289,22 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 
+export function resolveConversationExecutionOverride(
+  meta: Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null | undefined,
+): Pick<SessionMeta, 'remoteHostId' | 'remoteHostLabel' | 'remoteConversationId'> | null {
+  const remoteHostId = meta?.remoteHostId?.trim() || '';
+  const remoteConversationId = meta?.remoteConversationId?.trim() || '';
+  if (!remoteHostId && !remoteConversationId) {
+    return null;
+  }
+
+  return {
+    ...(remoteHostId ? { remoteHostId } : {}),
+    ...(meta?.remoteHostLabel ? { remoteHostLabel: meta.remoteHostLabel } : {}),
+    ...(remoteConversationId ? { remoteConversationId } : {}),
+  };
+}
+
 function hasBlockingOverlayOpen(): boolean {
   return typeof document !== 'undefined' && hasBlockingConversationOverlay();
 }
@@ -368,15 +384,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       : rawSessionSnapshot;
   }, [conversationExecutionOverride, rawSessionSnapshot]);
   useEffect(() => {
-    setConversationExecutionOverride(
-      rawSessionSnapshot?.remoteHostId && rawSessionSnapshot?.remoteConversationId
-        ? {
-            remoteHostId: rawSessionSnapshot.remoteHostId,
-            remoteHostLabel: rawSessionSnapshot.remoteHostLabel,
-            remoteConversationId: rawSessionSnapshot.remoteConversationId,
-          }
-        : null,
-    );
+    setConversationExecutionOverride(resolveConversationExecutionOverride(rawSessionSnapshot));
   }, [rawSessionSnapshot?.id, rawSessionSnapshot?.remoteConversationId, rawSessionSnapshot?.remoteHostId, rawSessionSnapshot?.remoteHostLabel]);
 
   useEffect(() => {
@@ -1364,15 +1372,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     setContinueInBusy(true);
     try {
       const result = await api.continueConversationInHost(id, hostId);
-      setConversationExecutionOverride(
-        result.remoteHostId && result.remoteConversationId
-          ? {
-              remoteHostId: result.remoteHostId,
-              remoteHostLabel: result.remoteHostLabel,
-              remoteConversationId: result.remoteConversationId,
-            }
-          : null,
-      );
+      setConversationExecutionOverride(resolveConversationExecutionOverride(result));
       showNotice(
         'accent',
         result.remoteHostId
