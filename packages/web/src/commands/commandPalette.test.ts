@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   isCommandPaletteThreadDataLoading,
+  resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
   shouldBootstrapCommandPaletteThreads,
   type CommandPaletteItem,
@@ -143,5 +144,12 @@ describe('command palette search', () => {
     expect(isCommandPaletteThreadDataLoading({ sessions: null, sessionsLoading: false })).toBe(true);
     expect(isCommandPaletteThreadDataLoading({ sessions: [], sessionsLoading: true })).toBe(true);
     expect(isCommandPaletteThreadDataLoading({ sessions: [], sessionsLoading: false })).toBe(false);
+  });
+
+  it('maps command palette hotkeys to the intended scopes', () => {
+    expect(resolveCommandPaletteHotkeyScope({ key: 'k', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false })).toBe('threads');
+    expect(resolveCommandPaletteHotkeyScope({ key: 'p', metaKey: false, ctrlKey: true, altKey: false, shiftKey: false })).toBe('files');
+    expect(resolveCommandPaletteHotkeyScope({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: true })).toBe('search');
+    expect(resolveCommandPaletteHotkeyScope({ key: 'f', metaKey: true, ctrlKey: false, altKey: false, shiftKey: false })).toBeNull();
   });
 });

@@ -7,6 +7,7 @@ import {
   COMMAND_PALETTE_SCOPE_SECTIONS,
   COMMAND_PALETTE_SECTION_LABELS,
   isCommandPaletteThreadDataLoading,
+  resolveCommandPaletteHotkeyScope,
   searchCommandPaletteItems,
   shouldBootstrapCommandPaletteThreads,
   type CommandPaletteItem,
@@ -39,26 +40,6 @@ const CONVERSATION_CONTENT_SEARCH_DEBOUNCE_MS = 160;
 
 function hasBlockingOverlayOpen(): boolean {
   return document.querySelector('.ui-overlay-backdrop:not([data-command-palette="true"])') !== null;
-}
-
-function isPrimaryModifierPressed(event: KeyboardEvent): boolean {
-  return event.metaKey || event.ctrlKey;
-}
-
-function normalizeHotkeyKey(event: KeyboardEvent): string {
-  return event.key.length === 1 ? event.key.toLowerCase() : event.key;
-}
-
-function isCommandPaletteHotkey(event: KeyboardEvent): boolean {
-  return normalizeHotkeyKey(event) === 'k' && isPrimaryModifierPressed(event) && !event.altKey && !event.shiftKey;
-}
-
-function isFilePaletteHotkey(event: KeyboardEvent): boolean {
-  return normalizeHotkeyKey(event) === 'p' && isPrimaryModifierPressed(event) && !event.altKey && !event.shiftKey;
-}
-
-function isSearchAllHotkey(event: KeyboardEvent): boolean {
-  return normalizeHotkeyKey(event) === 'f' && isPrimaryModifierPressed(event) && !event.altKey && event.shiftKey;
 }
 
 function isMacPlatform(): boolean {
@@ -575,13 +556,7 @@ export function CommandPalette() {
         return;
       }
 
-      const nextScope = isSearchAllHotkey(event)
-        ? 'threads'
-        : isFilePaletteHotkey(event)
-          ? 'files'
-          : isCommandPaletteHotkey(event)
-            ? 'threads'
-            : null;
+      const nextScope = resolveCommandPaletteHotkeyScope(event);
 
       if (nextScope) {
         if (!open && hasBlockingOverlayOpen()) {
@@ -589,7 +564,7 @@ export function CommandPalette() {
         }
 
         event.preventDefault();
-        if (isCommandPaletteHotkey(event) && open) {
+        if (nextScope === 'threads' && open) {
           closePalette();
         } else {
           openPalette({ scope: nextScope });
