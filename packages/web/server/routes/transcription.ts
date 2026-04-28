@@ -28,6 +28,12 @@ export function readRequiredBase64(value: unknown, label: string): Buffer {
   return decoded;
 }
 
+function isTranscriptionClientInputError(message: string): boolean {
+  return message.endsWith(' is required.')
+    || message.endsWith(' must contain valid base64 data.')
+    || message.endsWith(' must decode to non-empty data.');
+}
+
 export function registerTranscriptionRoutes(
   router: Pick<Express, 'get' | 'patch' | 'post'>,
   context: Pick<ServerRouteContext, 'getSettingsFile' | 'getAuthFile'>,
@@ -93,7 +99,8 @@ export function registerTranscriptionRoutes(
       res.json(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      res.status(message.includes('Choose a transcription provider') ? 400 : 500).json({ error: message });
+      res.status(message.includes('Choose a transcription provider') || isTranscriptionClientInputError(message) ? 400 : 500)
+        .json({ error: message });
     }
   });
 }
