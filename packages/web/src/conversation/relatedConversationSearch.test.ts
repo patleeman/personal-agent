@@ -128,6 +128,29 @@ describe('selectRecentConversationCandidates', () => {
       recentWindowDays: 3,
     }).map((session) => session.id)).toEqual(['recent-current']);
   });
+
+  it('uses the default recent window for unsafe window day values', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+      buildSession({
+        id: 'stale-current',
+        title: 'Stale current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-03-01T09:00:00.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+      recentWindowDays: Number.MAX_SAFE_INTEGER + 1,
+    }).map((session) => session.id)).toEqual(['recent-current']);
+  });
 });
 
 describe('listRecentConversationResults', () => {

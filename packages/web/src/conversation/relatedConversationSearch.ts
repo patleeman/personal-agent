@@ -58,6 +58,16 @@ function normalizePositiveIntegerLimit(value: number | undefined, fallback: numb
     : fallback;
 }
 
+function normalizeRecentWindowDays(value: number | null | undefined): number | null {
+  if (value === null) {
+    return null;
+  }
+
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : DEFAULT_RECENT_WINDOW_DAYS;
+}
+
 function scoreField(token: string, value: string | undefined, weight: number): number | null {
   const normalizedValue = normalizeField(value);
   if (!normalizedValue) {
@@ -231,9 +241,7 @@ export function selectRecentConversationCandidates(
   } = {},
 ): SessionMeta[] {
   const nowMs = options.nowMs ?? Date.now();
-  const recentWindowDays = options.recentWindowDays === undefined
-    ? DEFAULT_RECENT_WINDOW_DAYS
-    : options.recentWindowDays;
+  const recentWindowDays = normalizeRecentWindowDays(options.recentWindowDays);
   const recentWindowMs = recentWindowDays === null
     ? null
     : recentWindowDays * DAY_MS;
