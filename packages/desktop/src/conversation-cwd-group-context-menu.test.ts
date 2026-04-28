@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildConversationCwdGroupContextMenuTemplate } from './conversation-cwd-group-context-menu.js';
+import { buildConversationCwdGroupContextMenuTemplate, normalizeConversationCwdGroupContextMenuCoordinate } from './conversation-cwd-group-context-menu.js';
 
 describe('buildConversationCwdGroupContextMenuTemplate', () => {
+  it('drops unsafe menu coordinates', () => {
+    expect(normalizeConversationCwdGroupContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeConversationCwdGroupContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
+  });
+
   it('groups primary and removal actions with a separator', () => {
     const template = buildConversationCwdGroupContextMenuTemplate({
       canOpenInFinder: true,

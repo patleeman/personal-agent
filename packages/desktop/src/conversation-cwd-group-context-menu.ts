@@ -15,9 +15,9 @@ export interface ConversationCwdGroupContextMenuInput {
   canRemove?: boolean;
 }
 
-function normalizeCoordinate(value: number | undefined): number {
+export function normalizeConversationCwdGroupContextMenuCoordinate(value: number | undefined): number {
   const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
+  if (!Number.isSafeInteger(Math.round(numericValue))) {
     return 0;
   }
 
@@ -109,8 +109,8 @@ export async function showConversationCwdGroupContextMenu(
 
     menu.popup({
       ...(targetWindow ? { window: targetWindow } : {}),
-      x: normalizeCoordinate(input.x),
-      y: normalizeCoordinate(input.y),
+      x: normalizeConversationCwdGroupContextMenuCoordinate(input.x),
+      y: normalizeConversationCwdGroupContextMenuCoordinate(input.y),
       callback: finish,
     });
   });
