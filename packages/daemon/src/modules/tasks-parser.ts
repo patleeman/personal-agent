@@ -211,7 +211,7 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
   }
 
   if (typeof raw === 'number') {
-    if (!Number.isInteger(raw) || raw <= 0) {
+    if (!Number.isSafeInteger(raw) || raw <= 0) {
       throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
     }
 
@@ -220,7 +220,7 @@ function readTimeoutSeconds(attributes: Record<string, unknown>, defaultTimeoutS
 
   if (typeof raw === 'string' && /^\d+$/.test(raw.trim())) {
     const parsed = Number.parseInt(raw.trim(), 10);
-    if (parsed <= 0) {
+    if (!Number.isSafeInteger(parsed) || parsed <= 0) {
       throw new Error('Frontmatter key timeoutSeconds must be a positive integer');
     }
 

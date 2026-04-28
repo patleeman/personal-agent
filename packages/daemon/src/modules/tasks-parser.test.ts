@@ -61,6 +61,19 @@ hello
     })).toThrow('must define one schedule key');
   });
 
+  it('rejects unsafe timeoutSeconds values', () => {
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/unsafe-timeout.task.md',
+      rawContent: `---
+cron: "0 * * * *"
+timeoutSeconds: ${Number.MAX_SAFE_INTEGER + 1}
+---
+hello
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Frontmatter key timeoutSeconds must be a positive integer');
+  });
+
   it('matches cron expressions using cron day-of-month/day-of-week semantics', () => {
     const expression = parseCronExpression('0 9 15 * 1');
 
