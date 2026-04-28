@@ -340,6 +340,28 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('normalizes companion attachment data url mime type casing', async () => {
+    const localController = {
+      readConversationAttachmentAsset: vi.fn().mockResolvedValue({
+        dataUrl: 'data:IMAGE/PNG;base64,aGVsbG8=',
+      }),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.readConversationAttachmentAsset({
+      conversationId: 'conv-1',
+      attachmentId: 'drawing-1',
+      asset: 'preview',
+    })).resolves.toMatchObject({
+      mimeType: 'image/png',
+      disposition: 'inline',
+    });
+  });
+
   it('routes parallel prompts to the dedicated live-session endpoint', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ ok: true, accepted: true, jobId: 'job-1', childConversationId: 'child-1' })),

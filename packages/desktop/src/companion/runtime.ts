@@ -127,11 +127,11 @@ function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
     throw new Error('Attachment asset payload is malformed.');
   }
   const dataUrlMimeType = typeof match[1] === 'string' && match[1].trim().length > 0
-    ? match[1].trim()
+    ? match[1].trim().toLowerCase()
     : undefined;
   const mimeType = dataUrlMimeType
     ?? (typeof candidate.mimeType === 'string' && candidate.mimeType.trim().length > 0
-      ? candidate.mimeType.trim()
+      ? candidate.mimeType.trim().toLowerCase()
       : 'application/octet-stream');
 
   const base64 = (match[2] || '').trim();
