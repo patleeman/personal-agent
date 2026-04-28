@@ -87,7 +87,7 @@ export interface TasksModuleDependencies {
 }
 
 function normalizeIntegerConfig(value: number, fallback: number, minimum: number): number {
-  return Number.isInteger(value) && value >= minimum ? value : fallback;
+  return Number.isSafeInteger(value) && value >= minimum ? value : fallback;
 }
 
 function sanitizeActivityIdSegment(value: string): string {
