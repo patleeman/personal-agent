@@ -164,6 +164,18 @@ export function base64ToFile(data: string, mimeType: string, name: string): File
   return new File([bytes], name, { type: mimeType });
 }
 
+function safeBase64ToFile(data: string, mimeType: string, name: string): File | null {
+  if (!data.trim() || !mimeType.trim()) {
+    return null;
+  }
+
+  try {
+    return base64ToFile(data.trim(), mimeType.trim(), name);
+  } catch {
+    return null;
+  }
+}
+
 export function screenshotCaptureImageToFile(image: {
   data: string;
   mimeType: string;
@@ -182,10 +194,11 @@ export function restoreQueuedImageFiles(
   queueIndex: number,
 ): File[] {
   const normalizedImages = Array.isArray(images) ? images : [];
-  return normalizedImages.map((image, imageIndex) => {
+  return normalizedImages.flatMap((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `queued-${behavior}-${queueIndex + 1}-${imageIndex + 1}.${extension}`;
-    return base64ToFile(image.data, image.mimeType, name);
+    const file = safeBase64ToFile(image.data, image.mimeType, name);
+    return file ? [file] : [];
   });
 }
 
@@ -194,10 +207,11 @@ export function restoreComposerImageFiles(
   fallbackNamePrefix: string,
 ): File[] {
   const normalizedImages = Array.isArray(images) ? images : [];
-  return normalizedImages.map((image, imageIndex) => {
+  return normalizedImages.flatMap((image, imageIndex) => {
     const extension = fileExtensionForMimeType(image.mimeType);
     const name = image.name?.trim() || `${fallbackNamePrefix}-${imageIndex + 1}.${extension}`;
-    return base64ToFile(image.data, image.mimeType, name);
+    const file = safeBase64ToFile(image.data, image.mimeType, name);
+    return file ? [file] : [];
   });
 }
 

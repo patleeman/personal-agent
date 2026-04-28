@@ -39,6 +39,18 @@ describe('promptAttachments', () => {
     expect(restoredComposer[0]?.name).toBe('draft-image-1.png');
   });
 
+  it('skips malformed restored image payloads instead of throwing', async () => {
+    expect(restoreQueuedImageFiles([
+      { data: '%%%', mimeType: 'image/png' },
+      { data: globalThis.btoa('hello'), mimeType: 'image/png' },
+    ], 'steer', 0)).toHaveLength(1);
+
+    expect(restoreComposerImageFiles([
+      { data: '   ', mimeType: 'image/png' },
+      { data: globalThis.btoa('hello'), mimeType: 'image/png' },
+    ], 'draft-image')).toHaveLength(1);
+  });
+
   it('detects Excalidraw-compatible files before parsing them', () => {
     expect(isPotentialExcalidrawFile(new File(['{}'], 'scene.excalidraw', { type: '' }))).toBe(true);
     expect(isPotentialExcalidrawFile(new File(['{}'], 'scene.png', { type: 'image/png' }))).toBe(true);
