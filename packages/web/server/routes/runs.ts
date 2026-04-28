@@ -20,7 +20,11 @@ function parseRunLogTail(queryTail: unknown): number | undefined {
   if (typeof queryTail !== 'string') {
     return undefined;
   }
-  const parsed = parseInt(queryTail, 10);
+  const normalized = queryTail.trim();
+  if (!/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isFinite(parsed) || parsed <= 0) {
     return undefined;
   }
