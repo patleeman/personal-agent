@@ -110,6 +110,15 @@ describe('conversation composer editing helpers', () => {
       nextInput: 'bye',
       nextCaret: 3,
     });
+
+    expect(insertTextAtComposerSelection({
+      currentInput: 'hello',
+      selection: { start: 1.5, end: 1.5 },
+      text: 'bye',
+    })).toEqual({
+      nextInput: 'hello bye',
+      nextCaret: 9,
+    });
   });
 
   it('resolves composer history navigation without owning React state', () => {

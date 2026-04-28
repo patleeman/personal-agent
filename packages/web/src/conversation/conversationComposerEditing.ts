@@ -3,6 +3,14 @@ export interface ComposerSelectionRange {
   end: number;
 }
 
+function normalizeComposerSelectionIndex(value: number, fallback: number, max: number): number {
+  if (!Number.isSafeInteger(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(value, max));
+}
+
 export function resolveComposerClearShortcut(input: {
   key: string;
   ctrlKey: boolean;
@@ -63,8 +71,8 @@ export function insertTextAtComposerSelection(input: {
     return null;
   }
 
-  const start = Math.max(0, Math.min(input.selection.start, input.currentInput.length));
-  const end = Math.max(start, Math.min(input.selection.end, input.currentInput.length));
+  const start = normalizeComposerSelectionIndex(input.selection.start, input.currentInput.length, input.currentInput.length);
+  const end = Math.max(start, normalizeComposerSelectionIndex(input.selection.end, start, input.currentInput.length));
   const before = input.currentInput.slice(0, start);
   const after = input.currentInput.slice(end);
   const leadingSpace = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
