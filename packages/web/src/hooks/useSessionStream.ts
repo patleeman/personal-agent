@@ -272,6 +272,22 @@ function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, ne
   return previousImageCount === nextImageCount && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
 }
 
+export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | undefined, next: MessageBlock): boolean {
+  if (previous?.type !== 'user' || next.type !== 'user' || previous.text !== next.text) {
+    return false;
+  }
+
+  const previousImages = previous.images ?? [];
+  const nextImages = next.images ?? [];
+  return previousImages.length === nextImages.length
+    && nextImages.every((image, index) => {
+      const previousImage = previousImages[index];
+      return previousImage?.src === image.src
+        && previousImage?.mimeType === image.mimeType
+        && previousImage?.caption === image.caption;
+    });
+}
+
 function resolveSessionStreamSubscriptionId(
   sessionId: string | null,
   options?: { enabled?: boolean },
@@ -775,11 +791,7 @@ function applyEvent(
     case 'user_message': {
       const nextBlock = displayBlockToMessageBlock(event.block);
       const last = blocks[blocks.length - 1];
-      const lastImageCount = last?.type === 'user' ? last.images?.length ?? 0 : -1;
-      const nextImageCount = nextBlock.type === 'user' ? nextBlock.images?.length ?? 0 : -1;
-      const sameUserBlock = last?.type === 'user' && nextBlock.type === 'user'
-        && last.text === nextBlock.text
-        && lastImageCount === nextImageCount;
+      const sameUserBlock = userMessageBlocksMatchForStreamDedupe(last, nextBlock);
       const replaceOptimisticUserBlock = shouldReplaceOptimisticUserBlock(last, nextBlock);
 
       if (sameUserBlock || replaceOptimisticUserBlock) {
