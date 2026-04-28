@@ -56,6 +56,12 @@ function normalizeSessionIds(value: unknown): string[] {
   return ids;
 }
 
+function normalizePointerLimit(value: number | undefined): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(value, MAX_RELATED_CONVERSATION_POINTERS)
+    : MAX_RELATED_CONVERSATION_POINTERS;
+}
+
 function tokenize(value: string): string[] {
   const stopWords = new Set([
     'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'from', 'how', 'i', 'in', 'is', 'it', 'me', 'my',
@@ -204,7 +210,7 @@ export function buildRelatedConversationPointers(input: {
     return { contextMessages: [], pointers: [], warnings: [] };
   }
 
-  const limit = Math.max(1, Math.min(input.limit ?? MAX_RELATED_CONVERSATION_POINTERS, MAX_RELATED_CONVERSATION_POINTERS));
+  const limit = normalizePointerLimit(input.limit);
   const selectedIds = normalizeSessionIds(input.selectedSessionIds).filter((sessionId) => sessionId !== input.currentConversationId);
   const promptTerms = tokenize(prompt);
   const warnings: string[] = [];

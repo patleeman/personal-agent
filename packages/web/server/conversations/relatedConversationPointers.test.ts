@@ -102,4 +102,25 @@ describe('buildRelatedConversationPointers', () => {
     expect(result.contextMessages).toEqual([]);
     expect(result.warnings).toEqual(['Selected related conversation missing-1 could not be read and was omitted.']);
   });
+
+  it('uses the default pointer limit for fractional limits', () => {
+    readSessionMetaMock.mockImplementation((sessionId: string) => ({
+      ...baseMeta,
+      id: sessionId,
+      title: `Manual ${sessionId}`,
+    }));
+
+    const result = buildRelatedConversationPointers({
+      prompt: 'Fix the notarization release flow',
+      selectedSessionIds: ['manual-1', 'manual-2', 'manual-3', 'manual-4'],
+      limit: 2.5,
+    });
+
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual([
+      'manual-1',
+      'manual-2',
+      'manual-3',
+      'manual-4',
+    ]);
+  });
 });
