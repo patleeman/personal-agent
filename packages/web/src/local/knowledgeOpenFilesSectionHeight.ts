@@ -17,11 +17,12 @@ function readStorage(storage?: StorageLike): StorageLike | null {
 }
 
 export function clampOpenFilesSectionHeight(value: number): number {
-  if (!Number.isFinite(value)) {
+  const rounded = Math.round(value);
+  if (!Number.isSafeInteger(rounded)) {
     return DEFAULT_OPEN_FILES_SECTION_HEIGHT;
   }
 
-  return Math.max(MIN_OPEN_FILES_SECTION_HEIGHT, Math.round(value));
+  return Math.max(MIN_OPEN_FILES_SECTION_HEIGHT, rounded);
 }
 
 export function readStoredOpenFilesSectionHeight(storage?: StorageLike): number {
