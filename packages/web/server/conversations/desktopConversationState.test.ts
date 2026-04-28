@@ -342,6 +342,48 @@ describe('readDesktopConversationState', () => {
     });
   });
 
+  it('does not forward unsafe tail block limits to live snapshots', async () => {
+    readConversationSessionMetaCapabilityMock.mockReturnValue({
+      id: 'conv-live',
+      file: '/tmp/conv-live.jsonl',
+      timestamp: '2026-04-11T12:00:00.000Z',
+      cwd: '/tmp/project',
+      cwdSlug: 'project',
+      model: 'openai/gpt-5.4',
+      title: 'Live conversation',
+      messageCount: 1,
+      isLive: true,
+    });
+    readLiveSessionStateSnapshotMock.mockReturnValue({
+      blocks: [],
+      blockOffset: 0,
+      totalBlocks: 0,
+      hasSnapshot: true,
+      isStreaming: false,
+      isCompacting: false,
+      hasPendingHiddenTurn: false,
+      error: null,
+      title: null,
+      tokens: null,
+      cost: null,
+      contextUsage: null,
+      pendingQueue: { steering: [], followUp: [] },
+      parallelJobs: [],
+      presence: { surfaces: [], controllerSurfaceId: null, controllerSurfaceType: null, controllerAcquiredAt: null },
+      autoModeState: null,
+      cwdChange: null,
+    });
+
+    const { readDesktopConversationState } = await import('./desktopConversationState.js');
+    await readDesktopConversationState({
+      conversationId: 'conv-live',
+      profile: 'default',
+      tailBlocks: Number.MAX_SAFE_INTEGER + 1,
+    });
+
+    expect(readLiveSessionStateSnapshotMock).toHaveBeenCalledWith('conv-live', undefined);
+  });
+
   it('falls back to stored session detail when the conversation is not live', async () => {
     readConversationSessionMetaCapabilityMock.mockReturnValue({
       id: 'conv-stored',

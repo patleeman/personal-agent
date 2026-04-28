@@ -447,10 +447,13 @@ export async function readDesktopConversationState(input: {
   if (!conversationId) {
     throw new Error('conversationId required');
   }
+  const tailBlocks = typeof input.tailBlocks === 'number' && Number.isSafeInteger(input.tailBlocks) && input.tailBlocks > 0
+    ? input.tailBlocks
+    : undefined;
 
   const sessionMeta = readConversationSessionMetaCapability(conversationId);
   const liveSession = sessionMeta?.isLive
-    ? readLiveSessionStateSnapshot(conversationId, input.tailBlocks)
+    ? readLiveSessionStateSnapshot(conversationId, tailBlocks)
     : null;
 
   if (liveSession && sessionMeta) {
@@ -479,7 +482,7 @@ export async function readDesktopConversationState(input: {
   const { sessionRead } = await readSessionDetailForRoute({
     conversationId,
     profile: input.profile,
-    tailBlocks: input.tailBlocks,
+    tailBlocks,
   });
 
   if (!sessionRead.detail) {
