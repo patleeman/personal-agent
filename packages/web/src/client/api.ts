@@ -208,6 +208,12 @@ export function normalizeConversationContentSearchLimit(value: unknown): number 
     : 80;
 }
 
+export function normalizeVaultSearchLimit(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(50, value)
+    : 20;
+}
+
 export const api = {
   // ── Core ──────────────────────────────────────────────────────────────────
   status:       async () => get<AppStatus>('/status'),
@@ -1108,7 +1114,7 @@ export const vaultApi = {
     get<VaultBacklinksResult>(`/vault/backlinks?id=${encodeURIComponent(id)}`),
 
   search: (q: string, limit = 20) =>
-    get<VaultSearchResponse>(`/vault/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+    get<VaultSearchResponse>(`/vault/search?q=${encodeURIComponent(q)}&limit=${normalizeVaultSearchLimit(limit)}`),
 
   move: (id: string, targetDir: string) =>
     post<VaultEntry>('/vault/move', { id, targetDir }),
