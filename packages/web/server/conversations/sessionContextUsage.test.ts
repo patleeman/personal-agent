@@ -51,6 +51,15 @@ describe('readSessionContextUsageFromFile', () => {
     ]));
   });
 
+  it('rejects fractional and unsafe context token totals', () => {
+    const messages = [
+      { role: 'user', content: [{ type: 'text', text: 'review the diff' }] },
+    ] as never;
+
+    expect(estimateContextUsageSegments(messages, 1_200.5)).toEqual([]);
+    expect(estimateContextUsageSegments(messages, Number.MAX_SAFE_INTEGER + 1)).toEqual([]);
+  });
+
   it('returns null context tokens after compaction until a post-compaction assistant responds', () => {
     const file = createTempSessionFile([
       { type: 'session', id: 'session-1', timestamp: '2026-03-10T20:00:00.000Z', cwd: '/tmp/project', version: 3 },

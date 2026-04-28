@@ -159,7 +159,7 @@ function estimateContextWeights(messages: ContextMessageList): SegmentWeights {
 }
 
 function scaleWeightsToSegments(weights: SegmentWeights, totalTokens: number): ContextUsageSegment[] {
-  if (totalTokens <= 0) {
+  if (!Number.isSafeInteger(totalTokens) || totalTokens <= 0) {
     return [];
   }
 
