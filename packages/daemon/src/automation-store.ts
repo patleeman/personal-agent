@@ -411,7 +411,7 @@ function rowToRuntimeState(row: AutomationStateRow): TaskRuntimeState {
 
 function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationActivityEntry | undefined {
   const payload = parseJsonRecord(row.payload_json);
-  const count = typeof payload?.count === 'number' && Number.isInteger(payload.count) && payload.count > 0
+  const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0
     ? payload.count
     : undefined;
   const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' && Number.isFinite(Date.parse(payload.firstScheduledAt))
@@ -887,7 +887,7 @@ export function appendAutomationActivityEntry(
     throw new Error(`Unsupported automation activity kind: ${input.kind}`);
   }
 
-  if (!Number.isInteger(input.count) || input.count <= 0) {
+  if (!Number.isSafeInteger(input.count) || input.count <= 0) {
     throw new Error('Automation activity count must be a positive integer.');
   }
 

@@ -249,6 +249,31 @@ describe('tasks module scheduling', () => {
     expect(listAutomationActivityEntries('unsafe-activity-limit', { dbPath, limit: Number.MAX_SAFE_INTEGER + 1 })).toHaveLength(20);
   });
 
+  it('rejects unsafe automation activity counts', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    createStoredAutomation({
+      dbPath,
+      id: 'unsafe-activity-count',
+      profile: 'assistant',
+      title: 'Unsafe activity count',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+
+    expect(() => appendAutomationActivityEntry('unsafe-activity-count', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: Number.MAX_SAFE_INTEGER + 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath })).toThrow('Automation activity count must be a positive integer.');
+  });
+
   it('does not floor fractional task module timer config', () => {
     const module = createTasksModule({
       enabled: true,
