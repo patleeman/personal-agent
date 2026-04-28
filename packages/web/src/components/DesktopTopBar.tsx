@@ -58,6 +58,15 @@ function ZenViewIcon() {
   );
 }
 
+function readPersistedNavigationIndex(value: string | null, fallback: number): number {
+  if (value === null) {
+    return fallback;
+  }
+
+  const normalized = value.trim();
+  return /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
+}
+
 export function readBrowserNavigationState(): DesktopNavigationState {
   if (typeof window === 'undefined') {
     return { canGoBack: false, canGoForward: false };
@@ -68,7 +77,7 @@ export function readBrowserNavigationState(): DesktopNavigationState {
   let maxIndex = currentIndex;
 
   try {
-    const stored = Number(window.sessionStorage.getItem('__pa_nav_max_idx__') ?? currentIndex);
+    const stored = readPersistedNavigationIndex(window.sessionStorage.getItem('__pa_nav_max_idx__'), currentIndex);
     if (Number.isSafeInteger(stored) && stored >= 0) {
       maxIndex = Math.max(currentIndex, stored);
     }
