@@ -170,6 +170,14 @@ describe('pendingConversationPrompt helpers', () => {
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });
 
+  it('ignores absurd persisted dispatching timestamps', () => {
+    const storage = createStorage();
+
+    storage.setItem(PENDING_CONVERSATION_PROMPT_DISPATCHING_STORAGE_KEY, String(Number.MAX_SAFE_INTEGER));
+
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+  });
+
   it('removes empty prompts instead of keeping stale storage', () => {
     const storage = createStorage();
 

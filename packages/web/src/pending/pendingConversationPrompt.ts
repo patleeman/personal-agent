@@ -372,7 +372,8 @@ export function isPendingConversationPromptDispatching(
   }
 
   const dispatchingAt = readPendingConversationPromptDispatchingAt(sessionId, storage);
-  return dispatchingAt !== null && (Date.now() - dispatchingAt) < PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS;
+  const ageMs = dispatchingAt === null ? Number.NaN : Date.now() - dispatchingAt;
+  return Number.isSafeInteger(ageMs) && ageMs >= 0 && ageMs < PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS;
 }
 
 export function setPendingConversationPromptDispatching(
