@@ -121,6 +121,29 @@ describe('readConversationPlanDefaults', () => {
 
     expect(readConversationPlanLibrary(file).presets[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
   });
+
+  it('falls back for overflowed workflow preset timestamps', () => {
+    const dir = createTempDir();
+    const file = join(dir, 'settings.json');
+    writeFileSync(file, JSON.stringify({
+      ui: {
+        conversationAutomation: {
+          workflowPresets: {
+            presets: [
+              {
+                id: 'preset-1',
+                name: 'Alpha preset',
+                updatedAt: '2026-02-31T09:00:00.000Z',
+                items: [{ kind: 'instruction', text: 'Follow the plan.' }],
+              },
+            ],
+          },
+        },
+      },
+    }));
+
+    expect(readConversationPlanLibrary(file).presets[0]?.updatedAt).toBe('1970-01-01T00:00:00.000Z');
+  });
 });
 
 describe('writeConversationPlanDefaults', () => {

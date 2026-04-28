@@ -36,7 +36,7 @@ export interface ConversationPlanWorkspaceState extends ConversationPlanDefaults
   presetLibrary: ConversationPlanLibraryState;
 }
 
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -66,8 +66,27 @@ function normalizeTimestamp(value: unknown, fallback: string): string {
   }
 
   const normalized = value.trim();
-  const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
+  const match = normalized.match(ISO_TIMESTAMP_PATTERN);
+  const parsed = match && hasValidIsoDateParts(match) ? Date.parse(normalized) : Number.NaN;
   return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
