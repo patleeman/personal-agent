@@ -233,6 +233,44 @@ describe('sessions', () => {
     })).toBeNull();
   });
 
+  it('rejects unsafe append-only transcript cache offsets', () => {
+    const detail = {
+      meta: {
+        id: 'session-append-unsafe',
+        file: '/tmp/session-append-unsafe.jsonl',
+        timestamp: '2026-03-11T12:00:00.000Z',
+        cwd: '/tmp/project',
+        cwdSlug: '--tmp-project--',
+        model: 'test-model',
+        title: 'Append unsafe',
+        messageCount: 1,
+      },
+      blocks: [{ type: 'text' as const, id: 'assistant-1', ts: '2026-03-11T12:00:01.000Z', text: 'Reply 1' }],
+      blockOffset: 0,
+      totalBlocks: 1,
+      contextUsage: null,
+      signature: 'sig-unsafe',
+    };
+
+    expect(buildAppendOnlySessionDetailResponse({
+      detail,
+      knownBlockOffset: Number.MAX_SAFE_INTEGER + 1,
+      knownTotalBlocks: 0,
+      knownLastBlockId: 'assistant-1',
+    })).toBeNull();
+
+    expect(buildAppendOnlySessionDetailResponse({
+      detail: {
+        ...detail,
+        blockOffset: Number.MAX_SAFE_INTEGER + 1,
+        totalBlocks: Number.MAX_SAFE_INTEGER + 3,
+      },
+      knownBlockOffset: 0,
+      knownTotalBlocks: Number.MAX_SAFE_INTEGER + 1,
+      knownLastBlockId: 'assistant-1',
+    })).toBeNull();
+  });
+
   it('reports cache and loader telemetry for archived transcript tail reads', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

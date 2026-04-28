@@ -2301,10 +2301,10 @@ export function buildAppendOnlySessionDetailResponse(input: {
   knownTotalBlocks?: number;
   knownLastBlockId?: string;
 }): SessionDetailAppendOnlyResponse | null {
-  const knownBlockOffset = Number.isInteger(input.knownBlockOffset) && typeof input.knownBlockOffset === 'number'
+  const knownBlockOffset = Number.isSafeInteger(input.knownBlockOffset) && typeof input.knownBlockOffset === 'number'
     ? Math.max(0, input.knownBlockOffset)
     : null;
-  const knownTotalBlocks = Number.isInteger(input.knownTotalBlocks) && typeof input.knownTotalBlocks === 'number'
+  const knownTotalBlocks = Number.isSafeInteger(input.knownTotalBlocks) && typeof input.knownTotalBlocks === 'number'
     ? Math.max(0, input.knownTotalBlocks)
     : null;
 
