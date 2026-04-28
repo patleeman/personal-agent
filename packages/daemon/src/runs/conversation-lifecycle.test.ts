@@ -97,6 +97,24 @@ describe('conversation lifecycle helpers', () => {
     });
   });
 
+  it('falls back to valid timestamps when record dates are malformed', () => {
+    const stateRoot = createTempDir('conversation-lifecycle-');
+    const path = resolveConversationRecordPath(stateRoot, 'assistant', 'conv-invalid-time');
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, JSON.stringify({
+      createdAt: 'not-a-date',
+      updatedAt: 'also-not-a-date',
+    }), 'utf-8');
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
+
+    expect(readConversationRecord(stateRoot, 'assistant', 'conv-invalid-time')).toEqual(expect.objectContaining({
+      createdAt: '2026-04-10T12:34:56.000Z',
+      updatedAt: '2026-04-10T12:34:56.000Z',
+    }));
+  });
+
   it('writes records and preserves optional metadata fields', () => {
     const stateRoot = createTempDir('conversation-lifecycle-');
     const record: ConversationRecord = {

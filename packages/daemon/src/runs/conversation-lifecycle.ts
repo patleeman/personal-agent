@@ -28,6 +28,21 @@ export interface ConversationRecord {
 
 const CONVERSATION_FILE_VERSION = 1 as const;
 
+function normalizeTimestamp(value: unknown, fallback?: unknown): string {
+  for (const candidate of [value, fallback]) {
+    if (typeof candidate !== 'string') {
+      continue;
+    }
+
+    const parsed = Date.parse(candidate);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+
+  return new Date().toISOString();
+}
+
 /**
  * Resolve the path to a conversation record.
  */
@@ -67,8 +82,8 @@ export function readConversationRecord(
     return {
       id: String(parsed.conversationId ?? parsed.id ?? conversationId),
       state: (parsed.state as ConversationState) ?? 'open',
-      createdAt: String(parsed.createdAt ?? parsed.updatedAt ?? new Date().toISOString()),
-      updatedAt: String(parsed.updatedAt ?? parsed.createdAt ?? new Date().toISOString()),
+      createdAt: normalizeTimestamp(parsed.createdAt, parsed.updatedAt),
+      updatedAt: normalizeTimestamp(parsed.updatedAt, parsed.createdAt),
       title: parsed.latestConversationTitle as string | undefined,
       summary: parsed.latestAnchorPreview as string | undefined,
       relatedProjectIds: Array.isArray(parsed.relatedProjectIds)
