@@ -229,8 +229,8 @@ describe('related thread selection helpers', () => {
       maxAutoSelections: 5,
     })).toEqual({
       selectedThreadIds: [],
-      autoSelectedThreadIds: ['strong'],
-      changed: false,
+      autoSelectedThreadIds: [],
+      changed: true,
     });
   });
 });

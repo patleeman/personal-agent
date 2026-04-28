@@ -157,6 +157,10 @@ export function resolveRelatedThreadPreselectionUpdate(input: {
   const hasManualSelection = input.selectedThreadIds.some((sessionId) => !autoSelectedSet.has(sessionId));
   const onlyAutoSelected = input.selectedThreadIds.length > 0 && !hasManualSelection;
 
+  if (input.selectedThreadIds.length === 0 && input.autoSelectedThreadIds.length > 0) {
+    return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
+  }
+
   if (!input.draft || input.query.trim().length < MIN_AUTO_PRESELECT_QUERY_LENGTH) {
     if (onlyAutoSelected) {
       return { selectedThreadIds: [], autoSelectedThreadIds: [], changed: true };
