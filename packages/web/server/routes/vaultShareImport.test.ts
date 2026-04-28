@@ -81,6 +81,22 @@ describe('vaultShareImport', () => {
     })).rejects.toThrow('Shared image data URL must be base64-encoded.');
   });
 
+  it('rejects shared image imports with non-image mime types', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-non-image-'));
+    const targetDirAbs = join(root, 'Inbox');
+
+    await expect(importVaultSharedItem({
+      kind: 'image',
+      root,
+      targetDirAbs,
+      title: 'Not an image',
+      mimeType: 'text/plain',
+      fileName: 'note.txt',
+      dataBase64: Buffer.from('not-image-bytes', 'utf-8').toString('base64'),
+      createdAt: '2026-04-22T12:00:00.000Z',
+    })).rejects.toThrow('mimeType must be an image type for image imports.');
+  });
+
   it('extracts readable markdown for shared URLs', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-url-'));
     const targetDirAbs = join(root, 'Inbox');

@@ -230,11 +230,15 @@ function buildSharedImageNote(input: {
   createdAt: string;
 }): { title: string; content: string; assetId: string } {
   const imageBuffer = decodeSharedBase64(input.dataBase64);
+  const normalizedMimeType = input.mimeType?.trim().toLowerCase();
+  if (normalizedMimeType && !normalizedMimeType.startsWith('image/')) {
+    throw new Error('mimeType must be an image type for image imports.');
+  }
   const baseTitle = input.title?.trim()
     || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '')
     || `Shared image ${input.createdAt.slice(0, 10)}`;
   const assetExt = extname(input.fileName ?? '').trim().replace(/^\./, '')
-    || mimeExtension(input.mimeType ?? '')
+    || mimeExtension(normalizedMimeType ?? '')
     || 'png';
   const assetDirAbs = join(input.root, '_attachments');
   mkdirSync(assetDirAbs, { recursive: true });
@@ -248,7 +252,7 @@ function buildSharedImageNote(input: {
     source_type: 'shared-image',
     captured_at: input.createdAt,
     asset_path: assetId,
-    mime_type: input.mimeType ?? `image/${assetExt}`,
+    mime_type: normalizedMimeType ?? `image/${assetExt}`,
     tags: ['share', 'image'],
   };
   if (input.sourceApp) {
