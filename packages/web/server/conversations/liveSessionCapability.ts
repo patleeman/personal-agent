@@ -948,7 +948,7 @@ export async function restoreQueuedLiveSessionMessageCapability(
   if (input.behavior !== 'steer' && input.behavior !== 'followUp') {
     throw new LiveSessionCapabilityInputError('behavior must be "steer" or "followUp"');
   }
-  if (!Number.isInteger(input.index) || input.index < 0) {
+  if (!Number.isSafeInteger(input.index) || input.index < 0) {
     throw new LiveSessionCapabilityInputError('index must be a non-negative integer');
   }
 
