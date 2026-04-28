@@ -30,17 +30,30 @@ function resolveDaemonRoot(): string {
 }
 
 function normalizeReminderAt(at: string, now: Date): string {
-  const timestamp = Date.parse(at);
-  if (!Number.isFinite(timestamp)) {
+  const dueAtIso = normalizeIsoTimestamp(at);
+  if (!dueAtIso) {
     throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
   }
 
-  const dueAt = new Date(timestamp);
+  const dueAt = new Date(dueAtIso);
   if (dueAt.getTime() <= now.getTime()) {
     throw new Error('Reminder time must be in the future.');
   }
 
-  return dueAt.toISOString();
+  return dueAtIso;
+}
+
+function normalizeIsoTimestamp(value: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return new Date(parsed).toISOString();
 }
 
 function resolveValidNow(input?: Date): Date {
@@ -52,8 +65,7 @@ function normalizeOptionalTimestamp(value: string | undefined, fallback: string)
     return fallback;
   }
 
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+  return normalizeIsoTimestamp(value) ?? fallback;
 }
 
 function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string {

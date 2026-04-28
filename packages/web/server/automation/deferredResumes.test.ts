@@ -313,4 +313,15 @@ describe('deferredResumes', () => {
       delay: 'later',
     })).rejects.toThrow('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
   });
+
+  it('rejects non-ISO at timestamps', async () => {
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    await expect(scheduleDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/current.jsonl',
+      at: '9999',
+      now: new Date('2026-03-12T13:00:00.000Z'),
+    })).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+  });
 });
