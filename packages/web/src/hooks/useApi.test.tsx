@@ -61,4 +61,40 @@ describe('useApi', () => {
     expect(latestResult?.data).toBe('second-result');
     expect(latestResult?.loading).toBe(false);
   });
+
+  it('does not let an older in-flight fetch overwrite replaced data', async () => {
+    const first = createDeferred<string>();
+    const refresh = createDeferred<string>();
+    let callCount = 0;
+    const root = createRoot(document.createElement('div'));
+    mountedRoots.push(root);
+
+    await act(async () => {
+      root.render(<HookProbe cacheKey="same" fetcher={() => {
+        callCount += 1;
+        return callCount === 1 ? first.promise : refresh.promise;
+      }} />);
+    });
+
+    await act(async () => {
+      first.resolve('initial');
+      await first.promise;
+    });
+    expect(latestResult?.data).toBe('initial');
+
+    await act(async () => {
+      void latestResult?.refetch({ resetLoading: false });
+    });
+    await act(async () => {
+      latestResult?.replaceData('optimistic');
+    });
+
+    await act(async () => {
+      refresh.resolve('older-refresh');
+      await refresh.promise;
+    });
+
+    expect(latestResult?.data).toBe('optimistic');
+    expect(latestResult?.refreshing).toBe(false);
+  });
 });

@@ -80,6 +80,7 @@ export function useApi<T>(fetcher: () => Promise<T>, key?: string): UseApiResult
   }, []);
 
   const replaceData = useCallback((nextData: T) => {
+    requestIdRef.current += 1;
     dataRef.current = nextData;
     setData(nextData);
     setLoading(false);
