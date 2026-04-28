@@ -15,6 +15,35 @@ import {
 
 const RETENTION_DAYS = 30;
 const RETENTION_MS = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})Z$/;
+
+function parseIsoTimestamp(value: string): number | undefined {
+  const match = value.match(ISO_TIMESTAMP_PATTERN);
+  if (!match || !hasValidIsoDateParts(match)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = Number(match[7]);
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
+}
 
 /**
  * Check if a run is eligible for retention cleanup.
@@ -39,7 +68,10 @@ export function isRetentionEligible(runsRoot: string, runId: string): boolean {
     return false;
   }
 
-  const completedMs = new Date(completedAt).getTime();
+  const completedMs = parseIsoTimestamp(completedAt);
+  if (completedMs === undefined) {
+    return false;
+  }
   const nowMs = Date.now();
   const ageMs = nowMs - completedMs;
 

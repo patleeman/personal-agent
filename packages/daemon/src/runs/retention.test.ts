@@ -68,6 +68,12 @@ describe('durable run retention', () => {
     expect(isRetentionEligible('/runs', 'stale')).toBe(true);
   });
 
+  it('does not treat overflowed completion timestamps as retention eligible', () => {
+    loadDurableRunStatusMock.mockReturnValueOnce({ status: 'completed', completedAt: '2026-02-31T00:00:00.000Z' });
+
+    expect(isRetentionEligible('/runs', 'overflowed-completed-at')).toBe(false);
+  });
+
   it('lists only eligible runs when the runs root exists', () => {
     existsSyncMock.mockReturnValue(true);
     listDurableRunIdsMock.mockReturnValue(['run-a', 'run-b']);
