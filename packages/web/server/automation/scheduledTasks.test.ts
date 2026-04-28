@@ -133,6 +133,15 @@ describe('scheduledTasks', () => {
       cron: '0 * * * *',
       prompt: '   ',
     })).toThrow('prompt is required.');
+
+    expect(() => buildScheduledTaskMarkdown({
+      taskId: 'fractional-timeout',
+      profile: 'assistant',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: 1.5,
+      prompt: 'Run maintenance.',
+    })).toThrow('timeoutSeconds must be a positive integer.');
   });
 
   it('lists nested task definition files and exposes runtime state from the automation database', () => {

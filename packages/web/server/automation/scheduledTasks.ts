@@ -288,7 +288,10 @@ export function buildScheduledTaskMarkdown(input: {
   }
 
   if (input.timeoutSeconds !== undefined && input.timeoutSeconds !== null) {
-    lines.push(`timeoutSeconds: ${Math.max(1, Math.floor(input.timeoutSeconds))}`);
+    if (!Number.isInteger(input.timeoutSeconds) || input.timeoutSeconds <= 0) {
+      throw new Error('timeoutSeconds must be a positive integer.');
+    }
+    lines.push(`timeoutSeconds: ${input.timeoutSeconds}`);
   }
 
   lines.push('---');
