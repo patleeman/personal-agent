@@ -75,6 +75,7 @@ describe('taskSchedule helpers', () => {
     const now = Date.parse('2026-03-18T08:58:30');
     expect(getNextTaskRunAt({ enabled: true, cron: '0 9 * * 1-5' }, now)?.toISOString()).toBe(new Date('2026-03-18T09:00:00').toISOString());
     expect(getNextTaskRunAt({ enabled: true, cron: '*/15 * * * *' }, Date.parse('2026-03-18T08:45:00'))?.toISOString()).toBe(new Date('2026-03-18T09:00:00').toISOString());
+    expect(getNextTaskRunAt({ enabled: true, cron: '0 9abc * * *' }, now)).toBeNull();
   });
 
   it('does not report disabled or expired one-time schedules as upcoming', () => {

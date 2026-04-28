@@ -363,7 +363,8 @@ function parseCronFieldForNextRun(raw: string, min: number, max: number, allowSu
       return null;
     }
 
-    const step = stepParts[1] ? Number.parseInt(stepParts[1], 10) : 1;
+    const stepRaw = stepParts[1]?.trim();
+    const step = stepRaw ? (/^\d+$/.test(stepRaw) ? Number.parseInt(stepRaw, 10) : Number.NaN) : 1;
     if (!Number.isInteger(step) || step < 1) {
       return null;
     }
@@ -377,10 +378,10 @@ function parseCronFieldForNextRun(raw: string, min: number, max: number, allowSu
       end = max;
     } else if (rangePart.includes('-')) {
       const [startRaw, endRaw] = rangePart.split('-', 2);
-      start = Number.parseInt(startRaw ?? '', 10);
-      end = Number.parseInt(endRaw ?? '', 10);
+      start = /^\d+$/.test((startRaw ?? '').trim()) ? Number.parseInt((startRaw ?? '').trim(), 10) : Number.NaN;
+      end = /^\d+$/.test((endRaw ?? '').trim()) ? Number.parseInt((endRaw ?? '').trim(), 10) : Number.NaN;
     } else {
-      start = Number.parseInt(rangePart, 10);
+      start = /^\d+$/.test(rangePart.trim()) ? Number.parseInt(rangePart.trim(), 10) : Number.NaN;
       end = start;
     }
 
