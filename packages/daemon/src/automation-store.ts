@@ -149,12 +149,11 @@ function readRequiredString(value: string | null | undefined, label: string): st
 }
 
 function readOptionalPositiveInteger(value: number | null | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
     return undefined;
   }
 
-  const normalized = Math.floor(value);
-  return normalized > 0 ? normalized : undefined;
+  return value > 0 ? value : undefined;
 }
 
 function parseJsonRecord(value: string | null | undefined): Record<string, unknown> | undefined {
@@ -538,7 +537,10 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
 
   const timeoutSeconds = input.timeoutSeconds == null
     ? loadDaemonConfig().modules.tasks.defaultTimeoutSeconds
-    : Math.max(1, Math.floor(input.timeoutSeconds));
+    : readOptionalPositiveInteger(input.timeoutSeconds);
+  if (!timeoutSeconds) {
+    throw new Error('timeoutSeconds must be a positive integer.');
+  }
 
   if (cron) {
     parseCronExpression(cron);

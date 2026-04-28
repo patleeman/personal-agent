@@ -166,6 +166,22 @@ describe('tasks module scheduling', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
   });
 
+  it('rejects fractional automation timeouts when storing tasks', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    expect(() => createStoredAutomation({
+      dbPath,
+      id: 'fractional-timeout',
+      profile: 'assistant',
+      title: 'Fractional timeout',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: 1.5,
+      prompt: 'Run maintenance.',
+    })).toThrow('timeoutSeconds must be a positive integer.');
+  });
+
   it('retries one-time tasks up to 3 attempts and resolves on success', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
