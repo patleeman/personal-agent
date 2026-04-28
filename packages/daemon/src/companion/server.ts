@@ -168,7 +168,7 @@ function readOptionalPositiveInteger(input: unknown, field: string): number | un
   }
 
   const value = typeof input === 'string'
-    ? Number.parseInt(input, 10)
+    ? (/^\d+$/.test(input.trim()) ? Number.parseInt(input.trim(), 10) : Number.NaN)
     : typeof input === 'number'
       ? input
       : Number.NaN;
@@ -186,7 +186,7 @@ function readOptionalNonNegativeInteger(input: unknown, field: string): number |
   }
 
   const value = typeof input === 'string'
-    ? Number.parseInt(input, 10)
+    ? (/^\d+$/.test(input.trim()) ? Number.parseInt(input.trim(), 10) : Number.NaN)
     : typeof input === 'number'
       ? input
       : Number.NaN;
@@ -1254,13 +1254,20 @@ export class DaemonCompanionServer {
       }
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      let revision: number | undefined;
+      try {
+        revision = requestUrl.searchParams.has('revision')
+          ? readOptionalPositiveInteger(requestUrl.searchParams.get('revision'), 'revision')
+          : undefined;
+      } catch (error) {
+        sendError(response, 400, error instanceof Error ? error.message : String(error));
+        return;
+      }
       const input: CompanionAttachmentAssetInput = {
         conversationId: decodeURIComponent(assetMatch[1] || ''),
         attachmentId: decodeURIComponent(assetMatch[2] || ''),
         asset: assetMatch[3] === 'source' ? 'source' : 'preview',
-        ...(requestUrl.searchParams.has('revision')
-          ? { revision: readOptionalPositiveInteger(requestUrl.searchParams.get('revision'), 'revision') }
-          : {}),
+        ...(revision !== undefined ? { revision } : {}),
       };
       const asset = await runtime.readConversationAttachmentAsset(input);
       response.writeHead(200, {

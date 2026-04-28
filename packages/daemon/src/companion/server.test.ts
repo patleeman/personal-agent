@@ -258,6 +258,12 @@ describe('daemon companion server', () => {
     expect(assetResponse.headers.get('content-type')).toBe('image/png');
     expect(await assetResponse.text()).toBe('preview-bytes');
 
+    const malformedAssetRevisionResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/attachments/att-1/assets/preview?revision=2abc`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(malformedAssetRevisionResponse.status).toBe(400);
+    expect(await readJson(malformedAssetRevisionResponse)).toEqual({ error: 'revision must be a positive integer when provided.' });
+
     const autoModeResponse = await fetch(`${baseUrl}/companion/v1/conversations/conv-1/auto-mode`, {
       headers: { Authorization: `Bearer ${paired.bearerToken}` },
     });
