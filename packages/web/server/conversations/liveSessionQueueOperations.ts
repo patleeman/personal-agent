@@ -85,14 +85,20 @@ export async function restoreLiveSessionQueuedMessage(
     return { text: restoredText, images: [] };
   }
 
+  const previewIndex = previewId
+    ? readQueuedPromptPreviews(behavior, [...visibleQueue], behavior === 'steer'
+      ? internalAgent.steeringQueue
+      : internalAgent.followUpQueue).findIndex((preview) => preview.id === previewId.trim())
+    : -1;
   const removed = removeQueuedUserMessage(internalQueue, { index, previewId });
   if (!removed) {
     throw new Error('Queued prompt changed before it could be restored. Try again.');
   }
 
-  const fallbackText = visibleQueue[index] ?? '';
-  if (index < visibleQueue.length) {
-    visibleQueue.splice(index, 1);
+  const visibleQueueIndex = previewIndex >= 0 ? previewIndex : index;
+  const fallbackText = visibleQueue[visibleQueueIndex] ?? visibleQueue[index] ?? '';
+  if (visibleQueueIndex < visibleQueue.length) {
+    visibleQueue.splice(visibleQueueIndex, 1);
   }
 
   return extractQueuedPromptContent(removed.message, fallbackText);

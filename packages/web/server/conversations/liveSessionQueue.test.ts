@@ -6,6 +6,7 @@ import {
   readQueueState,
   removeQueuedUserMessage,
 } from './liveSessionQueue.js';
+import { restoreLiveSessionQueuedMessage } from './liveSessionQueueOperations.js';
 
 describe('liveSessionQueue', () => {
   it('normalizes prompt behavior only when a prompt must be queued', () => {
@@ -70,5 +71,28 @@ describe('liveSessionQueue', () => {
     });
     expect(extractQueuedPromptContent(undefined, 'fallback').text).toBe('fallback');
     expect(isVisibleQueueFallbackPreviewId('steer', 'steer-visible-0')).toBe(true);
+  });
+
+  it('restores by preview id without removing the wrong visible queued prompt when the index is stale', async () => {
+    const steeringMessages = ['first queued prompt', 'second queued prompt'];
+    const steeringQueue = [
+      { role: 'user', content: [{ type: 'text', text: 'first queued prompt' }], __personalAgentQueuedPromptId: 'first' },
+      { role: 'user', content: [{ type: 'text', text: 'second queued prompt' }], __personalAgentQueuedPromptId: 'second' },
+    ];
+
+    const restored = await restoreLiveSessionQueuedMessage({
+      session: {
+        agent: { steeringQueue, followUpQueue: [] },
+        getSteeringMessages: () => steeringMessages,
+        getFollowUpMessages: () => [],
+        clearQueue: () => ({ steering: [], followUp: [] }),
+        steer: async () => undefined,
+        followUp: async () => undefined,
+      },
+    }, 'steer', 0, 'second');
+
+    expect(restored.text).toBe('second queued prompt');
+    expect(steeringMessages).toEqual(['first queued prompt']);
+    expect(steeringQueue.map((message) => message.__personalAgentQueuedPromptId)).toEqual(['first']);
   });
 });
