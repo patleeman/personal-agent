@@ -20,18 +20,34 @@ function normalizePendingPromptContextMessages(value: unknown): Array<Pick<Injec
     return [];
   }
 
-  return value
-    .filter((message): message is { customType: string; content: string } => (
-      !!message
-      && typeof message === 'object'
-      && typeof message.customType === 'string'
-      && message.customType.trim().length > 0
-      && typeof message.content === 'string'
-    ))
-    .map((message) => ({
-      customType: message.customType.trim(),
-      content: message.content,
-    }));
+  const messages: Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> = [];
+  const seen = new Set<string>();
+
+  for (const message of value) {
+    if (!message || typeof message !== 'object') {
+      continue;
+    }
+
+    const customType = typeof (message as { customType?: unknown }).customType === 'string'
+      ? (message as { customType: string }).customType.trim()
+      : '';
+    const content = typeof (message as { content?: unknown }).content === 'string'
+      ? (message as { content: string }).content.trim()
+      : '';
+    if (!customType || !content) {
+      continue;
+    }
+
+    const dedupeKey = `${customType}\n${content}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    messages.push({ customType, content });
+  }
+
+  return messages;
 }
 
 function normalizePendingRelatedConversationIds(value: unknown): string[] {

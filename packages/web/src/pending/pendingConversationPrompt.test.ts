@@ -191,6 +191,17 @@ describe('pendingConversationPrompt helpers', () => {
     expect(readPendingConversationPrompt('session-123', storage)).toBeNull();
   });
 
+  it('drops blank pending prompt context messages before caching', () => {
+    persistPendingConversationPrompt('session-blank-context', {
+      text: '',
+      images: [],
+      attachmentRefs: [],
+      contextMessages: [{ customType: 'related_threads_context', content: '   ' }],
+    }, null);
+
+    expect(readPendingConversationPrompt('session-blank-context', null)).toBeNull();
+  });
+
   it('keeps related-thread staging metadata even before the prompt starts', () => {
     const storage = createStorage();
 
