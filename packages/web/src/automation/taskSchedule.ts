@@ -365,7 +365,7 @@ function parseCronFieldForNextRun(raw: string, min: number, max: number, allowSu
 
     const stepRaw = stepParts[1]?.trim();
     const step = stepRaw ? (/^\d+$/.test(stepRaw) ? Number.parseInt(stepRaw, 10) : Number.NaN) : 1;
-    if (!Number.isInteger(step) || step < 1) {
+    if (!Number.isSafeInteger(step) || step < 1) {
       return null;
     }
 
@@ -385,7 +385,7 @@ function parseCronFieldForNextRun(raw: string, min: number, max: number, allowSu
       end = start;
     }
 
-    if (!Number.isInteger(start) || !Number.isInteger(end) || start < min || end > max || start > end) {
+    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < min || end > max || start > end) {
       if (!allowSunday7 || start !== 7 || end !== 7) {
         return null;
       }
