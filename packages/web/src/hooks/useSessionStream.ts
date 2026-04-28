@@ -287,7 +287,7 @@ function messageBlockImagesMatch(
       }
 
       if (previousImage.src === image.src) {
-        return previousImage.mimeType === image.mimeType
+        return messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType)
           && previousImage.caption === image.caption;
       }
 
@@ -296,9 +296,13 @@ function messageBlockImagesMatch(
       const bridgesPreviewToTranscriptData = (previousSrc.startsWith('blob:') && isImageBase64DataUrl(nextSrc))
         || (isImageBase64DataUrl(previousSrc) && nextSrc.startsWith('blob:'));
       return bridgesPreviewToTranscriptData
-        && previousImage.mimeType === image.mimeType
+        && messageImageMimeTypesMatch(previousImage.mimeType, image.mimeType)
         && previousImage.caption === image.caption;
     });
+}
+
+function messageImageMimeTypesMatch(previousMimeType: string | undefined, nextMimeType: string | undefined): boolean {
+  return (previousMimeType?.trim().toLowerCase() || '') === (nextMimeType?.trim().toLowerCase() || '');
 }
 
 function isImageBase64DataUrl(value: string): boolean {
