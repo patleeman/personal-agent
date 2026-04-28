@@ -86,6 +86,10 @@ export interface TasksModuleDependencies {
   runTask?: (request: TaskRunRequest) => Promise<TaskRunResult>;
 }
 
+function normalizeIntegerConfig(value: number, fallback: number, minimum: number): number {
+  return Number.isInteger(value) && value >= minimum ? value : fallback;
+}
+
 function sanitizeActivityIdSegment(value: string): string {
   const sanitized = value
     .replace(/[^a-zA-Z0-9-_]+/g, '-')
@@ -286,10 +290,10 @@ export function createTasksModule(
   const runTask = dependencies.runTask ?? ((request: TaskRunRequest) => runTaskInIsolatedPi(request));
 
   const taskDir = resolve(config.taskDir);
-  const tickIntervalSeconds = Math.max(5, Math.floor(config.tickIntervalSeconds));
-  const maxRetries = Math.max(1, Math.floor(config.maxRetries));
-  const reapAfterDays = Math.max(0, Math.floor(config.reapAfterDays));
-  const defaultTimeoutSeconds = Math.max(30, Math.floor(config.defaultTimeoutSeconds));
+  const tickIntervalSeconds = normalizeIntegerConfig(config.tickIntervalSeconds, 30, 5);
+  const maxRetries = normalizeIntegerConfig(config.maxRetries, 3, 1);
+  const reapAfterDays = normalizeIntegerConfig(config.reapAfterDays, 7, 0);
+  const defaultTimeoutSeconds = normalizeIntegerConfig(config.defaultTimeoutSeconds, 1800, 30);
 
   const state: TasksModuleState = {
     knownTasks: 0,

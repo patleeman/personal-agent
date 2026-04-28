@@ -219,6 +219,19 @@ describe('tasks module scheduling', () => {
     expect(listAutomationActivityEntries('activity-limit', { dbPath, limit: 1.5 })).toHaveLength(2);
   });
 
+  it('does not floor fractional task module timer config', () => {
+    const module = createTasksModule({
+      enabled: true,
+      taskDir: createTempDir('tasks-module-definitions-'),
+      tickIntervalSeconds: 5.5,
+      maxRetries: 3,
+      reapAfterDays: 7,
+      defaultTimeoutSeconds: 1800,
+    });
+
+    expect(module.timers[0]?.intervalMs).toBe(30_000);
+  });
+
   it('retries one-time tasks up to 3 attempts and resolves on success', async () => {
     const taskDir = createTempDir('tasks-module-definitions-');
     const stateRoot = createTempDir('tasks-module-state-');
