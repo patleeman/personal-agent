@@ -298,6 +298,27 @@ describe('sessions', () => {
     expect(read.telemetry).not.toHaveProperty('requestedTailBlocks');
   });
 
+  it('caps expensive archived transcript tail read limits', () => {
+    const sessionsDir = createTempSessionsDir();
+    configureSessionEnv(sessionsDir);
+
+    writeSessionFile({
+      sessionsDir,
+      sessionId: 'session-expensive-tail',
+      title: 'Expensive tail test',
+      assistantTexts: Array.from({ length: 1200 }, (_, index) => `Reply ${index + 1}`),
+    });
+
+    const read = readSessionBlocksWithTelemetry('session-expensive-tail', { tailBlocks: 5000 });
+    expect(read.detail?.blocks).toHaveLength(1000);
+    expect(read.detail?.blockOffset).toBe(201);
+    expect(read.telemetry).toMatchObject({
+      requestedTailBlocks: 1000,
+      totalBlocks: 1201,
+      blockOffset: 201,
+    });
+  });
+
   it('invalidates cached archived transcript detail when the session file changes', () => {
     const sessionsDir = createTempSessionsDir();
     configureSessionEnv(sessionsDir);

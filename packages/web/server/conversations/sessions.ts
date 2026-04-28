@@ -2176,7 +2176,7 @@ function resolveTailBlockLimit(tailBlocks: number | undefined, totalBlocks: numb
 
 function normalizeTailBlockRequest(tailBlocks: number | undefined): number | undefined {
   return typeof tailBlocks === 'number' && Number.isSafeInteger(tailBlocks) && tailBlocks > 0
-    ? tailBlocks
+    ? Math.min(1000, tailBlocks)
     : undefined;
 }
 
