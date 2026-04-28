@@ -405,7 +405,7 @@ describe('conversationInspectCapability', () => {
     const result = queryConversationInspectBlocks({
       conversationId: 'conv-roles',
       roles: ['user', 'assistant'],
-      limit: 10,
+      limit: '1abc',
     });
 
     expect(result.blocks.map((block) => block.id)).toEqual(['user-1', 'assistant-1']);
