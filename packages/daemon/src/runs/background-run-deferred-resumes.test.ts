@@ -231,6 +231,38 @@ describe('background run result surfacing', () => {
     expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:45.000Z');
   });
 
+  it('falls back to the current clock when marking delivered with an overflowed timestamp', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-22T19:00:45.000Z'));
+    const tempRoot = createTempDir('pa-background-run-results-');
+    const runsRoot = join(tempRoot, 'runs');
+    const sessionFile = '/tmp/conversations/delivered-overflowed-time.jsonl';
+
+    const run = await createFinishedBackgroundRun({
+      runsRoot: tempRoot,
+      taskSlug: 'deliver-overflowed-time-task',
+      sessionFile,
+      endedAt: '2026-03-22T19:00:05.000Z',
+    });
+
+    const surfaced = await surfaceBackgroundRunResultsIfReady({
+      runsRoot,
+      triggerRunId: run.runId,
+      now: new Date('2026-03-22T19:00:05.000Z'),
+    });
+
+    const delivered = markBackgroundRunResultsDelivered({
+      runsRoot,
+      sessionFile,
+      resultIds: [surfaced.resultId ?? ''],
+      deliveredAt: '2026-02-31T19:00:30.000Z',
+    });
+
+    expect(delivered).toEqual([surfaced.resultId]);
+    const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
+    expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:45.000Z');
+  });
+
   it('falls back to the current clock when surfacing with an invalid Date', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-22T19:00:05.000Z'));

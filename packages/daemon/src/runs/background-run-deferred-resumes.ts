@@ -15,7 +15,7 @@ import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js'
 const SINGLE_RUN_LOG_TAIL_LINES = 60;
 const BATCH_RUN_LOG_TAIL_LINES = 20;
 const MAX_COMMAND_LENGTH = 500;
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 
 export interface BackgroundRunResultSummary {
   id: string;
@@ -61,13 +61,32 @@ function resolveValidDate(input?: Date): Date {
 function resolveValidTimestamp(input?: string): string {
   if (typeof input === 'string') {
     const normalized = input.trim();
-    const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
+    const match = normalized.match(ISO_TIMESTAMP_PATTERN);
+    const parsed = match && hasValidIsoDateParts(match) ? Date.parse(normalized) : Number.NaN;
     if (Number.isFinite(parsed)) {
       return new Date(parsed).toISOString();
     }
   }
 
   return new Date().toISOString();
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function readCheckpointPayload(checkpoint: DurableRunCheckpointFile | undefined): Record<string, unknown> {
