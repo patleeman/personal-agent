@@ -13,6 +13,7 @@ import {
   resolveConversationAutocompleteCatalogDemand,
   resolveConversationContextUsageTokens,
   resolveConversationGitSummaryPresentation,
+  selectUnattachedMentionItems,
   truncateConversationShelfText,
 } from './conversationComposerPresentation';
 
@@ -96,6 +97,16 @@ describe('conversation composer presentation helpers', () => {
       { path: '/b.md', title: 'Bee', kind: 'doc' },
     ], '/a.md')).toEqual([
       { path: '/b.md', title: 'Bee', kind: 'doc' },
+    ]);
+
+    expect(selectUnattachedMentionItems([
+      { kind: 'note', id: 'note:a', label: 'A', path: '/a.md' },
+      { kind: 'file', id: 'file:b', label: 'B', path: '/b.ts' },
+      { kind: 'skill', id: 'skill:c', label: 'C' },
+    ], [
+      { path: '/a.md', title: 'A', kind: 'doc' },
+    ])).toEqual([
+      { kind: 'file', id: 'file:b', label: 'B', path: '/b.ts' },
     ]);
   });
 

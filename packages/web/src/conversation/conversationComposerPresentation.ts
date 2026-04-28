@@ -74,6 +74,16 @@ export function removeConversationContextDocByPath(
   );
 }
 
+export function selectUnattachedMentionItems(
+  mentionItems: MentionItem[],
+  attachedDocs: ConversationContextDocRef[],
+): Array<MentionItem & { path: string }> {
+  const attachedPaths = new Set(attachedDocs.map((doc) => doc.path));
+  return mentionItems
+    .filter((item): item is MentionItem & { path: string } => isAttachableMentionItem(item))
+    .filter((item) => !attachedPaths.has(item.path));
+}
+
 export function truncateConversationShelfText(
   text: string,
   options: { maxChars?: number; maxLines?: number } = {},

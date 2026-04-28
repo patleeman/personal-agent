@@ -94,11 +94,11 @@ import {
 import {
   appendMentionedConversationContextDocs,
   dedupeConversationContextDocs,
-  isAttachableMentionItem,
   removeConversationContextDocByPath,
   resolveConversationAutocompleteCatalogDemand,
   resolveConversationContextUsageTokens,
   resolveConversationGitSummaryPresentation,
+  selectUnattachedMentionItems,
 } from '../conversation/conversationComposerPresentation';
 import {
   isConversationSessionNotLiveError,
@@ -2318,17 +2318,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     lastMessage: lastConversationMessage,
   }), [conversationRun, isLiveSession, lastConversationMessage]);
   const draftMentionItems = useMemo(() => resolveMentionItems(input, mentionItems), [input, mentionItems]);
-  const attachableDraftMentionItems = useMemo(
-    () => draftMentionItems.filter((item): item is MentionItem & { path: string } => isAttachableMentionItem(item)),
-    [draftMentionItems],
-  );
-  const attachedContextDocPathSet = useMemo(
-    () => new Set(attachedContextDocs.map((doc) => doc.path)),
-    [attachedContextDocs],
-  );
   const unattachedDraftMentionItems = useMemo(
-    () => attachableDraftMentionItems.filter((item) => !attachedContextDocPathSet.has(item.path)),
-    [attachableDraftMentionItems, attachedContextDocPathSet],
+    () => selectUnattachedMentionItems(draftMentionItems, attachedContextDocs),
+    [attachedContextDocs, draftMentionItems],
   );
   const shouldLoadConversationRun = Boolean(conversationRunId)
     && !draft
