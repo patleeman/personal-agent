@@ -27,7 +27,7 @@ export function truncateConversationCwdFromFront(cwd: string, maxChars = 48): st
     return '';
   }
 
-  const limit = Number.isFinite(maxChars) ? Math.max(1, Math.floor(maxChars)) : 48;
+  const limit = Number.isSafeInteger(maxChars) && maxChars > 0 ? maxChars : 48;
   if (trimmed.length <= limit) {
     return trimmed;
   }

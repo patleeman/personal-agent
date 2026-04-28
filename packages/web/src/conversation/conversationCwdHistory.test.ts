@@ -13,4 +13,15 @@ describe('conversation cwd history helpers', () => {
     expect(truncateConversationCwdFromFront('~/workingdir/dd-source', 64)).toBe('~/workingdir/dd-source');
     expect(truncateConversationCwdFromFront('/tmp/project', 1)).toBe('…');
   });
+
+  it('uses the default truncation limit for unsafe max character values', () => {
+    const cwd = `/Users/patrick/${'nested/'.repeat(12)}personal-agent`;
+
+    expect(truncateConversationCwdFromFront(cwd, Number.MAX_SAFE_INTEGER + 1)).toBe(
+      truncateConversationCwdFromFront(cwd),
+    );
+    expect(truncateConversationCwdFromFront(cwd, 24.5)).toBe(
+      truncateConversationCwdFromFront(cwd),
+    );
+  });
 });
