@@ -7,4 +7,10 @@ describe('shared time utilities', () => {
     expect(timeAgoCompact('not a date')).toBe('now');
     expect(formatDate('not a date')).toBe('');
   });
+
+  it('does not render parsed date labels for non-ISO timestamps', () => {
+    expect(timeAgo('1')).toBe('just now');
+    expect(timeAgoCompact('1')).toBe('now');
+    expect(formatDate('9999')).toBe('');
+  });
 });
