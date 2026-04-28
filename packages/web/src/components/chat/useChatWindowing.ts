@@ -61,6 +61,10 @@ export function resolveVisibleChunkRange({
     return null;
   }
 
+  const normalizedOverscanChunks = Number.isSafeInteger(overscanChunks) && overscanChunks >= 0
+    ? overscanChunks
+    : 0;
+
   const totalHeight = chunkLayouts[chunkLayouts.length - 1]?.bottom ?? 0;
   const tops = chunkLayouts.map((chunk) => chunk.top);
   const heights = chunkLayouts.map((chunk) => chunk.height);
@@ -73,19 +77,19 @@ export function resolveVisibleChunkRange({
 
   if (viewport === null) {
     const anchorChunkIndex = focusChunkIndex >= 0 ? focusChunkIndex : chunkLayouts.length - 1;
-    startChunkIndex = Math.max(0, anchorChunkIndex - overscanChunks);
-    endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + overscanChunks);
+    startChunkIndex = Math.max(0, anchorChunkIndex - normalizedOverscanChunks);
+    endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + normalizedOverscanChunks);
   } else {
     const viewportTop = Math.max(0, viewport.scrollTop);
     const viewportBottom = viewportTop + Math.max(1, viewport.clientHeight);
     const firstVisibleChunkIndex = resolveChunkIndexForOffset(viewportTop, tops, heights);
     const lastVisibleChunkIndex = resolveChunkIndexForOffset(viewportBottom, tops, heights);
-    startChunkIndex = Math.max(0, firstVisibleChunkIndex - overscanChunks);
-    endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + overscanChunks);
+    startChunkIndex = Math.max(0, firstVisibleChunkIndex - normalizedOverscanChunks);
+    endChunkIndex = Math.min(chunkLayouts.length - 1, lastVisibleChunkIndex + normalizedOverscanChunks);
 
     if (focusChunkIndex >= 0 && (focusChunkIndex < startChunkIndex || focusChunkIndex > endChunkIndex)) {
-      startChunkIndex = Math.max(0, focusChunkIndex - overscanChunks);
-      endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + overscanChunks);
+      startChunkIndex = Math.max(0, focusChunkIndex - normalizedOverscanChunks);
+      endChunkIndex = Math.min(chunkLayouts.length - 1, focusChunkIndex + normalizedOverscanChunks);
     }
   }
 

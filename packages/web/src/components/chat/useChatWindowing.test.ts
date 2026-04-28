@@ -55,6 +55,13 @@ describe('useChatWindowing helpers', () => {
     expect(range?.bottomSpacerHeight).toBe(0);
   });
 
+  it('rejects fractional overscan chunks instead of letting slice truncate them', () => {
+    const layouts = buildChatRenderChunkLayouts(chunks, {}, 100);
+    const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: null, overscanChunks: 0.5, viewport: null });
+
+    expect(range?.chunks.map((chunk) => chunk.key)).toEqual(['5-5-1']);
+  });
+
   it('keeps a focused message mounted even outside the viewport', () => {
     const layouts = buildChatRenderChunkLayouts(chunks, {}, 100);
     const range = resolveVisibleChunkRange({ chunkLayouts: layouts, focusMessageIndex: 0, overscanChunks: 0, viewport: { scrollTop: 500, clientHeight: 40 } });
