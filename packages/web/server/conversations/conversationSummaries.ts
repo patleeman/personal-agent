@@ -15,6 +15,7 @@ const MAX_ACTIVE_JOBS = 1;
 const SUMMARY_ATTEMPT_COOLDOWN_MS = 10 * 60 * 1000;
 const DEFAULT_BACKFILL_INITIAL_DELAY_MS = 5_000;
 const DEFAULT_BACKFILL_INTERVAL_MS = 60_000;
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 export type ConversationSummaryStatus = 'done' | 'blocked' | 'in_progress' | 'needs_user' | 'unknown';
 
@@ -282,6 +283,16 @@ function clearSummaryAttempt(sessionId: string): void {
   getDb().prepare('DELETE FROM conversation_summary_attempts WHERE session_id = ?').run(sessionId);
 }
 
+export function parseConversationSummaryAttemptTimestamp(value: string): number {
+  const normalized = value.trim();
+  if (!ISO_TIMESTAMP_PATTERN.test(normalized)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === normalized ? parsed : Number.NaN;
+}
+
 function isSummaryAttemptCoolingDown(meta: SessionMeta, nowMs = Date.now()): boolean {
   const fingerprint = buildConversationSummaryFingerprint(meta);
   if (!fingerprint) {
@@ -293,7 +304,7 @@ function isSummaryAttemptCoolingDown(meta: SessionMeta, nowMs = Date.now()): boo
     return false;
   }
 
-  const attemptedAtMs = Date.parse(attempt.attempted_at);
+  const attemptedAtMs = parseConversationSummaryAttemptTimestamp(attempt.attempted_at);
   return Number.isFinite(attemptedAtMs) && nowMs - attemptedAtMs < SUMMARY_ATTEMPT_COOLDOWN_MS;
 }
 
