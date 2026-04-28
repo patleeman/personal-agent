@@ -2,13 +2,13 @@ import type { MessageBlock } from '../shared/types';
 
 type AskUserQuestionStyle = 'radio' | 'check';
 
-interface AskUserQuestionOption {
+export interface AskUserQuestionOption {
   value: string;
   label: string;
   details?: string;
 }
 
-interface AskUserQuestionPrompt {
+export interface AskUserQuestionPrompt {
   id: string;
   label: string;
   details?: string;
@@ -211,6 +211,45 @@ export function isAskUserQuestionComplete(
   answers: AskUserQuestionAnswers,
 ): boolean {
   return presentation.questions.every((question) => (answers[question.id]?.length ?? 0) > 0);
+}
+
+export function countAnsweredAskUserQuestions(
+  presentation: AskUserQuestionPresentation | null | undefined,
+  answers: AskUserQuestionAnswers,
+): number {
+  return presentation?.questions.filter((question) => (answers[question.id]?.length ?? 0) > 0).length ?? 0;
+}
+
+export function resolveAskUserQuestionAnswerSelection(input: {
+  question: AskUserQuestionPrompt;
+  option: AskUserQuestionOption;
+  answers: AskUserQuestionAnswers;
+}): {
+  nextAnswers: AskUserQuestionAnswers;
+  selectedValues: string[];
+} {
+  if (input.question.style === 'check') {
+    const currentValues = input.answers[input.question.id] ?? [];
+    const selectedValues = currentValues.includes(input.option.value)
+      ? currentValues.filter((candidate) => candidate !== input.option.value)
+      : [...currentValues, input.option.value];
+    return {
+      selectedValues,
+      nextAnswers: {
+        ...input.answers,
+        [input.question.id]: selectedValues,
+      },
+    };
+  }
+
+  const selectedValues = [input.option.value];
+  return {
+    selectedValues,
+    nextAnswers: {
+      ...input.answers,
+      [input.question.id]: selectedValues,
+    },
+  };
 }
 
 export function shouldAdvanceAskUserQuestionAfterSelection(

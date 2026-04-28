@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest';
 import type { MessageBlock } from '../shared/types';
 import {
   buildAskUserQuestionReplyText,
+  countAnsweredAskUserQuestions,
   findPendingAskUserQuestion,
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
   readAskUserQuestionPresentation,
+  resolveAskUserQuestionAnswerSelection,
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionNavigationHotkey,
   resolveAskUserQuestionOptionHotkey,
@@ -213,6 +215,56 @@ describe('ask user questions', () => {
     })).toBe(true);
     expect(buildAskUserQuestionReplyText({ questions: [presentation.questions[1]!] }, { notify: ['sms', 'email'] }))
       .toBe('Select notifications: SMS, Email');
+    expect(countAnsweredAskUserQuestions(presentation, { target: ['prod'] })).toBe(1);
+    expect(countAnsweredAskUserQuestions(null, { target: ['prod'] })).toBe(0);
+  });
+
+  it('resolves radio and checkbox answer selection updates', () => {
+    const radioQuestion = {
+      id: 'target',
+      label: 'Choose a target',
+      style: 'radio' as const,
+      options: [
+        { value: 'staging', label: 'Staging' },
+        { value: 'prod', label: 'Production' },
+      ],
+    };
+    const checkQuestion = {
+      id: 'notify',
+      label: 'Select notifications',
+      style: 'check' as const,
+      options: [
+        { value: 'email', label: 'Email' },
+        { value: 'sms', label: 'SMS' },
+      ],
+    };
+
+    expect(resolveAskUserQuestionAnswerSelection({
+      question: radioQuestion,
+      option: radioQuestion.options[1]!,
+      answers: { target: ['staging'] },
+    })).toEqual({
+      selectedValues: ['prod'],
+      nextAnswers: { target: ['prod'] },
+    });
+
+    expect(resolveAskUserQuestionAnswerSelection({
+      question: checkQuestion,
+      option: checkQuestion.options[1]!,
+      answers: { notify: ['email'] },
+    })).toEqual({
+      selectedValues: ['email', 'sms'],
+      nextAnswers: { notify: ['email', 'sms'] },
+    });
+
+    expect(resolveAskUserQuestionAnswerSelection({
+      question: checkQuestion,
+      option: checkQuestion.options[0]!,
+      answers: { notify: ['email', 'sms'] },
+    })).toEqual({
+      selectedValues: ['sms'],
+      nextAnswers: { notify: ['sms'] },
+    });
   });
 
   it('resolves default option indices and wraps navigation indices', () => {

@@ -138,9 +138,11 @@ import { shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResu
 import { describeDeferredResumeStatus, resolveDeferredResumePresentationState } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
+  countAnsweredAskUserQuestions,
   findPendingAskUserQuestion,
   isAskUserQuestionComplete,
   moveAskUserQuestionIndex,
+  resolveAskUserQuestionAnswerSelection,
   resolveAskUserQuestionDefaultOptionIndex,
   resolveAskUserQuestionOptionHotkey,
   shouldAdvanceAskUserQuestionAfterSelection,
@@ -2795,9 +2797,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     visibleSessionDetail,
   ]);
 
-  const composerQuestionAnsweredCount = pendingAskUserQuestion
-    ? pendingAskUserQuestion.presentation.questions.filter((question) => (composerQuestionAnswers[question.id]?.length ?? 0) > 0).length
-    : 0;
+  const composerQuestionAnsweredCount = countAnsweredAskUserQuestions(
+    pendingAskUserQuestion?.presentation,
+    composerQuestionAnswers,
+  );
   const composerQuestionCanSubmit = pendingAskUserQuestion
     ? isAskUserQuestionComplete(pendingAskUserQuestion.presentation, composerQuestionAnswers)
     : false;
@@ -2844,31 +2847,13 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
     setComposerQuestionOptionIndex(optionIndex);
 
-    if (question.style === 'check') {
-      const currentValues = composerQuestionAnswers[question.id] ?? [];
-      const alreadySelected = currentValues.includes(option.value);
-      const nextValues = alreadySelected
-        ? currentValues.filter((candidate) => candidate !== option.value)
-        : [...currentValues, option.value];
-      const nextAnswers = {
-        ...composerQuestionAnswers,
-        [question.id]: nextValues,
-      };
-
-      setComposerQuestionAnswers(nextAnswers);
-      if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
-        advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
-      }
-      return;
-    }
-
-    const nextValues = [option.value];
-    const nextAnswers = {
-      ...composerQuestionAnswers,
-      [question.id]: nextValues,
-    };
+    const { nextAnswers, selectedValues } = resolveAskUserQuestionAnswerSelection({
+      question,
+      option,
+      answers: composerQuestionAnswers,
+    });
     setComposerQuestionAnswers(nextAnswers);
-    if (shouldAdvanceAskUserQuestionAfterSelection(question, nextValues)) {
+    if (shouldAdvanceAskUserQuestionAfterSelection(question, selectedValues)) {
       advanceComposerQuestionAfterAnswer(questionIndex, nextAnswers);
     }
   }, [advanceComposerQuestionAfterAnswer, composerQuestionAnswers, composerQuestionSubmitting, pendingAskUserQuestion]);

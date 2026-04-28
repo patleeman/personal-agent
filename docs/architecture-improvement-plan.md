@@ -95,6 +95,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved connected/active background-run derivation into `conversationPageState`, keeping run filtering and indicator text outside `ConversationPage`.
    - Moved related-thread candidate pruning and missing metadata selection into `relatedThreadSelection`, leaving `ConversationPage` to fetch returned ids.
    - Moved deferred-resume presentation derivation into `deferredResumeIndicator`, so ordering, ready state, auto-resume key, and indicator text stay tested together.
+   - Moved ask-user-question answer counting and option-selection transitions into `askUserQuestions`, keeping composer question state updates out of `ConversationPage`.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.
