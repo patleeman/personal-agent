@@ -645,7 +645,7 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
     try {
       const { filename, dataUrl } = req.body as { filename?: unknown; dataUrl?: unknown };
       if (typeof filename !== 'string' || !filename.trim()) { res.status(400).json({ error: 'filename required' }); return; }
-      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) { res.status(400).json({ error: 'dataUrl must be a data: URL' }); return; }
+      if (typeof dataUrl !== 'string' || !dataUrl.trim().toLowerCase().startsWith('data:')) { res.status(400).json({ error: 'dataUrl must be a data: URL' }); return; }
       const root = getRoot();
       const attachDir = join(root, '_attachments');
       mkdirSync(attachDir, { recursive: true });

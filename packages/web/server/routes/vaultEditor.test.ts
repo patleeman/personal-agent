@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { buildVaultImageUploadFileName, decodeVaultImageDataUrl } from './vaultEditor.js';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+import { buildVaultImageUploadFileName, decodeVaultImageDataUrl, registerVaultEditorRoutes } from './vaultEditor.js';
+
+const vaultRootMock = vi.hoisted(() => ({ value: '' }));
+
+vi.mock('@personal-agent/core', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@personal-agent/core')>(),
+  getVaultRoot: () => vaultRootMock.value,
+}));
 
 describe('vaultEditor image uploads', () => {
   it('rejects malformed image data urls before writing attachments', () => {
@@ -27,5 +37,29 @@ describe('vaultEditor image uploads', () => {
       .toBe('hello');
     expect(buildVaultImageUploadFileName('note.txt', 'DATA:IMAGE/PNG;BASE64,aGVsbG8=', 123))
       .toBe('123-note.png');
+  });
+
+  it('accepts uppercase data urls through the image upload route', () => {
+    vaultRootMock.value = mkdtempSync(join(tmpdir(), 'pa-vault-image-upload-'));
+    const postHandlers = new Map<string, (req: unknown, res: unknown) => void>();
+    registerVaultEditorRoutes({
+      get: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      post: vi.fn((path: string, handler: (req: unknown, res: unknown) => void) => {
+        postHandlers.set(path, handler);
+      }),
+    });
+    const json = vi.fn();
+    const status = vi.fn(() => ({ json }));
+
+    postHandlers.get('/api/vault/image')?.({
+      body: { filename: 'note.txt', dataUrl: 'DATA:IMAGE/PNG;BASE64,aGVsbG8=' },
+    }, { json, status });
+
+    expect(status).not.toHaveBeenCalled();
+    expect(json).toHaveBeenCalledWith(expect.objectContaining({
+      id: expect.stringMatching(/^_attachments\/\d+-note\.png$/),
+    }));
   });
 });
