@@ -4,7 +4,7 @@ import { resolveLiveSessionFile } from './liveSessionPersistence.js';
 
 function summarizeUserMessageContent(content: unknown): { text: string; imageCount: number } {
   const blocks = Array.isArray(content)
-    ? content as Array<{ type?: string; text?: string }>
+    ? content as Array<{ type?: string; text?: string; data?: unknown; mimeType?: unknown }>
     : typeof content === 'string'
       ? [{ type: 'text', text: content }]
       : [];
@@ -14,9 +14,26 @@ function summarizeUserMessageContent(content: unknown): { text: string; imageCou
     .map((block) => block.text ?? '')
     .join('\n')
     .trim();
-  const imageCount = blocks.filter((block) => block.type === 'image').length;
+  const imageCount = blocks.filter((block) => block.type === 'image' && hasValidImageBlockPayload(block)).length;
 
   return { text, imageCount };
+}
+
+function hasValidImageBlockPayload(block: { data?: unknown; mimeType?: unknown }): boolean {
+  if (typeof block.mimeType !== 'string' || !block.mimeType.trim().toLowerCase().startsWith('image/')) {
+    return false;
+  }
+
+  if (typeof block.data !== 'string') {
+    return false;
+  }
+
+  const normalized = block.data.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return false;
+  }
+
+  return Buffer.from(normalized, 'base64').length > 0;
 }
 
 function formatConversationTitle(text: string, imageCount: number): string {

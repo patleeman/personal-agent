@@ -49,6 +49,7 @@ import {
   type SseEvent,
 } from './liveSessions.js';
 import * as conversationModelPreferences from './conversationModelPreferences.js';
+import { buildFallbackTitleFromContent } from './liveSessionTitle.js';
 import { clearSessionCaches } from './sessions.js';
 
 const tempDirs: string[] = [];
@@ -975,6 +976,15 @@ describe('conversation titles', () => {
         ],
       },
     } as unknown as LiveRegistryEntry['session'])).toBe('Use the first prompt while the agent is running.');
+  });
+
+  it('does not derive fallback live titles from malformed image blocks', () => {
+    expect(buildFallbackTitleFromContent([
+      { type: 'image', data: '', mimeType: '' },
+      { type: 'image', data: '   ', mimeType: 'image/png' },
+      { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png' },
+      { type: 'image', data: 'aGVsbG8=', mimeType: 'text/plain' },
+    ])).toBe('');
   });
 });
 
