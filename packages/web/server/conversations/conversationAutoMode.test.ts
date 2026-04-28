@@ -30,6 +30,16 @@ describe('conversation auto mode state', () => {
     ])).toEqual(DEFAULT_CONVERSATION_AUTO_MODE_STATE);
   });
 
+  it('drops non-ISO auto mode state timestamps', () => {
+    expect(readConversationAutoModeStateFromEntries([
+      { type: 'custom', customType: 'conversation-auto-mode', data: { enabled: true, updatedAt: '1' } },
+    ])).toEqual({
+      enabled: true,
+      stopReason: null,
+      updatedAt: null,
+    });
+  });
+
   it('writes normalized state entries back through the session manager', () => {
     const appendCustomEntry = vi.fn();
     const state = writeConversationAutoModeState({

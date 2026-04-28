@@ -31,6 +31,7 @@ export const DEFAULT_CONVERSATION_AUTO_MODE_STATE: ConversationAutoModeState = {
   stopReason: null,
   updatedAt: null,
 };
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 export const CONVERSATION_AUTO_MODE_CONTROLLER_PROMPT = [
   'Auto mode review for this conversation.',
@@ -60,6 +61,9 @@ function normalizeUpdatedAt(value: unknown): string | null {
 
   const normalized = value.trim();
   if (!normalized) {
+    return null;
+  }
+  if (!ISO_TIMESTAMP_PATTERN.test(normalized)) {
     return null;
   }
 
