@@ -50,11 +50,11 @@ import {
 import { truncateConversationCwdFromFront } from '../conversation/conversationCwdHistory';
 import { NEW_CONVERSATION_TITLE } from '../conversation/conversationTitle';
 import {
-  buildConversationBackgroundRunIndicatorText,
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
   replaceConversationTitleInSessionList,
+  resolveConversationBackgroundRunState,
   resolveConversationInitialHistoricalWarmupTarget,
   resolveConversationLiveSession,
   resolveConversationPageTitle,
@@ -196,11 +196,7 @@ import {
   didConversationStopWithError,
   getConversationResumeState,
 } from '../conversation/conversationResume';
-import {
-  isRunActive,
-  listConnectedConversationBackgroundRuns,
-  type RunPresentationLookups,
-} from '../automation/runPresentation';
+import type { RunPresentationLookups } from '../automation/runPresentation';
 import {
   normalizeConversationComposerBehavior,
   resolveConversationComposerSubmitState,
@@ -2258,26 +2254,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     () => [...deferredResumes].sort(compareDeferredResumes),
     [deferredResumes],
   );
-  const connectedBackgroundRuns = useMemo(() => {
-    if (!id) {
-      return [];
-    }
-
-    return listConnectedConversationBackgroundRuns({
+  const backgroundRunState = useMemo(
+    () => resolveConversationBackgroundRunState({
       conversationId: id,
       runs,
       lookups: runLookups,
       excludeConversationRunId: conversationRunId,
-    });
-  }, [conversationRunId, id, runLookups, runs]);
-  const activeConversationBackgroundRuns = useMemo(
-    () => connectedBackgroundRuns.filter((run) => isRunActive(run)),
-    [connectedBackgroundRuns],
+    }),
+    [conversationRunId, id, runLookups, runs],
   );
-  const backgroundRunIndicatorText = useMemo(
-    () => buildConversationBackgroundRunIndicatorText(activeConversationBackgroundRuns, runLookups),
-    [activeConversationBackgroundRuns, runLookups],
-  );
+  const activeConversationBackgroundRuns = backgroundRunState.activeRuns;
+  const backgroundRunIndicatorText = backgroundRunState.indicatorText;
   const showActiveBackgroundRunDetails = showBackgroundRunDetails;
   const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
   const deferredResumeAutoResumeKey = useMemo(

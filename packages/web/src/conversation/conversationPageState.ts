@@ -1,7 +1,7 @@
-import type { DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
+import type { DurableRunListResult, DurableRunRecord, MessageBlock, SessionDetail, SessionMeta } from '../shared/types';
 import type { PendingConversationPrompt } from '../pending/pendingConversationPrompt';
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
-import { getRunHeadline, type RunPresentationLookups } from '../automation/runPresentation';
+import { getRunHeadline, isRunActive, listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
 
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
@@ -292,6 +292,34 @@ export function buildConversationBackgroundRunIndicatorText(
   }
 
   return `${runs.length} active · latest ${latestTitle}`;
+}
+
+export function resolveConversationBackgroundRunState(input: {
+  conversationId: string | null | undefined;
+  runs?: DurableRunListResult | null;
+  lookups?: RunPresentationLookups;
+  excludeConversationRunId?: string | null;
+}): {
+  connectedRuns: DurableRunRecord[];
+  activeRuns: DurableRunRecord[];
+  indicatorText: string;
+} {
+  if (!input.conversationId) {
+    return { connectedRuns: [], activeRuns: [], indicatorText: '' };
+  }
+
+  const connectedRuns = listConnectedConversationBackgroundRuns({
+    conversationId: input.conversationId,
+    runs: input.runs,
+    lookups: input.lookups,
+    excludeConversationRunId: input.excludeConversationRunId,
+  });
+  const activeRuns = connectedRuns.filter((run) => isRunActive(run));
+  return {
+    connectedRuns,
+    activeRuns,
+    indicatorText: buildConversationBackgroundRunIndicatorText(activeRuns, input.lookups),
+  };
 }
 
 export function resolveConversationInitialHistoricalWarmupTarget(input: {

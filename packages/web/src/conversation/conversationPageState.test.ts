@@ -6,6 +6,7 @@ import {
   hasConversationLoadedHistoricalTailBlocks,
   mergeConversationSessionMeta,
   replaceConversationMetaInSessionList,
+  resolveConversationBackgroundRunState,
   resolveConversationLiveSession,
   resolveConversationPerformanceMode,
   resolveConversationVisibleScrollBinding,
@@ -266,5 +267,62 @@ describe('conversation page state helpers', () => {
       },
       status: { status: 'running' },
     }])).toBe('running · task-a');
+  });
+
+  it('resolves connected active background-run state for a conversation', () => {
+    const state = resolveConversationBackgroundRunState({
+      conversationId: 'conv-1',
+      excludeConversationRunId: 'conversation-live-conv-1',
+      runs: {
+        scannedAt: '2026-04-01T00:00:00.000Z',
+        runsRoot: '/tmp/runs',
+        summary: { total: 3, recoveryActions: {}, statuses: {} },
+        runs: [
+          {
+            runId: 'run-active',
+            conversationId: 'conv-1',
+            manifest: {
+              kind: 'background-run',
+              source: { type: 'tool', id: 'conv-1' },
+              spec: { metadata: { taskSlug: 'arch-pass' } },
+              createdAt: '2026-04-01T00:00:00.000Z',
+            },
+            status: { status: 'running', updatedAt: '2026-04-01T00:01:00.000Z' },
+            problems: [],
+            recoveryAction: 'none',
+          },
+          {
+            runId: 'run-done',
+            conversationId: 'conv-1',
+            manifest: {
+              kind: 'background-run',
+              source: { type: 'tool', id: 'conv-1' },
+              spec: { metadata: { taskSlug: 'done-task' } },
+              createdAt: '2026-04-01T00:00:00.000Z',
+            },
+            status: { status: 'completed', completedAt: '2026-04-01T00:02:00.000Z' },
+            problems: [],
+            recoveryAction: 'none',
+          },
+          {
+            runId: 'conversation-live-conv-1',
+            conversationId: 'conv-1',
+            manifest: {
+              kind: 'background-run',
+              source: { type: 'tool', id: 'conv-1' },
+              spec: { metadata: { taskSlug: 'live-session' } },
+              createdAt: '2026-04-01T00:00:00.000Z',
+            },
+            status: { status: 'running' },
+            problems: [],
+            recoveryAction: 'none',
+          },
+        ],
+      },
+    });
+
+    expect(state.connectedRuns.map((run) => run.runId)).toEqual(['run-active', 'run-done']);
+    expect(state.activeRuns.map((run) => run.runId)).toEqual(['run-active']);
+    expect(state.indicatorText).toBe('running · arch-pass');
   });
 });
