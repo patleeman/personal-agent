@@ -9,7 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
 import { deliverBackgroundRunCallbackWakeup } from './background-run-callbacks.js';
 import { surfaceBackgroundRunResultsIfReady } from './background-run-deferred-resumes.js';
-import { loadDurableRunCheckpoint } from './store.js';
+import { loadDurableRunCheckpoint, loadDurableRunStatus, resolveDurableRunPaths, resolveDurableRunsRoot, saveDurableRunStatus } from './store.js';
 
 function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
@@ -114,6 +114,49 @@ describe('background run callbacks', () => {
       wakeupId: delivered.wakeupId,
       deliveredAt: '2026-04-04T01:05:00.000Z',
     });
+  });
+
+  it('keeps callback wakeups deliverable when status timestamps are malformed', async () => {
+    const daemonRoot = createTempDir('pa-background-run-callback-daemon-');
+    const stateRoot = createTempDir('pa-background-run-callback-state-');
+    const runsRoot = join(daemonRoot, 'runs');
+    const sessionFile = '/tmp/conversations/callback-invalid-time.jsonl';
+
+    const run = await createFinishedBackgroundRun({
+      daemonRoot,
+      sessionFile,
+      taskSlug: 'invalid-time-callback',
+      endedAt: '2026-04-04T01:05:00.000Z',
+    });
+    const paths = resolveDurableRunPaths(resolveDurableRunsRoot(daemonRoot), run.runId);
+    const status = loadDurableRunStatus(paths.statusPath);
+    saveDurableRunStatus(paths.statusPath, {
+      ...status!,
+      completedAt: 'not-a-date',
+      updatedAt: 'also-not-a-date',
+    });
+
+    const delivered = await deliverBackgroundRunCallbackWakeup({
+      daemonRoot,
+      stateRoot,
+      runsRoot,
+      runId: run.runId,
+    });
+
+    const deferredState = loadDeferredResumeState(resolveDeferredResumeStateFile(stateRoot));
+    const wakeup = deferredState.resumes[delivered.wakeupId ?? ''];
+    expect(delivered.delivered).toBe(true);
+    expect(wakeup).toEqual(expect.objectContaining({
+      id: delivered.wakeupId,
+      status: 'ready',
+      source: {
+        kind: 'background-run',
+        id: run.runId,
+      },
+    }));
+    expect(Number.isFinite(Date.parse(wakeup?.dueAt ?? ''))).toBe(true);
+    expect(Number.isFinite(Date.parse(wakeup?.readyAt ?? ''))).toBe(true);
+    expect(Number.isFinite(Date.parse(wakeup?.createdAt ?? ''))).toBe(true);
   });
 
   it('does not also surface hidden background-run context after callback delivery', async () => {

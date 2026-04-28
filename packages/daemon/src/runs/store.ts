@@ -209,7 +209,7 @@ function parseStatus(value: unknown): DurableRunStatusFile | undefined {
   const runId = toString(value.runId);
   const status = toRunStatus(value.status);
   const createdAt = toTimestampString(value.createdAt);
-  const updatedAt = toTimestampString(value.updatedAt);
+  const updatedAt = toTimestampString(value.updatedAt) ?? createdAt;
   const activeAttempt = toPositiveInteger(value.activeAttempt);
 
   if (!runId || !status || !createdAt || !updatedAt || activeAttempt === undefined) {
