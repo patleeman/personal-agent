@@ -40,6 +40,14 @@ describe('insertReplyQuoteIntoComposer', () => {
     });
   });
 
+  it('falls back to appending when the insertion range is fractional', () => {
+    expect(insertReplyQuoteIntoComposer('Intro', 'Important line', { start: 1.5, end: 1.5 })).toEqual({
+      text: 'Intro\n\n> Important line\n\n',
+      selectionStart: 25,
+      selectionEnd: 25,
+    });
+  });
+
   it('supports inserting multiple quotes one after another', () => {
     const first = insertReplyQuoteIntoComposer('', 'First point');
     const second = insertReplyQuoteIntoComposer(first.text, 'Second point', {

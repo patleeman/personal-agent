@@ -4,6 +4,14 @@ interface ReplyQuoteInsertionResult {
   selectionEnd: number;
 }
 
+function normalizeReplyQuoteSelectionIndex(value: number | undefined, fallback: number, max: number): number {
+  if (!Number.isSafeInteger(value)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(value, max));
+}
+
 export function normalizeReplyQuoteSelection(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
@@ -33,8 +41,8 @@ function buildInsertedComposerBlock(
 ): ReplyQuoteInsertionResult {
   const normalizedPrompt = promptText.replace(/\r\n?/g, '\n');
   const fallbackPosition = normalizedPrompt.length;
-  const start = Math.max(0, Math.min(selection?.start ?? fallbackPosition, normalizedPrompt.length));
-  const end = Math.max(start, Math.min(selection?.end ?? start, normalizedPrompt.length));
+  const start = normalizeReplyQuoteSelectionIndex(selection?.start, fallbackPosition, normalizedPrompt.length);
+  const end = Math.max(start, normalizeReplyQuoteSelectionIndex(selection?.end, start, normalizedPrompt.length));
 
   if (!block) {
     return {
