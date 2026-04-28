@@ -803,6 +803,14 @@ describe('live session routes', () => {
     expect(badIndexRes.status).toHaveBeenCalledWith(400);
     expect(badIndexRes.json).toHaveBeenCalledWith({ error: 'index must be a non-negative integer' });
 
+    const unsafeIndexRes = createResponse();
+    await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
+      params: { id: 'live-1' },
+      body: { behavior: 'steer', index: Number.MAX_SAFE_INTEGER + 1 },
+    }), unsafeIndexRes);
+    expect(unsafeIndexRes.status).toHaveBeenCalledWith(400);
+    expect(unsafeIndexRes.json).toHaveBeenCalledWith({ error: 'index must be a non-negative integer' });
+
     const dequeueRes = createResponse();
     await postHandler('/api/live-sessions/:id/dequeue')(createRequest({
       params: { id: 'live-1' },

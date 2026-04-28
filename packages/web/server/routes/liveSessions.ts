@@ -475,7 +475,7 @@ export function registerLiveSessionRoutes(
         return;
       }
 
-      if (!Number.isInteger(index) || (index as number) < 0) {
+      if (!Number.isSafeInteger(index) || (index as number) < 0) {
         res.status(400).json({ error: 'index must be a non-negative integer' });
         return;
       }
