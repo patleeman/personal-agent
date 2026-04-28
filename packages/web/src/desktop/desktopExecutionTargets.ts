@@ -23,18 +23,50 @@ export function resolveConversationExecutionTargetOptions(input: {
   hasDesktopBridge: boolean;
   currentRemoteHostId?: string | null;
   currentRemoteHostLabel?: string | null;
+  currentRemoteConversationId?: string | null;
 }): ConversationExecutionTargetOption[] {
   const baseOptions = input.continueInOptions.length > 0
     ? [...input.continueInOptions]
     : (input.hasDesktopBridge ? [{ value: 'local', label: 'Local' }] : []);
   const currentRemoteHostId = input.currentRemoteHostId?.trim() || '';
   const currentRemoteHostLabel = input.currentRemoteHostLabel?.trim() || currentRemoteHostId;
+  const currentRemoteConversationId = input.currentRemoteConversationId?.trim() || '';
 
   if (currentRemoteHostId && !baseOptions.some((option) => option.value === currentRemoteHostId)) {
     baseOptions.push({ value: currentRemoteHostId, label: currentRemoteHostLabel });
+  } else if (!currentRemoteHostId && currentRemoteConversationId) {
+    const fallbackRemoteValue = buildRemoteConversationExecutionTargetId(currentRemoteConversationId);
+    if (!baseOptions.some((option) => option.value === fallbackRemoteValue)) {
+      baseOptions.push({ value: fallbackRemoteValue, label: 'Remote' });
+    }
   }
 
   return baseOptions;
+}
+
+export function buildRemoteConversationExecutionTargetId(remoteConversationId: string): string {
+  return `remote-conversation:${remoteConversationId}`;
+}
+
+export function resolveSelectedConversationExecutionTargetId(input: {
+  draft: boolean;
+  draftExecutionTargetId: string;
+  currentRemoteHostId?: string | null;
+  currentRemoteConversationId?: string | null;
+}): string {
+  if (input.draft) {
+    return input.draftExecutionTargetId;
+  }
+
+  const currentRemoteHostId = input.currentRemoteHostId?.trim() || '';
+  if (currentRemoteHostId) {
+    return currentRemoteHostId;
+  }
+
+  const currentRemoteConversationId = input.currentRemoteConversationId?.trim() || '';
+  return currentRemoteConversationId
+    ? buildRemoteConversationExecutionTargetId(currentRemoteConversationId)
+    : 'local';
 }
 
 export function findSelectedExecutionTargetHost(input: {

@@ -39,6 +39,7 @@ import {
   buildContinueInExecutionTargetOptions,
   findSelectedExecutionTargetHost,
   resolveConversationExecutionTargetOptions,
+  resolveSelectedConversationExecutionTargetId,
 } from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
@@ -413,10 +414,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     hasDesktopBridge: Boolean(getDesktopBridge()),
     currentRemoteHostId: sessionSnapshot?.remoteHostId,
     currentRemoteHostLabel: sessionSnapshot?.remoteHostLabel,
-  }), [continueInOptions, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel]);
-  const selectedExecutionTargetId = draft
-    ? draftExecutionTargetId
-    : sessionSnapshot?.remoteHostId?.trim() || 'local';
+    currentRemoteConversationId: sessionSnapshot?.remoteConversationId,
+  }), [continueInOptions, sessionSnapshot?.remoteConversationId, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel]);
+  const selectedExecutionTargetId = resolveSelectedConversationExecutionTargetId({
+    draft,
+    draftExecutionTargetId,
+    currentRemoteHostId: sessionSnapshot?.remoteHostId,
+    currentRemoteConversationId: sessionSnapshot?.remoteConversationId,
+  });
   const selectedExecutionTargetHost = useMemo<Extract<DesktopHostRecord, { kind: 'ssh' }> | null>(
     () => findSelectedExecutionTargetHost({ selectedTargetId: selectedExecutionTargetId, connections: desktopConnectionsState }),
     [desktopConnectionsState, selectedExecutionTargetId],
