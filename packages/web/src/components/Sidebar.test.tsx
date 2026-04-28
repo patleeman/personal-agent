@@ -463,6 +463,13 @@ describe('Sidebar', () => {
       isLocal: false,
     });
     expect(getLocalSessionWorkspacePath(session)).toBe('');
+
+    storage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-remote-partial']));
+    const html = renderSidebar('/conversations/conv-remote-partial', {
+      sessions: [session],
+    });
+
+    expect(html).toContain('aria-label="Running on a remote host"');
   });
 
   it('renders saved custom cwd group labels when present', () => {

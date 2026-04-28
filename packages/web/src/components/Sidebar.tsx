@@ -1647,7 +1647,7 @@ function OpenConversationRow({
               needsAttention={needsAttention}
               className="shrink-0"
             />
-          ) : session.remoteHostId ? (
+          ) : isRemoteConversationSession(session) ? (
             <span
               className="shrink-0 text-accent/80"
               title={session.remoteHostLabel ? `Running on ${session.remoteHostLabel}` : 'Running on a remote host'}
