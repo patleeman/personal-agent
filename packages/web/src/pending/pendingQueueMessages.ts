@@ -73,7 +73,7 @@ export function appendPendingInitialPromptBlock(
   const text = pendingPrompt.text.trim();
   const images = pendingPrompt.images.map((image, index) => ({
     alt: image.name?.trim() || `Pending image ${index + 1}`,
-    src: image.previewUrl ?? `data:${image.mimeType};base64,${image.data}`,
+    src: safePendingImagePreviewUrl(image.previewUrl) ?? `data:${image.mimeType};base64,${image.data}`,
     mimeType: image.mimeType,
     caption: image.name,
   }));
@@ -110,4 +110,15 @@ export function appendPendingInitialPromptBlock(
       ...(images.length > 0 ? { images } : {}),
     },
   ];
+}
+
+function safePendingImagePreviewUrl(previewUrl: string | undefined): string | undefined {
+  const normalized = previewUrl?.trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  return normalized.startsWith('blob:') || normalized.toLowerCase().startsWith('data:image/')
+    ? normalized
+    : undefined;
 }
