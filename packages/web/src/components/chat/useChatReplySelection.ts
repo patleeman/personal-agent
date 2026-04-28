@@ -43,6 +43,16 @@ export function constrainSelectionContextMenuPosition(
   };
 }
 
+export function parseReplySelectionMessageIndex(value: string | undefined): number | null {
+  const normalized = value?.trim() ?? '';
+  if (!/^\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
 export function useChatReplySelection({
   onReplyToSelection,
   scrollContainerRef,
@@ -141,8 +151,8 @@ export function useChatReplySelection({
       return null;
     }
 
-    const messageIndex = Number.parseInt(scopeElement.dataset.messageIndex ?? '', 10);
-    if (!Number.isFinite(messageIndex)) {
+    const messageIndex = parseReplySelectionMessageIndex(scopeElement.dataset.messageIndex);
+    if (messageIndex === null) {
       return null;
     }
 
