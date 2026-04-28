@@ -131,7 +131,7 @@ export function parseOptionalNonNegativeNumber(value: string, label: string): nu
     return undefined;
   }
 
-  if (parsed < 0) {
+  if (parsed < 0 || Math.abs(parsed) > Number.MAX_SAFE_INTEGER) {
     throw new Error(`${label} must be a non-negative number.`);
   }
 
