@@ -14,6 +14,10 @@ function createDefaultDesktopAppPreferences(): DesktopAppPreferences {
   };
 }
 
+function readSafeNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
 function normalizeSshHostRecord(host: unknown): Extract<DesktopHostRecord, { kind: 'ssh' }> | null {
   if (!host || typeof host !== 'object') {
     return null;
@@ -79,10 +83,10 @@ function normalizeDesktopConfig(value: unknown): DesktopConfig {
     openWindowOnLaunch: input.openWindowOnLaunch !== false,
     windowState: input.windowState && typeof input.windowState === 'object'
       ? {
-          x: typeof input.windowState.x === 'number' ? input.windowState.x : undefined,
-          y: typeof input.windowState.y === 'number' ? input.windowState.y : undefined,
-          width: typeof input.windowState.width === 'number' ? input.windowState.width : DEFAULT_WINDOW_STATE.width,
-          height: typeof input.windowState.height === 'number' ? input.windowState.height : DEFAULT_WINDOW_STATE.height,
+          x: readSafeNumber(input.windowState.x),
+          y: readSafeNumber(input.windowState.y),
+          width: readSafeNumber(input.windowState.width) ?? DEFAULT_WINDOW_STATE.width,
+          height: readSafeNumber(input.windowState.height) ?? DEFAULT_WINDOW_STATE.height,
         }
       : { ...DEFAULT_WINDOW_STATE },
     hosts,

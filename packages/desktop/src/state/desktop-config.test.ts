@@ -52,6 +52,25 @@ describe('desktop-config', () => {
     }));
   });
 
+  it('drops unsafe persisted window bounds', () => {
+    writeFileSync(join(dir, 'config.json'), `${JSON.stringify({
+      version: 2,
+      windowState: {
+        x: Number.MAX_SAFE_INTEGER + 1,
+        y: 40,
+        width: Number.MAX_SAFE_INTEGER + 1,
+        height: 700,
+      },
+    }, null, 2)}\n`, 'utf-8');
+
+    expect(loadDesktopConfig().windowState).toEqual({
+      x: undefined,
+      y: 40,
+      width: 1440,
+      height: 700,
+    });
+  });
+
   it('defaults desktop app preferences and persists updates', () => {
     const initial = loadDesktopConfig();
     expect(readDesktopAppPreferences(initial)).toEqual({
