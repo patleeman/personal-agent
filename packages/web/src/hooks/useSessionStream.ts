@@ -252,7 +252,7 @@ function readInvokedSkillName(text: string): string | null {
   return skillName && skillName.length > 0 ? skillName : null;
 }
 
-function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, next: MessageBlock): boolean {
+export function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, next: MessageBlock): boolean {
   if (previous?.type !== 'user' || next.type !== 'user') {
     return false;
   }
@@ -267,18 +267,14 @@ function shouldReplaceOptimisticUserBlock(previous: MessageBlock | undefined, ne
     return false;
   }
 
-  const previousImageCount = previous.images?.length ?? 0;
-  const nextImageCount = next.images?.length ?? 0;
-  return previousImageCount === nextImageCount && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
+  return messageBlockImagesMatch(previous.images ?? [], next.images ?? [])
+    && nextSkillBlock.name.trim().toLowerCase() === previousSkillName;
 }
 
-export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | undefined, next: MessageBlock): boolean {
-  if (previous?.type !== 'user' || next.type !== 'user' || previous.text !== next.text) {
-    return false;
-  }
-
-  const previousImages = previous.images ?? [];
-  const nextImages = next.images ?? [];
+function messageBlockImagesMatch(
+  previousImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
+  nextImages: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>,
+): boolean {
   return previousImages.length === nextImages.length
     && nextImages.every((image, index) => {
       const previousImage = previousImages[index];
@@ -286,6 +282,14 @@ export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | u
         && previousImage?.mimeType === image.mimeType
         && previousImage?.caption === image.caption;
     });
+}
+
+export function userMessageBlocksMatchForStreamDedupe(previous: MessageBlock | undefined, next: MessageBlock): boolean {
+  if (previous?.type !== 'user' || next.type !== 'user' || previous.text !== next.text) {
+    return false;
+  }
+
+  return messageBlockImagesMatch(previous.images ?? [], next.images ?? []);
 }
 
 function resolveSessionStreamSubscriptionId(

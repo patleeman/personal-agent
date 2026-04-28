@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   normalizePendingQueueItems,
   retryLiveSessionActionAfterTakeover,
+  shouldReplaceOptimisticUserBlock,
   userMessageBlocksMatchForStreamDedupe,
 } from './useSessionStream';
 
@@ -36,6 +37,25 @@ describe('userMessageBlocksMatchForStreamDedupe', () => {
         images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
       },
     )).toBe(true);
+  });
+});
+
+describe('shouldReplaceOptimisticUserBlock', () => {
+  it('does not replace a skill prompt when accepted images differ', () => {
+    expect(shouldReplaceOptimisticUserBlock(
+      {
+        type: 'user',
+        ts: '2026-04-01T00:00:00.000Z',
+        text: '/skill:checkpoint',
+        images: [{ alt: 'old.png', src: 'blob:old', mimeType: 'image/png', caption: 'old.png' }],
+      },
+      {
+        type: 'user',
+        ts: '2026-04-01T00:00:01.000Z',
+        text: '<skill name="checkpoint" location="/skills/checkpoint/SKILL.md">\nCommit current work.\n</skill>',
+        images: [{ alt: 'new.png', src: 'blob:new', mimeType: 'image/png', caption: 'new.png' }],
+      },
+    )).toBe(false);
   });
 });
 
