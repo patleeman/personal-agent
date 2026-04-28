@@ -58,6 +58,12 @@ function ZenViewIcon() {
   );
 }
 
+const MAX_BROWSER_NAVIGATION_INDEX = 10_000;
+
+function isSafeNavigationIndex(value: number): boolean {
+  return Number.isSafeInteger(value) && value >= 0 && value <= MAX_BROWSER_NAVIGATION_INDEX;
+}
+
 function readPersistedNavigationIndex(value: string | null, fallback: number): number {
   if (value === null) {
     return fallback;
@@ -65,7 +71,7 @@ function readPersistedNavigationIndex(value: string | null, fallback: number): n
 
   const normalized = value.trim();
   const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 10_000 ? parsed : fallback;
+  return isSafeNavigationIndex(parsed) ? parsed : fallback;
 }
 
 export function readBrowserNavigationState(): DesktopNavigationState {
@@ -74,7 +80,7 @@ export function readBrowserNavigationState(): DesktopNavigationState {
   }
 
   const rawIndex = (window.history.state as { idx?: unknown } | null | undefined)?.idx;
-  const currentIndex = typeof rawIndex === 'number' && Number.isSafeInteger(rawIndex) && rawIndex >= 0 ? rawIndex : 0;
+  const currentIndex = typeof rawIndex === 'number' && isSafeNavigationIndex(rawIndex) ? rawIndex : 0;
   let maxIndex = currentIndex;
 
   try {
