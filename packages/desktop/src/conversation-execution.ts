@@ -211,7 +211,7 @@ function buildPromptFallbackConversationTitle(body: unknown): string {
         !!image
         && typeof image === 'object'
         && typeof (image as { data?: unknown }).data === 'string'
-        && (image as { data: string }).data.length > 0
+        && (image as { data: string }).data.trim().length > 0
         && typeof (image as { mimeType?: unknown }).mimeType === 'string'
         && (image as { mimeType: string }).mimeType.trim().length > 0
       )).length

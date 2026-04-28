@@ -227,7 +227,7 @@ describe('conversation-execution remote routing', () => {
     await dispatchConversationExecutionRequest(hostManager, {
       method: 'POST',
       path: '/api/live-sessions/local-conversation/prompt',
-      body: { images: [null, { data: '', mimeType: '' }] },
+      body: { images: [null, { data: '', mimeType: '' }, { data: '   ', mimeType: 'image/png' }] },
     });
 
     expect(localController.renameConversation).not.toHaveBeenCalled();
