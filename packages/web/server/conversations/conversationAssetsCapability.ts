@@ -127,7 +127,7 @@ function normalizeAttachmentDownloadInput(input: ConversationAttachmentDownloadI
     throw new ConversationAssetCapabilityInputError('asset must be "source" or "preview"');
   }
 
-  if (input.revision !== undefined && (!Number.isInteger(input.revision) || input.revision <= 0)) {
+  if (input.revision !== undefined && (!Number.isSafeInteger(input.revision) || input.revision <= 0)) {
     throw new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.');
   }
 

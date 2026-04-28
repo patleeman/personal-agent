@@ -279,6 +279,13 @@ describe('conversationAssetsCapability', () => {
       revision: 0,
     })).toThrowError(new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.'));
 
+    expect(() => readConversationAttachmentDownloadCapability('assistant', {
+      conversationId: 'session-1',
+      attachmentId: 'attachment-1',
+      asset: 'source',
+      revision: Number.MAX_SAFE_INTEGER + 1,
+    })).toThrowError(new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.'));
+
     readConversationAttachmentDownloadMock.mockImplementationOnce(() => {
       throw new Error('Attachment file not found: preview revision 2');
     });
