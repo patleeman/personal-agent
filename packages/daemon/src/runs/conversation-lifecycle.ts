@@ -34,9 +34,14 @@ function normalizeTimestamp(value: unknown, fallback?: unknown): string {
       continue;
     }
 
+    if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(candidate)) {
+      continue;
+    }
+
     const parsed = Date.parse(candidate);
-    if (Number.isFinite(parsed)) {
-      return new Date(parsed).toISOString();
+    const normalized = Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+    if (normalized === candidate || normalized === candidate.replace('Z', '.000Z')) {
+      return normalized;
     }
   }
 

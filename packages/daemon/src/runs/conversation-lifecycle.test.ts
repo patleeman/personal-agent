@@ -115,6 +115,24 @@ describe('conversation lifecycle helpers', () => {
     }));
   });
 
+  it('falls back to valid timestamps when record dates are non-ISO', () => {
+    const stateRoot = createTempDir('conversation-lifecycle-');
+    const path = resolveConversationRecordPath(stateRoot, 'assistant', 'conv-non-iso-time');
+    mkdirSync(join(path, '..'), { recursive: true });
+    writeFileSync(path, JSON.stringify({
+      createdAt: '1',
+      updatedAt: '1',
+    }), 'utf-8');
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-10T12:34:56.000Z'));
+
+    expect(readConversationRecord(stateRoot, 'assistant', 'conv-non-iso-time')).toEqual(expect.objectContaining({
+      createdAt: '2026-04-10T12:34:56.000Z',
+      updatedAt: '2026-04-10T12:34:56.000Z',
+    }));
+  });
+
   it('writes records and preserves optional metadata fields', () => {
     const stateRoot = createTempDir('conversation-lifecycle-');
     const record: ConversationRecord = {
