@@ -59,6 +59,16 @@ Prepare tax checklist.
 `,
       defaultTimeoutSeconds: 1800,
     })).toThrow('Invalid at timestamp: 9999');
+
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/overflowed-reminder.task.md',
+      rawContent: `---
+at: "2026-02-31T09:00:00.000Z"
+---
+Prepare tax checklist.
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Invalid at timestamp: 2026-02-31T09:00:00.000Z');
   });
 
   it('rejects tasks without cron or at schedule', () => {
