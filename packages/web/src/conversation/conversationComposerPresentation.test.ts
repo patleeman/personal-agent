@@ -113,6 +113,8 @@ describe('conversation composer presentation helpers', () => {
   it('formats queued prompt and parallel job shelf text compactly', () => {
     expect(truncateConversationShelfText('one\ntwo\nthree', { maxLines: 2 })).toBe('one\ntwo…');
     expect(truncateConversationShelfText('abcdef', { maxChars: 3 })).toBe('abc…');
+    expect(truncateConversationShelfText('one\ntwo\nthree', { maxLines: 1.5 })).toBe('one\ntwo\nthree');
+    expect(truncateConversationShelfText('abcdef', { maxChars: 3.5 })).toBe('abcdef');
     expect(formatQueuedPromptShelfText('', 1)).toBe('(image only)');
     expect(formatQueuedPromptShelfText('  ', 0)).toBe('(empty queued prompt)');
     expect(formatQueuedPromptImageSummary(2)).toBe('2 images attached');

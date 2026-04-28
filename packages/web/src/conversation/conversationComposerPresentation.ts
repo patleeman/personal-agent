@@ -89,8 +89,12 @@ export function truncateConversationShelfText(
   options: { maxChars?: number; maxLines?: number } = {},
 ): string {
   const normalized = text.replace(/\r\n?/g, '\n');
-  const maxChars = Math.max(1, options.maxChars ?? COMPOSER_SHELF_TEXT_MAX_CHARS);
-  const maxLines = Math.max(1, options.maxLines ?? COMPOSER_SHELF_TEXT_MAX_LINES);
+  const maxChars = typeof options.maxChars === 'number' && Number.isSafeInteger(options.maxChars) && options.maxChars > 0
+    ? options.maxChars
+    : COMPOSER_SHELF_TEXT_MAX_CHARS;
+  const maxLines = typeof options.maxLines === 'number' && Number.isSafeInteger(options.maxLines) && options.maxLines > 0
+    ? options.maxLines
+    : COMPOSER_SHELF_TEXT_MAX_LINES;
   const lines = normalized.split('\n');
   const truncatedByLines = lines.length > maxLines;
   const lineLimited = truncatedByLines ? lines.slice(0, maxLines).join('\n') : normalized;
