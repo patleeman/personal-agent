@@ -139,8 +139,9 @@ function writeStoredBoolean(key: string, value: boolean): void {
   try { localStorage.setItem(key, value ? '1' : '0'); } catch { /* ignore */ }
 }
 
-function formatBytes(size: number | null): string {
+export function formatWorkspaceEntrySize(size: number | null): string {
   if (size === null) return '';
+  if (!Number.isSafeInteger(size) || size < 0) return '';
   if (size < 1024) return `${size} B`;
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`;
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
@@ -558,7 +559,7 @@ function WorkspaceTreeRow({
       >
         <span className={cx('w-3 shrink-0 text-dim transition-transform', isDirectory && node?.expanded && 'rotate-90')}>{fileIcon(entry)}</span>
         <span className={cx('min-w-0 flex-1 truncate', isDirectory ? 'font-medium' : 'font-mono')}>{entry.name}</span>
-        {entry.size !== null && <span className="hidden shrink-0 text-[10px] text-dim group-hover:inline">{formatBytes(entry.size)}</span>}
+        {entry.size !== null && <span className="hidden shrink-0 text-[10px] text-dim group-hover:inline">{formatWorkspaceEntrySize(entry.size)}</span>}
         <WorkspaceStatusBadge status={entry.gitStatus} count={entry.descendantGitStatusCount} />
         <button
           type="button"
@@ -1023,7 +1024,7 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
             <div className="flex items-center gap-2 bg-base/70 px-3 py-2 text-secondary">
               <div className="min-w-0 flex-1">
                 <div className="truncate font-mono text-[12px] font-medium text-secondary" title={selectedFile.path}>{selectedFile.path}</div>
-                <div className="text-[10px] text-dim">{formatBytes(selectedFile.size)} {selectedFile.binary ? '· binary' : ''} {selectedFile.tooLarge ? '· large' : ''}</div>
+                <div className="text-[10px] text-dim">{formatWorkspaceEntrySize(selectedFile.size)} {selectedFile.binary ? '· binary' : ''} {selectedFile.tooLarge ? '· large' : ''}</div>
               </div>
               <WorkspaceStatusBadge status={selectedFile.gitStatus} />
               {selectedFile.gitStatus && !selectedFile.binary && !selectedFile.tooLarge && (
