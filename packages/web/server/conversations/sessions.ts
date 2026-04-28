@@ -605,10 +605,12 @@ function normalizeContent(content: unknown): RawContentBlock[] {
 
 function normalizeTimestamp(timestamp: string | number | undefined): string {
   if (typeof timestamp === 'string' && timestamp.trim()) {
-    return timestamp;
+    const parsed = Date.parse(timestamp);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date(0).toISOString();
   }
   if (typeof timestamp === 'number' && Number.isFinite(timestamp)) {
-    return new Date(timestamp).toISOString();
+    const date = new Date(timestamp);
+    return Number.isFinite(date.getTime()) ? date.toISOString() : new Date(0).toISOString();
   }
   return new Date(0).toISOString();
 }
