@@ -150,13 +150,13 @@ export function shouldContinueConversationBottomSettle(
   },
 ): boolean {
   const minFrames = typeof state.minFrames === 'number' && Number.isSafeInteger(state.minFrames) && state.minFrames >= 0
-    ? state.minFrames
+    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.minFrames)
     : 0;
   const stableFrameCount = typeof state.stableFrameCount === 'number' && Number.isSafeInteger(state.stableFrameCount) && state.stableFrameCount > 0
-    ? state.stableFrameCount
+    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.stableFrameCount)
     : DEFAULT_BOTTOM_SETTLE_STABLE_FRAME_COUNT;
   const maxFramesCandidate = typeof state.maxFrames === 'number' && Number.isSafeInteger(state.maxFrames) && state.maxFrames >= 0
-    ? state.maxFrames
+    ? Math.min(DEFAULT_BOTTOM_SETTLE_MAX_FRAMES, state.maxFrames)
     : DEFAULT_BOTTOM_SETTLE_MAX_FRAMES;
   const maxFrames = Math.max(minFrames, maxFramesCandidate);
 

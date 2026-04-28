@@ -265,4 +265,22 @@ describe('conversation scroll helpers', () => {
       maxFrames: 1.5,
     })).toBe(true);
   });
+
+  it('caps huge bottom-settle frame limits instead of running indefinitely', () => {
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 45,
+      stableFrames: 0,
+      minFrames: 0,
+      stableFrameCount: 2,
+      maxFrames: Number.MAX_SAFE_INTEGER,
+    })).toBe(false);
+
+    expect(shouldContinueConversationBottomSettle({
+      frameCount: 45,
+      stableFrames: 0,
+      minFrames: Number.MAX_SAFE_INTEGER,
+      stableFrameCount: 2,
+      maxFrames: 45,
+    })).toBe(false);
+  });
 });
