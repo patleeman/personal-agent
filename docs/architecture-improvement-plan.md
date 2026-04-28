@@ -99,6 +99,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved live pending-queue item shaping into `pendingQueueMessages`, so `ConversationPage` no longer maps steer/follow-up previews by hand.
    - Moved pending ask-user-question key derivation into `askUserQuestions`, keeping question identity rules beside the transcript parser.
    - Moved related-thread candidate lookup derivation into `relatedThreadSelection`, removing candidate map/id construction from `ConversationPage`.
+   - Moved historical block hydration id/list and transcript merge helpers into `messageBlocks`, keeping display/live block replacement rules outside `ConversationPage`.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

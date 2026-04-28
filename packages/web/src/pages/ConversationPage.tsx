@@ -115,7 +115,15 @@ import {
   resolveComposerClearShortcut,
   resolveComposerHistoryNavigation,
 } from '../conversation/conversationComposerEditing';
-import { displayBlockToMessageBlock } from '../transcript/messageBlocks';
+import {
+  addHydratingHistoricalBlockId,
+  buildHydratingHistoricalBlockIdSet,
+  displayBlockToMessageBlock,
+  mergeHydratedHistoricalBlocks,
+  mergeHydratedStreamBlocks,
+  normalizeHistoricalBlockId,
+  removeHydratingHistoricalBlockId,
+} from '../transcript/messageBlocks';
 import {
   hasSelectableModelId,
   resolveSelectableModelId,
@@ -667,7 +675,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [hydratedHistoricalBlocks, setHydratedHistoricalBlocks] = useState<Record<string, MessageBlock>>({});
   const [hydratingHistoricalBlockIds, setHydratingHistoricalBlockIds] = useState<string[]>([]);
   const hydratingHistoricalBlockIdSet = useMemo(
-    () => new Set(hydratingHistoricalBlockIds),
+    () => buildHydratingHistoricalBlockIdSet(hydratingHistoricalBlockIds),
     [hydratingHistoricalBlockIds],
   );
 
@@ -679,14 +687,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [id]);
 
   const hydrateHistoricalBlock = useCallback(async (blockId: string) => {
-    const normalizedBlockId = blockId.trim();
-    if (!id || normalizedBlockId.length === 0 || hydratingHistoricalBlockIdSet.has(normalizedBlockId)) {
+    const normalizedBlockId = normalizeHistoricalBlockId(blockId);
+    if (!id || !normalizedBlockId || hydratingHistoricalBlockIds.includes(normalizedBlockId)) {
       return;
     }
 
-    setHydratingHistoricalBlockIds((current) => current.includes(normalizedBlockId)
-      ? current
-      : [...current, normalizedBlockId]);
+    setHydratingHistoricalBlockIds((current) => addHydratingHistoricalBlockId(current, normalizedBlockId));
 
     try {
       const block = await api.sessionBlock(id, normalizedBlockId);
@@ -698,25 +704,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     } catch (error) {
       console.error('Failed to hydrate historical block', error);
     } finally {
-      setHydratingHistoricalBlockIds((current) => current.filter((candidate) => candidate !== normalizedBlockId));
+      setHydratingHistoricalBlockIds((current) => removeHydratingHistoricalBlockId(current, normalizedBlockId));
     }
-  }, [hydratingHistoricalBlockIdSet, id]);
+  }, [hydratingHistoricalBlockIds, id]);
 
   // Historical messages from the JSONL snapshot (doesn't update after load).
   // Memoize the conversion so typing in the composer does not rebuild long transcripts.
   const baseMessages = useMemo<MessageBlock[]>(() => (
-    visibleSessionDetail
-      ? visibleSessionDetail.blocks.map((block) => {
-          const hydrated = hydratedHistoricalBlocks[block.id];
-          return hydrated ?? displayBlockToMessageBlock(block);
-        })
-      : []
+    visibleSessionDetail ? mergeHydratedHistoricalBlocks(visibleSessionDetail.blocks, hydratedHistoricalBlocks) : []
   ), [hydratedHistoricalBlocks, visibleSessionDetail]);
   const visibleStreamBlocks = useMemo<MessageBlock[]>(() => (
-    stream.blocks.map((block) => {
-      const normalizedId = block.id?.trim();
-      return normalizedId ? (hydratedHistoricalBlocks[normalizedId] ?? block) : block;
-    })
+    mergeHydratedStreamBlocks(stream.blocks, hydratedHistoricalBlocks)
   ), [hydratedHistoricalBlocks, stream.blocks]);
 
   // Pending steer/followup queue as reported by the live session.

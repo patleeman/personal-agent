@@ -1,5 +1,32 @@
 import type { DisplayBlock, MessageBlock } from '../shared/types';
 
+export function normalizeHistoricalBlockId(blockId: string): string | null {
+  const normalized = blockId.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+export function addHydratingHistoricalBlockId(current: string[], blockId: string): string[] {
+  const normalized = normalizeHistoricalBlockId(blockId);
+  if (!normalized || current.includes(normalized)) {
+    return current;
+  }
+
+  return [...current, normalized];
+}
+
+export function removeHydratingHistoricalBlockId(current: string[], blockId: string): string[] {
+  const normalized = normalizeHistoricalBlockId(blockId);
+  if (!normalized) {
+    return current;
+  }
+
+  return current.filter((candidate) => candidate !== normalized);
+}
+
+export function buildHydratingHistoricalBlockIdSet(blockIds: string[]): ReadonlySet<string> {
+  return new Set(blockIds);
+}
+
 export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
   switch (block.type) {
     case 'user':
@@ -41,4 +68,21 @@ export function displayBlockToMessageBlock(block: DisplayBlock): MessageBlock {
     case 'error':
       return { type: 'error', id: block.id, tool: block.tool, message: block.message, ts: block.ts };
   }
+}
+
+export function mergeHydratedHistoricalBlocks(
+  blocks: DisplayBlock[],
+  hydratedBlocks: Record<string, MessageBlock>,
+): MessageBlock[] {
+  return blocks.map((block) => hydratedBlocks[block.id] ?? displayBlockToMessageBlock(block));
+}
+
+export function mergeHydratedStreamBlocks(
+  blocks: MessageBlock[],
+  hydratedBlocks: Record<string, MessageBlock>,
+): MessageBlock[] {
+  return blocks.map((block) => {
+    const normalizedId = block.id?.trim();
+    return normalizedId ? (hydratedBlocks[normalizedId] ?? block) : block;
+  });
 }
