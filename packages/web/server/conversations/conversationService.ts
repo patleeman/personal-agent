@@ -367,7 +367,7 @@ export function listConversationSessionsSnapshot() {
     ...syntheticLive,
     ...jsonl.map((session) => {
       const liveEntry = liveById.get(session.id);
-      const isRemoteTarget = Boolean(session.remoteHostId && session.remoteConversationId);
+      const isRemoteTarget = Boolean(session.remoteHostId || session.remoteConversationId);
       return {
         ...session,
         title: liveEntry?.title || session.title,
@@ -447,7 +447,7 @@ export function readConversationSessionMeta(conversationId: string) {
     return liveEntry ? buildSyntheticLiveSessionSnapshot(liveEntry, deferredResumesBySessionFile) : null;
   }
 
-  const isRemoteTarget = Boolean(decoratedSession.remoteHostId && decoratedSession.remoteConversationId);
+  const isRemoteTarget = Boolean(decoratedSession.remoteHostId || decoratedSession.remoteConversationId);
 
   return {
     ...decoratedSession,

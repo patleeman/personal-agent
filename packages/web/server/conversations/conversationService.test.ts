@@ -123,6 +123,7 @@ import {
   parseTailBlocksQuery,
   publishConversationSessionMetaChanged,
   readConversationModelPreferenceStateById,
+  readConversationSessionMeta,
   readConversationSessionSignature,
   readSessionDetailForRoute,
   resolveConversationSessionFile,
@@ -469,6 +470,42 @@ describe('conversationService', () => {
       messageCount: 3,
     });
     expect(toggleConversationAttention({ profile: 'assistant', conversationId: 'missing' })).toBe(false);
+  });
+
+  it('marks conversations with partial remote identity as live remote targets', () => {
+    listSessionsMock.mockReturnValue([
+      {
+        id: 'remote-partial',
+        file: '/sessions/remote-partial.jsonl',
+        timestamp: '2026-04-09T09:00:00.000Z',
+        cwd: '/remote/repo',
+        cwdSlug: '-remote-repo',
+        model: 'gpt-5',
+        title: 'Remote partial',
+        messageCount: 1,
+        remoteHostId: 'bender',
+      },
+    ]);
+    readSessionMetaMock.mockReturnValue({
+      id: 'remote-partial',
+      file: '/sessions/remote-partial.jsonl',
+      timestamp: '2026-04-09T09:00:00.000Z',
+      cwd: '/remote/repo',
+      cwdSlug: '-remote-repo',
+      model: 'gpt-5',
+      title: 'Remote partial',
+      messageCount: 1,
+      remoteHostId: 'bender',
+    });
+
+    expect(listConversationSessionsSnapshot()).toEqual([
+      expect.objectContaining({ id: 'remote-partial', isLive: true, isRunning: false }),
+    ]);
+    expect(readConversationSessionMeta('remote-partial')).toEqual(expect.objectContaining({
+      id: 'remote-partial',
+      isLive: true,
+      isRunning: false,
+    }));
   });
 
   it('reads route session detail and model preference state', async () => {
