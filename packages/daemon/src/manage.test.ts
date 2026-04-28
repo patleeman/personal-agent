@@ -146,6 +146,10 @@ describe('daemon manage helpers', () => {
     existsSyncMock.mockReturnValueOnce(true);
     readFileSyncMock.mockReturnValueOnce('not-a-number');
     await expect(readDaemonPid()).resolves.toBeUndefined();
+
+    existsSyncMock.mockReturnValueOnce(true);
+    readFileSyncMock.mockReturnValueOnce(String(Number.MAX_SAFE_INTEGER + 1));
+    await expect(readDaemonPid()).resolves.toBeUndefined();
   });
 
   it('renders a minimal status payload when the daemon is offline', async () => {
