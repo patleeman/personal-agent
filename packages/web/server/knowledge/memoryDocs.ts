@@ -14,6 +14,7 @@ import {
   getDurableSkillsDir,
   getProfilesRoot,
   getVaultRoot,
+  listUnifiedSkillNodeDirs,
   loadMemoryPackageReferences,
   loadUnifiedNodes,
 } from '@personal-agent/core';
@@ -251,7 +252,12 @@ export function listSkillsForProfile(profile: string): SkillItem[] {
   const seenNames = new Set<string>();
   const skills: SkillItem[] = [];
 
-  for (const skillDir of resolved.skillDirs) {
+  const skillDirs = [
+    ...resolved.skillDirs,
+    ...listUnifiedSkillNodeDirs(profile, { vaultRoot: getVaultRoot() }),
+  ];
+
+  for (const skillDir of skillDirs) {
     for (const filePath of listSkillFiles(skillDir)) {
       const normalizedPath = normalizeMemoryPath(filePath);
       if (!normalizedPath || seenPaths.has(normalizedPath)) {

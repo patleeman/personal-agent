@@ -141,8 +141,8 @@ Top-level note hub.
     writeFile(
       skillPath('alpha-skill'),
       `---
-id: alpha-skill
-summary: Alpha summary.
+name: alpha-skill
+description: Alpha summary.
 profiles:
   - assistant
 ---

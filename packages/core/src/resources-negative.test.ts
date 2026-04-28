@@ -55,12 +55,13 @@ describe('resources negative tests', () => {
       expect(resolved.name).toBe('shared');
     });
 
-    it('throws on non-existent profile', () => {
+    it('resolves non-existent profile names to the shared profile', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
       writeFile(join(repo, 'defaults/agent/AGENTS.md'), '# Shared\n');
 
-      expect(() => resolveResourceProfile('nonexistent', { repoRoot: repo, profilesRoot })).toThrow('Profile not found');
+      const resolved = resolveResourceProfile('nonexistent', { repoRoot: repo, profilesRoot });
+      expect(resolved.name).toBe('shared');
     });
 
     it('handles profile with no durable resources but local overlay', () => {
@@ -150,22 +151,22 @@ describe('resources negative tests', () => {
       expect(profiles).toEqual(['shared']);
     });
 
-    it('reads profile ids from profile directories', () => {
+    it('ignores legacy profile directories', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
       mkdirSync(join(profilesRoot, 'incomplete'), { recursive: true });
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toEqual(['incomplete', 'shared']);
+      expect(profiles).toEqual(['shared']);
     });
 
-    it('handles profiles with special characters in name (valid)', () => {
+    it('does not list legacy profile directories with special characters', () => {
       const repo = createTempDir('personal-agent-resources-');
       const profilesRoot = createTempProfilesRoot();
       mkdirSync(join(profilesRoot, 'test-profile_v2'), { recursive: true });
 
       const profiles = listProfiles({ repoRoot: repo, profilesRoot });
-      expect(profiles).toContain('test-profile_v2');
+      expect(profiles).toEqual(['shared']);
     });
   });
 
