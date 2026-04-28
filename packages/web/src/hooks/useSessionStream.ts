@@ -151,8 +151,8 @@ export function normalizePendingQueueItems(value: unknown): QueuedPromptPreview[
     }
 
     const candidate = item as Partial<QueuedPromptPreview>;
-    const imageCount = Number.isInteger(candidate.imageCount) && Number(candidate.imageCount) > 0
-      ? Number(candidate.imageCount)
+    const imageCount = typeof candidate.imageCount === 'number' && Number.isSafeInteger(candidate.imageCount) && candidate.imageCount > 0
+      ? candidate.imageCount
       : 0;
     const rawText = typeof candidate.text === 'string' ? candidate.text : '';
     const text = rawText.trim().length > 0

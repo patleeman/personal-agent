@@ -215,6 +215,12 @@ describe('normalizePendingQueueItems', () => {
     ]);
   });
 
+  it('rejects unsafe queue preview image counts', () => {
+    expect(normalizePendingQueueItems([{ id: 'steer-unsafe', text: '', imageCount: Number.MAX_SAFE_INTEGER + 1 }])).toEqual([
+      { id: 'steer-unsafe', text: '(empty queued prompt)', imageCount: 0 },
+    ]);
+  });
+
   it('falls back to an empty queue for non-array payloads', () => {
     expect(normalizePendingQueueItems(undefined)).toEqual([]);
     expect(normalizePendingQueueItems({ steering: ['bad-shape'] })).toEqual([]);
