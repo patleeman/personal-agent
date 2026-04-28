@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBackgroundRunRecord, finalizeBackgroundRun } from './background-runs.js';
 import {
   listPendingBackgroundRunResults,
@@ -55,6 +55,10 @@ async function createFinishedBackgroundRun(input: {
 }
 
 describe('background run result surfacing', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('waits until the last active run stops, then surfaces a batched pending result', async () => {
     // Note: runs are stored under <runsRoot>/runs/ due to scheduleRun structure
     const tempRoot = createTempDir('pa-background-run-results-');
@@ -161,6 +165,31 @@ describe('background run result surfacing', () => {
 
     const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
     expect((checkpoint?.payload?.backgroundRunResume as { deliveredAt?: string } | undefined)?.deliveredAt).toBe('2026-03-22T19:00:30.000Z');
+  });
+
+  it('falls back to the current clock when surfacing with an invalid Date', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-22T19:00:05.000Z'));
+    const tempRoot = createTempDir('pa-background-run-results-');
+    const runsRoot = join(tempRoot, 'runs');
+    const sessionFile = '/tmp/conversations/invalid-now.jsonl';
+
+    const run = await createFinishedBackgroundRun({
+      runsRoot: tempRoot,
+      taskSlug: 'invalid-now-task',
+      sessionFile,
+      endedAt: '2026-03-22T19:00:05.000Z',
+    });
+
+    const surfaced = await surfaceBackgroundRunResultsIfReady({
+      runsRoot,
+      triggerRunId: run.runId,
+      now: new Date(Number.NaN),
+    });
+
+    expect(surfaced.resultId).toBeTruthy();
+    const checkpoint = loadDurableRunCheckpoint(run.checkpointPath);
+    expect((checkpoint?.payload?.backgroundRunResume as { surfacedAt?: string } | undefined)?.surfacedAt).toBe('2026-03-22T19:00:05.000Z');
   });
 
 });

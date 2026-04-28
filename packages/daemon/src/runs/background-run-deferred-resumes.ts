@@ -53,6 +53,10 @@ function trimText(value: string | undefined, maxLength: number): string | undefi
   return `${normalized.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`;
 }
 
+function resolveValidDate(input?: Date): Date {
+  return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
+}
+
 function readCheckpointPayload(checkpoint: DurableRunCheckpointFile | undefined): Record<string, unknown> {
   return isRecord(checkpoint?.payload) ? checkpoint.payload : {};
 }
@@ -434,7 +438,7 @@ export async function surfaceBackgroundRunResultsIfReady(input: {
   }
 
   const surfacedRunIds = stoppedRuns.map((run) => run.run.runId).sort();
-  const surfacedAt = new Date(input.now ?? Date.now()).toISOString();
+  const surfacedAt = resolveValidDate(input.now).toISOString();
   const resultId = createBackgroundRunResultBatchId(trigger.sessionFile, surfacedRunIds);
   markRunsSurfaced(input.runsRoot, stoppedRuns, resultId, surfacedAt);
 
