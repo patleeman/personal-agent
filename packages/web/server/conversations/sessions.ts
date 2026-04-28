@@ -618,9 +618,23 @@ function imageMimeType(block: RawContentBlock): string | undefined {
   return typeof mimeType === 'string' && mimeType.trim().length > 0 ? mimeType.trim() : undefined;
 }
 
+function normalizeBase64ImageData(data: unknown): string | undefined {
+  if (typeof data !== 'string') {
+    return undefined;
+  }
+
+  const normalized = data.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return undefined;
+  }
+
+  const decoded = Buffer.from(normalized, 'base64');
+  return decoded.length > 0 ? normalized : undefined;
+}
+
 function imageSrc(block: RawContentBlock): string | undefined {
   const mimeType = imageMimeType(block);
-  const data = typeof block.data === 'string' ? block.data.trim() : '';
+  const data = normalizeBase64ImageData(block.data);
   if (!mimeType || !data) return undefined;
   return `data:${mimeType};base64,${data}`;
 }
@@ -2326,7 +2340,7 @@ export function readSessionBlock(sessionId: string, blockId: string): DisplayBlo
 
 function buildSessionImageAsset(block: RawContentBlock): { mimeType: string; data: Buffer; fileName?: string } | null {
   const mimeType = imageMimeType(block);
-  const data = typeof block.data === 'string' ? block.data.trim() : '';
+  const data = normalizeBase64ImageData(block.data);
   if (!mimeType || !data) {
     return null;
   }

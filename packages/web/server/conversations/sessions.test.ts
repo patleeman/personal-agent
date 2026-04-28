@@ -507,7 +507,7 @@ describe('sessions', () => {
           role: 'user',
           content: [
             { type: 'text', text: 'Here is a valid image after a bad one' },
-            { type: 'image', data: '   ', mimeType: 'image/png', name: 'bad.png' },
+            { type: 'image', data: 'not-valid-base64!', mimeType: 'image/png', name: 'bad.png' },
             { type: 'image', data: 'aGVsbG8=', mimeType: 'image/png', name: 'hello.png' },
           ],
         },
