@@ -48,6 +48,7 @@ export interface ServiceAttentionMonitor {
 const DEFAULT_MONITOR_INTERVAL_MS = 10_000;
 const DEFAULT_SUPPRESSION_MS = 20_000;
 const DEFAULT_ISSUE_GRACE_MS = 60_000;
+const MAX_ISSUE_GRACE_MS = 5 * 60_000;
 
 const suppressedServiceAttentionUntilMs: Record<MonitoredInternalService, number> = {
   daemon: 0,
@@ -182,7 +183,10 @@ export function createServiceAttentionMonitor(options: ServiceAttentionMonitorOp
     });
   });
   const stateRecords = new Map<MonitoredInternalService, ServiceAttentionStateRecord>();
-  const issueGraceMs = typeof options.issueGraceMs === 'number' && Number.isSafeInteger(options.issueGraceMs) && options.issueGraceMs >= 0
+  const issueGraceMs = typeof options.issueGraceMs === 'number'
+    && Number.isSafeInteger(options.issueGraceMs)
+    && options.issueGraceMs >= 0
+    && options.issueGraceMs <= MAX_ISSUE_GRACE_MS
     ? options.issueGraceMs
     : DEFAULT_ISSUE_GRACE_MS;
   let intervalHandle: ReturnType<typeof setInterval> | undefined;
