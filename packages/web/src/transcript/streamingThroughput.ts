@@ -34,7 +34,7 @@ function readStreamingThroughput(
   isStreaming: boolean,
   nowMs = Date.now(),
 ): StreamingThroughputSample | null {
-  if (!isStreaming || !Number.isFinite(nowMs)) {
+  if (!isStreaming || !Number.isSafeInteger(nowMs)) {
     return null;
   }
 
