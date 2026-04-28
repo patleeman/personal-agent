@@ -26,7 +26,7 @@ function readTrimmedString(value: Record<string, unknown> | null, key: string): 
 
 function readInteger(value: Record<string, unknown> | null, key: string): number | undefined {
   const candidate = value?.[key];
-  return typeof candidate === 'number' && Number.isInteger(candidate) ? candidate : undefined;
+  return typeof candidate === 'number' && Number.isSafeInteger(candidate) ? candidate : undefined;
 }
 
 function readBoolean(value: Record<string, unknown> | null, key: string): boolean {
