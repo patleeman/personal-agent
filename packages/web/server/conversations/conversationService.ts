@@ -459,6 +459,14 @@ export function readConversationSessionMeta(conversationId: string) {
 
 type SessionDetailRouteReadResult = ReturnType<typeof readSessionBlocksWithTelemetry>;
 
+const MAX_SESSION_DETAIL_TAIL_BLOCKS = 1000;
+
+function normalizeSessionDetailTailBlocks(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? Math.min(MAX_SESSION_DETAIL_TAIL_BLOCKS, value)
+    : undefined;
+}
+
 export function parseTailBlocksQuery(rawTailBlocks: unknown): number | undefined {
   const candidate = Array.isArray(rawTailBlocks) ? rawTailBlocks[0] : rawTailBlocks;
   const parsed = typeof candidate === 'number'
@@ -480,9 +488,10 @@ export async function readSessionDetailForRoute(input: {
   sessionRead: SessionDetailRouteReadResult;
   remoteMirror: SessionDetailRouteRemoteMirrorTelemetry;
 }> {
+  const tailBlocks = normalizeSessionDetailTailBlocks(input.tailBlocks);
   const sessionRead = readSessionBlocksWithTelemetry(
     input.conversationId,
-    input.tailBlocks ? { tailBlocks: input.tailBlocks } : undefined,
+    tailBlocks ? { tailBlocks } : undefined,
   );
 
   return {

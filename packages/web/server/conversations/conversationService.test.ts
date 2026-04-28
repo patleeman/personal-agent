@@ -530,6 +530,17 @@ describe('conversationService', () => {
     expect(readSessionBlocksWithTelemetryMock).toHaveBeenCalledWith('conversation-1', { tailBlocks: 5 });
 
     readSessionBlocksWithTelemetryMock.mockReturnValueOnce({
+      detail: { id: 'detail-capped' },
+      telemetry: { cache: 'hit', loader: 'disk', durationMs: 2 },
+    });
+    await expect(readSessionDetailForRoute({
+      conversationId: 'conversation-capped',
+      profile: 'assistant',
+      tailBlocks: 5000,
+    })).resolves.toMatchObject({ sessionRead: { detail: { id: 'detail-capped' } } });
+    expect(readSessionBlocksWithTelemetryMock).toHaveBeenLastCalledWith('conversation-capped', { tailBlocks: 1000 });
+
+    readSessionBlocksWithTelemetryMock.mockReturnValueOnce({
       detail: null,
       telemetry: { cache: 'miss', loader: 'disk', durationMs: 3 },
     });
