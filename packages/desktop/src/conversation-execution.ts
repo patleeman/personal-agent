@@ -225,7 +225,7 @@ function buildPromptFallbackConversationTitle(body: unknown): string {
         && typeof image === 'object'
         && hasPromptImageData((image as { data?: unknown }).data)
         && typeof (image as { mimeType?: unknown }).mimeType === 'string'
-        && (image as { mimeType: string }).mimeType.trim().length > 0
+        && (image as { mimeType: string }).mimeType.trim().toLowerCase().startsWith('image/')
       )).length
     : 0;
   return formatFallbackConversationTitle(text, imageCount);
