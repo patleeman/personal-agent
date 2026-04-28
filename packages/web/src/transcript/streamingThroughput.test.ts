@@ -47,6 +47,14 @@ describe('streamingThroughput', () => {
     expect(getStreamingThroughputLabel(blocks, true, Number.MAX_SAFE_INTEGER + 1)).toBeNull();
   });
 
+  it('ignores malformed tail timestamps', () => {
+    const blocks: MessageBlock[] = [
+      { type: 'text', ts: '1', text: 'a'.repeat(80) },
+    ];
+
+    expect(getStreamingThroughputLabel(blocks, true, Date.parse('2026-03-29T12:00:04.000Z'))).toBeNull();
+  });
+
   it('returns null once the tail is a tool step instead of streamed text', () => {
     const blocks: MessageBlock[] = [
       { type: 'thinking', ts: '2026-03-29T12:00:00.000Z', text: 'a'.repeat(80) },

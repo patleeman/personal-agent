@@ -29,6 +29,15 @@ function findStreamingTailBlock(blocks: ReadonlyArray<StreamingTextBlock>): Stre
   return tail;
 }
 
+function parseIsoTimestamp(value: string): number {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 function readStreamingThroughput(
   blocks: ReadonlyArray<StreamingTextBlock>,
   isStreaming: boolean,
@@ -48,7 +57,7 @@ function readStreamingThroughput(
     return null;
   }
 
-  const startedAtMs = Date.parse(tail.ts);
+  const startedAtMs = parseIsoTimestamp(tail.ts);
   if (!Number.isFinite(startedAtMs)) {
     return null;
   }
