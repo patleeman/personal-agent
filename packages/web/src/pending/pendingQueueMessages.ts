@@ -118,7 +118,8 @@ function safePendingImagePreviewUrl(previewUrl: string | undefined): string | un
     return undefined;
   }
 
-  return normalized.startsWith('blob:') || normalized.toLowerCase().startsWith('data:image/')
+  const lowerPreviewUrl = normalized.toLowerCase();
+  return normalized.startsWith('blob:') || (lowerPreviewUrl.startsWith('data:image/') && lowerPreviewUrl.includes(';base64,'))
     ? normalized
     : undefined;
 }

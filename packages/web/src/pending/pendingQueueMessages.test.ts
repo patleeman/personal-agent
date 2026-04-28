@@ -68,7 +68,10 @@ describe('appendPendingInitialPromptBlock', () => {
   it('ignores unsafe pending prompt image preview urls', () => {
     const promptWithStoredImage: PendingConversationPrompt = {
       text: '',
-      images: [{ mimeType: 'image/png', data: 'ZmFrZQ==', name: 'stored.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' }],
+      images: [
+        { mimeType: 'image/png', data: 'ZmFrZQ==', name: 'stored.png', previewUrl: 'data:text/html;base64,PHNjcmlwdA==' },
+        { mimeType: 'image/png', data: 'aGVsbG8=', name: 'plain.png', previewUrl: 'data:image/png,aGVsbG8=' },
+      ],
       attachmentRefs: [],
     };
 
@@ -78,7 +81,10 @@ describe('appendPendingInitialPromptBlock', () => {
         id: 'pending-initial-prompt',
         ts: '2026-03-24T00:00:02.000Z',
         text: '',
-        images: [{ alt: 'stored.png', src: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png', caption: 'stored.png' }],
+        images: [
+          { alt: 'stored.png', src: 'data:image/png;base64,ZmFrZQ==', mimeType: 'image/png', caption: 'stored.png' },
+          { alt: 'plain.png', src: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png', caption: 'plain.png' },
+        ],
       },
     ]);
   });
