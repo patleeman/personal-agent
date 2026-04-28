@@ -379,7 +379,7 @@ export function hasConversationLoadedHistoricalTailBlocks(
   detail: Pick<SessionDetail, 'blocks' | 'totalBlocks'> | null | undefined,
   targetTailBlocks: number | null,
 ): boolean {
-  if (!detail || typeof targetTailBlocks !== 'number' || targetTailBlocks <= 0) {
+  if (!detail || typeof targetTailBlocks !== 'number' || !Number.isSafeInteger(targetTailBlocks) || targetTailBlocks <= 0) {
     return false;
   }
 

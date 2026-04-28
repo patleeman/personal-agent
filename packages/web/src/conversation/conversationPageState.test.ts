@@ -232,6 +232,7 @@ describe('conversation page state helpers', () => {
     })).toBe(true);
 
     expect(hasConversationLoadedHistoricalTailBlocks({ blocks: [{ id: 'a' }], totalBlocks: 1 }, 10)).toBe(true);
+    expect(hasConversationLoadedHistoricalTailBlocks({ blocks: [{ id: 'a' }], totalBlocks: 1 }, Number.MAX_SAFE_INTEGER + 1)).toBe(false);
     expect(shouldShowConversationInitialHistoricalWarmupLoader({
       warmupActive: true,
       targetTailBlocks: 10,
