@@ -42,6 +42,26 @@ describe('conversation rail turns', () => {
     ]);
   });
 
+  it('ignores malformed images when building image-only snippets', () => {
+    const messages: MessageBlock[] = [
+      {
+        type: 'user',
+        ts: '2026-03-10T20:00:00.000Z',
+        text: '',
+        images: [
+          { alt: 'bad data', src: 'data:', mimeType: 'image/png' },
+          { alt: 'bad mime', src: 'data:text/plain;base64,aGVsbG8=', mimeType: 'text/plain' },
+          { alt: 'bad base64', src: 'data:image/png;base64,not-valid-base64!', mimeType: 'image/png' },
+          { alt: 'image', caption: 'Valid screenshot', src: 'data:image/png;base64,aGVsbG8=', mimeType: 'image/png' },
+        ],
+      },
+    ];
+
+    expect(getConversationRailTurns(messages)).toEqual([
+      { index: 0, kind: 'user', label: 'User', snippet: '1 image attachment · Valid screenshot' },
+    ]);
+  });
+
   it('strips xml tags and file paths so previews prefer human-language text', () => {
     const messages: MessageBlock[] = [
       {

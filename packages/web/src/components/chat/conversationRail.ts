@@ -115,14 +115,15 @@ function stripConversationPreviewMarkdown(text: string): string {
 }
 
 function formatImageAttachmentSnippet(block: Extract<MessageBlock, { type: 'user' }>): string {
-  const imageCount = block.images?.length ?? 0;
+  const images = (block.images ?? []).filter(isValidConversationRailImage);
+  const imageCount = images.length;
   if (imageCount === 0) {
     return 'Message';
   }
 
   const prefix = `${imageCount} image attachment${imageCount === 1 ? '' : 's'}`;
-  const firstDescriptor = block.images
-    ?.map((image) => collapseWhitespace(image.caption ?? image.alt ?? ''))
+  const firstDescriptor = images
+    .map((image) => collapseWhitespace(image.caption ?? image.alt ?? ''))
     .find((value) => value.length > 0 && value.toLowerCase() !== 'image');
 
   if (!firstDescriptor) {
@@ -130,6 +131,30 @@ function formatImageAttachmentSnippet(block: Extract<MessageBlock, { type: 'user
   }
 
   return `${prefix} · ${firstDescriptor}`;
+}
+
+function isValidConversationRailImage(image: NonNullable<Extract<MessageBlock, { type: 'user' }>['images']>[number]): boolean {
+  const mimeType = typeof image.mimeType === 'string' ? image.mimeType.trim().toLowerCase() : '';
+  if (mimeType && !mimeType.startsWith('image/')) {
+    return false;
+  }
+
+  const src = typeof image.src === 'string' ? image.src.trim() : '';
+  if (!src) {
+    return !mimeType || mimeType.startsWith('image/');
+  }
+  if (src.startsWith('blob:')) {
+    return true;
+  }
+  const normalized = src.toLowerCase();
+  if (!normalized.startsWith('data:image/') || !normalized.includes(';base64,')) {
+    return false;
+  }
+  const commaIndex = src.indexOf(',');
+  const base64 = commaIndex >= 0 ? src.slice(commaIndex + 1).trim() : '';
+  return Boolean(base64)
+    && base64.length % 4 !== 1
+    && /^[A-Za-z0-9+/]+={0,2}$/.test(base64);
 }
 
 function buildConversationRailSnippet(block: Extract<MessageBlock, { type: 'user' | 'text' }>, maxLength = DEFAULT_SNIPPET_LIMIT): string {
