@@ -224,5 +224,16 @@ describe('appendPendingInitialPromptBlock', () => {
       currentInput: '',
       restoredFileCount: 0,
     }).hasContent).toBe(false);
+
+    expect(resolveRestoredQueuedPromptComposerUpdate({
+      restoredText: 'restored text',
+      currentInput: '',
+      restoredFileCount: 1.5,
+    })).toEqual({
+      hasRestoredText: true,
+      hasContent: true,
+      nextInput: 'restored text',
+      noticeText: 'Restored queued text to the composer.',
+    });
   });
 });
