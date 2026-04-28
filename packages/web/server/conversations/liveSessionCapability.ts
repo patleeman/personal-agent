@@ -582,7 +582,7 @@ async function prepareLiveSessionPrompt(
     throw new LiveSessionCapabilityInputError('conversationId required');
   }
 
-  const text = typeof input.text === 'string' ? input.text : '';
+  const text = typeof input.text === 'string' ? input.text.trim() : '';
   const normalizedAttachmentRefs = normalizePromptAttachmentRefs(input.attachmentRefs);
   const promptContextMessages = normalizePromptContextMessages(input.contextMessages);
   const promptImages = normalizePromptImages(input.images);

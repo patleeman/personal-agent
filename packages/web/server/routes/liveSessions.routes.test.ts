@@ -480,6 +480,11 @@ describe('live session routes', () => {
     expect(emptyRes.status).toHaveBeenCalledWith(400);
     expect(emptyRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
 
+    const blankTextRes = createResponse();
+    await handleLiveSessionPrompt(createRequest({ params: { id: 'live-1' }, body: { text: '   ' } }), blankTextRes);
+    expect(blankTextRes.status).toHaveBeenCalledWith(400);
+    expect(blankTextRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });
+
     const invalidImageRes = createResponse();
     await handleLiveSessionPrompt(createRequest({
       params: { id: 'live-1' },
