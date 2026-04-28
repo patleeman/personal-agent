@@ -292,4 +292,21 @@ describe('deferred resume conversation durable runs', () => {
       readyAt: 'not-a-date',
     })).rejects.toThrow('Deferred resume run updatedAt must be a valid timestamp.');
   });
+
+  it('rejects non-ISO deferred resume run timestamps with field errors', async () => {
+    const daemonRoot = createTempDir('deferred-resume-runs-');
+    const sessionDir = join(daemonRoot, 'sessions');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-non-iso-time.jsonl');
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-non-iso-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n');
+
+    await expect(scheduleDeferredResumeConversationRun({
+      daemonRoot,
+      deferredResumeId: 'resume_non_iso_time',
+      sessionFile,
+      prompt: 'come back later',
+      dueAt: '9999',
+      createdAt: '2026-03-12T14:00:00.000Z',
+    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+  });
 });

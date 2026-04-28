@@ -16,6 +16,8 @@ import {
   type DurableRunStatus,
 } from './store.js';
 
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+
 function sanitizeIdSegment(value: string): string {
   const sanitized = value
     .replace(/[^a-zA-Z0-9-_]+/g, '-')
@@ -31,7 +33,8 @@ function writeJsonFile(path: string, value: unknown): void {
 }
 
 function normalizeTimestamp(value: string, field: string): string {
-  const parsed = Date.parse(value);
+  const normalized = value.trim();
+  const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
   if (!Number.isFinite(parsed)) {
     throw new Error(`Deferred resume run ${field} must be a valid timestamp.`);
   }
