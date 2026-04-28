@@ -116,6 +116,16 @@ function isVaultImageUploadClientError(error: unknown): boolean {
   return error.message.startsWith('dataUrl must ');
 }
 
+function isVaultShareImportClientError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message === 'dataBase64 is required for image imports.'
+    || error.message === 'url is required for URL imports.'
+    || error.message === 'mimeType must be an image type for image imports.'
+    || error.message.startsWith('Shared image data ');
+}
+
 // ── Serialise a single entry ──────────────────────────────────────────────────
 
 interface VaultEntry {
@@ -641,6 +651,10 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
         ...(imported.asset ? { asset: imported.asset } : {}),
       });
     } catch (err) {
+      if (isVaultShareImportClientError(err)) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+        return;
+      }
       logError('vault/share-import', { message: String(err) });
       res.status(500).json({ error: String(err) });
     }

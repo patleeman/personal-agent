@@ -84,4 +84,32 @@ describe('vaultEditor image uploads', () => {
     expect(status).toHaveBeenCalledWith(400);
     expect(json).toHaveBeenCalledWith({ error: 'dataUrl must contain valid base64 image data' });
   });
+
+  it('returns a client error for malformed shared image imports', async () => {
+    vaultRootMock.value = mkdtempSync(join(tmpdir(), 'pa-vault-share-import-bad-'));
+    const postHandlers = new Map<string, (req: unknown, res: unknown) => void | Promise<void>>();
+    registerVaultEditorRoutes({
+      get: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      post: vi.fn((path: string, handler: (req: unknown, res: unknown) => void | Promise<void>) => {
+        postHandlers.set(path, handler);
+      }),
+    });
+    const json = vi.fn();
+    const status = vi.fn(() => ({ json }));
+
+    await postHandlers.get('/api/vault/share-import')?.({
+      body: {
+        kind: 'image',
+        title: 'Bad Screenshot',
+        mimeType: 'image/png',
+        fileName: 'screenshot.png',
+        dataBase64: 'not-valid-base64!',
+      },
+    }, { json, status });
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ error: 'Shared image data must be valid base64.' });
+  });
 });
