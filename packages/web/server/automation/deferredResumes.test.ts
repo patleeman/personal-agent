@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadDeferredResumeState } from '@personal-agent/core';
 import {
   DEFAULT_DEFERRED_RESUME_PROMPT,
@@ -30,6 +30,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  vi.useRealTimers();
   process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
@@ -73,6 +74,23 @@ describe('deferredResumes', () => {
     });
 
     expect(scheduled.prompt).toBe(DEFAULT_DEFERRED_RESUME_PROMPT);
+  });
+
+  it('falls back to the current clock when scheduling with an invalid Date', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-12T13:00:00.000Z'));
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const scheduled = await scheduleDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/conv-invalid-now.jsonl',
+      delay: '10m',
+      now: new Date(Number.NaN),
+    });
+
+    expect(scheduled.id).toMatch(/^resume_1773320400000_/);
+    expect(scheduled.createdAt).toBe('2026-03-12T13:00:00.000Z');
+    expect(scheduled.dueAt).toBe('2026-03-12T13:10:00.000Z');
   });
 
   it('uses the default prompt for ready resumes with blank prompt text', () => {

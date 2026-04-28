@@ -43,6 +43,10 @@ function normalizeReminderAt(at: string, now: Date): string {
   return dueAt.toISOString();
 }
 
+function resolveValidNow(input?: Date): Date {
+  return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
+}
+
 function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string {
   if (input.delay && input.at) {
     throw new Error('Specify only one of delay or at.');
@@ -216,7 +220,7 @@ export async function scheduleDeferredResumeForSessionFile(input: {
   source?: { kind: string; id?: string };
   now?: Date;
 }): Promise<DeferredResumeSummary> {
-  const now = input.now ?? new Date();
+  const now = resolveValidNow(input.now);
   const dueAt = resolveDueAt({ delay: input.delay, at: input.at, now });
   const state = loadDeferredResumeState();
   const kind = input.kind ?? 'continue';
