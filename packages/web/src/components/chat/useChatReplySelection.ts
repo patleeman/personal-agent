@@ -27,6 +27,10 @@ function clearWindowSelection() {
   window.getSelection()?.removeAllRanges();
 }
 
+function readSafeGeometryNumber(value: number, fallback: number): number {
+  return Number.isFinite(value) && Number.isSafeInteger(Math.round(value)) ? value : fallback;
+}
+
 export function constrainSelectionContextMenuPosition(
   menuState: ReplySelectionContextMenuState,
   viewport: { width: number; height: number },
@@ -35,11 +39,15 @@ export function constrainSelectionContextMenuPosition(
   const menuItemCount = 1 + Number(Boolean(menuState.replySelection));
   const menuHeight = menuItemCount * 33 + (menuItemCount > 1 ? 11 : 10);
   const edgePadding = 12;
+  const viewportWidth = readSafeGeometryNumber(viewport.width, menuWidth + edgePadding * 2);
+  const viewportHeight = readSafeGeometryNumber(viewport.height, menuHeight + edgePadding * 2);
+  const x = readSafeGeometryNumber(menuState.x, edgePadding);
+  const y = readSafeGeometryNumber(menuState.y, edgePadding);
 
   return {
     ...menuState,
-    x: Math.max(edgePadding, Math.min(menuState.x, viewport.width - menuWidth - edgePadding)),
-    y: Math.max(edgePadding, Math.min(menuState.y, viewport.height - menuHeight - edgePadding)),
+    x: Math.max(edgePadding, Math.min(x, viewportWidth - menuWidth - edgePadding)),
+    y: Math.max(edgePadding, Math.min(y, viewportHeight - menuHeight - edgePadding)),
   };
 }
 
