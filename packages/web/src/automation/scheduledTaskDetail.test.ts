@@ -38,6 +38,16 @@ describe('scheduledTaskDetail helpers', () => {
       enabled: true,
       threadMode: 'dedicated',
     })).toBe(false);
+
+    expect(isScheduledTaskDetail({
+      id: 'fractional-timeout',
+      running: false,
+      enabled: true,
+      scheduleType: 'cron',
+      prompt: 'Run cleanup.',
+      threadMode: 'dedicated',
+      timeoutSeconds: 1.5,
+    })).toBe(false);
   });
 
 });

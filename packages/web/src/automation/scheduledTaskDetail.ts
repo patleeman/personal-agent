@@ -4,8 +4,8 @@ function isOptionalString(value: unknown): value is string | undefined {
   return value === undefined || typeof value === 'string';
 }
 
-function isOptionalNumber(value: unknown): value is number | undefined {
-  return value === undefined || typeof value === 'number';
+function isOptionalPositiveInteger(value: unknown): value is number | undefined {
+  return value === undefined || (typeof value === 'number' && Number.isInteger(value) && value > 0);
 }
 
 function isOptionalActivity(value: unknown): boolean {
@@ -20,7 +20,8 @@ function isOptionalActivity(value: unknown): boolean {
       return typeof record.id === 'string'
         && record.kind === 'missed'
         && typeof record.createdAt === 'string'
-        && typeof record.count === 'number'
+        && Number.isInteger(record.count)
+        && (record.count as number) > 0
         && typeof record.firstScheduledAt === 'string'
         && typeof record.lastScheduledAt === 'string'
         && Array.isArray(record.exampleScheduledAt)
@@ -50,8 +51,8 @@ export function isScheduledTaskDetail(value: unknown): value is ScheduledTaskDet
     && isOptionalString(record.model)
     && isOptionalString(record.thinkingLevel)
     && isOptionalString(record.cwd)
-    && isOptionalNumber(record.timeoutSeconds)
-    && isOptionalNumber(record.catchUpWindowSeconds)
+    && isOptionalPositiveInteger(record.timeoutSeconds)
+    && isOptionalPositiveInteger(record.catchUpWindowSeconds)
     && isOptionalString(record.lastStatus)
     && isOptionalString(record.lastRunAt)
     && isOptionalActivity(record.activity)
