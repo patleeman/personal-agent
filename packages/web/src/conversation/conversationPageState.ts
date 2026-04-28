@@ -392,7 +392,7 @@ export function shouldShowConversationInitialHistoricalWarmupLoader(input: {
   currentTailBlocks: number;
   loadedTailBlocks: boolean;
 }): boolean {
-  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || input.targetTailBlocks <= 0) {
+  if (!input.warmupActive || typeof input.targetTailBlocks !== 'number' || !Number.isSafeInteger(input.targetTailBlocks) || input.targetTailBlocks <= 0) {
     return false;
   }
 

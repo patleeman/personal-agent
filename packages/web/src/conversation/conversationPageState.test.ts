@@ -239,6 +239,12 @@ describe('conversation page state helpers', () => {
       currentTailBlocks: 5,
       loadedTailBlocks: false,
     })).toBe(true);
+    expect(shouldShowConversationInitialHistoricalWarmupLoader({
+      warmupActive: true,
+      targetTailBlocks: Number.MAX_SAFE_INTEGER + 1,
+      currentTailBlocks: 5,
+      loadedTailBlocks: false,
+    })).toBe(false);
     expect(shouldShowConversationBootstrapLoadingState({
       draft: false,
       conversationId: 'conv-1',
