@@ -197,13 +197,19 @@ async function buildSharedUrlNote(input: {
   }
 }
 
-function decodeSharedBase64(value: string): Buffer {
+function decodeSharedBase64Payload(value: string): { buffer: Buffer; mimeType?: string } {
   const trimmed = value.trim();
   let base64 = trimmed;
+  let mimeType: string | undefined;
   if (trimmed.startsWith('data:')) {
     const commaIndex = trimmed.indexOf(',');
-    if (commaIndex < 0 || !trimmed.slice(0, commaIndex).toLowerCase().includes(';base64')) {
+    const metadata = commaIndex >= 0 ? trimmed.slice(0, commaIndex) : '';
+    if (commaIndex < 0 || !metadata.toLowerCase().includes(';base64')) {
       throw new Error('Shared image data URL must be base64-encoded.');
+    }
+    const parsedMimeType = metadata.slice('data:'.length).split(';')[0]?.trim().toLowerCase();
+    if (parsedMimeType) {
+      mimeType = parsedMimeType;
     }
     base64 = trimmed.slice(commaIndex + 1);
   }
@@ -217,7 +223,7 @@ function decodeSharedBase64(value: string): Buffer {
     throw new Error('Shared image data must decode to non-empty content.');
   }
 
-  return decoded;
+  return { buffer: decoded, ...(mimeType ? { mimeType } : {}) };
 }
 
 const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
@@ -241,8 +247,9 @@ function buildSharedImageNote(input: {
   sourceApp?: string;
   createdAt: string;
 }): { title: string; content: string; assetId: string } {
-  const imageBuffer = decodeSharedBase64(input.dataBase64);
-  const normalizedMimeType = input.mimeType?.trim().toLowerCase();
+  const decodedImage = decodeSharedBase64Payload(input.dataBase64);
+  const imageBuffer = decodedImage.buffer;
+  const normalizedMimeType = decodedImage.mimeType ?? input.mimeType?.trim().toLowerCase();
   if (normalizedMimeType && !normalizedMimeType.startsWith('image/')) {
     throw new Error('mimeType must be an image type for image imports.');
   }
