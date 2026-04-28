@@ -369,15 +369,15 @@ function toParsedSchedule(row: StoredAutomationRow): ParsedTaskSchedule {
   }
 
   const at = readRequiredString(row.at, 'at');
-  const atMs = Date.parse(at);
-  if (!Number.isFinite(atMs)) {
+  const normalizedAt = normalizeIsoTimestamp(at);
+  if (!normalizedAt) {
     throw new Error(`Invalid automation at timestamp: ${at}`);
   }
 
   return {
     type: 'at',
-    at,
-    atMs,
+    at: normalizedAt,
+    atMs: Date.parse(normalizedAt),
   };
 }
 
@@ -610,11 +610,10 @@ function normalizeMutationInput(input: AutomationMutationInput): Required<Pick<A
   }
   let normalizedAt: string | undefined;
   if (at) {
-    const atMs = Date.parse(at);
-    if (!Number.isFinite(atMs)) {
+    normalizedAt = normalizeIsoTimestamp(at);
+    if (!normalizedAt) {
       throw new Error(`Invalid at timestamp: ${at}`);
     }
-    normalizedAt = new Date(atMs).toISOString();
   }
 
   const targetType = normalizeAutomationTargetTypeForSelection(input.targetType ?? undefined);

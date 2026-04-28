@@ -232,6 +232,22 @@ describe('tasks module scheduling', () => {
     }));
   });
 
+  it('rejects malformed one-time automation timestamps when storing tasks', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    expect(() => createStoredAutomation({
+      dbPath,
+      id: 'malformed-at',
+      profile: 'assistant',
+      title: 'Malformed at',
+      enabled: true,
+      at: '9999',
+      timeoutSeconds: 60,
+      prompt: 'Run maintenance.',
+    })).toThrow('Invalid at timestamp: 9999');
+  });
+
   it('does not floor fractional automation activity limits', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
