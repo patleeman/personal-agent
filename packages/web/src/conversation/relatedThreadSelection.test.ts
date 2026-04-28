@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionMeta } from '../shared/types';
 import {
+  resolveRelatedThreadPreselectionUpdate,
   selectVisibleRelatedThreadResults,
   toggleRelatedThreadSelectionIds,
 } from './relatedThreadSelection';
@@ -96,5 +97,72 @@ describe('related thread selection helpers', () => {
       sessionId: 'c',
       maxSelections: 2,
     })).toEqual({ next: ['a', 'b'], rejected: true });
+  });
+
+  it('auto-selects, preserves manual choices, and clears stale related-thread preselection', () => {
+    const strongResult = {
+      sessionId: 'strong',
+      title: 'Strong',
+      cwd: '/repo',
+      timestamp: 't',
+      snippet: 'matching prompt context',
+      matchedTerms: ['matching', 'prompt', 'context'],
+      score: 500,
+      sameWorkspace: true,
+      summary: {
+        sessionId: 'strong',
+        displaySummary: 'strong summary',
+        generatedAt: '2026-04-01T00:00:00.000Z',
+      },
+      reason: 'Strong semantic match',
+    } as const;
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'matching prompt context',
+      selectedThreadIds: [],
+      autoSelectedThreadId: null,
+      searchResults: [strongResult],
+    })).toEqual({
+      selectedThreadIds: ['strong'],
+      autoSelectedThreadId: 'strong',
+      changed: true,
+    });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'matching prompt context',
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadId: null,
+      searchResults: [strongResult],
+    })).toEqual({
+      selectedThreadIds: ['manual'],
+      autoSelectedThreadId: null,
+      changed: false,
+    });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'short',
+      selectedThreadIds: ['strong'],
+      autoSelectedThreadId: 'strong',
+      searchResults: [strongResult],
+    })).toEqual({
+      selectedThreadIds: [],
+      autoSelectedThreadId: null,
+      changed: true,
+    });
+
+    expect(resolveRelatedThreadPreselectionUpdate({
+      draft: true,
+      query: 'matching prompt context',
+      selectedThreadIds: ['strong'],
+      autoSelectedThreadId: 'strong',
+      searchResults: [strongResult],
+    })).toEqual({
+      selectedThreadIds: ['strong'],
+      autoSelectedThreadId: 'strong',
+      changed: false,
+    });
   });
 });

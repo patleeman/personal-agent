@@ -211,8 +211,8 @@ import { useReloadState } from '../local/reloadState';
 import { closeConversationTab, ensureConversationTabOpen } from '../session/sessionTabs';
 import { completeConversationOpenPhase, ensureConversationOpenStart } from '../client/perfDiagnostics';
 import { normalizeWorkspacePaths, readStoredWorkspacePaths, writeStoredWorkspacePaths } from '../local/savedWorkspacePaths';
-import { listRecentConversationResults, pickHighConfidenceRelatedConversation, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
-import { selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } from '../conversation/relatedThreadSelection';
+import { listRecentConversationResults, rankRelatedConversationSessions, selectRecentConversationCandidates, type RelatedConversationSearchResult } from '../conversation/relatedConversationSearch';
+import { resolveRelatedThreadPreselectionUpdate, selectVisibleRelatedThreadResults, toggleRelatedThreadSelectionIds } from '../conversation/relatedThreadSelection';
 import type { ConversationSummaryRecord } from '../shared/types';
 import { parseExcalidrawSceneFromSourceData } from '../content/excalidrawUtils';
 import {
@@ -2194,36 +2194,18 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [draft, relatedThreadCandidateIds, relatedThreadSummaries]);
 
   useEffect(() => {
-    if (!draft || debouncedRelatedThreadsQuery.trim().length < 8) {
-      if (autoSelectedRelatedThreadId && selectedRelatedThreadIds.length === 1 && selectedRelatedThreadIds[0] === autoSelectedRelatedThreadId) {
-        setSelectedRelatedThreadIds([]);
-        setAutoSelectedRelatedThreadId(null);
-      }
+    const update = resolveRelatedThreadPreselectionUpdate({
+      draft,
+      query: debouncedRelatedThreadsQuery,
+      selectedThreadIds: selectedRelatedThreadIds,
+      autoSelectedThreadId: autoSelectedRelatedThreadId,
+      searchResults: relatedThreadSearchResults,
+    });
+    if (!update.changed) {
       return;
     }
-
-    const preselection = pickHighConfidenceRelatedConversation(relatedThreadSearchResults);
-    const onlyAutoSelected = autoSelectedRelatedThreadId !== null
-      && selectedRelatedThreadIds.length === 1
-      && selectedRelatedThreadIds[0] === autoSelectedRelatedThreadId;
-
-    if (!preselection) {
-      if (onlyAutoSelected) {
-        setSelectedRelatedThreadIds([]);
-        setAutoSelectedRelatedThreadId(null);
-      }
-      return;
-    }
-
-    if (preselection.sessionId === autoSelectedRelatedThreadId) {
-      return;
-    }
-    if (selectedRelatedThreadIds.length > 0 && !onlyAutoSelected) {
-      return;
-    }
-
-    setSelectedRelatedThreadIds([preselection.sessionId]);
-    setAutoSelectedRelatedThreadId(preselection.sessionId);
+    setSelectedRelatedThreadIds(update.selectedThreadIds);
+    setAutoSelectedRelatedThreadId(update.autoSelectedThreadId);
   }, [autoSelectedRelatedThreadId, debouncedRelatedThreadsQuery, draft, relatedThreadSearchResults, selectedRelatedThreadIds]);
 
   useEffect(() => {

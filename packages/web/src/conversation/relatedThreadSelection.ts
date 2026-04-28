@@ -1,5 +1,5 @@
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
-import type { RelatedConversationSearchResult } from './relatedConversationSearch';
+import { pickHighConfidenceRelatedConversation, type RelatedConversationSearchResult } from './relatedConversationSearch';
 
 export function selectVisibleRelatedThreadResults(input: {
   selectedRelatedThreadIds: string[];
@@ -90,4 +90,65 @@ export function toggleRelatedThreadSelectionIds(input: {
   }
 
   return { next: [...input.current, input.sessionId], rejected: false };
+}
+
+export function resolveRelatedThreadPreselectionUpdate(input: {
+  draft: boolean;
+  query: string;
+  selectedThreadIds: string[];
+  autoSelectedThreadId: string | null;
+  searchResults: RelatedConversationSearchResult[];
+}): {
+  selectedThreadIds: string[];
+  autoSelectedThreadId: string | null;
+  changed: boolean;
+} {
+  const onlyAutoSelected = input.autoSelectedThreadId !== null
+    && input.selectedThreadIds.length === 1
+    && input.selectedThreadIds[0] === input.autoSelectedThreadId;
+
+  if (!input.draft || input.query.trim().length < 8) {
+    if (onlyAutoSelected) {
+      return { selectedThreadIds: [], autoSelectedThreadId: null, changed: true };
+    }
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadId: input.autoSelectedThreadId,
+      changed: false,
+    };
+  }
+
+  const preselection = pickHighConfidenceRelatedConversation(input.searchResults);
+  if (!preselection) {
+    if (onlyAutoSelected) {
+      return { selectedThreadIds: [], autoSelectedThreadId: null, changed: true };
+    }
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadId: input.autoSelectedThreadId,
+      changed: false,
+    };
+  }
+
+  if (preselection.sessionId === input.autoSelectedThreadId) {
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadId: input.autoSelectedThreadId,
+      changed: false,
+    };
+  }
+
+  if (input.selectedThreadIds.length > 0 && !onlyAutoSelected) {
+    return {
+      selectedThreadIds: input.selectedThreadIds,
+      autoSelectedThreadId: input.autoSelectedThreadId,
+      changed: false,
+    };
+  }
+
+  return {
+    selectedThreadIds: [preselection.sessionId],
+    autoSelectedThreadId: preselection.sessionId,
+    changed: true,
+  };
 }
