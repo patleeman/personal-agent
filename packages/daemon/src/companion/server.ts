@@ -56,6 +56,7 @@ import {
 
 const DEFAULT_DAEMON_VERSION = '0.0.0';
 const JSON_LIMIT_BYTES = 12 * 1024 * 1024;
+const MAX_COMPANION_RUN_LOG_TAIL = 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -1432,9 +1433,12 @@ export class DaemonCompanionServer {
       }
 
       const runtime = await resolveRuntimeOrThrow(this.config, this.runtimeProvider);
+      const tail = requestUrl.searchParams.has('tail')
+        ? Math.min(MAX_COMPANION_RUN_LOG_TAIL, readOptionalPositiveInteger(requestUrl.searchParams.get('tail'), 'tail') ?? MAX_COMPANION_RUN_LOG_TAIL)
+        : undefined;
       const input: CompanionDurableRunLogInput = {
         runId: decodeURIComponent(runLogMatch[1] || ''),
-        ...(requestUrl.searchParams.has('tail') ? { tail: readOptionalPositiveInteger(requestUrl.searchParams.get('tail'), 'tail') } : {}),
+        ...(tail !== undefined ? { tail } : {}),
       };
       sendJson(response, 200, await runtime.readDurableRunLog(input));
       return;

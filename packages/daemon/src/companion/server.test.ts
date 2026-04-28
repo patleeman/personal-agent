@@ -150,7 +150,7 @@ describe('daemon companion server', () => {
       runScheduledTask: async () => ({ ok: true, accepted: true, runId: 'run-1' }),
       listDurableRuns: async () => ({ runs: [] }),
       readDurableRun: async (runId) => ({ run: { runId } }),
-      readDurableRunLog: async ({ runId }) => ({ path: `/tmp/${runId}.log`, log: '' }),
+      readDurableRunLog: async ({ runId, tail }) => ({ path: `/tmp/${runId}.log`, log: '', tail }),
       cancelDurableRun: async (runId) => ({ cancelled: true, runId }),
       subscribeApp: async (onEvent) => {
         appSubscribers.push(onEvent);
@@ -345,6 +345,12 @@ describe('daemon companion server', () => {
         limit: undefined,
       }],
     });
+
+    const cappedRunLogResponse = await fetch(`${baseUrl}/companion/v1/runs/run-1/log?tail=5000`, {
+      headers: { Authorization: `Bearer ${paired.bearerToken}` },
+    });
+    expect(cappedRunLogResponse.status).toBe(200);
+    expect(await readJson(cappedRunLogResponse)).toEqual({ path: '/tmp/run-1.log', log: '', tail: 1000 });
 
     const knowledgeWriteResponse = await fetch(`${baseUrl}/companion/v1/knowledge/file`, {
       method: 'PUT',
