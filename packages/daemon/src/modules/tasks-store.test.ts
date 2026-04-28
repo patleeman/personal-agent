@@ -150,6 +150,39 @@ describe('tasks-store', () => {
     });
   });
 
+  it('drops non-ISO persisted task state timestamps', () => {
+    const dir = createTempDir('tasks-store-non-iso-time-');
+    const path = join(dir, 'task-state.json');
+
+    writeFileSync(path, JSON.stringify({
+      version: 1,
+      lastEvaluatedAt: '1',
+      tasks: {
+        task: {
+          id: 'task',
+          filePath: '/tmp/task.task.md',
+          scheduleType: 'at',
+          lastRunAt: '1',
+          oneTimeResolvedAt: '1',
+        },
+      },
+    }, null, 2));
+
+    expect(loadTaskState(path)).toEqual({
+      version: 1,
+      tasks: {
+        task: {
+          id: 'task',
+          filePath: '/tmp/task.task.md',
+          scheduleType: 'at',
+          running: false,
+          lastRunAt: undefined,
+          oneTimeResolvedAt: undefined,
+        },
+      },
+    });
+  });
+
   it('saves state files and creates parent directories', () => {
     const dir = createTempDir('tasks-store-save-');
     const path = join(dir, 'nested', 'state', 'task-state.json');

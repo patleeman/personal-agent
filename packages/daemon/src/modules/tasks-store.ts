@@ -44,8 +44,17 @@ function toTimestampString(value: unknown): string | undefined {
     return undefined;
   }
 
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) {
+    return undefined;
+  }
+
   const parsed = Date.parse(raw);
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  const normalized = new Date(parsed).toISOString();
+  return normalized === raw || normalized === raw.replace('Z', '.000Z') ? normalized : undefined;
 }
 
 function toBoolean(value: unknown): boolean | undefined {
