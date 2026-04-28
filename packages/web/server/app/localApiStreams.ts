@@ -26,7 +26,12 @@ function parsePositiveInteger(raw: string | null, options?: { minimum?: number; 
     return undefined;
   }
 
-  const parsed = Number.parseInt(raw, 10);
+  const normalized = raw.trim();
+  if (!/^\d+$/.test(normalized)) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(normalized, 10);
   if (!Number.isInteger(parsed)) {
     return undefined;
   }
