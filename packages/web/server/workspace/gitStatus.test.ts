@@ -37,6 +37,17 @@ describe('parseGitNumstat', () => {
       linesDeleted: 1,
     });
   });
+
+  it('ignores malformed and unsafe numstat counts', () => {
+    expect(parseGitNumstat([
+      '2abc\t1\tpartial.txt',
+      `${Number.MAX_SAFE_INTEGER + 1}\t3\tunsafe.txt`,
+      '4\t5\tvalid.txt',
+    ].join('\n'))).toEqual({
+      linesAdded: 4,
+      linesDeleted: 9,
+    });
+  });
 });
 
 describe('countGitStatusEntries', () => {

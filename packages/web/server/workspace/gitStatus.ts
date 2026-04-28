@@ -147,6 +147,16 @@ export function parseGitNumstat(output: string): { linesAdded: number; linesDele
   let linesAdded = 0;
   let linesDeleted = 0;
 
+  const parseCount = (value: string | undefined): number | null => {
+    const normalized = value?.trim() ?? '';
+    if (!/^\d+$/.test(normalized)) {
+      return null;
+    }
+
+    const parsed = Number.parseInt(normalized, 10);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  };
+
   for (const line of output.split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) {
@@ -154,14 +164,14 @@ export function parseGitNumstat(output: string): { linesAdded: number; linesDele
     }
 
     const [addedRaw, deletedRaw] = trimmed.split('\t');
-    const added = Number.parseInt(addedRaw ?? '', 10);
-    const deleted = Number.parseInt(deletedRaw ?? '', 10);
+    const added = parseCount(addedRaw);
+    const deleted = parseCount(deletedRaw);
 
-    if (Number.isFinite(added)) {
+    if (added !== null) {
       linesAdded += added;
     }
 
-    if (Number.isFinite(deleted)) {
+    if (deleted !== null) {
       linesDeleted += deleted;
     }
   }
