@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRecord, ScheduledTaskDetail, SessionMeta } from '../shared/types';
-import { buildTaskProjectOptions, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
+import { buildTaskExistingThreadOptions, buildTaskProjectOptions, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -75,6 +75,33 @@ describe('ScheduledTaskPanel editor capabilities', () => {
       { path: '/tmp/saved-worktree', label: 'saved-worktree' },
       { path: '/tmp/local-worktree', label: 'local-worktree' },
       { path: '/tmp/project-repo', label: 'Project Repo' },
+    ]);
+  });
+
+  it('uses only local conversations as existing automation thread options', () => {
+    const localSession: SessionMeta = {
+      id: 'local-thread',
+      file: '/tmp/local.jsonl',
+      timestamp: '2026-04-01T00:00:00.000Z',
+      cwd: '/tmp/worktree',
+      cwdSlug: 'worktree',
+      model: 'openai/gpt-5.4',
+      title: 'Local thread',
+      messageCount: 1,
+    };
+    const remoteSession: SessionMeta = {
+      ...localSession,
+      id: 'remote-thread',
+      title: 'Remote thread',
+      remoteHostId: 'bender',
+      remoteConversationId: 'remote-1',
+    };
+
+    expect(buildTaskExistingThreadOptions({
+      effectiveThreadCwd: '/tmp/worktree',
+      sessions: [remoteSession, localSession],
+    })).toEqual([
+      { id: 'local-thread', label: 'Local thread', cwd: '/tmp/worktree' },
     ]);
   });
 });

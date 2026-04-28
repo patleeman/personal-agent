@@ -495,6 +495,29 @@ export function buildTaskProjectOptions(input: {
   }));
 }
 
+export function buildTaskExistingThreadOptions(input: {
+  sessions?: SessionMeta[] | null;
+  effectiveThreadCwd?: string | null;
+}): Array<{ id: string; label: string; cwd?: string }> {
+  const effectiveThreadCwd = normalizeConversationGroupCwd(input.effectiveThreadCwd);
+  const entries = (input.sessions ?? [])
+    .filter((session) => {
+      if (session.remoteHostId || session.remoteConversationId) {
+        return false;
+      }
+
+      const sessionCwd = normalizeConversationGroupCwd(session.cwd);
+      return !effectiveThreadCwd || !sessionCwd || sessionCwd === effectiveThreadCwd;
+    })
+    .map((session) => ({
+      id: session.id,
+      label: session.title,
+      cwd: session.cwd,
+    }));
+
+  return entries.sort((left, right) => left.label.localeCompare(right.label));
+}
+
 function formatTargetTypeLabel(targetType: TaskFormState['targetType'] | string | undefined): string {
   return targetType === 'conversation' ? 'Thread' : 'Job';
 }
@@ -772,20 +795,10 @@ function TaskEditorForm({
   const effectiveThreadCwd = value.runIn === 'worktree'
     ? normalizeConversationGroupCwd(value.projectPath)
     : normalizeConversationGroupCwd(cwdState?.effectiveCwd);
-  const existingThreadOptions = useMemo(() => {
-    const entries = (sessions ?? [])
-      .filter((session) => {
-        const sessionCwd = normalizeConversationGroupCwd(session.cwd);
-        return !effectiveThreadCwd || !sessionCwd || sessionCwd === effectiveThreadCwd;
-      })
-      .map((session) => ({
-        id: session.id,
-        label: session.title,
-        cwd: session.cwd,
-      }));
-
-    return entries.sort((left, right) => left.label.localeCompare(right.label));
-  }, [effectiveThreadCwd, sessions]);
+  const existingThreadOptions = useMemo(() => buildTaskExistingThreadOptions({
+    sessions,
+    effectiveThreadCwd,
+  }), [effectiveThreadCwd, sessions]);
   const selectedExistingThread = existingThreadOptions.find((option) => option.id === value.threadConversationId);
   const thinkingLabel = THINKING_LEVEL_OPTIONS.find((option) => option.value === value.thinkingLevel)?.label ?? value.thinkingLevel;
   const advancedSummaryParts = [
