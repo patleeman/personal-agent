@@ -1,7 +1,10 @@
 import type { AppLayoutMode } from '../ui-state/appLayoutMode';
 
 export function supportsWorkbenchFilePane(pathname: string): boolean {
-  return pathname.startsWith('/conversations') || pathname.startsWith('/automations');
+  return pathname === '/conversations'
+    || pathname.startsWith('/conversations/')
+    || pathname === '/automations'
+    || pathname.startsWith('/automations/');
 }
 
 export function buildCommandPaletteFileOpenRoute(input: {

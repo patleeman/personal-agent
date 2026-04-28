@@ -39,7 +39,9 @@ describe('command palette navigation', () => {
 
   it('only treats routes with a workbench document pane as workbench file routes', () => {
     expect(supportsWorkbenchFilePane('/conversations/new')).toBe(true);
+    expect(supportsWorkbenchFilePane('/conversations-old')).toBe(false);
     expect(supportsWorkbenchFilePane('/automations')).toBe(true);
+    expect(supportsWorkbenchFilePane('/automations-history')).toBe(false);
     expect(supportsWorkbenchFilePane('/knowledge')).toBe(false);
   });
 });
