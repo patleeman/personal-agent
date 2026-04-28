@@ -24,7 +24,7 @@ const IDLE_RUN_LOG_POLL_INTERVAL_MS = 2_000;
 function parseRunLogTail(raw: unknown): number {
   const normalized = typeof raw === 'string' ? raw.trim() : '';
   const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : undefined;
-  return Number.isFinite(parsed) && (parsed as number) > 0
+  return Number.isSafeInteger(parsed) && (parsed as number) > 0
     ? Math.min(1000, parsed as number)
     : 120;
 }

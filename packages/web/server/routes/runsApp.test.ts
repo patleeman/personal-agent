@@ -269,6 +269,10 @@ describe('registerRunAppRoutes', () => {
     await logHandler({ params: { id: 'run-1' }, query: { tail: '25abc' } }, malformedRes);
     expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 120);
 
+    const unsafeRes = createJsonResponse();
+    await logHandler({ params: { id: 'run-1' }, query: { tail: String(Number.MAX_SAFE_INTEGER + 1) } }, unsafeRes);
+    expect(getDurableRunLogMock).toHaveBeenLastCalledWith('run-1', 120);
+
     getDurableRunLogMock.mockResolvedValue(undefined);
     const missingRes = createJsonResponse();
     await logHandler({ params: { id: 'missing' }, query: { tail: '10' } }, missingRes);
