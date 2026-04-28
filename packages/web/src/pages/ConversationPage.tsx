@@ -134,8 +134,8 @@ import {
 } from '../conversation/pendingInitialPromptLogic';
 import { buildSlashMenuItems, parseSlashInput } from '../commands/slashMenu';
 import { buildMentionItems, filterMentionItems, MAX_MENTION_MENU_ITEMS, resolveMentionItems, type MentionItem } from '../conversation/conversationMentions';
-import { buildDeferredResumeAutoResumeKey, shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
-import { buildDeferredResumeIndicatorText, compareDeferredResumes, describeDeferredResumeStatus } from '../deferred-resume/deferredResumeIndicator';
+import { shouldAutoResumeDeferredResumes } from '../deferred-resume/deferredResumeAutoResume';
+import { describeDeferredResumeStatus, resolveDeferredResumePresentationState } from '../deferred-resume/deferredResumeIndicator';
 import {
   buildAskUserQuestionReplyText,
   findPendingAskUserQuestion,
@@ -2257,10 +2257,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const savedConversationSessionFile = currentSessionMeta?.file
     ?? visibleSessionDetail?.meta.file
     ?? null;
-  const orderedDeferredResumes = useMemo(
-    () => [...deferredResumes].sort(compareDeferredResumes),
-    [deferredResumes],
+  const deferredResumePresentation = useMemo(
+    () => resolveDeferredResumePresentationState({
+      resumes: deferredResumes,
+      nowMs: deferredResumeNowMs,
+      isLiveSession,
+      sessionFile: savedConversationSessionFile,
+    }),
+    [deferredResumeNowMs, deferredResumes, isLiveSession, savedConversationSessionFile],
   );
+  const orderedDeferredResumes = deferredResumePresentation.orderedResumes;
   const backgroundRunState = useMemo(
     () => resolveConversationBackgroundRunState({
       conversationId: id,
@@ -2273,19 +2279,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const activeConversationBackgroundRuns = backgroundRunState.activeRuns;
   const backgroundRunIndicatorText = backgroundRunState.indicatorText;
   const showActiveBackgroundRunDetails = showBackgroundRunDetails;
-  const hasReadyDeferredResumes = orderedDeferredResumes.some((resume) => resume.status === 'ready');
-  const deferredResumeAutoResumeKey = useMemo(
-    () => buildDeferredResumeAutoResumeKey({
-      resumes: orderedDeferredResumes,
-      isLiveSession,
-      sessionFile: savedConversationSessionFile,
-    }),
-    [isLiveSession, orderedDeferredResumes, savedConversationSessionFile],
-  );
-  const deferredResumeIndicatorText = useMemo(
-    () => buildDeferredResumeIndicatorText(orderedDeferredResumes, deferredResumeNowMs),
-    [orderedDeferredResumes, deferredResumeNowMs],
-  );
+  const hasReadyDeferredResumes = deferredResumePresentation.hasReadyResumes;
+  const deferredResumeAutoResumeKey = deferredResumePresentation.autoResumeKey;
+  const deferredResumeIndicatorText = deferredResumePresentation.indicatorText;
   const lastConversationMessage = realMessages?.[realMessages.length - 1] ?? null;
   const lastCopyableAgentText = useMemo(() => findLastCopyableAgentText(realMessages), [realMessages]);
   const conversationResumeState = useMemo(() => getConversationResumeState({

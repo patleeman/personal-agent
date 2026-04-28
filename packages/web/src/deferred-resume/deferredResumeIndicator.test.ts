@@ -4,6 +4,7 @@ import {
   compareDeferredResumes,
   describeDeferredResumeStatus,
   formatDeferredResumeWhen,
+  resolveDeferredResumePresentationState,
 } from './deferredResumeIndicator';
 import type { DeferredResumeSummary } from '../shared/types';
 
@@ -74,6 +75,23 @@ describe('deferredResumeIndicator', () => {
       scheduled('two', '2026-03-12T13:08:00.000Z'),
       ready('three', '2026-03-12T13:02:00.000Z'),
     ], Date.parse('2026-03-12T13:03:00.000Z'))).toBe('2 ready now · 1 scheduled');
+  });
+
+  it('resolves ordered presentation state and auto-resume key together', () => {
+    const state = resolveDeferredResumePresentationState({
+      resumes: [
+        scheduled('later', '2026-03-12T13:30:00.000Z'),
+        ready('ready', '2026-03-12T13:01:00.000Z'),
+      ],
+      nowMs: Date.parse('2026-03-12T13:03:00.000Z'),
+      isLiveSession: false,
+      sessionFile: '/tmp/session.jsonl',
+    });
+
+    expect(state.orderedResumes.map((resume) => resume.id)).toEqual(['ready', 'later']);
+    expect(state.hasReadyResumes).toBe(true);
+    expect(state.autoResumeKey).toBe('/tmp/session.jsonl::ready');
+    expect(state.indicatorText).toBe('1 ready now · 1 scheduled');
   });
 
   it('formats the visible due/ready timestamp for deferred resumes', () => {

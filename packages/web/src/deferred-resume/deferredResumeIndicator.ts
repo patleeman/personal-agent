@@ -1,4 +1,5 @@
 import type { DeferredResumeSummary } from '../shared/types';
+import { buildDeferredResumeAutoResumeKey } from './deferredResumeAutoResume';
 
 function getDeferredResumeTargetMs(resume: DeferredResumeSummary): number {
   return Date.parse(resume.status === 'ready'
@@ -58,6 +59,30 @@ export function buildDeferredResumeIndicatorText(resumes: DeferredResumeSummary[
 
   const countLabel = resumes.length === 1 ? '1 scheduled' : `${resumes.length} scheduled`;
   return `${countLabel} · next ${describeDeferredResumeStatus(nextResume, nowMs)}`;
+}
+
+export function resolveDeferredResumePresentationState(input: {
+  resumes: DeferredResumeSummary[];
+  nowMs: number;
+  isLiveSession: boolean;
+  sessionFile?: string | null;
+}): {
+  orderedResumes: DeferredResumeSummary[];
+  hasReadyResumes: boolean;
+  autoResumeKey: string | null;
+  indicatorText: string;
+} {
+  const orderedResumes = [...input.resumes].sort(compareDeferredResumes);
+  return {
+    orderedResumes,
+    hasReadyResumes: orderedResumes.some((resume) => resume.status === 'ready'),
+    autoResumeKey: buildDeferredResumeAutoResumeKey({
+      resumes: orderedResumes,
+      isLiveSession: input.isLiveSession,
+      sessionFile: input.sessionFile,
+    }),
+    indicatorText: buildDeferredResumeIndicatorText(orderedResumes, input.nowMs),
+  };
 }
 
 export function formatDeferredResumeWhen(resume: DeferredResumeSummary): string {
