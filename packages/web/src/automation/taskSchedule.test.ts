@@ -109,6 +109,7 @@ describe('taskSchedule helpers', () => {
   it('does not calculate next runs from malformed one-time schedule timestamps', () => {
     const now = Date.parse('2026-03-18T08:00:00Z');
     expect(getNextTaskRunAt({ enabled: true, at: '9999' }, now)).toBeNull();
+    expect(getNextTaskRunAt({ enabled: true, at: '2026-04-31T09:00:00.000Z' }, now)).toBeNull();
   });
 
   it('does not calculate next runs from unsafe clocks', () => {
