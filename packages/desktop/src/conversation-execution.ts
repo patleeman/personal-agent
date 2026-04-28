@@ -199,6 +199,19 @@ function formatFallbackConversationTitle(text: string, imageCount: number): stri
     || (imageCount === 1 ? '(image attachment)' : imageCount > 1 ? `(${String(imageCount)} image attachments)` : '');
 }
 
+function hasPromptImageData(value: unknown): boolean {
+  if (typeof value !== 'string') {
+    return false;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return false;
+  }
+
+  return Buffer.from(normalized, 'base64').length > 0;
+}
+
 function buildPromptFallbackConversationTitle(body: unknown): string {
   if (!body || typeof body !== 'object') {
     return '';
@@ -210,8 +223,7 @@ function buildPromptFallbackConversationTitle(body: unknown): string {
     ? candidate.images.filter((image) => (
         !!image
         && typeof image === 'object'
-        && typeof (image as { data?: unknown }).data === 'string'
-        && (image as { data: string }).data.trim().length > 0
+        && hasPromptImageData((image as { data?: unknown }).data)
         && typeof (image as { mimeType?: unknown }).mimeType === 'string'
         && (image as { mimeType: string }).mimeType.trim().length > 0
       )).length
