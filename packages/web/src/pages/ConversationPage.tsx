@@ -35,6 +35,11 @@ import { useDesktopConversationState } from '../hooks/useDesktopConversationStat
 import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
 import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
+import {
+  buildContinueInExecutionTargetOptions,
+  findSelectedExecutionTargetHost,
+  resolveConversationExecutionTargetOptions,
+} from '../desktop/desktopExecutionTargets';
 import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperations';
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
@@ -387,10 +392,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }
 
         setDesktopConnectionsState(connections);
-        setContinueInOptions([
-          { value: 'local', label: 'Local' },
-          ...connections.hosts.map((host) => ({ value: host.id, label: host.label })),
-        ]);
+        setContinueInOptions(buildContinueInExecutionTargetOptions(connections));
       })
       .catch(() => {
         if (!cancelled) {
@@ -404,26 +406,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     };
   }, []);
 
-  const executionTargetOptions = useMemo(() => {
-    const baseOptions = continueInOptions.length > 0
-      ? [...continueInOptions]
-      : (getDesktopBridge() ? [{ value: 'local', label: 'Local' }] : []);
-    const currentRemoteHostId = sessionSnapshot?.remoteHostId?.trim() || '';
-    const currentRemoteHostLabel = sessionSnapshot?.remoteHostLabel?.trim() || currentRemoteHostId;
-
-    if (currentRemoteHostId && !baseOptions.some((option) => option.value === currentRemoteHostId)) {
-      baseOptions.push({ value: currentRemoteHostId, label: currentRemoteHostLabel });
-    }
-
-    return baseOptions;
-  }, [continueInOptions, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel]);
+  const executionTargetOptions = useMemo(() => resolveConversationExecutionTargetOptions({
+    continueInOptions,
+    hasDesktopBridge: Boolean(getDesktopBridge()),
+    currentRemoteHostId: sessionSnapshot?.remoteHostId,
+    currentRemoteHostLabel: sessionSnapshot?.remoteHostLabel,
+  }), [continueInOptions, sessionSnapshot?.remoteHostId, sessionSnapshot?.remoteHostLabel]);
   const selectedExecutionTargetId = draft
     ? draftExecutionTargetId
     : sessionSnapshot?.remoteHostId?.trim() || 'local';
   const selectedExecutionTargetHost = useMemo<Extract<DesktopHostRecord, { kind: 'ssh' }> | null>(
-    () => selectedExecutionTargetId === 'local'
-      ? null
-      : desktopConnectionsState?.hosts.find((host) => host.id === selectedExecutionTargetId) ?? null,
+    () => findSelectedExecutionTargetHost({ selectedTargetId: selectedExecutionTargetId, connections: desktopConnectionsState }),
     [desktopConnectionsState, selectedExecutionTargetId],
   );
   const selectedExecutionTargetLabel = selectedExecutionTargetHost?.label
