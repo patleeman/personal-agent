@@ -427,6 +427,13 @@ describe('conversation routes', () => {
     expect(readSessionImageAssetMock).toHaveBeenLastCalledWith('session-1', 'block-1', 2);
     expect(indexedImageRes.send).toHaveBeenCalledWith(Buffer.from('image-data'));
 
+    const malformedIndexedImageRes = createResponse();
+    getHandler('/api/sessions/:id/blocks/:blockId/images/:imageIndex')(createRequest({
+      params: { id: 'session-1', blockId: 'block-1', imageIndex: '2abc' },
+    }), malformedIndexedImageRes);
+    expect(malformedIndexedImageRes.status).toHaveBeenCalledWith(400);
+    expect(malformedIndexedImageRes.json).toHaveBeenCalledWith({ error: 'imageIndex must be a non-negative integer' });
+
     readSessionBlockMock.mockReturnValueOnce(null);
     const missingBlockRes = createResponse();
     getHandler('/api/sessions/:id/blocks/:blockId')(createRequest({ params: { id: 'session-1', blockId: 'missing' } }), missingBlockRes);

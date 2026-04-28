@@ -98,6 +98,15 @@ function parseNonNegativeIntegerQuery(rawValue: unknown): number | undefined {
     : undefined;
 }
 
+function parseNonNegativeIntegerPath(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function parsePositiveIntegerQuery(rawValue: unknown): number | undefined {
   const candidate = Array.isArray(rawValue) ? rawValue[0] : rawValue;
   if (typeof candidate === 'number') {
@@ -300,7 +309,11 @@ function registerConversationReadRoutes(router: Pick<Express, 'get'>): void {
 
   router.get('/api/sessions/:id/blocks/:blockId/images/:imageIndex', (req, res) => {
     try {
-      const imageIndex = Number.parseInt(req.params.imageIndex, 10);
+      const imageIndex = parseNonNegativeIntegerPath(req.params.imageIndex);
+      if (imageIndex === null) {
+        res.status(400).json({ error: 'imageIndex must be a non-negative integer' });
+        return;
+      }
       const asset = readSessionImageAsset(req.params.id, req.params.blockId, imageIndex);
       if (!asset) { res.status(404).json({ error: 'Session image not found' }); return; }
       if (asset.fileName) {
