@@ -137,4 +137,38 @@ describe('expandPromptReferencesWithNodeGraph', () => {
       memoryDocIds: ['seed', 'one', 'two'],
     });
   });
+
+  it('caps absurd related-node limits instead of expanding every linked node', () => {
+    loadUnifiedNodesMock.mockReturnValue({
+      nodes: [
+        {
+          id: 'seed',
+          type: 'note',
+          kinds: [],
+          links: {
+            related: [],
+            conversations: [],
+            relationships: Array.from({ length: 24 }, (_, index) => ({ type: 'mentions', targetId: `note-${index}` })),
+          },
+        },
+        ...Array.from({ length: 24 }, (_, index) => ({
+          id: `note-${index}`,
+          type: 'note',
+          kinds: [],
+          links: { related: [], conversations: [], relationships: [] },
+        })),
+      ],
+      parseErrors: [],
+    });
+
+    expect(expandPromptReferencesWithNodeGraph({
+      projectIds: [],
+      memoryDocIds: ['seed'],
+      skillNames: [],
+      maxRelatedPerSeed: Number.MAX_SAFE_INTEGER,
+    }).memoryDocIds).toEqual([
+      'seed',
+      ...Array.from({ length: 20 }, (_, index) => `note-${index}`),
+    ]);
+  });
 });

@@ -45,6 +45,8 @@ export interface ExpandedPromptNodeGraphReferences {
   skillNames: string[];
 }
 
+const MAX_RELATED_PROMPT_REFERENCES_PER_SEED = 20;
+
 function appendUnique(target: string[], seen: Set<string>, value: string) {
   if (seen.has(value)) {
     return;
@@ -168,7 +170,7 @@ export function expandPromptReferencesWithNodeGraph(input: {
 
   const seedIds = [...new Set([...input.projectIds, ...input.memoryDocIds, ...input.skillNames])];
   const maxRelatedPerSeed = Number.isSafeInteger(input.maxRelatedPerSeed) && (input.maxRelatedPerSeed as number) >= 0
-    ? input.maxRelatedPerSeed as number
+    ? Math.min(MAX_RELATED_PROMPT_REFERENCES_PER_SEED, input.maxRelatedPerSeed as number)
     : 2;
   const projectIds = [...input.projectIds];
   const memoryDocIds = [...input.memoryDocIds];
