@@ -419,6 +419,30 @@ describe('tasks module scheduling', () => {
     expect(loadAutomationSchedulerState({ dbPath })).toEqual({});
   });
 
+  it('normalizes malformed stored automation row timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-02T12:00:00.000Z'));
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    const automation = createStoredAutomation({
+      dbPath,
+      id: 'corrupt-automation-time',
+      profile: 'assistant',
+      title: 'Corrupt automation time',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+    openSqliteDatabase(dbPath)
+      .prepare('UPDATE automations SET created_at = ?, updated_at = ? WHERE id = ?')
+      .run('not-a-date', 'also-not-a-date', automation.id);
+
+    expect(listStoredAutomations({ dbPath })[0]).toEqual(expect.objectContaining({
+      createdAt: '2026-03-02T12:00:00.000Z',
+      updatedAt: '2026-03-02T12:00:00.000Z',
+    }));
+  });
+
   it('does not floor fractional task module timer config', () => {
     const module = createTasksModule({
       enabled: true,

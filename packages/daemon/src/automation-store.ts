@@ -370,6 +370,8 @@ function toParsedSchedule(row: StoredAutomationRow): ParsedTaskSchedule {
 function rowToStoredAutomation(row: StoredAutomationRow): StoredAutomation {
   const legacyFilePath = readOptionalString(row.legacy_file_path);
   const filePath = legacyFilePath ?? buildSyntheticAutomationFilePath(row.id);
+  const createdAt = readOptionalTimestamp(row.created_at) ?? new Date().toISOString();
+  const updatedAt = readOptionalTimestamp(row.updated_at) ?? createdAt;
   return {
     key: row.id,
     filePath,
@@ -387,8 +389,8 @@ function rowToStoredAutomation(row: StoredAutomationRow): StoredAutomation {
     catchUpWindowSeconds: readOptionalPositiveInteger(row.catch_up_window_seconds),
     targetType: normalizeAutomationTargetTypeForSelection(row.target_type),
     conversationBehavior: readAutomationConversationBehavior(row.conversation_behavior),
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt,
+    updatedAt,
     legacyFilePath,
     threadMode: normalizeAutomationThreadMode(row.thread_mode),
     threadSessionFile: readOptionalString(row.thread_session_file),
