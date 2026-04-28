@@ -254,6 +254,21 @@ describe('listRecentConversationResults', () => {
       limit: 1.5,
     })).toHaveLength(3);
   });
+
+  it('caps expensive recent-result limits', () => {
+    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) => buildSession({
+      id: `recent-${index}`,
+      title: `Recent ${index}`,
+      cwd: '/repo/current',
+      lastActivityAt: '2026-04-12T09:00:00.000Z',
+    }));
+
+    expect(listRecentConversationResults(sessions, {
+      workspaceCwd: '/repo/current',
+      recentWindowDays: null,
+      limit: 5000,
+    })).toHaveLength(100);
+  });
 });
 
 describe('rankRelatedConversationSessions', () => {
@@ -360,6 +375,21 @@ describe('rankRelatedConversationSessions', () => {
       query: 'release signing',
       limit: Number.MAX_SAFE_INTEGER + 1,
     })).toHaveLength(9);
+  });
+
+  it('caps expensive ranked-result limits', () => {
+    const sessions: SessionMeta[] = Array.from({ length: 150 }, (_, index) => buildSession({
+      id: `match-${index}`,
+      title: `Release signing ${index}`,
+      cwd: '/repo/current',
+    }));
+
+    expect(rankRelatedConversationSessions({
+      sessions,
+      searchIndex: Object.fromEntries(sessions.map((session) => [session.id, 'release signing flow'])),
+      query: 'release signing',
+      limit: 5000,
+    })).toHaveLength(100);
   });
 
   it('uses generated summaries for ranking reasons and high-confidence preselection', () => {

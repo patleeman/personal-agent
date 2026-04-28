@@ -5,6 +5,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_RECENT_WINDOW_DAYS = 7;
 const DEFAULT_CANDIDATE_LIMIT = 48;
 const DEFAULT_RECENT_RESULTS_LIMIT = 10;
+const MAX_RELATED_CONVERSATION_LIMIT = 100;
 const COMMON_QUERY_STOPWORDS = new Set([
   'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'do', 'for', 'from', 'help', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'me', 'my', 'of', 'on', 'or', 'out', 'please', 'should', 'that', 'the', 'this', 'to', 'want', 'what', 'why', 'with', 'you', 'your',
 ]);
@@ -54,7 +55,7 @@ function normalizeField(value: string | undefined): string {
 
 function normalizePositiveIntegerLimit(value: number | undefined, fallback: number): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
-    ? value
+    ? Math.min(MAX_RELATED_CONVERSATION_LIMIT, value)
     : fallback;
 }
 
