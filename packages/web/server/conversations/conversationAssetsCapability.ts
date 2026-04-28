@@ -20,6 +20,8 @@ import {
 export class ConversationAssetCapabilityInputError extends Error {}
 export class ConversationAssetCapabilityNotFoundError extends Error {}
 
+const MAX_ATTACHMENT_REVISION = 1_000_000;
+
 interface ConversationArtifactMutationInput {
   conversationId: string;
   artifactId: string;
@@ -127,7 +129,7 @@ function normalizeAttachmentDownloadInput(input: ConversationAttachmentDownloadI
     throw new ConversationAssetCapabilityInputError('asset must be "source" or "preview"');
   }
 
-  if (input.revision !== undefined && (!Number.isSafeInteger(input.revision) || input.revision <= 0)) {
+  if (input.revision !== undefined && (!Number.isSafeInteger(input.revision) || input.revision <= 0 || input.revision > MAX_ATTACHMENT_REVISION)) {
     throw new ConversationAssetCapabilityInputError('revision must be a positive integer when provided.');
   }
 
