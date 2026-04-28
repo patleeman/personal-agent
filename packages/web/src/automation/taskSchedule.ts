@@ -474,6 +474,10 @@ export function getNextTaskRunAt(task: { enabled?: boolean; cron?: string; at?: 
 }
 
 export function formatTaskNextRunCountdown(nextRunAt: Date, nowMs = Date.now()): string {
+  if (!Number.isSafeInteger(nextRunAt.getTime()) || !Number.isSafeInteger(nowMs)) {
+    return 'now';
+  }
+
   const totalSeconds = Math.max(0, Math.ceil((nextRunAt.getTime() - nowMs) / 1000));
   if (totalSeconds <= 0) {
     return 'now';

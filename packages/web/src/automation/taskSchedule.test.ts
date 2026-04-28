@@ -112,4 +112,9 @@ describe('taskSchedule helpers', () => {
     expect(formatTaskNextRunCountdown(new Date('2026-03-18T09:00:00Z'), now)).toBe('in 1m 30s');
     expect(formatTaskNextRunCountdown(new Date('2026-03-19T10:00:00Z'), now)).toBe('in 1d 1h');
   });
+
+  it('does not render NaN countdowns for invalid schedule dates', () => {
+    expect(formatTaskNextRunCountdown(new Date('not a date'), Date.parse('2026-03-18T08:58:30Z'))).toBe('now');
+    expect(formatTaskNextRunCountdown(new Date('2026-03-18T09:00:00Z'), Number.MAX_SAFE_INTEGER + 1)).toBe('now');
+  });
 });
