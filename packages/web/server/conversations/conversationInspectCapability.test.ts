@@ -384,6 +384,34 @@ describe('conversationInspectCapability', () => {
     expect(formatConversationInspectQueryResult(result)).toContain('Chrono execution is stuck in high lag.');
   });
 
+  it('defaults unsafe transcript query limits instead of clamping them', () => {
+    readConversationSessionMetaMock.mockReturnValue({
+      id: 'conv-unsafe-limit',
+      title: 'Unsafe limit thread',
+      cwd: '/repo',
+      file: '/sessions/conv-unsafe-limit.jsonl',
+    });
+    resolveConversationSessionFileMock.mockReturnValue('/sessions/conv-unsafe-limit.jsonl');
+    readConversationSessionSignatureMock.mockReturnValue('unsafe:1');
+    readSessionBlocksByFileMock.mockReturnValue({
+      signature: 'unsafe:1',
+      blocks: Array.from({ length: 21 }, (_, index) => ({
+        type: 'text',
+        id: `assistant-${index}`,
+        ts: `2026-04-20T10:00:${String(index).padStart(2, '0')}.000Z`,
+        text: `reply ${index}`,
+      })),
+    });
+
+    const result = queryConversationInspectBlocks({
+      conversationId: 'conv-unsafe-limit',
+      limit: Number.MAX_SAFE_INTEGER + 1,
+    });
+
+    expect(result.returnedBlocks).toBe(20);
+    expect(result.blocks).toHaveLength(20);
+  });
+
   it('queries by conversational role and reports valid enum values for bad filters', () => {
     readConversationSessionMetaMock.mockReturnValue({
       id: 'conv-roles',
