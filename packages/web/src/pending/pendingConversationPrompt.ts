@@ -91,7 +91,7 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
       ? (attachmentRef as { attachmentId: string }).attachmentId.trim()
       : '';
     const revision = (attachmentRef as { revision?: unknown }).revision;
-    if (!attachmentId || (revision !== undefined && (!Number.isInteger(revision) || revision <= 0))) {
+    if (!attachmentId || (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0))) {
       continue;
     }
 
