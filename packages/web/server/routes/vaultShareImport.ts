@@ -220,6 +220,18 @@ function decodeSharedBase64(value: string): Buffer {
   return decoded;
 }
 
+const IMAGE_FILE_EXTENSIONS = new Set(['avif', 'gif', 'heic', 'heif', 'jpeg', 'jpg', 'png', 'svg', 'webp']);
+
+function resolveSharedImageAssetExtension(input: { fileName?: string; mimeType?: string }): string {
+  const mimeExt = mimeExtension(input.mimeType ?? '');
+  if (typeof mimeExt === 'string' && mimeExt.trim()) {
+    return mimeExt.trim();
+  }
+
+  const fileExt = extname(input.fileName ?? '').trim().replace(/^\./, '').toLowerCase();
+  return IMAGE_FILE_EXTENSIONS.has(fileExt) ? fileExt : 'png';
+}
+
 function buildSharedImageNote(input: {
   root: string;
   title?: string;
@@ -237,9 +249,7 @@ function buildSharedImageNote(input: {
   const baseTitle = input.title?.trim()
     || normalizeShareString(input.fileName)?.replace(/\.[^.]+$/, '')
     || `Shared image ${input.createdAt.slice(0, 10)}`;
-  const assetExt = extname(input.fileName ?? '').trim().replace(/^\./, '')
-    || mimeExtension(normalizedMimeType ?? '')
-    || 'png';
+  const assetExt = resolveSharedImageAssetExtension({ fileName: input.fileName, mimeType: normalizedMimeType });
   const assetDirAbs = join(input.root, '_attachments');
   mkdirSync(assetDirAbs, { recursive: true });
   const assetBase = `${Date.now()}-${slugifyShareValue(baseTitle, 'shared-image')}`;

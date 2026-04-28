@@ -49,6 +49,23 @@ describe('vaultShareImport', () => {
     expect(note).toContain(imported.asset?.url ?? '');
   });
 
+  it('uses the image mime extension when shared image filenames have non-image extensions', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-image-extension-'));
+    const targetDirAbs = join(root, 'Inbox');
+    const imported = await importVaultSharedItem({
+      kind: 'image',
+      root,
+      targetDirAbs,
+      title: 'Screenshot',
+      mimeType: 'image/png',
+      fileName: 'screenshot.txt',
+      dataBase64: Buffer.from('image-bytes', 'utf-8').toString('base64'),
+      createdAt: '2026-04-22T12:00:00.000Z',
+    });
+
+    expect(imported.asset?.id).toMatch(/\.png$/);
+  });
+
   it('rejects malformed shared image base64', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-bad-image-'));
     const targetDirAbs = join(root, 'Inbox');
