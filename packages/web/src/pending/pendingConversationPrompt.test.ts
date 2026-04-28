@@ -258,6 +258,10 @@ describe('pendingConversationPrompt helpers', () => {
     nowSpy.mockReturnValue(30_000);
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
 
+    storage.setItem(key, String(Number.MAX_SAFE_INTEGER + 1));
+    nowSpy.mockReturnValue(Number.MAX_SAFE_INTEGER + 30_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+
     storage.setItem(key, '1000');
     nowSpy.mockReturnValue(200_000);
     expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);

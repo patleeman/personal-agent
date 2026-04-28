@@ -232,7 +232,7 @@ function readPendingConversationPromptDispatchingAt(
     deserialize: (raw) => {
       const normalized = raw.trim();
       const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+      return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
     },
   });
 }
