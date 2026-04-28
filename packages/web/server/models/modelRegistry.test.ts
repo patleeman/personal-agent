@@ -99,4 +99,33 @@ describe('model registry helpers', () => {
       contextWindow: 400_000,
     });
   });
+
+  it('rejects unsafe context metadata returned by runtime registries', () => {
+    const authStorage = { kind: 'auth-storage' };
+    const registry = {
+      getAll: vi.fn(() => [
+        { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
+      ]),
+      getAvailable: vi.fn(() => [
+        { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 },
+      ]),
+      find: vi.fn(() => ({ id: 'gpt-5.4', provider: 'openai-codex', contextWindow: Number.MAX_SAFE_INTEGER + 1 })),
+    };
+    getPiAgentRuntimeDirMock.mockReturnValue('/runtime/pi-agent-runtime');
+    modelRegistryCreateMock.mockReturnValue(registry);
+
+    const created = createRuntimeModelRegistry(authStorage as never);
+
+    expect(created.getAvailable()).toEqual([
+      { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 },
+    ]);
+    expect(created.getAll()).toEqual([
+      { id: 'gpt-5.4', provider: 'openai-codex', contextWindow: 128_000 },
+    ]);
+    expect(created.find('openai-codex', 'gpt-5.4')).toEqual({
+      id: 'gpt-5.4',
+      provider: 'openai-codex',
+      contextWindow: 128_000,
+    });
+  });
 });

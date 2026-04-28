@@ -6,7 +6,7 @@ import { normalizeModelContextWindow } from './modelContextWindows.js';
 type RegistryModel = ReturnType<ModelRegistry['getAvailable']>[number];
 
 function applyPersonalAgentModelMetadataOverrides(model: RegistryModel): RegistryModel {
-  const contextWindow = normalizeModelContextWindow(model.id, model.contextWindow, model.contextWindow ?? 128_000);
+  const contextWindow = normalizeModelContextWindow(model.id, model.contextWindow, 128_000);
   if (contextWindow !== model.contextWindow) {
     return { ...model, contextWindow };
   }

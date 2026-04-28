@@ -17,7 +17,8 @@ export function normalizeModelContextWindow(
   contextWindow: number | undefined,
   fallback: number,
 ): number {
-  const resolved = Number.isFinite(contextWindow) && contextWindow !== undefined ? contextWindow : fallback;
+  const safeFallback = Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 128_000;
+  const resolved = Number.isSafeInteger(contextWindow) && contextWindow !== undefined && contextWindow > 0 ? contextWindow : safeFallback;
   const minimum = MIN_CONTEXT_WINDOWS_BY_MODEL_ID[canonicalModelId(modelId) ?? ''];
   return minimum === undefined ? resolved : Math.max(resolved, minimum);
 }
