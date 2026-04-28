@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildKnowledgeEntryContextMenuTemplate } from './knowledge-entry-context-menu.js';
+import { buildKnowledgeEntryContextMenuTemplate, normalizeKnowledgeEntryContextMenuCoordinate } from './knowledge-entry-context-menu.js';
 
 describe('buildKnowledgeEntryContextMenuTemplate', () => {
+  it('drops unsafe menu coordinates', () => {
+    expect(normalizeKnowledgeEntryContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeKnowledgeEntryContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
+  });
+
   it('groups rename and move before delete with a native separator', () => {
     const template = buildKnowledgeEntryContextMenuTemplate({
       canOpenInFinder: true,

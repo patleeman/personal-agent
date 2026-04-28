@@ -13,9 +13,9 @@ export interface KnowledgeEntryContextMenuInput {
   canDelete?: boolean;
 }
 
-function normalizeCoordinate(value: number | undefined): number {
+export function normalizeKnowledgeEntryContextMenuCoordinate(value: number | undefined): number {
   const numericValue = typeof value === 'number' ? value : Number.NaN;
-  if (!Number.isFinite(numericValue)) {
+  if (!Number.isSafeInteger(Math.round(numericValue))) {
     return 0;
   }
 
@@ -122,8 +122,8 @@ export async function showKnowledgeEntryContextMenu(
 
     menu.popup({
       ...(targetWindow ? { window: targetWindow } : {}),
-      x: normalizeCoordinate(input.x),
-      y: normalizeCoordinate(input.y),
+      x: normalizeKnowledgeEntryContextMenuCoordinate(input.x),
+      y: normalizeKnowledgeEntryContextMenuCoordinate(input.y),
       callback: finish,
     });
   });
