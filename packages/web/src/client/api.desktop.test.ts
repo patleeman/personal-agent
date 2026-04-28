@@ -1362,6 +1362,24 @@ describe('api desktop transport', () => {
     });
   });
 
+  it('omits unsafe session detail numeric query params from HTTP requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(createJsonResponse({ id: 'session-1', blocks: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { api } = await import('./api');
+    await api.sessionDetail('session-1', {
+      tailBlocks: Number.MAX_SAFE_INTEGER + 1,
+      knownBlockOffset: Number.MAX_SAFE_INTEGER + 1,
+      knownTotalBlocks: Number.MAX_SAFE_INTEGER + 1,
+      knownSessionSignature: ' sig-1 ',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions/session-1?knownSessionSignature=sig-1', {
+      method: 'GET',
+      cache: 'no-store',
+    });
+  });
+
   it('falls back to HTTP for desktop conversation deferred-resume bridges on non-local hosts', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(createJsonResponse({ conversationId: 'conversation-1', resumes: [{ id: 'resume-1', dueAt: '2026-04-24T10:05:00.000Z' }] }))

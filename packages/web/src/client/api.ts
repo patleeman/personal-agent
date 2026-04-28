@@ -204,16 +204,16 @@ export const api = {
     knownLastBlockId?: string;
   }) => {
     const params = new URLSearchParams();
-    if (typeof options?.tailBlocks === 'number' && Number.isInteger(options.tailBlocks) && options.tailBlocks > 0) {
+    if (typeof options?.tailBlocks === 'number' && Number.isSafeInteger(options.tailBlocks) && options.tailBlocks > 0) {
       params.set('tailBlocks', String(options.tailBlocks));
     }
     if (typeof options?.knownSessionSignature === 'string' && options.knownSessionSignature.trim().length > 0) {
       params.set('knownSessionSignature', options.knownSessionSignature.trim());
     }
-    if (typeof options?.knownBlockOffset === 'number' && Number.isInteger(options.knownBlockOffset) && options.knownBlockOffset >= 0) {
+    if (typeof options?.knownBlockOffset === 'number' && Number.isSafeInteger(options.knownBlockOffset) && options.knownBlockOffset >= 0) {
       params.set('knownBlockOffset', String(options.knownBlockOffset));
     }
-    if (typeof options?.knownTotalBlocks === 'number' && Number.isInteger(options.knownTotalBlocks) && options.knownTotalBlocks >= 0) {
+    if (typeof options?.knownTotalBlocks === 'number' && Number.isSafeInteger(options.knownTotalBlocks) && options.knownTotalBlocks >= 0) {
       params.set('knownTotalBlocks', String(options.knownTotalBlocks));
     }
     if (typeof options?.knownLastBlockId === 'string' && options.knownLastBlockId.trim().length > 0) {
