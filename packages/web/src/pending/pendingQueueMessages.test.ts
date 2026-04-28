@@ -39,6 +39,20 @@ describe('appendPendingInitialPromptBlock', () => {
     ]);
   });
 
+  it('falls back to the current clock for non-ISO pending prompt timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-24T00:00:00.000Z'));
+
+    expect(appendPendingInitialPromptBlock(undefined, pendingPrompt, '1')).toEqual([
+      {
+        type: 'user',
+        id: 'pending-initial-prompt',
+        ts: '2026-03-24T00:00:00.000Z',
+        text: 'first prompt still on the way',
+      },
+    ]);
+  });
+
   it('does not duplicate a trailing user block that already matches the pending prompt', () => {
     const messages: MessageBlock[] = [
       { type: 'user', ts: '2026-03-24T00:00:00.000Z', text: 'first prompt still on the way' },

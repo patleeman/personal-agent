@@ -10,6 +10,15 @@ export interface ConversationPendingQueueItem {
   queueIndex: number;
 }
 
+function normalizePendingTimestamp(value: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? value : undefined;
+}
+
 export function buildConversationPendingQueueItems(input: {
   steering: QueuedPromptPreview[];
   followUp: QueuedPromptPreview[];
@@ -100,7 +109,7 @@ export function appendPendingInitialPromptBlock(
     return existingMessages;
   }
 
-  const timestamp = Number.isFinite(Date.parse(now)) ? now : new Date().toISOString();
+  const timestamp = normalizePendingTimestamp(now) ?? new Date().toISOString();
 
   return [
     ...existingMessages,
