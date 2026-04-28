@@ -5,13 +5,22 @@ export const DAEMON_EVENT_VERSION = 1;
 
 function normalizeTimestamp(value: unknown): string {
   if (typeof value === 'string') {
-    const parsed = Date.parse(value);
-    if (Number.isFinite(parsed)) {
+    const parsed = parseIsoTimestamp(value);
+    if (parsed !== undefined) {
       return new Date(parsed).toISOString();
     }
   }
 
   return new Date().toISOString();
+}
+
+function parseIsoTimestamp(value: string): number | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : undefined;
 }
 
 export function createDaemonEvent(input: DaemonEventInput): DaemonEvent {
@@ -38,7 +47,7 @@ export function isDaemonEvent(value: unknown): value is DaemonEvent {
     typeof value.type === 'string' &&
     typeof value.source === 'string' &&
     typeof value.timestamp === 'string' &&
-    Number.isFinite(Date.parse(value.timestamp)) &&
+    parseIsoTimestamp(value.timestamp) !== undefined &&
     isRecord(value.payload)
   );
 }

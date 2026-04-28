@@ -44,6 +44,28 @@ describe('daemon events', () => {
     }).timestamp).toBe('2026-01-01T00:00:00.000Z');
   });
 
+  it('falls back to the current clock for non-ISO explicit timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'));
+
+    expect(createDaemonEvent({
+      type: 'task.done',
+      source: 'runner',
+      timestamp: '1',
+    }).timestamp).toBe('2026-01-01T00:00:00.000Z');
+  });
+
+  it('rejects daemon event shapes with non-ISO timestamps', () => {
+    expect(isDaemonEvent({
+      id: 'x',
+      version: 1,
+      type: 't',
+      source: 's',
+      timestamp: '1',
+      payload: {},
+    })).toBe(false);
+  });
+
   it('rejects non-daemon event shapes', () => {
     expect(isDaemonEvent(null)).toBe(false);
     expect(isDaemonEvent({})).toBe(false);
