@@ -149,7 +149,7 @@ function readRequiredString(value: string | null | undefined, label: string): st
 }
 
 function readOptionalPositiveInteger(value: number | null | undefined): number | undefined {
-  if (typeof value !== 'number' || !Number.isInteger(value)) {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
     return undefined;
   }
 

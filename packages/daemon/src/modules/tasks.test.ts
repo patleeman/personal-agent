@@ -183,6 +183,34 @@ describe('tasks module scheduling', () => {
     })).toThrow('timeoutSeconds must be a positive integer.');
   });
 
+  it('rejects unsafe automation durations when storing tasks', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+
+    expect(() => createStoredAutomation({
+      dbPath,
+      id: 'unsafe-timeout',
+      profile: 'assistant',
+      title: 'Unsafe timeout',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: Number.MAX_SAFE_INTEGER + 1,
+      prompt: 'Run maintenance.',
+    })).toThrow('timeoutSeconds must be a positive integer.');
+
+    expect(() => createStoredAutomation({
+      dbPath,
+      id: 'unsafe-catch-up',
+      profile: 'assistant',
+      title: 'Unsafe catch-up',
+      enabled: true,
+      cron: '0 * * * *',
+      timeoutSeconds: 60,
+      catchUpWindowSeconds: Number.MAX_SAFE_INTEGER + 1,
+      prompt: 'Run maintenance.',
+    })).toThrow('catchUpWindowSeconds must be a positive integer.');
+  });
+
   it('does not floor fractional automation activity limits', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
