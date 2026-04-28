@@ -30,6 +30,8 @@ export interface VaultKnowledgeShareImportResult {
   };
 }
 
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+
 function normalizeShareString(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed ? trimmed : undefined;
@@ -37,7 +39,7 @@ function normalizeShareString(value: string | undefined): string | undefined {
 
 function normalizeShareTimestamp(value: string | undefined): string {
   const raw = normalizeShareString(value);
-  if (raw) {
+  if (raw && ISO_TIMESTAMP_PATTERN.test(raw)) {
     const parsed = Date.parse(raw);
     if (Number.isFinite(parsed)) {
       return new Date(parsed).toISOString();

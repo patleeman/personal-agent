@@ -47,6 +47,24 @@ describe('vaultShareImport', () => {
     expect(note).toContain('captured_at: 2026-04-22T12:00:00.000Z');
   });
 
+  it('falls back to the current clock for non-ISO share timestamps', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-22T12:00:00.000Z'));
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-non-iso-time-'));
+    const targetDirAbs = join(root, 'Inbox');
+    const imported = await importVaultSharedItem({
+      kind: 'text',
+      root,
+      targetDirAbs,
+      title: 'Quick note',
+      text: 'remember this snippet',
+      createdAt: '9999',
+    });
+
+    const note = readFileSync(imported.notePath, 'utf-8');
+    expect(note).toContain('captured_at: 2026-04-22T12:00:00.000Z');
+  });
+
   it('creates markdown notes plus backing assets for shared images', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-image-'));
     const targetDirAbs = join(root, 'Inbox');
