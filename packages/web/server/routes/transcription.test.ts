@@ -10,7 +10,7 @@ vi.mock('../ui/settingsPersistence.js', () => ({
   persistSettingsWrite: persistSettingsWriteMock,
 }));
 
-import { registerTranscriptionRoutes } from './transcription.js';
+import { readRequiredBase64, registerTranscriptionRoutes } from './transcription.js';
 
 describe('registerTranscriptionRoutes', () => {
   beforeEach(() => {
@@ -65,5 +65,10 @@ describe('registerTranscriptionRoutes', () => {
         model: 'gpt-4o-mini-transcribe',
       },
     }));
+  });
+
+  it('rejects malformed transcription file base64 before provider dispatch', () => {
+    expect(() => readRequiredBase64('not-valid-base64!', 'dataBase64'))
+      .toThrow('dataBase64 must contain valid base64 data.');
   });
 });

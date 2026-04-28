@@ -13,11 +13,19 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function readRequiredBase64(value: unknown, label: string): Buffer {
+export function readRequiredBase64(value: unknown, label: string): Buffer {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`${label} is required.`);
   }
-  return Buffer.from(value, 'base64');
+  const normalized = value.trim();
+  if (normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new Error(`${label} must contain valid base64 data.`);
+  }
+  const decoded = Buffer.from(normalized, 'base64');
+  if (decoded.length === 0) {
+    throw new Error(`${label} must decode to non-empty data.`);
+  }
+  return decoded;
 }
 
 export function registerTranscriptionRoutes(
