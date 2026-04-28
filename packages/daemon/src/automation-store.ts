@@ -962,8 +962,7 @@ export function appendAutomationActivityEntry(
   const firstScheduledAt = readAutomationActivityTimestamp(input.firstScheduledAt, 'firstScheduledAt');
   const lastScheduledAt = readAutomationActivityTimestamp(input.lastScheduledAt, 'lastScheduledAt');
   const exampleScheduledAt = input.exampleScheduledAt
-    .filter((value) => typeof value === 'string' && Number.isFinite(Date.parse(value)))
-    .map((value) => new Date(value).toISOString());
+    .flatMap((value) => (typeof value === 'string' ? normalizeIsoTimestamp(value) ?? [] : []));
   if (input.outcome !== 'skipped' && input.outcome !== 'catch-up-started') {
     throw new Error(`Unsupported automation activity outcome: ${input.outcome}`);
   }

@@ -413,6 +413,34 @@ describe('tasks module scheduling', () => {
     expect(listAutomationActivityEntries('non-iso-activity-time', { dbPath })).toEqual([]);
   });
 
+  it('drops non-ISO automation activity example timestamps', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'non-iso-activity-example-time',
+      profile: 'assistant',
+      title: 'Non ISO activity example time',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+
+    appendAutomationActivityEntry('non-iso-activity-example-time', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['1', '2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath });
+
+    expect(listAutomationActivityEntries('non-iso-activity-example-time', { dbPath })[0]?.exampleScheduledAt).toEqual([
+      '2026-03-02T10:00:00.000Z',
+    ]);
+  });
+
   it('sanitizes malformed persisted automation runtime state', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);
