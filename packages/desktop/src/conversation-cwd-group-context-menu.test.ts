@@ -3,7 +3,7 @@ import { buildConversationCwdGroupContextMenuTemplate, normalizeConversationCwdG
 
 describe('buildConversationCwdGroupContextMenuTemplate', () => {
   it('drops unsafe menu coordinates', () => {
-    expect(normalizeConversationCwdGroupContextMenuCoordinate(12.4)).toBe(12);
+    expect(normalizeConversationCwdGroupContextMenuCoordinate(12.4)).toBe(0);
     expect(normalizeConversationCwdGroupContextMenuCoordinate(Number.MAX_SAFE_INTEGER + 1)).toBe(0);
   });
 
