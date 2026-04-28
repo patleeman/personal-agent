@@ -44,7 +44,7 @@ export interface CompanionDeviceAdminState {
 }
 
 function resolveNow(input?: Date): Date {
-  return input instanceof Date ? input : new Date();
+  return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
 }
 
 function toIso(input: Date): string {

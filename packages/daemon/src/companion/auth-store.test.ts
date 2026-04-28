@@ -1,7 +1,7 @@
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createCompanionPairingCode,
   pairCompanionDevice,
@@ -14,6 +14,10 @@ import {
 function createTempDir(prefix: string): string {
   return mkdtempSync(join(tmpdir(), prefix));
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('companion auth store', () => {
   it('creates pairing codes and exchanges them for paired devices', () => {
@@ -57,5 +61,18 @@ describe('companion auth store', () => {
     expect(readCompanionDeviceByToken(stateRoot, paired.bearerToken, {
       now: new Date('2026-04-18T10:31:00.000Z'),
     })).toBeNull();
+  });
+
+  it('falls back to the current clock for invalid Date inputs', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-18T10:00:00.000Z'));
+    const stateRoot = createTempDir('pa-companion-auth-');
+
+    const pairing = createCompanionPairingCode(stateRoot, {
+      now: new Date(Number.NaN),
+    });
+
+    expect(pairing.createdAt).toBe('2026-04-18T10:00:00.000Z');
+    expect(pairing.expiresAt).toBe('2026-04-18T10:10:00.000Z');
   });
 });
