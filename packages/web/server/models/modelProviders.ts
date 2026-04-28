@@ -187,12 +187,14 @@ function readOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+const MAX_MODEL_TOKEN_LIMIT = 10_000_000;
+
 function readOptionalNonNegativeNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER && value >= 0 ? value : undefined;
 }
 
 function readOptionalPositiveInteger(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : undefined;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_MODEL_TOKEN_LIMIT ? value : undefined;
 }
 
 function readOptionalStringRecord(value: unknown): Record<string, string> | undefined {
