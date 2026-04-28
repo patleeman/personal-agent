@@ -49,6 +49,22 @@ describe('vaultShareImport', () => {
     expect(note).toContain(imported.asset?.url ?? '');
   });
 
+  it('rejects malformed shared image base64', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-bad-image-'));
+    const targetDirAbs = join(root, 'Inbox');
+
+    await expect(importVaultSharedItem({
+      kind: 'image',
+      root,
+      targetDirAbs,
+      title: 'Bad Screenshot',
+      mimeType: 'image/png',
+      fileName: 'screenshot.png',
+      dataBase64: 'not-valid-base64!',
+      createdAt: '2026-04-22T12:00:00.000Z',
+    })).rejects.toThrow('Shared image data must be valid base64.');
+  });
+
   it('extracts readable markdown for shared URLs', async () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-vault-share-url-'));
     const targetDirAbs = join(root, 'Inbox');

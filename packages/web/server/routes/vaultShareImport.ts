@@ -200,7 +200,17 @@ async function buildSharedUrlNote(input: {
 function decodeSharedBase64(value: string): Buffer {
   const trimmed = value.trim();
   const base64 = trimmed.startsWith('data:') ? trimmed.slice(trimmed.indexOf(',') + 1) : trimmed;
-  return Buffer.from(base64, 'base64');
+  const normalized = base64.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new Error('Shared image data must be valid base64.');
+  }
+
+  const decoded = Buffer.from(normalized, 'base64');
+  if (decoded.length === 0) {
+    throw new Error('Shared image data must decode to non-empty content.');
+  }
+
+  return decoded;
 }
 
 function buildSharedImageNote(input: {
