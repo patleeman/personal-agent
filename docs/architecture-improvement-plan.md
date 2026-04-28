@@ -101,6 +101,7 @@ For UI architecture work, also run app build/tests and perform a visual check if
    - Moved related-thread candidate lookup derivation into `relatedThreadSelection`, removing candidate map/id construction from `ConversationPage`.
    - Moved historical block hydration id/list and transcript merge helpers into `messageBlocks`, keeping display/live block replacement rules outside `ConversationPage`.
    - Moved desktop execution-target option and selected-host derivation into `desktopExecutionTargets`, keeping remote target fallback rules out of `ConversationPage`.
+   - Moved restored queued-prompt composer update and notice formatting into `pendingQueueMessages`, so `ConversationPage` only applies restored text/files.
 3. [in progress] Extract keyboard shortcut/event wiring into focused hooks.
    - Extracted viewport keyboard inset and composer modifier-key tracking into `useConversationKeyboardState`.
    - Extracted workspace draft/reply composer event wiring into `useWorkspaceComposerEvents`.

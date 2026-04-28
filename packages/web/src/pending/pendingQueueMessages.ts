@@ -34,6 +34,33 @@ export function buildConversationPendingQueueItems(input: {
   ];
 }
 
+export function resolveRestoredQueuedPromptComposerUpdate(input: {
+  restoredText: string;
+  currentInput: string;
+  restoredFileCount: number;
+}): {
+  hasRestoredText: boolean;
+  hasContent: boolean;
+  nextInput: string | null;
+  noticeText: string;
+} {
+  const hasRestoredText = input.restoredText.trim().length > 0;
+  const restoredFileCount = Math.max(0, input.restoredFileCount);
+  const parts = [
+    hasRestoredText ? 'text' : null,
+    restoredFileCount > 0 ? `${restoredFileCount} image${restoredFileCount === 1 ? '' : 's'}` : null,
+  ].filter((value): value is string => Boolean(value));
+
+  return {
+    hasRestoredText,
+    hasContent: hasRestoredText || restoredFileCount > 0,
+    nextInput: hasRestoredText
+      ? [input.restoredText, input.currentInput].filter((value) => value.trim().length > 0).join('\n\n')
+      : null,
+    noticeText: `Restored queued ${parts.join(' + ')} to the composer.`,
+  };
+}
+
 export function appendPendingInitialPromptBlock(
   messages: MessageBlock[] | undefined,
   pendingPrompt: PendingConversationPrompt | null,

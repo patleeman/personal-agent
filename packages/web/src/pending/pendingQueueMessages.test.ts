@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PendingConversationPrompt } from './pendingConversationPrompt';
 import type { MessageBlock } from '../shared/types';
-import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems } from './pendingQueueMessages';
+import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems, resolveRestoredQueuedPromptComposerUpdate } from './pendingQueueMessages';
 
 describe('appendPendingInitialPromptBlock', () => {
   const pendingPrompt: PendingConversationPrompt = {
@@ -73,5 +73,35 @@ describe('appendPendingInitialPromptBlock', () => {
         queueIndex: 0,
       },
     ]);
+  });
+
+  it('resolves restored queued prompt composer updates and notices', () => {
+    expect(resolveRestoredQueuedPromptComposerUpdate({
+      restoredText: 'restored text',
+      currentInput: 'existing draft',
+      restoredFileCount: 2,
+    })).toEqual({
+      hasRestoredText: true,
+      hasContent: true,
+      nextInput: 'restored text\n\nexisting draft',
+      noticeText: 'Restored queued text + 2 images to the composer.',
+    });
+
+    expect(resolveRestoredQueuedPromptComposerUpdate({
+      restoredText: '   ',
+      currentInput: 'existing draft',
+      restoredFileCount: 1,
+    })).toEqual({
+      hasRestoredText: false,
+      hasContent: true,
+      nextInput: null,
+      noticeText: 'Restored queued 1 image to the composer.',
+    });
+
+    expect(resolveRestoredQueuedPromptComposerUpdate({
+      restoredText: '',
+      currentInput: '',
+      restoredFileCount: 0,
+    }).hasContent).toBe(false);
   });
 });

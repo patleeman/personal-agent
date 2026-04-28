@@ -206,7 +206,7 @@ import {
   type PendingConversationPrompt,
   type PendingConversationPromptChangedDetail,
 } from '../pending/pendingConversationPrompt';
-import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems } from '../pending/pendingQueueMessages';
+import { appendPendingInitialPromptBlock, buildConversationPendingQueueItems, resolveRestoredQueuedPromptComposerUpdate } from '../pending/pendingQueueMessages';
 import {
   didConversationStopMidTurn,
   didConversationStopWithError,
@@ -4993,28 +4993,26 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       }, currentSurfaceId);
       const restoredText = typeof restored.text === 'string' ? restored.text : '';
       const restoredFiles = restoreQueuedImageFiles(restored.images, behavior, queueIndex);
-      const hasRestoredText = restoredText.trim().length > 0;
+      const restoredUpdate = resolveRestoredQueuedPromptComposerUpdate({
+        restoredText,
+        currentInput: textareaRef.current?.value ?? input,
+        restoredFileCount: restoredFiles.length,
+      });
 
-      if (!hasRestoredText && restoredFiles.length === 0) {
+      if (!restoredUpdate.hasContent) {
         showNotice('danger', 'Queued prompt had nothing to restore.', 4000);
         return;
       }
 
-      if (hasRestoredText) {
-        const currentInput = textareaRef.current?.value ?? input;
-        setInput([restoredText, currentInput].filter((value) => value.trim().length > 0).join('\n\n'));
+      if (restoredUpdate.nextInput !== null) {
+        setInput(restoredUpdate.nextInput);
       }
       if (restoredFiles.length > 0) {
         setAttachments((current) => [...restoredFiles, ...current]);
       }
 
       moveComposerCaretToEnd();
-
-      const restoredParts = [
-        hasRestoredText ? 'text' : null,
-        restoredFiles.length > 0 ? `${restoredFiles.length} image${restoredFiles.length === 1 ? '' : 's'}` : null,
-      ].filter((value): value is string => Boolean(value));
-      showNotice('accent', `Restored queued ${restoredParts.join(' + ')} to the composer.`);
+      showNotice('accent', restoredUpdate.noticeText);
     } catch (error) {
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
