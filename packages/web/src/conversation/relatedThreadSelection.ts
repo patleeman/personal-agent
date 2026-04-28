@@ -2,6 +2,13 @@ import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 import type { RelatedConversationSearchResult } from './relatedConversationSearch';
 
 const MIN_AUTO_PRESELECT_QUERY_LENGTH = 3;
+const MAX_VISIBLE_RELATED_THREAD_RESULTS = 100;
+
+function normalizeVisibleRelatedThreadLimit(value: number): number {
+  return Number.isSafeInteger(value) && value >= 0
+    ? Math.min(MAX_VISIBLE_RELATED_THREAD_RESULTS, value)
+    : 0;
+}
 
 export function buildRelatedThreadCandidateLookup(candidates: SessionMeta[]): {
   candidateById: Map<string, SessionMeta>;
@@ -24,6 +31,7 @@ export function selectVisibleRelatedThreadResults(input: {
   workspaceCwd: string | null;
   limit: number;
 }): RelatedConversationSearchResult[] {
+  const limit = normalizeVisibleRelatedThreadLimit(input.limit);
   const baseResults = input.query.trim().length > 0
     ? input.searchResults
     : input.recentResults;
@@ -74,12 +82,12 @@ export function selectVisibleRelatedThreadResults(input: {
 
     results.push(result);
     seen.add(result.sessionId);
-    if (results.length >= input.limit) {
+    if (results.length >= limit) {
       break;
     }
   }
 
-  return results.slice(0, input.limit);
+  return results.slice(0, limit);
 }
 
 export function toggleRelatedThreadSelectionIds(input: {

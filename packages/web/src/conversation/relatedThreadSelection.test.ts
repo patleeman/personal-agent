@@ -94,6 +94,52 @@ describe('related thread selection helpers', () => {
     expect(visible.map((result) => result.sessionId)).toEqual(['a']);
   });
 
+  it('rejects fractional visible related-thread limits instead of letting slice truncate them', () => {
+    const visible = selectVisibleRelatedThreadResults({
+      selectedRelatedThreadIds: [],
+      query: 'needle',
+      searchResults: [
+        { sessionId: 'a', title: 'A', cwd: '/repo', timestamp: 't', snippet: 'a', matchedTerms: [], score: 9, sameWorkspace: true },
+        { sessionId: 'b', title: 'B', cwd: '/repo', timestamp: 't', snippet: 'b', matchedTerms: [], score: 8, sameWorkspace: true },
+      ],
+      recentResults: [],
+      candidateById: new Map(),
+      searchIndex: {},
+      summaries: {},
+      workspaceCwd: '/repo',
+      limit: 1.5,
+    });
+
+    expect(visible).toEqual([]);
+  });
+
+  it('caps expensive visible related-thread limits', () => {
+    const searchResults = Array.from({ length: 150 }, (_, index) => ({
+      sessionId: `match-${index}`,
+      title: `Match ${index}`,
+      cwd: '/repo',
+      timestamp: 't',
+      snippet: 'match',
+      matchedTerms: [],
+      score: 150 - index,
+      sameWorkspace: true,
+    }));
+
+    const visible = selectVisibleRelatedThreadResults({
+      selectedRelatedThreadIds: [],
+      query: 'needle',
+      searchResults,
+      recentResults: [],
+      candidateById: new Map(),
+      searchIndex: {},
+      summaries: {},
+      workspaceCwd: '/repo',
+      limit: 5000,
+    });
+
+    expect(visible).toHaveLength(100);
+  });
+
   it('toggles selections while enforcing the maximum', () => {
     expect(toggleRelatedThreadSelectionIds({
       current: ['a'],
