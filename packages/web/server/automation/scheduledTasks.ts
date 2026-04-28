@@ -244,6 +244,7 @@ export function buildScheduledTaskMarkdown(input: {
   thinkingLevel?: string | null;
   cwd?: string | null;
   timeoutSeconds?: number | null;
+  catchUpWindowSeconds?: number | null;
   prompt: string;
 }): string {
   const cron = readOptionalString(input.cron);
