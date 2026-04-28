@@ -8,8 +8,9 @@ import { getKnowledgeBaseSyncPresentation } from '../knowledge/knowledgeBaseSync
 import {
   createModelEditorDraft,
   createProviderEditorDraft,
-  parseOptionalFiniteNumber,
   parseOptionalJsonObject,
+  parseOptionalNonNegativeNumber,
+  parseOptionalPositiveInteger,
   parseOptionalStringRecord,
   type ModelEditorDraft,
   type ProviderEditorDraft,
@@ -2329,12 +2330,12 @@ export function SettingsPage() {
     try {
       const headers = parseOptionalStringRecord(modelDraft.headersText, 'Model headers');
       const compat = parseOptionalJsonObject(modelDraft.compatText, 'Model compat');
-      const contextWindow = parseOptionalFiniteNumber(modelDraft.contextWindow, 'Context window');
-      const maxTokens = parseOptionalFiniteNumber(modelDraft.maxTokens, 'Max tokens');
-      const costInput = parseOptionalFiniteNumber(modelDraft.costInput, 'Input cost');
-      const costOutput = parseOptionalFiniteNumber(modelDraft.costOutput, 'Output cost');
-      const costCacheRead = parseOptionalFiniteNumber(modelDraft.costCacheRead, 'Cache read cost');
-      const costCacheWrite = parseOptionalFiniteNumber(modelDraft.costCacheWrite, 'Cache write cost');
+      const contextWindow = parseOptionalPositiveInteger(modelDraft.contextWindow, 'Context window');
+      const maxTokens = parseOptionalPositiveInteger(modelDraft.maxTokens, 'Max tokens');
+      const costInput = parseOptionalNonNegativeNumber(modelDraft.costInput, 'Input cost');
+      const costOutput = parseOptionalNonNegativeNumber(modelDraft.costOutput, 'Output cost');
+      const costCacheRead = parseOptionalNonNegativeNumber(modelDraft.costCacheRead, 'Cache read cost');
+      const costCacheWrite = parseOptionalNonNegativeNumber(modelDraft.costCacheWrite, 'Cache write cost');
       const existed = editingProviderModel?.id === modelId;
 
       setModelDraftAction('save');

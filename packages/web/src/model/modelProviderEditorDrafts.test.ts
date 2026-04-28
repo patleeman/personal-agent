@@ -5,6 +5,8 @@ import {
   formatJsonObject,
   parseOptionalFiniteNumber,
   parseOptionalJsonObject,
+  parseOptionalNonNegativeNumber,
+  parseOptionalPositiveInteger,
   parseOptionalStringRecord,
 } from './modelProviderEditorDrafts.js';
 
@@ -69,9 +71,13 @@ describe('modelProviderEditorDrafts', () => {
     expect(parseOptionalJsonObject('{"a":1}', 'Compat')).toEqual({ a: 1 });
     expect(parseOptionalStringRecord('{"x":"y"}', 'Headers')).toEqual({ x: 'y' });
     expect(parseOptionalFiniteNumber('42', 'Context window')).toBe(42);
+    expect(parseOptionalPositiveInteger('42', 'Context window')).toBe(42);
+    expect(parseOptionalNonNegativeNumber('0.25', 'Input cost')).toBe(0.25);
 
     expect(() => parseOptionalJsonObject('[]', 'Compat')).toThrow('Compat must be a JSON object.');
     expect(() => parseOptionalStringRecord('{"x":1}', 'Headers')).toThrow('Headers values must all be strings.');
     expect(() => parseOptionalFiniteNumber('nope', 'Context window')).toThrow('Context window must be a valid number.');
+    expect(() => parseOptionalPositiveInteger('42.5', 'Context window')).toThrow('Context window must be a positive integer.');
+    expect(() => parseOptionalNonNegativeNumber('-1', 'Input cost')).toThrow('Input cost must be a non-negative number.');
   });
 });

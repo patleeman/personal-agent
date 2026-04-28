@@ -111,3 +111,29 @@ export function parseOptionalFiniteNumber(value: string, label: string): number 
 
   return parsed;
 }
+
+export function parseOptionalPositiveInteger(value: string, label: string): number | undefined {
+  const parsed = parseOptionalFiniteNumber(value, label);
+  if (parsed === undefined) {
+    return undefined;
+  }
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    throw new Error(`${label} must be a positive integer.`);
+  }
+
+  return parsed;
+}
+
+export function parseOptionalNonNegativeNumber(value: string, label: string): number | undefined {
+  const parsed = parseOptionalFiniteNumber(value, label);
+  if (parsed === undefined) {
+    return undefined;
+  }
+
+  if (parsed < 0) {
+    throw new Error(`${label} must be a non-negative number.`);
+  }
+
+  return parsed;
+}
