@@ -264,6 +264,7 @@ export function mergeConversationSessionMeta(
       attentionUnreadActivityCount: detailMeta.attentionUnreadActivityCount ?? sessionSnapshot.attentionUnreadActivityCount,
       attentionActivityIds: detailMeta.attentionActivityIds ?? sessionSnapshot.attentionActivityIds,
       deferredResumes: detailMeta.deferredResumes ?? sessionSnapshot.deferredResumes,
+      attachedContextDocs: detailMeta.attachedContextDocs ?? sessionSnapshot.attachedContextDocs,
     };
   }
 

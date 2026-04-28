@@ -149,6 +149,7 @@ describe('conversation page state helpers', () => {
       messageCount: 4,
       isRunning: true,
       needsAttention: true,
+      attachedContextDocs: [{ id: 'doc-1', title: 'Design doc', summary: 'System design' }],
     };
 
     expect(mergeConversationSessionMeta({
@@ -156,10 +157,12 @@ describe('conversation page state helpers', () => {
       title: 'Detail title',
       isRunning: undefined,
       needsAttention: undefined,
+      attachedContextDocs: undefined,
     }, sessionSnapshot)).toMatchObject({
       title: 'Detail title',
       isRunning: true,
       needsAttention: true,
+      attachedContextDocs: [{ id: 'doc-1', title: 'Design doc', summary: 'System design' }],
     });
   });
 
