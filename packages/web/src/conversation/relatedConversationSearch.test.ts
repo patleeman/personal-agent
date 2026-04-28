@@ -179,6 +179,28 @@ describe('selectRecentConversationCandidates', () => {
       nowMs: -Number.MAX_SAFE_INTEGER - 1,
     }).map((session) => session.id)).toEqual(['recent-current']);
   });
+
+  it('sorts malformed recent timestamps after valid recent conversations', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'malformed-current',
+        title: 'Malformed current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '9999',
+      }),
+      buildSession({
+        id: 'recent-current',
+        title: 'Recent current workspace',
+        cwd: '/repo/current',
+        lastActivityAt: '2026-04-12T09:00:00.000Z',
+      }),
+    ];
+
+    expect(selectRecentConversationCandidates(sessions, {
+      workspaceCwd: '/repo/current',
+      recentWindowDays: null,
+    }).map((session) => session.id)).toEqual(['recent-current', 'malformed-current']);
+  });
 });
 
 describe('listRecentConversationResults', () => {

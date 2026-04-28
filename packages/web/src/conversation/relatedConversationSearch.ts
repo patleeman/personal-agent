@@ -74,6 +74,15 @@ function normalizeNowMs(value: number | undefined): number {
     : Date.now();
 }
 
+function parseConversationTimestamp(value: string | undefined): number {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 function scoreField(token: string, value: string | undefined, weight: number): number | null {
   const normalizedValue = normalizeField(value);
   if (!normalizedValue) {
@@ -97,7 +106,7 @@ function scoreField(token: string, value: string | undefined, weight: number): n
 }
 
 function scoreRecency(timestamp: string, nowMs: number): number {
-  const parsed = Date.parse(timestamp);
+  const parsed = parseConversationTimestamp(timestamp);
   if (!Number.isFinite(parsed)) {
     return 0;
   }
@@ -226,11 +235,18 @@ function compareRecentConversationCandidates(left: SessionMeta, right: SessionMe
     return leftWorkspace ? -1 : 1;
   }
 
-  const leftTimestamp = left.lastActivityAt ?? left.timestamp;
-  const rightTimestamp = right.lastActivityAt ?? right.timestamp;
-  const timestampCompare = rightTimestamp.localeCompare(leftTimestamp);
-  if (timestampCompare !== 0) {
-    return timestampCompare;
+  const leftTimestamp = parseConversationTimestamp(left.lastActivityAt ?? left.timestamp);
+  const rightTimestamp = parseConversationTimestamp(right.lastActivityAt ?? right.timestamp);
+  if (Number.isFinite(leftTimestamp) || Number.isFinite(rightTimestamp)) {
+    if (!Number.isFinite(leftTimestamp)) {
+      return 1;
+    }
+    if (!Number.isFinite(rightTimestamp)) {
+      return -1;
+    }
+    if (leftTimestamp !== rightTimestamp) {
+      return rightTimestamp - leftTimestamp;
+    }
   }
 
   return left.title.localeCompare(right.title);
@@ -262,7 +278,7 @@ export function selectRecentConversationCandidates(
         return true;
       }
 
-      const timestamp = Date.parse(session.lastActivityAt ?? session.timestamp);
+      const timestamp = parseConversationTimestamp(session.lastActivityAt ?? session.timestamp);
       return Number.isFinite(timestamp) && nowMs - timestamp <= recentWindowMs;
     })
     .sort((left, right) => compareRecentConversationCandidates(left, right, workspaceCwd))
