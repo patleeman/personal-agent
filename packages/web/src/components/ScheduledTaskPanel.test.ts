@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectRecord, ScheduledTaskDetail, SessionMeta } from '../shared/types';
-import { buildTaskExistingThreadOptions, buildTaskProjectOptions, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
+import { buildTaskExistingThreadOptions, buildTaskProjectOptions, parseCatchUpWindowMinutes, shouldClearMissingExistingThreadSelection, shouldShowTaskModelControls, taskStatusMeta } from './ScheduledTaskPanel';
 
 function createTask(overrides: Partial<ScheduledTaskDetail>): ScheduledTaskDetail {
   return {
@@ -28,6 +28,10 @@ describe('ScheduledTaskPanel status presentation', () => {
 });
 
 describe('ScheduledTaskPanel editor capabilities', () => {
+  it('rejects unsafe catch-up window minute values', () => {
+    expect(parseCatchUpWindowMinutes(String(Number.MAX_SAFE_INTEGER + 1))).toBeNaN();
+  });
+
   it('allows thread automations to choose a model', () => {
     expect(shouldShowTaskModelControls({ targetType: 'conversation' })).toBe(true);
   });

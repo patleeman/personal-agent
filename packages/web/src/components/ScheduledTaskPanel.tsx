@@ -148,7 +148,7 @@ function resolveCronExpression(state: TaskFormState): string {
     : state.cronEditor.rawCron.trim();
 }
 
-function parseCatchUpWindowMinutes(value: string): number | undefined {
+export function parseCatchUpWindowMinutes(value: string): number | undefined {
   const normalized = value.trim();
   if (!normalized) {
     return undefined;
@@ -159,7 +159,7 @@ function parseCatchUpWindowMinutes(value: string): number | undefined {
   }
 
   const parsed = Number.parseInt(normalized, 10);
-  return parsed > 0 ? parsed : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : Number.NaN;
 }
 
 function formatCatchUpWindowLabel(seconds: number | undefined): string {
