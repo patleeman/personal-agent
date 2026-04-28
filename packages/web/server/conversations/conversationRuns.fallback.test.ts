@@ -84,6 +84,26 @@ describe('conversationRuns daemon fallback', () => {
     expect(saveWebLiveConversationRunStateMock).not.toHaveBeenCalled();
   });
 
+  it('omits malformed updatedAt values when syncing live conversation runs', async () => {
+    pingDaemonMock.mockResolvedValue(true);
+    syncWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-daemon' });
+
+    await expect(syncWebLiveConversationRun({
+      conversationId: 'conv-invalid-time',
+      sessionFile: '/tmp/conv-invalid-time.jsonl',
+      cwd: '/tmp/workspace',
+      state: 'running',
+      updatedAt: 'not-a-date',
+    })).resolves.toEqual({ runId: 'run-daemon' });
+
+    expect(syncWebLiveConversationRunStateMock).toHaveBeenCalledWith({
+      conversationId: 'conv-invalid-time',
+      sessionFile: '/tmp/conv-invalid-time.jsonl',
+      cwd: '/tmp/workspace',
+      state: 'running',
+    });
+  });
+
   it('falls back to local persistence when the daemon is unavailable', async () => {
     saveWebLiveConversationRunStateMock.mockResolvedValue({ runId: 'run-local' });
 

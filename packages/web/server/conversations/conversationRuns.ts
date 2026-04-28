@@ -36,6 +36,15 @@ function isDaemonUnavailable(error: unknown): boolean {
 
 export { createWebLiveConversationRunId };
 
+function normalizeOptionalTimestamp(value: string | Date | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = value instanceof Date ? value.getTime() : Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : undefined;
+}
+
 export async function syncWebLiveConversationRun(input: {
   conversationId: string;
   sessionFile: string;
@@ -47,6 +56,7 @@ export async function syncWebLiveConversationRun(input: {
   lastError?: string;
   pendingOperation?: WebLiveConversationPendingOperation | null;
 }): Promise<{ runId: string }> {
+  const updatedAt = normalizeOptionalTimestamp(input.updatedAt);
   const normalizedInput: SyncWebLiveConversationRunRequestInput = {
     conversationId: input.conversationId,
     sessionFile: input.sessionFile,
@@ -54,7 +64,7 @@ export async function syncWebLiveConversationRun(input: {
     state: input.state,
     ...(input.title !== undefined ? { title: input.title } : {}),
     ...(input.profile !== undefined ? { profile: input.profile } : {}),
-    ...(input.updatedAt ? { updatedAt: new Date(input.updatedAt).toISOString() } : {}),
+    ...(updatedAt ? { updatedAt } : {}),
     ...(input.lastError !== undefined ? { lastError: input.lastError } : {}),
     ...(input.pendingOperation !== undefined ? { pendingOperation: input.pendingOperation } : {}),
   };
