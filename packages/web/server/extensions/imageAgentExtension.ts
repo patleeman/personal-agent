@@ -70,7 +70,7 @@ function supportsImageGeneration(model: Model<Api> | undefined): model is Model<
   }
 
   return (model.api === 'openai-codex-responses' || model.api === 'openai-responses')
-    && /^gpt-5(?:$|[.-])/.test(model.id);
+    && /^(?:gpt-4o(?:$|[.-])|gpt-4\.1(?:$|[.-])|o3(?:$|[.-])|gpt-5(?:$|[.-]))/.test(model.id);
 }
 
 function trimTrailingSlashes(value: string): string {
@@ -159,11 +159,20 @@ async function resolveImageGenerationTarget(ctx: {
     pushCandidate(ctx.model);
   }
 
+  pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5.5'));
   pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5.4'));
   pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5.4-mini'));
+  pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5.4-nano'));
   pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5.2'));
+  pushCandidate(ctx.modelRegistry.find('openai-codex', 'gpt-5'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.5'));
   pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.4'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.4-mini'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.4-nano'));
   pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.2'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-4.1'));
+  pushCandidate(ctx.modelRegistry.find('openai', 'gpt-4o'));
   pushCandidate(ctx.modelRegistry.find('openai', 'gpt-5.1-codex-mini'));
 
   for (const candidate of candidates) {
@@ -189,7 +198,7 @@ async function resolveImageGenerationTarget(ctx: {
     };
   }
 
-  throw new Error('Image generation requires configured openai-codex or openai auth with a GPT-5 model.');
+  throw new Error('Image generation requires configured openai-codex or openai auth with an image-generation-capable Responses model.');
 }
 
 function readImageBlocks(content: unknown): ImageContent[] {

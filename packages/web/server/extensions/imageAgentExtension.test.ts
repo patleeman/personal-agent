@@ -539,6 +539,38 @@ describe('image agent extension', () => {
     });
   });
 
+  it('falls back to an OpenAI image-generation-capable Responses model', async () => {
+    const imageTool = registerImageTool();
+    const openAiModel = createModel({
+      id: 'gpt-4.1',
+      provider: 'openai',
+      api: 'openai-responses',
+      baseUrl: 'https://api.openai.com/v1',
+    });
+    const fetchMock = vi.fn().mockResolvedValue(createSuccessfulImageResponse());
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await imageTool.execute(
+      'tool-1',
+      { prompt: 'Draw a compact product settings screen.' },
+      undefined,
+      undefined,
+      createToolContext({
+        models: [openAiModel],
+        authByProvider: {
+          openai: { apiKey: 'openai-key' },
+        },
+      }),
+    );
+
+    const [url, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe('https://api.openai.com/v1/responses');
+    const body = JSON.parse(String(request.body)) as { model: string; tools: Array<{ type: string }> };
+    expect(body.model).toBe('gpt-4.1');
+    expect(body.tools).toEqual([{ type: 'image_generation' }]);
+    expect(result.details).toMatchObject({ provider: 'openai', model: 'gpt-4.1' });
+  });
+
   it('fails clearly when no compatible auth is configured', async () => {
     const imageTool = registerImageTool();
     const anthropicModel = createModel({
@@ -558,6 +590,6 @@ describe('image agent extension', () => {
         currentModel: anthropicModel,
         models: [anthropicModel],
       }),
-    )).rejects.toThrow('Image generation requires configured openai-codex or openai auth with a GPT-5 model.');
+    )).rejects.toThrow('Image generation requires configured openai-codex or openai auth with an image-generation-capable Responses model.');
   });
 });
