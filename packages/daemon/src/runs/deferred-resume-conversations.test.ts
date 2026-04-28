@@ -265,4 +265,31 @@ describe('deferred resume conversation durable runs', () => {
       }),
     });
   });
+
+  it('rejects invalid deferred resume run timestamps with field errors', async () => {
+    const daemonRoot = createTempDir('deferred-resume-runs-');
+    const sessionDir = join(daemonRoot, 'sessions');
+    mkdirSync(sessionDir, { recursive: true });
+    const sessionFile = join(sessionDir, 'conv-invalid-time.jsonl');
+    writeFileSync(sessionFile, '{"type":"session","id":"conv-invalid-time","timestamp":"2026-03-12T14:00:00.000Z","cwd":"/tmp/workspace"}\n');
+
+    await expect(scheduleDeferredResumeConversationRun({
+      daemonRoot,
+      deferredResumeId: 'resume_invalid_time',
+      sessionFile,
+      prompt: 'come back later',
+      dueAt: 'not-a-date',
+      createdAt: '2026-03-12T14:00:00.000Z',
+    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+
+    await expect(markDeferredResumeConversationRunReady({
+      daemonRoot,
+      deferredResumeId: 'resume_invalid_time',
+      sessionFile,
+      prompt: 'come back later',
+      dueAt: '2026-03-12T14:10:00.000Z',
+      createdAt: '2026-03-12T14:00:00.000Z',
+      readyAt: 'not-a-date',
+    })).rejects.toThrow('Deferred resume run updatedAt must be a valid timestamp.');
+  });
 });

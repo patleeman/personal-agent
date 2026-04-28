@@ -30,8 +30,13 @@ function writeJsonFile(path: string, value: unknown): void {
   writeFileSync(path, JSON.stringify(value, null, 2));
 }
 
-function normalizeTimestamp(value: string): string {
-  return new Date(value).toISOString();
+function normalizeTimestamp(value: string, field: string): string {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Deferred resume run ${field} must be a valid timestamp.`);
+  }
+
+  return new Date(parsed).toISOString();
 }
 
 function resolveConversationId(input: { conversationId?: string; sessionFile: string }): string | undefined {
@@ -72,9 +77,9 @@ function createSpec(input: DeferredResumeConversationRunInput): Record<string, u
     deferredResumeId: input.deferredResumeId,
     sessionFile: input.sessionFile,
     prompt: input.prompt,
-    dueAt: normalizeTimestamp(input.dueAt),
-    ...(input.createdAt ? { createdAt: normalizeTimestamp(input.createdAt) } : {}),
-    ...(input.readyAt ? { readyAt: normalizeTimestamp(input.readyAt) } : {}),
+    dueAt: normalizeTimestamp(input.dueAt, 'dueAt'),
+    ...(input.createdAt ? { createdAt: normalizeTimestamp(input.createdAt, 'createdAt') } : {}),
+    ...(input.readyAt ? { readyAt: normalizeTimestamp(input.readyAt, 'readyAt') } : {}),
     ...(input.profile ? { profile: input.profile } : {}),
     ...(input.cwd ? { cwd: input.cwd } : {}),
     ...(resolveConversationId(input) ? { conversationId: resolveConversationId(input) } : {}),
@@ -90,10 +95,10 @@ async function saveDeferredResumeConversationRunState(
   const existingManifest = loadDurableRunManifest(paths.manifestPath);
   const existingStatus = loadDurableRunStatus(paths.statusPath);
   const conversationId = resolveConversationId(input);
-  const createdAt = normalizeTimestamp(existingManifest?.createdAt ?? existingStatus?.createdAt ?? input.createdAt ?? input.updatedAt);
-  const updatedAt = normalizeTimestamp(input.updatedAt);
+  const createdAt = normalizeTimestamp(existingManifest?.createdAt ?? existingStatus?.createdAt ?? input.createdAt ?? input.updatedAt, 'createdAt');
+  const updatedAt = normalizeTimestamp(input.updatedAt, 'updatedAt');
   const completedAt = input.status === 'completed' || input.status === 'failed' || input.status === 'cancelled'
-    ? normalizeTimestamp(input.completedAt ?? input.updatedAt)
+    ? normalizeTimestamp(input.completedAt ?? input.updatedAt, 'completedAt')
     : undefined;
 
   if (!existingManifest) {
@@ -145,9 +150,9 @@ async function saveDeferredResumeConversationRunState(
       sessionFile: input.sessionFile,
       ...(conversationId ? { conversationId } : {}),
       prompt: input.prompt,
-      dueAt: normalizeTimestamp(input.dueAt),
-      ...(input.createdAt ? { createdAt: normalizeTimestamp(input.createdAt) } : {}),
-      ...(input.readyAt ? { readyAt: normalizeTimestamp(input.readyAt) } : {}),
+      dueAt: normalizeTimestamp(input.dueAt, 'dueAt'),
+      ...(input.createdAt ? { createdAt: normalizeTimestamp(input.createdAt, 'createdAt') } : {}),
+      ...(input.readyAt ? { readyAt: normalizeTimestamp(input.readyAt, 'readyAt') } : {}),
       ...(input.profile ? { profile: input.profile } : {}),
       ...(input.cwd ? { cwd: input.cwd } : {}),
       ...(input.lastError ? { lastError: input.lastError } : {}),
@@ -274,8 +279,8 @@ export async function completeDeferredResumeConversationRun(
       sessionFile: input.sessionFile,
       ...(resolveConversationId(input) ? { conversationId: resolveConversationId(input) } : {}),
       prompt: input.prompt,
-      dueAt: normalizeTimestamp(input.dueAt),
-      completedAt: normalizeTimestamp(input.completedAt),
+      dueAt: normalizeTimestamp(input.dueAt, 'dueAt'),
+      completedAt: normalizeTimestamp(input.completedAt, 'completedAt'),
       status: 'completed',
     },
   });
@@ -298,8 +303,8 @@ export async function cancelDeferredResumeConversationRun(
       sessionFile: input.sessionFile,
       ...(resolveConversationId(input) ? { conversationId: resolveConversationId(input) } : {}),
       prompt: input.prompt,
-      dueAt: normalizeTimestamp(input.dueAt),
-      cancelledAt: normalizeTimestamp(input.cancelledAt),
+      dueAt: normalizeTimestamp(input.dueAt, 'dueAt'),
+      cancelledAt: normalizeTimestamp(input.cancelledAt, 'cancelledAt'),
       reason: input.reason,
       status: 'cancelled',
     },
