@@ -1,6 +1,7 @@
 import type { ConversationArtifactToolDetails, MessageBlock } from '../shared/types';
 
 const CONVERSATION_ARTIFACT_QUERY_PARAM = 'artifact';
+const MAX_ARTIFACT_REVISION = 1_000_000;
 
 interface ConversationArtifactPresentation {
   action: 'save' | 'get' | 'list' | 'delete';
@@ -90,7 +91,12 @@ export function readArtifactPresentation(block: Extract<MessageBlock, { type: 't
     artifactId,
     title,
     kind,
-    revision: typeof details?.revision === 'number' && Number.isSafeInteger(details.revision) && details.revision > 0 ? details.revision : undefined,
+    revision: typeof details?.revision === 'number'
+      && Number.isSafeInteger(details.revision)
+      && details.revision > 0
+      && details.revision <= MAX_ARTIFACT_REVISION
+      ? details.revision
+      : undefined,
     updatedAt: typeof details?.updatedAt === 'string' ? details.updatedAt : undefined,
     openRequested: typeof details?.openRequested === 'boolean'
       ? details.openRequested

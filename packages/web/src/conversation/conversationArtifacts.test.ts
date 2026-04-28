@@ -12,4 +12,15 @@ describe('conversationArtifacts', () => {
       status: 'done',
     } as never)?.revision).toBeUndefined();
   });
+
+  it('ignores absurd artifact revisions from tool details', () => {
+    expect(readArtifactPresentation({
+      type: 'tool_use',
+      id: 'tool-1',
+      tool: 'artifact',
+      input: { action: 'save', artifactId: 'artifact-1', title: 'Artifact', kind: 'html' },
+      details: { action: 'save', artifactId: 'artifact-1', title: 'Artifact', kind: 'html', revision: Number.MAX_SAFE_INTEGER },
+      status: 'done',
+    } as never)?.revision).toBeUndefined();
+  });
 });
