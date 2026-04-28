@@ -779,8 +779,8 @@ export function createDesktopCompanionRuntime(hostManager: HostManager): Compani
 
     async searchKnowledge(input: { query?: string | null; limit?: number | null }) {
       const query = input.query?.trim() ?? '';
-      const limit = Number.isInteger(input.limit) && Number(input.limit) > 0
-        ? Math.min(50, Number(input.limit))
+      const limit = typeof input.limit === 'number' && Number.isSafeInteger(input.limit) && input.limit > 0
+        ? Math.min(50, input.limit)
         : 20;
       const params = new URLSearchParams({ limit: String(limit) });
       if (query) {

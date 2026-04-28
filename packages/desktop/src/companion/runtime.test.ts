@@ -226,6 +226,25 @@ describe('desktop companion runtime', () => {
     });
   });
 
+  it('defaults unsafe knowledge search limits instead of clamping them', async () => {
+    const localController = {
+      dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ results: [] })),
+    };
+
+    const hostManager = {
+      getHostController: vi.fn().mockReturnValue(localController),
+      getConnectionsState: vi.fn().mockReturnValue({ hosts: [] }),
+    } as unknown as HostManager;
+
+    const runtime = createDesktopCompanionRuntime(hostManager);
+    await expect(runtime.searchKnowledge({ query: 'release', limit: Number.MAX_SAFE_INTEGER + 1 })).resolves.toEqual({ results: [] });
+
+    expect(localController.dispatchApiRequest).toHaveBeenCalledWith({
+      method: 'GET',
+      path: '/api/vault/note-search?limit=20&q=release',
+    });
+  });
+
   it('changes execution target then reloads bootstrap through the desktop API dispatcher', async () => {
     const localController = {
       dispatchApiRequest: vi.fn().mockResolvedValue(jsonResponse({ bootstrap: { conversationId: 'conv-1' } })),
