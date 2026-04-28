@@ -114,6 +114,16 @@ describe('liveSessionTranscript', () => {
     expect(mergeConversationHistoryBlocks([persistedTool], [liveTool])).toEqual([persistedTool]);
   });
 
+  it('does not let malformed persisted timestamps hide newer live blocks', () => {
+    const persisted = [textBlock('persisted', 'persisted', '9999')];
+    const live = [textBlock('live', 'live', '2026-04-26T12:00:00.000Z')];
+
+    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
+      ...persisted,
+      ...live,
+    ]);
+  });
+
   it('updates the latest compaction summary title without mutating the input array', () => {
     const first = summaryBlock('s1', 'Old title');
     const second = summaryBlock('s2', 'Later old title');

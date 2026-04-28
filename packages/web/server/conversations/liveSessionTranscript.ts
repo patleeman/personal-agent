@@ -152,8 +152,12 @@ function mergeIdentityKey(block: DisplayBlock): string | null {
 }
 
 function parseDisplayBlockTimestampMs(block: DisplayBlock): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(block.ts)) {
+    return null;
+  }
+
   const ms = Date.parse(block.ts);
-  return Number.isFinite(ms) ? ms : null;
+  return Number.isFinite(ms) && new Date(ms).toISOString() === block.ts ? ms : null;
 }
 
 function mergePersistedIdentityBlock(existing: DisplayBlock, liveBlock: DisplayBlock): DisplayBlock {
