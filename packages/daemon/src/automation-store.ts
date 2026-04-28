@@ -421,6 +421,10 @@ function rowToRuntimeState(row: AutomationStateRow): TaskRuntimeState {
 
 function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationActivityEntry | undefined {
   const payload = parseJsonRecord(row.payload_json);
+  const createdAt = Date.parse(row.created_at);
+  if (!Number.isFinite(createdAt)) {
+    return undefined;
+  }
   const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0
     ? payload.count
     : undefined;
@@ -447,7 +451,7 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
     id: `${row.automation_id}:${row.seq}`,
     automationId: row.automation_id,
     kind: 'missed',
-    createdAt: new Date(row.created_at).toISOString(),
+    createdAt: new Date(createdAt).toISOString(),
     count,
     firstScheduledAt,
     lastScheduledAt,

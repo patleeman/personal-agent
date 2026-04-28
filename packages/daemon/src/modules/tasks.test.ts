@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFil
 import { rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { listProfileActivityEntries, loadDeferredResumeState, setTaskCallbackBinding } from '@personal-agent/core';
+import { listProfileActivityEntries, loadDeferredResumeState, openSqliteDatabase, setTaskCallbackBinding } from '@personal-agent/core';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DaemonConfig } from '../config.js';
 import {
@@ -334,6 +334,34 @@ describe('tasks module scheduling', () => {
       exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
       outcome: 'skipped',
     }, { dbPath })).toThrow('Automation activity firstScheduledAt must be a valid timestamp.');
+  });
+
+  it('skips persisted automation activity rows with malformed created times', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'corrupt-activity-time',
+      profile: 'assistant',
+      title: 'Corrupt activity time',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+    appendAutomationActivityEntry('corrupt-activity-time', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath });
+    openSqliteDatabase(dbPath)
+      .prepare('UPDATE automation_activity SET created_at = ? WHERE automation_id = ?')
+      .run('not-a-date', 'corrupt-activity-time');
+
+    expect(listAutomationActivityEntries('corrupt-activity-time', { dbPath })).toEqual([]);
   });
 
   it('does not floor fractional task module timer config', () => {
