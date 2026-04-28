@@ -111,7 +111,6 @@ export function DraftRelatedThreadsPanel({
                       {autoSelected && (
                         <span className="text-accent/80"> · auto-selected</span>
                       )}
-                      <span className={cx('text-dim', checked && 'text-accent/70')}>{` · score ${Math.round(result.score)}`}</span>
                     </span>
                     {(detail || reason) && (
                       <span className={cx('mt-0.5 block min-w-0 truncate text-[11px] text-secondary', checked && 'text-accent/70')}>

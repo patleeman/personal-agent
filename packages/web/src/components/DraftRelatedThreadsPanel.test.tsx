@@ -51,7 +51,6 @@ describe('DraftRelatedThreadsPanel', () => {
     expect(html).toContain('Suggested context');
     expect(html).toContain('Auto-ranked from past conversations.');
     expect(html).toContain('auto-selected');
-    expect(html).toContain('score 180');
     expect(html).toContain('appearance-none');
     expect(html).toContain('Reuse context from Release signing flow');
     expect(html).toContain('Mapped APPLE_PASSWORD for the release flow.');
