@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { runCommand } from './command.js';
+import { normalizeCommandTimeoutMs, runCommand } from './command.js';
 
 describe('runCommand', () => {
+  it('defaults malformed timeout values', () => {
+    expect(normalizeCommandTimeoutMs(1.5)).toBe(60_000);
+    expect(normalizeCommandTimeoutMs(Number.MAX_SAFE_INTEGER + 1)).toBe(60_000);
+  });
+
   it('returns stdout/stderr output and zero exit code for successful commands', async () => {
     const result = await runCommand(process.execPath, [
       '-e',

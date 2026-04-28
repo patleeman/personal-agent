@@ -7,12 +7,20 @@ export interface CommandResult {
 }
 
 const GRACEFUL_SHUTDOWN_MS = 5000;
+const DEFAULT_COMMAND_TIMEOUT_MS = 60_000;
+
+export function normalizeCommandTimeoutMs(value: number | undefined): number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+    ? value as number
+    : DEFAULT_COMMAND_TIMEOUT_MS;
+}
 
 export async function runCommand(
   command: string,
   args: string[],
-  timeoutMs = 60_000,
+  timeoutMs = DEFAULT_COMMAND_TIMEOUT_MS,
 ): Promise<CommandResult> {
+  const normalizedTimeoutMs = normalizeCommandTimeoutMs(timeoutMs);
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -39,8 +47,8 @@ export async function runCommand(
           child.kill('SIGKILL');
         }
       }, GRACEFUL_SHUTDOWN_MS);
-      finalize(() => reject(new Error(`${command} timed out after ${timeoutMs}ms`)));
-    }, timeoutMs);
+      finalize(() => reject(new Error(`${command} timed out after ${normalizedTimeoutMs}ms`)));
+    }, normalizedTimeoutMs);
 
     child.stdout.on('data', (chunk: Buffer | string) => {
       stdout += chunk.toString();
