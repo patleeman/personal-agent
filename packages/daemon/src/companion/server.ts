@@ -173,7 +173,7 @@ function readOptionalPositiveInteger(input: unknown, field: string): number | un
       ? input
       : Number.NaN;
 
-  if (!Number.isInteger(value) || value <= 0) {
+  if (!Number.isSafeInteger(value) || value <= 0) {
     throw new Error(`${field} must be a positive integer when provided.`);
   }
 
@@ -191,7 +191,7 @@ function readOptionalNonNegativeInteger(input: unknown, field: string): number |
       ? input
       : Number.NaN;
 
-  if (!Number.isInteger(value) || value < 0) {
+  if (!Number.isSafeInteger(value) || value < 0) {
     throw new Error(`${field} must be a non-negative integer when provided.`);
   }
 
@@ -205,7 +205,7 @@ function readOptionalPositiveIntegerQuery(input: string | null): number | undefi
   }
 
   const value = Number.parseInt(normalized, 10);
-  return Number.isInteger(value) && value > 0 ? value : undefined;
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 
 function readNonNegativeIntegerPath(input: string): number | undefined {
@@ -215,7 +215,7 @@ function readNonNegativeIntegerPath(input: string): number | undefined {
   }
 
   const value = Number.parseInt(normalized, 10);
-  return Number.isInteger(value) && value >= 0 ? value : undefined;
+  return Number.isSafeInteger(value) && value >= 0 ? value : undefined;
 }
 
 function normalizeSurfaceType(input: unknown): CompanionSurfaceType | undefined {
