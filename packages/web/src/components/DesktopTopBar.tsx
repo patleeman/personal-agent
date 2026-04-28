@@ -64,7 +64,8 @@ function readPersistedNavigationIndex(value: string | null, fallback: number): n
   }
 
   const normalized = value.trim();
-  return /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
+  const parsed = /^\d+$/.test(normalized) ? Number.parseInt(normalized, 10) : Number.NaN;
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 10_000 ? parsed : fallback;
 }
 
 export function readBrowserNavigationState(): DesktopNavigationState {

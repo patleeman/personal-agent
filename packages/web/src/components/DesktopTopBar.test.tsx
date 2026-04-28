@@ -47,6 +47,21 @@ describe('DesktopTopBar', () => {
     expect(readBrowserNavigationState()).toEqual({ canGoBack: false, canGoForward: false });
   });
 
+  it('ignores absurd persisted browser navigation indexes', () => {
+    const storage = new Map<string, string>([
+      ['__pa_nav_max_idx__', String(Number.MAX_SAFE_INTEGER)],
+    ]);
+    vi.stubGlobal('window', {
+      history: { state: { idx: 0 } },
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => storage.set(key, value),
+      },
+    });
+
+    expect(readBrowserNavigationState()).toEqual({ canGoBack: false, canGoForward: false });
+  });
+
   it('ignores malformed persisted browser navigation indexes', () => {
     const storage = new Map<string, string>([
       ['__pa_nav_max_idx__', '1e3'],
