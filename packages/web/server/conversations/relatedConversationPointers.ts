@@ -92,6 +92,15 @@ function normalizePreview(value: string | undefined, maxLength = 220): string | 
     : normalized;
 }
 
+function parsePointerTimestamp(value: string | undefined): number {
+  if (!value || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)) {
+    return Number.NaN;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value ? parsed : Number.NaN;
+}
+
 function scoreCandidate(input: {
   meta: SessionMeta;
   terms: string[];
@@ -124,7 +133,7 @@ function scoreCandidate(input: {
     reasons.push(`transcript index matches ${searchMatches.slice(0, 4).join(', ')}`);
   }
 
-  const lastActivity = Date.parse(input.meta.lastActivityAt ?? input.meta.timestamp);
+  const lastActivity = parsePointerTimestamp(input.meta.lastActivityAt ?? input.meta.timestamp);
   if (Number.isFinite(lastActivity)) {
     const ageDays = (Date.now() - lastActivity) / 86_400_000;
     if (ageDays <= 7) {
@@ -175,7 +184,7 @@ function buildPointer(input: {
 }
 
 function pointerActivityMs(pointer: RelatedConversationPointer): number {
-  const parsed = Date.parse(pointer.lastActivityAt ?? pointer.timestamp);
+  const parsed = parsePointerTimestamp(pointer.lastActivityAt ?? pointer.timestamp);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 

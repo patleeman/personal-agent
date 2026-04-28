@@ -140,4 +140,21 @@ describe('buildRelatedConversationPointers', () => {
 
     expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time', 'invalid-time']);
   });
+
+  it('sorts auto candidates with non-ISO activity timestamps last', () => {
+    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readSessionSearchTextMock.mockReturnValue('release signing fix');
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'non-iso-time', title: 'Release signing non iso', timestamp: '9999', lastActivityAt: '9999', messageCount: 6 },
+      { ...baseMeta, id: 'valid-time', title: 'Release signing valid', timestamp: '2026-02-01T10:00:00.000Z', lastActivityAt: '2026-02-01T10:00:00.000Z', messageCount: 6 },
+    ]);
+
+    const result = buildRelatedConversationPointers({
+      prompt: 'Fix the release signing flow',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time', 'non-iso-time']);
+  });
 });
