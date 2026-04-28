@@ -228,6 +228,22 @@ describe('conversation queue agent extension', () => {
     });
   });
 
+  it('rejects malformed absolute continuation times', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-04-12T12:00:00Z'));
+
+    const tool = registerConversationQueueTool();
+    await expect(tool.execute(
+      'tool-1',
+      { action: 'add', trigger: 'at', at: '9999', prompt: 'Check the deployment again.' },
+      undefined,
+      undefined,
+      createToolContext(),
+    )).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+
+    expect(createStoredAutomationMock).not.toHaveBeenCalled();
+  });
+
   it('lists live queued prompts, saved automations, and deferred resumes together', async () => {
     listQueuedPromptPreviewsMock.mockReturnValue({
       steering: [{ id: 'steer-1', text: 'Adjust the plan first.', imageCount: 0 }],

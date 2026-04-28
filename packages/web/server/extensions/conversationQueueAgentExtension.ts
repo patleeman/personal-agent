@@ -275,6 +275,10 @@ function resolveScheduledAt(input: { delay?: string; at?: string }): string {
     return new Date(Date.now() + delayMs).toISOString();
   }
 
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?(?:Z|[+-]\d{2}:\d{2})$/.test(input.at as string)) {
+    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+  }
+
   const atMs = Date.parse(input.at as string);
   if (!Number.isFinite(atMs)) {
     throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
