@@ -488,7 +488,7 @@ describe('live session routes', () => {
     const invalidImageRes = createResponse();
     await handleLiveSessionPrompt(createRequest({
       params: { id: 'live-1' },
-      body: { images: [null, { mimeType: '', data: '' }] },
+      body: { images: [null, { mimeType: '', data: '' }, { mimeType: 'image/png', data: '   ' }] },
     }), invalidImageRes);
     expect(invalidImageRes.status).toHaveBeenCalledWith(400);
     expect(invalidImageRes.json).toHaveBeenCalledWith({ error: 'text, images, or attachmentRefs required' });

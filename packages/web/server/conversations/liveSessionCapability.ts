@@ -328,13 +328,13 @@ function normalizePromptImages(value: unknown): PromptImageAttachment[] | undefi
       !!image
       && typeof image === 'object'
       && typeof (image as { data?: unknown }).data === 'string'
-      && (image as { data: string }).data.length > 0
+      && (image as { data: string }).data.trim().length > 0
       && typeof (image as { mimeType?: unknown }).mimeType === 'string'
       && (image as { mimeType: string }).mimeType.trim().length > 0
     ))
     .map((image) => ({
       type: 'image' as const,
-      data: image.data,
+      data: image.data.trim(),
       mimeType: image.mimeType.trim(),
       ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
     }));
