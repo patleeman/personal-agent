@@ -74,6 +74,7 @@ describe('pendingConversationPrompt helpers', () => {
         { attachmentId: '   ' },
         { attachmentId: 'bad-revision', revision: 0 },
         { attachmentId: 'unsafe-revision', revision: Number.MAX_SAFE_INTEGER + 1 },
+        { attachmentId: 'absurd-revision', revision: Number.MAX_SAFE_INTEGER },
       ],
     }, null);
 

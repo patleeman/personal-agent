@@ -14,6 +14,7 @@ export interface PendingConversationPrompt {
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
 const inFlightPendingPromptDispatches = new Set<string>();
 const PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS = 90_000;
+const MAX_PENDING_ATTACHMENT_REVISION = 1_000_000;
 
 function normalizePendingPromptContextMessages(value: unknown): Array<Pick<InjectedPromptMessage, 'customType' | 'content'>> {
   if (!Array.isArray(value)) {
@@ -91,7 +92,7 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
       ? (attachmentRef as { attachmentId: string }).attachmentId.trim()
       : '';
     const revision = (attachmentRef as { revision?: unknown }).revision;
-    if (!attachmentId || (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0))) {
+    if (!attachmentId || (revision !== undefined && (!Number.isSafeInteger(revision) || revision <= 0 || revision > MAX_PENDING_ATTACHMENT_REVISION))) {
       continue;
     }
 
