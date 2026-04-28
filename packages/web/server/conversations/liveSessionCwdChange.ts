@@ -74,9 +74,8 @@ export async function applyPendingLiveSessionWorkingDirectoryChange<TEntry exten
   entry: TEntry;
   pendingChanges: Map<string, PendingConversationWorkingDirectoryChange>;
   resolveSessionFile: (entry: TEntry) => string | undefined;
-  createSessionFromExisting: (sessionFile: string, cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
+  changeSessionWorkingDirectory: (entry: TEntry, sessionFile: string, cwd: string, options: LiveSessionLoaderOptions) => Promise<{ id: string; sessionFile: string }>;
   promptSession: (sessionId: string, prompt: string) => Promise<unknown>;
-  destroySession: (sessionId: string) => void;
   broadcast: (entry: TEntry, event: SseEvent) => void;
 }): Promise<void> {
   const pending = input.pendingChanges.get(input.entry.sessionId);
@@ -96,7 +95,7 @@ export async function applyPendingLiveSessionWorkingDirectoryChange<TEntry exten
   }
 
   try {
-    const result = await input.createSessionFromExisting(sourceSessionFile, pending.cwd, pending.loaderOptions);
+    const result = await input.changeSessionWorkingDirectory(input.entry, sourceSessionFile, pending.cwd, pending.loaderOptions);
     const autoContinued = Boolean(pending.continuePrompt);
 
     input.broadcast(input.entry, {
@@ -105,7 +104,6 @@ export async function applyPendingLiveSessionWorkingDirectoryChange<TEntry exten
       cwd: pending.cwd,
       autoContinued,
     });
-    input.destroySession(input.entry.sessionId);
 
     if (pending.continuePrompt) {
       void input.promptSession(result.id, pending.continuePrompt).catch((error) => {

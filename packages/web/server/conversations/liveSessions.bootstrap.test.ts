@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   applyConversationModelPreferencesMock,
+  appendConversationWorkspaceMetadataMock,
   authCreateMock,
   createAgentSessionMock,
   createBashToolMock,
@@ -32,6 +33,7 @@ const {
 
   return {
     applyConversationModelPreferencesMock: vi.fn(),
+    appendConversationWorkspaceMetadataMock: vi.fn(),
     authCreateMock: vi.fn(),
     createAgentSessionMock: vi.fn(),
     createBashToolMock: vi.fn(),
@@ -100,6 +102,7 @@ vi.mock('./conversationRuns.js', () => ({
 }));
 
 vi.mock('./sessions.js', () => ({
+  appendConversationWorkspaceMetadata: appendConversationWorkspaceMetadataMock,
   buildDisplayBlocksFromEntries: vi.fn(() => []),
   getAssistantErrorDisplayMessage: vi.fn(() => null),
   readSessionBlocksByFile: readSessionBlocksByFileMock,
@@ -261,6 +264,7 @@ function setLiveEntry(sessionId: string, entry: { cwd: string; title: string; se
 describe('liveSessions bootstrap helpers', () => {
   beforeEach(() => {
     applyConversationModelPreferencesMock.mockReset();
+    appendConversationWorkspaceMetadataMock.mockReset();
     authCreateMock.mockReset();
     createAgentSessionMock.mockReset();
     createBashToolMock.mockReset();
@@ -545,7 +549,7 @@ describe('liveSessions bootstrap helpers', () => {
     expect(registry.get('session-resumed')?.autoTitleRequested).toBe(true);
   });
 
-  it('applies queued working directory changes after the current turn ends and auto-continues in the new session', async () => {
+  it('applies queued working directory changes after the current turn ends and auto-continues in the same session', async () => {
     const runtimeRegistry = {
       getAvailable: vi.fn(() => [{ id: 'gpt-5', provider: 'openai' }]),
     };
@@ -564,7 +568,7 @@ describe('liveSessions bootstrap helpers', () => {
       sessionFile: '/tmp/durable-sessions/--tmp-next-workspace--/session-next.jsonl',
     });
     const nextSession = createMockSession({
-      sessionId: 'session-next',
+      sessionId: 'session-source',
       cwd: '/tmp/next-workspace',
       manager: nextManager,
       sessionFile: '/tmp/durable-sessions/--tmp-next-workspace--/session-next.jsonl',
@@ -574,7 +578,18 @@ describe('liveSessions bootstrap helpers', () => {
 
     createRuntimeModelRegistryMock.mockReturnValue(runtimeRegistry);
     sessionManagerCreateMock.mockReturnValue(sourceManager);
-    sessionManagerForkFromMock.mockReturnValue(nextManager);
+    sessionManagerOpenMock.mockReturnValue(nextManager);
+    readSessionMetaByFileMock.mockReturnValue({
+      id: 'session-source',
+      file: '/tmp/durable-sessions/--tmp-source-workspace--/session-source.jsonl',
+      timestamp: '2026-04-25T00:00:00.000Z',
+      cwd: '/tmp/source-workspace',
+      workspaceCwd: null,
+      cwdSlug: '--tmp-source-workspace--',
+      model: 'gpt-5',
+      title: 'Cwd-less chat',
+      messageCount: 1,
+    });
     createAgentSessionMock
       .mockResolvedValueOnce({ session: sourceSession.session })
       .mockResolvedValueOnce({ session: nextSession.session });
@@ -589,8 +604,16 @@ describe('liveSessions bootstrap helpers', () => {
     sourceSession.emit({ type: 'turn_end' });
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(registry.has('session-source')).toBe(false);
-    expect(registry.get('session-next')?.cwd).toBe('/tmp/next-workspace');
+    expect(appendConversationWorkspaceMetadataMock).toHaveBeenCalledWith({
+      sessionFile: '/tmp/durable-sessions/--tmp-source-workspace--/session-source.jsonl',
+      previousCwd: '/tmp/source-workspace',
+      previousWorkspaceCwd: null,
+      cwd: '/tmp/next-workspace',
+      workspaceCwd: '/tmp/next-workspace',
+      visibleMessage: true,
+    });
+    expect(registry.has('session-source')).toBe(true);
+    expect(registry.get('session-source')?.cwd).toBe('/tmp/next-workspace');
     expect(nextSession.session.prompt).toHaveBeenCalledWith('Continue here.');
   });
 

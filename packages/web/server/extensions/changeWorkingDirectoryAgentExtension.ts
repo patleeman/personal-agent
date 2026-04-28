@@ -43,12 +43,12 @@ export function createChangeWorkingDirectoryAgentExtension(options: {
     pi.registerTool({
       name: 'change_working_directory',
       label: 'Change Working Directory',
-      description: 'Change the current conversation working directory. The switch happens after the current turn by opening a new live conversation rooted at the requested directory.',
+      description: 'Change the current conversation working directory. The switch happens after the current turn and keeps the same conversation attached to the requested directory.',
       promptSnippet: 'Switch this conversation into a different working directory when the task clearly needs another repo or folder.',
       promptGuidelines: [
         'Use this tool when the user asks to switch repos/folders, or when the task cannot continue in the current working directory.',
-        'The switch happens after the current turn in a new live conversation. Do not claim you already inspected the new directory until that new conversation is active.',
-        'If you need to keep working immediately after the switch, provide continuePrompt and then stop so the new conversation can continue there.',
+        'The switch happens after the current turn in this same conversation. Do not claim you already inspected the new directory until the switch is active.',
+        'If you need to keep working immediately after the switch, provide continuePrompt and then stop so the conversation can continue there.',
         'If no automatic continuation is needed, call the tool and end the turn after telling the user the conversation moved.',
       ],
       parameters: ChangeWorkingDirectoryToolParams,
@@ -97,8 +97,8 @@ export function createChangeWorkingDirectoryAgentExtension(options: {
           content: [{
             type: 'text' as const,
             text: continuePrompt
-              ? `Queued working directory change to ${result.cwd}. A new conversation will open there after this turn and continue automatically.`
-              : `Queued working directory change to ${result.cwd}. A new conversation will open there after this turn.`,
+              ? `Queued working directory change to ${result.cwd}. This conversation will move there after this turn and continue automatically.`
+              : `Queued working directory change to ${result.cwd}. This conversation will move there after this turn.`,
           }],
           details: {
             action: 'queue',

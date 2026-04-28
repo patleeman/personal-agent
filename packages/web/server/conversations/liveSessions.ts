@@ -18,7 +18,7 @@ import {
   type ConversationModelPreferenceState,
 } from './conversationModelPreferences.js';
 import type { WebLiveConversationRunState } from './conversationRuns.js';
-import { readSessionBlocksByFile } from './sessions.js';
+import { appendConversationWorkspaceMetadata, readSessionBlocksByFile, readSessionMetaByFile } from './sessions.js';
 import {
   CONVERSATION_AUTO_MODE_CONTINUE_HIDDEN_TURN_CUSTOM_TYPE,
   type ConversationAutoModeState,
@@ -646,9 +646,30 @@ async function applyPendingConversationWorkingDirectoryChange(entry: LiveEntry):
     entry,
     pendingChanges: pendingConversationWorkingDirectoryChanges,
     resolveSessionFile: (candidate) => resolveLiveSessionFile(candidate.session, { ensurePersisted: true }) ?? undefined,
-    createSessionFromExisting,
+    changeSessionWorkingDirectory: async (candidate, sessionFile, cwd, options) => {
+      const currentMeta = readSessionMetaByFile(sessionFile);
+      const previousWorkspaceCwd = currentMeta && 'workspaceCwd' in currentMeta
+        ? currentMeta.workspaceCwd
+        : (currentMeta?.cwd ?? candidate.cwd);
+      appendConversationWorkspaceMetadata({
+        sessionFile,
+        previousCwd: currentMeta?.cwd ?? candidate.cwd,
+        previousWorkspaceCwd,
+        cwd,
+        workspaceCwd: cwd,
+        visibleMessage: true,
+      });
+
+      destroySession(candidate.sessionId);
+      return resumeSession(sessionFile, {
+        ...options,
+        cwdOverride: cwd,
+      }).then((result) => ({
+        ...result,
+        sessionFile,
+      }));
+    },
     promptSession,
-    destroySession,
     broadcast,
   });
 }
