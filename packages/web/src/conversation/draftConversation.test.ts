@@ -224,6 +224,25 @@ describe('draftConversation', () => {
     expect(hasDraftConversationAttachments(storage)).toBe(true);
   });
 
+  it('drops malformed draft image attachments when restoring storage', () => {
+    const storage = createStorage();
+
+    persistDraftConversationAttachments({
+      images: [
+        { mimeType: 'image/png', data: 'abc', name: 'diagram.png' },
+        { mimeType: 'text/plain', data: 'aGVsbG8=', name: 'note.txt' },
+        { mimeType: 'image/png', data: 'not-valid-base64!', name: 'bad.png' },
+        { mimeType: 'image/png', data: '   ', name: 'blank.png' },
+      ],
+      drawings: [],
+    }, storage);
+
+    expect(readDraftConversationAttachments(storage)).toEqual({
+      images: [{ mimeType: 'image/png', data: 'abc', name: 'diagram.png' }],
+      drawings: [],
+    });
+  });
+
   it('persists attachments per conversation thread', () => {
     const storage = createStorage();
 

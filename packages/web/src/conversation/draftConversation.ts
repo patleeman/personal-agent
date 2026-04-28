@@ -89,6 +89,19 @@ function normalizeDraftConversationServiceTier(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+function normalizeDraftConversationImageData(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const data = value.trim();
+  if (!data || data.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(data)) {
+    return null;
+  }
+
+  return data;
+}
+
 function normalizeDraftConversationImage(value: unknown): PromptImageInput | null {
   if (!value || typeof value !== 'object') {
     return null;
@@ -99,11 +112,17 @@ function normalizeDraftConversationImage(value: unknown): PromptImageInput | nul
     return null;
   }
 
+  const mimeType = image.mimeType.trim();
+  const data = normalizeDraftConversationImageData(image.data);
+  if (!mimeType.toLowerCase().startsWith('image/') || !data) {
+    return null;
+  }
+
   return {
-    mimeType: image.mimeType,
-    data: image.data,
-    ...(typeof image.name === 'string' ? { name: image.name } : {}),
-    ...(typeof image.previewUrl === 'string' ? { previewUrl: image.previewUrl } : {}),
+    mimeType,
+    data,
+    ...(typeof image.name === 'string' && image.name.trim() ? { name: image.name.trim() } : {}),
+    ...(typeof image.previewUrl === 'string' && image.previewUrl.trim() ? { previewUrl: image.previewUrl.trim() } : {}),
   };
 }
 
