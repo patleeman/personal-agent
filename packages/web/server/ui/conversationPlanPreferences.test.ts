@@ -48,7 +48,7 @@ describe('readConversationPlanDefaults', () => {
               {
                 id: ' preset-1 ',
                 name: ' Alpha preset ',
-                updatedAt: '2026-04-09T17:00:00.000Z',
+                updatedAt: 'not-a-date',
                 items: [
                   { kind: 'instruction', label: '  Instruction ', text: '  Follow the plan. ' },
                   { kind: 'skill', label: '  Skill ', skillName: ' backfill-tests ', skillArgs: ' target=models ' },
@@ -70,7 +70,7 @@ describe('readConversationPlanDefaults', () => {
         {
           id: 'preset-1',
           name: 'Alpha preset',
-          updatedAt: '2026-04-09T17:00:00.000Z',
+          updatedAt: '1970-01-01T00:00:00.000Z',
           items: [
             { id: 'item-1', kind: 'instruction', label: 'Instruction', text: 'Follow the plan.' },
             { id: 'item-2', kind: 'skill', label: 'Skill', skillName: 'backfill-tests', skillArgs: 'target=models' },

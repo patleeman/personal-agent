@@ -58,6 +58,15 @@ function writeSettingsObject(settingsFile: string, settings: Record<string, unkn
   writeFileSync(settingsFile, `${JSON.stringify(settings, null, 2)}\n`);
 }
 
+function normalizeTimestamp(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') {
+    return fallback;
+  }
+
+  const parsed = Date.parse(value.trim());
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+}
+
 function normalizeConversationPlanItem(value: unknown, index: number): ConversationPlanItemRecord | null {
   if (!isRecord(value)) {
     return null;
@@ -152,9 +161,7 @@ export function readConversationPlanLibrary(settingsFile: string): ConversationP
           const name = typeof preset.name === 'string' && preset.name.trim().length > 0
             ? preset.name.trim()
             : `Preset ${index + 1}`;
-          const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
-            ? preset.updatedAt.trim()
-            : new Date(0).toISOString();
+          const updatedAt = normalizeTimestamp(preset.updatedAt, new Date(0).toISOString());
           const items = Array.isArray(preset.items)
             ? preset.items
                 .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
@@ -201,9 +208,7 @@ export function writeConversationPlanLibrary(
             const name = typeof preset.name === 'string' && preset.name.trim().length > 0
               ? preset.name.trim()
               : `Preset ${index + 1}`;
-            const updatedAt = typeof preset.updatedAt === 'string' && preset.updatedAt.trim().length > 0
-              ? preset.updatedAt.trim()
-              : new Date().toISOString();
+            const updatedAt = normalizeTimestamp(preset.updatedAt, new Date().toISOString());
             const items = Array.isArray(preset.items)
               ? preset.items
                   .map((item, itemIndex) => normalizeConversationPlanItem(item, itemIndex))
