@@ -40,6 +40,10 @@ function decodeBase64(input: string): Buffer {
   return decoded;
 }
 
+function sanitizeMultipartHeaderValue(value: string): string {
+  return value.replace(/["\r\n\0]/g, '');
+}
+
 async function readOpenAICodexAccessToken(): Promise<string> {
   const authFile = join(getPiAgentRuntimeDir(), 'auth.json');
   const parsed = JSON.parse(await readFile(authFile, 'utf8')) as AuthFileShape;
@@ -52,12 +56,12 @@ async function readOpenAICodexAccessToken(): Promise<string> {
 
 function buildMultipartBody(input: DesktopTranscribeFileInput): { body: Buffer; contentType: string } {
   const boundary = `----pa-codex-transcribe-${randomUUID()}`;
-  const mimeType = input.mimeType?.trim() || 'application/octet-stream';
-  const fileName = input.fileName?.trim() || 'dictation.webm';
+  const mimeType = sanitizeMultipartHeaderValue(input.mimeType?.trim() || 'application/octet-stream') || 'application/octet-stream';
+  const fileName = sanitizeMultipartHeaderValue(input.fileName?.trim() || 'dictation.webm') || 'dictation.webm';
   const file = decodeBase64(input.dataBase64);
   const parts: Buffer[] = [
     Buffer.from(`--${boundary}\r\n`),
-    Buffer.from(`Content-Disposition: form-data; name="file"; filename="${fileName.replaceAll('"', '')}"\r\n`),
+    Buffer.from(`Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n`),
     Buffer.from(`Content-Type: ${mimeType}\r\n\r\n`),
     file,
     Buffer.from('\r\n'),
