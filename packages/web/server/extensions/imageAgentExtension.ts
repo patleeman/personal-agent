@@ -209,7 +209,7 @@ function readImageBlocks(content: unknown): ImageContent[] {
 
     const data = candidate.data.trim();
     const mimeType = candidate.mimeType.trim().toLowerCase();
-    if (!data || !mimeType.startsWith('image/')) {
+    if (!data || !mimeType.startsWith('image/') || !isValidImageSourceBase64(data)) {
       return [];
     }
 
@@ -219,6 +219,13 @@ function readImageBlocks(content: unknown): ImageContent[] {
       mimeType,
     } satisfies ImageContent];
   });
+}
+
+function isValidImageSourceBase64(value: string): boolean {
+  if (value.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) {
+    return false;
+  }
+  return Buffer.from(value, 'base64').length > 0;
 }
 
 function collectImageReferenceGroups(messages: AgentMessage[]): ImageReferenceGroup[] {
