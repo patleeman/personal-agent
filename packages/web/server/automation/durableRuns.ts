@@ -75,6 +75,12 @@ function decorateRun<T extends ScannedDurableRun>(run: T) {
   return decorateDurableRunAttention(run);
 }
 
+export function normalizeDurableRunLogTail(value: number | undefined): number {
+  return Number.isSafeInteger(value) && (value as number) > 0
+    ? Math.min(1000, value as number)
+    : 120;
+}
+
 function readTailText(filePath: string | undefined, maxLines = 120, maxBytes = 64 * 1024): string {
   if (!filePath || !existsSync(filePath)) {
     return '';
@@ -316,7 +322,7 @@ export async function getDurableRunSnapshot(runId: string, tail = 120): Promise<
     detail,
     log: {
       path: detail.run.paths.outputLogPath,
-      log: readTailText(detail.run.paths.outputLogPath, tail),
+      log: readTailText(detail.run.paths.outputLogPath, normalizeDurableRunLogTail(tail)),
     },
   };
 }

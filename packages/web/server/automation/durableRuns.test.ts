@@ -15,7 +15,7 @@ import {
   saveDurableRunStatus,
   type DaemonConfig,
 } from '@personal-agent/daemon';
-import { clearDurableRunsListCache, getDurableRun, listDurableRunsWithTelemetry, readDurableRunLogDelta } from './durableRuns.js';
+import { clearDurableRunsListCache, getDurableRun, listDurableRunsWithTelemetry, normalizeDurableRunLogTail, readDurableRunLogDelta } from './durableRuns.js';
 
 const tempDirs: string[] = [];
 const originalEnv = process.env;
@@ -76,6 +76,13 @@ describe('durable run reads', () => {
       nextCursor: 6,
       reset: false,
     });
+  });
+
+  it('defaults malformed durable run log tails and caps expensive tails', () => {
+    expect(normalizeDurableRunLogTail(25)).toBe(25);
+    expect(normalizeDurableRunLogTail(25.5)).toBe(120);
+    expect(normalizeDurableRunLogTail(Number.MAX_SAFE_INTEGER + 1)).toBe(120);
+    expect(normalizeDurableRunLogTail(5000)).toBe(1000);
   });
 
   it('reports cache telemetry when durable runs fall back to filesystem scanning', async () => {
