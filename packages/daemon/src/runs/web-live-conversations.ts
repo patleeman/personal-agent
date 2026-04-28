@@ -64,8 +64,9 @@ function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
 }
 
-function normalizeTimestamp(value: string | Date | undefined): string {
-  return new Date(value ?? Date.now()).toISOString();
+function normalizeTimestamp(value: string | Date | undefined): string | undefined {
+  const date = new Date(value ?? Date.now());
+  return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -152,7 +153,7 @@ export async function saveWebLiveConversationRunState(input: {
   const existingStatus = loadDurableRunStatus(runPaths.statusPath);
   const existingCheckpoint = loadDurableRunCheckpoint(runPaths.checkpointPath);
   const existingPayload = readCheckpointPayload(existingCheckpoint);
-  const updatedAt = normalizeTimestamp(input.updatedAt);
+  const updatedAt = normalizeTimestamp(input.updatedAt) ?? new Date().toISOString();
   const createdAt = existingManifest?.createdAt ?? existingStatus?.createdAt ?? updatedAt;
   const pendingOperation = input.pendingOperation === undefined
     ? (input.state === 'waiting' ? undefined : parsePendingOperation(existingPayload.pendingOperation))
