@@ -194,14 +194,21 @@ export function resolveLoopOptions(input?: LoopOptions): LoopOptions | undefined
   if (!input || !input.enabled) {
     return undefined;
   }
+  const maxIterations = Number.isSafeInteger(input.maxIterations) && (input.maxIterations as number) > 0
+    ? input.maxIterations
+    : undefined;
+  const retryAttempts = Number.isSafeInteger(input.retry?.attempts) && (input.retry?.attempts as number) > 0
+    ? input.retry?.attempts
+    : DEFAULT_LOOP_RETRY.attempts;
 
   return {
     enabled: true,
     delay: input.delay ?? '1h',
-    maxIterations: input.maxIterations,
+    ...(maxIterations !== undefined ? { maxIterations } : {}),
     retry: {
       ...DEFAULT_LOOP_RETRY,
       ...input.retry,
+      attempts: retryAttempts,
     },
   };
 }
@@ -445,12 +452,15 @@ export function validateScheduleRunInput(input: unknown): ValidationError[] {
       errors.push({ field: 'loop.delay', message: 'Invalid loop.delay format' });
     }
 
-    if (loop.maxIterations !== undefined && (typeof loop.maxIterations !== 'number' || loop.maxIterations < 1)) {
-      errors.push({ field: 'loop.maxIterations', message: 'loop.maxIterations must be a positive number' });
+    if (loop.maxIterations !== undefined && (typeof loop.maxIterations !== 'number' || !Number.isSafeInteger(loop.maxIterations) || loop.maxIterations < 1)) {
+      errors.push({ field: 'loop.maxIterations', message: 'loop.maxIterations must be a positive integer' });
     }
 
     if (loop.retry && typeof loop.retry === 'object') {
       const retry = loop.retry as Record<string, unknown>;
+      if (retry.attempts !== undefined && (typeof retry.attempts !== 'number' || !Number.isSafeInteger(retry.attempts) || retry.attempts < 1)) {
+        errors.push({ field: 'loop.retry.attempts', message: 'loop.retry.attempts must be a positive integer' });
+      }
       if (retry.maxDelay !== undefined && typeof retry.maxDelay === 'string' && parseDelayToMs(retry.maxDelay) === undefined) {
         errors.push({ field: 'loop.retry.maxDelay', message: 'Invalid loop.retry.maxDelay format' });
       }

@@ -333,6 +333,22 @@ describe('validateScheduleRunInput', () => {
       loop: { enabled: true, maxIterations: 0 },
     });
     expect(errors.some((e) => e.field === 'loop.maxIterations')).toBe(true);
+
+    const fractionalErrors = validateScheduleRunInput({
+      trigger: { type: 'now' },
+      target: { type: 'agent', prompt: 'do stuff' },
+      loop: { enabled: true, maxIterations: 1.5 },
+    });
+    expect(fractionalErrors.some((e) => e.field === 'loop.maxIterations')).toBe(true);
+  });
+
+  it('rejects invalid loop retry attempts', () => {
+    const errors = validateScheduleRunInput({
+      trigger: { type: 'now' },
+      target: { type: 'agent', prompt: 'do stuff' },
+      loop: { enabled: true, retry: { attempts: 1.5 } },
+    });
+    expect(errors.some((e) => e.field === 'loop.retry.attempts')).toBe(true);
   });
 
   it('rejects invalid loop.delay format', () => {
