@@ -105,6 +105,27 @@ describe('deferredResumes', () => {
     expect(ready.prompt).toBe(DEFAULT_DEFERRED_RESUME_PROMPT);
   });
 
+  it('falls back to the current clock for invalid ready resume timestamps', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-12T13:00:00.000Z'));
+    const stateRoot = createTempDir('pa-web-deferred-');
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const ready = createReadyDeferredResumeForSessionFile({
+      sessionFile: '/tmp/sessions/conv-ready-invalid-time.jsonl',
+      prompt: 'Continue later.',
+      dueAt: 'not-a-date',
+      createdAt: 'also-not-a-date',
+      readyAt: 'bad-ready-time',
+    });
+
+    expect(ready).toEqual(expect.objectContaining({
+      dueAt: '2026-03-12T13:00:00.000Z',
+      createdAt: '2026-03-12T13:00:00.000Z',
+      readyAt: '2026-03-12T13:00:00.000Z',
+    }));
+  });
+
   it('cancels only entries that belong to the requested session file', async () => {
     const stateRoot = createTempDir('pa-web-deferred-');
     process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;

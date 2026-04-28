@@ -47,6 +47,15 @@ function resolveValidNow(input?: Date): Date {
   return input instanceof Date && Number.isFinite(input.getTime()) ? input : new Date();
 }
 
+function normalizeOptionalTimestamp(value: string | undefined, fallback: string): string {
+  if (!value) {
+    return fallback;
+  }
+
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : fallback;
+}
+
 function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string {
   if (input.delay && input.at) {
     throw new Error('Specify only one of delay or at.');
@@ -269,9 +278,10 @@ export function createReadyDeferredResumeForSessionFile(input: {
   createdAt?: string;
 }): DeferredResumeSummary {
   const now = new Date();
-  const dueAt = input.dueAt ? new Date(input.dueAt).toISOString() : now.toISOString();
-  const createdAt = input.createdAt ? new Date(input.createdAt).toISOString() : dueAt;
-  const readyAt = input.readyAt ? new Date(input.readyAt).toISOString() : now.toISOString();
+  const nowIso = now.toISOString();
+  const dueAt = normalizeOptionalTimestamp(input.dueAt, nowIso);
+  const createdAt = normalizeOptionalTimestamp(input.createdAt, dueAt);
+  const readyAt = normalizeOptionalTimestamp(input.readyAt, nowIso);
   const state = loadDeferredResumeState();
   const prompt = input.prompt.trim() || DEFAULT_DEFERRED_RESUME_PROMPT;
   const record = createReadyDeferredResume(state, {
