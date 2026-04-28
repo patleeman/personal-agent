@@ -385,6 +385,34 @@ describe('tasks module scheduling', () => {
     expect(listAutomationActivityEntries('corrupt-activity-time', { dbPath })).toEqual([]);
   });
 
+  it('skips persisted automation activity rows with non-ISO created times', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'non-iso-activity-time',
+      profile: 'assistant',
+      title: 'Non ISO activity time',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+    appendAutomationActivityEntry('non-iso-activity-time', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath });
+    openSqliteDatabase(dbPath)
+      .prepare('UPDATE automation_activity SET created_at = ? WHERE automation_id = ?')
+      .run('1', 'non-iso-activity-time');
+
+    expect(listAutomationActivityEntries('non-iso-activity-time', { dbPath })).toEqual([]);
+  });
+
   it('sanitizes malformed persisted automation runtime state', () => {
     const stateRoot = createTempDir('tasks-module-state-');
     const dbPath = resolveRuntimeDbPath(stateRoot);

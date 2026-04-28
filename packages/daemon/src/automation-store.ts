@@ -148,14 +148,28 @@ function readRequiredString(value: string | null | undefined, label: string): st
   return normalized;
 }
 
-function readAutomationActivityTimestamp(value: string | null | undefined, label: string): string {
-  const raw = readRequiredString(value, label);
+function normalizeIsoTimestamp(raw: string): string | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) {
+    return undefined;
+  }
+
   const parsed = Date.parse(raw);
   if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  const normalized = new Date(parsed).toISOString();
+  return normalized === raw || normalized === raw.replace('Z', '.000Z') ? normalized : undefined;
+}
+
+function readAutomationActivityTimestamp(value: string | null | undefined, label: string): string {
+  const raw = readRequiredString(value, label);
+  const normalized = normalizeIsoTimestamp(raw);
+  if (!normalized) {
     throw new Error(`Automation activity ${label} must be a valid timestamp.`);
   }
 
-  return new Date(parsed).toISOString();
+  return normalized;
 }
 
 function readOptionalPositiveInteger(value: number | null | undefined): number | undefined {
@@ -404,17 +418,7 @@ function readOptionalTimestamp(value: unknown): string | undefined {
     return undefined;
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/.test(raw)) {
-    return undefined;
-  }
-
-  const parsed = Date.parse(raw);
-  if (!Number.isFinite(parsed)) {
-    return undefined;
-  }
-
-  const normalized = new Date(parsed).toISOString();
-  return normalized === raw || normalized === raw.replace('Z', '.000Z') ? normalized : undefined;
+  return normalizeIsoTimestamp(raw);
 }
 
 function readTaskRunStatus(value: unknown): TaskRuntimeState['lastStatus'] | undefined {
@@ -467,23 +471,22 @@ function rowToRuntimeState(row: AutomationStateRow): TaskRuntimeState {
 
 function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationActivityEntry | undefined {
   const payload = parseJsonRecord(row.payload_json);
-  const createdAt = Date.parse(row.created_at);
-  if (!Number.isFinite(createdAt)) {
+  const createdAt = normalizeIsoTimestamp(row.created_at);
+  if (!createdAt) {
     return undefined;
   }
   const count = typeof payload?.count === 'number' && Number.isSafeInteger(payload.count) && payload.count > 0
     ? payload.count
     : undefined;
-  const firstScheduledAt = typeof payload?.firstScheduledAt === 'string' && Number.isFinite(Date.parse(payload.firstScheduledAt))
-    ? new Date(payload.firstScheduledAt).toISOString()
+  const firstScheduledAt = typeof payload?.firstScheduledAt === 'string'
+    ? normalizeIsoTimestamp(payload.firstScheduledAt)
     : undefined;
-  const lastScheduledAt = typeof payload?.lastScheduledAt === 'string' && Number.isFinite(Date.parse(payload.lastScheduledAt))
-    ? new Date(payload.lastScheduledAt).toISOString()
+  const lastScheduledAt = typeof payload?.lastScheduledAt === 'string'
+    ? normalizeIsoTimestamp(payload.lastScheduledAt)
     : undefined;
   const exampleScheduledAt = Array.isArray(payload?.exampleScheduledAt)
     ? payload.exampleScheduledAt
-      .filter((value): value is string => typeof value === 'string' && Number.isFinite(Date.parse(value)))
-      .map((value) => new Date(value).toISOString())
+      .flatMap((value) => (typeof value === 'string' ? normalizeIsoTimestamp(value) ?? [] : []))
     : [];
   const outcome = payload?.outcome === 'catch-up-started' || payload?.outcome === 'skipped'
     ? payload.outcome
@@ -497,7 +500,7 @@ function rowToAutomationActivityEntry(row: AutomationActivityRow): AutomationAct
     id: `${row.automation_id}:${row.seq}`,
     automationId: row.automation_id,
     kind: 'missed',
-    createdAt: new Date(createdAt).toISOString(),
+    createdAt,
     count,
     firstScheduledAt,
     lastScheduledAt,
