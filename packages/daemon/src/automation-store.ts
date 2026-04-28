@@ -148,6 +148,16 @@ function readRequiredString(value: string | null | undefined, label: string): st
   return normalized;
 }
 
+function readAutomationActivityTimestamp(value: string | null | undefined, label: string): string {
+  const raw = readRequiredString(value, label);
+  const parsed = Date.parse(raw);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Automation activity ${label} must be a valid timestamp.`);
+  }
+
+  return new Date(parsed).toISOString();
+}
+
 function readOptionalPositiveInteger(value: number | null | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isSafeInteger(value)) {
     return undefined;
@@ -882,7 +892,7 @@ export function appendAutomationActivityEntry(
     throw new Error(`Automation not found: ${normalizedAutomationId}`);
   }
 
-  const createdAt = new Date(readRequiredString(input.createdAt, 'createdAt')).toISOString();
+  const createdAt = readAutomationActivityTimestamp(input.createdAt, 'createdAt');
   if (input.kind !== 'missed') {
     throw new Error(`Unsupported automation activity kind: ${input.kind}`);
   }
@@ -891,8 +901,8 @@ export function appendAutomationActivityEntry(
     throw new Error('Automation activity count must be a positive integer.');
   }
 
-  const firstScheduledAt = new Date(readRequiredString(input.firstScheduledAt, 'firstScheduledAt')).toISOString();
-  const lastScheduledAt = new Date(readRequiredString(input.lastScheduledAt, 'lastScheduledAt')).toISOString();
+  const firstScheduledAt = readAutomationActivityTimestamp(input.firstScheduledAt, 'firstScheduledAt');
+  const lastScheduledAt = readAutomationActivityTimestamp(input.lastScheduledAt, 'lastScheduledAt');
   const exampleScheduledAt = input.exampleScheduledAt
     .filter((value) => typeof value === 'string' && Number.isFinite(Date.parse(value)))
     .map((value) => new Date(value).toISOString());

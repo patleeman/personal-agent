@@ -302,6 +302,40 @@ describe('tasks module scheduling', () => {
     }, { dbPath })).toThrow('Automation activity count must be a positive integer.');
   });
 
+  it('rejects invalid automation activity timestamps with field errors', () => {
+    const stateRoot = createTempDir('tasks-module-state-');
+    const dbPath = resolveRuntimeDbPath(stateRoot);
+    createStoredAutomation({
+      dbPath,
+      id: 'invalid-activity-time',
+      profile: 'assistant',
+      title: 'Invalid activity time',
+      enabled: true,
+      cron: '0 * * * *',
+      prompt: 'Run maintenance.',
+    });
+
+    expect(() => appendAutomationActivityEntry('invalid-activity-time', {
+      kind: 'missed',
+      createdAt: 'not-a-date',
+      count: 1,
+      firstScheduledAt: '2026-03-02T10:00:00.000Z',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath })).toThrow('Automation activity createdAt must be a valid timestamp.');
+
+    expect(() => appendAutomationActivityEntry('invalid-activity-time', {
+      kind: 'missed',
+      createdAt: '2026-03-02T10:00:00.000Z',
+      count: 1,
+      firstScheduledAt: 'not-a-date',
+      lastScheduledAt: '2026-03-02T10:00:00.000Z',
+      exampleScheduledAt: ['2026-03-02T10:00:00.000Z'],
+      outcome: 'skipped',
+    }, { dbPath })).toThrow('Automation activity firstScheduledAt must be a valid timestamp.');
+  });
+
   it('does not floor fractional task module timer config', () => {
     const module = createTasksModule({
       enabled: true,
