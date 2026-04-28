@@ -20,13 +20,18 @@ vi.mock('@personal-agent/core', async () => {
   };
 });
 
-import { dispatchDesktopLocalApiRequest, rollbackDesktopConversation } from './localApi.js';
+import { dispatchDesktopLocalApiRequest, normalizeDesktopLocalApiTailBlocks, rollbackDesktopConversation } from './localApi.js';
 
 function readJsonBody(response: Awaited<ReturnType<typeof dispatchDesktopLocalApiRequest>>) {
   return JSON.parse(Buffer.from(response.body).toString('utf-8')) as Record<string, unknown>;
 }
 
 describe('desktop local API conversation actions', () => {
+  it('drops unsafe desktop local API tail block limits', () => {
+    expect(normalizeDesktopLocalApiTailBlocks(20)).toBe(20);
+    expect(normalizeDesktopLocalApiTailBlocks(Number.MAX_SAFE_INTEGER + 1)).toBeUndefined();
+  });
+
   it('rejects unsafe rollback turn counts before resolving conversation state', async () => {
     await expect(rollbackDesktopConversation({
       conversationId: 'conversation-1',

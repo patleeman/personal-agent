@@ -799,6 +799,12 @@ function shouldRefreshDesktopConversationStateForAppEvent(
   return false;
 }
 
+export function normalizeDesktopLocalApiTailBlocks(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+    ? value
+    : undefined;
+}
+
 export async function subscribeDesktopConversationState(
   input: {
     conversationId: string;
@@ -813,6 +819,7 @@ export async function subscribeDesktopConversationState(
   if (!conversationId) {
     throw new Error('conversationId required');
   }
+  const tailBlocks = normalizeDesktopLocalApiTailBlocks(input.tailBlocks);
 
   let closed = false;
   let liveUnsubscribe: (() => void) | null = null;
@@ -820,7 +827,7 @@ export async function subscribeDesktopConversationState(
   let currentState = await readDesktopConversationState({
     conversationId,
     profile: capabilityContext.getCurrentProfile(),
-    tailBlocks: input.tailBlocks,
+    tailBlocks,
   });
   let lastSerializedState = '';
 
@@ -839,7 +846,7 @@ export async function subscribeDesktopConversationState(
     currentState = await readDesktopConversationState({
       conversationId,
       profile: capabilityContext.getCurrentProfile(),
-      tailBlocks: input.tailBlocks,
+      tailBlocks,
     });
   };
 
@@ -897,8 +904,8 @@ export async function subscribeDesktopConversationState(
 
       emitState(currentState);
     }, {
-      ...(typeof input.tailBlocks === 'number' && Number.isInteger(input.tailBlocks) && input.tailBlocks > 0
-        ? { tailBlocks: input.tailBlocks }
+      ...(tailBlocks !== undefined
+        ? { tailBlocks }
         : {}),
       ...(input.surfaceId && input.surfaceType
         ? { surface: { surfaceId: input.surfaceId, surfaceType: input.surfaceType } }
@@ -910,7 +917,7 @@ export async function subscribeDesktopConversationState(
     currentState = await readDesktopConversationState({
       conversationId,
       profile: capabilityContext.getCurrentProfile(),
-      tailBlocks: input.tailBlocks,
+      tailBlocks,
     });
     await ensureCurrentStateIsLive();
     syncLiveSubscription();
