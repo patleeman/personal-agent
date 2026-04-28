@@ -70,6 +70,7 @@ describe('pendingConversationPrompt helpers', () => {
       images: [],
       attachmentRefs: [
         { attachmentId: ' diagram-1 ', revision: 2 },
+        { attachmentId: 'diagram-1', revision: 2 },
         { attachmentId: '   ' },
         { attachmentId: 'bad-revision', revision: 0 },
       ],

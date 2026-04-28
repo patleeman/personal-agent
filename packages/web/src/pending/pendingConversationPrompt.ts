@@ -63,19 +63,35 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
     return [];
   }
 
-  return value
-    .filter((attachmentRef): attachmentRef is { attachmentId: string; revision?: number } => (
-      !!attachmentRef
-      && typeof attachmentRef === 'object'
-      && typeof attachmentRef.attachmentId === 'string'
-      && attachmentRef.attachmentId.trim().length > 0
-      && (attachmentRef.revision === undefined
-        || (Number.isInteger(attachmentRef.revision) && attachmentRef.revision > 0))
-    ))
-    .map((attachmentRef) => ({
-      attachmentId: attachmentRef.attachmentId.trim(),
-      ...(attachmentRef.revision ? { revision: attachmentRef.revision } : {}),
-    }));
+  const refs: PromptAttachmentRefInput[] = [];
+  const seen = new Set<string>();
+
+  for (const attachmentRef of value) {
+    if (!attachmentRef || typeof attachmentRef !== 'object') {
+      continue;
+    }
+
+    const attachmentId = typeof (attachmentRef as { attachmentId?: unknown }).attachmentId === 'string'
+      ? (attachmentRef as { attachmentId: string }).attachmentId.trim()
+      : '';
+    const revision = (attachmentRef as { revision?: unknown }).revision;
+    if (!attachmentId || (revision !== undefined && (!Number.isInteger(revision) || revision <= 0))) {
+      continue;
+    }
+
+    const dedupeKey = `${attachmentId}:${String(revision ?? 'latest')}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+    refs.push({
+      attachmentId,
+      ...(revision ? { revision } : {}),
+    });
+  }
+
+  return refs;
 }
 
 function normalizePendingPromptImageData(value: unknown): string | undefined {
