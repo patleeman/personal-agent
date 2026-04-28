@@ -92,7 +92,12 @@ function fingerprintDisplayBlock(block: DisplayBlock): string {
         type: block.type,
         ts: block.ts,
         text: block.text,
-        imageCount: block.images?.length ?? 0,
+        images: (block.images ?? []).map((image) => ({
+          src: image.src?.slice(0, 128) ?? null,
+          mimeType: image.mimeType?.trim().toLowerCase() ?? null,
+          caption: image.caption ?? null,
+          alt: image.alt ?? null,
+        })),
       });
     case 'text':
     case 'thinking':

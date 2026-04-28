@@ -10,6 +10,16 @@ function textBlock(id: string, text: string, ts = `2026-04-26T12:00:0${id}.000Z`
   return { id, type: 'text', role: 'assistant', text, ts } as DisplayBlock;
 }
 
+function userImageBlock(id: string, imageSrc: string): DisplayBlock {
+  return {
+    id,
+    type: 'user',
+    text: 'same text',
+    ts: '2026-04-26T12:00:00.000Z',
+    images: [{ alt: 'image', src: imageSrc, mimeType: 'image/png', caption: imageSrc }],
+  } as DisplayBlock;
+}
+
 function toolBlock(input: {
   id: string;
   toolCallId: string;
@@ -51,6 +61,16 @@ describe('liveSessionTranscript', () => {
       textBlock('1', 'one'),
       textBlock('2', 'two'),
       textBlock('3', 'three'),
+    ]);
+  });
+
+  it('does not collapse same-text user image blocks with different images', () => {
+    const persisted = [userImageBlock('user-old', 'blob:old')];
+    const live = [userImageBlock('user-new', 'blob:new')];
+
+    expect(mergeConversationHistoryBlocks(persisted, live)).toEqual([
+      userImageBlock('user-old', 'blob:old'),
+      userImageBlock('user-new', 'blob:new'),
     ]);
   });
 
