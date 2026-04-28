@@ -15,6 +15,7 @@ import { getBackgroundRunCallbackDelivery } from './background-run-callbacks.js'
 const SINGLE_RUN_LOG_TAIL_LINES = 60;
 const BATCH_RUN_LOG_TAIL_LINES = 20;
 const MAX_COMMAND_LENGTH = 500;
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 export interface BackgroundRunResultSummary {
   id: string;
@@ -59,7 +60,8 @@ function resolveValidDate(input?: Date): Date {
 
 function resolveValidTimestamp(input?: string): string {
   if (typeof input === 'string') {
-    const parsed = Date.parse(input);
+    const normalized = input.trim();
+    const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
     if (Number.isFinite(parsed)) {
       return new Date(parsed).toISOString();
     }
