@@ -5,6 +5,7 @@ import type { DurableRunDetailResult } from '../../shared/types';
 export const INLINE_RUN_LOG_TAIL_LINES = 240;
 export const MAX_INLINE_RUN_LOG_TAIL_LINES = 1000;
 export const INLINE_RUN_POLL_INTERVAL_MS = 2200;
+export const MAX_INLINE_RUN_POLL_INTERVAL_MS = 10_000;
 
 export interface PolledRunSnapshotState {
   detail: DurableRunDetailResult | null;
@@ -34,7 +35,7 @@ export function normalizeInlineRunPollingOptions(options?: {
     ? Math.min(MAX_INLINE_RUN_LOG_TAIL_LINES, options?.tail as number)
     : INLINE_RUN_LOG_TAIL_LINES;
   const pollIntervalMs = Number.isSafeInteger(options?.pollIntervalMs) && (options?.pollIntervalMs as number) > 0
-    ? options?.pollIntervalMs as number
+    ? Math.min(MAX_INLINE_RUN_POLL_INTERVAL_MS, options?.pollIntervalMs as number)
     : INLINE_RUN_POLL_INTERVAL_MS;
   return { tail, pollIntervalMs };
 }

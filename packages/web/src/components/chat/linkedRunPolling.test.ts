@@ -12,5 +12,9 @@ describe('normalizeInlineRunPollingOptions', () => {
       tail: INLINE_RUN_LOG_TAIL_LINES,
       pollIntervalMs: 500,
     });
+    expect(normalizeInlineRunPollingOptions({ tail: 240, pollIntervalMs: Number.MAX_SAFE_INTEGER })).toEqual({
+      tail: 240,
+      pollIntervalMs: 10_000,
+    });
   });
 });
