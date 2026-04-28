@@ -24,9 +24,9 @@ function readTrimmedString(value: Record<string, unknown> | null, key: string): 
   return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
 }
 
-function readNumber(value: Record<string, unknown> | null, key: string): number | undefined {
+function readInteger(value: Record<string, unknown> | null, key: string): number | undefined {
   const candidate = value?.[key];
-  return typeof candidate === 'number' && Number.isFinite(candidate) ? candidate : undefined;
+  return typeof candidate === 'number' && Number.isInteger(candidate) ? candidate : undefined;
 }
 
 function readBoolean(value: Record<string, unknown> | null, key: string): boolean {
@@ -53,7 +53,7 @@ export function readTerminalBashToolPresentation(
 
   return {
     command,
-    exitCode: readNumber(details, 'exitCode'),
+    exitCode: readInteger(details, 'exitCode'),
     cancelled: readBoolean(details, 'cancelled'),
     truncated: readBoolean(details, 'truncated'),
     fullOutputPath: readTrimmedString(details, 'fullOutputPath'),
