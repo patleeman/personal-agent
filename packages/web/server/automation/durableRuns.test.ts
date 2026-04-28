@@ -69,6 +69,13 @@ describe('durable run reads', () => {
       nextCursor: 6,
       reset: false,
     });
+
+    expect(readDurableRunLogDelta(logPath, Number.MAX_SAFE_INTEGER + 1)).toEqual({
+      path: logPath,
+      delta: 'abcdef',
+      nextCursor: 6,
+      reset: false,
+    });
   });
 
   it('reports cache telemetry when durable runs fall back to filesystem scanning', async () => {

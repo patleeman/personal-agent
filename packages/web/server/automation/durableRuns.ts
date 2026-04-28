@@ -133,7 +133,7 @@ export function readDurableRunLogDelta(
 
   try {
     const stats = statSync(filePath);
-    const normalizedCursor = Number.isInteger(fromCursor) && fromCursor > 0 ? fromCursor : 0;
+    const normalizedCursor = Number.isSafeInteger(fromCursor) && fromCursor > 0 ? fromCursor : 0;
 
     if (stats.size < normalizedCursor) {
       return {
