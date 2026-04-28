@@ -130,8 +130,18 @@ function parseDataUrlAsset(input: unknown): CompanionBinaryAsset {
     throw new Error('Attachment asset payload is malformed.');
   }
 
+  const base64 = (match[2] || '').trim();
+  if (!base64 || base64.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) {
+    throw new Error('Attachment asset payload must contain valid base64 data.');
+  }
+
+  const data = Buffer.from(base64, 'base64');
+  if (data.length === 0) {
+    throw new Error('Attachment asset payload must contain non-empty data.');
+  }
+
   return {
-    data: Buffer.from(match[2] || '', 'base64'),
+    data,
     mimeType,
     ...(fileName ? { fileName } : {}),
     disposition: mimeType.startsWith('image/') ? 'inline' : 'attachment',
