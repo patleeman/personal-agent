@@ -192,6 +192,9 @@ export function collectConversationTitleSourceMessages(
   messages: ConversationTitleMessageInput[],
   maxMessages = DEFAULT_MAX_MESSAGES,
 ): ConversationTitleSourceMessage[] {
+  const messageLimit = Number.isSafeInteger(maxMessages) && maxMessages > 0
+    ? maxMessages
+    : DEFAULT_MAX_MESSAGES;
   const collected: ConversationTitleSourceMessage[] = [];
 
   for (const message of messages) {
@@ -211,8 +214,8 @@ export function collectConversationTitleSourceMessages(
     }
   }
 
-  if (maxMessages > 0 && collected.length > maxMessages) {
-    return collected.slice(-maxMessages);
+  if (messageLimit > 0 && collected.length > messageLimit) {
+    return collected.slice(-messageLimit);
   }
 
   return collected;
@@ -231,7 +234,9 @@ export function buildConversationTitleTranscript(
     return '';
   }
 
-  const maxMessageLength = options.maxMessageLength ?? DEFAULT_MAX_MESSAGE_LENGTH;
+  const maxMessageLength = Number.isSafeInteger(options.maxMessageLength) && (options.maxMessageLength as number) > 0
+    ? options.maxMessageLength as number
+    : DEFAULT_MAX_MESSAGE_LENGTH;
   return sourceMessages
     .map((message) => `${message.role === 'user' ? 'User' : 'Assistant'}: ${truncateText(message.text, maxMessageLength)}`)
     .join('\n');

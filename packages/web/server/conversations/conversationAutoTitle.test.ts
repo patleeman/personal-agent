@@ -164,6 +164,28 @@ describe('buildConversationTitleTranscript', () => {
       },
     ])).toBe('');
   });
+
+  it('defaults fractional transcript limits instead of letting slice truncate them', () => {
+    expect(buildConversationTitleTranscript([
+      { role: 'user', content: [{ type: 'text', text: 'first user message' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'first assistant reply' }] },
+      { role: 'user', content: [{ type: 'text', text: 'second user message' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'second assistant reply' }] },
+    ], { maxMessages: 1.5 })).toBe([
+      'User: first user message',
+      'Assistant: first assistant reply',
+      'User: second user message',
+      'Assistant: second assistant reply',
+    ].join('\n'));
+
+    expect(buildConversationTitleTranscript([
+      { role: 'user', content: [{ type: 'text', text: 'abcdef' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'assistant reply' }] },
+    ], { maxMessageLength: 3.5 })).toBe([
+      'User: abcdef',
+      'Assistant: assistant reply',
+    ].join('\n'));
+  });
 });
 
 describe('normalizeGeneratedConversationTitle', () => {
