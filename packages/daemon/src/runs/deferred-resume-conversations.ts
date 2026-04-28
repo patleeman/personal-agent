@@ -16,7 +16,7 @@ import {
   type DurableRunStatus,
 } from './store.js';
 
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 
 function sanitizeIdSegment(value: string): string {
   const sanitized = value
@@ -34,12 +34,31 @@ function writeJsonFile(path: string, value: unknown): void {
 
 function normalizeTimestamp(value: string, field: string): string {
   const normalized = value.trim();
-  const parsed = ISO_TIMESTAMP_PATTERN.test(normalized) ? Date.parse(normalized) : Number.NaN;
+  const match = normalized.match(ISO_TIMESTAMP_PATTERN);
+  const parsed = match && hasValidIsoDateParts(match) ? Date.parse(normalized) : Number.NaN;
   if (!Number.isFinite(parsed)) {
     throw new Error(`Deferred resume run ${field} must be a valid timestamp.`);
   }
 
   return new Date(parsed).toISOString();
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function resolveConversationId(input: { conversationId?: string; sessionFile: string }): string | undefined {

@@ -308,5 +308,14 @@ describe('deferred resume conversation durable runs', () => {
       dueAt: '9999',
       createdAt: '2026-03-12T14:00:00.000Z',
     })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
+
+    await expect(scheduleDeferredResumeConversationRun({
+      daemonRoot,
+      deferredResumeId: 'resume_overflowed_time',
+      sessionFile,
+      prompt: 'come back later',
+      dueAt: '2026-02-31T14:10:00.000Z',
+      createdAt: '2026-03-12T14:00:00.000Z',
+    })).rejects.toThrow('Deferred resume run dueAt must be a valid timestamp.');
   });
 });
