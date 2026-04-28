@@ -188,6 +188,46 @@ describe('conversationInspectCapability', () => {
     expect(formatConversationInspectSearchResult(result)).toContain('tool-1 (tool_use)');
   });
 
+  it('supports all-terms search with inline context windows', () => {
+    listConversationSessionsSnapshotMock.mockReturnValue([
+      {
+        id: 'conv-search',
+        title: 'UI cleanup',
+        cwd: '/repo',
+        file: '/sessions/conv-search.jsonl',
+        timestamp: '2026-04-20T09:59:00.000Z',
+        lastActivityAt: '2026-04-20T09:59:30.000Z',
+        isLive: true,
+        isRunning: false,
+        messageCount: 3,
+      },
+    ]);
+    readSessionBlocksByFileMock.mockReturnValue({
+      blocks: [
+        { type: 'user', id: 'user-1', ts: '2026-04-20T10:00:00.000Z', text: 'Fix the details page.' },
+        { type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'I will inspect SessionDetail first.' },
+        { type: 'tool_use', id: 'tool-1', ts: '2026-04-20T10:00:02.000Z', tool: 'bash', input: { command: 'eslint ModelInfo' }, output: 'SessionDetail imports ModelInfo.', toolCallId: 'call-1' },
+      ],
+    });
+
+    const result = searchConversationInspectSessions({
+      query: 'eslint ModelInfo SessionDetail',
+      searchMode: 'allTerms',
+      includeAroundMatches: true,
+      window: 1,
+    });
+
+    expect(result).toMatchObject({
+      query: 'eslint ModelInfo SessionDetail',
+      mode: 'allTerms',
+      returnedCount: 1,
+    });
+    expect(result.matches[0]?.blockId).toBe('tool-1');
+    expect(result.matches[0]?.contextBlocks?.map((block) => block.id)).toEqual(['assistant-1', 'tool-1']);
+    expect(formatConversationInspectSearchResult(result)).toContain('mode=allTerms');
+    expect(formatConversationInspectSearchResult(result)).toContain('assistant-1 · text');
+  });
+
   it('queries transcript blocks with type/tool/text filters', () => {
     readConversationSessionMetaMock.mockReturnValue({
       id: 'conv-2',
@@ -245,6 +285,41 @@ describe('conversationInspectCapability', () => {
     ]);
     expect(formatConversationInspectQueryResult(result)).toContain('tool-1 · tool_use:bash');
     expect(formatConversationInspectQueryResult(result)).toContain('Chrono execution is stuck in high lag.');
+  });
+
+  it('queries by conversational role and reports valid enum values for bad filters', () => {
+    readConversationSessionMetaMock.mockReturnValue({
+      id: 'conv-roles',
+      title: 'Role thread',
+      cwd: '/repo',
+      file: '/sessions/conv-roles.jsonl',
+    });
+    resolveConversationSessionFileMock.mockReturnValue('/sessions/conv-roles.jsonl');
+    readConversationSessionSignatureMock.mockReturnValue('roles:1');
+    readSessionBlocksByFileMock.mockReturnValue({
+      signature: 'roles:1',
+      blocks: [
+        { type: 'user', id: 'user-1', ts: '2026-04-20T10:00:00.000Z', text: 'hello' },
+        { type: 'text', id: 'assistant-1', ts: '2026-04-20T10:00:01.000Z', text: 'hi' },
+        { type: 'tool_use', id: 'tool-1', ts: '2026-04-20T10:00:02.000Z', tool: 'bash', input: {}, output: 'ok', toolCallId: 'call-1' },
+      ],
+    });
+
+    const result = queryConversationInspectBlocks({
+      conversationId: 'conv-roles',
+      roles: ['user', 'assistant'],
+      limit: 10,
+    });
+
+    expect(result.blocks.map((block) => block.id)).toEqual(['user-1', 'assistant-1']);
+    expect(() => queryConversationInspectBlocks({
+      conversationId: 'conv-roles',
+      types: ['assistant'],
+    })).toThrow('Valid values: user, text, context, summary, tool_use, image, error');
+    expect(() => queryConversationInspectBlocks({
+      conversationId: 'conv-roles',
+      roles: ['bot'],
+    })).toThrow('Valid values: user, assistant, tool, context, summary, image, error');
   });
 
   it('supports aroundBlockId windows and rejects conflicting range inputs', () => {

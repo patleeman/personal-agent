@@ -12,11 +12,15 @@ export const CONVERSATION_INSPECT_SCOPE_VALUES = ['all', 'live', 'running', 'arc
 export const CONVERSATION_INSPECT_ACTION_VALUES = ['list', 'search', 'query', 'diff', 'outline', 'read_window'] as const;
 export const CONVERSATION_INSPECT_ORDER_VALUES = ['asc', 'desc'] as const;
 export const CONVERSATION_INSPECT_BLOCK_TYPE_VALUES = ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'] as const;
+export const CONVERSATION_INSPECT_ROLE_VALUES = ['user', 'assistant', 'tool', 'context', 'summary', 'image', 'error'] as const;
+export const CONVERSATION_INSPECT_SEARCH_MODE_VALUES = ['phrase', 'allTerms', 'anyTerm'] as const;
 
 export type ConversationInspectScope = (typeof CONVERSATION_INSPECT_SCOPE_VALUES)[number];
 export type ConversationInspectAction = (typeof CONVERSATION_INSPECT_ACTION_VALUES)[number];
 export type ConversationInspectOrder = (typeof CONVERSATION_INSPECT_ORDER_VALUES)[number];
 export type ConversationInspectBlockType = (typeof CONVERSATION_INSPECT_BLOCK_TYPE_VALUES)[number];
+export type ConversationInspectRole = (typeof CONVERSATION_INSPECT_ROLE_VALUES)[number];
+export type ConversationInspectSearchMode = (typeof CONVERSATION_INSPECT_SEARCH_MODE_VALUES)[number];
 
 const DEFAULT_LIST_LIMIT = 20;
 const MAX_LIST_LIMIT = 100;
@@ -78,10 +82,12 @@ export interface SearchConversationInspectMatch {
   blockType: ConversationInspectBlockType;
   blockIndex: number;
   snippet: string;
+  contextBlocks?: InspectableConversationBlock[];
 }
 
 export interface SearchConversationInspectResult {
   query: string;
+  mode: ConversationInspectSearchMode;
   scope: ConversationInspectScope;
   totalMatching: number;
   returnedCount: number;
@@ -157,13 +163,33 @@ function normalizePositiveInteger(value: unknown, fallback: number, max: number)
 }
 
 function normalizeScope(value: unknown): ConversationInspectScope {
-  return value === 'live' || value === 'running' || value === 'archived'
-    ? value
-    : 'all';
+  if (value === undefined || value === null || value === '') {
+    return 'all';
+  }
+  if (value === 'all' || value === 'live' || value === 'running' || value === 'archived') {
+    return value;
+  }
+  throw new ConversationInspectCapabilityInputError(`Invalid scope ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.`);
 }
 
 function normalizeOrder(value: unknown): ConversationInspectOrder {
-  return value === 'desc' ? 'desc' : 'asc';
+  if (value === undefined || value === null || value === '') {
+    return 'asc';
+  }
+  if (value === 'asc' || value === 'desc') {
+    return value;
+  }
+  throw new ConversationInspectCapabilityInputError(`Invalid order ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.`);
+}
+
+function normalizeSearchMode(value: unknown): ConversationInspectSearchMode {
+  if (value === undefined || value === null || value === '') {
+    return 'phrase';
+  }
+  if (value === 'phrase' || value === 'allTerms' || value === 'anyTerm') {
+    return value;
+  }
+  throw new ConversationInspectCapabilityInputError(`Invalid searchMode ${JSON.stringify(value)}. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(', ')}.`);
 }
 
 function normalizeBlockTypes(value: unknown): ConversationInspectBlockType[] {
@@ -177,12 +203,40 @@ function normalizeBlockTypes(value: unknown): ConversationInspectBlockType[] {
 
   for (const candidate of value) {
     const type = typeof candidate === 'string' ? candidate.trim() : '';
-    if (!type || !allowed.has(type) || seen.has(type)) {
+    if (!type || seen.has(type)) {
       continue;
+    }
+    if (!allowed.has(type)) {
+      throw new ConversationInspectCapabilityInputError(`Invalid types value ${JSON.stringify(type)}. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(', ')}. Tip: use roles:["assistant"] for assistant messages; block type "text" is assistant text.`);
     }
 
     seen.add(type);
     normalized.push(type as ConversationInspectBlockType);
+  }
+
+  return normalized;
+}
+
+function normalizeRoles(value: unknown): ConversationInspectRole[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const allowed = new Set<string>(CONVERSATION_INSPECT_ROLE_VALUES);
+  const seen = new Set<string>();
+  const normalized: ConversationInspectRole[] = [];
+
+  for (const candidate of value) {
+    const role = typeof candidate === 'string' ? candidate.trim() : '';
+    if (!role || seen.has(role)) {
+      continue;
+    }
+    if (!allowed.has(role)) {
+      throw new ConversationInspectCapabilityInputError(`Invalid roles value ${JSON.stringify(role)}. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(', ')}.`);
+    }
+
+    seen.add(role);
+    normalized.push(role as ConversationInspectRole);
   }
 
   return normalized;
@@ -250,6 +304,54 @@ function buildBlockSearchText(block: DisplayBlock): string {
     default:
       return '';
   }
+}
+
+function blockRole(block: DisplayBlock): ConversationInspectRole | null {
+  switch (block.type) {
+    case 'user':
+      return 'user';
+    case 'text':
+      return 'assistant';
+    case 'tool_use':
+      return 'tool';
+    case 'context':
+      return 'context';
+    case 'summary':
+      return 'summary';
+    case 'image':
+      return 'image';
+    case 'error':
+      return 'error';
+    default:
+      return null;
+  }
+}
+
+function splitSearchTerms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+}
+
+function matchesSearchText(text: string, query: string, mode: ConversationInspectSearchMode): boolean {
+  const haystack = text.toLowerCase();
+  const phrase = query.toLowerCase().trim();
+  if (!phrase) {
+    return false;
+  }
+  if (mode === 'phrase') {
+    return haystack.includes(phrase);
+  }
+
+  const terms = splitSearchTerms(query);
+  if (terms.length === 0) {
+    return false;
+  }
+  return mode === 'allTerms'
+    ? terms.every((term) => haystack.includes(term))
+    : terms.some((term) => haystack.includes(term));
 }
 
 function sanitizeBlock(block: DisplayBlock, index: number, maxCharactersPerBlock: number): InspectableConversationBlock | null {
@@ -535,8 +637,11 @@ function applyBlockFilters(blocks: DisplayBlock[], input: {
   aroundBlockId?: string;
   window: number;
   types: ConversationInspectBlockType[];
+  roles: ConversationInspectRole[];
   tools: string[];
   text?: string;
+  searchMode: ConversationInspectSearchMode;
+  includeAroundMatches: boolean;
 }): Array<{ block: DisplayBlock; index: number }> {
   if (input.aroundBlockId && (input.afterBlockId || input.beforeBlockId)) {
     throw new ConversationInspectCapabilityInputError('aroundBlockId cannot be combined with afterBlockId or beforeBlockId.');
@@ -566,6 +671,14 @@ function applyBlockFilters(blocks: DisplayBlock[], input: {
     indexed = indexed.filter((entry) => allowed.has(entry.block.type));
   }
 
+  if (input.roles.length > 0) {
+    const allowed = new Set<string>(input.roles);
+    indexed = indexed.filter((entry) => {
+      const role = blockRole(entry.block);
+      return role ? allowed.has(role) : false;
+    });
+  }
+
   if (input.tools.length > 0) {
     const allowed = new Set(input.tools.map((tool) => tool.toLowerCase()));
     indexed = indexed.filter((entry) => {
@@ -580,8 +693,21 @@ function applyBlockFilters(blocks: DisplayBlock[], input: {
   }
 
   if (input.text) {
-    const needle = input.text.toLowerCase();
-    indexed = indexed.filter((entry) => buildBlockSearchText(entry.block).toLowerCase().includes(needle));
+    indexed = indexed.filter((entry) => matchesSearchText(buildBlockSearchText(entry.block), input.text ?? '', input.searchMode));
+  }
+
+  if (input.includeAroundMatches && !input.aroundBlockId) {
+    const includedIndexes = new Set<number>();
+    for (const entry of indexed) {
+      const start = Math.max(0, entry.index - input.window);
+      const end = Math.min(blocks.length, entry.index + input.window + 1);
+      for (let index = start; index < end; index += 1) {
+        includedIndexes.add(index);
+      }
+    }
+    indexed = blocks
+      .map((block, index) => ({ block, index }))
+      .filter((entry) => includedIndexes.has(entry.index));
   }
 
   return indexed;
@@ -629,27 +755,38 @@ export function formatConversationInspectSessionList(result: ListConversationIns
 
 export function searchConversationInspectSessions(input: {
   query?: unknown;
+  searchMode?: unknown;
   scope?: unknown;
   cwd?: unknown;
   limit?: unknown;
+  window?: unknown;
+  includeAroundMatches?: unknown;
   includeCurrent?: unknown;
   currentConversationId?: string;
   maxSnippetCharacters?: unknown;
+  maxCharactersPerBlock?: unknown;
 } = {}): SearchConversationInspectResult {
   const query = readOptionalString(input.query);
   if (!query) {
     throw new ConversationInspectCapabilityInputError('query is required.');
   }
 
+  const mode = normalizeSearchMode(input.searchMode);
   const limit = normalizePositiveInteger(input.limit, DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT);
+  const window = normalizePositiveInteger(input.window, DEFAULT_WINDOW, MAX_WINDOW);
+  const includeAroundMatches = readOptionalBoolean(input.includeAroundMatches) ?? false;
   const maxSnippetCharacters = normalizePositiveInteger(input.maxSnippetCharacters, 240, 2_000);
+  const maxCharactersPerBlock = normalizePositiveInteger(
+    input.maxCharactersPerBlock,
+    DEFAULT_MAX_CHARACTERS_PER_BLOCK,
+    MAX_MAX_CHARACTERS_PER_BLOCK,
+  );
   const { scope, sessions } = collectInspectableSessions({
     scope: input.scope,
     cwd: input.cwd,
     includeCurrent: input.includeCurrent,
     currentConversationId: input.currentConversationId,
   });
-  const needle = query.toLowerCase();
 
   const matches: SearchConversationInspectMatch[] = [];
 
@@ -661,10 +798,16 @@ export function searchConversationInspectSessions(input: {
 
     const matchEntry = detail.blocks
       .map((block, index) => ({ block, index, searchText: buildBlockSearchText(block) }))
-      .find((entry) => entry.searchText.toLowerCase().includes(needle));
+      .find((entry) => matchesSearchText(entry.searchText, query, mode));
     if (!matchEntry) {
       continue;
     }
+
+    const contextEntries = includeAroundMatches
+      ? detail.blocks
+        .map((block, index) => ({ block, index }))
+        .slice(Math.max(0, matchEntry.index - window), Math.min(detail.blocks.length, matchEntry.index + window + 1))
+      : [];
 
     matches.push({
       conversationId: session.id,
@@ -677,6 +820,7 @@ export function searchConversationInspectSessions(input: {
       blockType: matchEntry.block.type as ConversationInspectBlockType,
       blockIndex: matchEntry.index,
       snippet: extractQuerySnippet(matchEntry.searchText, query, maxSnippetCharacters),
+      ...(includeAroundMatches ? { contextBlocks: sanitizeBlocks(contextEntries, maxCharactersPerBlock) } : {}),
     });
   }
 
@@ -684,6 +828,7 @@ export function searchConversationInspectSessions(input: {
 
   return {
     query,
+    mode,
     scope,
     totalMatching: matches.length,
     returnedCount: returned.length,
@@ -693,24 +838,36 @@ export function searchConversationInspectSessions(input: {
 
 export function formatConversationInspectSearchResult(result: SearchConversationInspectResult): string {
   if (result.matches.length === 0) {
-    return `No conversations matched transcript search ${JSON.stringify(result.query)} within scope=${result.scope}.`;
+    return `No conversations matched transcript search ${JSON.stringify(result.query)} mode=${result.mode} within scope=${result.scope}.`;
   }
 
   return [
-    `Transcript search (${result.returnedCount}/${result.totalMatching}) for ${JSON.stringify(result.query)} scope=${result.scope}:`,
-    ...result.matches.map((match) => `- ${match.conversationId} [${match.isRunning ? 'running' : match.isLive ? 'live' : 'archived'}] ${match.title} · ${match.cwd} · block ${match.blockId} (${match.blockType})\n  ${match.snippet}`),
+    `Transcript search (${result.returnedCount}/${result.totalMatching}) for ${JSON.stringify(result.query)} mode=${result.mode} scope=${result.scope}:`,
+    ...result.matches.flatMap((match) => {
+      const header = `- ${match.conversationId} [${match.isRunning ? 'running' : match.isLive ? 'live' : 'archived'}] ${match.title} · ${match.cwd} · block ${match.blockId} (${match.blockType})\n  ${match.snippet}`;
+      if (!match.contextBlocks || match.contextBlocks.length === 0) {
+        return [header];
+      }
+      return [
+        header,
+        ...match.contextBlocks.map((block) => formatInspectableBlock(block).split('\n').map((line) => `  ${line}`).join('\n')),
+      ];
+    }),
   ].join('\n');
 }
 
 export function queryConversationInspectBlocks(input: {
   conversationId?: unknown;
   types?: unknown;
+  roles?: unknown;
   tools?: unknown;
   text?: unknown;
+  searchMode?: unknown;
   afterBlockId?: unknown;
   beforeBlockId?: unknown;
   aroundBlockId?: unknown;
   window?: unknown;
+  includeAroundMatches?: unknown;
   order?: unknown;
   limit?: unknown;
   maxCharactersPerBlock?: unknown;
@@ -731,8 +888,11 @@ export function queryConversationInspectBlocks(input: {
     aroundBlockId: readOptionalString(input.aroundBlockId),
     window,
     types: normalizeBlockTypes(input.types),
+    roles: normalizeRoles(input.roles),
     tools: normalizeStringArray(input.tools),
     text: readOptionalString(input.text),
+    searchMode: normalizeSearchMode(input.searchMode),
+    includeAroundMatches: readOptionalBoolean(input.includeAroundMatches) ?? false,
   });
 
   const ordered = order === 'desc'
@@ -875,8 +1035,10 @@ export function diffConversationInspectBlocks(input: {
   knownSignature?: unknown;
   afterBlockId?: unknown;
   types?: unknown;
+  roles?: unknown;
   tools?: unknown;
   text?: unknown;
+  searchMode?: unknown;
   limit?: unknown;
   maxCharactersPerBlock?: unknown;
 }): DiffConversationInspectResult {
@@ -911,8 +1073,11 @@ export function diffConversationInspectBlocks(input: {
     aroundBlockId: undefined,
     window: DEFAULT_WINDOW,
     types: normalizeBlockTypes(input.types),
+    roles: normalizeRoles(input.roles),
     tools: normalizeStringArray(input.tools),
     text: readOptionalString(input.text),
+    searchMode: normalizeSearchMode(input.searchMode),
+    includeAroundMatches: false,
   });
 
   const returned = filtered.length > limit

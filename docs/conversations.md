@@ -67,11 +67,12 @@ Agents can inspect other conversations through the read-only `conversation_inspe
 Use it for:
 
 - listing live or archived threads
-- searching visible transcript text
-- reading visible blocks from another conversation
+- searching visible transcript text with `searchMode: "phrase" | "allTerms" | "anyTerm"`
+- reading visible blocks from another conversation, including `roles: ["user", "assistant"]` when the intent is conversational filtering
+- pulling surrounding context in one call with `includeAroundMatches: true` and `window`
 - diff-style follow-up reads
 
-It does not expose hidden reasoning from another thread.
+It does not expose hidden reasoning from another thread. Structural block `types` are `user`, `text`, `context`, `summary`, `tool_use`, `image`, and `error`; use `roles` instead when you mean participant-style filtering.
 
 ## Async follow-through from a conversation
 

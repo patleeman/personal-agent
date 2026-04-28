@@ -31,6 +31,8 @@ vi.mock('../conversations/conversationInspectCapability.js', () => ({
   CONVERSATION_INSPECT_ACTION_VALUES: ['list', 'search', 'query', 'diff', 'outline', 'read_window'],
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES: ['user', 'text', 'context', 'summary', 'tool_use', 'image', 'error'],
   CONVERSATION_INSPECT_ORDER_VALUES: ['asc', 'desc'],
+  CONVERSATION_INSPECT_ROLE_VALUES: ['user', 'assistant', 'tool', 'context', 'summary', 'image', 'error'],
+  CONVERSATION_INSPECT_SEARCH_MODE_VALUES: ['phrase', 'allTerms', 'anyTerm'],
   CONVERSATION_INSPECT_SCOPE_VALUES: ['all', 'live', 'running', 'archived'],
   listConversationInspectSessions: listConversationInspectSessionsMock,
   formatConversationInspectSessionList: formatConversationInspectSessionListMock,

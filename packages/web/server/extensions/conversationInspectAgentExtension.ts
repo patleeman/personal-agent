@@ -4,6 +4,8 @@ import {
   CONVERSATION_INSPECT_ACTION_VALUES,
   CONVERSATION_INSPECT_BLOCK_TYPE_VALUES,
   CONVERSATION_INSPECT_ORDER_VALUES,
+  CONVERSATION_INSPECT_ROLE_VALUES,
+  CONVERSATION_INSPECT_SEARCH_MODE_VALUES,
   CONVERSATION_INSPECT_SCOPE_VALUES,
   diffConversationInspectBlocks,
   formatConversationInspectDiffResult,
@@ -19,32 +21,34 @@ import {
 } from '../conversations/conversationInspectCapability.js';
 
 const ConversationInspectToolParams = Type.Object({
-  action: Type.Union(CONVERSATION_INSPECT_ACTION_VALUES.map((value) => Type.Literal(value))),
+  action: Type.String({ description: `Action to perform. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.` }),
   conversationId: Type.Optional(Type.String({ description: 'Conversation id for query/diff actions.' })),
-  scope: Type.Optional(Type.Union(CONVERSATION_INSPECT_SCOPE_VALUES.map((value) => Type.Literal(value)), {
-    description: 'List scope: all, live, running, or archived conversations.',
-  })),
+  scope: Type.Optional(Type.String({ description: `List scope. Valid values: ${CONVERSATION_INSPECT_SCOPE_VALUES.join(', ')}.` })),
   cwd: Type.Optional(Type.String({ description: 'Optional cwd filter for list actions.' })),
   query: Type.Optional(Type.String({ description: 'Query string for list/search actions. List matches metadata; search matches visible transcript text.' })),
   includeCurrent: Type.Optional(Type.Boolean({ description: 'Whether list should include the current conversation. Defaults to false.' })),
   types: Type.Optional(Type.Array(
-    Type.Union(CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.map((value) => Type.Literal(value))),
-    { description: 'Optional transcript block types to include.', minItems: 1 },
+    Type.String({ minLength: 1 }),
+    { description: `Optional structural transcript block types to include. Valid values: ${CONVERSATION_INSPECT_BLOCK_TYPE_VALUES.join(', ')}. Use roles for user/assistant filtering.`, minItems: 1 },
+  )),
+  roles: Type.Optional(Type.Array(
+    Type.String({ minLength: 1 }),
+    { description: `Optional conversational roles to include. Valid values: ${CONVERSATION_INSPECT_ROLE_VALUES.join(', ')}. assistant maps to text blocks; tool maps to tool_use blocks.`, minItems: 1 },
   )),
   tools: Type.Optional(Type.Array(
     Type.String({ minLength: 1 }),
     { description: 'Optional tool names to match for tool_use/error blocks.', minItems: 1 },
   )),
-  text: Type.Optional(Type.String({ description: 'Case-insensitive substring filter over transcript block text.' })),
+  text: Type.Optional(Type.String({ description: 'Case-insensitive transcript text filter.' })),
+  searchMode: Type.Optional(Type.String({ description: `How query/text matching works. Valid values: ${CONVERSATION_INSPECT_SEARCH_MODE_VALUES.join(', ')}. Default phrase; allTerms/anyTerm split on whitespace.` })),
   afterBlockId: Type.Optional(Type.String({ description: 'Only include transcript blocks after this block id.' })),
   beforeBlockId: Type.Optional(Type.String({ description: 'Only include transcript blocks before this block id.' })),
   aroundBlockId: Type.Optional(Type.String({ description: 'Restrict query results to a context window around this block id.' })),
   knownSignature: Type.Optional(Type.String({ description: 'Last seen conversation signature for diff checks.' })),
-  order: Type.Optional(Type.Union(CONVERSATION_INSPECT_ORDER_VALUES.map((value) => Type.Literal(value)), {
-    description: 'Block order for query results: asc or desc.',
-  })),
+  order: Type.Optional(Type.String({ description: `Block order for query results. Valid values: ${CONVERSATION_INSPECT_ORDER_VALUES.join(', ')}.` })),
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 200, description: 'Maximum items to return.' })),
   window: Type.Optional(Type.Number({ minimum: 1, maximum: 50, description: 'Context window size for aroundBlockId queries.' })),
+  includeAroundMatches: Type.Optional(Type.Boolean({ description: 'When searching or querying with filters, include surrounding context blocks around each match using window.' })),
   maxCharactersPerBlock: Type.Optional(Type.Number({ minimum: 1, maximum: 20000, description: 'Character cap per returned block.' })),
   maxSnippetCharacters: Type.Optional(Type.Number({ minimum: 1, maximum: 2000, description: 'Character cap per returned search snippet.' })),
 });
@@ -92,9 +96,13 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
               scope: params.scope,
               cwd: params.cwd,
               limit: params.limit,
+              window: params.window,
+              searchMode: params.searchMode,
+              includeAroundMatches: params.includeAroundMatches,
               includeCurrent: params.includeCurrent,
               currentConversationId: ctx.sessionManager.getSessionId(),
               maxSnippetCharacters: params.maxSnippetCharacters,
+              maxCharactersPerBlock: params.maxCharactersPerBlock,
             });
 
             return {
@@ -110,12 +118,15 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
             const result = queryConversationInspectBlocks({
               conversationId: params.conversationId,
               types: params.types,
+              roles: params.roles,
               tools: params.tools,
               text: params.text,
+              searchMode: params.searchMode,
               afterBlockId: params.afterBlockId,
               beforeBlockId: params.beforeBlockId,
               aroundBlockId: params.aroundBlockId,
               window: params.window,
+              includeAroundMatches: params.includeAroundMatches,
               order: params.order,
               limit: params.limit,
               maxCharactersPerBlock: params.maxCharactersPerBlock,
@@ -168,8 +179,10 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
               knownSignature: params.knownSignature,
               afterBlockId: params.afterBlockId,
               types: params.types,
+              roles: params.roles,
               tools: params.tools,
               text: params.text,
+              searchMode: params.searchMode,
               limit: params.limit,
               maxCharactersPerBlock: params.maxCharactersPerBlock,
             });
@@ -184,7 +197,7 @@ export function createConversationInspectAgentExtension(): (pi: ExtensionAPI) =>
           }
 
           default:
-            throw new Error(`Unsupported conversation_inspect action: ${String(params.action)}`);
+            throw new Error(`Unsupported conversation_inspect action ${JSON.stringify(params.action)}. Valid values: ${CONVERSATION_INSPECT_ACTION_VALUES.join(', ')}.`);
         }
       },
     });
