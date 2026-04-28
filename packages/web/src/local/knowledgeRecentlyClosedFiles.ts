@@ -61,13 +61,16 @@ export function recordRecentlyClosedFileId(
   fileId: string,
   maxRecentlyClosedFileIds: number = MAX_RECENTLY_CLOSED_FILE_IDS,
 ): string[] {
+  const limit = Number.isSafeInteger(maxRecentlyClosedFileIds) && maxRecentlyClosedFileIds > 0
+    ? Math.min(MAX_RECENTLY_CLOSED_FILE_IDS, maxRecentlyClosedFileIds)
+    : MAX_RECENTLY_CLOSED_FILE_IDS;
   const normalizedId = fileId.trim();
   if (!normalizedId || normalizedId.endsWith('/')) {
-    return normalizeOpenFileIds(recentlyClosedFileIds);
+    return normalizeOpenFileIds(recentlyClosedFileIds).slice(0, limit);
   }
 
   return normalizeOpenFileIds([
     normalizedId,
     ...recentlyClosedFileIds.filter((recentlyClosedId) => recentlyClosedId !== normalizedId),
-  ]).slice(0, maxRecentlyClosedFileIds);
+  ]).slice(0, limit);
 }
