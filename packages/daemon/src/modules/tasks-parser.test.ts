@@ -49,6 +49,18 @@ Prepare tax checklist.
     expect(task.timeoutSeconds).toBe(1800);
   });
 
+  it('rejects malformed one-time at task timestamps', () => {
+    expect(() => parseTaskDefinition({
+      filePath: '/tmp/tasks/malformed-reminder.task.md',
+      rawContent: `---
+at: "9999"
+---
+Prepare tax checklist.
+`,
+      defaultTimeoutSeconds: 1800,
+    })).toThrow('Invalid at timestamp: 9999');
+  });
+
   it('rejects tasks without cron or at schedule', () => {
     expect(() => parseTaskDefinition({
       filePath: '/tmp/tasks/no-schedule.task.md',

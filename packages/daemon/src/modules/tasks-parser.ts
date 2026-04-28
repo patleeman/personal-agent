@@ -4,6 +4,7 @@ import { parseDocument } from 'yaml';
 
 const FRONTMATTER_DELIMITER = '---';
 const DEFAULT_PROFILE = 'shared';
+const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
 
 interface ParsedCronField {
   values: Set<number>;
@@ -70,6 +71,20 @@ function expandHome(path: string): string {
   }
 
   return path;
+}
+
+function normalizeIsoTimestamp(raw: string): string | undefined {
+  const normalized = raw.trim();
+  if (!ISO_TIMESTAMP_PATTERN.test(normalized)) {
+    return undefined;
+  }
+
+  const parsed = Date.parse(normalized);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+
+  return new Date(parsed).toISOString();
 }
 
 function toTaskIdFromFile(filePath: string): string {
@@ -410,15 +425,15 @@ export function parseTaskDefinition(options: ParseTaskDefinitionOptions): Parsed
     }
     : (() => {
       const atValue = at as string;
-      const timestamp = Date.parse(atValue);
-      if (!Number.isFinite(timestamp)) {
+      const normalizedAt = normalizeIsoTimestamp(atValue);
+      if (!normalizedAt) {
         throw new Error(`Invalid at timestamp: ${atValue}`);
       }
 
       return {
         type: 'at' as const,
-        at: atValue,
-        atMs: timestamp,
+        at: normalizedAt,
+        atMs: Date.parse(normalizedAt),
       };
     })();
 
