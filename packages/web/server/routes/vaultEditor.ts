@@ -109,6 +109,13 @@ export function buildVaultImageUploadFileName(filename: string, dataUrl: string,
   return `${timestamp}-${baseName}.${resolveVaultImageUploadExtension(originalName, dataUrl)}`;
 }
 
+function isVaultImageUploadClientError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.message.startsWith('dataUrl must ');
+}
+
 // ── Serialise a single entry ──────────────────────────────────────────────────
 
 interface VaultEntry {
@@ -656,6 +663,10 @@ export function registerVaultEditorRoutes(router: Pick<Express, 'get' | 'put' | 
       const id = `_attachments/${outName}`;
       res.json({ id, url: `/api/vault/asset?id=${encodeURIComponent(id)}` });
     } catch (err) {
+      if (isVaultImageUploadClientError(err)) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+        return;
+      }
       logError('vault/image', { message: String(err) });
       res.status(500).json({ error: String(err) });
     }

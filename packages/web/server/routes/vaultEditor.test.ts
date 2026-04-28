@@ -62,4 +62,26 @@ describe('vaultEditor image uploads', () => {
       id: expect.stringMatching(/^_attachments\/\d+-note\.png$/),
     }));
   });
+
+  it('returns a client error for malformed image upload data urls', () => {
+    vaultRootMock.value = mkdtempSync(join(tmpdir(), 'pa-vault-image-upload-bad-'));
+    const postHandlers = new Map<string, (req: unknown, res: unknown) => void>();
+    registerVaultEditorRoutes({
+      get: vi.fn(),
+      put: vi.fn(),
+      delete: vi.fn(),
+      post: vi.fn((path: string, handler: (req: unknown, res: unknown) => void) => {
+        postHandlers.set(path, handler);
+      }),
+    });
+    const json = vi.fn();
+    const status = vi.fn(() => ({ json }));
+
+    postHandlers.get('/api/vault/image')?.({
+      body: { filename: 'note.png', dataUrl: 'data:image/png;base64,not-valid-base64!' },
+    }, { json, status });
+
+    expect(status).toHaveBeenCalledWith(400);
+    expect(json).toHaveBeenCalledWith({ error: 'dataUrl must contain valid base64 image data' });
+  });
 });
