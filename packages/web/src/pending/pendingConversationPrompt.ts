@@ -78,26 +78,49 @@ function normalizePendingPromptAttachmentRefs(value: unknown): PromptAttachmentR
     }));
 }
 
+function normalizePendingPromptImageData(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const normalized = value.trim();
+  if (!normalized || normalized.length % 4 === 1 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    return undefined;
+  }
+
+  return normalized;
+}
+
 function normalizePendingPromptImages(value: unknown): PromptImageInput[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value
-    .filter((image): image is PromptImageInput => (
-      !!image
-      && typeof image === 'object'
-      && typeof image.mimeType === 'string'
-      && image.mimeType.trim().length > 0
-      && typeof image.data === 'string'
-      && image.data.trim().length > 0
-    ))
-    .map((image) => ({
-      mimeType: image.mimeType.trim(),
-      data: image.data.trim(),
-      ...(typeof image.name === 'string' && image.name.trim().length > 0 ? { name: image.name.trim() } : {}),
-      ...(typeof image.previewUrl === 'string' && image.previewUrl.trim().length > 0 ? { previewUrl: image.previewUrl.trim() } : {}),
-    }));
+    .flatMap((image) => {
+      if (!image || typeof image !== 'object') {
+        return [];
+      }
+
+      const mimeType = typeof (image as { mimeType?: unknown }).mimeType === 'string'
+        ? (image as { mimeType: string }).mimeType.trim()
+        : '';
+      const data = normalizePendingPromptImageData((image as { data?: unknown }).data);
+      if (!mimeType || !data) {
+        return [];
+      }
+
+      return [{
+        mimeType,
+        data,
+        ...(typeof (image as { name?: unknown }).name === 'string' && (image as { name: string }).name.trim().length > 0
+          ? { name: (image as { name: string }).name.trim() }
+          : {}),
+        ...(typeof (image as { previewUrl?: unknown }).previewUrl === 'string' && (image as { previewUrl: string }).previewUrl.trim().length > 0
+          ? { previewUrl: (image as { previewUrl: string }).previewUrl.trim() }
+          : {}),
+      }];
+    });
 }
 
 export const PENDING_CONVERSATION_PROMPT_CHANGED_EVENT = 'pa:pending-conversation-prompt-changed';
