@@ -36,9 +36,10 @@ describe('knowledgeOpenFilesSectionHeight', () => {
     vi.stubGlobal('localStorage', createStorage());
   });
 
-  it('clamps stored heights to the minimum without a fixed maximum', () => {
+  it('clamps stored heights to the supported range', () => {
     expect(clampOpenFilesSectionHeight(24)).toBe(88);
     expect(clampOpenFilesSectionHeight(512)).toBe(512);
+    expect(clampOpenFilesSectionHeight(Number.MAX_SAFE_INTEGER)).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
     expect(clampOpenFilesSectionHeight(Number.MAX_SAFE_INTEGER + 1)).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
     expect(clampOpenFilesSectionHeight(224.5)).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
   });
@@ -60,6 +61,9 @@ describe('knowledgeOpenFilesSectionHeight', () => {
     expect(readStoredOpenFilesSectionHeight()).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
 
     localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, String(Number.MAX_SAFE_INTEGER + 1));
+    expect(readStoredOpenFilesSectionHeight()).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
+
+    localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, String(Number.MAX_SAFE_INTEGER));
     expect(readStoredOpenFilesSectionHeight()).toBe(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
 
     writeStoredOpenFilesSectionHeight(DEFAULT_OPEN_FILES_SECTION_HEIGHT);
