@@ -17,7 +17,7 @@ export interface SavedUiPreferences {
   nodeBrowserViews: SavedNodeBrowserViewPreference[];
 }
 
-const ISO_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
+const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 
 function readNonEmptyString(value: unknown): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : '';
@@ -25,7 +25,8 @@ function readNonEmptyString(value: unknown): string {
 
 function readTimestampString(value: unknown, fallback?: string): string {
   const raw = readNonEmptyString(value);
-  if (raw && ISO_TIMESTAMP_PATTERN.test(raw)) {
+  const match = raw ? raw.match(ISO_TIMESTAMP_PATTERN) : null;
+  if (match && hasValidIsoDateParts(match)) {
     const parsed = Date.parse(raw);
     if (Number.isFinite(parsed)) {
       return new Date(parsed).toISOString();
@@ -33,6 +34,24 @@ function readTimestampString(value: unknown, fallback?: string): string {
   }
 
   return fallback ?? new Date().toISOString();
+}
+
+function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+  const millisecond = match[7] ? Number(match[7].slice(0, 3).padEnd(3, '0')) : 0;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
+  return date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+    && date.getUTCHours() === hour
+    && date.getUTCMinutes() === minute
+    && date.getUTCSeconds() === second
+    && date.getUTCMilliseconds() === millisecond;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
