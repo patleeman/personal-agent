@@ -212,6 +212,15 @@ export function App() {
         setDaemon(payload.state);
         return;
       case 'invalidate':
+        if (payload.topics.includes('runs')) {
+          void api.runs()
+            .then((result) => {
+              setRuns(result);
+            })
+            .catch(() => {
+              // Keep the last known snapshot until the next app event or manual refresh.
+            });
+        }
         setEventVersions((prev) => {
           const next = { ...prev };
           for (const topic of payload.topics) {

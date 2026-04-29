@@ -74,7 +74,13 @@ vi.mock('../navigation/lazyRouteRecovery', async () => {
   };
 });
 
-function createRun(runId: string, status: string, conversationId = 'conv-1'): DurableRunRecord {
+function createRun(
+  runId: string,
+  status: string | undefined,
+  conversationId = 'conv-1',
+  options: { updatedAt?: string; command?: string; includeStatus?: boolean } = {},
+): DurableRunRecord {
+  const includeStatus = options.includeStatus ?? true;
   return {
     runId,
     conversationId,
@@ -95,21 +101,21 @@ function createRun(runId: string, status: string, conversationId = 'conv-1'): Du
       createdAt: '2026-04-29T01:22:23.123Z',
       source: { type: 'tool', id: conversationId },
       spec: {
-        target: { type: 'shell', command: 'npm test', cwd: '/repo' },
+        target: { type: 'shell', command: options.command ?? 'npm test', cwd: '/repo' },
         metadata: { taskSlug: 'test-run', cwd: '/repo' },
       },
     },
-    status: {
+    ...(includeStatus ? { status: {
       version: 1,
       runId,
       status,
       createdAt: '2026-04-29T01:22:23.123Z',
-      updatedAt: '2026-04-29T01:22:24.000Z',
+      updatedAt: options.updatedAt ?? '2026-04-29T01:22:24.000Z',
       activeAttempt: 1,
       ...(status === 'completed' || status === 'failed' || status === 'cancelled'
         ? { completedAt: '2026-04-29T01:22:25.000Z' }
         : {}),
-    },
+    } } : {}),
     problems: [],
     recoveryAction: 'none',
   } as DurableRunRecord;
@@ -126,7 +132,8 @@ function createRuns(runs: DurableRunRecord[]): DurableRunListResult {
 
 async function flushReact() {
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+    await Promise.resolve();
   });
 }
 
@@ -239,5 +246,91 @@ describe('App background work run state integration', () => {
     expect(container.textContent).toContain('Background Work');
     expect(container.textContent).toContain('run-rerun');
     expect(container.textContent).not.toContain('run-first');
+  });
+
+  it('loads the initial shelf from the bootstrap runs snapshot', async () => {
+    vi.useFakeTimers();
+    subscribeDesktopAppEventsMock.mockImplementation(async (listener) => {
+      desktopListener = listener;
+      return () => {};
+    });
+    apiRunsMock.mockResolvedValue(createRuns([createRun('run-bootstrap', 'running')]));
+
+    ({ container, root } = await renderAppAtConversation());
+
+    await act(async () => {
+      vi.advanceTimersByTime(1500);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(apiRunsMock).toHaveBeenCalled();
+    expect(container.textContent).toContain('Background Work');
+    expect(container.textContent).toContain('run-bootstrap');
+  });
+
+  it('refreshes the shelf from api.runs when an invalidate event arrives without a runs snapshot', async () => {
+    ({ container, root } = await renderAppAtConversation());
+
+    await emitDesktopEvent({ type: 'runs', result: createRuns([createRun('run-invalidated', 'running')]) });
+    expect(container.textContent).toContain('run-invalidated');
+
+    apiRunsMock.mockResolvedValueOnce(createRuns([createRun('run-invalidated', 'cancelled')]));
+    await emitDesktopEvent({ type: 'invalidate', topics: ['runs'] });
+
+    expect(apiRunsMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain('No Background Work');
+    expect(container.textContent).not.toContain('run-invalidated');
+  });
+
+  it('treats queued, waiting, and recovering as active until they become terminal', async () => {
+    ({ container, root } = await renderAppAtConversation());
+
+    await emitDesktopEvent({
+      type: 'runs',
+      result: createRuns([
+        createRun('run-queued', 'queued'),
+        createRun('run-waiting', 'waiting'),
+        createRun('run-recovering', 'recovering'),
+      ]),
+    });
+
+    expect(container.textContent).toContain('Background Work');
+    expect(container.textContent).toContain('3 active · latest npm test');
+    expect(container.textContent).toContain('run-queued');
+    expect(container.textContent).toContain('run-waiting');
+    expect(container.textContent).toContain('run-recovering');
+
+    await emitDesktopEvent({
+      type: 'runs',
+      result: createRuns([
+        createRun('run-queued', 'cancelled'),
+        createRun('run-waiting', 'completed'),
+        createRun('run-recovering', 'failed'),
+      ]),
+    });
+
+    expect(container.textContent).toContain('No Background Work');
+    expect(container.textContent).not.toContain('run-queued');
+    expect(container.textContent).not.toContain('run-waiting');
+    expect(container.textContent).not.toContain('run-recovering');
+  });
+
+  it('sorts multiple active runs by latest update and keeps malformed statuses out of the active shelf', async () => {
+    ({ container, root } = await renderAppAtConversation());
+
+    await emitDesktopEvent({
+      type: 'runs',
+      result: createRuns([
+        createRun('run-old', 'running', 'conv-1', { updatedAt: '2026-04-29T01:22:24.000Z', command: 'npm test old' }),
+        createRun('run-new', 'running', 'conv-1', { updatedAt: '2026-04-29T01:23:24.000Z', command: 'npm test new' }),
+        createRun('run-missing-status', undefined, 'conv-1', { includeStatus: false }),
+      ]),
+    });
+
+    expect(container.textContent).toContain('2 active · latest npm test new');
+    expect(container.textContent).toContain('run-old');
+    expect(container.textContent).toContain('run-new');
+    expect(container.textContent).not.toContain('run-missing-status');
   });
 });
