@@ -107,7 +107,7 @@ export function isConversationTailVisibleAtBottom(
   const containerRect = container.getBoundingClientRect();
   const tailRect = tail.getBoundingClientRect();
   return tailRect.bottom <= containerRect.bottom + thresholdPx
-    && tailRect.bottom >= containerRect.top - thresholdPx;
+    && tailRect.bottom >= containerRect.bottom - thresholdPx;
 }
 
 export function shouldAutoScrollToStreamingTail(

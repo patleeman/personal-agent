@@ -124,6 +124,17 @@ describe('conversation scroll helpers', () => {
     expect(isConversationTailVisibleAtBottom(container as unknown as Pick<ParentNode, 'querySelector'> & { getBoundingClientRect: () => { top: number; bottom: number } })).toBe(false);
   });
 
+  it('does not treat a merely visible tail anchor as pinned to the bottom', () => {
+    const container = {
+      querySelector: vi.fn().mockReturnValue({
+        getBoundingClientRect: () => ({ top: 160, bottom: 240 }),
+      }),
+      getBoundingClientRect: () => ({ top: 100, bottom: 500 }),
+    };
+
+    expect(isConversationTailVisibleAtBottom(container as unknown as Pick<ParentNode, 'querySelector'> & { getBoundingClientRect: () => { top: number; bottom: number } })).toBe(false);
+  });
+
   it('returns a stable tail key for in-place streaming text updates', () => {
     expect(getConversationTailBlockKey({
       type: 'text',

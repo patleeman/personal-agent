@@ -98,12 +98,11 @@ export function useConversationScroll({
 
   const syncPinnedBottomFromDom = useCallback((el: HTMLDivElement, scrollHeight = el.scrollHeight) => {
     scrollPinnedToBottomRef.current = true;
-    if (!scrollConversationTailIntoView(el)) {
-      el.scrollTop = getConversationBottomScrollTop({
-        scrollHeight,
-        clientHeight: el.clientHeight,
-      });
-    }
+    scrollConversationTailIntoView(el);
+    el.scrollTop = getConversationBottomScrollTop({
+      scrollHeight,
+      clientHeight: el.clientHeight,
+    });
     setAtBottom(true);
   }, []);
 
@@ -124,7 +123,13 @@ export function useConversationScroll({
       }
 
       const nextScrollHeight = el.scrollHeight;
-      if (scrollPinnedToBottomRef.current && nextScrollHeight !== lastScrollHeight) {
+      const tailNeedsRealignment = !isConversationTailVisibleAtBottom(el)
+        && !isConversationScrolledToBottom({
+          scrollHeight: nextScrollHeight,
+          scrollTop: el.scrollTop,
+          clientHeight: el.clientHeight,
+        });
+      if (scrollPinnedToBottomRef.current && (nextScrollHeight !== lastScrollHeight || tailNeedsRealignment)) {
         syncPinnedBottomFromDom(el, nextScrollHeight);
       }
       lastScrollHeight = nextScrollHeight;
