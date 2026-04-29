@@ -3,7 +3,7 @@ import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
 
-const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 680;
+const COMPOSER_PREFERENCES_MENU_WIDTH_PX = 780;
 
 export function ConversationComposerInputControls({
   fileInputRef,

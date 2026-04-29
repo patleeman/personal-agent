@@ -239,7 +239,7 @@ export function ConversationPreferencesRow({
   }, [compactMenuOpen]);
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-2">
+    <div className="flex min-w-0 flex-nowrap items-center gap-2">
       {!compact ? (
         <>
           <ConversationModelSelect
