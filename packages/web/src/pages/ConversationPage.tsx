@@ -4828,6 +4828,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             for (const warning of result.relatedConversationPointerWarnings ?? []) {
               showNotice('danger', warning, 5000);
             }
+            if (result.accepted) {
+              clearPendingConversationPrompt(newId);
+            }
+            setPendingConversationPromptDispatching(newId, false);
           }).catch((error) => {
             setPendingConversationPromptDispatching(newId, false);
             console.error('Initial prompt failed:', error);

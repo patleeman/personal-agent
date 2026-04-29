@@ -277,4 +277,20 @@ describe('pendingConversationPrompt helpers', () => {
 
     nowSpy.mockRestore();
   });
+
+  it('drops stale in-memory dispatching state when a detached initial prompt never settles', () => {
+    const storage = createStorage();
+    const nowSpy = vi.spyOn(Date, 'now');
+
+    nowSpy.mockReturnValue(1_000);
+    setPendingConversationPromptDispatching('session-123', true, storage);
+
+    nowSpy.mockReturnValue(30_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(true);
+
+    nowSpy.mockReturnValue(200_000);
+    expect(isPendingConversationPromptDispatching('session-123', storage)).toBe(false);
+
+    nowSpy.mockRestore();
+  });
 });

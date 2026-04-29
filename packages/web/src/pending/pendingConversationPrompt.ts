@@ -12,7 +12,7 @@ export interface PendingConversationPrompt {
 }
 
 const inMemoryPendingPrompts = new Map<string, PendingConversationPrompt>();
-const inFlightPendingPromptDispatches = new Set<string>();
+const inFlightPendingPromptDispatches = new Map<string, number>();
 const PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS = 90_000;
 const MAX_PENDING_ATTACHMENT_REVISION = 1_000_000;
 
@@ -368,8 +368,13 @@ export function isPendingConversationPromptDispatching(
     return false;
   }
 
-  if (inFlightPendingPromptDispatches.has(sessionId)) {
-    return true;
+  const inFlightStartedAt = inFlightPendingPromptDispatches.get(sessionId);
+  if (inFlightStartedAt !== undefined) {
+    const inFlightAgeMs = Date.now() - inFlightStartedAt;
+    if (Number.isSafeInteger(inFlightAgeMs) && inFlightAgeMs >= 0 && inFlightAgeMs < PENDING_CONVERSATION_PROMPT_DISPATCHING_STALE_MS) {
+      return true;
+    }
+    inFlightPendingPromptDispatches.delete(sessionId);
   }
 
   const dispatchingAt = readPendingConversationPromptDispatchingAt(sessionId, storage);
@@ -387,7 +392,7 @@ export function setPendingConversationPromptDispatching(
   }
 
   if (dispatching) {
-    inFlightPendingPromptDispatches.add(sessionId);
+    inFlightPendingPromptDispatches.set(sessionId, Date.now());
   } else {
     inFlightPendingPromptDispatches.delete(sessionId);
   }
