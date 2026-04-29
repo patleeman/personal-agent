@@ -215,7 +215,7 @@ export function TraceClusterBlock({
       {linkedRuns.length > 0 && (
         <div className="ml-2.5 space-y-1.5 border-l border-border-subtle pl-2.5">
           <div className="flex flex-wrap items-center gap-2 rounded-md bg-elevated/30 px-2.5 py-1.5 text-[11px] text-secondary">
-            <span className="text-[10px] uppercase tracking-[0.14em] text-dim">runs</span>
+            <span className="text-[10px] uppercase tracking-[0.14em] text-dim">background work</span>
             <span>{linkedRuns.length} linked</span>
             <span className="flex-1" />
             {hiddenLinkedRunCount > 0 && (

@@ -73,13 +73,13 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(createRun(), { tasks })).toEqual({
       title: 'Summarize yesterday and today.',
-      summary: 'Scheduled task · daily-report',
+      summary: 'Automation execution · daily-report',
     });
 
     expect(getRunConnections(createRun(), { tasks })).toEqual([
       {
         key: 'task:daily-report',
-        label: 'Scheduled task',
+        label: 'Automation',
         value: 'daily-report',
         to: '/automations/daily-report',
         detail: 'Summarize yesterday and today.',
@@ -133,7 +133,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run, { sessions })).toEqual({
       title: 'Fix runs navigation',
-      summary: 'Live conversation · conv-123',
+      summary: 'Conversation session · conv-123',
     });
 
     expect(getRunConnections(run, { sessions })).toEqual([
@@ -221,7 +221,7 @@ describe('runPresentation', () => {
         prompt: 'Summarize yesterday and today.',
       }],
     })).toMatchObject({
-      label: 'Scheduled task',
+      label: 'Automation',
       to: '/automations/daily-report',
     });
 
@@ -452,7 +452,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/web run dev',
-      summary: 'Background run · ui-smoke',
+      summary: 'Shell command · ui-smoke',
     });
   });
 
@@ -476,7 +476,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'npm --prefix packages/web run dev',
-      summary: 'Shell run',
+      summary: 'Shell command',
     });
   });
 
@@ -525,7 +525,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'printf ok',
-      summary: 'Shell run · ui-preview-check',
+      summary: 'Shell command · ui-preview-check',
     });
   });
 
@@ -557,7 +557,7 @@ describe('runPresentation', () => {
 
     expect(getRunHeadline(run)).toEqual({
       title: 'Inspect git diff and summarize the result.',
-      summary: 'Background run · ui-polish',
+      summary: 'Agent task · ui-polish',
     });
   });
 

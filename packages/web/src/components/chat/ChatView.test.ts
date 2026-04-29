@@ -286,9 +286,9 @@ describe('chat view streaming disclosure', () => {
     }));
 
     expect(html).toContain('Continuous conversations next chunk ui');
-    expect(html).toContain('background run');
+    expect(html).toContain('agent task');
     expect(html).toContain('text-left');
-    expect(html).toContain('mentioned run');
+    expect(html).toContain('mentioned execution');
   });
 
   it('shows run tool previews and linked run metadata for started agent runs', () => {
@@ -318,7 +318,7 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).toContain('start_agent Inspect git diff');
     expect(html).toContain('Inspect git diff');
-    expect(html).toContain('agent run');
+    expect(html).toContain('agent task');
     expect(html).toContain('ui-polish');
     expect(html).toContain('cwd personal-agent');
     expect(html).toContain('gpt-5.4');
@@ -344,7 +344,7 @@ describe('chat view streaming disclosure', () => {
 
     expect(html).toContain('start printf ok');
     expect(html).toContain('printf ok');
-    expect(html).toContain('shell run');
+    expect(html).toContain('shell command');
     expect(html).toContain('ui-preview-check');
     expect(html).toContain('cwd personal-agent');
   });
@@ -372,7 +372,7 @@ describe('chat view streaming disclosure', () => {
     }));
 
     expect(html).toContain('Internal work');
-    expect(html).toContain('runs');
+    expect(html).toContain('background work');
     expect(html).toContain('Inspect git diff');
     expect(html).toContain('show');
   });
@@ -481,12 +481,12 @@ describe('chat view streaming disclosure', () => {
       isStreaming: true,
     }));
 
-    expect(html).toContain('listed runs');
-    expect(html).toContain('Showing 5 of 7 runs returned by the tool.');
+    expect(html).toContain('listed executions');
+    expect(html).toContain('Showing 5 of 7 executions returned by the tool.');
     expect(html).toContain('Show all');
     expect(html).toContain('Fix build a');
     expect(html).toContain('Fix build e');
-    expect(html).toContain('queued · background run');
+    expect(html).toContain('queued · agent task');
     expect(html).not.toContain('Fix build f');
     expect(html).not.toContain('Fix build g');
   });

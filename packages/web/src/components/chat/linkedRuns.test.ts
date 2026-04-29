@@ -19,7 +19,7 @@ describe('linkedRuns', () => {
   });
 
   it('builds compact previews for run tool actions', () => {
-    expect(buildToolPreview(runToolBlock({ details: { action: 'list' } }))).toBe('list durable runs');
+    expect(buildToolPreview(runToolBlock({ details: { action: 'list' } }))).toBe('list background work');
     expect(buildToolPreview(runToolBlock({ details: { action: 'logs', runId: 'run-debug-router-abc123' } }))).toBe('logs Debug router');
     expect(buildToolPreview(runToolBlock({ details: { action: 'start_agent', prompt: '# Fix architecture\n\nPlease do it' } }))).toBe('start_agent Fix architecture');
   });
@@ -39,8 +39,8 @@ describe('linkedRuns', () => {
     expect(linkedRuns).toEqual({
       scope: 'listed',
       runs: [
-        { runId: 'run-chat-cleanup-abc123', title: 'Chat cleanup', detail: 'running · background run' },
-        { runId: 'task-nightly-review', title: 'Nightly review', detail: 'queued · scheduled task' },
+        { runId: 'run-chat-cleanup-abc123', title: 'Chat cleanup', detail: 'running · agent task' },
+        { runId: 'task-nightly-review', title: 'Nightly review', detail: 'queued · automation execution' },
       ],
     });
   });
@@ -59,7 +59,7 @@ describe('linkedRuns', () => {
     }));
 
     expect(linkedRuns.scope).toBe('mentioned');
-    expect(linkedRuns.runs).toEqual([{ runId: 'run-architecture-pass-abc123', title: 'Improve the chat architecture by extracting linked runs.', detail: 'running · agent run · architecture-pass · cwd personal-agent · gpt-5.1' }]);
+    expect(linkedRuns.runs).toEqual([{ runId: 'run-architecture-pass-abc123', title: 'Improve the chat architecture by extracting linked runs.', detail: 'running · agent task · architecture-pass · cwd personal-agent · gpt-5.1' }]);
   });
 
   it('falls back to durable run ids mentioned in generic tool blocks', () => {
@@ -73,7 +73,7 @@ describe('linkedRuns', () => {
 
     expect(linkedRuns).toEqual({
       scope: 'mentioned',
-      runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'background run' }],
+      runs: [{ runId: 'run-foo-bar-abc123', title: 'Foo bar', detail: 'agent task' }],
     });
   });
 

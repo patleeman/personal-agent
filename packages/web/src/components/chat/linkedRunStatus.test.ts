@@ -3,9 +3,9 @@ import { describeInlineRunStatus, inferStatusFromLinkedRunDetail } from './linke
 
 describe('linkedRunStatus', () => {
   it('infers known statuses from linked run detail prefix', () => {
-    expect(inferStatusFromLinkedRunDetail('running · background run')).toBe('running');
-    expect(inferStatusFromLinkedRunDetail('FAILED · agent run')).toBe('failed');
-    expect(inferStatusFromLinkedRunDetail('background run')).toBeUndefined();
+    expect(inferStatusFromLinkedRunDetail('running · agent task')).toBe('running');
+    expect(inferStatusFromLinkedRunDetail('FAILED · shell command')).toBe('failed');
+    expect(inferStatusFromLinkedRunDetail('agent task')).toBeUndefined();
   });
 
   it('maps statuses to inline display tones', () => {

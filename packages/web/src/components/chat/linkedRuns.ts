@@ -61,9 +61,9 @@ function summarizeLinkedRunTail(value: string): string | null {
 function describeLinkedRun(runId: string): LinkedRunDescriptor {
   if (runId.startsWith('conversation-live-')) {
     return {
-      title: 'Live Conversation',
+      title: 'Conversation Session',
       detail: summarizeLinkedRunTail(runId.slice('conversation-live-'.length)),
-      kindLabel: 'live conversation',
+      kindLabel: 'conversation session',
     };
   }
 
@@ -77,24 +77,24 @@ function describeLinkedRun(runId: string): LinkedRunDescriptor {
 
   if (runId.startsWith('task-')) {
     return {
-      title: 'Scheduled Task',
+      title: 'Automation Execution',
       detail: summarizeLinkedRunTail(runId.slice('task-'.length)),
-      kindLabel: 'scheduled task',
+      kindLabel: 'automation execution',
     };
   }
 
   if (runId.startsWith('run-')) {
     return {
-      title: 'Background Run',
+      title: 'Background Work',
       detail: summarizeLinkedRunTail(runId.slice('run-'.length)),
-      kindLabel: 'background run',
+      kindLabel: 'agent task',
     };
   }
 
   return {
-    title: 'Linked Run',
+    title: 'Background Work',
     detail: summarizeLinkedRunTail(runId),
-    kindLabel: 'linked run',
+    kindLabel: 'background work',
   };
 }
 
@@ -168,23 +168,23 @@ function buildRunToolPreview(block: Extract<MessageBlock, { type: 'tool_use' }>)
 
   switch (action) {
     case 'list':
-      return 'list durable runs';
+      return 'list background work';
     case 'get':
-      return `get ${runLabel ?? runId ?? 'run'}`;
+      return `get ${runLabel ?? runId ?? 'execution'}`;
     case 'logs':
-      return `logs ${runLabel ?? runId ?? 'run'}`;
+      return `logs ${runLabel ?? runId ?? 'execution'}`;
     case 'cancel':
-      return `cancel ${runLabel ?? runId ?? 'run'}`;
+      return `cancel ${runLabel ?? runId ?? 'execution'}`;
     case 'rerun':
-      return `rerun ${summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'run'}`;
+      return `rerun ${summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'execution'}`;
     case 'follow_up':
-      return `follow_up ${prompt ?? summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'run'}`;
+      return `follow_up ${prompt ?? summarizeLinkedRunTail((sourceRunId ?? '').replace(/^(?:run|task)-/, '')) ?? sourceRunId ?? runLabel ?? 'task'}`;
     case 'start_agent':
-      return `start_agent ${prompt ?? taskSlug ?? runLabel ?? 'agent run'}`;
+      return `start_agent ${prompt ?? taskSlug ?? runLabel ?? 'agent task'}`;
     case 'start':
-      return `start ${command ?? taskSlug ?? runLabel ?? 'background run'}`;
+      return `start ${command ?? taskSlug ?? runLabel ?? 'shell command'}`;
     default:
-      return `${action} ${prompt ?? command ?? taskSlug ?? runLabel ?? 'run'}`.trim();
+      return `${action} ${prompt ?? command ?? taskSlug ?? runLabel ?? 'execution'}`.trim();
   }
 }
 
@@ -210,15 +210,15 @@ function describeListedRunKind(details: ListedRunDetails): string | null {
   }
 
   if (details.source === 'web-live-session') {
-    return 'live conversation';
+    return 'conversation session';
   }
 
   if (details.source === 'scheduled-task' || details.kind === 'scheduled-task') {
-    return 'scheduled task';
+    return 'automation execution';
   }
 
   if (details.kind === 'raw-shell') {
-    return 'shell run';
+    return 'shell command';
   }
 
   if (details.kind === 'workflow') {
@@ -226,11 +226,11 @@ function describeListedRunKind(details: ListedRunDetails): string | null {
   }
 
   if (details.kind === 'background-run') {
-    return 'background run';
+    return 'agent task';
   }
 
   if (details.kind === 'conversation') {
-    return 'conversation run';
+    return 'conversation session';
   }
 
   return null;
@@ -327,13 +327,13 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
 
   switch (action) {
     case 'start_agent':
-      pushRunDetail(detailBits, 'agent run');
+      pushRunDetail(detailBits, 'agent task');
       break;
     case 'start':
-      pushRunDetail(detailBits, 'shell run');
+      pushRunDetail(detailBits, 'shell command');
       break;
     case 'follow_up':
-      pushRunDetail(detailBits, 'follow-up run');
+      pushRunDetail(detailBits, 'follow-up task');
       break;
     case 'rerun':
       pushRunDetail(detailBits, 'rerun');
@@ -342,7 +342,7 @@ function readRunToolLinkedRun(block: Extract<MessageBlock, { type: 'tool_use' }>
       pushRunDetail(detailBits, 'log view');
       break;
     case 'get':
-      pushRunDetail(detailBits, 'run details');
+      pushRunDetail(detailBits, 'execution details');
       break;
     case 'cancel':
       pushRunDetail(detailBits, 'cancelled');

@@ -126,7 +126,7 @@ function buildWakeupPrompt(run: ScannedDurableRun): string {
   const status = run.status?.status ?? 'unknown';
   const logPath = run.paths.outputLogPath;
   const lines = [
-    `Durable run ${run.runId} has finished.`,
+    `Background task ${run.runId} has finished.`,
     `taskSlug=${taskSlug}`,
     `status=${status}`,
     `log=${logPath}`,
@@ -154,15 +154,15 @@ function buildWakeupTitle(run: ScannedDurableRun): string {
 
   switch (status) {
     case 'completed':
-      return `Background run ${taskSlug} completed`;
+      return `Background task ${taskSlug} completed`;
     case 'failed':
-      return `Background run ${taskSlug} failed`;
+      return `Background task ${taskSlug} failed`;
     case 'cancelled':
-      return `Background run ${taskSlug} cancelled`;
+      return `Background task ${taskSlug} cancelled`;
     case 'interrupted':
-      return `Background run ${taskSlug} interrupted`;
+      return `Background task ${taskSlug} interrupted`;
     default:
-      return `Background run ${taskSlug} finished`;
+      return `Background task ${taskSlug} finished`;
   }
 }
 

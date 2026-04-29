@@ -370,7 +370,7 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Runs');
+    expect(html).toContain('Background Work');
     expect(html).not.toContain('Details');
     expect(html).not.toContain('Working directory');
     expect(html).not.toContain('Changed files');
@@ -395,7 +395,7 @@ describe('ContextRail run detail', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Runs');
+    expect(html).toContain('Background Work');
     expect(html).not.toContain('Details');
     expect(html).not.toContain('Loading artifact…');
     expect(html).not.toContain('copy source');

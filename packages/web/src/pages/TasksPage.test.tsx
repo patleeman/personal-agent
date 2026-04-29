@@ -308,7 +308,7 @@ describe('TasksPage', () => {
       </MemoryRouter>,
     );
 
-    expect(html).toContain('Runs');
+    expect(html).toContain('Executions');
     expect(html).toContain('task-daily-report-2026-03-18');
     expect(html).not.toContain('Hide run details');
   });

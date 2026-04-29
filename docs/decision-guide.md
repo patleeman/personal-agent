@@ -13,7 +13,7 @@ Use this doc when you need to decide where something should live.
 | Track durable structured work | project | `<vault-root>/projects/<projectId>/...` | a giant thread |
 | Continue this conversation later | `conversation_queue` | conversation queue / wakeup state | reminder |
 | Tell the user later | reminder | reminder + wakeup state | scheduled task |
-| Start detached work now | run | `<state-root>/daemon/runtime.db` + run logs | scheduled task |
+| Start a detached shell command or agent task now | run tool | `<state-root>/daemon/runtime.db` + execution logs | scheduled task |
 | Run something later or repeatedly | scheduled task / automation | daemon automation state | run |
 | Produce inspectable rendered output in a thread | conversation artifact | conversation artifact state | screenshots pasted into chat |
 | Save project-owned deliverables | project artifact | `<vault-root>/projects/<projectId>/artifacts/` | conversation artifact only |
@@ -34,7 +34,7 @@ Use this rule:
 
 - keep working in the same thread later → `conversation_queue`
 - tell the human later → reminder
-- detached work should start now → `run`
+- detached shell commands or agent tasks should start now → `run`
 - unattended work should happen later or on a schedule → `scheduled_task`
 
 ## Practical defaults
@@ -51,6 +51,7 @@ Use this rule:
 - a **reminder** is not the same thing as a saved automation
 - a **conversation artifact** is not the same thing as a durable project file
 - a **doc** is not the same thing as an instruction file just because both are markdown
+- a **run** is the internal durable record; UI should say shell command, agent task, automation execution, wakeup, or conversation session
 
 ## Related docs
 

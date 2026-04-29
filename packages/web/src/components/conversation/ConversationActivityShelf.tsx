@@ -71,7 +71,7 @@ export function ConversationActivityShelf({
             <div className="flex flex-col gap-2 border-b border-border-subtle px-3 pt-2.5 pb-2.5">
               {backgroundRuns.map((run) => {
                 const headline = getRunHeadline(run, runLookups);
-                const summary = headline.summary === 'Background run'
+                const summary = headline.summary === 'Agent task' || headline.summary === 'Shell command'
                   ? `Run ${run.runId}`
                   : headline.summary;
                 const statusLabel = formatConversationBackgroundRunStatusLabel(run.status?.status);

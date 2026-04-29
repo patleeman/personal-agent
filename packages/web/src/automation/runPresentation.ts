@@ -451,11 +451,11 @@ function getRunCategory(run: DurableRunRecord): RunCategory {
 
 function sourceKindLabel(run: DurableRunRecord): string {
   if (run.manifest?.source?.type === 'scheduled-task' || run.manifest?.kind === 'scheduled-task') {
-    return 'Scheduled task';
+    return 'Automation execution';
   }
 
   if (run.manifest?.source?.type === 'web-live-session') {
-    return 'Live conversation';
+    return 'Conversation session';
   }
 
   if (run.manifest?.source?.type === 'deferred-resume') {
@@ -463,11 +463,11 @@ function sourceKindLabel(run: DurableRunRecord): string {
   }
 
   if (run.manifest?.kind === 'background-run' || run.manifest?.source?.type === 'background-run') {
-    return 'Background run';
+    return 'Agent task';
   }
 
   if (run.manifest?.kind === 'raw-shell') {
-    return 'Shell run';
+    return 'Shell command';
   }
 
   if (run.manifest?.kind === 'workflow') {
@@ -475,7 +475,7 @@ function sourceKindLabel(run: DurableRunRecord): string {
   }
 
   if (run.manifest?.kind === 'conversation') {
-    return 'Conversation run';
+    return 'Conversation session';
   }
 
   return run.manifest?.kind ?? 'Run';
@@ -486,7 +486,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const taskId = getRunTaskId(run);
     const task = taskById(lookups, taskId);
     const title = task?.title ?? excerpt(task?.prompt) ?? taskId ?? run.runId;
-    const kindLabel = task?.targetType === 'conversation' ? 'Thread automation' : 'Scheduled task';
+    const kindLabel = task?.targetType === 'conversation' ? 'Thread automation' : 'Automation execution';
     const summary = task?.title && taskId && task.title !== taskId
       ? `${kindLabel} · ${task.title}`
       : taskId ? `${kindLabel} · ${taskId}` : kindLabel;
@@ -497,8 +497,8 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const { title, conversationId } = conversationLabel(run, lookups);
     const headline = title ?? conversationId ?? run.runId;
     const summary = conversationId && headline !== conversationId
-      ? `Live conversation · ${conversationId}`
-      : 'Live conversation';
+      ? `Conversation session · ${conversationId}`
+      : 'Conversation session';
     return { title: headline, summary };
   }
 
@@ -520,11 +520,12 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const shellCommand = excerptShellCommand(getRunTargetCommand(run));
     const taskSlug = getRunTaskSlug(run);
     const headline = agentPrompt ?? shellCommand ?? taskSlug ?? run.runId;
+    const kindLabel = agentPrompt ? 'Agent task' : shellCommand ? 'Shell command' : 'Agent task';
     const summary = taskSlug && headline !== taskSlug
-      ? `Background run · ${taskSlug}`
+      ? `${kindLabel} · ${taskSlug}`
       : shellCommand && headline !== shellCommand
-        ? `Background run · ${shellCommand}`
-        : 'Background run';
+        ? `${kindLabel} · ${shellCommand}`
+        : kindLabel;
     return { title: headline, summary };
   }
 
@@ -535,7 +536,7 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
     const detail = taskSlug && taskSlug !== title ? taskSlug : undefined;
     return {
       title,
-      summary: detail ? `Shell run · ${detail}` : shellCommand ? 'Shell run' : sourceKindLabel(run),
+      summary: detail ? `Shell command · ${detail}` : shellCommand ? 'Shell command' : sourceKindLabel(run),
     };
   }
 
@@ -565,7 +566,7 @@ export function getRunConnections(run: DurableRunRecord, lookups: RunPresentatio
     if (taskId) {
       connections.push({
         key: `task:${taskId}`,
-        label: 'Scheduled task',
+        label: 'Automation',
         value: task?.title ?? taskId,
         to: `/automations/${encodeURIComponent(taskId)}`,
         detail: task?.title && task.title !== taskId

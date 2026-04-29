@@ -191,18 +191,18 @@ function formatConversationRailRunSummary(input: {
   hasOnlyUnresolvedCards: boolean;
 }): string {
   if (input.loading && input.hasOnlyUnresolvedCards) {
-    return 'Refreshing runs…';
+    return 'Refreshing background work…';
   }
 
   if (input.totalCount === 0) {
-    return 'No runs';
+    return 'No background work';
   }
 
   if (input.activeCount === input.totalCount && input.reviewCount === 0) {
     return `${input.activeCount} active`;
   }
 
-  const parts = [`${input.totalCount} run${input.totalCount === 1 ? '' : 's'}`];
+  const parts = [`${input.totalCount} execution${input.totalCount === 1 ? '' : 's'}`];
   if (input.activeCount > 0) {
     parts.push(`${input.activeCount} active`);
   }
@@ -245,7 +245,7 @@ function compactRunCardSummary(
     return null;
   }
 
-  if (/^(Live conversation|Conversation run|Background run|Wakeup|Scheduled task|Shell run|Workflow)( · .+)?$/.test(trimmed)) {
+  if (/^(Conversation session|Agent task|Shell command|Wakeup|Automation execution|Thread automation|Workflow)( · .+)?$/.test(trimmed)) {
     return null;
   }
 
@@ -434,7 +434,7 @@ function RunContextPanel({
   const showRecovery = run.recoveryAction !== 'none';
   const cancelable = canCancelRun(run);
   const showOwnerChrome = Boolean(closeLabel);
-  const outputLabel = terminalRun ? 'Terminal output' : 'Run output';
+  const outputLabel = terminalRun ? 'Terminal output' : 'Task output';
   const outputPathLabel = log?.path?.split('/').filter(Boolean).pop() ?? 'output.log';
   const hasOutput = Boolean(log?.log && log.log.length > 0);
   const emptyOutputLabel = runStreaming ? 'Waiting for output…' : '(empty)';
@@ -599,7 +599,7 @@ function RunContextPanel({
             )}
 
             <div className="space-y-2">
-              <p className="ui-section-label">Run details</p>
+              <p className="ui-section-label">Execution details</p>
               <div className="ui-detail-list">
                 {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
                 {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
@@ -607,7 +607,7 @@ function RunContextPanel({
                 {targetCwd && <RailMetadataRow label="Working dir" value={<span className="break-all font-mono text-[12px] text-primary">{targetCwd}</span>} />}
                 {targetModel && <RailMetadataRow label="Model" value={targetModel} />}
                 {targetProfile && <RailMetadataRow label="Runtime" value={targetProfile} />}
-                <RailMetadataRow label="Run" value={run.manifest?.kind ?? 'unknown kind'} />
+                <RailMetadataRow label="Internal kind" value={run.manifest?.kind ?? 'unknown kind'} />
                 <RailMetadataRow label="Source" value={run.manifest?.source?.type ?? 'unknown'} />
                 <RailMetadataRow label="Attempt" value={run.status?.activeAttempt ?? 0} />
                 {run.checkpoint?.step && <RailMetadataRow label="Checkpoint" value={run.checkpoint.step} />}
@@ -1012,7 +1012,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
   
   return (
     <div className="space-y-4">
-      <Section title="Runs">
+      <Section title="Background Work">
         <button
           type="button"
           onClick={() => setRunsExpanded((open) => !open)}
@@ -1031,7 +1031,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
         {runsExpanded && (
           <div id={`conversation-runs-${id}`} className="space-y-3 border-t border-border-subtle/70 pt-3">
             {runsLoading && visibleRunCards.every(({ record }) => !record) && (
-              <p className="text-[11px] text-dim animate-pulse">Refreshing runs…</p>
+              <p className="text-[11px] text-dim animate-pulse">Refreshing background work…</p>
             )}
             {runsError && (
               <p className="text-[11px] text-danger/80">{runsError}</p>
@@ -1102,7 +1102,7 @@ function LiveSessionContextPanel({ id }: { id: string }) {
                 ))}
               </div>
             ) : (
-              !runsLoading && !runsError && <p className="text-[11px] text-dim">No runs right now.</p>
+              !runsLoading && !runsError && <p className="text-[11px] text-dim">No background work right now.</p>
             )}
           </div>
         )}
@@ -1500,7 +1500,7 @@ function SettingsOverviewContext() {
 
       <div className="space-y-2 border-t border-border-subtle pt-4">
         <p className="ui-section-label">What lives here</p>
-        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, desktop connections, and inline runtime service panels. Use Runs for durable background work and recovery review.</p>
+        <p className="ui-card-meta">Use Settings for stable preferences, interface controls, desktop connections, and inline runtime service panels. Use Background Work for shell commands, agent tasks, and recovery review.</p>
       </div>
     </div>
   );

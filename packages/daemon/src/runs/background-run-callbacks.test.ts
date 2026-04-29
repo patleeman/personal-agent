@@ -95,7 +95,7 @@ describe('background run callbacks', () => {
       id: delivered.wakeupId,
       sessionFile,
       status: 'ready',
-      title: 'Background run wiki-raw-activity-drain completed',
+      title: 'Background task wiki-raw-activity-drain completed',
       source: {
         kind: 'background-run',
         id: run.runId,

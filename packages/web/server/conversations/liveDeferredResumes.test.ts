@@ -180,7 +180,7 @@ describe('createLiveDeferredResumeFlusher', () => {
     const ready = {
       ...createReadyResume('background-run-resume-1'),
       prompt: [
-        'Durable run run-123 has finished.',
+        'Background task run-123 has finished.',
         'taskSlug=information-architecture-eval',
         'status=completed',
         'log=/tmp/output.log',
@@ -188,7 +188,7 @@ describe('createLiveDeferredResumeFlusher', () => {
         'Recent log tail:',
         '{"total":1,"failed":1}',
       ].join('\n'),
-      title: 'Background run information-architecture-eval completed',
+      title: 'Background task information-architecture-eval completed',
       source: { kind: 'background-run', id: 'run-123' },
     };
     getLiveSessionsMock.mockReturnValue([{
@@ -221,11 +221,11 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    const visiblePrompt = 'Background run information-architecture-eval completed. Tell Patrick it finished in one short sentence. Do not include run ids, log paths, commands, metadata, or log tails unless there was a failure or he asks for details.';
+    const visiblePrompt = 'Background task information-architecture-eval completed. Tell Patrick it finished in one short sentence. Do not include run ids, log paths, commands, metadata, or log tails unless there was a failure or he asks for details.';
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conv-1',
       'referenced_context',
-      expect.stringContaining('Durable run run-123 has finished.'),
+      expect.stringContaining('Background task run-123 has finished.'),
     );
     expect(promptSessionMock).toHaveBeenCalledWith('conv-1', visiblePrompt, undefined);
     expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({

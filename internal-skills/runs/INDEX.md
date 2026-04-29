@@ -11,6 +11,14 @@ tools:
 
 Runs are durable daemon-backed background jobs started on demand.
 
+User-facing UI should avoid using "run" as the primary label. Treat **run** as the internal durable record. In the product, prefer:
+
+- **Shell command** for detached terminal commands started with `action=start`.
+- **Agent task** for detached/subagent prompts started with `action=start_agent`.
+- **Automation execution** for work created by a scheduled task.
+- **Wakeup** for conversation resume machinery.
+- **Conversation session** for the live foreground chat process.
+
 Use a run when you want detached work to start **now** or **loop** immediately.
 
 ## When to use runs

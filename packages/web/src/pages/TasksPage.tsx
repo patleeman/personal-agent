@@ -578,9 +578,9 @@ function AutomationDetailView({
             </dl>
           </DetailSection>
 
-          <DetailSection title="Runs">
+          <DetailSection title="Executions">
             {taskRuns.length === 0 ? (
-              <p className="text-[14px] text-secondary">No runs yet.</p>
+              <p className="text-[14px] text-secondary">No executions yet.</p>
             ) : (
               <div className="divide-y divide-border-subtle border-t border-border-subtle">
                 {taskRuns.slice(0, 6).map((run) => {
