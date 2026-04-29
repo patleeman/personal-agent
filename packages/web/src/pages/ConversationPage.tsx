@@ -2680,13 +2680,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         fileName,
       });
       if (!result.text.trim()) {
-        throw new Error('Dictation returned an empty transcript. Try speaking longer or check microphone input.');
+        setDictationState('idle');
+        return;
       }
 
       insertTextIntoComposer(result.text);
       showNotice('accent', 'Dictation inserted.', 1800);
     } catch (error) {
-      showNotice('danger', error instanceof Error ? error.message : String(error), 5000);
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.toLowerCase().includes('empty transcript')) {
+        showNotice('danger', message, 5000);
+      }
     } finally {
       setDictationState('idle');
     }
@@ -5883,7 +5887,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onDictationPointerDown={handleDictationPointerDown}
               onDictationPointerUp={handleDictationPointerUp}
               onDictationPointerCancel={handleDictationPointerCancel}
-              onStopDictation={() => { void stopDictation(); }}
               onSubmitComposerQuestion={() => { void submitComposerQuestionIfReady(); }}
               onSubmitComposerActionForModifiers={(altKeyHeld, parallelKeyHeld) => {
                 void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);

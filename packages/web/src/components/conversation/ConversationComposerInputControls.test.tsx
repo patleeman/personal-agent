@@ -61,7 +61,6 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onDictationPointerDown={vi.fn()}
       onDictationPointerUp={vi.fn()}
       onDictationPointerCancel={vi.fn()}
-      onStopDictation={vi.fn()}
       onSubmitComposerQuestion={vi.fn()}
       onSubmitComposerActionForModifiers={vi.fn()}
       onAbortStream={vi.fn()}

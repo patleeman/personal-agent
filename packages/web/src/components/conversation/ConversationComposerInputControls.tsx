@@ -1,4 +1,4 @@
-import { useEffect, useState, type ClipboardEventHandler, type KeyboardEventHandler, type PointerEventHandler, type RefObject } from 'react';
+import type { ClipboardEventHandler, KeyboardEventHandler, PointerEventHandler, RefObject } from 'react';
 import type { ModelInfo } from '../../shared/types';
 import { ConversationComposerActions, type ConversationComposerSubmitLabel } from './ConversationComposerActions';
 import { ConversationPreferencesRow } from './ConversationPreferencesRow';
@@ -50,7 +50,6 @@ export function ConversationComposerInputControls({
   onDictationPointerDown,
   onDictationPointerUp,
   onDictationPointerCancel,
-  onStopDictation,
   onSubmitComposerQuestion,
   onSubmitComposerActionForModifiers,
   onAbortStream,
@@ -99,7 +98,6 @@ export function ConversationComposerInputControls({
   onDictationPointerDown: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerUp: PointerEventHandler<HTMLButtonElement>;
   onDictationPointerCancel: PointerEventHandler<HTMLButtonElement>;
-  onStopDictation: () => void;
   onSubmitComposerQuestion: () => void;
   onSubmitComposerActionForModifiers: (altKeyHeld: boolean, parallelKeyHeld: boolean) => void;
   onAbortStream: () => void;
@@ -123,35 +121,27 @@ export function ConversationComposerInputControls({
 
       <div className="flex flex-col gap-0">
         <div className="px-3 pt-1">
-          {dictationState === 'recording' ? (
-            <DictationWaveform
-              samples={dictationLevelSamples}
-              startedAt={dictationStartedAt}
-              onStop={onStopDictation}
-            />
-          ) : (
-            <textarea
-              ref={textareaRef}
-              value={input}
-              onChange={(event) => { onInputChange(event.target.value, event.target); }}
-              onSelect={(event) => { onRememberComposerSelection(event.currentTarget); }}
-              onClick={(event) => { onRememberComposerSelection(event.currentTarget); }}
-              onKeyUp={(event) => { onRememberComposerSelection(event.currentTarget); }}
-              onFocus={(event) => { onRememberComposerSelection(event.currentTarget); }}
-              onKeyDown={onKeyDown}
-              onPaste={onPaste}
-              rows={1}
-              disabled={composerDisabled}
-              className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
-              placeholder={pendingAskUserQuestion
-                ? 'Answer 1-9, or type to skip…'
-                : 'Message… / commands, @ notes'}
-              title={pendingAskUserQuestion
-                ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
-                : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
-              style={{ minHeight: '44px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' }}
-            />
-          )}
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(event) => { onInputChange(event.target.value, event.target); }}
+            onSelect={(event) => { onRememberComposerSelection(event.currentTarget); }}
+            onClick={(event) => { onRememberComposerSelection(event.currentTarget); }}
+            onKeyUp={(event) => { onRememberComposerSelection(event.currentTarget); }}
+            onFocus={(event) => { onRememberComposerSelection(event.currentTarget); }}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            rows={1}
+            disabled={composerDisabled}
+            className="w-full resize-none overscroll-contain bg-transparent text-sm leading-relaxed text-primary outline-none placeholder:text-dim disabled:cursor-default disabled:text-dim"
+            placeholder={pendingAskUserQuestion
+              ? 'Answer 1-9, or type to skip…'
+              : 'Message… / commands, @ notes'}
+            title={pendingAskUserQuestion
+              ? '1-9 selects the current answer. Tab/Shift+Tab or ←/→ moves between questions. Enter selects or submits. Ctrl+C clears the composer.'
+              : 'Ctrl+C clears the composer. Ctrl/⌘+Enter starts a parallel prompt while the conversation is busy. Alt+Enter queues a follow up. ↑/↓ recalls recent prompts.'}
+            style={{ minHeight: '44px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' }}
+          />
         </div>
 
         <div className="flex flex-nowrap items-center gap-1.5 px-3 py-0.5">
@@ -221,6 +211,8 @@ export function ConversationComposerInputControls({
 
           <ConversationComposerActions
             dictationState={dictationState}
+            dictationLevelSamples={dictationLevelSamples}
+            dictationStartedAt={dictationStartedAt}
             composerDisabled={composerDisabled}
             streamIsStreaming={streamIsStreaming}
             conversationNeedsTakeover={conversationNeedsTakeover}
@@ -241,61 +233,6 @@ export function ConversationComposerInputControls({
           />
         </div>
       </div>
-    </div>
-  );
-}
-
-function formatDictationElapsed(startedAt: number | null, now: number): string {
-  if (!startedAt) {
-    return '0:00';
-  }
-
-  const totalSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = String(totalSeconds % 60).padStart(2, '0');
-  return `${minutes}:${seconds}`;
-}
-
-function DictationWaveform({
-  samples,
-  startedAt,
-  onStop,
-}: {
-  samples: number[];
-  startedAt: number | null;
-  onStop: () => void;
-}) {
-  const [now, setNow] = useState(() => performance.now());
-  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 56 }, () => 0.04);
-
-  useEffect(() => {
-    const interval = window.setInterval(() => { setNow(performance.now()); }, 250);
-    return () => { window.clearInterval(interval); };
-  }, []);
-
-  return (
-    <div className="flex min-h-[44px] items-center gap-3 text-secondary" aria-label="Recording dictation">
-      <div className="flex min-w-0 flex-1 items-center gap-[2px]" aria-hidden="true">
-        {visibleSamples.slice(-72).map((sample, index) => {
-          const height = Math.max(2, Math.round(3 + sample * 26));
-          const opacity = 0.28 + Math.min(0.72, sample * 1.4);
-          return (
-            <span
-              key={index}
-              className="w-[2px] shrink-0 rounded-full bg-current"
-              style={{ height: `${height}px`, opacity }}
-            />
-          );
-        })}
-      </div>
-      <span className="shrink-0 font-mono text-[12px] text-secondary">{formatDictationElapsed(startedAt, now)}</span>
-      <button
-        type="button"
-        onClick={onStop}
-        className="shrink-0 rounded-full bg-elevated px-3 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-elevated/80"
-      >
-        Stop dictation
-      </button>
     </div>
   );
 }

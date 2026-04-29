@@ -1,4 +1,4 @@
-import type { PointerEventHandler } from 'react';
+import { useEffect, useState, type PointerEventHandler } from 'react';
 import { cx } from '../ui';
 import { ComposerActionIcon } from './ConversationComposerChrome';
 import { formatComposerActionLabel } from '../../conversation/conversationComposerPresentation';
@@ -7,6 +7,8 @@ export type ConversationComposerSubmitLabel = 'Send' | 'Steer' | 'Follow up' | '
 
 export function ConversationComposerActions({
   dictationState,
+  dictationLevelSamples,
+  dictationStartedAt,
   composerDisabled,
   streamIsStreaming,
   conversationNeedsTakeover,
@@ -26,6 +28,8 @@ export function ConversationComposerActions({
   onAbortStream,
 }: {
   dictationState: 'idle' | 'recording' | 'transcribing';
+  dictationLevelSamples?: number[];
+  dictationStartedAt?: number | null;
   composerDisabled: boolean;
   streamIsStreaming: boolean;
   conversationNeedsTakeover: boolean;
@@ -46,6 +50,9 @@ export function ConversationComposerActions({
 }) {
   return (
     <div className="ml-auto flex shrink-0 items-center gap-2">
+      {dictationState === 'recording' ? (
+        <DictationWaveform samples={dictationLevelSamples ?? []} startedAt={dictationStartedAt ?? null} />
+      ) : null}
       <button
         type="button"
         onPointerDown={onDictationPointerDown}
@@ -191,6 +198,46 @@ export function ConversationComposerActions({
           </svg>
         </button>
       )}
+    </div>
+  );
+}
+
+function formatDictationElapsed(startedAt: number | null, now: number): string {
+  if (!startedAt) {
+    return '0:00';
+  }
+
+  const totalSeconds = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return `${minutes}:${seconds}`;
+}
+
+function DictationWaveform({ samples, startedAt }: { samples: number[]; startedAt: number | null }) {
+  const [now, setNow] = useState(() => performance.now());
+  const visibleSamples = samples.length > 0 ? samples : Array.from({ length: 44 }, () => 0.04);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => { setNow(performance.now()); }, 250);
+    return () => { window.clearInterval(interval); };
+  }, []);
+
+  return (
+    <div className="flex min-w-[9rem] max-w-[16rem] items-center gap-2 text-secondary" aria-label="Recording dictation">
+      <div className="flex min-w-0 flex-1 items-center justify-end gap-[2px]" aria-hidden="true">
+        {visibleSamples.slice(-52).map((sample, index) => {
+          const height = Math.max(2, Math.round(3 + sample * 22));
+          const opacity = 0.28 + Math.min(0.72, sample * 1.4);
+          return (
+            <span
+              key={index}
+              className="w-[2px] shrink-0 rounded-full bg-current"
+              style={{ height: `${height}px`, opacity }}
+            />
+          );
+        })}
+      </div>
+      <span className="shrink-0 font-mono text-[12px] text-secondary">{formatDictationElapsed(startedAt, now)}</span>
     </div>
   );
 }
