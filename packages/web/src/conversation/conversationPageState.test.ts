@@ -284,6 +284,18 @@ describe('conversation page state helpers', () => {
       },
       status: { status: 'running' },
     }])).toBe('running · task-a');
+    expect(buildConversationBackgroundRunIndicatorText([{
+      runId: 'run-shell',
+      conversationId: 'conv-1',
+      manifest: {
+        kind: 'raw-shell',
+        spec: {
+          target: { type: 'shell', command: 'npm test' },
+          metadata: { taskSlug: 'test-run' },
+        },
+      },
+      status: { status: 'running' },
+    }])).toBe('running · npm test');
   });
 
   it('resolves connected active background-run state for a conversation', () => {

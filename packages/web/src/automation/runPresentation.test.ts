@@ -524,8 +524,8 @@ describe('runPresentation', () => {
     });
 
     expect(getRunHeadline(run)).toEqual({
-      title: 'ui-preview-check',
-      summary: 'Shell run · printf ok',
+      title: 'printf ok',
+      summary: 'Shell run · ui-preview-check',
     });
   });
 

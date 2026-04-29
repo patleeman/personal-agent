@@ -531,8 +531,8 @@ export function getRunHeadline(run: DurableRunRecord, lookups: RunPresentationLo
   if (run.manifest?.kind === 'raw-shell') {
     const shellCommand = excerptShellCommand(getRunTargetCommand(run));
     const taskSlug = getRunTaskSlug(run);
-    const title = taskSlug ?? shellCommand ?? run.runId;
-    const detail = title === taskSlug ? shellCommand : taskSlug;
+    const title = shellCommand ?? taskSlug ?? run.runId;
+    const detail = taskSlug && taskSlug !== title ? taskSlug : undefined;
     return {
       title,
       summary: detail ? `Shell run · ${detail}` : shellCommand ? 'Shell run' : sourceKindLabel(run),
