@@ -1495,6 +1495,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [drawingsBusy, setDrawingsBusy] = useState(false);
   const [drawingsError, setDrawingsError] = useState<string | null>(null);
   const [dictationState, setDictationState] = useState<'idle' | 'recording' | 'transcribing'>('idle');
+  const [dictationLevelSamples, setDictationLevelSamples] = useState<number[]>([]);
+  const [dictationStartedAt, setDictationStartedAt] = useState<number | null>(null);
   const { composerAltHeld, composerParallelHeld } = useComposerModifierKeys();
   const [dragOver, setDragOver] = useState(false);
   const composerHistoryScopeId = draft ? null : id ?? null;
@@ -2663,6 +2665,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
 
     dictationCaptureRef.current = null;
+    setDictationStartedAt(null);
     setDictationState('transcribing');
     try {
       const { audio, durationMs, mimeType, fileName } = await capture.stop();
@@ -2701,10 +2704,17 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         return;
       }
 
-      const capture = await startComposerDictationCapture();
+      setDictationLevelSamples([]);
+      setDictationStartedAt(performance.now());
+      const capture = await startComposerDictationCapture({
+        onLevel: (level) => {
+          setDictationLevelSamples((samples) => [...samples.slice(-71), level]);
+        },
+      });
       dictationCaptureRef.current = capture;
       setDictationState('recording');
     } catch (error) {
+      setDictationStartedAt(null);
       setDictationState('idle');
       showNotice('danger', error instanceof Error ? error.message : String(error), 5000);
     }
@@ -5841,6 +5851,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               conversationAutoModeEnabled={conversationAutoModeEnabled}
               conversationAutoModeBusy={conversationAutoModeBusy}
               dictationState={dictationState}
+              dictationLevelSamples={dictationLevelSamples}
+              dictationStartedAt={dictationStartedAt}
               conversationNeedsTakeover={conversationNeedsTakeover}
               composerHasContent={composerHasContent}
               composerShowsQuestionSubmit={composerShowsQuestionSubmit}
@@ -5870,6 +5882,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               onDictationPointerDown={handleDictationPointerDown}
               onDictationPointerUp={handleDictationPointerUp}
               onDictationPointerCancel={handleDictationPointerCancel}
+              onStopDictation={() => { void stopDictation(); }}
               onSubmitComposerQuestion={() => { void submitComposerQuestionIfReady(); }}
               onSubmitComposerActionForModifiers={(altKeyHeld, parallelKeyHeld) => {
                 void submitComposerActionForModifiers(altKeyHeld, parallelKeyHeld);

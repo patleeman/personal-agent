@@ -35,6 +35,8 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       conversationAutoModeEnabled={false}
       conversationAutoModeBusy={false}
       dictationState="idle"
+      dictationLevelSamples={[]}
+      dictationStartedAt={null}
       conversationNeedsTakeover={false}
       composerHasContent={false}
       composerShowsQuestionSubmit={false}
@@ -59,6 +61,7 @@ function renderControls(overrides: Partial<React.ComponentProps<typeof Conversat
       onDictationPointerDown={vi.fn()}
       onDictationPointerUp={vi.fn()}
       onDictationPointerCancel={vi.fn()}
+      onStopDictation={vi.fn()}
       onSubmitComposerQuestion={vi.fn()}
       onSubmitComposerActionForModifiers={vi.fn()}
       onAbortStream={vi.fn()}
@@ -92,5 +95,16 @@ describe('ConversationComposerInputControls', () => {
     expect(html).toContain('Capture screenshot');
     expect(html).toContain('Answer 1-9, or type to skip…');
     expect(html).toContain('Submit answers');
+  });
+
+  it('renders the dictation waveform while recording', () => {
+    const html = renderControls({
+      dictationState: 'recording',
+      dictationStartedAt: 1000,
+      dictationLevelSamples: [0.1, 0.8, 0.2],
+    });
+
+    expect(html).toContain('Recording dictation');
+    expect(html).toContain('Stop dictation');
   });
 });
