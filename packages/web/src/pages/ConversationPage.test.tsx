@@ -20,6 +20,7 @@ import {
   resolveConversationExecutionOverride,
 } from './ConversationPage.js';
 import { constrainPromptImageDimensions } from '../conversation/promptAttachments.js';
+import { AppDataContext } from '../app/contexts.js';
 
 (globalThis as typeof globalThis & { React?: typeof React }).React = React;
 
@@ -645,5 +646,66 @@ describe('ConversationPage', () => {
     expect(html).not.toContain('aria-label="Conversation context"');
     expect(html).not.toContain('Show right sidebar');
     expect(html).not.toContain('Hide right sidebar');
+  });
+
+  it('shows active background runs above the composer even without other shelf content', () => {
+    const runId = 'run-ui-preview-check-2026-04-26T00-00-01-000Z-feedface';
+    const html = renderToString(
+      <AppDataContext.Provider value={{
+        projects: null,
+        sessions: null,
+        tasks: null,
+        runs: {
+          scannedAt: '2026-04-26T00:00:02.000Z',
+          runsRoot: '/tmp/runs',
+          summary: { total: 1, recoveryActions: {}, statuses: { running: 1 } },
+          runs: [{
+            runId,
+            paths: {
+              root: `/tmp/runs/${runId}`,
+              manifestPath: `/tmp/runs/${runId}/manifest.json`,
+              statusPath: `/tmp/runs/${runId}/status.json`,
+              checkpointPath: `/tmp/runs/${runId}/checkpoint.json`,
+              eventsPath: `/tmp/runs/${runId}/events.jsonl`,
+              outputLogPath: `/tmp/runs/${runId}/output.log`,
+              resultPath: `/tmp/runs/${runId}/result.json`,
+            },
+            manifest: {
+              version: 1,
+              id: runId,
+              kind: 'background-run',
+              resumePolicy: 'continue',
+              createdAt: '2026-04-26T00:00:01.000Z',
+              spec: { metadata: { taskSlug: 'ui-preview-check' } },
+              source: { type: 'tool', id: 'test-session' },
+            },
+            status: {
+              version: 1,
+              runId,
+              status: 'running',
+              createdAt: '2026-04-26T00:00:01.000Z',
+              updatedAt: '2026-04-26T00:00:02.000Z',
+              activeAttempt: 1,
+              startedAt: '2026-04-26T00:00:01.000Z',
+            },
+            problems: [],
+            recoveryAction: 'none',
+          }],
+        },
+        setProjects: () => {},
+        setSessions: () => {},
+        setTasks: () => {},
+        setRuns: () => {},
+      }}>
+        <MemoryRouter initialEntries={['/conversations/test-session']}>
+          <Routes>
+            <Route path="/conversations/:id" element={<ConversationPage />} />
+          </Routes>
+        </MemoryRouter>
+      </AppDataContext.Provider>,
+    );
+
+    expect(html).toContain('Background Work');
+    expect(html).toContain('running · ui-preview-check');
   });
 });

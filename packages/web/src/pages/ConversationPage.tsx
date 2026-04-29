@@ -5343,6 +5343,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || draftMentionItems.length > 0
     || pendingQueue.length > 0
     || parallelJobs.length > 0
+    || activeConversationBackgroundRuns.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
   const hasComposerAttachmentShelfContent = attachments.length > 0
