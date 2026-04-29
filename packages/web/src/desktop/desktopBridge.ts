@@ -55,6 +55,7 @@ export const DESKTOP_CONVERSATION_STATE_EVENT = 'personal-agent-desktop-conversa
 export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 export const DESKTOP_REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
+export const DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
 
 export type DesktopConversationContextMenuAction =
   | 'pin'
@@ -137,6 +138,23 @@ export interface DesktopWorkbenchBrowserState {
 
 export interface DesktopWorkbenchBrowserSnapshot extends DesktopWorkbenchBrowserState {
   text: string;
+}
+
+export interface DesktopWorkbenchBrowserCommentTarget {
+  url: string;
+  title: string;
+  selector?: string;
+  xpath?: string;
+  role?: string;
+  accessibleName?: string;
+  testId?: string;
+  textSnippet?: string;
+  surroundingText?: string;
+  elementHtmlPreview?: string;
+  pageTextQuote?: string;
+  viewportRect: { x: number; y: number; width: number; height: number };
+  scroll: { x: number; y: number };
+  devicePixelRatio: number;
 }
 
 export interface PersonalAgentDesktopBridge {

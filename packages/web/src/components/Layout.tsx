@@ -12,7 +12,7 @@ import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
-import { getDesktopBridge, isDesktopShell, readDesktopEnvironment, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
+import { getDesktopBridge, isDesktopShell, readDesktopEnvironment, DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
@@ -33,6 +33,7 @@ const WorkspaceExplorer = lazyRouteWithRecovery('layout-workspace-explorer', () 
 const WorkspaceFileDocument = lazyRouteWithRecovery('layout-workspace-file-document', () => import('./workspace/WorkspaceExplorer').then((module) => ({ default: module.WorkspaceFileDocument })));
 const WORKSPACE_DRAFT_PROMPT_EVENT = 'pa:workspace-draft-prompt';
 const WORKSPACE_REPLY_SELECTION_EVENT = 'pa:workspace-reply-selection';
+const WORKBENCH_BROWSER_COMMENT_ADDED_EVENT = 'pa:workbench-browser-comment-added';
 
 const WORKBENCH_DOCUMENT_WIDTH_STORAGE_KEY = 'pa:workbench-document-width';
 const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
@@ -548,6 +549,7 @@ function WorkbenchBrowserTab() {
   const [actionsDraft, setActionsDraft] = useState('[\n  { "type": "wait", "ms": 500 }\n]');
   const [snapshotText, setSnapshotText] = useState('');
   const [status, setStatus] = useState('');
+  const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
   const bridge = getDesktopBridge();
 
   useEffect(() => {
@@ -598,6 +600,19 @@ function WorkbenchBrowserTab() {
       void bridge?.setWorkbenchBrowserBounds({ visible: false }).catch(() => undefined);
     };
   }, [bridge, syncBounds]);
+
+  useEffect(() => {
+    function handleBrowserCommentTarget(event: Event) {
+      const target = (event as CustomEvent<DesktopWorkbenchBrowserCommentTarget>).detail;
+      if (!target || typeof target.url !== 'string') {
+        return;
+      }
+      setCommentDraft({ target, text: '' });
+    }
+
+    window.addEventListener(DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, handleBrowserCommentTarget);
+    return () => window.removeEventListener(DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, handleBrowserCommentTarget);
+  }, []);
 
   const refreshState = useCallback(() => {
     if (!bridge) {
@@ -668,6 +683,25 @@ function WorkbenchBrowserTab() {
     }
   }
 
+  function saveCommentDraft() {
+    const text = commentDraft?.text.trim();
+    if (!commentDraft || !text) {
+      setCommentDraft(null);
+      return;
+    }
+
+    window.dispatchEvent(new CustomEvent(WORKBENCH_BROWSER_COMMENT_ADDED_EVENT, {
+      detail: {
+        id: `browser-comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        createdAt: new Date().toISOString(),
+        target: commentDraft.target,
+        comment: text,
+      },
+    }));
+    setCommentDraft(null);
+    setStatus('Browser comment added to composer.');
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <form
@@ -693,6 +727,38 @@ function WorkbenchBrowserTab() {
         {!bridge ? (
           <div className="flex h-full items-center justify-center px-4 text-center text-[12px] leading-5 text-dim">
             Browser embedding is only available in the Electron desktop app.
+          </div>
+        ) : null}
+        {commentDraft ? (
+          <div
+            className="absolute z-20 w-[min(18rem,calc(100%-1rem))] rounded-xl border border-accent/30 bg-surface/95 p-2 shadow-2xl backdrop-blur"
+            style={{
+              left: Math.max(8, Math.min(commentDraft.target.viewportRect.x, (browserHostRef.current?.clientWidth ?? 320) - 296)),
+              top: Math.max(8, Math.min(commentDraft.target.viewportRect.y + Math.min(commentDraft.target.viewportRect.height, 28), (browserHostRef.current?.clientHeight ?? 320) - 156)),
+            }}
+          >
+            <p className="truncate text-[11px] font-medium text-primary">Comment on {commentDraft.target.role ?? 'element'}{commentDraft.target.accessibleName ? `: ${commentDraft.target.accessibleName}` : ''}</p>
+            <textarea
+              className="mt-2 min-h-[72px] w-full resize-none rounded-md border border-border-subtle bg-base px-2 py-1.5 text-[12px] leading-5 text-primary outline-none focus:border-accent/60"
+              value={commentDraft.text}
+              onChange={(event) => setCommentDraft((current) => current ? { ...current, text: event.target.value } : null)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setCommentDraft(null);
+                }
+                if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
+                  event.preventDefault();
+                  saveCommentDraft();
+                }
+              }}
+              autoFocus
+              placeholder="What should the agent know about this?"
+            />
+            <div className="mt-2 flex justify-end gap-1.5">
+              <button type="button" className="ui-toolbar-button px-2 py-1 text-[11px]" onClick={() => setCommentDraft(null)}>Cancel</button>
+              <button type="button" className="ui-action-button px-2 py-1 text-[11px]" onClick={saveCommentDraft}>Add comment</button>
+            </div>
           </div>
         ) : null}
       </div>

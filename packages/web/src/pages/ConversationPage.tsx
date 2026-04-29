@@ -34,7 +34,7 @@ import { useConversationEventVersion } from '../hooks/useConversationEventVersio
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
-import { getDesktopBridge, readDesktopConnections } from '../desktop/desktopBridge';
+import { getDesktopBridge, readDesktopConnections, type DesktopWorkbenchBrowserCommentTarget } from '../desktop/desktopBridge';
 import {
   buildContinueInExecutionTargetOptions,
   findSelectedExecutionTargetHost,
@@ -290,6 +290,57 @@ const MAX_AUTOMATIC_HISTORICAL_TAIL_BLOCKS = 360;
 const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const EMPTY_ASK_USER_QUESTION_ANSWERS: AskUserQuestionAnswers = {};
+const WORKBENCH_BROWSER_COMMENT_ADDED_EVENT = 'pa:workbench-browser-comment-added';
+
+interface PendingBrowserComment {
+  id: string;
+  createdAt: string;
+  target: DesktopWorkbenchBrowserCommentTarget;
+  comment: string;
+}
+
+function isPendingBrowserComment(value: unknown): value is PendingBrowserComment {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const comment = value as Partial<PendingBrowserComment>;
+  return typeof comment.id === 'string'
+    && typeof comment.createdAt === 'string'
+    && typeof comment.comment === 'string'
+    && Boolean(comment.target)
+    && typeof comment.target?.url === 'string';
+}
+
+function formatBrowserCommentTargetLabel(target: DesktopWorkbenchBrowserCommentTarget): string {
+  const role = target.role?.trim() || 'element';
+  const name = target.accessibleName?.trim() || target.textSnippet?.trim() || target.selector?.trim() || target.url;
+  return `${role}${name ? `: ${name}` : ''}`;
+}
+
+function formatBrowserCommentsContext(comments: PendingBrowserComment[]): string {
+  const lines = ['Browser comments from the workbench:'];
+  comments.forEach((entry, index) => {
+    const target = entry.target;
+    lines.push('', `Comment ${index + 1}:`, `URL: ${target.url}`, `Page title: ${target.title || '(untitled)'}`);
+    lines.push(`Target: ${formatBrowserCommentTargetLabel(target)}`);
+    if (target.selector) lines.push(`Selector: ${target.selector}`);
+    if (target.xpath) lines.push(`XPath: ${target.xpath}`);
+    if (target.testId) lines.push(`Test id: ${target.testId}`);
+    if (target.textSnippet) lines.push(`Element text: ${target.textSnippet}`);
+    if (target.surroundingText) lines.push(`Nearby text: ${target.surroundingText}`);
+    if (target.elementHtmlPreview) lines.push(`Element HTML preview: ${target.elementHtmlPreview}`);
+    lines.push(`Viewport rect: x=${target.viewportRect.x}, y=${target.viewportRect.y}, width=${target.viewportRect.width}, height=${target.viewportRect.height}`);
+    lines.push(`User comment: ${entry.comment}`);
+  });
+  return lines.join('\n');
+}
+
+function buildBrowserCommentContextMessages(comments: PendingBrowserComment[]): Array<{ customType: string; content: string }> | undefined {
+  if (comments.length === 0) {
+    return undefined;
+  }
+  return [{ customType: 'browser-comments', content: formatBrowserCommentsContext(comments) }];
+}
 
 function buildComposerQuestionAnswersStorageKey(conversationId: string | undefined, pendingQuestionKey: string): string | null {
   if (!conversationId || !pendingQuestionKey) {
@@ -1487,6 +1538,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
+  const [pendingBrowserComments, setPendingBrowserComments] = useState<PendingBrowserComment[]>([]);
   const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
   const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
   const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachmentSummary[]>([]);
@@ -1506,6 +1558,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const dictationCaptureRef = useRef<ComposerDictationCapture | null>(null);
   const dictationPointerRef = useRef<{ pointerId: number; startedAt: number; startedExistingRecording: boolean } | null>(null);
   const composerAttachmentScopeKey = draft ? 'draft' : (id ? `conversation:${id}` : null);
+
+  useEffect(() => {
+    function handleBrowserCommentAdded(event: Event) {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (!isPendingBrowserComment(detail)) {
+        return;
+      }
+      setPendingBrowserComments((current) => [...current, detail]);
+      showNotice('accent', 'Browser comment attached to composer.', 2500);
+    }
+
+    window.addEventListener(WORKBENCH_BROWSER_COMMENT_ADDED_EVENT, handleBrowserCommentAdded);
+    return () => window.removeEventListener(WORKBENCH_BROWSER_COMMENT_ADDED_EVENT, handleBrowserCommentAdded);
+  }, [showNotice]);
   const composerAttachmentsHydratedRef = useRef(false);
   const lastComposerAttachmentScopeKeyRef = useRef<string | null>(composerAttachmentScopeKey);
 
@@ -4585,12 +4651,14 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     const pendingImageAttachments = attachments;
     const pendingDrawingAttachments = drawingAttachments;
     const pendingAttachedContextDocs = attachedContextDocs;
-    if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
+    const pendingBrowserCommentsSnapshot = pendingBrowserComments;
+    const browserCommentContextMessages = buildBrowserCommentContextMessages(pendingBrowserCommentsSnapshot);
+    if (!text && pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0 && pendingBrowserCommentsSnapshot.length === 0) {
       return;
     }
 
     let slashTextToSend: string | null = null;
-    if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0) {
+    if (pendingImageAttachments.length === 0 && pendingDrawingAttachments.length === 0 && pendingBrowserCommentsSnapshot.length === 0) {
       const wholeLineBash = parseWholeLineBashCommand(text);
       if (wholeLineBash) {
         await runWholeLineBashCommand(inputSnapshot, wholeLineBash);
@@ -4641,6 +4709,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setInput('');
       setAttachments([]);
       setDrawingAttachments([]);
+      setPendingBrowserComments([]);
       setDrawingsError(null);
 
       const requestedBehavior = behavior ?? (isLiveSession ? defaultComposerBehavior : undefined);
@@ -4652,6 +4721,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         setInput(inputSnapshot);
         setAttachments(pendingImageAttachments);
         setDrawingAttachments(pendingDrawingAttachments);
+        setPendingBrowserComments(pendingBrowserCommentsSnapshot);
         return;
       }
 
@@ -4714,6 +4784,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               behavior: queuedBehavior,
               images: promptImages,
               attachmentRefs,
+              contextMessages: browserCommentContextMessages,
               relatedConversationIds: selectedRelatedThreadIdsSnapshot,
             };
 
@@ -4775,6 +4846,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             }
             showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
             await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+            setPendingBrowserComments(pendingBrowserCommentsSnapshot);
           } finally {
             setPreparingRelatedThreadContext(false);
             setPendingAssistantStatusLabel(null);
@@ -4788,6 +4860,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           behavior: queuedBehavior,
           images: promptImages,
           attachmentRefs: [],
+          contextMessages: browserCommentContextMessages,
         });
         setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
           isLiveSession: false,
@@ -4819,6 +4892,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             behavior: queuedBehavior,
             images: promptImages,
             attachmentRefs,
+            contextMessages: browserCommentContextMessages,
           };
 
           rememberComposerInput(inputSnapshot, newId);
@@ -4831,6 +4905,8 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             initialPrompt.behavior,
             initialPrompt.images,
             initialPrompt.attachmentRefs,
+            undefined,
+            initialPrompt.contextMessages,
           );
           for (const warning of sendResult.relatedConversationPointerWarnings ?? []) {
             showNotice('danger', warning, 5000);
@@ -4877,6 +4953,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setDraftPendingPrompt(null);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
           await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+          setPendingBrowserComments(pendingBrowserCommentsSnapshot);
         }
         return;
       }
@@ -4888,6 +4965,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       if (!isLiveSession && !visibleSessionDetail) {
         showNotice('danger', 'Conversation is still loading. Try sending again in a moment.', 4000);
         await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+        setPendingBrowserComments(pendingBrowserCommentsSnapshot);
         return;
       }
 
@@ -4901,7 +4979,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }));
 
         try {
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
         } catch (error) {
           if (!isConversationSessionNotLiveError(error)) {
             throw error;
@@ -4918,7 +4996,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Resuming…');
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
         }
 
         await refetchConversationAttachments();
@@ -4942,7 +5020,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Working…');
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
           await refetchConversationAttachments();
           window.setTimeout(() => {
             scrollToBottom();
@@ -4951,6 +5029,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           console.error('Auto-resume failed:', error);
           setPendingAssistantStatusLabel(null);
           await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+          setPendingBrowserComments(pendingBrowserCommentsSnapshot);
           showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
         }
       }
@@ -4958,6 +5037,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       console.error('Failed to prepare attachments:', error);
       setPendingAssistantStatusLabel(null);
       await restoreComposerDraft(inputSnapshot, pendingImageAttachments, pendingDrawingAttachments);
+      setPendingBrowserComments(pendingBrowserCommentsSnapshot);
       showNotice('danger', error instanceof Error ? error.message : String(error), 4000);
     }
   }
@@ -5340,7 +5420,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     }
   }
 
-  const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0;
+  const composerHasContent = input.trim().length > 0 || attachments.length > 0 || drawingAttachments.length > 0 || pendingBrowserComments.length > 0;
   const composerShowsQuestionSubmit = shouldShowQuestionSubmitAsPrimaryComposerAction(
     Boolean(pendingAskUserQuestion),
     composerHasContent,
@@ -5364,6 +5444,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     || parallelJobs.length > 0
     || activeConversationBackgroundRuns.length > 0
     || (!draft && orderedDeferredResumes.length > 0)
+    || pendingBrowserComments.length > 0
     || Boolean(pendingAskUserQuestion && composerActiveQuestion);
   const hasComposerAttachmentShelfContent = attachments.length > 0
     || drawingAttachments.length > 0
@@ -5794,6 +5875,31 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             {hasComposerShelfContent && (
               <div className="max-h-[min(34vh,20rem)] overflow-y-auto overscroll-contain">
+                {pendingBrowserComments.length > 0 ? (
+                  <div className="border-b border-border-subtle/60 px-3 py-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-dim">Browser comments</p>
+                      <button type="button" className="ui-toolbar-button px-2 py-1 text-[11px]" onClick={() => setPendingBrowserComments([])}>Clear</button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {pendingBrowserComments.map((entry) => (
+                        <div key={entry.id} className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border-subtle bg-surface px-2 py-1 text-[11px] text-secondary">
+                          <span className="max-w-[26rem] truncate text-primary">{formatBrowserCommentTargetLabel(entry.target)}</span>
+                          <span className="max-w-[20rem] truncate">{entry.comment}</span>
+                          <button
+                            type="button"
+                            className="ml-1 text-dim hover:text-primary"
+                            aria-label="Remove browser comment"
+                            onClick={() => setPendingBrowserComments((current) => current.filter((comment) => comment.id !== entry.id))}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 <ConversationContextShelf
                   attachedContextDocs={attachedContextDocs}
                   draftMentionItems={draftMentionItems}

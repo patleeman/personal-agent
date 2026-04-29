@@ -15,6 +15,8 @@ const REMOTE_OPERATION_CHANNEL = `${CHANNEL_PREFIX}:remote-operation`;
 const REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 const PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
+const WORKBENCH_BROWSER_COMMENT_CHANNEL = `${CHANNEL_PREFIX}:workbench-browser-comment`;
+const WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -313,6 +315,16 @@ const desktopBridge = {
   unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
+  setWorkbenchBrowserBounds: (input: { visible: boolean; bounds?: { x: number; y: number; width: number; height: number } }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, input),
+  getWorkbenchBrowserState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-state`),
+  navigateWorkbenchBrowser: (input: { url: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-navigate`, input),
+  goBackWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-back`),
+  goForwardWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-forward`),
+  reloadWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-reload`),
+  stopWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-stop`),
+  snapshotWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-snapshot`),
+  runWorkbenchBrowserActions: (input: { actions: unknown[] }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-run-actions`, input),
 };
 
 if (domGlobals.document?.documentElement) {
@@ -357,6 +369,10 @@ ipcRenderer.on(REMOTE_OPERATION_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(PROVIDER_OAUTH_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(PROVIDER_OAUTH_EVENT, payload);
+});
+
+ipcRenderer.on(WORKBENCH_BROWSER_COMMENT_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(WORKBENCH_BROWSER_COMMENT_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

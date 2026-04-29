@@ -1,9 +1,10 @@
-import { BrowserWindow, WebContentsView, shell, type WebContents } from 'electron';
+import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'electron';
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com/search?q=personal%20agent';
 const MAX_SNAPSHOT_TEXT_LENGTH = 30_000;
 const MAX_ACTIONS_PER_BATCH = 25;
 const MAX_ACTION_TEXT_LENGTH = 5_000;
+const BROWSER_COMMENT_CHANNEL = 'personal-agent-desktop:workbench-browser-comment';
 
 export interface WorkbenchBrowserBounds {
   x: number;
@@ -22,6 +23,23 @@ export interface WorkbenchBrowserState {
 
 export interface WorkbenchBrowserSnapshot extends WorkbenchBrowserState {
   text: string;
+}
+
+export interface WorkbenchBrowserCommentTarget {
+  url: string;
+  title: string;
+  selector?: string;
+  xpath?: string;
+  role?: string;
+  accessibleName?: string;
+  testId?: string;
+  textSnippet?: string;
+  surroundingText?: string;
+  elementHtmlPreview?: string;
+  pageTextQuote?: string;
+  viewportRect: { x: number; y: number; width: number; height: number };
+  scroll: { x: number; y: number };
+  devicePixelRatio: number;
 }
 
 export type WorkbenchBrowserAction =
@@ -158,7 +176,7 @@ async function wait(ms: number): Promise<void> {
 }
 
 export class WorkbenchBrowserViewController {
-  private views = new Map<number, { ownerWindow: BrowserWindow; view: WebContentsView }>();
+  private views = new Map<number, { ownerWindow: BrowserWindow; owner: WebContents; view: WebContentsView }>();
 
   getState(ownerWebContentsId: number): WorkbenchBrowserState | null {
     const view = this.views.get(ownerWebContentsId);
@@ -301,7 +319,7 @@ export class WorkbenchBrowserViewController {
         sandbox: true,
       },
     });
-    this.views.set(ownerWebContentsId, { ownerWindow, view });
+    this.views.set(ownerWebContentsId, { ownerWindow, owner: ownerWindow.webContents, view });
     ownerWindow.contentView.addChildView(view);
     view.webContents.setWindowOpenHandler(({ url }) => {
       let target: string;
@@ -314,8 +332,149 @@ export class WorkbenchBrowserViewController {
       void view.webContents.loadURL(target).catch(() => shell.openExternal(target));
       return { action: 'deny' };
     });
+    view.webContents.on('context-menu', (_event, params) => {
+      this.showContextMenu(ownerWebContentsId, params.x, params.y);
+    });
     void view.webContents.loadURL(DEFAULT_BROWSER_URL).catch(() => undefined);
     return view;
+  }
+
+  private showContextMenu(ownerWebContentsId: number, x: number, y: number): void {
+    const entry = this.views.get(ownerWebContentsId);
+    if (!entry || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) {
+      return;
+    }
+
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'Comment on this',
+        click: () => {
+          void this.captureCommentTarget(entry.view, x, y)
+            .then((target) => {
+              if (!entry.owner.isDestroyed()) {
+                entry.owner.send(BROWSER_COMMENT_CHANNEL, target);
+              }
+            })
+            .catch(() => undefined);
+        },
+      },
+      { type: 'separator' },
+      { role: 'copy', label: 'Copy' },
+      { role: 'selectAll', label: 'Select All' },
+    ]);
+    menu.popup({ window: entry.ownerWindow });
+  }
+
+  private async captureCommentTarget(view: WebContentsView, x: number, y: number): Promise<WorkbenchBrowserCommentTarget> {
+    const script = `(() => {
+      const max = (value, length) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
+      const cssEscape = (value) => {
+        if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');
+      };
+      const elementRole = (element) => {
+        const explicit = element.getAttribute('role');
+        if (explicit) return explicit;
+        const tag = element.tagName.toLowerCase();
+        if (tag === 'button') return 'button';
+        if (tag === 'a' && element.hasAttribute('href')) return 'link';
+        if (tag === 'input') return element.type === 'checkbox' ? 'checkbox' : element.type === 'radio' ? 'radio' : 'textbox';
+        if (tag === 'textarea') return 'textbox';
+        if (tag === 'select') return 'combobox';
+        if (/^h[1-6]$/.test(tag)) return 'heading';
+        return tag;
+      };
+      const accessibleName = (element) => {
+        const aria = element.getAttribute('aria-label');
+        if (aria) return max(aria, 240);
+        const labelledBy = element.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const text = labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ');
+          if (text.trim()) return max(text, 240);
+        }
+        if (element.id) {
+          const label = document.querySelector('label[for="' + cssEscape(element.id) + '"]');
+          if (label?.textContent?.trim()) return max(label.textContent, 240);
+        }
+        if (element.alt) return max(element.alt, 240);
+        if (element.title) return max(element.title, 240);
+        return max(element.innerText || element.textContent || element.value || '', 240);
+      };
+      const unique = (selector) => {
+        try { return document.querySelectorAll(selector).length === 1; } catch { return false; }
+      };
+      const selectorFor = (element) => {
+        const testIdAttribute = element.hasAttribute('data-testid') ? 'data-testid' : element.hasAttribute('data-test') ? 'data-test' : element.hasAttribute('data-qa') ? 'data-qa' : '';
+        const testId = testIdAttribute ? element.getAttribute(testIdAttribute) : '';
+        if (testIdAttribute && testId) {
+          const selector = '[' + testIdAttribute + '="' + cssEscape(testId) + '"]';
+          if (unique(selector)) return selector;
+        }
+        if (element.id) {
+          const selector = '#' + cssEscape(element.id);
+          if (unique(selector)) return selector;
+        }
+        const role = elementRole(element);
+        const name = accessibleName(element);
+        if (role && name && element.getAttribute('aria-label')) {
+          const roleSelector = '[role="' + cssEscape(role) + '"][aria-label="' + cssEscape(name) + '"]';
+          if (unique(roleSelector)) return roleSelector;
+        }
+        const parts = [];
+        let current = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 6) {
+          const tag = current.tagName.toLowerCase();
+          let part = tag;
+          if (current.classList.length > 0) {
+            part += '.' + Array.from(current.classList).slice(0, 2).map(cssEscape).join('.');
+          }
+          const parent = current.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children).filter((child) => child.tagName === current.tagName);
+            if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
+          }
+          parts.unshift(part);
+          const selector = parts.join(' > ');
+          if (unique(selector)) return selector;
+          current = parent;
+        }
+        return parts.join(' > ');
+      };
+      const xpathFor = (element) => {
+        const parts = [];
+        let current = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+          const tag = current.tagName.toLowerCase();
+          const parent = current.parentElement;
+          const index = parent ? Array.from(parent.children).filter((child) => child.tagName === current.tagName).indexOf(current) + 1 : 1;
+          parts.unshift(tag + '[' + index + ']');
+          current = parent;
+        }
+        return '/' + parts.join('/');
+      };
+      const element = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)}) || document.body;
+      const rect = element.getBoundingClientRect();
+      const parentText = element.parentElement?.innerText || document.body?.innerText || '';
+      const target = {
+        url: location.href,
+        title: document.title || '',
+        selector: selectorFor(element),
+        xpath: xpathFor(element),
+        role: elementRole(element),
+        accessibleName: accessibleName(element),
+        testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || undefined,
+        textSnippet: max(element.innerText || element.textContent || element.value || '', 500),
+        surroundingText: max(parentText, 1000),
+        elementHtmlPreview: max(element.outerHTML, 1200),
+        pageTextQuote: max(document.body?.innerText || '', 1500),
+        viewportRect: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+        scroll: { x: Math.round(window.scrollX), y: Math.round(window.scrollY) },
+        devicePixelRatio: window.devicePixelRatio || 1,
+      };
+      return JSON.parse(JSON.stringify(target));
+    })()`;
+    const target = await view.webContents.executeJavaScript(script, true);
+    return target as WorkbenchBrowserCommentTarget;
   }
 
   private async runAction(view: WebContentsView, action: WorkbenchBrowserAction): Promise<void> {

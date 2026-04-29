@@ -15,6 +15,8 @@ const REMOTE_OPERATION_CHANNEL = `${CHANNEL_PREFIX}:remote-operation`;
 const REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 const PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
+const WORKBENCH_BROWSER_COMMENT_CHANNEL = `${CHANNEL_PREFIX}:workbench-browser-comment`;
+const WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -367,6 +369,10 @@ ipcRenderer.on(REMOTE_OPERATION_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(PROVIDER_OAUTH_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(PROVIDER_OAUTH_EVENT, payload);
+});
+
+ipcRenderer.on(WORKBENCH_BROWSER_COMMENT_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(WORKBENCH_BROWSER_COMMENT_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);
