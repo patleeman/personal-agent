@@ -15,6 +15,7 @@ const apiMocks = vi.hoisted(() => ({
   move: vi.fn(),
   rename: vi.fn(),
   search: vi.fn(),
+  syncKnowledgeBase: vi.fn(),
   tree: vi.fn(),
   vaultFiles: vi.fn(),
   writeFile: vi.fn(),
@@ -23,6 +24,7 @@ const apiMocks = vi.hoisted(() => ({
 vi.mock('../../client/api', () => ({
   api: {
     knowledgeBase: apiMocks.knowledgeBase,
+    syncKnowledgeBase: apiMocks.syncKnowledgeBase,
     vaultFiles: apiMocks.vaultFiles,
   },
   vaultApi: {
@@ -205,6 +207,24 @@ describe('VaultFileTree', () => {
     });
     apiMocks.vaultFiles.mockReset();
     apiMocks.vaultFiles.mockResolvedValue(TREE);
+    apiMocks.syncKnowledgeBase.mockReset();
+    apiMocks.syncKnowledgeBase.mockResolvedValue({
+      repoUrl: 'https://github.com/patleeman/knowledge-base.git',
+      branch: 'main',
+      configured: true,
+      effectiveRoot: '/vault',
+      managedRoot: '/runtime/knowledge-base/repo',
+      usesManagedRoot: true,
+      syncStatus: 'idle',
+      lastSyncAt: '2026-04-22T12:00:00.000Z',
+      gitStatus: {
+        localChangeCount: 0,
+        aheadCount: 0,
+        behindCount: 0,
+      },
+      recoveredEntryCount: 0,
+      recoveryDir: '/runtime/knowledge-base/recovered',
+    });
   });
 
   afterEach(() => {
@@ -238,6 +258,18 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     expect(container.querySelector('[role="status"]')?.getAttribute('aria-label')).toBe('Pending sync · 2 local changes');
+  });
+
+  it('syncs the knowledge base from the tree toolbar', async () => {
+    const { container } = renderTree();
+    await flushAsyncWork();
+
+    click(getButton(container, 'Sync knowledge base'));
+    await flushAsyncWork();
+
+    expect(apiMocks.syncKnowledgeBase).toHaveBeenCalledTimes(1);
+    expect(apiMocks.knowledgeBase).toHaveBeenCalledTimes(2);
+    expect(apiMocks.vaultFiles).toHaveBeenCalledTimes(2);
   });
 
   it('stays empty when managed sync is off', async () => {

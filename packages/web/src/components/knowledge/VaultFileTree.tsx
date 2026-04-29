@@ -71,6 +71,7 @@ const ICON = {
   move: 'M7.5 21 3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5',
   search: 'M21 21l-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z',
   import: 'M12 3v12m0 0 4-4m-4 4-4-4m-5 8.25h18',
+  refresh: 'M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99',
   x: 'M6 18 18 6M6 6l12 12',
   file: 'M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z',
   folderOpen: 'M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75',
@@ -636,6 +637,7 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const [moveEntry, setMoveEntry] = useState<VaultEntry | null>(null);
   const [importDirectoryId, setImportDirectoryId] = useState<string | null>(null);
   const [createEntryState, setCreateEntryState] = useState<CreateEntryState | null>(null);
+  const [syncingKnowledgeBase, setSyncingKnowledgeBase] = useState(false);
   const initialOpenFileIds = useRef(activeFileId ? addOpenFileId(readStoredOpenFileIds(), activeFileId) : readStoredOpenFileIds());
   const [openFileIds, setOpenFileIds] = useState<string[]>(initialOpenFileIds.current);
   const openFileIdsRef = useRef<string[]>(initialOpenFileIds.current);
@@ -837,6 +839,26 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     emitKBEvent('kb:entries-changed');
     onFileSelect(imported.note.id);
   }, [onFileSelect]);
+
+  const handleKnowledgeBaseSync = useCallback(async () => {
+    if (!knowledgeBaseState?.configured || syncingKnowledgeBase) {
+      return;
+    }
+
+    setSyncingKnowledgeBase(true);
+    try {
+      await api.syncKnowledgeBase();
+      await Promise.all([
+        refetchKnowledgeBase({ resetLoading: false }),
+        loadSnapshot({ keepLoadingState: false }),
+      ]);
+    } catch (error) {
+      console.error('knowledge base sync failed', error);
+      await refetchKnowledgeBase({ resetLoading: false });
+    } finally {
+      setSyncingKnowledgeBase(false);
+    }
+  }, [knowledgeBaseState?.configured, loadSnapshot, refetchKnowledgeBase, syncingKnowledgeBase]);
 
   const openCreateEntryModal = useCallback((kind: CreateEntryState['kind'], directoryIdInput: string) => {
     const directoryId = normalizeVaultDir(directoryIdInput);
@@ -1366,6 +1388,16 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
                 title={knowledgeBaseSyncPresentation.text}
                 className={cx('h-2 w-2 shrink-0 rounded-full', knowledgeBaseSyncPresentation.dotClass, knowledgeBaseSyncPresentation.pulse && 'animate-pulse')}
               />
+              <button
+                type="button"
+                className="ui-icon-button ui-icon-button-compact"
+                title={syncingKnowledgeBase ? 'Syncing knowledge base…' : 'Sync knowledge base'}
+                aria-label="Sync knowledge base"
+                disabled={syncingKnowledgeBase}
+                onClick={() => { void handleKnowledgeBaseSync(); }}
+              >
+                <Ico d={ICON.refresh} size={12} />
+              </button>
               <button
                 type="button"
                 className="ui-icon-button ui-icon-button-compact"
