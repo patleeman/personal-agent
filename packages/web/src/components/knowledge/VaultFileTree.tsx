@@ -5,8 +5,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
 } from 'react';
 import {
   FileTree as TreesModel,
@@ -34,13 +32,6 @@ import {
   recordRecentlyClosedFileId,
   writeStoredRecentlyClosedFileIds,
 } from '../../local/knowledgeRecentlyClosedFiles';
-import {
-  DEFAULT_OPEN_FILES_SECTION_HEIGHT,
-  MIN_OPEN_FILES_SECTION_HEIGHT,
-  clampOpenFilesSectionHeight,
-  readStoredOpenFilesSectionHeight,
-  writeStoredOpenFilesSectionHeight,
-} from '../../local/knowledgeOpenFilesSectionHeight';
 import {
   collapseExpandedFolderIds,
   readStoredExpandedFolderIds,
@@ -101,10 +92,6 @@ const TREE_HOST_STYLE = {
   '--trees-selected-bg-override': 'rgb(var(--color-accent) / 0.14)',
   '--trees-selected-fg-override': 'rgb(var(--color-primary))',
 } satisfies CSSProperties & Record<string, string | number>;
-
-const MIN_TREE_HOST_HEIGHT = 120;
-const OPEN_FILES_SECTION_RESIZE_STEP = 24;
-const OPEN_FILES_SECTION_RESIZER_HEIGHT = 8;
 
 export interface FileTreeProps {
   activeFileId: string | null;
@@ -669,9 +656,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const useNativeKnowledgeContextMenu = shouldUseNativeAppContextMenus();
-  const [desiredOpenFilesSectionHeight, setDesiredOpenFilesSectionHeight] = useState(() => readStoredOpenFilesSectionHeight());
-  const [maxOpenFilesSectionHeight, setMaxOpenFilesSectionHeight] = useState(Number.MAX_SAFE_INTEGER);
-  const openFilesSectionHeight = Math.min(desiredOpenFilesSectionHeight, maxOpenFilesSectionHeight);
   const {
     data: knowledgeBaseState,
     loading: knowledgeBaseLoading,
@@ -753,67 +737,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
     visibleExpandedFolderIdsRef.current = normalized;
     writeStoredExpandedFolderIds(normalized);
   }, []);
-
-  const persistOpenFilesSectionHeight = useCallback((nextHeight: number) => {
-    const normalized = clampOpenFilesSectionHeight(nextHeight);
-    setDesiredOpenFilesSectionHeight(normalized);
-    writeStoredOpenFilesSectionHeight(normalized);
-  }, []);
-
-  const handleOpenFilesSectionResizeMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-    event.preventDefault();
-
-    const startY = event.clientY;
-    const startHeight = openFilesSectionHeight;
-    document.body.style.cursor = 'row-resize';
-    document.body.style.userSelect = 'none';
-
-    function handleMouseMove(moveEvent: MouseEvent) {
-      const delta = moveEvent.clientY - startY;
-      const nextHeight = Math.min(
-        maxOpenFilesSectionHeight,
-        clampOpenFilesSectionHeight(startHeight + delta),
-      );
-      persistOpenFilesSectionHeight(nextHeight);
-    }
-
-    function handleMouseUp() {
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    }
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [maxOpenFilesSectionHeight, openFilesSectionHeight, persistOpenFilesSectionHeight]);
-
-  const handleOpenFilesSectionResizeKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
-    switch (event.key) {
-      case 'ArrowUp':
-        event.preventDefault();
-        persistOpenFilesSectionHeight(openFilesSectionHeight - OPEN_FILES_SECTION_RESIZE_STEP);
-        break;
-      case 'ArrowDown':
-        event.preventDefault();
-        persistOpenFilesSectionHeight(Math.min(maxOpenFilesSectionHeight, openFilesSectionHeight + OPEN_FILES_SECTION_RESIZE_STEP));
-        break;
-      case 'Home':
-        event.preventDefault();
-        persistOpenFilesSectionHeight(MIN_OPEN_FILES_SECTION_HEIGHT);
-        break;
-      case 'End':
-        event.preventDefault();
-        persistOpenFilesSectionHeight(maxOpenFilesSectionHeight);
-        break;
-      default:
-        break;
-    }
-  }, [maxOpenFilesSectionHeight, openFilesSectionHeight, persistOpenFilesSectionHeight]);
-
-  const handleOpenFilesSectionResizeReset = useCallback(() => {
-    persistOpenFilesSectionHeight(Math.min(DEFAULT_OPEN_FILES_SECTION_HEIGHT, maxOpenFilesSectionHeight));
-  }, [maxOpenFilesSectionHeight, persistOpenFilesSectionHeight]);
 
   const applyRenameEffects = useCallback((oldId: string, newId: string) => {
     persistOpenFileIds(renameOpenFileIds(openFileIdsRef.current, oldId, newId));
@@ -1214,35 +1137,6 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
   }, [knowledgeBaseDisabled, knowledgeBaseState, loadSnapshot, model]);
 
   useEffect(() => {
-    const root = rootRef.current;
-    const header = headerRef.current;
-    if (!root || !header || typeof ResizeObserver === 'undefined') {
-      return;
-    }
-
-    const updateMaxOpenFilesSectionHeight = () => {
-      const availableHeight = root.getBoundingClientRect().height
-        - header.getBoundingClientRect().height
-        - OPEN_FILES_SECTION_RESIZER_HEIGHT
-        - MIN_TREE_HOST_HEIGHT;
-      setMaxOpenFilesSectionHeight(Math.max(
-        MIN_OPEN_FILES_SECTION_HEIGHT,
-        Math.round(availableHeight),
-      ));
-    };
-
-    updateMaxOpenFilesSectionHeight();
-    const observer = new ResizeObserver(() => {
-      updateMaxOpenFilesSectionHeight();
-    });
-    observer.observe(root);
-    observer.observe(header);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  useEffect(() => {
     if (!activeFileId) {
       for (const selectedPath of model.getSelectedPaths()) {
         model.getItem(selectedPath)?.deselect();
@@ -1443,36 +1337,15 @@ export function VaultFileTree({ activeFileId, onFileSelect }: FileTreeProps) {
       ) : (
         <>
           {openFileIds.length > 0 ? (
-            <>
-              <div className="shrink-0 overflow-hidden" style={{ height: openFilesSectionHeight }}>
-                <OpenFilesSection
-                  openFileIds={openFileIds}
-                  activeFileId={activeFileId}
-                  onSelect={onFileSelect}
-                  onClose={handleOpenFileClose}
-                  onCloseAll={handleOpenFilesCloseAll}
-                  bordered={false}
-                  className="h-full"
-                />
-              </div>
-              <div
-                role="separator"
-                aria-label="Resize open files section"
-                aria-orientation="horizontal"
-                aria-valuemin={MIN_OPEN_FILES_SECTION_HEIGHT}
-                aria-valuemax={maxOpenFilesSectionHeight}
-                aria-valuenow={openFilesSectionHeight}
-                tabIndex={0}
-                className="group relative shrink-0 cursor-row-resize select-none px-2 focus-visible:outline-none"
-                onMouseDown={handleOpenFilesSectionResizeMouseDown}
-                onKeyDown={handleOpenFilesSectionResizeKeyDown}
-                onDoubleClick={handleOpenFilesSectionResizeReset}
-              >
-                <div className="flex h-2 items-center">
-                  <div className="h-px w-full bg-border-subtle transition-colors group-hover:bg-accent/40 group-focus-visible:bg-accent/40" />
-                </div>
-              </div>
-            </>
+            <OpenFilesSection
+              openFileIds={openFileIds}
+              activeFileId={activeFileId}
+              onSelect={onFileSelect}
+              onClose={handleOpenFileClose}
+              onCloseAll={handleOpenFilesCloseAll}
+              bordered={false}
+              className="max-h-[45%] shrink-0"
+            />
           ) : (
             <OpenFilesSection
               openFileIds={openFileIds}

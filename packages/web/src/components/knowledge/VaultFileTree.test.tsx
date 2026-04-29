@@ -5,7 +5,6 @@ import { createRoot, type Root } from 'react-dom/client';
 import { VaultFileTree } from './VaultFileTree';
 import { emitKBEvent } from './knowledgeEvents';
 import { KNOWLEDGE_OPEN_FILE_IDS_STORAGE_KEY } from '../../local/knowledgeOpenFiles';
-import { KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY } from '../../local/knowledgeOpenFilesSectionHeight';
 import { KNOWLEDGE_TREE_EXPANDED_FOLDERS_STORAGE_KEY } from '../../local/knowledgeTreeState';
 import type { VaultEntry, VaultFileListResult } from '../../shared/types';
 
@@ -171,14 +170,6 @@ function fillInput(input: HTMLInputElement, value: string) {
   act(() => {
     valueSetter.call(input, value);
     input.dispatchEvent(new Event('input', { bubbles: true }));
-  });
-}
-
-function drag(target: HTMLElement, startY: number, endY: number) {
-  act(() => {
-    target.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, clientY: startY }));
-    document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, clientY: endY }));
-    document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, clientY: endY }));
   });
 }
 
@@ -443,9 +434,7 @@ describe('VaultFileTree', () => {
     expect(apiMocks.writeFile).toHaveBeenCalledWith('notes/idea.md', '');
   });
 
-  it('lets the open files section resize taller and persists the new height', async () => {
-    localStorage.setItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY, '120');
-
+  it('does not render a resize separator between open files and the tree', async () => {
     const { container } = renderManagedTree();
     await flushAsyncWork();
 
@@ -453,21 +442,6 @@ describe('VaultFileTree', () => {
     await flushAsyncWork();
 
     const separator = container.querySelector<HTMLElement>('[aria-label="Resize open files section"]');
-    expect(separator).toBeTruthy();
-
-    const startHeight = Number(separator?.getAttribute('aria-valuenow'));
-    expect(Number.isFinite(startHeight)).toBe(true);
-
-    if (!separator) {
-      throw new Error('Expected open files resize separator');
-    }
-
-    drag(separator, 120, 220);
-    await flushAsyncWork();
-
-    const resizedSeparator = container.querySelector<HTMLElement>('[aria-label="Resize open files section"]');
-    const nextHeight = Number(resizedSeparator?.getAttribute('aria-valuenow'));
-    expect(nextHeight).toBeGreaterThan(startHeight);
-    expect(localStorage.getItem(KNOWLEDGE_OPEN_FILES_SECTION_HEIGHT_STORAGE_KEY)).toBe(String(nextHeight));
+    expect(separator).toBeNull();
   });
 });

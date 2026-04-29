@@ -380,7 +380,7 @@ function WorkspaceOpenFilesSection({
       {openFilePaths.length === 0 ? (
         <p className="px-2 py-2 text-[12px] text-dim">No open files.</p>
       ) : (
-        <div className="max-h-44 min-h-0 space-y-1 overflow-y-auto">
+        <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
           {openFilePaths.map((path) => {
             const isActive = activePath === path;
             const fileName = path.split('/').filter(Boolean).pop() ?? path;
@@ -930,14 +930,15 @@ export function WorkspaceExplorer({ cwd, onDraftPrompt, onOpenFile, activeFilePa
   if (railOnly) {
     return (
       <div className="flex h-full flex-col bg-base/96 text-sm">
-        <WorkspaceOpenFilesSection
-          openFilePaths={openFilePaths}
-          activePath={activeFilePath}
-          onSelect={openWorkspaceFile}
-          onClose={closeWorkspaceFile}
-          onCloseAll={closeAllWorkspaceFiles}
-        />
-        <div className="mx-2 h-px shrink-0 bg-border-subtle" aria-hidden="true" />
+        <div className="max-h-[45%] shrink-0 overflow-hidden">
+          <WorkspaceOpenFilesSection
+            openFilePaths={openFilePaths}
+            activePath={activeFilePath}
+            onSelect={openWorkspaceFile}
+            onClose={closeWorkspaceFile}
+            onCloseAll={closeAllWorkspaceFiles}
+          />
+        </div>
         <div className="px-3 pt-1 pb-1 shrink-0 rounded-md">
           <div className="flex items-center gap-1">
             <p className="ui-section-label flex-1">File Explorer</p>
