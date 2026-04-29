@@ -15,6 +15,7 @@ import {
   type QueuedPromptPreview,
 } from '../conversations/liveSessions.js';
 import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
+import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
 
 const CONVERSATION_QUEUE_ACTION_VALUES = ['add', 'list', 'cancel'] as const;
 const CONVERSATION_QUEUE_TRIGGER_VALUES = ['after_turn', 'delay', 'at'] as const;
@@ -32,7 +33,7 @@ const ConversationQueueToolParams = Type.Object({
     description: 'Trigger for add: after_turn queues behind the current turn; delay/at schedule later continuation.',
   })),
   delay: Type.Optional(Type.String({ description: 'Delay for trigger="delay", for example 30s, 10m, 2h, or 1d.' })),
-  at: Type.Optional(Type.String({ description: 'Timestamp for trigger="at", parseable by Date.parse.' })),
+  at: Type.Optional(Type.String({ description: 'Time for trigger="at". Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.' })),
   deliverAs: Type.Optional(Type.Union(CONVERSATION_QUEUE_DELIVER_AS_VALUES.map((value) => Type.Literal(value)), {
     description: 'How to enqueue the continuation when it runs.' ,
   })),
@@ -257,27 +258,7 @@ function summarizeAutomationTitle(prompt: string, title?: string): string {
   return summary.slice(0, 80) || 'Queued continuation';
 }
 
-const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?(Z|[+-]\d{2}:\d{2})$/;
-
-function hasValidIsoDateParts(match: RegExpMatchArray): boolean {
-  const year = Number(match[1]);
-  const month = Number(match[2]);
-  const day = Number(match[3]);
-  const hour = Number(match[4]);
-  const minute = Number(match[5]);
-  const second = Number(match[6]);
-  const millisecond = match[7] ? Number(match[7]) : 0;
-  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second, millisecond));
-  return date.getUTCFullYear() === year
-    && date.getUTCMonth() === month - 1
-    && date.getUTCDate() === day
-    && date.getUTCHours() === hour
-    && date.getUTCMinutes() === minute
-    && date.getUTCSeconds() === second
-    && date.getUTCMilliseconds() === millisecond;
-}
-
-function resolveScheduledAt(input: { delay?: string; at?: string }): string {
+function resolveScheduledAt(input: { delay?: string; at?: string }): { dueAt: string; interpretation?: string; timeExpression?: string } {
   if (input.delay && input.at) {
     throw new Error('Specify only one of delay or at.');
   }
@@ -292,25 +273,11 @@ function resolveScheduledAt(input: { delay?: string; at?: string }): string {
       throw new Error('Invalid delay. Use forms like 30s, 10m, 2h, or 1d.');
     }
 
-    return new Date(Date.now() + delayMs).toISOString();
+    return { dueAt: new Date(Date.now() + delayMs).toISOString() };
   }
 
-  const atMatch = (input.at as string).match(ISO_TIMESTAMP_PATTERN);
-  if (!atMatch || !hasValidIsoDateParts(atMatch)) {
-    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
-  }
-
-  const atMs = Date.parse(input.at as string);
-  if (!Number.isFinite(atMs)) {
-    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
-  }
-
-  const dueAt = new Date(atMs);
-  if (dueAt.getTime() <= Date.now()) {
-    throw new Error('Queue time must be in the future.');
-  }
-
-  return dueAt.toISOString();
+  const parsed = parseFutureHumanDateTime(input.at as string);
+  return { dueAt: parsed.dueAt, interpretation: parsed.interpretation, timeExpression: parsed.input };
 }
 
 function findConversationAutomation(id: string, sessionFile: string) {
@@ -388,7 +355,7 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
               throw new Error('Time-based queue entries require a persisted conversation.');
             }
 
-            const scheduledAt = resolveScheduledAt({
+            const scheduled = resolveScheduledAt({
               delay: trigger === 'delay' ? readRequiredString(params.delay, 'delay') : undefined,
               at: trigger === 'at' ? readRequiredString(params.at, 'at') : undefined,
             });
@@ -396,7 +363,7 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
               profile: options.getCurrentProfile(),
               title: summarizeAutomationTitle(prompt, params.title),
               enabled: true,
-              at: scheduledAt,
+              at: scheduled.dueAt,
               prompt,
               cwd: ctx.cwd,
               targetType: 'conversation',
@@ -414,7 +381,7 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
             return {
               content: [{
                 type: 'text' as const,
-                text: `Queued conversation continuation ${task.id} (${trigger === 'delay' ? `in ${params.delay}` : `for ${scheduledAt}`}).`,
+                text: `Queued conversation continuation ${task.id} (${trigger === 'delay' ? `in ${params.delay}` : `for ${scheduled.interpretation ?? scheduled.dueAt}`}).`,
               }],
               details: {
                 action: 'add',
@@ -423,7 +390,9 @@ export function createConversationQueueAgentExtension(options: { getCurrentProfi
                 sessionFile,
                 id: task.id,
                 prompt: task.prompt,
-                dueAt: scheduledAt,
+                dueAt: scheduled.dueAt,
+                ...(scheduled.interpretation ? { localDueAt: scheduled.interpretation } : {}),
+                ...(scheduled.timeExpression ? { timeExpression: scheduled.timeExpression } : {}),
                 ...(deliverAs ? { deliverAs } : {}),
               },
             };

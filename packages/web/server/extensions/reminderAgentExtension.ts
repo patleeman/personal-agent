@@ -2,13 +2,14 @@ import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 import { publishAppEvent } from '../shared/appEvents.js';
 import { scheduleDeferredResumeForSessionFile } from '../automation/deferredResumes.js';
+import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
 
 const ReminderToolParams = Type.Object({
   delay: Type.Optional(Type.String({
     description: 'Relative delay until the reminder, for example 30s, 10m, 2h, or 1d.',
   })),
   at: Type.Optional(Type.String({
-    description: 'Absolute reminder time parseable by Date.parse, for example 2026-03-27T09:00:00-04:00.',
+    description: 'Reminder time. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.',
   })),
   prompt: Type.String({
     description: 'What the reminder should tell the agent/user when it fires.',
@@ -51,10 +52,12 @@ export function createReminderAgentExtension(): (pi: ExtensionAPI) => void {
           throw new Error('Reminder requires a persisted session file.');
         }
 
+        const parsedAt = params.at ? parseFutureHumanDateTime(params.at) : undefined;
+
         const reminder = await scheduleDeferredResumeForSessionFile({
           sessionFile,
           delay: params.delay,
-          at: params.at,
+          at: parsedAt?.dueAt,
           prompt: params.prompt,
           title: params.title,
           kind: 'reminder',
@@ -73,12 +76,13 @@ export function createReminderAgentExtension(): (pi: ExtensionAPI) => void {
         return {
           content: [{
             type: 'text' as const,
-            text: `Scheduled reminder ${reminder.id}${params.delay ? ` in ${params.delay}` : ''} (due ${reminder.dueAt}).`,
+            text: `Scheduled reminder ${reminder.id}${params.delay ? ` in ${params.delay}` : ''} (due ${parsedAt?.interpretation ?? reminder.dueAt}).`,
           }],
           details: {
             id: reminder.id,
             sessionFile,
             dueAt: reminder.dueAt,
+            ...(parsedAt ? { localDueAt: parsedAt.interpretation, timeExpression: parsedAt.input } : {}),
             prompt: reminder.prompt,
             title: reminder.title,
           },

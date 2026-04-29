@@ -239,7 +239,7 @@ describe('conversation queue agent extension', () => {
       undefined,
       undefined,
       createToolContext(),
-    )).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+    )).rejects.toThrow('Invalid time expression');
 
     expect(createStoredAutomationMock).not.toHaveBeenCalled();
   });
@@ -255,7 +255,7 @@ describe('conversation queue agent extension', () => {
       undefined,
       undefined,
       createToolContext(),
-    )).rejects.toThrow('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
+    )).rejects.toThrow('Invalid time expression');
 
     expect(createStoredAutomationMock).not.toHaveBeenCalled();
   });

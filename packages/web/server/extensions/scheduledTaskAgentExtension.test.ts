@@ -60,10 +60,13 @@ function writeSessionFile(conversationId: string): string {
 
 beforeEach(() => {
   process.env = { ...originalEnv, PERSONAL_AGENT_STATE_ROOT: createTempDir('pa-web-task-state-') };
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-04-01T12:00:00.000Z'));
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   closeAutomationDbs();
   process.env = originalEnv;
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));

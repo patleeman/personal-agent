@@ -22,25 +22,12 @@ import {
   resolveDaemonPaths,
   scheduleDeferredResumeConversationRun,
 } from '@personal-agent/daemon';
+import { parseFutureHumanDateTime } from './humanDateTime.js';
 
 export const DEFAULT_DEFERRED_RESUME_PROMPT = 'Continue from where you left off and keep going.';
 
 function resolveDaemonRoot(): string {
   return resolveDaemonPaths(loadDaemonConfig().ipc.socketPath).root;
-}
-
-function normalizeReminderAt(at: string, now: Date): string {
-  const dueAtIso = normalizeIsoTimestamp(at);
-  if (!dueAtIso) {
-    throw new Error('Invalid at timestamp. Use an ISO-8601 timestamp or another Date.parse-compatible string.');
-  }
-
-  const dueAt = new Date(dueAtIso);
-  if (dueAt.getTime() <= now.getTime()) {
-    throw new Error('Reminder time must be in the future.');
-  }
-
-  return dueAtIso;
 }
 
 const ISO_TIMESTAMP_PATTERN = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{3}))?(Z|[+-]\d{2}:\d{2})$/;
@@ -107,7 +94,7 @@ function resolveDueAt(input: { delay?: string; at?: string; now: Date }): string
     return new Date(input.now.getTime() + delayMs).toISOString();
   }
 
-  return normalizeReminderAt(input.at as string, input.now);
+  return parseFutureHumanDateTime(input.at as string, { now: input.now }).dueAt;
 }
 
 export interface DeferredResumeSummary {

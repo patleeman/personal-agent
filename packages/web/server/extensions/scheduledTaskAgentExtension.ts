@@ -28,6 +28,7 @@ import {
   resolveScheduledTaskThreadBinding,
   type ScheduledTaskThreadInput,
 } from '../automation/scheduledTaskThreads.js';
+import { parseFutureHumanDateTime } from '../automation/humanDateTime.js';
 
 const SCHEDULED_TASK_ACTION_VALUES = ['list', 'get', 'save', 'delete', 'validate', 'run'] as const;
 const SCHEDULED_TASK_TARGET_VALUES = ['background-agent', 'conversation'] as const;
@@ -43,7 +44,7 @@ const ScheduledTaskToolParams = Type.Object({
   title: Type.Optional(Type.String({ description: 'Human-readable title for the automation. Defaults to taskId.' })),
   enabled: Type.Optional(Type.Boolean({ description: 'Whether the task is enabled when saving.' })),
   cron: Type.Optional(Type.String({ description: 'Recurring 5-field cron expression.' })),
-  at: Type.Optional(Type.String({ description: 'One-time timestamp parseable by Date.parse.' })),
+  at: Type.Optional(Type.String({ description: 'One-time schedule. Supports ISO timestamps, natural phrases like "tomorrow 8pm", and explicit forms like now+1d@20:00.' })),
   targetType: Type.Optional(Type.Union(SCHEDULED_TASK_TARGET_VALUES.map((value) => Type.Literal(value)), { description: 'Automation target: background-agent or conversation.' })),
   threadMode: Type.Optional(Type.Union(SCHEDULED_TASK_THREAD_MODE_VALUES.map((value) => Type.Literal(value)), { description: 'Thread binding mode: dedicated, existing, or none.' })),
   threadConversationId: Type.Optional(Type.String({ description: 'Existing conversation id when binding the automation to an existing thread.' })),
@@ -72,6 +73,16 @@ function readRequiredString(value: string | undefined, label: string): string {
 function readOptionalString(value: string | undefined): string | undefined {
   const normalized = value?.trim();
   return normalized && normalized.length > 0 ? normalized : undefined;
+}
+
+function resolveOptionalScheduleAt(value: string | undefined): { dueAt: string; interpretation: string; timeExpression: string } | undefined {
+  const normalized = readOptionalString(value);
+  if (!normalized) {
+    return undefined;
+  }
+
+  const parsed = parseFutureHumanDateTime(normalized);
+  return { dueAt: parsed.dueAt, interpretation: parsed.interpretation, timeExpression: parsed.input };
 }
 
 function formatSchedule(task: Pick<StoredAutomation, 'schedule'>): string {
@@ -315,6 +326,7 @@ export function createScheduledTaskAgentExtension(options: {
               const threadMode = readThreadMode(params.threadMode);
               const threadConversationId = readOptionalString(params.threadConversationId);
               const cwd = params.cwd ?? existing?.cwd;
+              const scheduledAt = resolveOptionalScheduleAt(params.at);
               const shouldBindThread = shouldApplyThreadBinding({
                 targetType,
                 threadMode,
@@ -344,7 +356,7 @@ export function createScheduledTaskAgentExtension(options: {
                   title: readOptionalString(params.title) ?? existing.title ?? taskId,
                   enabled: params.enabled ?? existing.enabled,
                   cron: params.cron ?? (existing.schedule.type === 'cron' ? existing.schedule.expression : undefined),
-                  at: params.at ?? (existing.schedule.type === 'at' ? existing.schedule.at : undefined),
+                  at: scheduledAt?.dueAt ?? (existing.schedule.type === 'at' ? existing.schedule.at : undefined),
                   modelRef: params.model ?? existing.modelRef,
                   cwd,
                   timeoutSeconds: params.timeoutSeconds ?? existing.timeoutSeconds,
@@ -359,7 +371,7 @@ export function createScheduledTaskAgentExtension(options: {
                   title: readOptionalString(params.title) ?? taskId,
                   enabled: params.enabled ?? true,
                   cron: params.cron,
-                  at: params.at,
+                  at: scheduledAt?.dueAt,
                   modelRef: params.model,
                   cwd,
                   timeoutSeconds: params.timeoutSeconds,
@@ -403,13 +415,17 @@ export function createScheduledTaskAgentExtension(options: {
               invalidateAppTopics('tasks');
 
               return {
-                content: [{ type: 'text' as const, text: `${existing ? 'Updated' : 'Saved'} scheduled task @${taskId}.` }],
+                content: [{
+                  type: 'text' as const,
+                  text: `${existing ? 'Updated' : 'Saved'} scheduled task @${taskId}${scheduledAt ? ` for ${scheduledAt.interpretation}` : ''}.`,
+                }],
                 details: {
                   action: 'save',
                   profile,
                   taskId,
                   filePath: task.filePath,
                   targetType,
+                  ...(scheduledAt ? { dueAt: scheduledAt.dueAt, localDueAt: scheduledAt.interpretation, timeExpression: scheduledAt.timeExpression } : {}),
                 },
               };
             }
