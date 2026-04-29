@@ -550,6 +550,7 @@ function WorkbenchBrowserTab() {
   const [snapshotText, setSnapshotText] = useState('');
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
+  const [pendingMarkers, setPendingMarkers] = useState<Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>>([]);
   const bridge = getDesktopBridge();
 
   useEffect(() => {
@@ -690,14 +691,16 @@ function WorkbenchBrowserTab() {
       return;
     }
 
+    const id = `browser-comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     window.dispatchEvent(new CustomEvent(WORKBENCH_BROWSER_COMMENT_ADDED_EVENT, {
       detail: {
-        id: `browser-comment-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        id,
         createdAt: new Date().toISOString(),
         target: commentDraft.target,
         comment: text,
       },
     }));
+    setPendingMarkers((current) => [...current, { id, target: commentDraft.target, comment: text }]);
     setCommentDraft(null);
     setStatus('Browser comment added to composer.');
   }
@@ -729,6 +732,23 @@ function WorkbenchBrowserTab() {
             Browser embedding is only available in the Electron desktop app.
           </div>
         ) : null}
+        {pendingMarkers.map((marker, index) => {
+          const hostWidth = browserHostRef.current?.clientWidth ?? 320;
+          const hostHeight = browserHostRef.current?.clientHeight ?? 320;
+          const x = Math.max(6, Math.min(marker.target.viewportRect.x, hostWidth - 28));
+          const y = Math.max(6, Math.min(marker.target.viewportRect.y, hostHeight - 28));
+          return (
+            <div
+              key={marker.id}
+              className="pointer-events-none absolute z-10 flex h-6 w-6 items-center justify-center rounded-full border border-accent/70 bg-accent text-[11px] font-semibold text-black shadow-lg"
+              style={{ left: x, top: y }}
+              title={marker.comment}
+              aria-hidden="true"
+            >
+              {index + 1}
+            </div>
+          );
+        })}
         {commentDraft ? (
           <div
             className="absolute z-20 w-[min(18rem,calc(100%-1rem))] rounded-xl border border-accent/30 bg-surface/95 p-2 shadow-2xl backdrop-blur"

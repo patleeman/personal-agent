@@ -291,6 +291,7 @@ const HISTORICAL_PREFETCH_SCROLL_THRESHOLD_PX = 1400;
 const HISTORICAL_BACKGROUND_PREFETCH_DELAY_MS = 1500;
 const EMPTY_ASK_USER_QUESTION_ANSWERS: AskUserQuestionAnswers = {};
 const WORKBENCH_BROWSER_COMMENT_ADDED_EVENT = 'pa:workbench-browser-comment-added';
+const EMPTY_PENDING_BROWSER_COMMENTS: PendingBrowserComment[] = [];
 
 interface PendingBrowserComment {
   id: string;
@@ -340,6 +341,20 @@ function buildBrowserCommentContextMessages(comments: PendingBrowserComment[]): 
     return undefined;
   }
   return [{ customType: 'browser-comments', content: formatBrowserCommentsContext(comments) }];
+}
+
+function buildBrowserCommentsStorageKey(draft: boolean, conversationId: string | undefined): string | null {
+  if (draft) {
+    return 'pa:reload:draft-conversation:browser-comments';
+  }
+  return conversationId ? `pa:reload:conversation:${conversationId}:browser-comments` : null;
+}
+
+function normalizePendingBrowserComments(value: unknown): PendingBrowserComment[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter(isPendingBrowserComment).slice(0, 20);
 }
 
 function buildComposerQuestionAnswersStorageKey(conversationId: string | undefined, pendingQuestionKey: string): string | null {
@@ -1508,6 +1523,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
     : id
       ? buildConversationComposerStorageKey(id)
       : null;
+  const browserCommentsStorageKey = buildBrowserCommentsStorageKey(draft, id);
 
   // Input state
   const [input, setInputState] = useReloadState<string>({
@@ -1538,7 +1554,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   const [attachments, setAttachments] = useState<File[]>([]);
   const [screenshotCaptureBusy, setScreenshotCaptureBusy] = useState(false);
   const [drawingAttachments, setDrawingAttachments] = useState<ComposerDrawingAttachment[]>([]);
-  const [pendingBrowserComments, setPendingBrowserComments] = useState<PendingBrowserComment[]>([]);
+  const [pendingBrowserComments, setPendingBrowserComments] = useReloadState<PendingBrowserComment[]>({
+    storageKey: browserCommentsStorageKey,
+    initialValue: EMPTY_PENDING_BROWSER_COMMENTS,
+    deserialize: (raw) => normalizePendingBrowserComments(JSON.parse(raw) as unknown),
+    shouldPersist: (comments) => comments.length > 0,
+  });
   const [editingDrawingLocalId, setEditingDrawingLocalId] = useState<string | null>(null);
   const [drawingsPickerOpen, setDrawingsPickerOpen] = useState(false);
   const [conversationAttachments, setConversationAttachments] = useState<ConversationAttachmentSummary[]>([]);

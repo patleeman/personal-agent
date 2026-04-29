@@ -414,6 +414,19 @@ export class WorkbenchBrowserViewController {
           const selector = '#' + cssEscape(element.id);
           if (unique(selector)) return selector;
         }
+        const tag = element.tagName.toLowerCase();
+        if (element.getAttribute('aria-label')) {
+          const ariaSelector = tag + '[aria-label="' + cssEscape(element.getAttribute('aria-label')) + '"]';
+          if (unique(ariaSelector)) return ariaSelector;
+        }
+        if (element.getAttribute('name')) {
+          const nameSelector = tag + '[name="' + cssEscape(element.getAttribute('name')) + '"]';
+          if (unique(nameSelector)) return nameSelector;
+        }
+        if (tag === 'a' && element.getAttribute('href')) {
+          const hrefSelector = 'a[href="' + cssEscape(element.getAttribute('href')) + '"]';
+          if (unique(hrefSelector)) return hrefSelector;
+        }
         const role = elementRole(element);
         const name = accessibleName(element);
         if (role && name && element.getAttribute('aria-label')) {
