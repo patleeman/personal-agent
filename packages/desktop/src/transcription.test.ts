@@ -17,4 +17,10 @@ describe('desktop transcription', () => {
     expect(multipart).toContain('filename="dictation.webmX-Injected: yes"');
     expect(multipart).not.toContain('\r\nX-Injected: yes');
   });
+
+  it('extracts transcript text from common response shapes', () => {
+    expect(testExports.extractTranscriptText({ text: 'hello' })).toBe('hello');
+    expect(testExports.extractTranscriptText({ transcript: 'hello' })).toBe('hello');
+    expect(testExports.extractTranscriptText({ segments: [{ text: 'hello' }, { text: 'world' }] })).toBe('hello world');
+  });
 });

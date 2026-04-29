@@ -23,6 +23,8 @@ Supported provider ids:
 | `openai-api` | planned | file, stream | Should adapt the official OpenAI audio/realtime APIs. Not implemented yet. |
 | `whisperkit-local` | planned | file, stream | Should call a local Swift/WhisperKit helper on macOS and native WhisperKit on iOS. Not implemented yet. |
 
+The current composer flow is batch dictation: record audio, stop, transcribe, then insert the final text. The provider abstraction already has a streaming transport, but the UI does not consume partial transcript events yet. Streaming dictation should use a realtime provider adapter that accepts PCM chunks and emits `delta` / `done` events; the existing Codex upload endpoint is not that API.
+
 The settings API is:
 
 ```text
@@ -77,10 +79,12 @@ language=<optional>
 
 The normal `openai-codex` provider base URL in PA is often `https://chatgpt.com/backend-api`; the adapter normalizes that to `/backend-api/transcribe`. If a custom base URL ends in `/backend-api/codex`, the adapter also normalizes it back to `/backend-api/transcribe` because this endpoint is not under the `/codex` path.
 
-The expected response is:
+The normal expected response is:
 
 ```json
 { "text": "transcribed text" }
 ```
+
+PA also accepts a few common transcript response shapes (`transcript`, `transcription`, and arrays of segment objects with `text`) so provider quirks do not silently produce an empty insertion. Empty transcripts are treated as visible failures instead of showing “Dictation inserted.”
 
 The Settings “model” field remains provider configuration for future adapters, but Codex’s current `/transcribe` endpoint does not expose a model parameter in the observed desktop-app request shape.

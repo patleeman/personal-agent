@@ -80,13 +80,38 @@ function buildCodexTranscribeHeaders(input: {
   return Object.fromEntries(headers.entries());
 }
 
-function parseTranscribeResponse(raw: unknown): string {
-  if (!raw || typeof raw !== 'object') {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function parseTranscribeResponse(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(parseTranscribeResponse).filter(Boolean).join(' ');
+  }
+
+  if (!isRecord(value)) {
     return '';
   }
 
-  const text = (raw as { text?: unknown }).text;
-  return typeof text === 'string' ? text : '';
+  for (const key of ['text', 'transcript', 'transcription']) {
+    const candidate = parseTranscribeResponse(value[key]);
+    if (candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  for (const key of ['segments', 'items', 'results']) {
+    const candidate = parseTranscribeResponse(value[key]);
+    if (candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return '';
 }
 
 export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionProvider {
@@ -133,8 +158,13 @@ export class OpenAICodexRealtimeTranscriptionProvider implements TranscriptionPr
     }
 
     const raw = await response.json() as unknown;
+    const text = parseTranscribeResponse(raw).trim();
+    if (!text) {
+      throw new Error('Codex transcription returned an empty transcript. Try speaking longer or check microphone input.');
+    }
+
     return {
-      text: parseTranscribeResponse(raw).trim(),
+      text,
       provider: this.id,
       model: this.modelId,
       ...(options.language ? { language: options.language } : {}),

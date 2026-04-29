@@ -26,6 +26,9 @@ describe('OpenAI Codex transcription provider helpers', () => {
 
   it('parses transcribe responses', () => {
     expect(testExports.parseTranscribeResponse({ text: 'hello world' })).toBe('hello world');
+    expect(testExports.parseTranscribeResponse({ transcript: 'hello world' })).toBe('hello world');
+    expect(testExports.parseTranscribeResponse({ transcription: 'hello world' })).toBe('hello world');
+    expect(testExports.parseTranscribeResponse({ segments: [{ text: 'hello' }, { text: 'world' }] })).toBe('hello world');
     expect(testExports.parseTranscribeResponse({})).toBe('');
     expect(testExports.parseTranscribeResponse(null)).toBe('');
   });

@@ -2676,6 +2676,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         mimeType,
         fileName,
       });
+      if (!result.text.trim()) {
+        throw new Error('Dictation returned an empty transcript. Try speaking longer or check microphone input.');
+      }
+
       insertTextIntoComposer(result.text);
       showNotice('accent', 'Dictation inserted.', 1800);
     } catch (error) {

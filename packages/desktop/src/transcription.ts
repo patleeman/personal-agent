@@ -25,6 +25,10 @@ export interface DesktopTranscriptionResult {
   language?: string;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function decodeBase64(input: string): Buffer {
   const normalized = input.trim();
   if (!normalized) {
@@ -83,6 +87,36 @@ function buildMultipartBody(input: DesktopTranscribeFileInput): { body: Buffer; 
   };
 }
 
+function extractTranscriptText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(extractTranscriptText).filter(Boolean).join(' ');
+  }
+
+  if (!isRecord(value)) {
+    return '';
+  }
+
+  for (const key of ['text', 'transcript', 'transcription']) {
+    const candidate = extractTranscriptText(value[key]);
+    if (candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  for (const key of ['segments', 'items', 'results']) {
+    const candidate = extractTranscriptText(value[key]);
+    if (candidate.trim()) {
+      return candidate;
+    }
+  }
+
+  return '';
+}
+
 export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFileInput): Promise<DesktopTranscriptionResult> {
   const token = await readOpenAICodexAccessToken();
   const { body, contentType } = buildMultipartBody(input);
@@ -108,9 +142,11 @@ export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFile
     throw new Error('Codex transcription returned non-JSON response.');
   }
 
-  const transcript = typeof (parsed as { text?: unknown }).text === 'string'
-    ? (parsed as { text: string }).text.trim()
-    : '';
+  const transcript = extractTranscriptText(parsed).trim();
+  if (!transcript) {
+    throw new Error('Codex transcription returned an empty transcript. Try speaking longer or check microphone input.');
+  }
+
   return {
     text: transcript,
     provider: 'openai-codex-realtime',
@@ -121,4 +157,5 @@ export async function transcribeWithCodexDesktopNet(input: DesktopTranscribeFile
 
 export const testExports = {
   buildMultipartBody,
+  extractTranscriptText,
 };
