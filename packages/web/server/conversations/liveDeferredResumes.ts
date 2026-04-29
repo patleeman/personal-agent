@@ -11,9 +11,44 @@ import {
   retryDeferredResumeForSessionFile,
 } from '../automation/deferredResumes.js';
 import { syncWebLiveConversationRun } from './conversationRuns.js';
-import { getLiveSessions, promptSession as promptLocalSession, registry as liveRegistry } from './liveSessions.js';
+import { getLiveSessions, promptSession as promptLocalSession, queuePromptContext, registry as liveRegistry } from './liveSessions.js';
 
 const DEFAULT_RETRY_DELAY_MS = 30_000;
+
+interface DeferredResumeLike {
+  prompt: string;
+  title?: string;
+  source?: {
+    kind: string;
+    id?: string;
+  };
+}
+
+function buildPromptDeliveryForDeferredResume(entry: DeferredResumeLike): {
+  visiblePrompt: string;
+  contextMessages: Array<{ customType: string; content: string }>;
+} {
+  if (entry.source?.kind !== 'background-run') {
+    return {
+      visiblePrompt: entry.prompt,
+      contextMessages: [],
+    };
+  }
+
+  const title = entry.title?.trim() || (entry.source.id ? `Background run ${entry.source.id} finished` : 'Background run finished');
+  return {
+    visiblePrompt: `${title}. Continue from the background run result.`,
+    contextMessages: [{
+      customType: 'referenced_context',
+      content: [
+        'A durable background run completed and resumed this conversation.',
+        'Use the run result below as hidden context. Do not quote the raw callback envelope unless the user asks for it.',
+        '',
+        entry.prompt,
+      ].join('\n'),
+    }],
+  };
+}
 
 export interface CreateLiveDeferredResumeFlusherOptions {
   getCurrentProfile: () => string;
@@ -83,6 +118,11 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
           try {
             const deferredResumeBehavior = readyEntry.behavior
               ?? (liveEntry.session.isStreaming ? 'followUp' as const : undefined);
+            const promptDelivery = buildPromptDeliveryForDeferredResume(readyEntry);
+            for (const message of promptDelivery.contextMessages) {
+              await queuePromptContext(session.id, message.customType, message.content);
+            }
+
             if (liveEntry.session.sessionFile) {
               await syncWebLiveConversationRun({
                 conversationId: session.id,
@@ -93,8 +133,11 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
                 state: 'running',
                 pendingOperation: {
                   type: 'prompt',
-                  text: readyEntry.prompt,
+                  text: promptDelivery.visiblePrompt,
                   ...(deferredResumeBehavior ? { behavior: deferredResumeBehavior } : {}),
+                  ...(promptDelivery.contextMessages.length > 0
+                    ? { contextMessages: promptDelivery.contextMessages }
+                    : {}),
                   enqueuedAt: new Date().toISOString(),
                 },
               });
@@ -102,7 +145,7 @@ export function createLiveDeferredResumeFlusher(options: CreateLiveDeferredResum
 
             await promptLocalSession(
               session.id,
-              readyEntry.prompt,
+              promptDelivery.visiblePrompt,
               deferredResumeBehavior,
             );
 

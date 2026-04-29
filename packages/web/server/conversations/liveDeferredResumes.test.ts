@@ -11,6 +11,7 @@ const {
   surfaceReadyDeferredResumeMock,
   getLiveSessionsMock,
   promptSessionMock,
+  queuePromptContextMock,
   syncWebLiveConversationRunMock,
   liveRegistry,
 } = vi.hoisted(() => ({
@@ -24,6 +25,7 @@ const {
   surfaceReadyDeferredResumeMock: vi.fn(),
   getLiveSessionsMock: vi.fn(),
   promptSessionMock: vi.fn(),
+  queuePromptContextMock: vi.fn(),
   syncWebLiveConversationRunMock: vi.fn(),
   liveRegistry: new Map<string, {
     cwd: string;
@@ -52,6 +54,7 @@ vi.mock('@personal-agent/daemon', () => ({
 vi.mock('./liveSessions.js', () => ({
   getLiveSessions: getLiveSessionsMock,
   promptSession: promptSessionMock,
+  queuePromptContext: queuePromptContextMock,
   registry: liveRegistry,
 }));
 
@@ -92,6 +95,7 @@ beforeEach(() => {
   surfaceReadyDeferredResumeMock.mockReset();
   getLiveSessionsMock.mockReset();
   promptSessionMock.mockReset();
+  queuePromptContextMock.mockReset();
   syncWebLiveConversationRunMock.mockReset();
   liveRegistry.clear();
 
@@ -99,6 +103,7 @@ beforeEach(() => {
   completeDeferredResumeConversationRunMock.mockResolvedValue(undefined);
   markDeferredResumeConversationRunRetryScheduledMock.mockResolvedValue(undefined);
   promptSessionMock.mockResolvedValue(undefined);
+  queuePromptContextMock.mockResolvedValue(undefined);
   syncWebLiveConversationRunMock.mockResolvedValue(undefined);
   retryDeferredResumeForSessionFileMock.mockReturnValue(undefined);
 });
@@ -169,6 +174,69 @@ describe('createLiveDeferredResumeFlusher', () => {
     expect(markDeferredResumeConversationRunRetryScheduledMock).not.toHaveBeenCalled();
     expect(publishConversationSessionMetaChanged).toHaveBeenCalledWith('conv-1');
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('keeps background run callback details hidden behind a clean visible prompt', async () => {
+    const ready = {
+      ...createReadyResume('background-run-resume-1'),
+      prompt: [
+        'Durable run run-123 has finished.',
+        'taskSlug=information-architecture-eval',
+        'status=completed',
+        'log=/tmp/output.log',
+        '',
+        'Recent log tail:',
+        '{"total":1,"failed":1}',
+      ].join('\n'),
+      title: 'Background run information-architecture-eval completed',
+      source: { kind: 'background-run', id: 'run-123' },
+    };
+    getLiveSessionsMock.mockReturnValue([{
+      id: 'conv-1',
+      cwd: '/repo',
+      sessionFile: '/tmp/session-1.jsonl',
+      title: 'Conversation 1',
+      isStreaming: false,
+      hasPendingHiddenTurn: false,
+    }]);
+    liveRegistry.set('conv-1', {
+      cwd: '/repo',
+      title: 'Conversation 1',
+      session: {
+        sessionFile: '/tmp/session-1.jsonl',
+        isStreaming: false,
+      },
+    });
+    activateDueDeferredResumesForSessionFileMock.mockReturnValue([]);
+    listDeferredResumesForSessionFileMock.mockReturnValue([ready]);
+    completeDeferredResumeForSessionFileMock.mockReturnValue(ready);
+
+    const flush = createLiveDeferredResumeFlusher({
+      getCurrentProfile: () => 'shared',
+      getRepoRoot: () => '/repo-root',
+      getStateRoot: () => '/state',
+      resolveDaemonRoot: () => '/daemon',
+      publishConversationSessionMetaChanged: vi.fn(),
+    });
+
+    await flush();
+
+    const visiblePrompt = 'Background run information-architecture-eval completed. Continue from the background run result.';
+    expect(queuePromptContextMock).toHaveBeenCalledWith(
+      'conv-1',
+      'referenced_context',
+      expect.stringContaining('Durable run run-123 has finished.'),
+    );
+    expect(promptSessionMock).toHaveBeenCalledWith('conv-1', visiblePrompt, undefined);
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
+      pendingOperation: expect.objectContaining({
+        text: visiblePrompt,
+        contextMessages: [expect.objectContaining({
+          customType: 'referenced_context',
+          content: expect.stringContaining('taskSlug=information-architecture-eval'),
+        })],
+      }),
+    }));
   });
 
   it('schedules a retry when prompt delivery fails', async () => {
