@@ -1067,11 +1067,11 @@ export class PersonalAgentDaemon {
       };
     }
 
-    if (run.manifest?.kind !== 'background-run') {
+    if (run.manifest?.kind !== 'background-run' && run.manifest?.kind !== 'raw-shell') {
       return {
         cancelled: false,
         runId,
-        reason: 'only daemon background runs can be cancelled',
+        reason: 'only daemon background work can be cancelled',
       };
     }
 
