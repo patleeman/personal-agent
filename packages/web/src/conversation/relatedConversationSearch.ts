@@ -1,4 +1,4 @@
-import stopword from 'stopword';
+import { eng, removeStopwords } from 'stopword';
 import { fuzzyScore } from '../commands/slashMenu';
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 
@@ -42,7 +42,7 @@ function normalizeQueryTokens(query: string): string[] {
     .split(/\s+/)
     .filter((token) => token.length > 0);
 
-  const tokens = stopword.removeStopwords(cleanedTokens, stopword.eng)
+  const tokens = removeStopwords(cleanedTokens, eng)
     .filter((token) => token.length > 1 && !PRODUCT_QUERY_STOPWORDS.has(token));
 
   return [...new Set(tokens)].slice(0, 8);

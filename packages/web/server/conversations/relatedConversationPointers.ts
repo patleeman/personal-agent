@@ -1,4 +1,4 @@
-import stopword from 'stopword';
+import { eng, removeStopwords } from 'stopword';
 import { readConversationSummary } from './conversationSummaries.js';
 import {
   listSessions,
@@ -75,7 +75,7 @@ function tokenize(value: string): string[] {
     .split(/[^a-z0-9_./-]+/)
     .map((term) => term.trim())
     .filter((term) => term.length >= 3);
-  const terms = stopword.removeStopwords(tokens, stopword.eng)
+  const terms = removeStopwords(tokens, eng)
     .filter((term) => !PRODUCT_STOPWORDS.has(term));
 
   return Array.from(new Set(terms)).slice(0, 32);
