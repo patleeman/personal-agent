@@ -35,6 +35,8 @@ The desktop top bar has a layout selector:
 
 Use `Cmd+Option+\` on macOS, or `Ctrl+Alt+\` elsewhere, to toggle between Compact and Workbench. It sits with the related layout shortcuts: `Cmd/Ctrl+\` toggles the left sidebar and `Cmd/Ctrl+Shift+\` toggles the right rail.
 
+The right-side workbench rail includes Knowledge, File Explorer, Artifacts when present, and Browser. Browser is an Electron-owned embedded web view with local navigation controls plus agent-facing tools: capture a readable snapshot, or run a small JSON action batch (`click`, `type`, `key`, `scroll`, `wait`) and capture the resulting snapshot.
+
 Workbench stores its mode and pane widths in browser-local layout preferences. Reset them from Settings → Browser local state → “Reset layout + reload”.
 
 ## Validation

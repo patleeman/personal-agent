@@ -1222,4 +1222,40 @@ export function registerDesktopIpc(options: {
   ipcMain.handle(`${CHANNEL_PREFIX}:go-forward`, async (event) => {
     return options.windowController.goForwardForWebContents(event.sender.id);
   });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, async (event, input) => {
+    return options.windowController.setWorkbenchBrowserBoundsForWebContents(event.sender.id, input ?? {});
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-state`, async (event) => {
+    return options.windowController.getWorkbenchBrowserStateForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-navigate`, async (event, input) => {
+    return options.windowController.navigateWorkbenchBrowserForWebContents(event.sender.id, input?.url);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-back`, async (event) => {
+    return options.windowController.goBackWorkbenchBrowserForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-forward`, async (event) => {
+    return options.windowController.goForwardWorkbenchBrowserForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-reload`, async (event) => {
+    return options.windowController.reloadWorkbenchBrowserForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-stop`, async (event) => {
+    return options.windowController.stopWorkbenchBrowserForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-snapshot`, async (event) => {
+    return options.windowController.snapshotWorkbenchBrowserForWebContents(event.sender.id);
+  });
+
+  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-run-actions`, async (event, input) => {
+    return options.windowController.runWorkbenchBrowserActionsForWebContents(event.sender.id, input?.actions);
+  });
 }

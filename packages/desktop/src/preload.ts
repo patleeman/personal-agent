@@ -313,6 +313,16 @@ const desktopBridge = {
   unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
+  setWorkbenchBrowserBounds: (input: { visible: boolean; bounds?: { x: number; y: number; width: number; height: number } }) =>
+    ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, input),
+  getWorkbenchBrowserState: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-state`),
+  navigateWorkbenchBrowser: (input: { url: string }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-navigate`, input),
+  goBackWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-back`),
+  goForwardWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-forward`),
+  reloadWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-reload`),
+  stopWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-stop`),
+  snapshotWorkbenchBrowser: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-snapshot`),
+  runWorkbenchBrowserActions: (input: { actions: unknown[] }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-run-actions`, input),
 };
 
 if (domGlobals.document?.documentElement) {

@@ -10,6 +10,7 @@ import { buildDesktopStartupErrorPageDataUrl } from './startup-error-page.js';
 import type { HostManager } from './hosts/host-manager.js';
 import type { DesktopHostRecord } from './hosts/types.js';
 import { syncDesktopShellAppModeForWindows } from './app-mode.js';
+import { WorkbenchBrowserViewController, normalizeWorkbenchBrowserBounds } from './workbench-browser.js';
 
 function resolvePreloadPath(): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
@@ -221,6 +222,7 @@ export class DesktopWindowController {
     role: ManagedWindowRole;
     window: BrowserWindow;
   }>();
+  private readonly workbenchBrowser = new WorkbenchBrowserViewController();
   private hasVisibleWindowsInAppMode: boolean | null = null;
 
   constructor(private readonly hostManager: HostManager) {}
@@ -327,6 +329,81 @@ export class DesktopWindowController {
 
   async goForwardForWebContents(webContentsId: number): Promise<DesktopNavigationState> {
     return this.goForward(this.trackedWindows.get(webContentsId)?.window);
+  }
+
+  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown }): unknown {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      return null;
+    }
+
+    const visible = input?.visible === true;
+    const bounds = visible ? normalizeWorkbenchBrowserBounds(input?.bounds) : null;
+    if (visible && !bounds) {
+      throw new Error('Workbench browser bounds are invalid.');
+    }
+
+    return this.workbenchBrowser.setBounds(tracked.window.webContents, visible, bounds);
+  }
+
+  getWorkbenchBrowserStateForWebContents(webContentsId: number): unknown {
+    return this.workbenchBrowser.getState(webContentsId);
+  }
+
+  async navigateWorkbenchBrowserForWebContents(webContentsId: number, url: unknown): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.navigate(tracked.window.webContents, url);
+  }
+
+  async goBackWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.goBack(tracked.window.webContents);
+  }
+
+  async goForwardWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.goForward(tracked.window.webContents);
+  }
+
+  async reloadWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.reload(tracked.window.webContents);
+  }
+
+  stopWorkbenchBrowserForWebContents(webContentsId: number): unknown {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.stop(tracked.window.webContents);
+  }
+
+  async snapshotWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.snapshot(tracked.window.webContents);
+  }
+
+  async runWorkbenchBrowserActionsForWebContents(webContentsId: number, actions: unknown): Promise<unknown> {
+    const tracked = this.trackedWindows.get(webContentsId);
+    if (!tracked || tracked.window.isDestroyed()) {
+      throw new Error('Workbench browser owner window is unavailable.');
+    }
+    return this.workbenchBrowser.runActions(tracked.window.webContents, actions);
   }
 
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {
@@ -546,6 +623,7 @@ export class DesktopWindowController {
     this.trackedWindows.set(webContentsId, { hostId, role, window });
 
     window.on('closed', () => {
+      this.workbenchBrowser.destroy(webContentsId);
       this.trackedWindows.delete(webContentsId);
       if (role === 'main' && this.mainWindow === window) {
         this.mainWindow = undefined;

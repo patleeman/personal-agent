@@ -1,4 +1,4 @@
-import { Component, Suspense, useRef, useState, useCallback, useEffect, useMemo, type ReactNode } from 'react';
+import { Component, Suspense, useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { AlertToaster } from './AlertToaster';
 import { CommandPalette } from './CommandPalette';
@@ -12,7 +12,7 @@ import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
-import { isDesktopShell, readDesktopEnvironment } from '../desktop/desktopBridge';
+import { getDesktopBridge, isDesktopShell, readDesktopEnvironment, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
@@ -39,6 +39,8 @@ const WORKBENCH_EXPLORER_WIDTH_STORAGE_KEY = 'pa:workbench-explorer-width';
 const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15z';
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode' | 'cycle-view-mode';
+
+type WorkbenchRailMode = 'knowledge' | 'files' | 'artifacts' | 'browser';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode' || value === 'cycle-view-mode';
@@ -528,6 +530,203 @@ function WorkbenchDocumentPane({
   );
 }
 
+function formatBrowserSnapshotForAgent(snapshot: { url: string; title: string; text: string }): string {
+  return [
+    'Browser snapshot:',
+    `URL: ${snapshot.url || '(blank)'}`,
+    `Title: ${snapshot.title || '(untitled)'}`,
+    '',
+    snapshot.text || '(No readable text.)',
+  ].join('\n');
+}
+
+function WorkbenchBrowserTab() {
+  const browserHostRef = useRef<HTMLDivElement | null>(null);
+  const [urlDraft, setUrlDraft] = useState('https://www.google.com/search?q=personal%20agent');
+  const latestUrlDraftRef = useRef(urlDraft);
+  const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
+  const [actionsDraft, setActionsDraft] = useState('[\n  { "type": "wait", "ms": 500 }\n]');
+  const [snapshotText, setSnapshotText] = useState('');
+  const [status, setStatus] = useState('');
+  const bridge = getDesktopBridge();
+
+  useEffect(() => {
+    latestUrlDraftRef.current = urlDraft;
+  }, [urlDraft]);
+
+  const syncBounds = useCallback(() => {
+    const host = browserHostRef.current;
+    if (!bridge || !host) {
+      return;
+    }
+
+    const rect = host.getBoundingClientRect();
+    const visible = rect.width >= 24 && rect.height >= 24;
+    void bridge.setWorkbenchBrowserBounds({
+      visible,
+      ...(visible ? {
+        bounds: {
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        },
+      } : {}),
+      }).then((nextState) => {
+      if (nextState) {
+        setState(nextState);
+        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+      }
+    }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
+  }, [bridge]);
+
+  useLayoutEffect(() => {
+    syncBounds();
+    const observer = typeof ResizeObserver !== 'undefined' && browserHostRef.current
+      ? new ResizeObserver(syncBounds)
+      : null;
+    if (browserHostRef.current) {
+      observer?.observe(browserHostRef.current);
+    }
+    window.addEventListener('resize', syncBounds);
+    const timer = window.setInterval(syncBounds, 1000);
+
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', syncBounds);
+      window.clearInterval(timer);
+      void bridge?.setWorkbenchBrowserBounds({ visible: false }).catch(() => undefined);
+    };
+  }, [bridge, syncBounds]);
+
+  const refreshState = useCallback(() => {
+    if (!bridge) {
+      return;
+    }
+    void bridge.getWorkbenchBrowserState().then((nextState) => {
+      if (nextState) {
+        setState(nextState);
+        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+      }
+    }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
+  }, [bridge]);
+
+  async function runBrowserCommand(command: () => Promise<DesktopWorkbenchBrowserState | null | undefined>) {
+    if (!bridge) {
+      setStatus('Workbench browser is only available in the Electron desktop app.');
+      return;
+    }
+    try {
+      setStatus('Working…');
+      const nextState = await command();
+      if (nextState) {
+        setState(nextState);
+        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+      }
+      setStatus('');
+      syncBounds();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function captureSnapshot() {
+    if (!bridge) {
+      setStatus('Workbench browser is only available in the Electron desktop app.');
+      return;
+    }
+    try {
+      setStatus('Capturing snapshot…');
+      const snapshot = await bridge.snapshotWorkbenchBrowser();
+      setState(snapshot);
+      setUrlDraft(snapshot.url || latestUrlDraftRef.current);
+      setSnapshotText(formatBrowserSnapshotForAgent(snapshot));
+      setStatus('Snapshot captured.');
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  async function runActionBatch() {
+    if (!bridge) {
+      setStatus('Workbench browser is only available in the Electron desktop app.');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(actionsDraft) as unknown;
+      if (!Array.isArray(parsed)) {
+        throw new Error('Action batch must be a JSON array.');
+      }
+      setStatus('Running action batch…');
+      const result = await bridge.runWorkbenchBrowserActions({ actions: parsed });
+      setState(result.snapshot);
+      setUrlDraft(result.snapshot.url || latestUrlDraftRef.current);
+      setSnapshotText(formatBrowserSnapshotForAgent(result.snapshot));
+      setStatus(`Ran ${result.actions.length} action${result.actions.length === 1 ? '' : 's'}.`);
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <form
+        className="flex shrink-0 gap-1.5 border-b border-border-subtle px-2 py-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void runBrowserCommand(() => bridge!.navigateWorkbenchBrowser({ url: urlDraft }));
+        }}
+      >
+        <button type="button" className="ui-toolbar-button px-2" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser())}>←</button>
+        <button type="button" className="ui-toolbar-button px-2" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
+        <button type="button" className="ui-toolbar-button px-2" onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? 'Stop' : 'Reload'}</button>
+        <input
+          className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
+          value={urlDraft}
+          onChange={(event) => setUrlDraft(event.target.value)}
+          onBlur={refreshState}
+          placeholder="https://example.com"
+        />
+        <button type="submit" className="ui-action-button px-2 py-1 text-[12px]">Go</button>
+      </form>
+      <div ref={browserHostRef} className="relative min-h-[220px] flex-1 overflow-hidden bg-base">
+        {!bridge ? (
+          <div className="flex h-full items-center justify-center px-4 text-center text-[12px] leading-5 text-dim">
+            Browser embedding is only available in the Electron desktop app.
+          </div>
+        ) : null}
+      </div>
+      <div className="flex max-h-[42%] shrink-0 flex-col gap-2 overflow-auto border-t border-border-subtle px-2 py-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-[12px] font-medium text-primary">{state?.title || 'Browser tools'}</p>
+            <p className="truncate text-[11px] text-dim">{state?.url || 'Ready'}</p>
+          </div>
+          <button type="button" className="ui-action-button px-2 py-1 text-[12px]" onClick={() => void captureSnapshot()}>Snapshot</button>
+        </div>
+        <textarea
+          className="min-h-[90px] rounded-md border border-border-subtle bg-surface px-2 py-2 font-mono text-[11px] leading-5 text-primary outline-none focus:border-accent/60"
+          value={actionsDraft}
+          onChange={(event) => setActionsDraft(event.target.value)}
+          spellCheck={false}
+          aria-label="Browser action batch JSON"
+        />
+        <button type="button" className="ui-action-button justify-center px-2 py-1 text-[12px]" onClick={() => void runActionBatch()}>Run action batch</button>
+        {status ? <p className="text-[11px] text-dim">{status}</p> : null}
+        {snapshotText ? (
+          <textarea
+            className="min-h-[120px] rounded-md border border-border-subtle bg-base px-2 py-2 font-mono text-[11px] leading-5 text-primary outline-none"
+            value={snapshotText}
+            onChange={(event) => setSnapshotText(event.target.value)}
+            spellCheck={false}
+            aria-label="Browser snapshot for agent"
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function WorkbenchKnowledgeRail({
   conversationId,
   workspaceCwd,
@@ -544,7 +743,7 @@ function WorkbenchKnowledgeRail({
   onWorkspaceFileClear: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [railMode, setRailMode] = useState<'knowledge' | 'files' | 'artifacts'>('knowledge');
+  const [railMode, setRailMode] = useState<WorkbenchRailMode>('knowledge');
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
@@ -598,6 +797,10 @@ function WorkbenchKnowledgeRail({
       return next;
     });
   }, [activeArtifactId, artifacts, onWorkspaceFileClear, setSearchParams]);
+  const handleBrowserModeSelect = useCallback(() => {
+    setRailMode('browser');
+    onWorkspaceFileClear();
+  }, [onWorkspaceFileClear]);
   const handleArtifactSelect = useCallback((artifactId: string) => {
     setRailMode('artifacts');
     onWorkspaceFileClear();
@@ -652,6 +855,15 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'browser' && 'ui-sidebar-nav-item-active')} title="Browser" onClick={handleBrowserModeSelect}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.25" />
+            <path d="M3.75 12h16.5" />
+            <path d="M12 3.75c2.1 2.25 3.15 5 3.15 8.25S14.1 18 12 20.25" />
+            <path d="M12 3.75C9.9 6 8.85 8.75 8.85 12S9.9 18 12 20.25" />
+          </svg>
+          <span className="flex-1 text-left">Browser</span>
+        </button>
       </div>
       {railMode === 'knowledge' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
@@ -677,7 +889,7 @@ function WorkbenchKnowledgeRail({
             <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>
           )}
         </div>
-      ) : (
+      ) : railMode === 'artifacts' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationArtifactRailContent
             artifacts={artifacts}
@@ -686,6 +898,10 @@ function WorkbenchKnowledgeRail({
             error={artifactsError}
             onOpenArtifact={handleArtifactSelect}
           />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <WorkbenchBrowserTab />
         </div>
       )}
     </div>

@@ -120,6 +120,25 @@ export interface DesktopScreenshotCaptureResult {
   };
 }
 
+export interface DesktopWorkbenchBrowserBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface DesktopWorkbenchBrowserState {
+  url: string;
+  title: string;
+  loading: boolean;
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+export interface DesktopWorkbenchBrowserSnapshot extends DesktopWorkbenchBrowserState {
+  text: string;
+}
+
 export interface PersonalAgentDesktopBridge {
   getEnvironment(): Promise<DesktopEnvironmentState>;
   getConnections(): Promise<DesktopConnectionsState>;
@@ -409,6 +428,15 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
+  setWorkbenchBrowserBounds(input: { visible: boolean; bounds?: DesktopWorkbenchBrowserBounds }): Promise<DesktopWorkbenchBrowserState | null>;
+  getWorkbenchBrowserState(): Promise<DesktopWorkbenchBrowserState | null>;
+  navigateWorkbenchBrowser(input: { url: string }): Promise<DesktopWorkbenchBrowserState>;
+  goBackWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
+  goForwardWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
+  reloadWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
+  stopWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
+  snapshotWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserSnapshot>;
+  runWorkbenchBrowserActions(input: { actions: unknown[] }): Promise<{ ok: true; actions: Array<{ index: number; type: string; ok: true }>; snapshot: DesktopWorkbenchBrowserSnapshot }>;
 }
 
 export interface DesktopRemoteOperationEnvelope {
