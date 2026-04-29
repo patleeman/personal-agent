@@ -1062,6 +1062,14 @@
     @apply text-sm leading-relaxed text-primary;
   }
 
+  .ui-markdown > *:first-child {
+    @apply mt-0;
+  }
+
+  .ui-markdown > *:last-child {
+    @apply mb-0;
+  }
+
   .ui-markdown h1 {
     @apply mt-1 mb-3 text-[18px] font-semibold tracking-tight text-primary;
   }
