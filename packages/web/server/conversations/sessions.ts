@@ -1409,6 +1409,32 @@ function readLegacyToolWorkspaceMetadata(line: RawMessage): LegacyToolWorkspaceM
   return { cwd, workspaceCwd: cwd };
 }
 
+function readCurrentSessionLeafId(filePath: string): string | null {
+  try {
+    let leafId: string | null = null;
+    for (const rawLine of readFileSync(filePath, 'utf-8').split('\n')) {
+      if (!rawLine.trim()) {
+        continue;
+      }
+
+      const line = parseJsonLine(rawLine);
+      if (!line || line.type === 'session') {
+        continue;
+      }
+
+      const id = typeof line.id === 'string' && line.id.trim().length > 0
+        ? line.id.trim()
+        : null;
+      if (id) {
+        leafId = id;
+      }
+    }
+    return leafId;
+  } catch {
+    return null;
+  }
+}
+
 export function appendConversationWorkspaceMetadata(input: {
   sessionFile: string;
   cwd?: string;
@@ -1420,11 +1446,13 @@ export function appendConversationWorkspaceMetadata(input: {
   const cwd = input.cwd?.trim();
   const workspaceCwd = input.workspaceCwd === null ? null : input.workspaceCwd?.trim();
   const timestamp = new Date().toISOString();
+  const metadataId = randomUUID();
+  const metadataParentId = readCurrentSessionLeafId(input.sessionFile);
 
   appendFileSync(input.sessionFile, `${JSON.stringify({
     type: 'custom',
-    id: randomUUID(),
-    parentId: null,
+    id: metadataId,
+    parentId: metadataParentId,
     timestamp,
     customType: CONVERSATION_WORKSPACE_METADATA_CUSTOM_TYPE,
     data: {
@@ -1447,7 +1475,7 @@ export function appendConversationWorkspaceMetadata(input: {
   appendFileSync(input.sessionFile, `${JSON.stringify({
     type: 'custom_message',
     id: randomUUID(),
-    parentId: null,
+    parentId: metadataId,
     timestamp,
     customType: CONVERSATION_WORKSPACE_CHANGE_CUSTOM_TYPE,
     content: `Working directory changed from ${previousLabel} to ${nextLabel}.`,

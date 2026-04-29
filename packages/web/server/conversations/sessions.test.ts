@@ -1221,12 +1221,30 @@ describe('sessions', () => {
     expect(detail?.meta.workspaceCwd).toBe('/tmp/attached-project');
     expect(readFileSync(filePath, 'utf-8').split('\n')[0]).toContain('"cwd":"/tmp/original"');
     expect(detail?.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'user', text: 'Move me' }),
+      expect.objectContaining({ type: 'text', text: 'Assistant reply' }),
+    ]));
+    expect(detail?.blocks).toEqual(expect.arrayContaining([
       expect.objectContaining({
         type: 'context',
         customType: 'conversation_workspace_change',
         text: 'Working directory changed from Chats to /tmp/attached-project.',
       }),
     ]));
+
+    const appendedLines = readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .filter(Boolean)
+      .slice(-2)
+      .map((line) => JSON.parse(line));
+    expect(appendedLines[0]).toEqual(expect.objectContaining({
+      type: 'custom',
+    }));
+    expect(appendedLines[0].parentId).toEqual(expect.any(String));
+    expect(appendedLines[1]).toEqual(expect.objectContaining({
+      type: 'custom_message',
+      parentId: appendedLines[0].id,
+    }));
   });
 
   it('infers neutral chat workspaces as chat conversations without metadata', () => {
