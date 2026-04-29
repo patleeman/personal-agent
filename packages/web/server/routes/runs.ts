@@ -133,6 +133,7 @@ export function registerRunRoutes(router: Pick<Express, 'get' | 'post' | 'patch'
         res.status(409).json({ error: result.reason ?? 'Could not cancel run.' });
         return;
       }
+      invalidateAppTopics('runs');
       res.json(result);
     } catch (err) {
       logError('request handler error', {

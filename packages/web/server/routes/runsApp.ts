@@ -14,7 +14,7 @@ import {
   getDurableRunLogCursor,
   readDurableRunLogDelta,
 } from '../automation/durableRuns.js';
-import { logError } from '../middleware/index.js';
+import { invalidateAppTopics, logError } from '../middleware/index.js';
 
 const ACTIVE_RUN_POLL_INTERVAL_MS = 1_000;
 const IDLE_RUN_POLL_INTERVAL_MS = 5_000;
@@ -257,6 +257,7 @@ export function registerRunAppRoutes(
     try {
       const result = await cancelDurableRun(req.params.id);
       if (!result.cancelled) { res.status(409).json({ error: result.reason ?? 'Could not cancel run.' }); return; }
+      invalidateAppTopics('runs');
       res.json(result);
     } catch (err) {
       logError('request handler error', {

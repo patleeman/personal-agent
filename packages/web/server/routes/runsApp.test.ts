@@ -6,6 +6,7 @@ const {
   getDurableRunLogCursorMock,
   getDurableRunLogMock,
   getDurableRunMock,
+  invalidateAppTopicsMock,
   listDurableRunsMock,
   logErrorMock,
   readDurableRunLogDeltaMock,
@@ -14,6 +15,7 @@ const {
   getDurableRunLogCursorMock: vi.fn(),
   getDurableRunLogMock: vi.fn(),
   getDurableRunMock: vi.fn(),
+  invalidateAppTopicsMock: vi.fn(),
   listDurableRunsMock: vi.fn(),
   logErrorMock: vi.fn(),
   readDurableRunLogDeltaMock: vi.fn(),
@@ -29,7 +31,7 @@ vi.mock('../automation/durableRuns.js', () => ({
 }));
 
 vi.mock('../middleware/index.js', () => ({
-  invalidateAppTopics: vi.fn(),
+  invalidateAppTopics: invalidateAppTopicsMock,
   logError: logErrorMock,
 }));
 
@@ -46,6 +48,7 @@ describe('registerRunAppRoutes', () => {
     getDurableRunLogCursorMock.mockReturnValue(0);
     getDurableRunLogMock.mockReset();
     getDurableRunMock.mockReset();
+    invalidateAppTopicsMock.mockReset();
     listDurableRunsMock.mockReset();
     logErrorMock.mockReset();
     readDurableRunLogDeltaMock.mockReset();
@@ -304,14 +307,17 @@ describe('registerRunAppRoutes', () => {
     await cancelHandler({ params: { id: 'run-1' } }, res);
 
     expect(cancelDurableRunMock).toHaveBeenCalledWith('run-1');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
     expect(res.json).toHaveBeenCalledWith({ cancelled: true, reason: null });
 
+    invalidateAppTopicsMock.mockClear();
     cancelDurableRunMock.mockResolvedValue({ cancelled: false, reason: 'already finished' });
     const conflictRes = createJsonResponse();
     await cancelHandler({ params: { id: 'run-1' } }, conflictRes);
 
     expect(conflictRes.status).toHaveBeenCalledWith(409);
     expect(conflictRes.json).toHaveBeenCalledWith({ error: 'already finished' });
+    expect(invalidateAppTopicsMock).not.toHaveBeenCalled();
 
     cancelDurableRunMock.mockRejectedValue(new Error('cancel failed'));
     const failingRes = createJsonResponse();

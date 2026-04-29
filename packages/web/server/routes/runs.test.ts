@@ -238,13 +238,16 @@ describe('registerRunRoutes', () => {
 
     await cancelHandler({ params: { id: 'run-1' } }, res);
     expect(cancelDurableRunMock).toHaveBeenCalledWith('run-1');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
     expect(res.json).toHaveBeenCalledWith({ cancelled: true, reason: null });
 
+    invalidateAppTopicsMock.mockClear();
     cancelDurableRunMock.mockResolvedValue({ cancelled: false, reason: 'already finished' });
     const conflictRes = createJsonResponse();
     await cancelHandler({ params: { id: 'run-1' } }, conflictRes);
     expect(conflictRes.status).toHaveBeenCalledWith(409);
     expect(conflictRes.json).toHaveBeenCalledWith({ error: 'already finished' });
+    expect(invalidateAppTopicsMock).not.toHaveBeenCalled();
 
     cancelDurableRunMock.mockRejectedValue(new Error('cancel failed'));
     const failingRes = createJsonResponse();
