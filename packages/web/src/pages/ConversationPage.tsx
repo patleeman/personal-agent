@@ -4719,6 +4719,25 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
 
             rememberComposerInput(inputSnapshot, created.id);
             persistPendingConversationPrompt(created.id, initialPrompt);
+            setPendingConversationPromptDispatching(created.id, true);
+
+            const sendResult = await api.promptSession(
+              created.id,
+              initialPrompt.text,
+              initialPrompt.behavior,
+              initialPrompt.images,
+              initialPrompt.attachmentRefs,
+              undefined,
+              initialPrompt.contextMessages,
+              normalizePendingRelatedConversationIds(initialPrompt),
+            );
+            for (const warning of sendResult.relatedConversationPointerWarnings ?? []) {
+              showNotice('danger', warning, 5000);
+            }
+            if (sendResult.accepted) {
+              clearPendingConversationPrompt(created.id);
+            }
+            setPendingConversationPromptDispatching(created.id, false);
 
             clearDraftConversationAttachments();
             clearDraftConversationContextDocs();
@@ -4748,6 +4767,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             });
             navigatedToCreatedConversation = true;
           } catch (error) {
+            if (createdSessionId) {
+              setPendingConversationPromptDispatching(createdSessionId, false);
+            }
             if (createdSessionId && !navigatedToCreatedConversation) {
               await api.destroySession(createdSessionId).catch(() => {});
             }
@@ -4803,6 +4825,21 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           persistPendingConversationPrompt(newId, initialPrompt);
           setPendingConversationPromptDispatching(newId, true);
 
+          const sendResult = await api.promptSession(
+            newId,
+            initialPrompt.text,
+            initialPrompt.behavior,
+            initialPrompt.images,
+            initialPrompt.attachmentRefs,
+          );
+          for (const warning of sendResult.relatedConversationPointerWarnings ?? []) {
+            showNotice('danger', warning, 5000);
+          }
+          if (sendResult.accepted) {
+            clearPendingConversationPrompt(newId);
+          }
+          setPendingConversationPromptDispatching(newId, false);
+
           clearDraftConversationAttachments();
           clearDraftConversationContextDocs();
           clearDraftConversationCwd();
@@ -4829,32 +4866,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             },
           });
           navigatedToCreatedConversation = true;
-
-          // Kick off the first turn immediately, but do not hold route
-          // navigation open on the prompt-start roundtrip. The pending prompt
-          // stays mirrored in storage until the new conversation page can see
-          // the accepted user turn in its transcript, so the optimistic state
-          // survives the route handoff and can still retry if this detached
-          // start fails before that handoff completes.
-          void api.promptSession(
-            newId,
-            initialPrompt.text,
-            initialPrompt.behavior,
-            initialPrompt.images,
-            initialPrompt.attachmentRefs,
-          ).then((result) => {
-            for (const warning of result.relatedConversationPointerWarnings ?? []) {
-              showNotice('danger', warning, 5000);
-            }
-            if (result.accepted) {
-              clearPendingConversationPrompt(newId);
-            }
-            setPendingConversationPromptDispatching(newId, false);
-          }).catch((error) => {
-            setPendingConversationPromptDispatching(newId, false);
-            console.error('Initial prompt failed:', error);
-          });
         } catch (error) {
+          if (createdSessionId) {
+            setPendingConversationPromptDispatching(createdSessionId, false);
+          }
           if (createdSessionId && !navigatedToCreatedConversation) {
             await api.destroySession(createdSessionId).catch(() => {});
           }
