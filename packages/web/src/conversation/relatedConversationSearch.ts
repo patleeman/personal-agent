@@ -1,3 +1,4 @@
+import stopword from 'stopword';
 import { fuzzyScore } from '../commands/slashMenu';
 import type { ConversationSummaryRecord, SessionMeta } from '../shared/types';
 
@@ -7,8 +8,11 @@ const MAX_RECENT_WINDOW_DAYS = 365;
 const DEFAULT_CANDIDATE_LIMIT = 48;
 const DEFAULT_RECENT_RESULTS_LIMIT = 10;
 const MAX_RELATED_CONVERSATION_LIMIT = 100;
-const COMMON_QUERY_STOPWORDS = new Set([
-  'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'do', 'for', 'from', 'help', 'how', 'i', 'if', 'in', 'into', 'is', 'it', 'me', 'my', 'of', 'on', 'or', 'out', 'please', 'should', 'that', 'the', 'this', 'to', 'want', 'what', 'why', 'with', 'you', 'your',
+const PRODUCT_QUERY_STOPWORDS = new Set([
+  'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'help', 'how',
+  'junk', 'like', 'look', 'looks', 'new', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
+  'thread', 'threads', 'today', 'used', 'user', 'want', 'wants', 'what', 'when', 'where', 'why', 'work', 'working',
+  'would', 'yeah',
 ]);
 
 export interface RelatedConversationSearchResult {
@@ -38,8 +42,8 @@ function normalizeQueryTokens(query: string): string[] {
     .split(/\s+/)
     .filter((token) => token.length > 0);
 
-  const meaningfulTokens = cleanedTokens.filter((token) => token.length > 1 && !COMMON_QUERY_STOPWORDS.has(token));
-  const tokens = meaningfulTokens.length > 0 ? meaningfulTokens : cleanedTokens;
+  const tokens = stopword.removeStopwords(cleanedTokens, stopword.eng)
+    .filter((token) => token.length > 1 && !PRODUCT_QUERY_STOPWORDS.has(token));
 
   return [...new Set(tokens)].slice(0, 8);
 }

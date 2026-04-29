@@ -89,6 +89,42 @@ describe('buildRelatedConversationPointers', () => {
     expect(result.contextMessages[0]?.content).toContain('Do not treat these pointer previews as factual source context');
   });
 
+  it('does not auto-rank conversations from generic prompt terms alone', () => {
+    readConversationSummaryMock.mockImplementation((sessionId: string) => sessionId === 'generic-1'
+      ? { displaySummary: 'Paused before rewriting our private repo history', promptSummary: '', keyTerms: [], filesTouched: [] }
+      : null);
+    readSessionSearchTextMock.mockReturnValue('our app looks good now');
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'generic-1', title: 'Sanitize Git History for Open Source', messageCount: 6, lastActivityAt: '2026-04-20T10:00:00.000Z' },
+    ]);
+
+    const result = buildRelatedConversationPointers({
+      prompt: 'Why is our app bundle 730MB?',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(result.pointers).toEqual([]);
+    expect(result.contextMessages).toEqual([]);
+  });
+
+  it('keeps feature terms after aggressive stopword removal', () => {
+    readConversationSummaryMock.mockReturnValue({ displaySummary: 'Dictation was added with a mic button and transcription provider', promptSummary: '', keyTerms: [], filesTouched: [] });
+    readSessionSearchTextMock.mockReturnValue('dictation whisper transcription streaming');
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'dictation-1', title: 'Add Whisper Dictation to PA', messageCount: 6, lastActivityAt: '2026-04-20T10:00:00.000Z' },
+    ]);
+
+    const result = buildRelatedConversationPointers({
+      prompt: "Dictation isn't working. Is there a way to stream dictation?",
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['dictation-1']);
+    expect(result.pointers[0]?.reasons.join(' ')).toContain('dictation');
+  });
+
   it('omits missing manual selections after retry and warns', () => {
     readSessionMetaMock.mockReturnValue(null);
 

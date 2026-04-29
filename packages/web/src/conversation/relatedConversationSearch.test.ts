@@ -375,6 +375,49 @@ describe('rankRelatedConversationSessions', () => {
     expect(result?.matchedTerms).toEqual(expect.arrayContaining(['release', 'signing', 'failing']));
   });
 
+  it('does not rank results from generic product chatter alone', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'generic',
+        title: 'Sanitize Git History for Open Source',
+        cwd: '/repo/current',
+      }),
+    ];
+
+    expect(rankRelatedConversationSessions({
+      sessions,
+      searchIndex: {
+        generic: 'Paused before rewriting our private repo history. The app looks good now.',
+      },
+      query: 'Why is our app bundle good now?',
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+    })).toEqual([]);
+  });
+
+  it('keeps strong feature terms after aggressive stopword removal', () => {
+    const sessions: SessionMeta[] = [
+      buildSession({
+        id: 'model-selector',
+        title: 'Fix model selector bug',
+        cwd: '/repo/current',
+      }),
+    ];
+
+    const [result] = rankRelatedConversationSessions({
+      sessions,
+      searchIndex: {
+        'model-selector': 'Fixed model selector defaulting and line wrapping regressions.',
+      },
+      query: 'Input is still line-breaking the model selector items',
+      workspaceCwd: '/repo/current',
+      nowMs: Date.parse('2026-04-13T09:00:00.000Z'),
+    });
+
+    expect(result?.sessionId).toBe('model-selector');
+    expect(result?.matchedTerms).toEqual(expect.arrayContaining(['model', 'selector']));
+  });
+
   it('returns no matches for a blank query', () => {
     const sessions: SessionMeta[] = [buildSession({ id: 'one', title: 'Thread one', cwd: '/repo/current' })];
 

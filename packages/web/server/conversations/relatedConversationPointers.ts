@@ -1,3 +1,4 @@
+import stopword from 'stopword';
 import { readConversationSummary } from './conversationSummaries.js';
 import {
   listSessions,
@@ -9,6 +10,12 @@ import {
 export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
+const PRODUCT_STOPWORDS = new Set([
+  'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
+  'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
+  'thread', 'threads', 'today', 'used', 'user', 'want', 'wants', 'what', 'when', 'where', 'why', 'work', 'working',
+  'would', 'yeah',
+]);
 
 export interface RelatedConversationPointer {
   sessionId: string;
@@ -63,15 +70,13 @@ function normalizePointerLimit(value: number | undefined): number {
 }
 
 function tokenize(value: string): string[] {
-  const stopWords = new Set([
-    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'for', 'from', 'how', 'i', 'in', 'is', 'it', 'me', 'my',
-    'of', 'on', 'or', 'so', 'that', 'the', 'this', 'to', 'we', 'what', 'when', 'where', 'why', 'with', 'you', 'your',
-  ]);
-  const terms = value
+  const tokens = value
     .toLowerCase()
-    .split(/[^a-z0-9_.\/-]+/)
+    .split(/[^a-z0-9_./-]+/)
     .map((term) => term.trim())
-    .filter((term) => term.length >= 3 && !stopWords.has(term));
+    .filter((term) => term.length >= 3);
+  const terms = stopword.removeStopwords(tokens, stopword.eng)
+    .filter((term) => !PRODUCT_STOPWORDS.has(term));
 
   return Array.from(new Set(terms)).slice(0, 32);
 }
