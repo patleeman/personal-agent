@@ -18,6 +18,9 @@ await build({
   platform: 'node',
   target: 'node20',
   format: 'esm',
+  banner: {
+    js: 'import { createRequire as __paCreateRequire } from "node:module"; const require = __paCreateRequire(import.meta.url);',
+  },
   sourcemap: false,
   minify: true,
   legalComments: 'none',
