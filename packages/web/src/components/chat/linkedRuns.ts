@@ -411,7 +411,12 @@ export function collectTraceClusterLinkedRuns(blocks: MessageBlock[]): LinkedRun
       continue;
     }
 
-    for (const run of readLinkedRuns(block).runs) {
+    const linkedRuns = readLinkedRuns(block);
+    if (linkedRuns.scope === 'listed') {
+      continue;
+    }
+
+    for (const run of linkedRuns.runs) {
       const runId = run.runId.trim();
       if (!runId || seen.has(runId)) {
         continue;

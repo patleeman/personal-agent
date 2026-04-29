@@ -87,4 +87,21 @@ describe('linkedRuns', () => {
       { runId: 'run-new-cleanup-def456', title: 'New cleanup', detail: 'log view' },
     ]);
   });
+
+  it('does not promote bulk run list results to trace cluster linked cards', () => {
+    const listRuns = runToolBlock({
+      details: {
+        action: 'list',
+        runs: [
+          { runId: 'run-old-cleanup-abc123', status: 'completed', kind: 'background-run' },
+          { runId: 'run-new-cleanup-def456', status: 'running', kind: 'background-run' },
+        ],
+      },
+    });
+    const activeRun = runToolBlock({ details: { action: 'logs', runId: 'run-new-cleanup-def456' } });
+
+    expect(collectTraceClusterLinkedRuns([listRuns, activeRun])).toEqual([
+      { runId: 'run-new-cleanup-def456', title: 'New cleanup', detail: 'log view' },
+    ]);
+  });
 });
