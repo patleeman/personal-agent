@@ -311,6 +311,11 @@ export async function markBackgroundRunStarted(input: {
 
 export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): Promise<void> {
   const manifest = loadDurableRunManifest(input.runPaths.manifestPath);
+  const currentStatus = loadDurableRunStatus(input.runPaths.statusPath);
+  if (currentStatus?.status === 'cancelled' && !input.cancelled) {
+    return;
+  }
+
   const status = input.cancelled
     ? 'cancelled'
     : input.exitCode === 0

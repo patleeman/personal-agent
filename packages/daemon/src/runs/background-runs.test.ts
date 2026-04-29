@@ -334,6 +334,28 @@ describe('background runs', () => {
     const output = readFileSync(record.paths.outputLogPath, 'utf-8');
     expect(output).toContain('# cancelledAt=2026-03-19T20:00:02.000Z');
 
+    await finalizeBackgroundRun({
+      runId: record.runId,
+      runPaths: record.paths,
+      taskSlug: 'cancel-me',
+      cwd: '/tmp/cancel-me',
+      startedAt: '2026-03-19T20:00:01.000Z',
+      endedAt: '2026-03-19T20:00:04.000Z',
+      exitCode: 1,
+      signal: 'SIGTERM',
+      cancelled: false,
+      error: 'Command exited with code 1',
+    });
+
+    expect(loadDurableRunStatus(record.paths.statusPath)).toEqual(expect.objectContaining({
+      status: 'cancelled',
+      completedAt: '2026-03-19T20:00:02.000Z',
+      lastError: 'Cancelled by user',
+    }));
+    expect(readDurableRunEvents(record.paths.eventsPath).at(-1)).toEqual(expect.objectContaining({
+      type: 'run.cancelled',
+    }));
+
     await expect(markBackgroundRunCancelling({
       runId: record.runId,
       runPaths: record.paths,

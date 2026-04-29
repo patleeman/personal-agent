@@ -13,6 +13,7 @@ const {
   createStoredAutomationMock,
   applyScheduledTaskThreadBindingMock,
   setTaskCallbackBindingMock,
+  invalidateAppTopicsMock,
 } = vi.hoisted(() => ({
   listDurableRunsMock: vi.fn(),
   getDurableRunMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   createStoredAutomationMock: vi.fn(),
   applyScheduledTaskThreadBindingMock: vi.fn(),
   setTaskCallbackBindingMock: vi.fn(),
+  invalidateAppTopicsMock: vi.fn(),
 }));
 
 vi.mock('../automation/durableRuns.js', () => ({
@@ -47,6 +49,10 @@ vi.mock('@personal-agent/daemon', () => ({
 
 vi.mock('../automation/scheduledTaskThreads.js', () => ({
   applyScheduledTaskThreadBinding: applyScheduledTaskThreadBindingMock,
+}));
+
+vi.mock('../shared/appEvents.js', () => ({
+  invalidateAppTopics: invalidateAppTopicsMock,
 }));
 
 vi.mock('@personal-agent/core', async (importOriginal) => {
@@ -105,6 +111,7 @@ beforeEach(() => {
   createStoredAutomationMock.mockReset();
   applyScheduledTaskThreadBindingMock.mockReset();
   setTaskCallbackBindingMock.mockReset();
+  invalidateAppTopicsMock.mockReset();
   rerunDurableRunMock.mockReset();
   followUpDurableRunMock.mockReset();
 
@@ -563,6 +570,7 @@ describe('run agent extension', () => {
 
     expect(result.isError).not.toBe(true);
     expect(rerunDurableRunMock).toHaveBeenCalledWith('run-original-123');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
     expect(result.content[0]?.text).toContain('Started rerun run-rerun-123 from run-original-123');
   });
 
@@ -590,6 +598,7 @@ describe('run agent extension', () => {
 
     expect(result.isError).not.toBe(true);
     expect(followUpDurableRunMock).toHaveBeenCalledWith('run-original-123', 'Continue from the failed migration step and finish validation.');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
     expect(result.content[0]?.text).toContain('Started follow-up run run-followup-123 from run-original-123');
   });
 
@@ -615,6 +624,31 @@ describe('run agent extension', () => {
     expect(result.isError).toBe(true);
     expect(followUpDurableRunMock).toHaveBeenCalledWith('run-original-123', 'Continue from where you left off.');
     expect(result.content[0]?.text).toContain('cannot continue');
+  });
+
+  it('cancels a durable run and invalidates run snapshots', async () => {
+    ensureDaemonAvailableMock.mockResolvedValue(undefined);
+    cancelDurableRunMock.mockResolvedValue({
+      cancelled: true,
+      runId: 'run-original-123',
+    });
+
+    const runTool = registerRunTool();
+    const result = await runTool.execute(
+      'tool-1',
+      {
+        action: 'cancel',
+        runId: 'run-original-123',
+      },
+      undefined,
+      undefined,
+      createToolContext(),
+    );
+
+    expect(result.isError).not.toBe(true);
+    expect(cancelDurableRunMock).toHaveBeenCalledWith('run-original-123');
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('runs');
+    expect(result.content[0]?.text).toContain('Cancelled durable run run-original-123.');
   });
 
   it('returns tool errors for missing runs and rejected cancellations', async () => {

@@ -211,6 +211,41 @@ describe('registerRunAppRoutes', () => {
     expect(res.write.mock.calls).toHaveLength(writesBeforeClose);
   });
 
+  it('slows run detail and log polling after a terminal snapshot', async () => {
+    vi.useFakeTimers();
+    readDurableRunLogDeltaMock.mockReturnValue(undefined);
+    const getDurableRunSnapshot = vi.fn()
+      .mockResolvedValueOnce({
+        detail: { run: { runId: 'run-1', status: 'running' } },
+        log: { path: '/tmp/run.log', log: 'initial' },
+      })
+      .mockResolvedValue({
+        detail: { run: { runId: 'run-1', status: 'cancelled' } },
+        log: { path: '/tmp/run.log', log: 'cancelled' },
+      });
+    const { eventsHandler } = createHarness({ getDurableRunSnapshot });
+    const req = Object.assign(new EventEmitter(), {
+      params: { id: 'run-1' },
+      query: {},
+    });
+    const res = createStreamResponse();
+
+    await eventsHandler(req, res);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(res.write).toHaveBeenCalledWith(`data: ${JSON.stringify({
+      type: 'detail',
+      detail: { run: { runId: 'run-1', status: 'cancelled' } },
+    })}\n\n`);
+    expect(getDurableRunSnapshot).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(getDurableRunSnapshot).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(getDurableRunSnapshot).toHaveBeenCalledTimes(3);
+
+    req.emit('close');
+  });
+
   it('returns 404 when the run snapshot is missing and logs snapshot startup failures', async () => {
     const missingSnapshot = vi.fn().mockResolvedValue(null);
     const { eventsHandler } = createHarness({ getDurableRunSnapshot: missingSnapshot });
