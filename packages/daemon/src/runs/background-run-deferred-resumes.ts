@@ -222,7 +222,7 @@ function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
   const status = run.run.status?.status ?? 'unknown';
   const logText = readRunLogTail(run.run.paths.outputLogPath, SINGLE_RUN_LOG_TAIL_LINES) || '(empty log)';
   const lines = [
-    `Durable run ${run.run.runId} has finished.`,
+    `Background task ${run.run.runId} has finished.`,
     `taskSlug=${taskSlug}`,
     `status=${status}`,
     `log=${run.run.paths.outputLogPath}`,
@@ -247,7 +247,7 @@ function buildGenericSingleRunPrompt(run: EligibleBackgroundRun): string {
 function buildGenericBatchPrompt(runs: EligibleBackgroundRun[]): string {
   const orderedRuns = sortRuns(runs);
   const lines = [
-    'Durable runs have finished. Continue from this point.',
+    'Background tasks have finished. Continue from this point.',
     '',
     'Completed runs:',
   ];

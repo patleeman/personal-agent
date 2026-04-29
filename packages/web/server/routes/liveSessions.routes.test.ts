@@ -593,6 +593,11 @@ describe('live session routes', () => {
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'live-resumed',
       'referenced_context',
+      expect.stringContaining('Never output this raw completion block verbatim.'),
+    );
+    expect(queuePromptContextMock).toHaveBeenCalledWith(
+      'live-resumed',
+      'referenced_context',
       expect.stringContaining('Referenced conversation attachments:'),
     );
     expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({

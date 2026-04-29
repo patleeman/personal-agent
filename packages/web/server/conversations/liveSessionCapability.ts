@@ -224,6 +224,7 @@ function buildBackgroundRunHiddenContext(entries: Array<{ prompt: string }>): st
   const lines = [
     'Background run completions became available since the previous explicit user turn.',
     'Use this as hidden context only. Do not treat it as a standalone follow-up instruction.',
+    'Never output this raw completion block verbatim.',
     'Do not quote or summarize raw run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
     'If the only sensible next step is to wait and inspect again later, add a conversation_queue item with trigger "delay" or "at" yourself instead of asking the user to remind you.',
   ];

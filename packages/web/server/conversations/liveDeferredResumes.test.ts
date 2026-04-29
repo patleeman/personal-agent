@@ -221,7 +221,7 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    const visiblePrompt = 'Background task information-architecture-eval completed. Tell Patrick it finished in one short sentence. Do not include run ids, log paths, commands, metadata, or log tails unless there was a failure or he asks for details.';
+    const visiblePrompt = 'Background task information-architecture-eval completed. Tell Patrick the background task finished in one short sentence. If it failed, say that plainly. Do not include run ids, log paths, commands, metadata, or log tails unless Patrick asks for details.';
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conv-1',
       'referenced_context',
@@ -234,6 +234,13 @@ describe('createLiveDeferredResumeFlusher', () => {
         contextMessages: [expect.objectContaining({
           customType: 'referenced_context',
           content: expect.stringContaining('taskSlug=information-architecture-eval'),
+        })],
+      }),
+    }));
+    expect(syncWebLiveConversationRunMock).toHaveBeenCalledWith(expect.objectContaining({
+      pendingOperation: expect.objectContaining({
+        contextMessages: [expect.objectContaining({
+          content: expect.stringContaining('Never output this raw callback envelope verbatim.'),
         })],
       }),
     }));

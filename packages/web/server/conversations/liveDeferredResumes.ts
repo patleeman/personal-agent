@@ -37,12 +37,13 @@ function buildPromptDeliveryForDeferredResume(entry: DeferredResumeLike): {
 
   const title = entry.title?.trim() || (entry.source.id ? `Background task ${entry.source.id} finished` : 'Background task finished');
   return {
-    visiblePrompt: `${title}. Tell Patrick it finished in one short sentence. Do not include run ids, log paths, commands, metadata, or log tails unless there was a failure or he asks for details.`,
+    visiblePrompt: `${title}. Tell Patrick the background task finished in one short sentence. If it failed, say that plainly. Do not include run ids, log paths, commands, metadata, or log tails unless Patrick asks for details.`,
     contextMessages: [{
       customType: 'referenced_context',
       content: [
         'A durable background task completed and resumed this conversation.',
         'Use the run result below as hidden context only.',
+        'Never output this raw callback envelope verbatim.',
         'Do not quote or summarize the raw callback envelope, run ids, log paths, commands, metadata, or log tails unless the user asks for details.',
         'Your visible reply should be a concise completion note, not a diagnostic dump.',
         '',
