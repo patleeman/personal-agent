@@ -390,6 +390,66 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
   }, null, 2));
 }
 
+export async function markBackgroundRunCancelling(input: {
+  runId: string;
+  runPaths: DurableRunPaths;
+  reason: string;
+  cancelledAt?: string;
+}): Promise<boolean> {
+  const manifest = loadDurableRunManifest(input.runPaths.manifestPath);
+  const currentStatus = loadDurableRunStatus(input.runPaths.statusPath);
+  if (!manifest || (manifest.kind !== 'background-run' && manifest.kind !== 'raw-shell') || !currentStatus) {
+    return false;
+  }
+
+  if (currentStatus.status === 'completed' || currentStatus.status === 'failed' || currentStatus.status === 'cancelled' || currentStatus.status === 'interrupted') {
+    return false;
+  }
+
+  const cancelledAt = new Date(input.cancelledAt ?? Date.now()).toISOString();
+  const checkpoint = loadDurableRunCheckpoint(input.runPaths.checkpointPath);
+
+  saveDurableRunStatus(input.runPaths.statusPath, createInitialDurableRunStatus({
+    runId: input.runId,
+    status: 'cancelled',
+    createdAt: currentStatus.createdAt,
+    updatedAt: cancelledAt,
+    activeAttempt: currentStatus.activeAttempt,
+    startedAt: currentStatus.startedAt,
+    completedAt: cancelledAt,
+    checkpointKey: 'cancelled',
+    lastError: input.reason,
+  }));
+
+  saveDurableRunCheckpoint(input.runPaths.checkpointPath, {
+    version: 1,
+    runId: input.runId,
+    updatedAt: cancelledAt,
+    step: 'cancelled',
+    payload: {
+      ...(checkpoint?.payload ?? {}),
+      cancelledAt,
+      cancelled: true,
+      error: input.reason,
+    },
+  });
+
+  await appendDurableRunEvent(input.runPaths.eventsPath, {
+    version: 1,
+    runId: input.runId,
+    timestamp: cancelledAt,
+    type: 'run.cancelled',
+    attempt: currentStatus.activeAttempt,
+    payload: {
+      cancelled: true,
+      error: input.reason,
+    },
+  });
+
+  appendOutputLog(input.runPaths.outputLogPath, `\n# cancelledAt=${cancelledAt}\n# error=${input.reason}\n`);
+  return true;
+}
+
 export async function markBackgroundRunInterrupted(input: {
   runId: string;
   runPaths: DurableRunPaths;

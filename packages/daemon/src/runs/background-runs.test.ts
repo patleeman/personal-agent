@@ -15,6 +15,7 @@ import {
   createBackgroundRunId,
   createBackgroundRunRecord,
   finalizeBackgroundRun,
+  markBackgroundRunCancelling,
   markBackgroundRunInterrupted,
   markBackgroundRunStarted,
 } from './background-runs.js';
@@ -284,6 +285,61 @@ describe('background runs', () => {
       cancelled: true,
       success: false,
     }));
+  });
+
+  it('marks active runs cancelled before the child process exits', async () => {
+    const runsRoot = createTempDir('pa-background-run-cancelling-');
+    const record = await createBackgroundRunRecord(runsRoot, {
+      taskSlug: 'cancel-me',
+      cwd: '/tmp/cancel-me',
+      shellCommand: 'sleep 10',
+      createdAt: '2026-03-19T20:00:00.000Z',
+    });
+
+    await markBackgroundRunStarted({
+      runId: record.runId,
+      runPaths: record.paths,
+      startedAt: '2026-03-19T20:00:01.000Z',
+      pid: 4343,
+      taskSlug: 'cancel-me',
+      cwd: '/tmp/cancel-me',
+    });
+
+    await expect(markBackgroundRunCancelling({
+      runId: record.runId,
+      runPaths: record.paths,
+      reason: 'Cancelled by user',
+      cancelledAt: '2026-03-19T20:00:02.000Z',
+    })).resolves.toBe(true);
+
+    expect(loadDurableRunStatus(record.paths.statusPath)).toEqual(expect.objectContaining({
+      status: 'cancelled',
+      checkpointKey: 'cancelled',
+      completedAt: '2026-03-19T20:00:02.000Z',
+      lastError: 'Cancelled by user',
+    }));
+    expect(loadDurableRunCheckpoint(record.paths.checkpointPath)).toEqual(expect.objectContaining({
+      step: 'cancelled',
+      payload: expect.objectContaining({
+        cancelledAt: '2026-03-19T20:00:02.000Z',
+        cancelled: true,
+        error: 'Cancelled by user',
+      }),
+    }));
+    expect(readDurableRunEvents(record.paths.eventsPath).at(-1)).toEqual(expect.objectContaining({
+      type: 'run.cancelled',
+      attempt: 1,
+      payload: { cancelled: true, error: 'Cancelled by user' },
+    }));
+    const output = readFileSync(record.paths.outputLogPath, 'utf-8');
+    expect(output).toContain('# cancelledAt=2026-03-19T20:00:02.000Z');
+
+    await expect(markBackgroundRunCancelling({
+      runId: record.runId,
+      runPaths: record.paths,
+      reason: 'should not change final state',
+      cancelledAt: '2026-03-19T20:00:03.000Z',
+    })).resolves.toBe(false);
   });
 
   it('interrupts active runs and ignores missing or already-finalized ones', async () => {

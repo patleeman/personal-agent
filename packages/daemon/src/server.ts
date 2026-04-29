@@ -14,6 +14,7 @@ import { ensureDaemonDirectories, resolveDaemonPaths } from './paths.js';
 import {
   createBackgroundRunRecord,
   finalizeBackgroundRun,
+  markBackgroundRunCancelling,
   markBackgroundRunInterrupted,
   markBackgroundRunStarted,
   type StartBackgroundRunInput,
@@ -1035,6 +1036,11 @@ export class PersonalAgentDaemon {
     if (active) {
       active.cancelling = true;
       active.cancelReason = reason;
+      await markBackgroundRunCancelling({
+        runId,
+        runPaths: resolveDurableRunPaths(this.runsRoot, runId),
+        reason,
+      });
       if (!active.child.killed) {
         active.child.kill('SIGTERM');
       }
