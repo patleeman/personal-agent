@@ -13,7 +13,6 @@ import {
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import {
   readConversationCheckpointReviewContext,
-  readConversationCheckpointStructuralDiff,
   resolveConversationCheckpointRecord,
 } from './checkpointReview.js';
 
@@ -54,11 +53,6 @@ interface ConversationAttachmentSaveInput {
 interface ConversationCheckpointCommentCreateInput extends ConversationCheckpointMutationInput {
   body?: string;
   filePath?: string;
-}
-
-interface ConversationCheckpointStructuralDiffInput extends ConversationCheckpointMutationInput {
-  filePath: string;
-  display: 'inline' | 'side-by-side';
 }
 
 interface ConversationAttachmentDownloadInput extends ConversationAttachmentMutationInput {
@@ -216,7 +210,6 @@ export function createConversationCommitCheckpointCommentCapability(
 export async function readConversationCheckpointReviewContextCapability(
   profile: string,
   input: ConversationCheckpointMutationInput,
-  options?: { repoRoot?: string },
 ) {
   const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
   const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
@@ -224,37 +217,12 @@ export async function readConversationCheckpointReviewContextCapability(
     profile,
     conversationId,
     checkpointId,
-    repoRoot: options?.repoRoot,
   });
   if (!reviewContext) {
     throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
   }
 
   return reviewContext;
-}
-
-export function readConversationCheckpointStructuralDiffCapability(
-  profile: string,
-  input: ConversationCheckpointStructuralDiffInput,
-  options?: { repoRoot?: string },
-) {
-  const conversationId = normalizeRequiredId(input.conversationId, 'conversationId');
-  const checkpointId = normalizeRequiredId(input.checkpointId, 'checkpointId');
-  const filePath = normalizeRequiredId(input.filePath, 'filePath');
-  const display: 'inline' | 'side-by-side' = input.display === 'side-by-side' ? 'side-by-side' : 'inline';
-  const result = readConversationCheckpointStructuralDiff({
-    profile,
-    conversationId,
-    checkpointId,
-    filePath,
-    display,
-    repoRoot: options?.repoRoot,
-  });
-  if (!result) {
-    throw new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found');
-  }
-
-  return result;
 }
 
 export function deleteConversationArtifactCapability(

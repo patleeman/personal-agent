@@ -74,10 +74,6 @@ const electronBuilderConfig = {
       to: 'prompt-catalog',
     },
     {
-      from: 'packages/desktop/vendor/difftastic',
-      to: 'vendor/difftastic',
-    },
-    {
       from: 'packages/desktop/vendor/remote-helper',
       to: 'vendor/remote-helper',
     },

@@ -8,30 +8,27 @@ import {
 } from '../conversation/conversationCheckpoints';
 import { useAppEvents } from '../app/contexts';
 import { useApi } from '../hooks/useApi';
-import type { ConversationCheckpointStructuralDiffResult, ConversationCommitCheckpointComment } from '../shared/types';
+import type { ConversationCommitCheckpointComment } from '../shared/types';
 import { formatDate } from '../shared/utils';
 import { CheckpointDiffSection, fileDisplayPath, statusLabel } from './checkpoints/CheckpointDiffView';
 import { ErrorState, LoadingState, cx } from './ui';
 
-type DiffViewMode = 'unified' | 'split' | 'structural';
+type DiffViewMode = 'unified' | 'split';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
 function DiffViewToggle({
   currentView,
   onChange,
-  structuralDiffAvailable,
 }: {
   currentView: DiffViewMode;
   onChange: (nextView: DiffViewMode) => void;
-  structuralDiffAvailable: boolean;
 }) {
   return (
     <div className="ui-segmented-control" role="tablist" aria-label="Diff view">
       {([
         ['split', 'Split'],
         ['unified', 'Unified'],
-        ...(structuralDiffAvailable ? [['structural', 'Structural']] : []),
       ] as Array<[DiffViewMode, string]>).map(([value, label]) => (
         <button
           key={value}
@@ -40,34 +37,6 @@ function DiffViewToggle({
           aria-selected={currentView === value}
           onClick={() => onChange(value)}
           className={cx('ui-segmented-button', currentView === value && 'ui-segmented-button-active')}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function StructuralDisplayToggle({
-  display,
-  onChange,
-}: {
-  display: 'inline' | 'side-by-side';
-  onChange: (nextDisplay: 'inline' | 'side-by-side') => void;
-}) {
-  return (
-    <div className="ui-segmented-control" role="tablist" aria-label="Structural diff layout">
-      {([
-        ['side-by-side', 'Side by side'],
-        ['inline', 'Inline'],
-      ] as const).map(([value, label]) => (
-        <button
-          key={value}
-          type="button"
-          role="tab"
-          aria-selected={display === value}
-          onClick={() => onChange(value)}
-          className={cx('ui-segmented-button', display === value && 'ui-segmented-button-active')}
         >
           {label}
         </button>
@@ -97,34 +66,6 @@ function CheckpointCommentList({ comments }: { comments: ConversationCommitCheck
   );
 }
 
-function StructuralDiffContent({
-  state,
-}: {
-  state: {
-    loading: boolean;
-    error: string | null;
-    data: ConversationCheckpointStructuralDiffResult | null;
-  };
-}) {
-  if (state.loading) {
-    return <LoadingState label="Loading structural diff…" className="justify-center h-full" />;
-  }
-
-  if (state.error) {
-    return <ErrorState message={state.error} className="px-4 py-4" />;
-  }
-
-  if (!state.data?.available) {
-    return <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">Structural diff isn’t available for this file on this machine.</div>;
-  }
-
-  return (
-    <pre className="min-h-full whitespace-pre overflow-x-auto px-4 py-3 font-mono text-[11px] leading-5 text-primary">
-      {state.data.content}
-    </pre>
-  );
-}
-
 const COMMENT_TEXTAREA_CLASS = 'w-full rounded-xl border border-border-subtle bg-surface/70 px-3 py-2.5 text-[13px] leading-relaxed text-primary outline-none transition-colors focus:border-accent/50 focus:bg-surface focus-visible:ring-2 focus-visible:ring-accent/20';
 
 export function ConversationCheckpointModal({
@@ -139,12 +80,6 @@ export function ConversationCheckpointModal({
   const { versions } = useAppEvents();
   const [copied, setCopied] = useState(false);
   const [diffView, setDiffView] = useState<DiffViewMode>('split');
-  const [structuralDisplay, setStructuralDisplay] = useState<'inline' | 'side-by-side'>('side-by-side');
-  const [structuralState, setStructuralState] = useState<{
-    loading: boolean;
-    error: string | null;
-    data: ConversationCheckpointStructuralDiffResult | null;
-  }>({ loading: false, error: null, data: null });
   const [commentDraft, setCommentDraft] = useState('');
   const [commentSaveState, setCommentSaveState] = useState<SaveState>('idle');
   const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -169,8 +104,6 @@ export function ConversationCheckpointModal({
   useEffect(() => {
     setCopied(false);
     setDiffView('split');
-    setStructuralDisplay('side-by-side');
-    setStructuralState({ loading: false, error: null, data: null });
     setCommentDraft('');
     setCommentSaveState('idle');
   }, [checkpointId]);
@@ -215,16 +148,7 @@ export function ConversationCheckpointModal({
   const selectedFile = checkpoint?.files.find((file) => file.path === resolvedFilePath)
     ?? checkpoint?.files[0]
     ?? null;
-  const structuralDiffAvailable = reviewContext?.structuralDiff.available === true;
-  const sidebarSelectedFilePath = diffView === 'structural'
-    ? selectedFile?.path ?? null
-    : activeFilePath ?? selectedFile?.path ?? null;
-
-  useEffect(() => {
-    if (!structuralDiffAvailable && diffView === 'structural') {
-      setDiffView('split');
-    }
-  }, [diffView, structuralDiffAvailable]);
+  const sidebarSelectedFilePath = activeFilePath ?? selectedFile?.path ?? null;
 
   useEffect(() => {
     if (selectedFilePath) {
@@ -236,44 +160,7 @@ export function ConversationCheckpointModal({
   }, [checkpoint?.files, selectedFilePath]);
 
   useEffect(() => {
-    if (diffView !== 'structural' || !selectedFile || !structuralDiffAvailable) {
-      setStructuralState((current) => current.loading || current.error || current.data
-        ? { loading: false, error: null, data: null }
-        : current);
-      return;
-    }
-
-    let cancelled = false;
-    setStructuralState({ loading: true, error: null, data: null });
-
-    void api.conversationCheckpointStructuralDiff(conversationId, checkpointId, {
-      path: selectedFile.path,
-      display: structuralDisplay,
-    }).then((nextData) => {
-      if (cancelled) {
-        return;
-      }
-
-      setStructuralState({ loading: false, error: null, data: nextData });
-    }).catch((fetchError) => {
-      if (cancelled) {
-        return;
-      }
-
-      setStructuralState({
-        loading: false,
-        error: fetchError instanceof Error ? fetchError.message : String(fetchError),
-        data: null,
-      });
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [checkpointId, conversationId, diffView, selectedFile, structuralDiffAvailable, structuralDisplay]);
-
-  useEffect(() => {
-    if (diffView === 'structural' || !selectedFilePath) {
+    if (!selectedFilePath) {
       return;
     }
 
@@ -286,7 +173,7 @@ export function ConversationCheckpointModal({
   }, [diffView, selectedFilePath, checkpoint?.id]);
 
   useEffect(() => {
-    if (diffView === 'structural' || !checkpoint?.files.length) {
+    if (!checkpoint?.files.length) {
       return;
     }
 
@@ -385,11 +272,9 @@ export function ConversationCheckpointModal({
       search: setConversationCheckpointFileInSearch(location.search, filePath),
     });
 
-    if (diffView !== 'structural') {
-      const element = fileSectionRefs.current[filePath];
-      element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-    }
-  }, [diffView, location.pathname, location.search, navigate]);
+    const element = fileSectionRefs.current[filePath];
+    element?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }, [location.pathname, location.search, navigate]);
 
   const githubInfo = reviewContext?.github ?? null;
 
@@ -450,10 +335,7 @@ export function ConversationCheckpointModal({
             </div>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <DiffViewToggle currentView={diffView} onChange={setDiffView} structuralDiffAvailable={structuralDiffAvailable} />
-            {diffView === 'structural' ? (
-              <StructuralDisplayToggle display={structuralDisplay} onChange={setStructuralDisplay} />
-            ) : null}
+            <DiffViewToggle currentView={diffView} onChange={setDiffView} />
           </div>
         </div>
 
@@ -503,33 +385,14 @@ export function ConversationCheckpointModal({
                 <div className="border-b border-border-subtle px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="min-w-0">
-                      {diffView === 'structural' && selectedFile ? (
-                        <>
-                          <p className="truncate text-[13px] font-medium text-primary" title={fileDisplayPath(selectedFile)}>{fileDisplayPath(selectedFile)}</p>
-                          <p className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-secondary">
-                            <span>{statusLabel(selectedFile)}</span>
-                            <span className="font-mono tabular-nums"><span className="text-success">+{selectedFile.additions}</span> <span className="text-danger">-{selectedFile.deletions}</span></span>
-                            {reviewContext?.structuralDiff.command ? <span className="text-dim">via {reviewContext.structuralDiff.command}</span> : null}
-                          </p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="text-[13px] font-medium text-primary">All diffs</p>
-                          <p className="mt-0.5 text-[11px] text-secondary">Scroll continuously or jump between files from the sidebar.</p>
-                        </>
-                      )}
+                      <p className="text-[13px] font-medium text-primary">All diffs</p>
+                      <p className="mt-0.5 text-[11px] text-secondary">Scroll continuously or jump between files from the sidebar.</p>
                     </div>
                     <p className="text-[11px] text-dim">{checkpoint.authorName}{checkpoint.authorEmail ? ` · ${checkpoint.authorEmail}` : ''}</p>
                   </div>
                 </div>
                 <div ref={viewerScrollRef} className="min-h-0 flex-1 overflow-auto overscroll-contain bg-elevated/20">
-                  {diffView === 'structural' ? (
-                    selectedFile ? (
-                      <StructuralDiffContent state={structuralState} />
-                    ) : (
-                      <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">Select a file from the sidebar.</div>
-                    )
-                  ) : checkpoint.files.length === 0 ? (
+                  {checkpoint.files.length === 0 ? (
                     <div className="flex h-full items-center justify-center px-6 text-[13px] text-secondary">No changed files were captured for this checkpoint.</div>
                   ) : (
                     <div>

@@ -128,19 +128,6 @@ export interface ConversationCheckpointReviewContext {
   conversationId: string;
   checkpointId: string;
   github: ConversationCheckpointGithubInfo | null;
-  structuralDiff: {
-    available: boolean;
-    command?: string;
-  };
-}
-
-export interface ConversationCheckpointStructuralDiffResult {
-  conversationId: string;
-  checkpointId: string;
-  filePath: string;
-  display: 'inline' | 'side-by-side';
-  available: boolean;
-  content?: string;
 }
 
 type ConversationAttachmentKind = 'excalidraw';

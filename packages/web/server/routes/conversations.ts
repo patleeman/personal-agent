@@ -38,7 +38,6 @@ import {
   readConversationAttachmentsCapability,
   createConversationCommitCheckpointCommentCapability,
   readConversationCheckpointReviewContextCapability,
-  readConversationCheckpointStructuralDiffCapability,
   readConversationCommitCheckpointCapability,
   readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
@@ -65,17 +64,12 @@ let getCurrentProfileFn: () => string = () => {
   throw new Error('getCurrentProfile not initialized for conversation routes');
 };
 
-let getRepoRootFn: () => string = () => {
-  throw new Error('getRepoRoot not initialized for conversation routes');
-};
-
 let flushLiveDeferredResumesFn: () => Promise<void> = async () => {};
 
 function initializeConversationRoutesContext(
   context: Pick<ServerRouteContext, 'getCurrentProfile' | 'getRepoRoot' | 'getSavedUiPreferences' | 'flushLiveDeferredResumes'>,
 ): void {
   getCurrentProfileFn = context.getCurrentProfile;
-  getRepoRootFn = context.getRepoRoot;
   flushLiveDeferredResumesFn = context.flushLiveDeferredResumes;
 
   setConversationServiceContext({
@@ -549,30 +543,6 @@ export function registerConversationRoutes(
       res.json(await readConversationCheckpointReviewContextCapability(getCurrentProfileFn(), {
         conversationId: req.params.id,
         checkpointId: req.params.checkpointId,
-      }, {
-        repoRoot: getRepoRootFn(),
-      }));
-    } catch (err) {
-      logError('request handler error', {
-        message: err instanceof Error ? err.message : String(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
-      if (writeConversationAssetCapabilityError(res, err)) {
-        return;
-      }
-      res.status(500).json({ error: String(err) });
-    }
-  });
-
-  router.get('/api/conversations/:id/checkpoints/:checkpointId/structural-diff', (req, res) => {
-    try {
-      res.json(readConversationCheckpointStructuralDiffCapability(getCurrentProfileFn(), {
-        conversationId: req.params.id,
-        checkpointId: req.params.checkpointId,
-        filePath: parseTrimmedQueryString(req.query.path) ?? '',
-        display: req.query.display === 'side-by-side' ? 'side-by-side' : 'inline',
-      }, {
-        repoRoot: getRepoRootFn(),
       }));
     } catch (err) {
       logError('request handler error', {

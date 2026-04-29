@@ -41,7 +41,6 @@ function mockUseApiResults(results: Record<string, Partial<ReturnType<typeof use
           conversationId: 'conv-123',
           checkpointId: 'abc1234def567890abc1234def567890abc12345',
           github: null,
-          structuralDiff: { available: false },
         },
       });
     }
@@ -140,10 +139,6 @@ describe('ConversationCheckpointModal', () => {
             pullRequestUrl: 'https://github.com/patleeman/personal-agent/pull/42',
             pullRequestTitle: 'feat: add checkpoint review',
             pullRequestNumber: 42,
-          },
-          structuralDiff: {
-            available: true,
-            command: 'difft',
           },
         },
       },

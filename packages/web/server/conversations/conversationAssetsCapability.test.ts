@@ -44,7 +44,6 @@ vi.mock('../shared/appEvents.js', () => ({
 
 vi.mock('./checkpointReview.js', () => ({
   readConversationCheckpointReviewContext: vi.fn(),
-  readConversationCheckpointStructuralDiff: vi.fn(),
   resolveConversationCheckpointRecord: resolveConversationCheckpointRecordMock,
 }));
 
