@@ -221,7 +221,7 @@ describe('createLiveDeferredResumeFlusher', () => {
 
     await flush();
 
-    const visiblePrompt = 'Background run information-architecture-eval completed. Continue from the background run result.';
+    const visiblePrompt = 'Background run information-architecture-eval completed. Tell Patrick it finished in one short sentence. Do not include run ids, log paths, commands, metadata, or log tails unless there was a failure or he asks for details.';
     expect(queuePromptContextMock).toHaveBeenCalledWith(
       'conv-1',
       'referenced_context',
