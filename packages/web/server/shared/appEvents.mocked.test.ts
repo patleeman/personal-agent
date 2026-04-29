@@ -11,6 +11,7 @@ const {
   getMachineConfigFilePathMock,
   getStateRootMock,
   loadDaemonConfigMock,
+  clearDurableRunsListCacheMock,
   logWarnMock,
   readKnownSessionIdByFilePathMock,
   readdirSyncMock,
@@ -80,6 +81,7 @@ const {
     getMachineConfigFilePathMock: vi.fn(() => '/machine/config.json'),
     getStateRootMock: vi.fn(() => '/state'),
     loadDaemonConfigMock: vi.fn(() => ({ ipc: { socketPath: '/daemon/socket.sock' } })),
+    clearDurableRunsListCacheMock: vi.fn(),
     logWarnMock: vi.fn(),
     readKnownSessionIdByFilePathMock: vi.fn((filePath: string) => (filePath.includes('conv-1') ? ' conv-1 ' : undefined)),
     readdirSyncMock,
@@ -127,6 +129,10 @@ vi.mock('@personal-agent/daemon', () => ({
   loadDaemonConfig: loadDaemonConfigMock,
   resolveDaemonPaths: resolveDaemonPathsMock,
   resolveDurableRunsRoot: resolveDurableRunsRootMock,
+}));
+
+vi.mock('../automation/durableRuns.js', () => ({
+  clearDurableRunsListCache: clearDurableRunsListCacheMock,
 }));
 
 vi.mock('../conversations/sessions.js', () => ({
@@ -210,6 +216,7 @@ describe('appEvents mocked behavior', () => {
     getMachineConfigFilePathMock.mockClear();
     getStateRootMock.mockClear();
     loadDaemonConfigMock.mockClear();
+    clearDurableRunsListCacheMock.mockClear();
     logWarnMock.mockReset();
     readKnownSessionIdByFilePathMock.mockClear();
     readdirSyncMock.mockClear();
@@ -246,6 +253,7 @@ describe('appEvents mocked behavior', () => {
     expect(events).toEqual([
       { type: 'invalidate', topics: ['runs', 'tasks'] },
     ]);
+    expect(clearDurableRunsListCacheMock).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to manual directory tree watches and emits session file changes from buffer filenames', () => {

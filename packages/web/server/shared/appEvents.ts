@@ -13,6 +13,7 @@ import {
 } from '@personal-agent/core';
 import { getDaemonConfigFilePath, loadDaemonConfig, resolveDaemonPaths, resolveDurableRunsRoot } from '@personal-agent/daemon';
 import { readKnownSessionIdByFilePath } from '../conversations/sessions.js';
+import { clearDurableRunsListCache } from '../automation/durableRuns.js';
 import { logWarn } from './logging.js';
 
 export type AppEventTopic =
@@ -478,6 +479,10 @@ export function invalidateAppTopics(...topics: AppEventTopic[]): void {
   const uniqueTopics = [...new Set(topics)].sort();
   if (uniqueTopics.length === 0) {
     return;
+  }
+
+  if (uniqueTopics.includes('runs')) {
+    clearDurableRunsListCache();
   }
 
   publishAppEvent({ type: 'invalidate', topics: uniqueTopics });
