@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppDataContext, LiveTitlesContext, SseConnectionContext } from '../app/contexts.js';
 import { OPEN_SESSION_IDS_STORAGE_KEY, PINNED_SESSION_IDS_STORAGE_KEY, ARCHIVED_SESSION_IDS_STORAGE_KEY } from '../local/localSettings.js';
 import type { ScheduledTaskSummary, SessionMeta } from '../shared/types.js';
-import { applyRunningIndicatorGrace, useConversations } from './useConversations.js';
+import { useConversations } from './useConversations.js';
 
 Object.assign(globalThis, { React, IS_REACT_ACT_ENVIRONMENT: true });
 
@@ -163,22 +163,7 @@ describe('useConversations', () => {
     expect(latestHookResult?.archivedSessions.map((session) => session.id)).toEqual(['newest', 'middle', 'older']);
   });
 
-  it('keeps the running indicator sticky across brief stale snapshots', () => {
-    const runningUntilBySessionId = new Map<string, number>();
-    const runningSnapshot = [createSession({ id: 'conv-running', isRunning: true, needsAttention: true })];
-    const staleSnapshot = [createSession({ id: 'conv-running', isRunning: false, needsAttention: true })];
-
-    expect(applyRunningIndicatorGrace(runningSnapshot, runningUntilBySessionId, 1_000, 5_000)[0]?.isRunning).toBe(true);
-
-    const sticky = applyRunningIndicatorGrace(staleSnapshot, runningUntilBySessionId, 3_000, 5_000);
-    expect(sticky[0]).toMatchObject({ isRunning: true, needsAttention: true });
-
-    const expired = applyRunningIndicatorGrace(staleSnapshot, runningUntilBySessionId, 7_000, 5_000);
-    expect(expired[0]).toMatchObject({ isRunning: false, needsAttention: true });
-  });
-
-  it('clears the sticky running indicator after the grace window without waiting for another snapshot', () => {
-    vi.useFakeTimers();
+  it('uses the latest session snapshot as the source of truth for running state', () => {
     localStorage.setItem(OPEN_SESSION_IDS_STORAGE_KEY, JSON.stringify(['conv-running']));
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -195,12 +180,6 @@ describe('useConversations', () => {
       sessions: [createSession({ id: 'conv-running', isRunning: false })],
       tasks: null,
     });
-    expect(latestHookResult?.tabs[0]?.isRunning).toBe(true);
-
-    act(() => {
-      vi.advanceTimersByTime(751);
-    });
     expect(latestHookResult?.tabs[0]?.isRunning).toBe(false);
-    vi.useRealTimers();
   });
 });

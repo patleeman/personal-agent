@@ -17,7 +17,7 @@ import {
   ensureSessionFileExists,
   registry as liveSessionRegistry,
 } from './liveSessions.js';
-import { publishAppEvent } from '../shared/appEvents.js';
+import { invalidateAppTopics, publishAppEvent } from '../shared/appEvents.js';
 import {
   listSessions,
   readSessionBlocksWithTelemetry,
@@ -272,6 +272,10 @@ export function publishConversationSessionMetaChanged(...conversationIds: Array<
 
     seen.add(conversationId);
     publishAppEvent({ type: 'session_meta_changed', sessionId: conversationId });
+  }
+
+  if (seen.size > 0) {
+    invalidateAppTopics('sessions');
   }
 }
 

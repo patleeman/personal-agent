@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { act } from 'react';
 import { useParams } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { DesktopAppEvent, DurableRunListResult, DurableRunRecord } from '../shared/types';
+import type { DesktopAppEvent, DurableRunListResult, DurableRunRecord, SessionMeta } from '../shared/types';
 
 (globalThis as typeof globalThis & { React?: typeof React; IS_REACT_ACT_ENVIRONMENT?: boolean }).React = React;
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -13,6 +13,7 @@ const subscribeDesktopAppEventsMock = vi.fn();
 const apiRunsMock = vi.fn();
 const apiTasksMock = vi.fn();
 const apiDaemonMock = vi.fn();
+const apiSessionMetaMock = vi.fn();
 const fetchSessionsSnapshotMock = vi.fn();
 let desktopListener: { onopen?: () => void; onevent?: (event: DesktopAppEvent) => void } | null = null;
 
@@ -25,6 +26,7 @@ vi.mock('../client/api', () => ({
     runs: apiRunsMock,
     tasks: apiTasksMock,
     daemon: apiDaemonMock,
+    sessionMeta: apiSessionMetaMock,
   },
 }));
 
@@ -43,12 +45,14 @@ vi.mock('../navigation/lazyRouteRecovery', async () => {
 
   function ConversationPageProbe() {
     const { id } = useParams();
-    const { runs } = useAppData();
+    const { runs, sessions } = useAppData();
     const state = useMemo(() => resolveConversationBackgroundRunState({ conversationId: id, runs }), [id, runs]);
+    const session = sessions?.find((candidate) => candidate.id === id);
 
     return (
       <main>
         <h1>Conversation {id}</h1>
+        <span>{session?.isRunning ? 'conversation running' : 'conversation idle'}</span>
         {state.activeRuns.length > 0 ? (
           <section data-testid="background-work">
             <span>Background Work</span>
@@ -121,6 +125,20 @@ function createRun(
   } as DurableRunRecord;
 }
 
+function createSessionMeta(overrides: Partial<SessionMeta> = {}): SessionMeta {
+  return {
+    id: 'conv-1',
+    file: '/tmp/conv-1.jsonl',
+    timestamp: '2026-04-29T01:22:23.123Z',
+    cwd: '/repo',
+    cwdSlug: 'repo',
+    model: 'openai/gpt-test',
+    title: 'Thread',
+    messageCount: 1,
+    ...overrides,
+  };
+}
+
 function createRuns(runs: DurableRunRecord[]): DurableRunListResult {
   return {
     scannedAt: '2026-04-29T01:22:24.000Z',
@@ -177,6 +195,7 @@ describe('App background work run state integration', () => {
     apiRunsMock.mockResolvedValue(createRuns([]));
     apiTasksMock.mockResolvedValue([]);
     apiDaemonMock.mockResolvedValue(null);
+    apiSessionMetaMock.mockResolvedValue(null);
     fetchSessionsSnapshotMock.mockResolvedValue([]);
   });
 
@@ -202,6 +221,22 @@ describe('App background work run state integration', () => {
     expect(container.textContent).not.toContain('running · npm test');
     expect(container.textContent).not.toContain('run-test-1');
     expect(container.textContent).toContain('No Background Work');
+  });
+
+  it('updates conversation running state immediately from session meta change events', async () => {
+    const idleSession = createSessionMeta({ isRunning: false });
+    const runningSession = createSessionMeta({ isRunning: true });
+    fetchSessionsSnapshotMock.mockResolvedValueOnce([idleSession]);
+    apiSessionMetaMock.mockResolvedValueOnce(runningSession);
+    ({ container, root } = await renderAppAtConversation());
+
+    await emitDesktopEvent({ type: 'sessions', sessions: [idleSession] });
+    expect(container.textContent).toContain('conversation idle');
+
+    await emitDesktopEvent({ type: 'session_meta_changed', sessionId: 'conv-1' });
+
+    expect(apiSessionMetaMock).toHaveBeenCalledWith('conv-1');
+    expect(container.textContent).toContain('conversation running');
   });
 
   it('keeps completed, failed, interrupted, and unrelated runs out of the active shelf', async () => {

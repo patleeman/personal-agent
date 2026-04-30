@@ -17,6 +17,7 @@ const {
   loadProfileActivityReadStateMock,
   markConversationAttentionReadMock,
   markConversationAttentionUnreadMock,
+  invalidateAppTopicsMock,
   publishAppEventMock,
   readConversationModelPreferenceSnapshotMock,
   readSavedModelPreferencesMock,
@@ -43,6 +44,7 @@ const {
   loadProfileActivityReadStateMock: vi.fn(),
   markConversationAttentionReadMock: vi.fn(),
   markConversationAttentionUnreadMock: vi.fn(),
+  invalidateAppTopicsMock: vi.fn(),
   publishAppEventMock: vi.fn(),
   readConversationModelPreferenceSnapshotMock: vi.fn(),
   readSavedModelPreferencesMock: vi.fn(),
@@ -98,6 +100,7 @@ vi.mock('./liveSessions.js', () => ({
 }));
 
 vi.mock('../shared/appEvents.js', () => ({
+  invalidateAppTopics: invalidateAppTopicsMock,
   publishAppEvent: publishAppEventMock,
 }));
 
@@ -157,6 +160,7 @@ describe('conversationService', () => {
     loadProfileActivityReadStateMock.mockReset();
     markConversationAttentionReadMock.mockReset();
     markConversationAttentionUnreadMock.mockReset();
+    invalidateAppTopicsMock.mockReset();
     publishAppEventMock.mockReset();
     readConversationModelPreferenceSnapshotMock.mockReset();
     readSavedModelPreferencesMock.mockReset();
@@ -252,12 +256,13 @@ describe('conversationService', () => {
     expect(parseTailBlocksQuery('5000')).toBe(1000);
   });
 
-  it('publishes deduped session meta change events', () => {
+  it('publishes deduped session meta change events and refreshes the sessions snapshot', () => {
     publishConversationSessionMetaChanged(' conversation-1 ', undefined, 'conversation-1', null, 'conversation-2');
 
     expect(publishAppEventMock).toHaveBeenCalledTimes(2);
     expect(publishAppEventMock).toHaveBeenNthCalledWith(1, { type: 'session_meta_changed', sessionId: 'conversation-1' });
     expect(publishAppEventMock).toHaveBeenNthCalledWith(2, { type: 'session_meta_changed', sessionId: 'conversation-2' });
+    expect(invalidateAppTopicsMock).toHaveBeenCalledWith('sessions');
   });
 
   it('merges live registry state and resolves session files', () => {

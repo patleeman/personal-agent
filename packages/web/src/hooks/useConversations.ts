@@ -35,31 +35,6 @@ import {
 } from '../session/sessionTabs';
 import type { SessionMeta } from '../shared/types';
 
-const RUNNING_INDICATOR_GRACE_MS = 750;
-
-function getNextRunningIndicatorGraceExpiration(
-  sessions: SessionMeta[],
-  runningUntilBySessionId: Map<string, number>,
-  nowMs: number,
-): number | null {
-  let nextExpiration: number | null = null;
-
-  for (const session of sessions) {
-    if (session.isRunning) {
-      continue;
-    }
-
-    const runningUntil = runningUntilBySessionId.get(session.id) ?? 0;
-    if (runningUntil <= nowMs) {
-      continue;
-    }
-
-    nextExpiration = nextExpiration === null ? runningUntil : Math.min(nextExpiration, runningUntil);
-  }
-
-  return nextExpiration;
-}
-
 function compareSessionsByRecentActivity(left: SessionMeta, right: SessionMeta): number {
   return (right.lastActivityAt ?? right.timestamp).localeCompare(left.lastActivityAt ?? left.timestamp);
 }
@@ -88,35 +63,6 @@ function buildPlaceholderSessionMeta(id: string, title?: string): SessionMeta {
   };
 }
 
-export function applyRunningIndicatorGrace(
-  sessions: SessionMeta[],
-  runningUntilBySessionId: Map<string, number>,
-  nowMs: number,
-  graceMs = RUNNING_INDICATOR_GRACE_MS,
-): SessionMeta[] {
-  let changed = false;
-
-  const nextSessions = sessions.map((session) => {
-    if (session.isRunning) {
-      runningUntilBySessionId.set(session.id, nowMs + graceMs);
-      return session;
-    }
-
-    const runningUntil = runningUntilBySessionId.get(session.id) ?? 0;
-    if (runningUntil > nowMs) {
-      changed = true;
-      return { ...session, isRunning: true };
-    }
-
-    if (runningUntilBySessionId.has(session.id)) {
-      runningUntilBySessionId.delete(session.id);
-    }
-    return session;
-  });
-
-  return changed ? nextSessions : sessions;
-}
-
 export function useConversations() {
   const [openIds, setOpenIds] = useState(() => readOpenSessionIds());
   const [pinnedIds, setPinnedIds] = useState(() => readPinnedSessionIds());
@@ -125,8 +71,6 @@ export function useConversations() {
   const { sessions, tasks, setSessions } = useAppData();
   const { status: sseStatus } = useSseConnection();
   const seenRunningAutomationIdsRef = useRef<Set<string>>(new Set());
-  const runningIndicatorGraceBySessionIdRef = useRef<Map<string, number>>(new Map());
-  const [runningIndicatorGraceClock, setRunningIndicatorGraceClock] = useState(0);
 
   useEffect(() => {
     function handleConversationLayoutChanged() {
@@ -276,35 +220,13 @@ export function useConversations() {
     [tasks],
   );
 
-  const sessionsWithRunningGrace = useMemo(
-    () => applyRunningIndicatorGrace(sessions ?? [], runningIndicatorGraceBySessionIdRef.current, Date.now()),
-    [runningIndicatorGraceClock, sessions],
-  );
-
-  useEffect(() => {
-    const nextExpiration = getNextRunningIndicatorGraceExpiration(
-      sessions ?? [],
-      runningIndicatorGraceBySessionIdRef.current,
-      Date.now(),
-    );
-    if (nextExpiration === null) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setRunningIndicatorGraceClock((value) => value + 1);
-    }, Math.max(0, nextExpiration - Date.now()) + 1);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [runningIndicatorGraceClock, sessions]);
-
-  const withTitles = useMemo(() => sessionsWithRunningGrace.map((session) => {
+  const withTitles = useMemo(() => (sessions ?? []).map((session) => {
     const liveTitle = normalizeConversationTitle(liveTitles.get(session.id));
     const sessionTitle = normalizeConversationTitle(session.title) ?? NEW_CONVERSATION_TITLE;
     const title = liveTitle ?? sessionTitle;
 
     return title === session.title ? session : { ...session, title };
-  }), [liveTitles, sessionsWithRunningGrace]);
+  }), [liveTitles, sessions]);
   const openIdSet = useMemo(() => new Set(openIds), [openIds]);
   const pinnedIdSet = useMemo(() => new Set(pinnedIds), [pinnedIds]);
   const sessionsById = useMemo(
