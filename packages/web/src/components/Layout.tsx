@@ -506,7 +506,7 @@ function WorkbenchDocumentPane({
   }
 
   if (activeTool === 'browser') {
-    return <WorkbenchBrowserTab conversationId={conversationId} />;
+    return <WorkbenchBrowserTab conversationId={conversationId} onClose={() => onActiveToolChange('knowledge')} />;
   }
 
   if (!activeFileId && workspaceFile) {
@@ -547,7 +547,7 @@ function WorkbenchDocumentPane({
   );
 }
 
-function WorkbenchBrowserTab({ conversationId }: { conversationId: string | null }) {
+function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const [urlDraft, setUrlDraft] = useState('https://www.google.com/');
@@ -644,6 +644,13 @@ function WorkbenchBrowserTab({ conversationId }: { conversationId: string | null
     }
   }
 
+  function handleCloseBrowser() {
+    setStatus('');
+    setCommentDraft(null);
+    void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey }).catch(() => undefined);
+    onClose();
+  }
+
   function saveCommentDraft() {
     const text = commentDraft?.text.trim();
     if (!commentDraft || !text) {
@@ -684,6 +691,15 @@ function WorkbenchBrowserTab({ conversationId }: { conversationId: string | null
           onChange={(event) => setUrlDraft(event.target.value)}
           placeholder="https://example.com"
         />
+        <button
+          type="button"
+          className="rounded px-1.5 py-1 text-[13px] text-secondary hover:bg-surface hover:text-primary"
+          aria-label="Close browser"
+          title="Close browser"
+          onClick={handleCloseBrowser}
+        >
+          ×
+        </button>
       </form>
       <div ref={browserHostRef} className="relative min-h-[220px] flex-1 overflow-hidden bg-base">
         {!bridge ? (

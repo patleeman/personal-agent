@@ -70,6 +70,7 @@ export interface ScannedDurableRun {
   manifest?: DurableRunManifest;
   status?: DurableRunStatusFile;
   checkpoint?: DurableRunCheckpointFile;
+  result?: Record<string, unknown>;
   problems: string[];
   recoveryAction: DurableRunRecoveryAction;
 }
@@ -262,6 +263,10 @@ function parseCheckpoint(value: unknown): DurableRunCheckpointFile | undefined {
   };
 }
 
+function parseResult(value: unknown): Record<string, unknown> | undefined {
+  return isRecord(value) ? value : undefined;
+}
+
 function parseEvent(value: unknown): DurableRunEvent | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -298,6 +303,18 @@ function parseStoredJson<T>(raw: string | null): T | undefined {
 
   try {
     return JSON.parse(raw) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+function readJsonFile(path: string): unknown {
+  if (!existsSync(path)) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(require('fs').readFileSync(path, 'utf-8')) as unknown;
   } catch {
     return undefined;
   }
@@ -749,6 +766,7 @@ export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableR
   const manifest = hydrateManifest(row);
   const status = hydrateStatus(row);
   const checkpoint = hydrateCheckpoint(row);
+  const result = parseResult(readJsonFile(paths.resultPath));
   const problems: string[] = [];
 
   if (!manifest) {
@@ -777,6 +795,7 @@ export function scanDurableRun(runsRoot: string, runId: string): ScannedDurableR
     manifest,
     status,
     checkpoint,
+    result,
     problems,
     recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
   } satisfies ScannedDurableRun;
@@ -790,6 +809,7 @@ export function scanDurableRunsForRecovery(runsRoot: string): ScannedDurableRun[
       const manifest = hydrateManifest(row);
       const status = hydrateStatus(row);
       const checkpoint = hydrateCheckpoint(row);
+      const result = parseResult(readJsonFile(paths.resultPath));
       const problems: string[] = [];
 
       if (!manifest) {
@@ -818,6 +838,7 @@ export function scanDurableRunsForRecovery(runsRoot: string): ScannedDurableRun[
         manifest,
         status,
         checkpoint,
+        result,
         problems,
         recoveryAction: problems.length > 0 ? 'invalid' : determineRecoveryAction(manifest, status),
       } satisfies ScannedDurableRun;

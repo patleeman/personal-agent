@@ -73,6 +73,7 @@ export interface FinalizeBackgroundRunInput {
   signal: NodeJS.Signals | null;
   cancelled: boolean;
   error?: string;
+  summary?: string;
 }
 
 function sanitizeIdSegment(value: string, fallback: string): string {
@@ -391,6 +392,7 @@ export async function finalizeBackgroundRun(input: FinalizeBackgroundRunInput): 
     signal: input.signal,
     cancelled: input.cancelled,
     success: input.exitCode === 0 && !input.cancelled,
+    summary: input.summary ?? (input.error ? input.error : input.cancelled ? 'Run cancelled.' : input.exitCode === 0 ? 'Run completed successfully.' : `Run failed with exit code ${input.exitCode}.`),
     ...(input.error ? { error: input.error } : {}),
   }, null, 2));
 }

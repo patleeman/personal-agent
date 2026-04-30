@@ -335,6 +335,7 @@ export interface DurableRunRecord {
   manifest?: DurableRunManifest;
   status?: DurableRunStatusRecord;
   checkpoint?: DurableRunCheckpoint;
+  result?: Record<string, unknown>;
   problems: string[];
   recoveryAction: string;
   location?: 'local' | 'remote';

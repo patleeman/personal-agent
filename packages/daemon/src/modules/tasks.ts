@@ -665,6 +665,15 @@ export function createTasksModule(
       attemptCount: record.lastAttemptCount ?? 0,
       success: finalResult?.success ?? false,
       cancelled: finalResult?.cancelled ?? false,
+      summary: finalResult?.error
+        ? finalResult.error
+        : finalResult?.cancelled
+          ? 'Task cancelled.'
+          : finalResult?.outputText?.trim()
+            ? finalResult.outputText.trim().split(/\r?\n/).filter((line) => line.trim().length > 0).at(-1)
+            : finalResult?.success
+              ? 'Task completed successfully.'
+              : 'Task finished.',
       error: finalResult?.error,
       logPath: finalResult?.logPath,
       outputText: finalResult?.outputText,

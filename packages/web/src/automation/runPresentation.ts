@@ -18,6 +18,25 @@ interface RunHeadline {
   summary: string;
 }
 
+export function getRunResultSummary(run: DurableRunRecord): string | undefined {
+  const result = run.result;
+  const summary = typeof result?.summary === 'string' && result.summary.trim().length > 0
+    ? result.summary.trim()
+    : undefined;
+  if (summary) {
+    return summary;
+  }
+
+  const error = typeof result?.error === 'string' && result.error.trim().length > 0
+    ? result.error.trim()
+    : undefined;
+  if (error) {
+    return error;
+  }
+
+  return undefined;
+}
+
 interface RunMoment {
   label: 'completed' | 'updated' | 'started' | 'created';
   at?: string;
@@ -642,6 +661,18 @@ export function listConnectedConversationBackgroundRuns(input: {
 
       return getRunSortTimestamp(right).localeCompare(getRunSortTimestamp(left));
     });
+}
+
+export function listRecentConversationBackgroundRuns(input: {
+  conversationId: string;
+  runs?: DurableRunListResult | null;
+  lookups?: RunPresentationLookups;
+  excludeConversationRunId?: string | null;
+  limit?: number;
+}): DurableRunRecord[] {
+  return listConnectedConversationBackgroundRuns(input)
+    .filter((run) => !isRunActive(run))
+    .slice(0, input.limit ?? 5);
 }
 
 export function getRunPrimaryConnection(

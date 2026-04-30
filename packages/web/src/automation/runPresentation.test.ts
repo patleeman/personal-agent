@@ -4,8 +4,10 @@ import {
   getRunHeadline,
   getRunMoment,
   getRunPrimaryConnection,
+  getRunResultSummary,
   getRunTimeline,
   isRunActive,
+  listRecentConversationBackgroundRuns,
   listConnectedConversationBackgroundRuns,
   runNeedsAttention,
 } from './runPresentation';
@@ -272,6 +274,62 @@ describe('runPresentation', () => {
       },
     });
     expect(getRunPrimaryConnection(backgroundRun)).toBeUndefined();
+  });
+
+  it('reads persisted run result summaries and recent completed conversation runs', () => {
+    const completed = createRun({
+      runId: 'run-completed',
+      manifest: {
+        version: 1,
+        id: 'run-completed',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        spec: {},
+        source: { type: 'tool', id: 'conv-123' },
+      },
+      status: {
+        version: 1,
+        runId: 'run-completed',
+        status: 'completed',
+        createdAt: '2026-03-12T20:30:00.000Z',
+        updatedAt: '2026-03-12T20:35:00.000Z',
+        activeAttempt: 1,
+        completedAt: '2026-03-12T20:35:00.000Z',
+      },
+      result: { summary: 'Uploaded the dataset successfully.' },
+    });
+    const running = createRun({
+      runId: 'run-running',
+      manifest: {
+        version: 1,
+        id: 'run-running',
+        kind: 'background-run',
+        resumePolicy: 'manual',
+        createdAt: '2026-03-12T20:31:00.000Z',
+        spec: {},
+        source: { type: 'tool', id: 'conv-123' },
+      },
+      status: {
+        version: 1,
+        runId: 'run-running',
+        status: 'running',
+        createdAt: '2026-03-12T20:31:00.000Z',
+        updatedAt: '2026-03-12T20:36:00.000Z',
+        activeAttempt: 1,
+      },
+    });
+
+    expect(getRunResultSummary(completed)).toBe('Uploaded the dataset successfully.');
+    expect(listRecentConversationBackgroundRuns({
+      conversationId: 'conv-123',
+      runs: {
+        scannedAt: '2026-03-12T20:36:00.000Z',
+        runsRoot: '/tmp/runs',
+        summary: { total: 2, recoveryActions: {}, statuses: {} },
+        runs: [running, completed],
+      },
+    }).map((run) => run.runId)).toEqual(['run-completed']);
   });
 
   it('prefers a run transcript conversation while still linking back to the originating conversation', () => {

@@ -3,6 +3,7 @@ import type { PendingConversationPrompt } from '../pending/pendingConversationPr
 import { getConversationDisplayTitle, NEW_CONVERSATION_TITLE, normalizeConversationTitle } from './conversationTitle';
 import { formatContextUsageLabel } from './conversationHeader';
 import { getRunHeadline, isRunActive, listConnectedConversationBackgroundRuns, type RunPresentationLookups } from '../automation/runPresentation';
+import { listRecentConversationBackgroundRuns } from '../automation/runPresentation';
 
 const MAX_CONVERSATION_RAIL_BLOCKS = 240;
 const AGGRESSIVE_CHAT_RENDERING_MESSAGE_THRESHOLD = 96;
@@ -304,10 +305,11 @@ export function resolveConversationBackgroundRunState(input: {
 }): {
   connectedRuns: DurableRunRecord[];
   activeRuns: DurableRunRecord[];
+  recentRuns: DurableRunRecord[];
   indicatorText: string;
 } {
   if (!input.conversationId) {
-    return { connectedRuns: [], activeRuns: [], indicatorText: '' };
+    return { connectedRuns: [], activeRuns: [], recentRuns: [], indicatorText: '' };
   }
 
   const connectedRuns = listConnectedConversationBackgroundRuns({
@@ -317,9 +319,11 @@ export function resolveConversationBackgroundRunState(input: {
     excludeConversationRunId: input.excludeConversationRunId,
   });
   const activeRuns = connectedRuns.filter((run) => isRunActive(run));
+  const recentRuns = listRecentConversationBackgroundRuns(input);
   return {
     connectedRuns,
     activeRuns,
+    recentRuns,
     indicatorText: buildConversationBackgroundRunIndicatorText(activeRuns, input.lookups),
   };
 }

@@ -16,6 +16,7 @@ import { useReloadState } from '../local/reloadState';
 import {
   getRunConnections,
   getRunHeadline,
+  getRunResultSummary,
   getRunTargetCommand,
   getRunTargetModel,
   getRunTargetProfile,
@@ -24,6 +25,7 @@ import {
   getRunTimeline,
   getRunWorkingDirectory,
   isRunActive,
+  listRecentConversationBackgroundRuns,
   listConnectedConversationBackgroundRuns,
   type RunPresentationLookups,
 } from '../automation/runPresentation';
@@ -252,6 +254,41 @@ function compactRunCardSummary(
   return trimmed;
 }
 
+function deriveRunOutcome(run: DurableRunDetailResult['run'], outputLog: string | null | undefined): string | null {
+  const persisted = getRunResultSummary(run);
+  if (persisted) {
+    return persisted;
+  }
+
+  const status = run.status?.status ?? null;
+
+  if (status === 'failed' || status === 'interrupted') {
+    return run.status?.lastError?.trim() || run.problems[0]?.trim() || 'Run failed.';
+  }
+
+  if (status === 'cancelled') {
+    return 'Run cancelled.';
+  }
+
+  const trimmedOutput = outputLog?.trim();
+  if (trimmedOutput) {
+    const lines = trimmedOutput
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && !line.startsWith('__PA_RUN_EXIT_CODE='));
+    const lastLine = lines.at(-1);
+    if (lastLine) {
+      return lastLine.length <= 220 ? lastLine : `${lastLine.slice(0, 219).trimEnd()}…`;
+    }
+  }
+
+  if (status === 'completed') {
+    return 'Run completed successfully.';
+  }
+
+  return null;
+}
+
 function formatRecoveryAction(action: string): string {
   switch (action) {
     case 'none': return 'stable';
@@ -438,6 +475,7 @@ function RunContextPanel({
   const outputPathLabel = log?.path?.split('/').filter(Boolean).pop() ?? 'output.log';
   const hasOutput = Boolean(log?.log && log.log.length > 0);
   const emptyOutputLabel = runStreaming ? 'Waiting for output…' : '(empty)';
+  const outcome = deriveRunOutcome(run, log?.log);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -482,6 +520,9 @@ function RunContextPanel({
               {status.text}
             </Pill>
           </div>
+          {outcome && (
+            <p className="text-[12px] text-primary break-words">{outcome}</p>
+          )}
           <p className="ui-card-meta flex flex-wrap items-center gap-1.5">
             <span>{headline.summary}</span>
             {showRecovery && (
@@ -601,6 +642,8 @@ function RunContextPanel({
             <div className="space-y-2">
               <p className="ui-section-label">Execution details</p>
               <div className="ui-detail-list">
+                <RailMetadataRow label="What ran" value={targetPrompt ?? targetCommand ?? headline.title} />
+                {outcome && <RailMetadataRow label="Outcome" value={outcome} />}
                 {taskSlug && <RailMetadataRow label="Task" value={taskSlug} />}
                 {targetPrompt && <RailMetadataRow label="Prompt" value={<span className="whitespace-pre-wrap break-words text-[12px] text-primary">{targetPrompt}</span>} />}
                 {targetCommand && <RailMetadataRow label="Command" value={<span className="break-all font-mono text-[12px] text-primary">{targetCommand}</span>} />}
@@ -911,6 +954,12 @@ function LiveSessionContextPanel({ id }: { id: string }) {
     runs,
     lookups: runLookups,
   }), [id, runLookups, runs]);
+  const recentBackgroundRuns = useMemo(() => listRecentConversationBackgroundRuns({
+    conversationId: id,
+    runs,
+    lookups: runLookups,
+    limit: 5,
+  }), [id, runLookups, runs]);
   const visibleRunMentions = useMemo(() => {
     const next: ConversationRelatedWorkMention[] = [];
     const seen = new Set<string>();
@@ -937,6 +986,10 @@ function LiveSessionContextPanel({ id }: { id: string }) {
 
     for (const run of connectedBackgroundRuns) {
       push(run.runId, 'Background work', 'Started from this conversation.', 'background');
+    }
+
+    for (const run of recentBackgroundRuns) {
+      push(run.runId, 'Recent run', 'Completed recently in this conversation.', 'other');
     }
 
     for (const mention of detectedRunMentions) {
