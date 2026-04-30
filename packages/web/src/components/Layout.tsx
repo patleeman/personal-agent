@@ -541,6 +541,7 @@ function WorkbenchBrowserTab() {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const [urlDraft, setUrlDraft] = useState('');
   const latestUrlDraftRef = useRef(urlDraft);
+  const urlInputFocusedRef = useRef(false);
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
@@ -572,7 +573,9 @@ function WorkbenchBrowserTab() {
       }).then((nextState) => {
       if (nextState) {
         setState(nextState);
-        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+        if (!urlInputFocusedRef.current) {
+          setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
+        }
       }
     }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
   }, [bridge]);
@@ -616,7 +619,9 @@ function WorkbenchBrowserTab() {
     void bridge.getWorkbenchBrowserState().then((nextState) => {
       if (nextState) {
         setState(nextState);
-        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+        if (!urlInputFocusedRef.current) {
+          setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
+        }
       }
     }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
   }, [bridge]);
@@ -631,7 +636,7 @@ function WorkbenchBrowserTab() {
       const nextState = await command();
       if (nextState) {
         setState(nextState);
-        setUrlDraft(nextState.url || latestUrlDraftRef.current);
+        setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
       }
       setStatus('');
       syncBounds();
@@ -677,7 +682,11 @@ function WorkbenchBrowserTab() {
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
           value={urlDraft}
           onChange={(event) => setUrlDraft(event.target.value)}
-          onBlur={refreshState}
+          onFocus={() => { urlInputFocusedRef.current = true; }}
+          onBlur={() => {
+            urlInputFocusedRef.current = false;
+            refreshState();
+          }}
           placeholder="https://example.com"
         />
       </form>
