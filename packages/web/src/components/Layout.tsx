@@ -472,6 +472,7 @@ function WorkbenchDocumentPane({
   checkpointId,
   workspaceFile,
   activeTool,
+  onActiveToolChange,
   onMissingCheckpoint,
 }: {
   conversationId: string | null;
@@ -479,6 +480,7 @@ function WorkbenchDocumentPane({
   checkpointId: string | null;
   workspaceFile: { cwd: string; path: string } | null;
   activeTool: WorkbenchRailMode;
+  onActiveToolChange: (mode: WorkbenchRailMode) => void;
   onMissingCheckpoint: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -558,6 +560,7 @@ function hasBlockingHtmlModal(): boolean {
 function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
+  const closedRef = useRef(false);
   const [urlDraft, setUrlDraft] = useState('https://www.google.com/');
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
@@ -576,7 +579,7 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
 
   const syncBounds = useCallback(() => {
     const host = browserHostRef.current;
-    if (!bridge || !host) {
+    if (!bridge || !host || closedRef.current) {
       return;
     }
 
@@ -634,11 +637,12 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
     const timer = window.setInterval(syncBounds, 1000);
 
     return () => {
+      closedRef.current = true;
       observer?.disconnect();
       modalObserver?.disconnect();
       window.removeEventListener('resize', syncBounds);
       window.clearInterval(timer);
-      void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey }).catch(() => undefined);
+      void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey, deactivate: true }).catch(() => undefined);
     };
   }, [bridge, browserSessionKey, syncBounds]);
 
@@ -675,9 +679,10 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
   }
 
   function handleCloseBrowser() {
+    closedRef.current = true;
     setStatus('');
     setCommentDraft(null);
-    void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey }).catch(() => undefined);
+    void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey, deactivate: true }).catch(() => undefined);
     onClose();
   }
 
@@ -1379,6 +1384,7 @@ export function Layout() {
                       checkpointId={activeWorkbenchCheckpointId}
                       workspaceFile={activeWorkspaceFile}
                       activeTool={activeWorkbenchTool}
+                      onActiveToolChange={setActiveWorkbenchTool}
                       onMissingCheckpoint={clearActiveConversationCheckpoint}
                     />
                   </section>

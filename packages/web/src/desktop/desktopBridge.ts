@@ -453,7 +453,7 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
-  setWorkbenchBrowserBounds(input: { visible: boolean; sessionKey?: string | null; bounds?: DesktopWorkbenchBrowserBounds }): Promise<DesktopWorkbenchBrowserState | null>;
+  setWorkbenchBrowserBounds(input: { visible: boolean; sessionKey?: string | null; bounds?: DesktopWorkbenchBrowserBounds; deactivate?: boolean }): Promise<DesktopWorkbenchBrowserState | null>;
   getWorkbenchBrowserState(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState | null>;
   navigateWorkbenchBrowser(input: { url: string; sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   goBackWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;

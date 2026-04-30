@@ -317,7 +317,7 @@ const desktopBridge = {
   unsubscribeRemoteOperations: (subscriptionId: string) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:unsubscribe-remote-operations`, subscriptionId),
   goBack: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-back`),
   goForward: () => ipcRenderer.invoke(`${CHANNEL_PREFIX}:go-forward`),
-  setWorkbenchBrowserBounds: (input: { visible: boolean; sessionKey?: string | null; bounds?: { x: number; y: number; width: number; height: number } }) =>
+  setWorkbenchBrowserBounds: (input: { visible: boolean; sessionKey?: string | null; bounds?: { x: number; y: number; width: number; height: number }; deactivate?: boolean }) =>
     ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-set-bounds`, input),
   getWorkbenchBrowserState: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-state`, input),
   navigateWorkbenchBrowser: (input: { url: string; sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-navigate`, input),

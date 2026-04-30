@@ -331,7 +331,7 @@ export class DesktopWindowController {
     return this.goForward(this.trackedWindows.get(webContentsId)?.window);
   }
 
-  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown; sessionKey?: string | null }): unknown {
+  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown; sessionKey?: string | null; deactivate?: boolean }): unknown {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       return null;
@@ -343,7 +343,7 @@ export class DesktopWindowController {
       throw new Error('Workbench browser bounds are invalid.');
     }
 
-    return this.workbenchBrowser.setBounds(tracked.window.webContents, visible, bounds, input.sessionKey);
+    return this.workbenchBrowser.setBounds(tracked.window.webContents, visible, bounds, input.sessionKey, input.deactivate === true);
   }
 
   getWorkbenchBrowserStateForWebContents(webContentsId: number, sessionKey?: string | null): unknown {

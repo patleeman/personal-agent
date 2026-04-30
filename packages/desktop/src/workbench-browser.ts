@@ -185,6 +185,7 @@ interface WorkbenchBrowserViewEntry {
   owner: WebContents;
   view: WebContentsView;
   active: boolean;
+  deactivated: boolean;
   browserRevision: number;
   lastSnapshotRevision: number;
   lastChangeReason?: string;
@@ -252,20 +253,24 @@ export class WorkbenchBrowserViewController {
     return Boolean(entry && !entry.view.webContents.isDestroyed());
   }
 
-  setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null, sessionKey?: string | null): WorkbenchBrowserState | null {
+  setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null, sessionKey?: string | null, deactivate?: boolean): WorkbenchBrowserState | null {
     const ownerWindow = BrowserWindow.fromWebContents(owner);
     if (!ownerWindow || ownerWindow.isDestroyed()) {
       return null;
     }
 
     if (!visible || !bounds) {
-      this.hide(this.viewKey(owner.id, sessionKey));
+      this.hide(this.viewKey(owner.id, sessionKey), deactivate === true);
       return this.getState(owner.id, sessionKey);
     }
 
     const viewKey = this.viewKey(owner.id, sessionKey);
     this.hideActiveOwnerView(owner.id, viewKey);
     const view = this.ensureView(ownerWindow, owner.id, sessionKey);
+    const entry = this.views.get(viewKey);
+    if (entry) {
+      entry.deactivated = false;
+    }
     view.setBounds(bounds);
     this.activeViewKeysByOwner.set(owner.id, viewKey);
     return getState(view.webContents, this.views.get(viewKey));
@@ -420,10 +425,16 @@ export class WorkbenchBrowserViewController {
     return `${ownerWebContentsId}:${normalizedSessionKey}`;
   }
 
-  private hide(viewKey: string): void {
+  private hide(viewKey: string, deactivate = false): void {
     const entry = this.views.get(viewKey);
     if (!entry) {
       return;
+    }
+    if (deactivate) {
+      entry.active = false;
+      entry.deactivated = true;
+      this.activeViewKeysByOwner.delete(entry.owner.id);
+      entry.view.webContents.stop();
     }
     entry.view.setBounds({ x: -10_000, y: -10_000, width: 1, height: 1 });
   }
@@ -467,6 +478,7 @@ export class WorkbenchBrowserViewController {
       owner: ownerWindow.webContents,
       view,
       active: false,
+      deactivated: false,
       browserRevision: 0,
       lastSnapshotRevision: 0,
     };
@@ -518,7 +530,9 @@ export class WorkbenchBrowserViewController {
     if (!entry || entry.view.webContents.isDestroyed()) {
       return;
     }
-    entry.active = true;
+    if (!entry.deactivated) {
+      entry.active = true;
+    }
     entry.browserRevision += 1;
     entry.lastChangeReason = reason;
     entry.lastChangedAt = new Date().toISOString();

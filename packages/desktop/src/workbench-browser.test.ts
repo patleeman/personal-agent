@@ -21,6 +21,14 @@ describe('workbench browser validation', () => {
     expect(source).toContain('cdpEvaluate(view.webContents');
   });
 
+  it('keeps closed browser views deactivated across late load events', () => {
+    const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
+
+    expect(source).toContain('entry.deactivated = true');
+    expect(source).toContain('if (!entry.deactivated)');
+    expect(source).toContain('entry.view.webContents.stop();');
+  });
+
   it('accepts safe content bounds', () => {
     expect(normalizeWorkbenchBrowserBounds({ x: 12, y: 48, width: 320, height: 480 })).toEqual({
       x: 12,
