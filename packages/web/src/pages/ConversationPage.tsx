@@ -5702,6 +5702,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               resumeConversationBusy={renderingStaleTranscript ? false : resumeConversationBusy}
               resumeConversationTitle={renderingStaleTranscript ? undefined : conversationResumeState.title}
               resumeConversationLabel={conversationResumeState.actionLabel ?? 'continue'}
+              anchorWindowingToTail={atBottom}
               windowingBadgeTopOffset={conversationHeaderOffset + 12}
             />
           </>

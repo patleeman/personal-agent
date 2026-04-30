@@ -51,11 +51,13 @@ export function buildChatRenderChunkLayouts(
 export function resolveVisibleChunkRange({
   chunkLayouts,
   focusMessageIndex,
+  anchorToTail,
   overscanChunks,
   viewport,
 }: {
   chunkLayouts: ChatRenderChunkLayout[];
   focusMessageIndex: number | null;
+  anchorToTail?: boolean;
   overscanChunks: number;
   viewport: { scrollTop: number; clientHeight: number } | null;
 }): { chunks: ChatRenderChunkLayout[]; topSpacerHeight: number; bottomSpacerHeight: number } | null {
@@ -77,7 +79,7 @@ export function resolveVisibleChunkRange({
   let startChunkIndex: number;
   let endChunkIndex: number;
 
-  if (viewport === null) {
+  if (viewport === null || (anchorToTail && focusChunkIndex < 0)) {
     const anchorChunkIndex = focusChunkIndex >= 0 ? focusChunkIndex : chunkLayouts.length - 1;
     startChunkIndex = Math.max(0, anchorChunkIndex - normalizedOverscanChunks);
     endChunkIndex = Math.min(chunkLayouts.length - 1, anchorChunkIndex + normalizedOverscanChunks);
@@ -113,12 +115,14 @@ export function useChatWindowing({
   messageIndexOffset,
   renderingProfile,
   focusMessageIndex,
+  anchorToTail,
 }: {
   scrollContainerRef?: RefObject<HTMLDivElement>;
   renderItems: ChatRenderItem[];
   messageIndexOffset: number;
   renderingProfile: ChatWindowingProfile;
   focusMessageIndex: number | null;
+  anchorToTail?: boolean;
 }) {
   const shouldWindowTranscript = Boolean(scrollContainerRef) && renderItems.length >= renderingProfile.windowingThreshold;
   const renderChunks = useMemo(
@@ -192,11 +196,12 @@ export function useChatWindowing({
       ? resolveVisibleChunkRange({
           chunkLayouts,
           focusMessageIndex,
+          anchorToTail,
           overscanChunks: renderingProfile.windowingOverscanChunks,
           viewport,
         })
       : null),
-    [chunkLayouts, focusMessageIndex, renderingProfile.windowingOverscanChunks, shouldWindowTranscript, viewport],
+    [anchorToTail, chunkLayouts, focusMessageIndex, renderingProfile.windowingOverscanChunks, shouldWindowTranscript, viewport],
   );
 
   return {

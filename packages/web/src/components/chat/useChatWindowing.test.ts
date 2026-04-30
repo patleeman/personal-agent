@@ -96,4 +96,18 @@ describe('useChatWindowing helpers', () => {
 
     expect(range?.chunks.map((chunk) => chunk.key)).toEqual(['0-1-1']);
   });
+
+  it('anchors to the tail while pinned even when the last viewport measurement is stale', () => {
+    const layouts = buildChatRenderChunkLayouts(chunks, {}, 100);
+    const range = resolveVisibleChunkRange({
+      chunkLayouts: layouts,
+      focusMessageIndex: null,
+      anchorToTail: true,
+      overscanChunks: 0,
+      viewport: { scrollTop: 0, clientHeight: 40 },
+    });
+
+    expect(range?.chunks.map((chunk) => chunk.key)).toEqual(['5-5-1']);
+    expect(range?.bottomSpacerHeight).toBe(0);
+  });
 });

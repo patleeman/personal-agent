@@ -44,6 +44,7 @@ interface ChatViewProps {
   resumeConversationTitle?: string | null;
   resumeConversationLabel?: string;
   windowingBadgeTopOffset?: number;
+  anchorWindowingToTail?: boolean;
 }
 
 function shouldFocusComposerFromTranscriptPointerDown(event: React.PointerEvent<HTMLDivElement>): boolean {
@@ -103,6 +104,7 @@ export const ChatView = memo(function ChatView({
   resumeConversationTitle,
   resumeConversationLabel = 'continue',
   windowingBadgeTopOffset = CHAT_WINDOWING_BADGE_DEFAULT_TOP_OFFSET_PX,
+  anchorWindowingToTail = false,
 }: ChatViewProps) {
   const renderItems = useMemo(() => buildChatRenderItems(messages), [messages]);
   const { isInlineRunExpanded, toggleInlineRun } = useInlineTraceRunExpansion(renderItems);
@@ -150,6 +152,7 @@ export const ChatView = memo(function ChatView({
     messageIndexOffset,
     renderingProfile,
     focusMessageIndex,
+    anchorToTail: anchorWindowingToTail,
   });
   const [selectedImage, setSelectedImage] = useState<InspectableImage | null>(null);
   const {
