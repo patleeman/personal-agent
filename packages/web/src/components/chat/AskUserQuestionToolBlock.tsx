@@ -124,6 +124,14 @@ export function AskUserQuestionToolBlock({
   }, [questionIdsKey]);
 
   const activeQuestion = presentation.questions[Math.max(0, Math.min(activeQuestionIndex, presentation.questions.length - 1))] ?? null;
+  const isActiveCheckQuestion = activeQuestion?.style === 'check';
+  const isLastQuestion = activeQuestionIndex >= presentation.questions.length - 1;
+  const canAdvanceToNextQuestion = Boolean(
+    activeQuestion
+    && isActiveCheckQuestion
+    && !isLastQuestion
+    && (answers[activeQuestion.id]?.length ?? 0) > 0,
+  );
 
   useEffect(() => {
     if (!activeQuestion) {
@@ -176,6 +184,13 @@ export function AskUserQuestionToolBlock({
       }
     }
   }, [answers, focusOption, focusQuestionTab, presentation.questions]);
+
+  const advanceToNextQuestion = useCallback(() => {
+    if (!canAdvanceToNextQuestion) {
+      return;
+    }
+    activateQuestion(activeQuestionIndex + 1, { focus: 'option' });
+  }, [activateQuestion, activeQuestionIndex, canAdvanceToNextQuestion]);
 
   const submitIfReady = useCallback(async () => {
     if (!onSubmit || !canSubmit) {
@@ -497,19 +512,34 @@ export function AskUserQuestionToolBlock({
                     );
                   })}
                   {hasInteractiveOptions && onSubmit && (
-                    <button
-                      ref={submitButtonRef}
-                      type="button"
-                      disabled={!canSubmit || submitting}
-                      onClick={() => { void submitIfReady(); }}
-                      onKeyDown={handleSubmitKeyDown}
-                      className={cx(
-                        'ui-action-button px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
-                        canSubmit && !submitting ? 'text-accent' : 'text-dim',
+                    <>
+                      {isActiveCheckQuestion && !isLastQuestion && (
+                        <button
+                          type="button"
+                          disabled={!canAdvanceToNextQuestion || submitting}
+                          onClick={advanceToNextQuestion}
+                          className={cx(
+                            'ui-action-button px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                            canAdvanceToNextQuestion && !submitting ? 'text-accent' : 'text-dim',
+                          )}
+                        >
+                          Next →
+                        </button>
                       )}
-                    >
-                      {submitLabel}
-                    </button>
+                      <button
+                        ref={submitButtonRef}
+                        type="button"
+                        disabled={!canSubmit || submitting}
+                        onClick={() => { void submitIfReady(); }}
+                        onKeyDown={handleSubmitKeyDown}
+                        className={cx(
+                          'ui-action-button px-1.5 py-0.5 text-[11px] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent/50 focus-visible:ring-offset-1 focus-visible:ring-offset-surface',
+                          canSubmit && !submitting ? 'text-accent' : 'text-dim',
+                        )}
+                      >
+                        {submitLabel}
+                      </button>
+                    </>
                   )}
                 </div>
 

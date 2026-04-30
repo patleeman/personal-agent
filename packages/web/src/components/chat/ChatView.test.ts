@@ -691,6 +691,40 @@ describe('chat view streaming disclosure', () => {
     expect(html).toContain('✓ Submit →');
   });
 
+  it('renders a next button for non-final checkbox questions', () => {
+    const html = renderToStaticMarkup(createElement(ChatView, {
+      messages: [{
+        type: 'tool_use',
+        ts: '2026-03-11T18:00:00.000Z',
+        tool: 'ask_user_question',
+        input: {},
+        details: {
+          action: 'ask_user_question',
+          conversationId: 'conv-123',
+          questions: [
+            {
+              id: 'notify',
+              label: 'Which notifications should I enable?',
+              style: 'check',
+              options: ['Email', 'Telegram'],
+            },
+            {
+              id: 'target',
+              label: 'Which environment should I use?',
+              style: 'radio',
+              options: ['staging', 'prod'],
+            },
+          ],
+        },
+        output: 'Asked the user 2 questions.',
+        status: 'ok',
+      }],
+      onSubmitAskUserQuestion: () => undefined,
+    }));
+
+    expect(html).toContain('Next →');
+  });
+
   it('shows the first user reply on answered question cards', () => {
     const html = renderToStaticMarkup(createElement(ChatView, {
       messages: [
