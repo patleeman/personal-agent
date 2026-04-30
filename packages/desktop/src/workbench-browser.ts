@@ -24,6 +24,11 @@ export interface WorkbenchBrowserState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  browserRevision: number;
+  lastSnapshotRevision: number;
+  changedSinceLastSnapshot: boolean;
+  lastChangeReason?: string;
+  lastChangedAt?: string;
 }
 
 export interface WorkbenchBrowserSnapshot extends WorkbenchBrowserState {
@@ -193,13 +198,28 @@ export function normalizeWorkbenchBrowserActions(input: unknown): WorkbenchBrows
   return input.map(normalizeAction);
 }
 
-function getState(webContents: WebContents): WorkbenchBrowserState {
+interface WorkbenchBrowserViewEntry {
+  ownerWindow: BrowserWindow;
+  owner: WebContents;
+  view: WebContentsView;
+  browserRevision: number;
+  lastSnapshotRevision: number;
+  lastChangeReason?: string;
+  lastChangedAt?: string;
+}
+
+function getState(webContents: WebContents, entry?: WorkbenchBrowserViewEntry): WorkbenchBrowserState {
   return {
     url: webContents.getURL(),
     title: webContents.getTitle(),
     loading: webContents.isLoadingMainFrame(),
     canGoBack: webContents.canGoBack(),
     canGoForward: webContents.canGoForward(),
+    browserRevision: entry?.browserRevision ?? 0,
+    lastSnapshotRevision: entry?.lastSnapshotRevision ?? 0,
+    changedSinceLastSnapshot: (entry?.browserRevision ?? 0) > (entry?.lastSnapshotRevision ?? 0),
+    ...(entry?.lastChangeReason ? { lastChangeReason: entry.lastChangeReason } : {}),
+    ...(entry?.lastChangedAt ? { lastChangedAt: entry.lastChangedAt } : {}),
   };
 }
 
@@ -212,12 +232,12 @@ function getScriptWorkerPath(): string {
 }
 
 export class WorkbenchBrowserViewController {
-  private views = new Map<number, { ownerWindow: BrowserWindow; owner: WebContents; view: WebContentsView }>();
+  private views = new Map<number, WorkbenchBrowserViewEntry>();
   private snapshotRefs = new Map<number, Map<string, { selector: string; xpath: string }>>();
 
   getState(ownerWebContentsId: number): WorkbenchBrowserState | null {
-    const view = this.views.get(ownerWebContentsId);
-    return view ? getState(view.view.webContents) : null;
+    const entry = this.views.get(ownerWebContentsId);
+    return entry ? getState(entry.view.webContents, entry) : null;
   }
 
   hasView(ownerWebContentsId: number): boolean {
@@ -238,7 +258,7 @@ export class WorkbenchBrowserViewController {
 
     const view = this.ensureView(ownerWindow, owner.id);
     view.setBounds(bounds);
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   async navigate(owner: WebContents, inputUrl: unknown): Promise<WorkbenchBrowserState> {
@@ -246,7 +266,7 @@ export class WorkbenchBrowserViewController {
     const view = this.ensureView(ownerWindow, owner.id);
     const url = normalizeWorkbenchBrowserUrl(inputUrl);
     await view.webContents.loadURL(url);
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   async goBack(owner: WebContents): Promise<WorkbenchBrowserState> {
@@ -255,7 +275,7 @@ export class WorkbenchBrowserViewController {
       view.webContents.goBack();
       await wait(120);
     }
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   async goForward(owner: WebContents): Promise<WorkbenchBrowserState> {
@@ -264,20 +284,20 @@ export class WorkbenchBrowserViewController {
       view.webContents.goForward();
       await wait(120);
     }
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   async reload(owner: WebContents): Promise<WorkbenchBrowserState> {
     const view = this.requireView(owner);
     view.webContents.reload();
     await wait(120);
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   stop(owner: WebContents): WorkbenchBrowserState {
     const view = this.requireView(owner);
     view.webContents.stop();
-    return getState(view.webContents);
+    return getState(view.webContents, this.views.get(owner.id));
   }
 
   async snapshot(owner: WebContents): Promise<WorkbenchBrowserSnapshot> {
@@ -311,9 +331,13 @@ export class WorkbenchBrowserViewController {
       ? raw.elements as WorkbenchBrowserSnapshotElement[]
       : [];
     this.snapshotRefs.set(owner.id, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
+    const entry = this.views.get(owner.id);
+    if (entry) {
+      entry.lastSnapshotRevision = entry.browserRevision;
+    }
 
     return {
-      ...getState(view.webContents),
+      ...getState(view.webContents, entry),
       text,
       elements,
     };
@@ -324,7 +348,7 @@ export class WorkbenchBrowserViewController {
     const image = await view.webContents.capturePage();
     const bounds = view.getBounds();
     return {
-      ...getState(view.webContents),
+      ...getState(view.webContents, this.views.get(owner.id)),
       mimeType: 'image/png',
       dataBase64: image.toPNG().toString('base64'),
       viewport: { width: bounds.width, height: bounds.height },
@@ -455,7 +479,14 @@ export class WorkbenchBrowserViewController {
         sandbox: true,
       },
     });
-    this.views.set(ownerWebContentsId, { ownerWindow, owner: ownerWindow.webContents, view });
+    const entry: WorkbenchBrowserViewEntry = {
+      ownerWindow,
+      owner: ownerWindow.webContents,
+      view,
+      browserRevision: 0,
+      lastSnapshotRevision: 0,
+    };
+    this.views.set(ownerWebContentsId, entry);
     ownerWindow.contentView.addChildView(view);
     view.webContents.setWindowOpenHandler(({ url }) => {
       let target: string;
@@ -471,8 +502,24 @@ export class WorkbenchBrowserViewController {
     view.webContents.on('context-menu', (_event, params) => {
       this.showContextMenu(ownerWebContentsId, params.x, params.y);
     });
+    view.webContents.on('did-start-loading', () => this.bumpRevision(ownerWebContentsId, 'page started loading'));
+    view.webContents.on('did-finish-load', () => this.bumpRevision(ownerWebContentsId, 'page finished loading'));
+    view.webContents.on('did-navigate', () => this.bumpRevision(ownerWebContentsId, 'navigated'));
+    view.webContents.on('did-navigate-in-page', () => this.bumpRevision(ownerWebContentsId, 'in-page navigation'));
+    view.webContents.on('page-title-updated', () => this.bumpRevision(ownerWebContentsId, 'page title changed'));
+    view.webContents.on('before-input-event', () => this.bumpRevision(ownerWebContentsId, 'page input'));
     void view.webContents.loadURL(DEFAULT_BROWSER_URL).catch(() => undefined);
     return view;
+  }
+
+  private bumpRevision(ownerWebContentsId: number, reason: string): void {
+    const entry = this.views.get(ownerWebContentsId);
+    if (!entry || entry.view.webContents.isDestroyed()) {
+      return;
+    }
+    entry.browserRevision += 1;
+    entry.lastChangeReason = reason;
+    entry.lastChangedAt = new Date().toISOString();
   }
 
   private showContextMenu(ownerWebContentsId: number, x: number, y: number): void {

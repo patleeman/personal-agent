@@ -39,6 +39,8 @@ The right-side workbench rail includes Knowledge, File Explorer, Artifacts when 
 
 Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_script`, and `browser_screenshot`. `browser_script` is the browser-context equivalent of `bash`: the agent writes one script using the constrained `browser` API, an isolated worker runs it, and Electron main brokers validated operations to the visible Workbench Browser.
 
+The embedded browser tracks a revision counter. When Patrick changes the page after the agent's last `browser_snapshot`, the next prompt injects `browser-changed-since-snapshot` context so the agent knows its old page observation is stale and should snapshot again.
+
 The built-in Browser is the product UI surface. The `agent-browser` CLI remains a separate development/validation automation tool; do not expose its snapshot/action controls in the normal Browser tab. See [Built-in Workbench Browser](../internal-skills/browser/INDEX.md) for agent-facing behavior and implementation guidance.
 
 Workbench stores its mode and pane widths in browser-local layout preferences. Reset them from Settings → Browser local state → “Reset layout + reload”.

@@ -34,7 +34,7 @@ import { useConversationEventVersion } from '../hooks/useConversationEventVersio
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
-import { getDesktopBridge, readDesktopConnections, type DesktopWorkbenchBrowserCommentTarget } from '../desktop/desktopBridge';
+import { getDesktopBridge, readDesktopConnections, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
 import {
   buildContinueInExecutionTargetOptions,
   findSelectedExecutionTargetHost,
@@ -341,6 +341,45 @@ function buildBrowserCommentContextMessages(comments: PendingBrowserComment[]): 
     return undefined;
   }
   return [{ customType: 'browser-comments', content: formatBrowserCommentsContext(comments) }];
+}
+
+function buildBrowserChangedContextMessage(state: DesktopWorkbenchBrowserState | null): { customType: string; content: string } | null {
+  if (!state?.changedSinceLastSnapshot) {
+    return null;
+  }
+
+  return {
+    customType: 'browser-changed-since-snapshot',
+    content: [
+      'The Workbench Browser changed after the agent last snapshotted it. The user may have navigated, logged in, typed, clicked, or otherwise changed page state manually.',
+      `Current URL: ${state.url || '(unknown)'}`,
+      `Current title: ${state.title || '(untitled)'}`,
+      `Current loading state: ${state.loading ? 'loading' : 'not loading'}`,
+      `Browser revision: ${state.browserRevision ?? 'unknown'}`,
+      `Last snapshot revision: ${state.lastSnapshotRevision ?? 'unknown'}`,
+      state.lastChangeReason ? `Last change reason: ${state.lastChangeReason}` : '',
+      state.lastChangedAt ? `Last changed at: ${state.lastChangedAt}` : '',
+      'Take a fresh browser_snapshot before relying on prior page observations.',
+    ].filter(Boolean).join('\n'),
+  };
+}
+
+async function readBrowserChangedContextMessage(): Promise<{ customType: string; content: string } | null> {
+  const bridge = getDesktopBridge();
+  if (!bridge?.getWorkbenchBrowserState) {
+    return null;
+  }
+
+  try {
+    return buildBrowserChangedContextMessage(await bridge.getWorkbenchBrowserState());
+  } catch {
+    return null;
+  }
+}
+
+function mergeContextMessages(...groups: Array<Array<{ customType: string; content: string }> | undefined>): Array<{ customType: string; content: string }> | undefined {
+  const messages = groups.flatMap((group) => group ?? []);
+  return messages.length > 0 ? messages : undefined;
 }
 
 function buildBrowserCommentsStorageKey(draft: boolean, conversationId: string | undefined): string | null {
@@ -4739,7 +4778,16 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const filePromptImages = await buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
+      const browserChangedContextMessage = await readBrowserChangedContextMessage();
+      const browserContextMessages = mergeContextMessages(
+        browserChangedContextMessage ? [browserChangedContextMessage] : undefined,
+      );
       const textToSend = slashTextToSend ?? text;
+      const browserChangedContextMessage = await readBrowserChangedContextMessage();
+      const browserContextMessages = mergeContextMessages(
+        browserCommentContextMessages,
+        browserChangedContextMessage ? [browserChangedContextMessage] : undefined,
+      );
 
       setInput('');
       setAttachments([]);
@@ -4819,7 +4867,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               behavior: queuedBehavior,
               images: promptImages,
               attachmentRefs,
-              contextMessages: browserCommentContextMessages,
+              contextMessages: browserContextMessages,
               relatedConversationIds: selectedRelatedThreadIdsSnapshot,
             };
 
@@ -4895,7 +4943,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           behavior: queuedBehavior,
           images: promptImages,
           attachmentRefs: [],
-          contextMessages: browserCommentContextMessages,
+          contextMessages: browserContextMessages,
         });
         setPendingAssistantStatusLabel(resolveConversationPendingStatusLabel({
           isLiveSession: false,
@@ -4927,7 +4975,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
             behavior: queuedBehavior,
             images: promptImages,
             attachmentRefs,
-            contextMessages: browserCommentContextMessages,
+            contextMessages: browserContextMessages,
           };
 
           rememberComposerInput(inputSnapshot, newId);
@@ -5014,7 +5062,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
         }));
 
         try {
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserContextMessages);
         } catch (error) {
           if (!isConversationSessionNotLiveError(error)) {
             throw error;
@@ -5031,7 +5079,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Resuming…');
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserContextMessages);
         }
 
         await refetchConversationAttachments();
@@ -5055,7 +5103,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
           setConfirmedLive(true);
           stream.reconnect();
           setPendingAssistantStatusLabel('Working…');
-          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserCommentContextMessages);
+          await stream.send(textToSend, queuedBehavior, promptImages, attachmentRefs, browserContextMessages);
           await refetchConversationAttachments();
           window.setTimeout(() => {
             scrollToBottom();
@@ -5124,7 +5172,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       setDrawingAttachments([]);
       setDrawingsError(null);
 
-      await streamParallel(text, promptImages, attachmentRefs);
+      await streamParallel(text, promptImages, attachmentRefs, browserContextMessages);
       await refetchConversationAttachments();
       showNotice('accent', 'Parallel prompt started.', 2500);
     } catch (error) {

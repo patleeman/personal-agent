@@ -87,6 +87,7 @@ It should return:
 
 - URL and title
 - loading state
+- browser revision metadata, including whether the page changed since the last snapshot
 - visible text summary
 - accessibility-oriented element rows when possible: role, name, state, bounds
 - DOM fallback metadata: selector, XPath, text snippet, HTML preview
@@ -106,6 +107,8 @@ Title: Sign in
 Refs are snapshot-scoped. After navigation or major DOM changes, take a fresh snapshot before using refs again.
 
 Prefer accessibility data for role/name/state, but always include DOM fallback selectors so scripts can act.
+
+If the user manually changes the page after the last agent snapshot — for example logging in, clicking, typing, or navigating — the next user prompt includes `browser-changed-since-snapshot` context. Treat that as a stale-observation warning and call `browser_snapshot` before assuming the old page state is still true.
 
 ### `browser_script`
 

@@ -25,6 +25,11 @@ function formatSnapshot(value: unknown): string {
     url?: string;
     title?: string;
     loading?: boolean;
+    browserRevision?: number;
+    lastSnapshotRevision?: number;
+    changedSinceLastSnapshot?: boolean;
+    lastChangeReason?: string;
+    lastChangedAt?: string;
     text?: string;
     elements?: Array<{ ref?: string; role?: string; name?: string; selector?: string; text?: string; enabled?: boolean; checked?: boolean }>;
   };
@@ -32,7 +37,12 @@ function formatSnapshot(value: unknown): string {
     `URL: ${snapshot.url ?? ''}`,
     `Title: ${snapshot.title ?? ''}`,
     `Loading: ${snapshot.loading === true ? 'yes' : 'no'}`,
+    `Browser revision: ${snapshot.browserRevision ?? 0}`,
+    `Changed since last snapshot: ${snapshot.changedSinceLastSnapshot === true ? 'yes' : 'no'}`,
   ];
+  if (snapshot.lastChangeReason || snapshot.lastChangedAt) {
+    lines.push(`Last browser change: ${snapshot.lastChangeReason ?? 'unknown'}${snapshot.lastChangedAt ? ` at ${snapshot.lastChangedAt}` : ''}`);
+  }
 
   if (snapshot.elements?.length) {
     lines.push('', 'Elements:');
