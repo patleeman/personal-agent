@@ -584,7 +584,6 @@ function buildPromptContextMessagesForSubmit(input: {
           currentCwd: input.currentCwd,
           selectedSessionIds: input.selectedSessionIds,
           includeAuto: false,
-          allowSessionSearchRead: false,
         })
       : readCachedRelatedConversationPointers({
           prompt: input.prompt,

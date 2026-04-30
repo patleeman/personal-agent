@@ -18,7 +18,9 @@ const {
   listConversationSessionsSnapshotMock,
   listDeferredResumesForSessionFileMock,
   logErrorMock,
+  logInfoMock,
   logSlowConversationPerfMock,
+  logWarnMock,
   parseTailBlocksQueryMock,
   publishConversationSessionMetaChangedMock,
   readConversationAttachmentDownloadMock,
@@ -30,6 +32,7 @@ const {
   readSessionDetailForRouteMock,
   readSessionImageAssetMock,
   readSessionSearchTextMock,
+  readCachedRelatedConversationPointersMock,
   searchConversationInspectSessionsMock,
   resolveConversationSessionFileMock,
   saveConversationAttachmentMock,
@@ -39,6 +42,7 @@ const {
   setServerTimingHeadersMock,
   toggleConversationAttentionMock,
   updateLiveSessionModelPreferencesMock,
+  warmRelatedConversationPointerCacheMock,
   ensureRequestControlsLocalLiveConversationMock,
 } = vi.hoisted(() => ({
   LiveSessionControlErrorClass: class LiveSessionControlError extends Error {},
@@ -58,7 +62,9 @@ const {
   listConversationSessionsSnapshotMock: vi.fn(),
   listDeferredResumesForSessionFileMock: vi.fn(),
   logErrorMock: vi.fn(),
+  logInfoMock: vi.fn(),
   logSlowConversationPerfMock: vi.fn(),
+  logWarnMock: vi.fn(),
   parseTailBlocksQueryMock: vi.fn(),
   publishConversationSessionMetaChangedMock: vi.fn(),
   readConversationAttachmentDownloadMock: vi.fn(),
@@ -70,6 +76,7 @@ const {
   readSessionDetailForRouteMock: vi.fn(),
   readSessionImageAssetMock: vi.fn(),
   readSessionSearchTextMock: vi.fn(),
+  readCachedRelatedConversationPointersMock: vi.fn(),
   searchConversationInspectSessionsMock: vi.fn(),
   resolveConversationSessionFileMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
@@ -79,6 +86,7 @@ const {
   setServerTimingHeadersMock: vi.fn(),
   toggleConversationAttentionMock: vi.fn(),
   updateLiveSessionModelPreferencesMock: vi.fn(),
+  warmRelatedConversationPointerCacheMock: vi.fn(),
   ensureRequestControlsLocalLiveConversationMock: vi.fn(),
 }));
 
@@ -142,8 +150,15 @@ vi.mock('../shared/httpHeaders.js', () => ({
 vi.mock('../middleware/index.js', () => ({
   invalidateAppTopics: invalidateAppTopicsMock,
   logError: logErrorMock,
+  logInfo: logInfoMock,
   logSlowConversationPerf: logSlowConversationPerfMock,
+  logWarn: logWarnMock,
   setServerTimingHeaders: setServerTimingHeadersMock,
+}));
+
+vi.mock('../conversations/relatedConversationPointers.js', () => ({
+  readCachedRelatedConversationPointers: readCachedRelatedConversationPointersMock,
+  warmRelatedConversationPointerCache: warmRelatedConversationPointerCacheMock,
 }));
 
 vi.mock('../shared/appEvents.js', () => ({
@@ -266,7 +281,9 @@ describe('conversation routes', () => {
     listConversationSessionsSnapshotMock.mockReset();
     listDeferredResumesForSessionFileMock.mockReset();
     logErrorMock.mockReset();
+    logInfoMock.mockReset();
     logSlowConversationPerfMock.mockReset();
+    logWarnMock.mockReset();
     parseTailBlocksQueryMock.mockReset();
     publishConversationSessionMetaChangedMock.mockReset();
     readConversationAttachmentDownloadMock.mockReset();
@@ -278,6 +295,7 @@ describe('conversation routes', () => {
     readSessionDetailForRouteMock.mockReset();
     readSessionImageAssetMock.mockReset();
     readSessionSearchTextMock.mockReset();
+    readCachedRelatedConversationPointersMock.mockReset();
     searchConversationInspectSessionsMock.mockReset();
     resolveConversationSessionFileMock.mockReset();
     saveConversationAttachmentMock.mockReset();
@@ -288,6 +306,7 @@ describe('conversation routes', () => {
     toggleConversationAttentionMock.mockReset();
     updateLiveSessionModelPreferencesMock.mockReset();
     ensureRequestControlsLocalLiveConversationMock.mockReset();
+    warmRelatedConversationPointerCacheMock.mockReset();
 
     SessionManagerOpenMock.mockReturnValue({ sessionFile: '/sessions/session-1.jsonl' });
     applyConversationModelPreferencesToSessionManagerMock.mockReturnValue({ model: 'gpt-4o', thinkingLevel: 'high' });
@@ -326,6 +345,7 @@ describe('conversation routes', () => {
       mimeType: 'image/png',
     });
     readSessionSearchTextMock.mockReturnValue('search text');
+    readCachedRelatedConversationPointersMock.mockReturnValue(null);
     searchConversationInspectSessionsMock.mockReturnValue({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
     resolveConversationSessionFileMock.mockReturnValue('/sessions/session-1.jsonl');
     saveConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw' });
@@ -333,6 +353,7 @@ describe('conversation routes', () => {
     scheduleDeferredResumeForSessionFileMock.mockResolvedValue({ id: 'resume-2', delay: '5m' });
     toggleConversationAttentionMock.mockReturnValue({ read: true });
     updateLiveSessionModelPreferencesMock.mockResolvedValue({ model: 'gpt-4o', thinkingLevel: 'high' });
+    warmRelatedConversationPointerCacheMock.mockReturnValue({ contextMessages: [], pointers: [], warnings: [] });
   });
 
   it('serves desktop session routes for metadata, detail responses, assets, list snapshots, and search text', async () => {
@@ -475,6 +496,36 @@ describe('conversation routes', () => {
       stopAfterLimit: true,
     });
     expect(contentSearchRes.json).toHaveBeenCalledWith({ query: 'needle', mode: 'allTerms', scope: 'all', totalMatching: 1, returnedCount: 1, matches: [{ conversationId: 'session-1', title: 'Session 1', snippet: 'needle found' }] });
+  });
+
+  it('warms related conversation pointers without reading transcript search text on the request path', () => {
+    const { postHandler } = createDesktopHarness();
+    warmRelatedConversationPointerCacheMock.mockReturnValue({
+      contextMessages: [],
+      pointers: [{ sessionId: 'related-1' }],
+      warnings: [],
+    });
+
+    const response = createResponse();
+    postHandler('/api/related-conversation-pointers/warm')(createRequest({
+      body: {
+        prompt: 'Fix suggested context beach ball',
+        currentConversationId: 'current',
+        currentCwd: '/repo/a',
+      },
+    }), response);
+
+    expect(readSessionSearchTextMock).not.toHaveBeenCalled();
+    expect(warmRelatedConversationPointerCacheMock).toHaveBeenCalledWith({
+      prompt: 'Fix suggested context beach ball',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+    expect(logInfoMock).toHaveBeenCalledWith('related conversation pointer warm', expect.objectContaining({
+      cache: 'miss',
+      pointerCount: 1,
+    }));
+    expect(response.json).toHaveBeenCalledWith({ ok: true, pointerCount: 1 });
   });
 
   it('handles deferred resumes, artifacts, attachments, attention toggles, and plan state routes', async () => {

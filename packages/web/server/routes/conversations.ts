@@ -23,6 +23,8 @@ import {
 import { buildContentDispositionHeader } from '../shared/httpHeaders.js';
 import {
   logError,
+  logInfo,
+  logWarn,
   logSlowConversationPerf,
   setServerTimingHeaders,
   invalidateAppTopics,
@@ -55,7 +57,10 @@ import {
   readConversationSummaryIndexCapability,
   startConversationSummaryBackfillLoop,
 } from '../conversations/conversationSummaries.js';
-import { warmRelatedConversationPointerCache } from '../conversations/relatedConversationPointers.js';
+import {
+  readCachedRelatedConversationPointers,
+  warmRelatedConversationPointerCache,
+} from '../conversations/relatedConversationPointers.js';
 import {
   readConversationContextDocs,
   writeConversationContextDocs,
@@ -413,12 +418,27 @@ export function registerConversationRoutes(
   });
 
   router.post('/api/related-conversation-pointers/warm', (req, res) => {
+    const started = Date.now();
     try {
       const body = req.body as { prompt?: unknown; currentConversationId?: unknown; currentCwd?: unknown };
       const prompt = typeof body.prompt === 'string' ? body.prompt : '';
       const currentConversationId = typeof body.currentConversationId === 'string' ? body.currentConversationId : undefined;
       const currentCwd = typeof body.currentCwd === 'string' ? body.currentCwd : undefined;
+      const hadCachedPointers = readCachedRelatedConversationPointers({ prompt, currentConversationId, currentCwd }) !== null;
       const result = warmRelatedConversationPointerCache({ prompt, currentConversationId, currentCwd });
+      const durationMs = Date.now() - started;
+      const fields = {
+        durationMs,
+        cache: hadCachedPointers ? 'hit' : 'miss',
+        pointerCount: result.pointers.length,
+        currentConversationId,
+        currentCwd,
+      };
+      if (durationMs > 100) {
+        logWarn('slow related conversation pointer warm', fields);
+      } else {
+        logInfo('related conversation pointer warm', fields);
+      }
       res.json({ ok: true, pointerCount: result.pointers.length });
     } catch (err) {
       logError('request handler error', {

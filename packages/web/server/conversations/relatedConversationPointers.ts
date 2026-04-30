@@ -6,18 +6,16 @@ import {
   type IndexedConversationSearchCandidate,
 } from './conversationSearchIndex.js';
 import {
-  listSessions,
   readSessionMeta,
-  readSessionSearchText,
   type SessionMeta,
 } from './sessions.js';
 
 export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
-const MAX_EXPLICIT_SESSION_SEARCH_READS = 24;
 const AUTO_POINTER_RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const POINTER_CACHE_TTL_MS = 60_000;
+const WARM_POINTER_BUDGET_MS = 150;
 const PRODUCT_STOPWORDS = new Set([
   'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
   'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
@@ -196,12 +194,11 @@ function buildPointer(input: {
   promptTerms: string[];
   currentCwd?: string;
   source: 'manual' | 'auto';
-  allowSessionSearchRead?: boolean;
   nowMs?: number;
 }): RelatedConversationPointer {
   const summary = readConversationSummary(input.meta.id);
   const preview = normalizePreview(summary?.displaySummary || summary?.promptSummary);
-  const searchText = summary?.searchText || (input.allowSessionSearchRead ? readSessionSearchText(input.meta.id, 6_000) ?? undefined : undefined);
+  const searchText = summary?.searchText;
   const scored = scoreCandidate({
     meta: input.meta,
     terms: input.promptTerms,
@@ -263,11 +260,6 @@ function pointerActivityMs(pointer: RelatedConversationPointer): number {
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 
-function isRecentAutoCandidate(meta: SessionMeta, nowMs: number): boolean {
-  const activityMs = parsePointerTimestamp(meta.lastActivityAt ?? meta.timestamp);
-  return Number.isFinite(activityMs) && nowMs - activityMs <= AUTO_POINTER_RECENT_WINDOW_MS;
-}
-
 function formatPointerContext(pointers: RelatedConversationPointer[]): string {
   const lines = [
     'Potentially related previous conversations are available as pointers only.',
@@ -300,7 +292,6 @@ export function buildRelatedConversationPointers(input: {
   limit?: number;
   nowMs?: number;
   includeAuto?: boolean;
-  allowSessionSearchRead?: boolean;
 }): RelatedConversationPointersResult {
   const prompt = input.prompt.trim();
   if (!prompt) {
@@ -326,12 +317,12 @@ export function buildRelatedConversationPointers(input: {
       continue;
     }
 
-    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: input.allowSessionSearchRead === true, nowMs });
+    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', nowMs });
     pointers.push(pointer);
     used.add(pointer.sessionId);
   }
 
-  if (input.includeAuto !== false && pointers.length < limit && input.allowSessionSearchRead === false) {
+  if (input.includeAuto !== false && pointers.length < limit) {
     const indexedCandidates = searchIndexedConversationDocuments({
       terms: promptTerms,
       currentConversationId: input.currentConversationId,
@@ -345,49 +336,6 @@ export function buildRelatedConversationPointers(input: {
       .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
 
     for (const pointer of indexedCandidates) {
-      if (pointers.length >= limit) {
-        break;
-      }
-      pointers.push(pointer);
-    }
-  } else if (input.includeAuto !== false && pointers.length < limit) {
-    const autoMetas = listSessions()
-      .filter((meta) => meta.id !== input.currentConversationId
-        && !used.has(meta.id)
-        && meta.messageCount > 0
-        && isRecentAutoCandidate(meta, nowMs));
-    const autoMetasById = new Map(autoMetas.map((meta) => [meta.id, meta]));
-    const cheapAutoCandidates = autoMetas
-      .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: false, nowMs }));
-
-    const autoCandidatesById = new Map<string, RelatedConversationPointer>();
-    for (const pointer of cheapAutoCandidates) {
-      if (pointer.score >= AUTO_POINTER_MIN_SCORE) {
-        autoCandidatesById.set(pointer.sessionId, pointer);
-      }
-    }
-
-    if (input.allowSessionSearchRead === true && promptTerms.length > 0) {
-      for (const cheapPointer of cheapAutoCandidates
-        .filter((pointer) => pointer.score < AUTO_POINTER_MIN_SCORE)
-        .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a))
-        .slice(0, MAX_EXPLICIT_SESSION_SEARCH_READS)) {
-        const meta = autoMetasById.get(cheapPointer.sessionId);
-        if (!meta) {
-          continue;
-        }
-
-        const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: true, nowMs });
-        if (pointer.score >= AUTO_POINTER_MIN_SCORE) {
-          autoCandidatesById.set(pointer.sessionId, pointer);
-        }
-      }
-    }
-
-    const autoCandidates = Array.from(autoCandidatesById.values())
-      .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
-
-    for (const pointer of autoCandidates) {
       if (pointers.length >= limit) {
         break;
       }
@@ -435,15 +383,27 @@ export function warmRelatedConversationPointerCache(input: {
   nowMs?: number;
 }): RelatedConversationPointersResult {
   scheduleConversationSearchIndexing();
+  const started = Date.now();
   const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
   const key = buildPointerCacheKey(input);
+  if (Date.now() - started > WARM_POINTER_BUDGET_MS) {
+    const empty = { contextMessages: [], pointers: [], warnings: [] };
+    pointerCache.set(key, { cachedAtMs: nowMs, result: empty });
+    return empty;
+  }
+
   const result = buildRelatedConversationPointers({
     ...input,
     selectedSessionIds: [],
     includeAuto: true,
-    allowSessionSearchRead: false,
     nowMs,
   });
+  if (Date.now() - started > WARM_POINTER_BUDGET_MS) {
+    const empty = { contextMessages: [], pointers: [], warnings: [] };
+    pointerCache.set(key, { cachedAtMs: nowMs, result: empty });
+    return empty;
+  }
+
   pointerCache.set(key, { cachedAtMs: nowMs, result });
   return result;
 }
