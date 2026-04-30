@@ -382,6 +382,19 @@ function mergeContextMessages(...groups: Array<Array<{ customType: string; conte
   return messages.length > 0 ? messages : undefined;
 }
 
+function shouldIncludeBrowserChangedContext(inputText: string, pendingBrowserCommentsSnapshot: PendingBrowserComment[]): boolean {
+  if (pendingBrowserCommentsSnapshot.length > 0) {
+    return true;
+  }
+
+  const text = inputText.trim().toLowerCase();
+  if (!text) {
+    return false;
+  }
+
+  return /(browser|workbench|webview|web page|webpage|site|website|url|tab|dom|selector|screenshot|snapshot|click|type|navigate|navigation|scroll|form|login)/.test(text);
+}
+
 function buildBrowserCommentsStorageKey(draft: boolean, conversationId: string | undefined): string | null {
   if (draft) {
     return 'pa:reload:draft-conversation:browser-comments';
@@ -4779,7 +4792,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
       const textToSend = slashTextToSend ?? text;
-      const browserChangedContextMessage = await readBrowserChangedContextMessage(id ?? 'draft');
+      const browserChangedContextMessage = shouldIncludeBrowserChangedContext(textToSend, pendingBrowserCommentsSnapshot)
+        ? await readBrowserChangedContextMessage(id ?? 'draft')
+        : null;
       const browserContextMessages = mergeContextMessages(
         browserCommentContextMessages,
         browserChangedContextMessage ? [browserChangedContextMessage] : undefined,
