@@ -1,6 +1,6 @@
 import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'electron';
 
-const DEFAULT_BROWSER_URL = 'https://www.google.com/search?q=personal%20agent';
+const DEFAULT_BROWSER_URL = 'about:blank';
 const MAX_SNAPSHOT_TEXT_LENGTH = 30_000;
 const MAX_ACTIONS_PER_BATCH = 25;
 const MAX_ACTION_TEXT_LENGTH = 5_000;

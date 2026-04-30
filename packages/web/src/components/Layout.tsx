@@ -539,7 +539,7 @@ function WorkbenchDocumentPane({
 
 function WorkbenchBrowserTab() {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
-  const [urlDraft, setUrlDraft] = useState('https://www.google.com/search?q=personal%20agent');
+  const [urlDraft, setUrlDraft] = useState('');
   const latestUrlDraftRef = useRef(urlDraft);
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
