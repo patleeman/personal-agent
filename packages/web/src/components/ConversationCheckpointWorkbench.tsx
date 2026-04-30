@@ -102,6 +102,28 @@ export function ConversationDiffRailContent({
   }
 
   if (checkpoints.length === 0) {
+    if (activeCheckpointId) {
+      const shortId = activeCheckpointId.slice(0, 12);
+      return (
+        <div className="h-full min-h-0 overflow-y-auto px-2 py-2">
+          <button
+            type="button"
+            onClick={() => onOpenCheckpoint(activeCheckpointId)}
+            className="w-full rounded-xl bg-elevated px-3 py-2.5 text-left text-primary transition-colors"
+            title={activeCheckpointId}
+          >
+            <div className="flex min-w-0 items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-medium">Opened commit</p>
+                <p className="mt-0.5 truncate text-[11px] leading-4 text-dim">Loaded from local git history</p>
+              </div>
+              <span className="shrink-0 font-mono text-[10px] text-dim">{shortId}</span>
+            </div>
+          </button>
+        </div>
+      );
+    }
+
     return <div className="px-4 py-5 text-[12px] text-dim">No diffs in this conversation.</div>;
   }
 

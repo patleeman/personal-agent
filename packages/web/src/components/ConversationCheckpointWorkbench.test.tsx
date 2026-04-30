@@ -59,6 +59,22 @@ describe('ConversationCheckpointWorkbench', () => {
     expect(html.indexOf('Newer change')).toBeLessThan(html.indexOf('Older change'));
   });
 
+  it('keeps an opened git commit visible when there are no saved checkpoint rows', () => {
+    const html = renderToString(
+      <ConversationDiffRailContent
+        checkpoints={[]}
+        activeCheckpointId="24d4dea5becb49e802d3d97b5ae75cac6816bbf5"
+        loading={false}
+        error={null}
+        onOpenCheckpoint={vi.fn()}
+      />,
+    );
+
+    expect(html).toContain('Opened commit');
+    expect(html).toContain('Loaded from local git history');
+    expect(html).toContain('24d4dea5becb');
+  });
+
   it('shows a placeholder when no diff is selected', () => {
     const html = renderToString(
       <ConversationCheckpointWorkbenchPane conversationId="conv-1" checkpointId={null} />,

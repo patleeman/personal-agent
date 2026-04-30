@@ -9,7 +9,7 @@ import { VaultEditor } from './knowledge/VaultEditor';
 import { ConversationArtifactRailContent, ConversationArtifactWorkbenchPane, useConversationArtifactSummaries } from './ConversationArtifactWorkbench';
 import { ConversationCheckpointWorkbenchPane, ConversationDiffRailContent, useConversationCheckpointSummaries } from './ConversationCheckpointWorkbench';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
-import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
+import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
@@ -955,7 +955,7 @@ function WorkbenchKnowledgeRail({
   }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
 
   useEffect(() => {
-    if (activeTool === 'diffs' && !checkpointsLoading && checkpoints.length === 0) {
+    if (activeTool === 'diffs' && !activeCheckpointId && !checkpointsLoading && checkpoints.length === 0) {
       onActiveToolChange('knowledge');
       onCheckpointSelect(null);
       setSearchParams((current) => {
@@ -964,7 +964,7 @@ function WorkbenchKnowledgeRail({
         return next;
       }, { replace: true });
     }
-  }, [activeTool, checkpoints.length, checkpointsLoading, onActiveToolChange, onCheckpointSelect, setSearchParams]);
+  }, [activeCheckpointId, activeTool, checkpoints.length, checkpointsLoading, onActiveToolChange, onCheckpointSelect, setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -981,7 +981,7 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
-        {checkpoints.length > 0 ? (
+        {checkpoints.length > 0 || activeCheckpointId ? (
           <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')} title="Diffs" onClick={handleDiffsModeSelect}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
               <path d="M7.5 4.5v15" />
@@ -1148,6 +1148,19 @@ export function Layout() {
 
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleAppLayoutModeChanged() {
+      setAppLayoutMode(readAppLayoutMode());
+    }
+
+    window.addEventListener(APP_LAYOUT_MODE_CHANGED_EVENT, handleAppLayoutModeChanged);
+    window.addEventListener('storage', handleAppLayoutModeChanged);
+    return () => {
+      window.removeEventListener(APP_LAYOUT_MODE_CHANGED_EVENT, handleAppLayoutModeChanged);
+      window.removeEventListener('storage', handleAppLayoutModeChanged);
     };
   }, []);
 
