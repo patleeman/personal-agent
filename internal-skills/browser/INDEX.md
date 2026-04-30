@@ -66,7 +66,6 @@ There is one browser session per conversation workbench and three agent-facing b
 
 - `browser_snapshot` — observe the current browser state
 - `browser_script` — run a browser automation script against the current browser session
-- `browser_screenshot` — capture visual state when layout or appearance matters
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
 
@@ -178,9 +177,9 @@ Diagnostics:
 
 Implementation note: `setInputFiles` is reserved in the script API but currently returns an unsupported error in the embedded browser. Prefer normal page flows unless file upload support has been explicitly added.
 
-### `browser_screenshot`
+### Screenshots
 
-Use `browser_snapshot` with `includeScreenshot: true` when visual layout matters or when DOM/accessibility snapshots are not enough. That keeps the structured page state and the image together. `browser_screenshot` has no arguments and is only for explicit user screenshot requests or image-only capture.
+Use `browser_snapshot` with `includeScreenshot: true` when visual layout matters or when DOM/accessibility snapshots are not enough. That keeps the structured page state and the image together. There is no standalone `browser_screenshot` tool; do not try to call one.
 
 Default to `browser_snapshot`. Snapshot is preferred for normal browsing because it is structured, cheaper, includes refs/selectors, and is better for text, feeds, lists, forms, buttons, and current page state. Do not use screenshots just to read a page.
 
@@ -257,7 +256,7 @@ Current relevant files:
 - `packages/desktop/src/workbench-browser-script-worker.ts` — isolated script worker for `browser_script`
 - `packages/desktop/src/window.ts` — owns the browser controller and routes window-scoped operations
 - `packages/desktop/src/ipc.ts` and `packages/desktop/src/preload.ts` — bridge browser operations/events
-- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot`, `browser_script`, and `browser_screenshot`
+- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot` and `browser_script`
 - `packages/web/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
 - `packages/web/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
 

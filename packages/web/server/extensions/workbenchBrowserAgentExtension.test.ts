@@ -16,12 +16,11 @@ const ctx = {
 };
 
 describe('workbench browser agent extension', () => {
-  it('registers the three built-in browser tools', () => {
+  it('registers the built-in browser tools', () => {
     const tools = collectTools();
     expect(tools.map((tool) => tool.name)).toEqual([
       'browser_snapshot',
       'browser_script',
-      'browser_screenshot',
     ]);
   });
 
@@ -38,9 +37,6 @@ describe('workbench browser agent extension', () => {
 
     const script = await tools[1]!.execute('tool-2' as never, { script: 'return 1;' } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
     expect(script.content[0]?.text).toContain('return 1;');
-
-    const screenshot = await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
-    expect(screenshot.content[1]).toMatchObject({ type: 'image', data: 'aW1n' });
 
     setWorkbenchBrowserToolHost(null);
   });

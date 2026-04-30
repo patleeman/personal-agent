@@ -73,7 +73,6 @@ const ScriptParams = Type.Object({
 const SnapshotParams = Type.Object({
   includeScreenshot: Type.Optional(Type.Boolean({ description: 'Also include a screenshot image. Default false; use only when visual layout/image rendering matters or the user requested it.' })),
 });
-const ScreenshotParams = Type.Object({});
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -145,43 +144,6 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
           details: result as Record<string, unknown>,
-        };
-      },
-    });
-
-    pi.registerTool({
-      name: 'browser_screenshot',
-      label: 'Browser Screenshot',
-      description: 'Capture a screenshot image of the built-in Workbench Browser. Prefer browser_snapshot for normal page understanding, optionally with includeScreenshot=true when visual capture is needed.',
-      promptSnippet: 'Prefer browser_snapshot. Use browser_screenshot only when the user explicitly asks for a screenshot or image-only capture.',
-      promptGuidelines: [
-        'Default to browser_snapshot. It is cheaper, more structured, gives selectors/refs, and can include a screenshot with includeScreenshot=true.',
-        'Do not use browser_screenshot to read normal text, lists, feeds, buttons, form state, or navigation state.',
-        'Use browser_snapshot with includeScreenshot=true for visual layout checks so the agent also gets structured page state.',
-        'Targets the visible built-in Workbench Browser session for this conversation.',
-      ],
-      parameters: ScreenshotParams,
-      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-        const conversationId = ctx.sessionManager.getSessionId();
-        const screenshot = await requireHost().screenshot(conversationId) as {
-          dataBase64?: string;
-          mimeType?: string;
-          url?: string;
-          title?: string;
-          viewport?: unknown;
-          capturedAt?: string;
-        };
-        return {
-          content: [
-            { type: 'text' as const, text: 'Captured Workbench Browser screenshot.' },
-            { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
-          ],
-          details: {
-            url: screenshot.url,
-            title: screenshot.title,
-            viewport: screenshot.viewport,
-            capturedAt: screenshot.capturedAt,
-          },
         };
       },
     });
