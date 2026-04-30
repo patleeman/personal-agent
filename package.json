@@ -13,6 +13,7 @@
     "desktop:build": "npm --prefix packages/desktop run build",
     "desktop:dev": "npm --prefix packages/desktop run dev",
     "desktop:start": "npm --prefix packages/desktop run start",
+    "desktop:demo": "node packages/desktop/scripts/launch-demo-app.mjs",
     "desktop:dist": "npm run desktop:build && electron-builder --config electron-builder.config.mjs --publish never",
     "desktop:dist:dir": "npm run desktop:build && electron-builder --config electron-builder.config.mjs --dir",
     "ios:dev": "node scripts/ios-dev.mjs dev",
