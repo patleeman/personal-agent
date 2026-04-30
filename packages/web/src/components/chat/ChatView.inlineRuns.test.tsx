@@ -206,4 +206,39 @@ describe('ChatView inline run cards', () => {
     expect(apiMocks.durableRunLog).toHaveBeenCalledWith(RUN_ID, 240);
     expect(container.textContent).toContain('Polling live log');
   });
+
+  it('collapses raw delivered run callbacks into a clickable run card', async () => {
+    const { container } = renderChatView([{
+      type: 'text',
+      ts: '2026-03-11T18:00:00.000Z',
+      text: [
+        `Durable run ${RUN_ID} has finished.`,
+        'taskSlug=ui-preview-check',
+        'status=completed',
+        `log=/tmp/runs/${RUN_ID}/output.log`,
+        'command=npm test',
+        '',
+        'Recent log tail:',
+        'very noisy callback output',
+      ].join('\n'),
+    }]);
+
+    expect(container.textContent).toContain('Background work finished.');
+    expect(container.textContent).toContain('ui-preview-check');
+    expect(container.textContent).not.toContain('very noisy callback output');
+    expect(apiMocks.durableRun).not.toHaveBeenCalled();
+
+    const runButtons = findInlineRunButtons(container);
+    expect(runButtons).toHaveLength(1);
+    expect(runButtons[0]?.getAttribute('aria-expanded')).toBe('false');
+
+    await act(async () => {
+      runButtons[0]?.click();
+      await flushAsyncWork();
+    });
+
+    expect(apiMocks.durableRun).toHaveBeenCalledWith(RUN_ID);
+    expect(apiMocks.durableRunLog).toHaveBeenCalledWith(RUN_ID, 240);
+    expect(container.textContent).toContain('Polling live log');
+  });
 });

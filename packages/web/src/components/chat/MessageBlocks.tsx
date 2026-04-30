@@ -9,6 +9,9 @@ import { MessageActions } from './MessageActions.js';
 import { ImagePreview, type InspectableImage } from './ImageMessageBlocks.js';
 import type { ChatViewLayout } from './chatViewTypes.js';
 import { SurfacePanel, cx } from '../ui';
+import { InlineTraceRunCard } from './InlineTraceRunCard.js';
+import { buildInlineRunExpansionKey } from './linkedRunPolling.js';
+import { readMentionedLinkedRunsFromText } from './linkedRuns.js';
 
 function formatInjectedContextLabel(customType?: string): string {
   if (!customType || customType === 'referenced_context') {
@@ -113,6 +116,8 @@ export const AssistantMessage = memo(function AssistantMessage({
   onOpenFilePath,
   onOpenCheckpoint,
   onSelectionGesture,
+  isInlineRunExpanded,
+  onToggleInlineRun,
   showCursor = false,
   layout = 'default',
 }: {
@@ -123,6 +128,8 @@ export const AssistantMessage = memo(function AssistantMessage({
   onOpenFilePath?: (path: string) => void;
   onOpenCheckpoint?: (checkpointId: string) => void;
   onSelectionGesture?: ReplySelectionGestureHandler;
+  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
+  onToggleInlineRun?: (inlineRunKey: string) => void;
   showCursor?: boolean;
   layout?: ChatViewLayout;
 }) {
@@ -143,6 +150,8 @@ export const AssistantMessage = memo(function AssistantMessage({
 
     return onForkMessage?.(messageIndex);
   }, [messageIndex, onForkMessage]);
+  const rawRunCallbackRuns = useMemo(() => readRawRunCallbackLinkedRuns(block.text), [block.text]);
+  const showRawRunCallbackCard = rawRunCallbackRuns.length > 0;
 
   return (
     <div className={cx('group flex items-start', layout === 'compact' ? 'gap-2.5' : 'gap-3')}>
@@ -154,7 +163,16 @@ export const AssistantMessage = memo(function AssistantMessage({
           {...replySelectionScopeProps}
           className="ui-message-card-assistant text-primary space-y-1"
         >
-          {renderText(block.text, { onOpenFilePath, onOpenCheckpoint })}
+          {showRawRunCallbackCard ? (
+            <RawRunCallbackCard
+              runs={rawRunCallbackRuns}
+              messageIndex={messageIndex}
+              isInlineRunExpanded={isInlineRunExpanded}
+              onToggleInlineRun={onToggleInlineRun}
+            />
+          ) : (
+            renderText(block.text, { onOpenFilePath, onOpenCheckpoint })
+          )}
           {shouldShowCursor && (
             <span
               className="inline-block w-[2px] h-[14px] bg-accent ml-0.5 rounded-sm"
@@ -175,6 +193,56 @@ export const AssistantMessage = memo(function AssistantMessage({
     </div>
   );
 });
+
+function readRawRunCallbackLinkedRuns(text: string) {
+  if (!looksLikeRawRunCallback(text)) {
+    return [];
+  }
+
+  return readMentionedLinkedRunsFromText(text);
+}
+
+function looksLikeRawRunCallback(text: string): boolean {
+  return /^(?:Durable run|Background task)\s+\S+\s+has finished\./.test(text.trim())
+    && /\btaskSlug=/.test(text)
+    && /\bstatus=/.test(text)
+    && /\blog=/.test(text)
+    && /Recent log tail:/.test(text);
+}
+
+function RawRunCallbackCard({
+  runs,
+  messageIndex,
+  isInlineRunExpanded,
+  onToggleInlineRun,
+}: {
+  runs: ReturnType<typeof readMentionedLinkedRunsFromText>;
+  messageIndex?: number;
+  isInlineRunExpanded?: (inlineRunKey: string) => boolean;
+  onToggleInlineRun?: (inlineRunKey: string) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2 text-[12px] text-secondary">
+        <span className="font-medium text-primary">Background work finished.</span>
+        <span>Open the run card for logs and metadata.</span>
+      </div>
+      <div className="space-y-1.5">
+        {runs.map((run) => {
+          const inlineRunKey = buildInlineRunExpansionKey(messageIndex ?? 0, run.runId);
+          return (
+            <InlineTraceRunCard
+              key={run.runId}
+              run={run}
+              expanded={isInlineRunExpanded?.(inlineRunKey) ?? false}
+              onToggle={() => onToggleInlineRun?.(inlineRunKey)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export const ContextMessage = memo(function ContextMessage({
   block,

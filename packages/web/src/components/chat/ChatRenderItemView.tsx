@@ -149,6 +149,8 @@ export function ChatRenderItemView({
             onOpenFilePath={onOpenFilePath}
             onOpenCheckpoint={onOpenCheckpoint}
             onSelectionGesture={onReplyToSelection ? onSelectionGesture : undefined}
+            isInlineRunExpanded={isInlineRunExpanded}
+            onToggleInlineRun={onToggleInlineRun}
             layout={layout}
           />
         );

@@ -401,6 +401,14 @@ export function readLinkedRuns(block: Extract<MessageBlock, { type: 'tool_use' }
   };
 }
 
+export function readMentionedLinkedRunsFromText(text: string): LinkedRunPresentation[] {
+  return extractDurableRunIdsFromBlock({
+    type: 'text',
+    ts: new Date(0).toISOString(),
+    text,
+  }).map((runId) => presentLinkedRun(runId));
+}
+
 export function collectTraceClusterLinkedRuns(blocks: MessageBlock[]): LinkedRunPresentation[] {
   const seen = new Set<string>();
   const next: LinkedRunPresentation[] = [];
