@@ -539,18 +539,21 @@ function WorkbenchDocumentPane({
 
 function WorkbenchBrowserTab() {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
+  const urlInputRef = useRef<HTMLInputElement | null>(null);
   const [urlDraft, setUrlDraft] = useState('');
-  const latestUrlDraftRef = useRef(urlDraft);
-  const urlInputFocusedRef = useRef(false);
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
   const [pendingMarkers, setPendingMarkers] = useState<Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>>([]);
   const bridge = getDesktopBridge();
 
-  useEffect(() => {
-    latestUrlDraftRef.current = urlDraft;
-  }, [urlDraft]);
+  const syncUrlDraftFromBrowserState = useCallback((nextState: DesktopWorkbenchBrowserState) => {
+    if (document.activeElement === urlInputRef.current) {
+      return;
+    }
+
+    setUrlDraft(nextState.url === 'about:blank' ? '' : nextState.url);
+  }, []);
 
   const syncBounds = useCallback(() => {
     const host = browserHostRef.current;
@@ -573,12 +576,10 @@ function WorkbenchBrowserTab() {
       }).then((nextState) => {
       if (nextState) {
         setState(nextState);
-        if (!urlInputFocusedRef.current) {
-          setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
-        }
+        syncUrlDraftFromBrowserState(nextState);
       }
     }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
-  }, [bridge]);
+  }, [bridge, syncUrlDraftFromBrowserState]);
 
   useLayoutEffect(() => {
     syncBounds();
@@ -612,20 +613,6 @@ function WorkbenchBrowserTab() {
     return () => window.removeEventListener(DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, handleBrowserCommentTarget);
   }, []);
 
-  const refreshState = useCallback(() => {
-    if (!bridge) {
-      return;
-    }
-    void bridge.getWorkbenchBrowserState().then((nextState) => {
-      if (nextState) {
-        setState(nextState);
-        if (!urlInputFocusedRef.current) {
-          setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
-        }
-      }
-    }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
-  }, [bridge]);
-
   async function runBrowserCommand(command: () => Promise<DesktopWorkbenchBrowserState | null | undefined>) {
     if (!bridge) {
       setStatus('Workbench browser is only available in the Electron desktop app.');
@@ -636,7 +623,7 @@ function WorkbenchBrowserTab() {
       const nextState = await command();
       if (nextState) {
         setState(nextState);
-        setUrlDraft(nextState.url === 'about:blank' ? '' : (nextState.url || latestUrlDraftRef.current));
+        setUrlDraft(nextState.url === 'about:blank' ? '' : nextState.url);
       }
       setStatus('');
       syncBounds();
@@ -679,14 +666,10 @@ function WorkbenchBrowserTab() {
         <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
         <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary" onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? 'Stop' : 'Reload'}</button>
         <input
+          ref={urlInputRef}
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
           value={urlDraft}
           onChange={(event) => setUrlDraft(event.target.value)}
-          onFocus={() => { urlInputFocusedRef.current = true; }}
-          onBlur={() => {
-            urlInputFocusedRef.current = false;
-            refreshState();
-          }}
           placeholder="https://example.com"
         />
       </form>
