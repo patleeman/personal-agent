@@ -52,11 +52,13 @@ describe('ConversationCheckpointWorkbench', () => {
       />,
     );
 
-    expect(html).toContain('Newer change');
-    expect(html).toContain('Older change');
+    expect(html).toContain('def4567');
+    expect(html).toContain('abc1234');
+    expect(html).not.toContain('Newer change summary');
+    expect(html).not.toContain('Older change summary');
     expect(html).toContain('10');
     expect(html).toContain('3');
-    expect(html.indexOf('Newer change')).toBeLessThan(html.indexOf('Older change'));
+    expect(html.indexOf('def4567')).toBeLessThan(html.indexOf('abc1234'));
   });
 
   it('keeps an opened git commit visible when there are no saved checkpoint rows', () => {

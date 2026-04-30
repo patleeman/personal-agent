@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AppEventsContext, INITIAL_APP_EVENT_VERSIONS } from '../../app/contexts.js';
 import { INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS } from '../../conversation/conversationEventVersions.js';
 import { useApi } from '../../hooks/useApi';
+import { ThemeProvider } from '../../ui-state/theme.js';
 import { CheckpointInlineDiff } from './CheckpointInlineDiff.js';
 
 vi.mock('../../hooks/useApi', () => ({
@@ -64,9 +65,11 @@ describe('CheckpointInlineDiff', () => {
     }));
 
     const html = renderToString(
-      <AppEventsContext.Provider value={{ versions: INITIAL_APP_EVENT_VERSIONS, conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS }}>
-        <CheckpointInlineDiff conversationId="conv-123" checkpointId="abc1234def567890abc1234def567890abc12345" onOpenCheckpoint={() => undefined} />
-      </AppEventsContext.Provider>,
+      <ThemeProvider>
+        <AppEventsContext.Provider value={{ versions: INITIAL_APP_EVENT_VERSIONS, conversationVersions: INITIAL_CONVERSATION_SCOPED_EVENT_VERSIONS }}>
+          <CheckpointInlineDiff conversationId="conv-123" checkpointId="abc1234def567890abc1234def567890abc12345" onOpenCheckpoint={() => undefined} />
+        </AppEventsContext.Provider>
+      </ThemeProvider>,
     );
 
     expect(html).toContain('Diff peek');
