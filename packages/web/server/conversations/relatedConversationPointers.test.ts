@@ -5,11 +5,15 @@ const {
   readSessionMetaMock,
   readSessionSearchTextMock,
   readConversationSummaryMock,
+  scheduleConversationSearchIndexingMock,
+  searchIndexedConversationDocumentsMock,
 } = vi.hoisted(() => ({
   listSessionsMock: vi.fn(),
   readSessionMetaMock: vi.fn(),
   readSessionSearchTextMock: vi.fn(),
   readConversationSummaryMock: vi.fn(),
+  scheduleConversationSearchIndexingMock: vi.fn(),
+  searchIndexedConversationDocumentsMock: vi.fn(),
 }));
 
 vi.mock('./sessions.js', () => ({
@@ -20,6 +24,11 @@ vi.mock('./sessions.js', () => ({
 
 vi.mock('./conversationSummaries.js', () => ({
   readConversationSummary: readConversationSummaryMock,
+}));
+
+vi.mock('./conversationSearchIndex.js', () => ({
+  scheduleConversationSearchIndexing: scheduleConversationSearchIndexingMock,
+  searchIndexedConversationDocuments: searchIndexedConversationDocumentsMock,
 }));
 
 import {
@@ -46,10 +55,13 @@ beforeEach(() => {
   readSessionMetaMock.mockReset();
   readSessionSearchTextMock.mockReset();
   readConversationSummaryMock.mockReset();
+  scheduleConversationSearchIndexingMock.mockReset();
+  searchIndexedConversationDocumentsMock.mockReset();
   clearRelatedConversationPointerCache();
   listSessionsMock.mockReturnValue([]);
   readSessionSearchTextMock.mockReturnValue('');
   readConversationSummaryMock.mockReturnValue(null);
+  searchIndexedConversationDocumentsMock.mockReturnValue([]);
 } );
 
 describe('buildRelatedConversationPointers', () => {
@@ -71,10 +83,7 @@ describe('buildRelatedConversationPointers', () => {
   });
 
   it('serves warmed pointer results from a short-lived cache', () => {
-    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
-    listSessionsMock.mockReturnValue([
-      { ...baseMeta, id: 'cached-hit', title: 'Release signing cached', messageCount: 6, lastActivityAt: '2026-04-21T10:00:00.000Z' },
-    ]);
+    searchIndexedConversationDocumentsMock.mockReturnValue([{ sessionId: 'cached-hit', title: 'Release signing cached', cwd: '/repo/a', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', searchText: 'release signing fix' }]);
 
     warmRelatedConversationPointerCache({
       prompt: 'Fix release signing',
@@ -83,6 +92,7 @@ describe('buildRelatedConversationPointers', () => {
       nowMs: TEST_NOW_MS,
     });
 
+    expect(scheduleConversationSearchIndexingMock).toHaveBeenCalledTimes(1);
     expect(readCachedRelatedConversationPointers({
       prompt: 'Fix release signing',
       currentConversationId: 'current',

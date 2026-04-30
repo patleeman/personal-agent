@@ -1,6 +1,11 @@
 import { eng, removeStopwords } from 'stopword';
 import { readConversationSummary } from './conversationSummaries.js';
 import {
+  scheduleConversationSearchIndexing,
+  searchIndexedConversationDocuments,
+  type IndexedConversationSearchCandidate,
+} from './conversationSearchIndex.js';
+import {
   listSessions,
   readSessionMeta,
   readSessionSearchText,
@@ -220,6 +225,39 @@ function buildPointer(input: {
   };
 }
 
+function buildIndexedPointer(input: {
+  candidate: IndexedConversationSearchCandidate;
+  promptTerms: string[];
+  currentCwd?: string;
+  nowMs?: number;
+}): RelatedConversationPointer {
+  const meta = {
+    id: input.candidate.sessionId,
+    title: input.candidate.title,
+    cwd: input.candidate.cwd,
+    timestamp: input.candidate.timestamp,
+    lastActivityAt: input.candidate.lastActivityAt,
+  } as SessionMeta;
+  const scored = scoreCandidate({
+    meta,
+    terms: input.promptTerms,
+    currentCwd: input.currentCwd,
+    searchText: input.candidate.searchText,
+    nowMs: input.nowMs,
+  });
+
+  return {
+    sessionId: input.candidate.sessionId,
+    title: input.candidate.title,
+    cwd: input.candidate.cwd,
+    timestamp: input.candidate.timestamp,
+    ...(input.candidate.lastActivityAt ? { lastActivityAt: input.candidate.lastActivityAt } : {}),
+    score: scored.score,
+    source: 'auto',
+    reasons: scored.reasons.length > 0 ? scored.reasons : ['indexed candidate'],
+  };
+}
+
 function pointerActivityMs(pointer: RelatedConversationPointer): number {
   const parsed = parsePointerTimestamp(pointer.lastActivityAt ?? pointer.timestamp);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
@@ -293,7 +331,26 @@ export function buildRelatedConversationPointers(input: {
     used.add(pointer.sessionId);
   }
 
-  if (input.includeAuto !== false && pointers.length < limit) {
+  if (input.includeAuto !== false && pointers.length < limit && input.allowSessionSearchRead === false) {
+    const indexedCandidates = searchIndexedConversationDocuments({
+      terms: promptTerms,
+      currentConversationId: input.currentConversationId,
+      currentCwd: input.currentCwd,
+      nowMs,
+      recentWindowMs: AUTO_POINTER_RECENT_WINDOW_MS,
+      limit: limit - pointers.length,
+    })
+      .map((candidate) => buildIndexedPointer({ candidate, promptTerms, currentCwd: input.currentCwd, nowMs }))
+      .filter((pointer) => pointer.score >= AUTO_POINTER_MIN_SCORE)
+      .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
+
+    for (const pointer of indexedCandidates) {
+      if (pointers.length >= limit) {
+        break;
+      }
+      pointers.push(pointer);
+    }
+  } else if (input.includeAuto !== false && pointers.length < limit) {
     const autoMetas = listSessions()
       .filter((meta) => meta.id !== input.currentConversationId
         && !used.has(meta.id)
@@ -377,6 +434,7 @@ export function warmRelatedConversationPointerCache(input: {
   limit?: number;
   nowMs?: number;
 }): RelatedConversationPointersResult {
+  scheduleConversationSearchIndexing();
   const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
   const key = buildPointerCacheKey(input);
   const result = buildRelatedConversationPointers({
