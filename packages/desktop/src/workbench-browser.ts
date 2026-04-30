@@ -2,6 +2,7 @@ import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'e
 import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { readStoredWorkbenchBrowserUrl, writeStoredWorkbenchBrowserUrl } from './state/workbench-browser-state.js';
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com/';
 const MAX_SNAPSHOT_TEXT_LENGTH = 30_000;
@@ -524,13 +525,30 @@ export class WorkbenchBrowserViewController {
       this.showContextMenu(viewKey, params.x, params.y);
     });
     view.webContents.on('did-start-loading', () => this.bumpRevision(viewKey, 'page started loading'));
-    view.webContents.on('did-finish-load', () => this.bumpRevision(viewKey, 'page finished loading'));
-    view.webContents.on('did-navigate', () => this.bumpRevision(viewKey, 'navigated'));
-    view.webContents.on('did-navigate-in-page', () => this.bumpRevision(viewKey, 'in-page navigation'));
+    view.webContents.on('did-finish-load', () => {
+      this.bumpRevision(viewKey, 'page finished loading');
+      this.persistCurrentUrl(sessionKey, view.webContents.getURL());
+    });
+    view.webContents.on('did-navigate', (_event, url) => {
+      this.bumpRevision(viewKey, 'navigated');
+      this.persistCurrentUrl(sessionKey, url);
+    });
+    view.webContents.on('did-navigate-in-page', (_event, url) => {
+      this.bumpRevision(viewKey, 'in-page navigation');
+      this.persistCurrentUrl(sessionKey, url);
+    });
     view.webContents.on('page-title-updated', () => this.bumpRevision(viewKey, 'page title changed'));
     view.webContents.on('before-input-event', () => this.bumpRevision(viewKey, 'page input'));
-    void view.webContents.loadURL(DEFAULT_BROWSER_URL).catch(() => undefined);
+    void view.webContents.loadURL(readStoredWorkbenchBrowserUrl(sessionKey) ?? DEFAULT_BROWSER_URL).catch(() => undefined);
     return view;
+  }
+
+  private persistCurrentUrl(sessionKey: string | null | undefined, url: string): void {
+    try {
+      writeStoredWorkbenchBrowserUrl(sessionKey, url);
+    } catch {
+      // Browser URL persistence is a convenience; never break navigation for it.
+    }
   }
 
   private bumpRevision(viewKey: string, reason: string): void {
