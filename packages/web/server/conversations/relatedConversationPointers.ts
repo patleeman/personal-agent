@@ -11,6 +11,7 @@ export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_p
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
 const MAX_AUTO_SESSION_SEARCH_READS = 24;
+const AUTO_POINTER_RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 const PRODUCT_STOPWORDS = new Set([
   'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
   'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
@@ -113,6 +114,7 @@ function scoreCandidate(input: {
   currentCwd?: string;
   preview?: string;
   searchText?: string;
+  nowMs?: number;
 }): { score: number; reasons: string[] } {
   let score = 0;
   const reasons: string[] = [];
@@ -141,7 +143,7 @@ function scoreCandidate(input: {
 
   const lastActivity = parsePointerTimestamp(input.meta.lastActivityAt ?? input.meta.timestamp);
   if (Number.isFinite(lastActivity)) {
-    const ageDays = (Date.now() - lastActivity) / 86_400_000;
+    const ageDays = ((input.nowMs ?? Date.now()) - lastActivity) / 86_400_000;
     if (ageDays <= 7) {
       score += 2;
       reasons.push('recent activity');
@@ -164,6 +166,7 @@ function buildPointer(input: {
   currentCwd?: string;
   source: 'manual' | 'auto';
   allowSessionSearchRead?: boolean;
+  nowMs?: number;
 }): RelatedConversationPointer {
   const summary = readConversationSummary(input.meta.id);
   const preview = normalizePreview(summary?.displaySummary || summary?.promptSummary);
@@ -174,6 +177,7 @@ function buildPointer(input: {
     currentCwd: input.currentCwd,
     preview,
     searchText,
+    nowMs: input.nowMs,
   });
 
   return {
@@ -193,6 +197,11 @@ function buildPointer(input: {
 function pointerActivityMs(pointer: RelatedConversationPointer): number {
   const parsed = parsePointerTimestamp(pointer.lastActivityAt ?? pointer.timestamp);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function isRecentAutoCandidate(meta: SessionMeta, nowMs: number): boolean {
+  const activityMs = parsePointerTimestamp(meta.lastActivityAt ?? meta.timestamp);
+  return Number.isFinite(activityMs) && nowMs - activityMs <= AUTO_POINTER_RECENT_WINDOW_MS;
 }
 
 function formatPointerContext(pointers: RelatedConversationPointer[]): string {
@@ -225,6 +234,7 @@ export function buildRelatedConversationPointers(input: {
   currentCwd?: string;
   selectedSessionIds?: unknown;
   limit?: number;
+  nowMs?: number;
 }): RelatedConversationPointersResult {
   const prompt = input.prompt.trim();
   if (!prompt) {
@@ -234,6 +244,7 @@ export function buildRelatedConversationPointers(input: {
   const limit = normalizePointerLimit(input.limit);
   const selectedIds = normalizeSessionIds(input.selectedSessionIds).filter((sessionId) => sessionId !== input.currentConversationId);
   const promptTerms = tokenize(prompt);
+  const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
   const warnings: string[] = [];
   const pointers: RelatedConversationPointer[] = [];
   const used = new Set<string>();
@@ -249,17 +260,20 @@ export function buildRelatedConversationPointers(input: {
       continue;
     }
 
-    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: true });
+    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: true, nowMs });
     pointers.push(pointer);
     used.add(pointer.sessionId);
   }
 
   if (pointers.length < limit) {
     const autoMetas = listSessions()
-      .filter((meta) => meta.id !== input.currentConversationId && !used.has(meta.id) && meta.messageCount > 0);
+      .filter((meta) => meta.id !== input.currentConversationId
+        && !used.has(meta.id)
+        && meta.messageCount > 0
+        && isRecentAutoCandidate(meta, nowMs));
     const autoMetasById = new Map(autoMetas.map((meta) => [meta.id, meta]));
     const cheapAutoCandidates = autoMetas
-      .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: false }));
+      .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: false, nowMs }));
 
     const autoCandidatesById = new Map<string, RelatedConversationPointer>();
     for (const pointer of cheapAutoCandidates) {
@@ -278,7 +292,7 @@ export function buildRelatedConversationPointers(input: {
           continue;
         }
 
-        const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: true });
+        const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: true, nowMs });
         if (pointer.score >= AUTO_POINTER_MIN_SCORE) {
           autoCandidatesById.set(pointer.sessionId, pointer);
         }

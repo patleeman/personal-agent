@@ -36,6 +36,7 @@ const baseMeta = {
   messageCount: 4,
   title: 'Release signing',
 };
+const TEST_NOW_MS = Date.parse('2026-04-22T10:00:00.000Z');
 
 beforeEach(() => {
   listSessionsMock.mockReset();
@@ -56,6 +57,7 @@ describe('buildRelatedConversationPointers', () => {
       currentConversationId: 'current',
       currentCwd: '/repo/a',
       selectedSessionIds: ['manual-1'],
+      nowMs: TEST_NOW_MS,
     });
 
     expect(result.pointers).toHaveLength(1);
@@ -83,6 +85,7 @@ describe('buildRelatedConversationPointers', () => {
       currentConversationId: 'current',
       currentCwd: '/repo/a',
       selectedSessionIds: ['manual-1'],
+      nowMs: TEST_NOW_MS,
     });
 
     expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['manual-1', 'auto-1']);
@@ -102,6 +105,7 @@ describe('buildRelatedConversationPointers', () => {
       prompt: 'Why is our app bundle 730MB?',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
     expect(result.pointers).toEqual([]);
@@ -119,6 +123,7 @@ describe('buildRelatedConversationPointers', () => {
       prompt: "Dictation isn't working. Is there a way to stream dictation?",
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
     expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['dictation-1']);
@@ -137,6 +142,7 @@ describe('buildRelatedConversationPointers', () => {
       prompt: 'Fix the release signing flow',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
     expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['summary-hit']);
@@ -149,8 +155,8 @@ describe('buildRelatedConversationPointers', () => {
       id: `candidate-${index}`,
       title: `Candidate ${index}`,
       messageCount: 6,
-      timestamp: `2026-04-${String(Math.min(index + 1, 28)).padStart(2, '0')}T10:00:00.000Z`,
-      lastActivityAt: `2026-04-${String(Math.min(index + 1, 28)).padStart(2, '0')}T10:00:00.000Z`,
+      timestamp: '2026-04-21T10:00:00.000Z',
+      lastActivityAt: '2026-04-21T10:00:00.000Z',
     }));
     listSessionsMock.mockReturnValue(metas);
     readSessionSearchTextMock.mockImplementation((sessionId: string) => sessionId === 'candidate-39'
@@ -161,6 +167,7 @@ describe('buildRelatedConversationPointers', () => {
       prompt: 'Find the needle release signing fix',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
     expect(readSessionSearchTextMock).toHaveBeenCalledTimes(24);
@@ -201,37 +208,39 @@ describe('buildRelatedConversationPointers', () => {
     ]);
   });
 
-  it('sorts auto candidates with malformed activity timestamps last', () => {
+  it('only auto-ranks recent conversations', () => {
     readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
     readSessionSearchTextMock.mockReturnValue('release signing fix');
     listSessionsMock.mockReturnValue([
-      { ...baseMeta, id: 'invalid-time', title: 'Release signing invalid', timestamp: 'not-a-date', lastActivityAt: 'not-a-date', messageCount: 6 },
-      { ...baseMeta, id: 'valid-time', title: 'Release signing valid', timestamp: '2026-02-01T10:00:00.000Z', lastActivityAt: '2026-02-01T10:00:00.000Z', messageCount: 6 },
+      { ...baseMeta, id: 'recent', title: 'Release signing recent', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', messageCount: 6 },
+      { ...baseMeta, id: 'stale', title: 'Release signing stale', timestamp: '2026-04-10T10:00:00.000Z', lastActivityAt: '2026-04-10T10:00:00.000Z', messageCount: 6 },
     ]);
 
     const result = buildRelatedConversationPointers({
       prompt: 'Fix the release signing flow',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
-    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time', 'invalid-time']);
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['recent']);
   });
 
-  it('sorts auto candidates with non-ISO activity timestamps last', () => {
+  it('skips auto candidates with malformed activity timestamps', () => {
     readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
     readSessionSearchTextMock.mockReturnValue('release signing fix');
     listSessionsMock.mockReturnValue([
       { ...baseMeta, id: 'non-iso-time', title: 'Release signing non iso', timestamp: '9999', lastActivityAt: '9999', messageCount: 6 },
-      { ...baseMeta, id: 'valid-time', title: 'Release signing valid', timestamp: '2026-02-01T10:00:00.000Z', lastActivityAt: '2026-02-01T10:00:00.000Z', messageCount: 6 },
+      { ...baseMeta, id: 'valid-time', title: 'Release signing valid', timestamp: '2026-04-21T10:00:00.000Z', lastActivityAt: '2026-04-21T10:00:00.000Z', messageCount: 6 },
     ]);
 
     const result = buildRelatedConversationPointers({
       prompt: 'Fix the release signing flow',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
     });
 
-    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time', 'non-iso-time']);
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['valid-time']);
   });
 });
