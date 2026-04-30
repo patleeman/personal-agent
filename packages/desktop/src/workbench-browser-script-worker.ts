@@ -5,10 +5,6 @@ const MAX_LOGS = 200;
 const MAX_LOG_LENGTH = 2_000;
 const MAX_RESULT_LENGTH = 200_000;
 
-if (!parentPort) {
-  throw new Error('browser script worker requires a parent port');
-}
-
 type RpcRequest = {
   id: number;
   op: string;
@@ -53,9 +49,16 @@ function ensureSerializable(value: unknown): unknown {
   return JSON.parse(json);
 }
 
+function requireParentPort(): NonNullable<typeof parentPort> {
+  if (!parentPort) {
+    throw new Error('browser script worker requires a parent port');
+  }
+  return parentPort;
+}
+
 function rpc(op: string, args: unknown[] = []): Promise<unknown> {
   const id = nextRpcId++;
-  parentPort!.postMessage({ type: 'rpc', request: { id, op, args } satisfies RpcRequest });
+  requireParentPort().postMessage({ type: 'rpc', request: { id, op, args } satisfies RpcRequest });
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
   });
@@ -97,6 +100,29 @@ const consoleProxy = Object.freeze({
   error: (...values: unknown[]) => appendLog(values),
 });
 
+function wrapBrowserScript(source: string): string {
+  return `(async () => {\n${source}\n})()`;
+}
+
+function normalizeEscapedLineBreaks(source: string): string {
+  return source.replace(/\\n/g, '\n');
+}
+
+export function compileBrowserScript(source: string): vm.Script {
+  try {
+    return new vm.Script(wrapBrowserScript(source), { filename: 'workbench-browser-script.js' });
+  } catch (error) {
+    if (!(error instanceof SyntaxError) || !source.includes('\\n')) {
+      throw error;
+    }
+
+    // Some callers accidentally double-escape multiline JSON tool input, so the
+    // worker receives literal "\\n" tokens between statements. Retry with those
+    // line breaks decoded before reporting a syntax error.
+    return new vm.Script(wrapBrowserScript(normalizeEscapedLineBreaks(source)), { filename: 'workbench-browser-script.js' });
+  }
+}
+
 async function runScript(source: string): Promise<void> {
   const context = vm.createContext({
     browser,
@@ -109,13 +135,12 @@ async function runScript(source: string): Promise<void> {
     codeGeneration: { strings: false, wasm: false },
   });
 
-  const wrapped = `(async () => {\n${source}\n})()`;
-  const script = new vm.Script(wrapped, { filename: 'workbench-browser-script.js' });
+  const script = compileBrowserScript(source);
   const result = await script.runInContext(context, { timeout: 1_000, breakOnSigint: false });
-  parentPort!.postMessage({ type: 'done', result: ensureSerializable(result), logs });
+  requireParentPort().postMessage({ type: 'done', result: ensureSerializable(result), logs });
 }
 
-parentPort.on('message', (message: unknown) => {
+parentPort?.on('message', (message: unknown) => {
   const value = message as { type?: string; response?: RpcResponse; script?: string };
   if (value.type === 'start' && typeof value.script === 'string') {
     void runScript(value.script).catch((error) => {
