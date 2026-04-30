@@ -62,14 +62,164 @@ Browser comments are prompt context, not durable page annotations. Avoid buildin
 
 ## Agent-facing browser use
 
-The desired direction is one browser session per conversation workbench:
+The desired direction is one browser session per conversation workbench and three agent-facing browser tools:
+
+- `browser_snapshot` — observe the current browser state
+- `browser_script` — run a browser automation script against the current browser session
+- `browser_screenshot` — capture visual state when layout or appearance matters
+
+These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
+
+The product model:
 
 - the Browser tab is the visual surface
 - Electron main owns navigation, state, snapshots, actions, and comments
-- agent browser tools should target that same session when running inside desktop conversations
+- agent browser tools target that same session when running inside desktop conversations
 - if an agent uses a built-in browser tool and the Browser tab is closed, the app should open Workbench → Browser automatically
 
 Avoid creating two unrelated browsers for the same task. A Playwright/`agent-browser` session and the built-in Electron Browser tab drifting apart is bad UX.
+
+### `browser_snapshot`
+
+Use `browser_snapshot` as the browser equivalent of `read`: it gives the agent eyes.
+
+It should return:
+
+- URL and title
+- loading state
+- visible text summary
+- accessibility-oriented element rows when possible: role, name, state, bounds
+- DOM fallback metadata: selector, XPath, text snippet, HTML preview
+- stable per-snapshot refs such as `@e1`, `@e2`, etc.
+
+Example shape:
+
+```text
+URL: https://example.com/login
+Title: Sign in
+
+@e1 role=textbox name="Email" selector="input[name=email]" enabled=true
+@e2 role=textbox name="Password" selector="input[name=password]" enabled=true
+@e3 role=button name="Sign in" selector="button[type=submit]" enabled=true
+```
+
+Refs are snapshot-scoped. After navigation or major DOM changes, take a fresh snapshot before using refs again.
+
+Prefer accessibility data for role/name/state, but always include DOM fallback selectors so scripts can act.
+
+### `browser_script`
+
+Use `browser_script` as the browser equivalent of `bash`: one powerful script execution surface, not many tiny click/type tools.
+
+Scripts should run against the current Workbench Browser session and can use refs from the latest snapshot.
+
+Example:
+
+```js
+await browser.goto('https://www.google.com/');
+await browser.type('textarea[name=q]', 'personal agent');
+await browser.press('Enter');
+await browser.waitForText('Personal Agent');
+return await browser.snapshot();
+```
+
+Supported API should include at least:
+
+Navigation and state:
+
+- `await browser.goto(url)`
+- `await browser.reload()`
+- `await browser.back()`
+- `await browser.forward()`
+- `await browser.url()`
+- `await browser.title()`
+
+Observation:
+
+- `await browser.snapshot()`
+- `await browser.text(selectorOrRef?)`
+- `await browser.html(selectorOrRef?)`
+- `await browser.exists(selectorOrRef)`
+- `await browser.query(selectorOrRef)`
+
+Actions:
+
+- `await browser.click(selectorOrRef)`
+- `await browser.type(selectorOrRef, text)`
+- `await browser.press(key)`
+- `await browser.scroll(x, y)`
+- `await browser.select(selectorOrRef, value)`
+- `await browser.check(selectorOrRef)`
+- `await browser.uncheck(selectorOrRef)`
+- `await browser.setInputFiles(selectorOrRef, paths)`
+
+Waiting:
+
+- `await browser.wait(ms)`
+- `await browser.waitFor(selectorOrRef)`
+- `await browser.waitForText(text)`
+- `await browser.waitForLoadState(state?)`
+
+Escape hatch:
+
+- `await browser.evaluate(fnOrSource, ...args)`
+
+`evaluate` is allowed because it is too useful to omit. It runs in the loaded page context, not in Electron main or the Personal Agent renderer. It can inspect and mutate the loaded page, so tool output must show the script and failures clearly.
+
+Diagnostics:
+
+- `browser.log(...values)` should append to the tool result logs.
+- returned values must be JSON-serializable and size-limited.
+
+### `browser_screenshot`
+
+Use `browser_screenshot` when visual layout matters or when DOM/accessibility snapshots are not enough.
+
+It should return an image attachment or image data plus basic metadata:
+
+- URL and title
+- viewport size
+- timestamp
+- image MIME/data/path according to the tool system's normal attachment conventions
+
+### Script isolation
+
+Never execute agent-provided browser scripts directly in Electron main.
+
+Correct model:
+
+```text
+agent script
+  ↓
+isolated worker / utility process / constrained VM
+  ↓ RPC calls such as browser.click('@e1')
+Electron main validates and applies operations to WebContentsView
+  ↓
+Workbench Browser page
+```
+
+Rules:
+
+- Electron main is the broker, not the script sandbox.
+- The worker gets only `browser`, `console`/`browser.log`, timers, and cancellation/timeout primitives.
+- Do not expose Node builtins, filesystem, environment variables, Electron objects, app state, or IPC directly to the script.
+- Hard-timeout scripts and terminate the worker/process on timeout.
+- Size-limit logs and return values.
+- Validate every operation in main before applying it to `WebContentsView`.
+- `browser.evaluate(...)` executes only in the loaded page via `webContents.executeJavaScript`.
+- Consider blocking or requiring explicit opt-in for `evaluate` on `personal-agent://app` pages so the agent cannot casually poke the host UI.
+
+### Auto-open behavior
+
+When any built-in browser tool runs from a desktop conversation:
+
+1. switch to Workbench mode if needed
+2. select the Browser tab
+3. ensure the browser pane exists
+4. show a small “Agent controlling browser” status while the tool is active
+5. return the tool result to the transcript
+
+Do not show raw script/debug panels in the user Browser tab. The transcript is where tool details belong.
 
 ## Relationship to `agent-browser`
 
