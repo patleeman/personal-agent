@@ -59,12 +59,12 @@ function isEmptyJsonRecord(filePath: string): boolean {
   return !record || Object.keys(record).length === 0;
 }
 
-function seedTestingAgentRuntimeFile(sourceFile: string, targetFile: string): void {
+function seedTestingAgentRuntimeFile(sourceFile: string, targetFile: string, options: { overwrite?: boolean } = {}): void {
   if (!existsSync(sourceFile)) {
     return;
   }
 
-  if (existsSync(targetFile) && !isEmptyJsonRecord(targetFile)) {
+  if (!options.overwrite && existsSync(targetFile) && !isEmptyJsonRecord(targetFile)) {
     return;
   }
 
@@ -88,7 +88,7 @@ export function seedTestingRuntimeState(env: NodeJS.ProcessEnv = process.env): v
     return;
   }
 
-  seedTestingAgentRuntimeFile(join(stableAgentDir, 'auth.json'), join(testingAgentDir, 'auth.json'));
+  seedTestingAgentRuntimeFile(join(stableAgentDir, 'auth.json'), join(testingAgentDir, 'auth.json'), { overwrite: true });
   seedTestingAgentRuntimeFile(join(stableAgentDir, 'models.json'), join(testingAgentDir, 'models.json'));
 }
 

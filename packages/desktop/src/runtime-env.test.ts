@@ -66,7 +66,7 @@ describe('desktop runtime environment overrides', () => {
     });
   });
 
-  it('keeps existing testing auth when it is already populated', () => {
+  it('refreshes existing testing auth from stable runtime on each launch', () => {
     const root = mkdtempSync(join(tmpdir(), 'pa-desktop-runtime-env-'));
     const stableAgentDir = join(root, 'personal-agent', 'pi-agent-runtime');
     const testingStateRoot = join(root, 'personal-agent-testing');
@@ -85,7 +85,7 @@ describe('desktop runtime environment overrides', () => {
     seedTestingRuntimeState(env);
 
     expect(JSON.parse(readFileSync(join(testingAgentDir, 'auth.json'), 'utf-8'))).toEqual({
-      'openai-codex': { accessToken: 'testing-token' },
+      'openai-codex': { accessToken: 'stable-token' },
     });
   });
 });
