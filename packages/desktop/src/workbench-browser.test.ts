@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('electron', () => ({
   BrowserWindow: class BrowserWindow {},
@@ -12,6 +14,13 @@ import {
 } from './workbench-browser.js';
 
 describe('workbench browser validation', () => {
+  it('keeps browser page inspection on the CDP path', () => {
+    const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
+
+    expect(source).not.toContain('executeJavaScript(');
+    expect(source).toContain('cdpEvaluate(view.webContents');
+  });
+
   it('accepts safe content bounds', () => {
     expect(normalizeWorkbenchBrowserBounds({ x: 12, y: 48, width: 320, height: 480 })).toEqual({
       x: 12,

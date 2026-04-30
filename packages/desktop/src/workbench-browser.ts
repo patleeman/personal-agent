@@ -646,105 +646,8 @@ export class WorkbenchBrowserViewController {
   }
 
   private async captureCommentTarget(view: WebContentsView, x: number, y: number): Promise<WorkbenchBrowserCommentTarget> {
-    const script = `(() => {
-      const max = (value, length) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, length);
-      const cssEscape = (value) => {
-        if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
-        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\\\$&');
-      };
-      const elementRole = (element) => {
-        const explicit = element.getAttribute('role');
-        if (explicit) return explicit;
-        const tag = element.tagName.toLowerCase();
-        if (tag === 'button') return 'button';
-        if (tag === 'a' && element.hasAttribute('href')) return 'link';
-        if (tag === 'input') return element.type === 'checkbox' ? 'checkbox' : element.type === 'radio' ? 'radio' : 'textbox';
-        if (tag === 'textarea') return 'textbox';
-        if (tag === 'select') return 'combobox';
-        if (/^h[1-6]$/.test(tag)) return 'heading';
-        return tag;
-      };
-      const accessibleName = (element) => {
-        const aria = element.getAttribute('aria-label');
-        if (aria) return max(aria, 240);
-        const labelledBy = element.getAttribute('aria-labelledby');
-        if (labelledBy) {
-          const text = labelledBy.split(/\\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ');
-          if (text.trim()) return max(text, 240);
-        }
-        if (element.id) {
-          const label = document.querySelector('label[for="' + cssEscape(element.id) + '"]');
-          if (label?.textContent?.trim()) return max(label.textContent, 240);
-        }
-        if (element.alt) return max(element.alt, 240);
-        if (element.title) return max(element.title, 240);
-        return max(element.innerText || element.textContent || element.value || '', 240);
-      };
-      const unique = (selector) => {
-        try { return document.querySelectorAll(selector).length === 1; } catch { return false; }
-      };
-      const selectorFor = (element) => {
-        const testIdAttribute = element.hasAttribute('data-testid') ? 'data-testid' : element.hasAttribute('data-test') ? 'data-test' : element.hasAttribute('data-qa') ? 'data-qa' : '';
-        const testId = testIdAttribute ? element.getAttribute(testIdAttribute) : '';
-        if (testIdAttribute && testId) {
-          const selector = '[' + testIdAttribute + '="' + cssEscape(testId) + '"]';
-          if (unique(selector)) return selector;
-        }
-        if (element.id) {
-          const selector = '#' + cssEscape(element.id);
-          if (unique(selector)) return selector;
-        }
-        const tag = element.tagName.toLowerCase();
-        if (element.getAttribute('aria-label')) {
-          const ariaSelector = tag + '[aria-label="' + cssEscape(element.getAttribute('aria-label')) + '"]';
-          if (unique(ariaSelector)) return ariaSelector;
-        }
-        if (element.getAttribute('name')) {
-          const nameSelector = tag + '[name="' + cssEscape(element.getAttribute('name')) + '"]';
-          if (unique(nameSelector)) return nameSelector;
-        }
-        if (tag === 'a' && element.getAttribute('href')) {
-          const hrefSelector = 'a[href="' + cssEscape(element.getAttribute('href')) + '"]';
-          if (unique(hrefSelector)) return hrefSelector;
-        }
-        const role = elementRole(element);
-        const name = accessibleName(element);
-        if (role && name && element.getAttribute('aria-label')) {
-          const roleSelector = '[role="' + cssEscape(role) + '"][aria-label="' + cssEscape(name) + '"]';
-          if (unique(roleSelector)) return roleSelector;
-        }
-        const parts = [];
-        let current = element;
-        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 6) {
-          const tag = current.tagName.toLowerCase();
-          let part = tag;
-          if (current.classList.length > 0) {
-            part += '.' + Array.from(current.classList).slice(0, 2).map(cssEscape).join('.');
-          }
-          const parent = current.parentElement;
-          if (parent) {
-            const siblings = Array.from(parent.children).filter((child) => child.tagName === current.tagName);
-            if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
-          }
-          parts.unshift(part);
-          const selector = parts.join(' > ');
-          if (unique(selector)) return selector;
-          current = parent;
-        }
-        return parts.join(' > ');
-      };
-      const xpathFor = (element) => {
-        const parts = [];
-        let current = element;
-        while (current && current.nodeType === Node.ELEMENT_NODE) {
-          const tag = current.tagName.toLowerCase();
-          const parent = current.parentElement;
-          const index = parent ? Array.from(parent.children).filter((child) => child.tagName === current.tagName).indexOf(current) + 1 : 1;
-          parts.unshift(tag + '[' + index + ']');
-          current = parent;
-        }
-        return '/' + parts.join('/');
-      };
+    const target = await cdpEvaluate(view.webContents, `(() => {
+      ${this.pageHelperSource()}
       const element = document.elementFromPoint(${Math.round(x)}, ${Math.round(y)}) || document.body;
       const rect = element.getBoundingClientRect();
       const parentText = element.parentElement?.innerText || document.body?.innerText || '';
@@ -765,8 +668,7 @@ export class WorkbenchBrowserViewController {
         devicePixelRatio: window.devicePixelRatio || 1,
       };
       return JSON.parse(JSON.stringify(target));
-    })()`;
-    const target = await view.webContents.executeJavaScript(script, true);
+    })()`);
     return target as WorkbenchBrowserCommentTarget;
   }
 
@@ -828,11 +730,24 @@ export class WorkbenchBrowserViewController {
           const selector = tag + '[name="' + cssEscape(element.getAttribute('name')) + '"]';
           if (unique(selector)) return selector;
         }
+        if (tag === 'a' && element.getAttribute('href')) {
+          const selector = 'a[href="' + cssEscape(element.getAttribute('href')) + '"]';
+          if (unique(selector)) return selector;
+        }
+        const role = elementRole(element);
+        const name = accessibleName(element);
+        if (role && name && element.getAttribute('aria-label')) {
+          const selector = '[role="' + cssEscape(role) + '"][aria-label="' + cssEscape(name) + '"]';
+          if (unique(selector)) return selector;
+        }
         const parts = [];
         let current = element;
         while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 6) {
           const tag = current.tagName.toLowerCase();
           let part = tag;
+          if (current.classList.length > 0) {
+            part += '.' + Array.from(current.classList).slice(0, 2).map(cssEscape).join('.');
+          }
           const parent = current.parentElement;
           if (parent) {
             const siblings = Array.from(parent.children).filter((child) => child.tagName === current.tagName);
