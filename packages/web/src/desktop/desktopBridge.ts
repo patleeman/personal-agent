@@ -135,6 +135,7 @@ export interface DesktopWorkbenchBrowserState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  active?: boolean;
   browserRevision?: number;
   lastSnapshotRevision?: number;
   changedSinceLastSnapshot?: boolean;

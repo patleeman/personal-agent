@@ -25,6 +25,7 @@ export interface WorkbenchBrowserState {
   loading: boolean;
   canGoBack: boolean;
   canGoForward: boolean;
+  active: boolean;
   browserRevision: number;
   lastSnapshotRevision: number;
   changedSinceLastSnapshot: boolean;
@@ -153,6 +154,7 @@ interface WorkbenchBrowserViewEntry {
   ownerWindow: BrowserWindow;
   owner: WebContents;
   view: WebContentsView;
+  active: boolean;
   browserRevision: number;
   lastSnapshotRevision: number;
   lastChangeReason?: string;
@@ -166,9 +168,10 @@ function getState(webContents: WebContents, entry?: WorkbenchBrowserViewEntry): 
     loading: webContents.isLoadingMainFrame(),
     canGoBack: webContents.canGoBack(),
     canGoForward: webContents.canGoForward(),
+    active: entry?.active === true,
     browserRevision: entry?.browserRevision ?? 0,
     lastSnapshotRevision: entry?.lastSnapshotRevision ?? 0,
-    changedSinceLastSnapshot: (entry?.browserRevision ?? 0) > (entry?.lastSnapshotRevision ?? 0),
+    changedSinceLastSnapshot: entry?.active === true && (entry?.browserRevision ?? 0) > (entry?.lastSnapshotRevision ?? 0),
     ...(entry?.lastChangeReason ? { lastChangeReason: entry.lastChangeReason } : {}),
     ...(entry?.lastChangedAt ? { lastChangedAt: entry.lastChangedAt } : {}),
   };
@@ -413,6 +416,7 @@ export class WorkbenchBrowserViewController {
       ownerWindow,
       owner: ownerWindow.webContents,
       view,
+      active: false,
       browserRevision: 0,
       lastSnapshotRevision: 0,
     };
@@ -464,6 +468,7 @@ export class WorkbenchBrowserViewController {
     if (!entry || entry.view.webContents.isDestroyed()) {
       return;
     }
+    entry.active = true;
     entry.browserRevision += 1;
     entry.lastChangeReason = reason;
     entry.lastChangedAt = new Date().toISOString();
