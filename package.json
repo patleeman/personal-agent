@@ -1,6 +1,6 @@
 {
   "name": "personal-agent",
-  "version": "0.5.21",
+  "version": "0.5.22",
   "private": true,
   "description": "Personal agent monorepo",
   "workspaces": [
