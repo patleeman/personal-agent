@@ -125,6 +125,47 @@ describe('buildRelatedConversationPointers', () => {
     expect(result.pointers[0]?.reasons.join(' ')).toContain('dictation');
   });
 
+  it('uses summary search text for auto ranking without reading every session file', () => {
+    readConversationSummaryMock.mockImplementation((sessionId: string) => sessionId === 'summary-hit'
+      ? { displaySummary: '', promptSummary: '', searchText: 'release signing fix', keyTerms: [], filesTouched: [] }
+      : null);
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'summary-hit', title: 'Mac app packaging', messageCount: 6, lastActivityAt: '2026-04-20T10:00:00.000Z' },
+    ]);
+
+    const result = buildRelatedConversationPointers({
+      prompt: 'Fix the release signing flow',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(result.pointers.map((pointer) => pointer.sessionId)).toEqual(['summary-hit']);
+    expect(readSessionSearchTextMock).not.toHaveBeenCalled();
+  });
+
+  it('caps expensive transcript fallback reads for auto ranking', () => {
+    const metas = Array.from({ length: 40 }, (_, index) => ({
+      ...baseMeta,
+      id: `candidate-${index}`,
+      title: `Candidate ${index}`,
+      messageCount: 6,
+      timestamp: `2026-04-${String(Math.min(index + 1, 28)).padStart(2, '0')}T10:00:00.000Z`,
+      lastActivityAt: `2026-04-${String(Math.min(index + 1, 28)).padStart(2, '0')}T10:00:00.000Z`,
+    }));
+    listSessionsMock.mockReturnValue(metas);
+    readSessionSearchTextMock.mockImplementation((sessionId: string) => sessionId === 'candidate-39'
+      ? 'needle release signing fix'
+      : 'bananas only');
+
+    buildRelatedConversationPointers({
+      prompt: 'Find the needle release signing fix',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+    });
+
+    expect(readSessionSearchTextMock).toHaveBeenCalledTimes(24);
+  });
+
   it('omits missing manual selections after retry and warns', () => {
     readSessionMetaMock.mockReturnValue(null);
 

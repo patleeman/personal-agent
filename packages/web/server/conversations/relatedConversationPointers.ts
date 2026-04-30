@@ -10,6 +10,7 @@ import {
 export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
+const MAX_AUTO_SESSION_SEARCH_READS = 24;
 const PRODUCT_STOPWORDS = new Set([
   'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
   'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
@@ -162,10 +163,11 @@ function buildPointer(input: {
   promptTerms: string[];
   currentCwd?: string;
   source: 'manual' | 'auto';
+  allowSessionSearchRead?: boolean;
 }): RelatedConversationPointer {
   const summary = readConversationSummary(input.meta.id);
   const preview = normalizePreview(summary?.displaySummary || summary?.promptSummary);
-  const searchText = readSessionSearchText(input.meta.id, 6_000) ?? undefined;
+  const searchText = summary?.searchText || (input.allowSessionSearchRead ? readSessionSearchText(input.meta.id, 6_000) ?? undefined : undefined);
   const scored = scoreCandidate({
     meta: input.meta,
     terms: input.promptTerms,
@@ -247,16 +249,43 @@ export function buildRelatedConversationPointers(input: {
       continue;
     }
 
-    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual' });
+    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: true });
     pointers.push(pointer);
     used.add(pointer.sessionId);
   }
 
   if (pointers.length < limit) {
-    const autoCandidates = listSessions()
-      .filter((meta) => meta.id !== input.currentConversationId && !used.has(meta.id) && meta.messageCount > 0)
-      .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto' }))
-      .filter((pointer) => pointer.score >= AUTO_POINTER_MIN_SCORE)
+    const autoMetas = listSessions()
+      .filter((meta) => meta.id !== input.currentConversationId && !used.has(meta.id) && meta.messageCount > 0);
+    const autoMetasById = new Map(autoMetas.map((meta) => [meta.id, meta]));
+    const cheapAutoCandidates = autoMetas
+      .map((meta) => buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: false }));
+
+    const autoCandidatesById = new Map<string, RelatedConversationPointer>();
+    for (const pointer of cheapAutoCandidates) {
+      if (pointer.score >= AUTO_POINTER_MIN_SCORE) {
+        autoCandidatesById.set(pointer.sessionId, pointer);
+      }
+    }
+
+    if (promptTerms.length > 0) {
+      for (const cheapPointer of cheapAutoCandidates
+        .filter((pointer) => pointer.score < AUTO_POINTER_MIN_SCORE)
+        .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a))
+        .slice(0, MAX_AUTO_SESSION_SEARCH_READS)) {
+        const meta = autoMetasById.get(cheapPointer.sessionId);
+        if (!meta) {
+          continue;
+        }
+
+        const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'auto', allowSessionSearchRead: true });
+        if (pointer.score >= AUTO_POINTER_MIN_SCORE) {
+          autoCandidatesById.set(pointer.sessionId, pointer);
+        }
+      }
+    }
+
+    const autoCandidates = Array.from(autoCandidatesById.values())
       .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a));
 
     for (const pointer of autoCandidates) {
