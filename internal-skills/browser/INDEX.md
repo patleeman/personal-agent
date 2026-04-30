@@ -114,23 +114,23 @@ If the user manually changes the page after the last agent snapshot — for exam
 
 ### `browser_cdp`
 
-Use `browser_cdp` when direct browser control is needed. It sends raw Chrome DevTools Protocol command tuples to the current Workbench Browser session. Send a single tuple for one command:
+Use `browser_cdp` when direct browser control is needed. It sends raw Chrome DevTools Protocol command objects to the current Workbench Browser session. Send a single object for one command:
 
 ```json
 {
-  "command": ["Runtime.evaluate", { "expression": "document.title", "returnByValue": true }]
+  "command": { "method": "Runtime.evaluate", "params": { "expression": "document.title", "returnByValue": true } }
 }
 ```
 
-Send an array of tuples for multi-step actions instead of firing many separate tool calls:
+Send an array of command objects for multi-step actions instead of firing many separate tool calls:
 
 ```json
 {
   "command": [
-    ["Input.dispatchMouseEvent", { "type": "mouseMoved", "x": 300, "y": 250 }],
-    ["Input.dispatchMouseEvent", { "type": "mousePressed", "x": 300, "y": 250, "button": "left", "clickCount": 1 }],
-    ["Input.dispatchMouseEvent", { "type": "mouseMoved", "x": 520, "y": 420, "button": "left", "buttons": 1 }],
-    ["Input.dispatchMouseEvent", { "type": "mouseReleased", "x": 520, "y": 420, "button": "left", "clickCount": 1 }]
+    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseMoved", "x": 300, "y": 250 } },
+    { "method": "Input.dispatchMouseEvent", "params": { "type": "mousePressed", "x": 300, "y": 250, "button": "left", "clickCount": 1 } },
+    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseMoved", "x": 520, "y": 420, "button": "left", "buttons": 1 } },
+    { "method": "Input.dispatchMouseEvent", "params": { "type": "mouseReleased", "x": 520, "y": 420, "button": "left", "clickCount": 1 } }
   ]
 }
 ```

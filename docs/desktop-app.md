@@ -41,7 +41,7 @@ Diffs are conversation-scoped and replace the old checkpoint diff modal. Opening
 
 Workbench Browser sessions are scoped to the conversation. Switching conversations hides the previous conversation's webview and restores the selected conversation's webview, matching the workbench file/explorer model instead of using one global browser.
 
-Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_cdp`, and `browser_screenshot`. `browser_cdp` is a thin Chrome DevTools Protocol command surface for direct browser control; it accepts either one raw tuple like `["Runtime.evaluate", { "expression": "document.title", "returnByValue": true }]` or an array of tuples executed sequentially.
+Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_cdp`, and `browser_screenshot`. `browser_cdp` is a thin Chrome DevTools Protocol command surface for direct browser control; it accepts either one raw object like `{ "method": "Runtime.evaluate", "params": { "expression": "document.title", "returnByValue": true } }` or an array of command objects executed sequentially.
 
 Agents should default to `browser_snapshot` for page understanding and navigation because it is more efficient and gives refs/selectors. Use `browser_screenshot` when visual layout or image/canvas-heavy content matters.
 
