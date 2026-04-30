@@ -41,7 +41,6 @@ export type DesktopRendererShortcutAction =
 type ManagedWindowRole = 'main' | 'remote' | 'popout';
 
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
-const SHOW_WORKBENCH_BROWSER_CHANNEL = 'personal-agent-desktop:show-workbench-browser';
 const DEFAULT_WINDOW_WIDTH = 1440;
 const DEFAULT_WINDOW_HEIGHT = 960;
 const MAX_SAVED_WINDOW_WIDTH = 4096;
@@ -481,24 +480,19 @@ export class DesktopWindowController {
   }
 
   private async ensureWorkbenchBrowserOwner(conversationId?: string | null): Promise<WebContents> {
-    const route = conversationId?.trim()
-      ? `/conversations/${encodeURIComponent(conversationId.trim())}`
-      : this.getWindowRoute(this.mainWindow);
-    await this.openMainWindow(route);
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      const route = conversationId?.trim()
+        ? `/conversations/${encodeURIComponent(conversationId.trim())}`
+        : '/';
+      await this.openMainWindow(route);
+    }
+
     const window = this.mainWindow;
     if (!window || window.isDestroyed()) {
       throw new Error('Desktop window is unavailable.');
     }
 
-    window.webContents.send(SHOW_WORKBENCH_BROWSER_CHANNEL, { conversationId: conversationId ?? null });
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (this.workbenchBrowser.hasView(window.webContents.id, conversationId)) {
-        return window.webContents;
-      }
-      await delay(100);
-    }
-
-    throw new Error('Workbench Browser did not become ready. Open the Browser tab and try again.');
+    return window.webContents;
   }
 
   private ensureWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {

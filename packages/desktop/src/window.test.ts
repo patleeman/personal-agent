@@ -296,6 +296,29 @@ describe('DesktopWindowController', () => {
     expect(window.loadURL).not.toHaveBeenCalled();
   });
 
+  it('does not navigate or focus the main window for background Workbench Browser commands', async () => {
+    const controller = new DesktopWindowController({} as never);
+    const window = createWindowDouble('http://127.0.0.1:3741/conversations/current?desktop-shell=1');
+    const cdp = vi.fn().mockResolvedValue({ ok: true, results: [], state: {} });
+
+    (controller as unknown as { mainWindow: typeof window; workbenchBrowser: { cdp: typeof cdp } }).mainWindow = window;
+    (controller as unknown as { workbenchBrowser: { cdp: typeof cdp } }).workbenchBrowser = { cdp };
+
+    await controller.cdpWorkbenchBrowserForConversation({
+      conversationId: 'background-conversation',
+      command: { method: 'Runtime.evaluate' },
+    });
+
+    expect(window.webContents.send).not.toHaveBeenCalled();
+    expect(window.loadURL).not.toHaveBeenCalled();
+    expect(window.focus).not.toHaveBeenCalled();
+    expect(cdp).toHaveBeenCalledWith(window.webContents, {
+      conversationId: 'background-conversation',
+      command: { method: 'Runtime.evaluate' },
+      sessionKey: 'background-conversation',
+    });
+  });
+
   it('falls back to a full load when the host changes', async () => {
     const controller = new DesktopWindowController({} as never);
     const window = createWindowDouble('http://127.0.0.1:3741/conversations/abc?desktop-shell=1');
