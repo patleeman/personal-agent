@@ -39,7 +39,7 @@ describe('workbench browser agent extension', () => {
     const script = await tools[1]!.execute('tool-2' as never, { script: 'return 1;' } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
     expect(script.content[0]?.text).toContain('return 1;');
 
-    const screenshot = await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
+    const screenshot = await tools[2]!.execute('tool-3' as never, { reason: 'visual_layout', note: 'checking visual layout' } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };
     expect(screenshot.content[1]).toMatchObject({ type: 'image', data: 'aW1n' });
 
     setWorkbenchBrowserToolHost(null);
