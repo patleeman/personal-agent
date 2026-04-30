@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, shell } from 'electron';
+import { app, BrowserWindow, screen, shell, type WebContents } from 'electron';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -41,6 +41,7 @@ export type DesktopRendererShortcutAction =
 type ManagedWindowRole = 'main' | 'remote' | 'popout';
 
 const DESKTOP_NAVIGATE_CHANNEL = 'personal-agent-desktop:navigate';
+const SHOW_WORKBENCH_BROWSER_CHANNEL = 'personal-agent-desktop:show-workbench-browser';
 const DEFAULT_WINDOW_WIDTH = 1440;
 const DEFAULT_WINDOW_HEIGHT = 960;
 const MAX_SAVED_WINDOW_WIDTH = 4096;
@@ -406,6 +407,21 @@ export class DesktopWindowController {
     return this.workbenchBrowser.runActions(tracked.window.webContents, actions);
   }
 
+  async snapshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
+    return this.workbenchBrowser.snapshot(owner);
+  }
+
+  async screenshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
+    return this.workbenchBrowser.screenshot(owner);
+  }
+
+  async runWorkbenchBrowserScriptForConversation(input: { conversationId?: string | null; script?: unknown; timeoutMs?: unknown }): Promise<unknown> {
+    const owner = await this.ensureWorkbenchBrowserOwner(input.conversationId);
+    return this.workbenchBrowser.runScript(owner, input);
+  }
+
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {
     const focusedWindow = BrowserWindow.getFocusedWindow();
     const trackedWindow = focusedWindow ? this.trackedWindows.get(focusedWindow.webContents.id)?.window : undefined;
@@ -470,6 +486,27 @@ export class DesktopWindowController {
     }
 
     return this.getNavigationState(window);
+  }
+
+  private async ensureWorkbenchBrowserOwner(conversationId?: string | null): Promise<WebContents> {
+    const route = conversationId?.trim()
+      ? `/conversations/${encodeURIComponent(conversationId.trim())}`
+      : this.getWindowRoute(this.mainWindow);
+    await this.openMainWindow(route);
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed()) {
+      throw new Error('Desktop window is unavailable.');
+    }
+
+    window.webContents.send(SHOW_WORKBENCH_BROWSER_CHANNEL, { conversationId: conversationId ?? null });
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      if (this.workbenchBrowser.hasView(window.webContents.id)) {
+        return window.webContents;
+      }
+      await delay(100);
+    }
+
+    throw new Error('Workbench Browser did not become ready. Open the Browser tab and try again.');
   }
 
   private ensureWindow(host: DesktopHostRecord, partition: string, role: ManagedWindowRole): BrowserWindow {

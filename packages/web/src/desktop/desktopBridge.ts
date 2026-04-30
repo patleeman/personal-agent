@@ -56,6 +56,7 @@ export const DESKTOP_APP_EVENTS_EVENT = 'personal-agent-desktop-app-events';
 export const DESKTOP_REMOTE_OPERATION_EVENT = 'personal-agent-desktop-remote-operation';
 export const DESKTOP_PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 export const DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
+export const DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT = 'personal-agent-desktop-show-workbench-browser';
 
 export type DesktopConversationContextMenuAction =
   | 'pin'

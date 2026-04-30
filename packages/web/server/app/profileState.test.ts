@@ -17,6 +17,7 @@ const {
   createReminderAgentExtensionMock,
   createRunAgentExtensionMock,
   createScheduledTaskAgentExtensionMock,
+  createWorkbenchBrowserAgentExtensionMock,
   requestConversationWorkingDirectoryChangeMock,
 } = vi.hoisted(() => ({
   getProfilesRootMock: vi.fn(() => '/profiles-root'),
@@ -34,6 +35,7 @@ const {
   createReminderAgentExtensionMock: vi.fn(() => 'reminder-extension'),
   createRunAgentExtensionMock: vi.fn(() => 'run-extension'),
   createScheduledTaskAgentExtensionMock: vi.fn(() => 'scheduled-task-extension'),
+  createWorkbenchBrowserAgentExtensionMock: vi.fn(() => 'workbench-browser-extension'),
   requestConversationWorkingDirectoryChangeMock: vi.fn(),
 }));
 
@@ -85,6 +87,10 @@ vi.mock('../extensions/scheduledTaskAgentExtension.js', () => ({
   createScheduledTaskAgentExtension: createScheduledTaskAgentExtensionMock,
 }));
 
+vi.mock('../extensions/workbenchBrowserAgentExtension.js', () => ({
+  createWorkbenchBrowserAgentExtension: createWorkbenchBrowserAgentExtensionMock,
+}));
+
 vi.mock('../conversations/liveSessions.js', () => ({
   requestConversationWorkingDirectoryChange: requestConversationWorkingDirectoryChangeMock,
 }));
@@ -120,6 +126,7 @@ describe('createProfileState', () => {
     createReminderAgentExtensionMock.mockClear();
     createRunAgentExtensionMock.mockClear();
     createScheduledTaskAgentExtensionMock.mockClear();
+    createWorkbenchBrowserAgentExtensionMock.mockClear();
     requestConversationWorkingDirectoryChangeMock.mockReset();
     delete process.env.PERSONAL_AGENT_ACTIVE_PROFILE;
     delete process.env.PERSONAL_AGENT_PROFILE;
@@ -156,6 +163,7 @@ describe('createProfileState', () => {
       expect.any(Function),
       'artifact-extension',
       'checkpoint-extension',
+      'workbench-browser-extension',
       'conversation-auto-mode-extension',
       'conversation-queue-extension',
       'reminder-extension',

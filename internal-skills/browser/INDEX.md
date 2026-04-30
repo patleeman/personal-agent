@@ -62,7 +62,7 @@ Browser comments are prompt context, not durable page annotations. Avoid buildin
 
 ## Agent-facing browser use
 
-The desired direction is one browser session per conversation workbench and three agent-facing browser tools:
+There is one browser session per conversation workbench and three agent-facing browser tools:
 
 - `browser_snapshot` — observe the current browser state
 - `browser_script` — run a browser automation script against the current browser session
@@ -75,7 +75,7 @@ The product model:
 - the Browser tab is the visual surface
 - Electron main owns navigation, state, snapshots, actions, and comments
 - agent browser tools target that same session when running inside desktop conversations
-- if an agent uses a built-in browser tool and the Browser tab is closed, the app should open Workbench → Browser automatically
+- if an agent uses a built-in browser tool and the Browser tab is closed, the app opens Workbench → Browser automatically
 
 Avoid creating two unrelated browsers for the same task. A Playwright/`agent-browser` session and the built-in Electron Browser tab drifting apart is bad UX.
 
@@ -171,6 +171,8 @@ Diagnostics:
 - `browser.log(...values)` should append to the tool result logs.
 - returned values must be JSON-serializable and size-limited.
 
+Implementation note: `setInputFiles` is reserved in the script API but currently returns an unsupported error in the embedded browser. Prefer normal page flows unless file upload support has been explicitly added.
+
 ### `browser_screenshot`
 
 Use `browser_screenshot` when visual layout matters or when DOM/accessibility snapshots are not enough.
@@ -181,6 +183,8 @@ It should return an image attachment or image data plus basic metadata:
 - viewport size
 - timestamp
 - image MIME/data/path according to the tool system's normal attachment conventions
+
+Current desktop tool output returns PNG data as base64 in tool details with URL/title/viewport metadata.
 
 ### Script isolation
 
@@ -207,7 +211,7 @@ Rules:
 - Size-limit logs and return values.
 - Validate every operation in main before applying it to `WebContentsView`.
 - `browser.evaluate(...)` executes only in the loaded page via `webContents.executeJavaScript`.
-- Consider blocking or requiring explicit opt-in for `evaluate` on `personal-agent://app` pages so the agent cannot casually poke the host UI.
+- `evaluate` is blocked on `personal-agent://app` pages so the agent cannot casually poke the host UI.
 
 ### Auto-open behavior
 
@@ -216,8 +220,7 @@ When any built-in browser tool runs from a desktop conversation:
 1. switch to Workbench mode if needed
 2. select the Browser tab
 3. ensure the browser pane exists
-4. show a small “Agent controlling browser” status while the tool is active
-5. return the tool result to the transcript
+4. return the tool result to the transcript
 
 Do not show raw script/debug panels in the user Browser tab. The transcript is where tool details belong.
 
@@ -237,8 +240,10 @@ Long term, desktop browser tools should use the Workbench Browser session direct
 Current relevant files:
 
 - `packages/desktop/src/workbench-browser.ts` — Electron browser view controller, validation, actions, comments
+- `packages/desktop/src/workbench-browser-script-worker.ts` — isolated script worker for `browser_script`
 - `packages/desktop/src/window.ts` — owns the browser controller and routes window-scoped operations
 - `packages/desktop/src/ipc.ts` and `packages/desktop/src/preload.ts` — bridge browser operations/events
+- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot`, `browser_script`, and `browser_screenshot`
 - `packages/web/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
 - `packages/web/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
 

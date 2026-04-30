@@ -55,7 +55,6 @@ import {
   inlineConversationBootstrapAssetsCapability,
   inlineConversationSessionDetailAssetsCapability,
   inlineConversationSessionDetailAppendOnlyAssetsCapability,
-  inlineConversationSessionSnapshotAssetsCapability,
   readConversationSessionBlockWithInlineAssetsCapability,
 } from '../conversations/conversationSessionAssetCapability.js';
 import { SessionManager } from '@mariozechner/pi-coding-agent';
@@ -167,6 +166,7 @@ import { loadDaemonConfig, resolveDaemonPaths } from '@personal-agent/daemon';
 import { createLiveDeferredResumeFlusher } from '../conversations/liveDeferredResumes.js';
 import { startDeferredResumeLoop } from './bootstrap.js';
 import { createProfileState } from './profileState.js';
+import { setWorkbenchBrowserToolHost, type WorkbenchBrowserToolHost } from '../extensions/workbenchBrowserAgentExtension.js';
 import { createServerRouteContext } from './routeContext.js';
 import {
   createConversationCheckpointCommit,
@@ -220,6 +220,10 @@ type DesktopAppBridgeEvent =
   | { type: 'event'; event: unknown }
   | { type: 'error'; message: string }
   | { type: 'close' };
+
+export function setDesktopWorkbenchBrowserToolHost(host: WorkbenchBrowserToolHost | null): void {
+  setWorkbenchBrowserToolHost(host);
+}
 
 class LocalApiResponse {
   statusCode = 200;

@@ -12,7 +12,7 @@ import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
 import { SIDEBAR_WIDTH_STORAGE_KEY } from '../local/localSettings';
 import { useAppData, useAppEvents } from '../app/contexts';
-import { getDesktopBridge, isDesktopShell, readDesktopEnvironment, DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
+import { getDesktopBridge, isDesktopShell, readDesktopEnvironment, DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, DESKTOP_WORKBENCH_BROWSER_COMMENT_EVENT, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
 import type { DesktopEnvironmentState, SessionMeta } from '../shared/types';
 import { CONVERSATION_LAYOUT_CHANGED_EVENT, readConversationLayout } from '../session/sessionTabs';
 import { buildConversationBootstrapVersionKey, fetchConversationBootstrapCached } from '../hooks/useConversationBootstrap';
@@ -1125,11 +1125,21 @@ export function Layout() {
       navigate(nextRoute, { replace: detail.replace === true });
     }
 
+    function handleShowWorkbenchBrowser() {
+      if (zenMode) {
+        handleZenModeChange(false);
+      }
+      handleAppLayoutModeChange('workbench');
+      setActiveWorkbenchTool('browser');
+    }
+
     window.addEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
     window.addEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
+    window.addEventListener(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, handleShowWorkbenchBrowser);
     return () => {
       window.removeEventListener(DESKTOP_SHORTCUT_EVENT, handleDesktopShortcut);
       window.removeEventListener(DESKTOP_NAVIGATE_EVENT, handleDesktopNavigate);
+      window.removeEventListener(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, handleShowWorkbenchBrowser);
     };
   }, [activeRightRailControl, appLayoutMode, handleAppLayoutModeChange, handleZenModeChange, location.hash, location.pathname, location.search, navigate, zenMode]);
 

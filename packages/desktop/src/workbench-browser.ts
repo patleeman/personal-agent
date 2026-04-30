@@ -1,9 +1,14 @@
 import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'electron';
+import { Worker } from 'node:worker_threads';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com/';
 const MAX_SNAPSHOT_TEXT_LENGTH = 30_000;
 const MAX_ACTIONS_PER_BATCH = 25;
 const MAX_ACTION_TEXT_LENGTH = 5_000;
+const MAX_BROWSER_SCRIPT_LENGTH = 80_000;
+const MAX_BROWSER_SCRIPT_TIMEOUT_MS = 60_000;
 const BROWSER_COMMENT_CHANNEL = 'personal-agent-desktop:workbench-browser-comment';
 
 export interface WorkbenchBrowserBounds {
@@ -23,6 +28,33 @@ export interface WorkbenchBrowserState {
 
 export interface WorkbenchBrowserSnapshot extends WorkbenchBrowserState {
   text: string;
+  elements?: WorkbenchBrowserSnapshotElement[];
+}
+
+export interface WorkbenchBrowserSnapshotElement {
+  ref: string;
+  role: string;
+  name: string;
+  selector: string;
+  xpath: string;
+  text: string;
+  enabled: boolean;
+  checked?: boolean;
+  bounds: { x: number; y: number; width: number; height: number };
+}
+
+export interface WorkbenchBrowserScreenshot extends WorkbenchBrowserState {
+  mimeType: 'image/png';
+  dataBase64: string;
+  viewport: { width: number; height: number };
+  capturedAt: string;
+}
+
+export interface WorkbenchBrowserScriptResult {
+  ok: true;
+  result: unknown;
+  logs: string[];
+  snapshot: WorkbenchBrowserSnapshot;
 }
 
 export interface WorkbenchBrowserCommentTarget {
@@ -175,12 +207,22 @@ async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function getScriptWorkerPath(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), 'workbench-browser-script-worker.js');
+}
+
 export class WorkbenchBrowserViewController {
   private views = new Map<number, { ownerWindow: BrowserWindow; owner: WebContents; view: WebContentsView }>();
+  private snapshotRefs = new Map<number, Map<string, { selector: string; xpath: string }>>();
 
   getState(ownerWebContentsId: number): WorkbenchBrowserState | null {
     const view = this.views.get(ownerWebContentsId);
     return view ? getState(view.view.webContents) : null;
+  }
+
+  hasView(ownerWebContentsId: number): boolean {
+    const entry = this.views.get(ownerWebContentsId);
+    return Boolean(entry && !entry.view.webContents.isDestroyed());
   }
 
   setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null): WorkbenchBrowserState | null {
@@ -240,17 +282,111 @@ export class WorkbenchBrowserViewController {
 
   async snapshot(owner: WebContents): Promise<WorkbenchBrowserSnapshot> {
     const view = this.requireView(owner);
-    const text = await view.webContents.executeJavaScript(`(() => {
-      const title = document.title ? 'Title: ' + document.title + '\\n' : '';
-      const url = location.href ? 'URL: ' + location.href + '\\n' : '';
+    const raw = await view.webContents.executeJavaScript(`(() => {
+      ${this.pageHelperSource()}
+      const title = document.title ? 'Title: ' + document.title + '\n' : '';
+      const url = location.href ? 'URL: ' + location.href + '\n' : '';
       const body = document.body ? document.body.innerText : '';
-      return (url + title + body).slice(0, ${MAX_SNAPSHOT_TEXT_LENGTH});
+      const candidates = Array.from(document.querySelectorAll('a, button, input, textarea, select, [role], [tabindex], label, summary')).slice(0, 120);
+      const elements = candidates.map((element, index) => {
+        const rect = element.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return null;
+        return {
+          ref: '@e' + (index + 1),
+          role: elementRole(element),
+          name: accessibleName(element),
+          selector: selectorFor(element),
+          xpath: xpathFor(element),
+          text: max(element.innerText || element.textContent || element.value || '', 240),
+          enabled: !element.disabled && element.getAttribute('aria-disabled') !== 'true',
+          checked: typeof element.checked === 'boolean' ? element.checked : undefined,
+          bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) },
+        };
+      }).filter(Boolean);
+      return { text: (url + title + body).slice(0, ${MAX_SNAPSHOT_TEXT_LENGTH}), elements };
     })()`, true);
+
+    const text = raw && typeof raw === 'object' && typeof raw.text === 'string' ? raw.text : '';
+    const elements = raw && typeof raw === 'object' && Array.isArray(raw.elements)
+      ? raw.elements as WorkbenchBrowserSnapshotElement[]
+      : [];
+    this.snapshotRefs.set(owner.id, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
 
     return {
       ...getState(view.webContents),
-      text: typeof text === 'string' ? text : '',
+      text,
+      elements,
     };
+  }
+
+  async screenshot(owner: WebContents): Promise<WorkbenchBrowserScreenshot> {
+    const view = this.requireView(owner);
+    const image = await view.webContents.capturePage();
+    const bounds = view.getBounds();
+    return {
+      ...getState(view.webContents),
+      mimeType: 'image/png',
+      dataBase64: image.toPNG().toString('base64'),
+      viewport: { width: bounds.width, height: bounds.height },
+      capturedAt: new Date().toISOString(),
+    };
+  }
+
+  async runScript(owner: WebContents, input: { script?: unknown; timeoutMs?: unknown }): Promise<WorkbenchBrowserScriptResult> {
+    const script = typeof input.script === 'string' ? input.script : '';
+    if (!script.trim()) {
+      throw new Error('browser_script requires a script.');
+    }
+    if (script.length > MAX_BROWSER_SCRIPT_LENGTH) {
+      throw new Error(`browser_script script is too long. Max ${MAX_BROWSER_SCRIPT_LENGTH} characters.`);
+    }
+    const timeoutMs = typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs)
+      ? Math.max(1_000, Math.min(MAX_BROWSER_SCRIPT_TIMEOUT_MS, Math.round(input.timeoutMs)))
+      : 30_000;
+    const view = this.requireView(owner);
+    const worker = new Worker(getScriptWorkerPath());
+
+    try {
+      const output = await new Promise<{ result: unknown; logs: string[] }>((resolvePromise, rejectPromise) => {
+        const timeout = setTimeout(() => {
+          rejectPromise(new Error(`browser_script timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+
+        worker.on('message', (message: unknown) => {
+          const payload = message as { type?: string; request?: { id: number; op: string; args: unknown[] }; result?: unknown; logs?: string[]; error?: string };
+          if (payload.type === 'done') {
+            clearTimeout(timeout);
+            resolvePromise({ result: payload.result, logs: Array.isArray(payload.logs) ? payload.logs : [] });
+            return;
+          }
+          if (payload.type === 'error') {
+            clearTimeout(timeout);
+            rejectPromise(new Error(payload.error || 'browser_script failed.'));
+            return;
+          }
+          if (payload.type === 'rpc' && payload.request) {
+            const request = payload.request;
+            void this.runScriptOperation(owner, view, request.op, request.args)
+              .then((value) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: true, value } }))
+              .catch((error) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: false, error: error instanceof Error ? error.message : String(error) } }));
+          }
+        });
+        worker.on('error', (error) => {
+          clearTimeout(timeout);
+          rejectPromise(error);
+        });
+        worker.postMessage({ type: 'start', script });
+      });
+
+      return {
+        ok: true,
+        result: output.result,
+        logs: output.logs,
+        snapshot: await this.snapshot(owner),
+      };
+    } finally {
+      await worker.terminate().catch(() => undefined);
+    }
   }
 
   async runActions(owner: WebContents, rawActions: unknown): Promise<WorkbenchBrowserBatchResult> {
@@ -488,6 +624,205 @@ export class WorkbenchBrowserViewController {
     })()`;
     const target = await view.webContents.executeJavaScript(script, true);
     return target as WorkbenchBrowserCommentTarget;
+  }
+
+  private pageHelperSource(): string {
+    return String.raw`
+      const max = (value, length) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, length);
+      const cssEscape = (value) => {
+        if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+        return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+      };
+      const elementRole = (element) => {
+        const explicit = element.getAttribute('role');
+        if (explicit) return explicit;
+        const tag = element.tagName.toLowerCase();
+        if (tag === 'button') return 'button';
+        if (tag === 'a' && element.hasAttribute('href')) return 'link';
+        if (tag === 'input') return element.type === 'checkbox' ? 'checkbox' : element.type === 'radio' ? 'radio' : 'textbox';
+        if (tag === 'textarea') return 'textbox';
+        if (tag === 'select') return 'combobox';
+        if (/^h[1-6]$/.test(tag)) return 'heading';
+        return tag;
+      };
+      const accessibleName = (element) => {
+        const aria = element.getAttribute('aria-label');
+        if (aria) return max(aria, 240);
+        const labelledBy = element.getAttribute('aria-labelledby');
+        if (labelledBy) {
+          const text = labelledBy.split(/\s+/).map((id) => document.getElementById(id)?.innerText || '').join(' ');
+          if (text.trim()) return max(text, 240);
+        }
+        if (element.id) {
+          const label = document.querySelector('label[for="' + cssEscape(element.id) + '"]');
+          if (label?.textContent?.trim()) return max(label.textContent, 240);
+        }
+        if (element.alt) return max(element.alt, 240);
+        if (element.title) return max(element.title, 240);
+        return max(element.innerText || element.textContent || element.value || '', 240);
+      };
+      const unique = (selector) => {
+        try { return document.querySelectorAll(selector).length === 1; } catch { return false; }
+      };
+      const selectorFor = (element) => {
+        const testIdAttribute = element.hasAttribute('data-testid') ? 'data-testid' : element.hasAttribute('data-test') ? 'data-test' : element.hasAttribute('data-qa') ? 'data-qa' : '';
+        const testId = testIdAttribute ? element.getAttribute(testIdAttribute) : '';
+        if (testIdAttribute && testId) {
+          const selector = '[' + testIdAttribute + '="' + cssEscape(testId) + '"]';
+          if (unique(selector)) return selector;
+        }
+        if (element.id) {
+          const selector = '#' + cssEscape(element.id);
+          if (unique(selector)) return selector;
+        }
+        const tag = element.tagName.toLowerCase();
+        if (element.getAttribute('aria-label')) {
+          const selector = tag + '[aria-label="' + cssEscape(element.getAttribute('aria-label')) + '"]';
+          if (unique(selector)) return selector;
+        }
+        if (element.getAttribute('name')) {
+          const selector = tag + '[name="' + cssEscape(element.getAttribute('name')) + '"]';
+          if (unique(selector)) return selector;
+        }
+        const parts = [];
+        let current = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body && parts.length < 6) {
+          const tag = current.tagName.toLowerCase();
+          let part = tag;
+          const parent = current.parentElement;
+          if (parent) {
+            const siblings = Array.from(parent.children).filter((child) => child.tagName === current.tagName);
+            if (siblings.length > 1) part += ':nth-of-type(' + (siblings.indexOf(current) + 1) + ')';
+          }
+          parts.unshift(part);
+          const selector = parts.join(' > ');
+          if (unique(selector)) return selector;
+          current = parent;
+        }
+        return parts.join(' > ');
+      };
+      const xpathFor = (element) => {
+        const parts = [];
+        let current = element;
+        while (current && current.nodeType === Node.ELEMENT_NODE) {
+          const tag = current.tagName.toLowerCase();
+          const parent = current.parentElement;
+          const index = parent ? Array.from(parent.children).filter((child) => child.tagName === current.tagName).indexOf(current) + 1 : 1;
+          parts.unshift(tag + '[' + index + ']');
+          current = parent;
+        }
+        return '/' + parts.join('/');
+      };
+      const resolveTarget = (selectorOrRef, refs) => {
+        const ref = refs[String(selectorOrRef || '')];
+        const selector = ref?.selector || String(selectorOrRef || '');
+        let element = selector ? document.querySelector(selector) : null;
+        if (!element && ref?.xpath) {
+          element = document.evaluate(ref.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+        }
+        if (!element) throw new Error('No element matches: ' + selectorOrRef);
+        return element;
+      };
+    `;
+  }
+
+  private resolveRefs(owner: WebContents): Record<string, { selector: string; xpath: string }> {
+    return Object.fromEntries(this.snapshotRefs.get(owner.id)?.entries() ?? []);
+  }
+
+  private async runScriptOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[]): Promise<unknown> {
+    switch (op) {
+      case 'goto': return this.navigate(owner, args[0]);
+      case 'reload': return this.reload(owner);
+      case 'back': return this.goBack(owner);
+      case 'forward': return this.goForward(owner);
+      case 'url': return view.webContents.getURL();
+      case 'title': return view.webContents.getTitle();
+      case 'snapshot': return this.snapshot(owner);
+      case 'screenshot': return this.screenshot(owner);
+      case 'click': await this.runAction(view, { type: 'click', selector: this.resolveSelector(owner, args[0]) }); return true;
+      case 'type': await this.runAction(view, { type: 'type', selector: this.resolveSelector(owner, args[0]), text: String(args[1] ?? '') }); return true;
+      case 'press': await this.runAction(view, { type: 'key', key: String(args[0] ?? '') }); return true;
+      case 'scroll': await this.runAction(view, { type: 'scroll', x: Number(args[0] ?? 0), y: Number(args[1] ?? 0) }); return true;
+      case 'wait': await wait(Math.max(0, Math.min(30_000, Math.round(Number(args[0] ?? 500))))); return true;
+      case 'text': return this.evaluateDomOperation(owner, view, 'text', args);
+      case 'html': return this.evaluateDomOperation(owner, view, 'html', args);
+      case 'exists': return this.evaluateDomOperation(owner, view, 'exists', args);
+      case 'query': return this.evaluateDomOperation(owner, view, 'query', args);
+      case 'select': return this.evaluateDomOperation(owner, view, 'select', args);
+      case 'check': return this.evaluateDomOperation(owner, view, 'check', args);
+      case 'uncheck': return this.evaluateDomOperation(owner, view, 'uncheck', args);
+      case 'setInputFiles': return this.evaluateDomOperation(owner, view, 'setInputFiles', args);
+      case 'waitFor': return this.waitForDom(owner, view, String(args[0] ?? ''), false);
+      case 'waitForText': return this.waitForDom(owner, view, String(args[0] ?? ''), true);
+      case 'waitForLoadState': return this.waitForLoadState(view);
+      case 'evaluate': return this.evaluatePage(view, args);
+      default: throw new Error(`Unsupported browser operation: ${op}`);
+    }
+  }
+
+  private resolveSelector(owner: WebContents, selectorOrRef: unknown): string {
+    const raw = typeof selectorOrRef === 'string' ? selectorOrRef.trim() : '';
+    if (!raw) throw new Error('selector/ref is required.');
+    return this.snapshotRefs.get(owner.id)?.get(raw)?.selector ?? raw;
+  }
+
+  private async evaluateDomOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[]): Promise<unknown> {
+    const refs = this.resolveRefs(owner);
+    return view.webContents.executeJavaScript(`(() => {
+      ${this.pageHelperSource()}
+      const refs = ${JSON.stringify(refs)};
+      const op = ${JSON.stringify(op)};
+      const selectorOrRef = ${JSON.stringify(args[0] ?? '')};
+      if (op === 'text' && !selectorOrRef) return document.body?.innerText || '';
+      if (op === 'html' && !selectorOrRef) return document.documentElement?.outerHTML || '';
+      let element;
+      try { element = resolveTarget(selectorOrRef, refs); } catch (error) { if (op === 'exists') return false; throw error; }
+      if (op === 'exists') return true;
+      if (op === 'text') return element.innerText || element.textContent || element.value || '';
+      if (op === 'html') return element.outerHTML || '';
+      if (op === 'query') { const rect = element.getBoundingClientRect(); return { selector: selectorFor(element), xpath: xpathFor(element), role: elementRole(element), name: accessibleName(element), text: max(element.innerText || element.textContent || element.value || '', 500), bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) } }; }
+      if (op === 'select') { element.value = ${JSON.stringify(args[1] ?? '')}; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+      if (op === 'check' || op === 'uncheck') { element.checked = op === 'check'; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
+      if (op === 'setInputFiles') throw new Error('setInputFiles is not supported by the embedded browser yet.');
+      throw new Error('Unsupported DOM operation: ' + op);
+    })()`, true);
+  }
+
+  private async waitForDom(owner: WebContents, view: WebContentsView, target: string, textMode: boolean): Promise<boolean> {
+    const deadline = Date.now() + 10_000;
+    while (Date.now() < deadline) {
+      const found = textMode
+        ? await view.webContents.executeJavaScript(`(document.body?.innerText || '').includes(${JSON.stringify(target)})`, true)
+        : await this.evaluateDomOperation(owner, view, 'exists', [target]);
+      if (found) return true;
+      await wait(100);
+    }
+    throw new Error(`Timed out waiting for ${textMode ? 'text' : 'selector'}: ${target}`);
+  }
+
+  private async waitForLoadState(view: WebContentsView): Promise<boolean> {
+    const deadline = Date.now() + 15_000;
+    while (Date.now() < deadline) {
+      if (!view.webContents.isLoadingMainFrame()) return true;
+      await wait(100);
+    }
+    throw new Error('Timed out waiting for page load.');
+  }
+
+  private async evaluatePage(view: WebContentsView, args: unknown[]): Promise<unknown> {
+    const source = typeof args[0] === 'string' ? args[0] : '';
+    if (!source.trim()) throw new Error('evaluate requires source.');
+    if (view.webContents.getURL().startsWith('personal-agent://app')) {
+      throw new Error('browser.evaluate is blocked on Personal Agent app pages.');
+    }
+    const fnArgs = args.slice(1);
+    return view.webContents.executeJavaScript(`(() => {
+      const source = ${JSON.stringify(source)};
+      const args = ${JSON.stringify(fnArgs)};
+      const fn = source.trim().startsWith('function') || source.trim().startsWith('(') ? (0, eval)('(' + source + ')') : null;
+      return fn ? fn(...args) : (0, eval)(source);
+    })()`, true);
   }
 
   private async runAction(view: WebContentsView, action: WorkbenchBrowserAction): Promise<void> {

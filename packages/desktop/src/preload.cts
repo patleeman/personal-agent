@@ -17,6 +17,8 @@ const PROVIDER_OAUTH_CHANNEL = `${CHANNEL_PREFIX}:provider-oauth-login`;
 const PROVIDER_OAUTH_EVENT = 'personal-agent-desktop-provider-oauth-login';
 const WORKBENCH_BROWSER_COMMENT_CHANNEL = `${CHANNEL_PREFIX}:workbench-browser-comment`;
 const WORKBENCH_BROWSER_COMMENT_EVENT = 'personal-agent-desktop-workbench-browser-comment';
+const SHOW_WORKBENCH_BROWSER_CHANNEL = `${CHANNEL_PREFIX}:show-workbench-browser`;
+const SHOW_WORKBENCH_BROWSER_EVENT = 'personal-agent-desktop-show-workbench-browser';
 
 const domGlobals = globalThis as typeof globalThis & {
   document?: {
@@ -373,6 +375,10 @@ ipcRenderer.on(PROVIDER_OAUTH_CHANNEL, (_event, payload: unknown) => {
 
 ipcRenderer.on(WORKBENCH_BROWSER_COMMENT_CHANNEL, (_event, payload: unknown) => {
   dispatchDesktopEvent(WORKBENCH_BROWSER_COMMENT_EVENT, payload);
+});
+
+ipcRenderer.on(SHOW_WORKBENCH_BROWSER_CHANNEL, (_event, payload: unknown) => {
+  dispatchDesktopEvent(SHOW_WORKBENCH_BROWSER_EVENT, payload);
 });
 
 contextBridge.exposeInMainWorld('personalAgentDesktop', desktopBridge);

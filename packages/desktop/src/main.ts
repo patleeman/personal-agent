@@ -15,6 +15,7 @@ import { applyDesktopRuntimeEnvironmentOverrides } from './runtime-env.js';
 import { DesktopWindowController } from './window.js';
 import { DesktopTrayController } from './tray.js';
 import { registerDesktopIpc } from './ipc.js';
+import { loadLocalApiModule } from './local-api-module.js';
 import { installDesktopApplicationMenu } from './menu.js';
 import { DesktopUpdateManager } from './updates/update-manager.js';
 import { confirmDesktopQuit } from './quit.js';
@@ -341,6 +342,15 @@ async function bootstrapDesktopApp(): Promise<void> {
   setCompanionRuntimeProvider(() => createDesktopCompanionRuntime(hostManager as HostManager));
   registerDesktopAppProtocol(hostManager);
   windowController = new DesktopWindowController(hostManager);
+  void loadLocalApiModule()
+    .then((module) => {
+      module.setDesktopWorkbenchBrowserToolHost?.({
+        snapshot: (conversationId) => windowController!.snapshotWorkbenchBrowserForConversation(conversationId),
+        screenshot: (conversationId) => windowController!.screenshotWorkbenchBrowserForConversation(conversationId),
+        runScript: (input) => windowController!.runWorkbenchBrowserScriptForConversation(input),
+      });
+    })
+    .catch((error) => logBootstrapError(error));
   updateManager = new DesktopUpdateManager({
     onBeforeQuitForUpdate: async () => {
       await prepareForQuit();
