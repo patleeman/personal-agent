@@ -40,6 +40,7 @@ export function ChatRenderItemView({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
+  onOpenBrowser,
   onOpenFilePath,
   onSubmitAskUserQuestion,
   askUserQuestionDisplayMode,
@@ -69,6 +70,7 @@ export function ChatRenderItemView({
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
+  onOpenBrowser?: () => void;
   onOpenFilePath?: (path: string) => void;
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode: 'inline' | 'composer';
@@ -105,6 +107,7 @@ export function ChatRenderItemView({
           activeArtifactId={activeArtifactId}
           onOpenCheckpoint={onOpenCheckpoint}
           activeCheckpointId={activeCheckpointId}
+          onOpenBrowser={onOpenBrowser}
           onOpenFilePath={onOpenFilePath}
           onResume={isTailItem ? onResumeConversation : undefined}
           resumeBusy={resumeConversationBusy}
@@ -169,6 +172,7 @@ export function ChatRenderItemView({
             activeArtifactId={activeArtifactId}
             onOpenCheckpoint={onOpenCheckpoint}
             activeCheckpointId={activeCheckpointId}
+            onOpenBrowser={onOpenBrowser}
             onOpenFilePath={onOpenFilePath}
             onHydrateMessage={onHydrateMessage}
             hydratingMessageBlockIds={hydratingMessageBlockIds}

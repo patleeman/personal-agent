@@ -7,7 +7,7 @@ import type { MessageBlock } from '../../shared/types';
 import { Pill, cx } from '../ui';
 import { buildToolPreview, readLinkedRuns } from './linkedRuns.js';
 import { AskUserQuestionToolBlock, describeAskUserQuestionState } from './AskUserQuestionToolBlock.js';
-import { ArtifactToolBlock, CheckpointToolBlock } from './ArtifactCheckpointToolBlocks.js';
+import { ArtifactToolBlock, BrowserToolBlock, CheckpointToolBlock } from './ArtifactCheckpointToolBlocks.js';
 import { TerminalToolBlock } from './TerminalToolBlock.js';
 import { resolveDisclosureOpen, toggleDisclosurePreference, toolMeta, type DisclosurePreference } from './toolPresentation.js';
 
@@ -20,6 +20,7 @@ export function ToolBlock({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
+  onOpenBrowser,
   onOpenFilePath: _onOpenFilePath,
   onHydrateMessage,
   hydratingMessageBlockIds,
@@ -34,6 +35,7 @@ export function ToolBlock({
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
+  onOpenBrowser?: () => void;
   onOpenFilePath?: (path: string) => void;
   onHydrateMessage?: (blockId: string) => Promise<void> | void;
   hydratingMessageBlockIds?: ReadonlySet<string>;
@@ -75,6 +77,10 @@ export function ToolBlock({
         activeCheckpointId={activeCheckpointId}
       />
     );
+  }
+
+  if (block.tool === 'browser_snapshot' || block.tool === 'browser_cdp' || block.tool === 'browser_screenshot') {
+    return <BrowserToolBlock block={block} onOpenBrowser={onOpenBrowser} />;
   }
 
   const terminalBash = readTerminalBashToolPresentation(block);

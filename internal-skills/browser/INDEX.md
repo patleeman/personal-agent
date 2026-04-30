@@ -77,7 +77,7 @@ The product model:
 - switching conversations preserves each conversation's embedded webview instead of reusing one global browser
 - Electron main owns navigation, state, snapshots, actions, and comments
 - agent browser tools target that same session when running inside desktop conversations
-- if an agent uses a built-in browser tool and the Browser tab is closed, the app opens Workbench → Browser automatically
+- if an agent uses a built-in browser tool and the Browser tab is closed, the transcript shows an inline Browser widget; Patrick chooses when to open Workbench → Browser
 
 Avoid creating two unrelated browsers for the same task. A Playwright/`agent-browser` session and the built-in Electron Browser tab drifting apart is bad UX.
 
@@ -166,14 +166,14 @@ It should return an image attachment or image data plus basic metadata:
 
 Current desktop tool output returns PNG data as base64 in tool details with URL/title/viewport metadata.
 
-### Auto-open behavior
+### Browser widget behavior
 
 When any built-in browser tool runs from a desktop conversation:
 
-1. switch to Workbench mode if needed
-2. select the Browser tab
-3. ensure the browser pane exists
-4. return the tool result to the transcript
+1. ensure the hidden browser session exists for the conversation
+2. return the tool result to the transcript
+3. render an inline Browser widget in chat with an **Open browser** action
+4. only switch to Workbench mode and select the Browser tab after the user clicks the widget
 
 Do not show raw script/debug panels in the user Browser tab. The transcript is where tool details belong.
 

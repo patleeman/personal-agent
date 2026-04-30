@@ -105,6 +105,7 @@ export function TraceClusterBlock({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
+  onOpenBrowser,
   onOpenFilePath,
   onResume,
   resumeBusy,
@@ -121,6 +122,7 @@ export function TraceClusterBlock({
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
+  onOpenBrowser?: () => void;
   onOpenFilePath?: (path: string) => void;
   onResume?: () => Promise<void> | void;
   resumeBusy?: boolean;
@@ -279,6 +281,7 @@ export function TraceClusterBlock({
                     activeArtifactId={activeArtifactId}
                     onOpenCheckpoint={onOpenCheckpoint}
                     activeCheckpointId={activeCheckpointId}
+                    onOpenBrowser={onOpenBrowser}
                     onOpenFilePath={onOpenFilePath}
                   />
                 );

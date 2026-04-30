@@ -34,7 +34,7 @@ import { useConversationEventVersion } from '../hooks/useConversationEventVersio
 import { useDesktopConversationState } from '../hooks/useDesktopConversationState';
 import { retryLiveSessionActionAfterTakeover, useSessionStream } from '../hooks/useSessionStream';
 import { api } from '../client/api';
-import { getDesktopBridge, readDesktopConnections, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
+import { DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT, getDesktopBridge, readDesktopConnections, type DesktopWorkbenchBrowserCommentTarget, type DesktopWorkbenchBrowserState } from '../desktop/desktopBridge';
 import {
   buildContinueInExecutionTargetOptions,
   findSelectedExecutionTargetHost,
@@ -476,6 +476,10 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       search: nextSearch,
     });
   }, [location.pathname, location.search, navigate, selectedCheckpointId]);
+
+  const openWorkbenchBrowser = useCallback(() => {
+    window.dispatchEvent(new CustomEvent(DESKTOP_SHOW_WORKBENCH_BROWSER_EVENT));
+  }, []);
 
   useEffect(() => {
     function handleAppLayoutModeChanged() {
@@ -5706,6 +5710,7 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
               activeArtifactId={renderingStaleTranscript ? null : selectedArtifactId}
               onOpenCheckpoint={renderingStaleTranscript ? undefined : openCheckpoint}
               activeCheckpointId={renderingStaleTranscript ? null : selectedCheckpointId}
+              onOpenBrowser={renderingStaleTranscript ? undefined : openWorkbenchBrowser}
               onSubmitAskUserQuestion={renderingStaleTranscript ? undefined : submitAskUserQuestion}
               askUserQuestionDisplayMode="composer"
               onResumeConversation={renderingStaleTranscript || !conversationResumeState.canResume ? undefined : resumeConversation}

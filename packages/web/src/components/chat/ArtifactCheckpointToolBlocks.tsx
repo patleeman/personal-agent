@@ -151,5 +151,92 @@ const CheckpointToolBlock = memo(function CheckpointToolBlock({
   );
 });
 
+const BROWSER_TOOL_LABELS: Record<string, string> = {
+  browser_snapshot: 'Browser snapshot',
+  browser_cdp: 'Browser action',
+  browser_screenshot: 'Browser screenshot',
+};
 
-export { ArtifactToolBlock, CheckpointToolBlock };
+function readBrowserUrl(block: Extract<MessageBlock, { type: 'tool_use' }>): string | null {
+  const details = block.details && typeof block.details === 'object'
+    ? block.details as { url?: unknown; state?: { url?: unknown } }
+    : null;
+  const input = block.input && typeof block.input === 'object'
+    ? block.input as { command?: unknown }
+    : null;
+
+  if (typeof details?.url === 'string' && details.url.trim()) {
+    return details.url.trim();
+  }
+  if (typeof details?.state?.url === 'string' && details.state.url.trim()) {
+    return details.state.url.trim();
+  }
+  if (input?.command && typeof input.command === 'object' && !Array.isArray(input.command)) {
+    const command = input.command as { method?: unknown; params?: { url?: unknown } };
+    if (command.method === 'Page.navigate' && typeof command.params?.url === 'string' && command.params.url.trim()) {
+      return command.params.url.trim();
+    }
+  }
+  return null;
+}
+
+const BrowserToolBlock = memo(function BrowserToolBlock({
+  block,
+  onOpenBrowser,
+}: {
+  block: Extract<MessageBlock, { type: 'tool_use' }>;
+  onOpenBrowser?: () => void;
+}) {
+  const isRunning = block.status === 'running' || !!block.running;
+  const isError = block.status === 'error' || !!block.error;
+  const url = readBrowserUrl(block);
+  const title = BROWSER_TOOL_LABELS[block.tool] ?? 'Browser tool';
+
+  return (
+    <SurfacePanel
+      muted
+      className={cx(
+        'px-3.5 py-3 text-[12px] transition-colors',
+        isError && 'border-danger/30 bg-danger/5',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <div className="ui-chat-avatar mt-0.5">
+          <span className="ui-chat-avatar-mark">◎</span>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className="truncate text-[13px] font-medium text-primary">{title}</span>
+            <Pill tone={isError ? 'danger' : 'teal'} mono>browser</Pill>
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-secondary">
+            The agent used the Workbench Browser. Open it when you want to see or control the page.
+          </p>
+          {url ? <p className="mt-1 truncate font-mono text-[11px] text-secondary">{url}</p> : null}
+          {isError && block.output ? (
+            <p className="mt-2 text-[12px] leading-relaxed text-danger/85">{block.output}</p>
+          ) : null}
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
+            {isRunning ? (
+              <span className="inline-flex items-center gap-1.5 text-dim">
+                <span className="h-3.5 w-3.5 rounded-full border-[1.5px] border-current border-t-transparent animate-spin" />
+                using browser…
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onOpenBrowser?.()}
+                disabled={!onOpenBrowser}
+                className="text-accent transition-colors hover:text-accent/80 disabled:cursor-default disabled:text-dim"
+              >
+                Open browser
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </SurfacePanel>
+  );
+});
+
+export { ArtifactToolBlock, CheckpointToolBlock, BrowserToolBlock };

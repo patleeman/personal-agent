@@ -156,4 +156,34 @@ describe('ChatView rendering stability', () => {
 
     expect(onFocusComposerRequest).not.toHaveBeenCalled();
   });
+
+  it('renders browser tool calls as an explicit open-browser widget', () => {
+    const onOpenBrowser = vi.fn();
+    const browserBlock = {
+      id: 'browser-tool-1',
+      type: 'tool_use',
+      ts: '2026-04-23T18:00:01.000Z',
+      tool: 'browser_snapshot',
+      input: {},
+      output: 'URL: https://example.com/',
+      status: 'ok',
+      details: { url: 'https://example.com/' },
+    } satisfies Extract<MessageBlock, { type: 'tool_use' }>;
+
+    const { container } = renderChatView([browserBlock], { onOpenBrowser });
+
+    expect(container.textContent).toContain('Browser snapshot');
+    expect(container.textContent).toContain('Open browser');
+    expect(container.textContent).toContain('https://example.com/');
+
+    const button = Array.from(container.querySelectorAll('button'))
+      .find((entry) => entry.textContent === 'Open browser');
+    expect(button).toBeTruthy();
+
+    act(() => {
+      button?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onOpenBrowser).toHaveBeenCalledTimes(1);
+  });
 });

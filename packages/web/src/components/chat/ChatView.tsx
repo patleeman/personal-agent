@@ -35,6 +35,7 @@ interface ChatViewProps {
   activeArtifactId?: string | null;
   onOpenCheckpoint?: (checkpointId: string) => void;
   activeCheckpointId?: string | null;
+  onOpenBrowser?: () => void;
   onOpenFilePath?: (path: string) => void;
   onSubmitAskUserQuestion?: (presentation: AskUserQuestionPresentation, answers: AskUserQuestionAnswers) => Promise<void> | void;
   askUserQuestionDisplayMode?: 'inline' | 'composer';
@@ -95,6 +96,7 @@ export const ChatView = memo(function ChatView({
   activeArtifactId,
   onOpenCheckpoint,
   activeCheckpointId,
+  onOpenBrowser,
   onOpenFilePath,
   onSubmitAskUserQuestion,
   askUserQuestionDisplayMode = 'inline',
@@ -206,6 +208,7 @@ export const ChatView = memo(function ChatView({
       activeArtifactId={activeArtifactId}
       onOpenCheckpoint={onOpenCheckpoint}
       activeCheckpointId={activeCheckpointId}
+      onOpenBrowser={onOpenBrowser}
       onOpenFilePath={onOpenFilePath}
       onSubmitAskUserQuestion={onSubmitAskUserQuestion}
       askUserQuestionDisplayMode={askUserQuestionDisplayMode}
