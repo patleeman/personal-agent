@@ -37,6 +37,8 @@ Use `Cmd+Option+\` on macOS, or `Ctrl+Alt+\` elsewhere, to toggle between Compac
 
 The right-side workbench rail includes Knowledge, File Explorer, Artifacts when present, and Browser. Browser opens an Electron-owned embedded web view in the workbench pane with simple navigation controls. Right-click inside the browser and choose “Comment on this” to attach a targeted browser comment to the composer; it is sent as prompt context with selector, role/name, text, nearby text, and viewport metadata.
 
+Workbench Browser sessions are scoped to the conversation. Switching conversations hides the previous conversation's webview and restores the selected conversation's webview, matching the workbench file/explorer model instead of using one global browser.
+
 Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_script`, and `browser_screenshot`. `browser_script` is the browser-context equivalent of `bash`: the agent writes one script using the constrained `browser` API, an isolated worker runs it, and Electron main brokers validated operations to the visible Workbench Browser.
 
 Agents should default to `browser_snapshot` for page understanding. `browser_screenshot` is only for visual layout, image/canvas-heavy content, or explicit screenshot requests; it should not be used to read normal page text or feeds.

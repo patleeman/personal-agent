@@ -332,7 +332,7 @@ export class DesktopWindowController {
     return this.goForward(this.trackedWindows.get(webContentsId)?.window);
   }
 
-  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown }): unknown {
+  setWorkbenchBrowserBoundsForWebContents(webContentsId: number, input: { visible?: boolean; bounds?: unknown; sessionKey?: string | null }): unknown {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       return null;
@@ -344,82 +344,82 @@ export class DesktopWindowController {
       throw new Error('Workbench browser bounds are invalid.');
     }
 
-    return this.workbenchBrowser.setBounds(tracked.window.webContents, visible, bounds);
+    return this.workbenchBrowser.setBounds(tracked.window.webContents, visible, bounds, input.sessionKey);
   }
 
-  getWorkbenchBrowserStateForWebContents(webContentsId: number): unknown {
-    return this.workbenchBrowser.getState(webContentsId);
+  getWorkbenchBrowserStateForWebContents(webContentsId: number, sessionKey?: string | null): unknown {
+    return this.workbenchBrowser.getState(webContentsId, sessionKey);
   }
 
-  async navigateWorkbenchBrowserForWebContents(webContentsId: number, url: unknown): Promise<unknown> {
+  async navigateWorkbenchBrowserForWebContents(webContentsId: number, input: { url?: unknown; sessionKey?: string | null }): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.navigate(tracked.window.webContents, url);
+    return this.workbenchBrowser.navigate(tracked.window.webContents, input.url, input.sessionKey);
   }
 
-  async goBackWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+  async goBackWorkbenchBrowserForWebContents(webContentsId: number, sessionKey?: string | null): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.goBack(tracked.window.webContents);
+    return this.workbenchBrowser.goBack(tracked.window.webContents, sessionKey);
   }
 
-  async goForwardWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+  async goForwardWorkbenchBrowserForWebContents(webContentsId: number, sessionKey?: string | null): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.goForward(tracked.window.webContents);
+    return this.workbenchBrowser.goForward(tracked.window.webContents, sessionKey);
   }
 
-  async reloadWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+  async reloadWorkbenchBrowserForWebContents(webContentsId: number, sessionKey?: string | null): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.reload(tracked.window.webContents);
+    return this.workbenchBrowser.reload(tracked.window.webContents, sessionKey);
   }
 
-  stopWorkbenchBrowserForWebContents(webContentsId: number): unknown {
+  stopWorkbenchBrowserForWebContents(webContentsId: number, sessionKey?: string | null): unknown {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.stop(tracked.window.webContents);
+    return this.workbenchBrowser.stop(tracked.window.webContents, sessionKey);
   }
 
-  async snapshotWorkbenchBrowserForWebContents(webContentsId: number): Promise<unknown> {
+  async snapshotWorkbenchBrowserForWebContents(webContentsId: number, sessionKey?: string | null): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.snapshot(tracked.window.webContents);
+    return this.workbenchBrowser.snapshot(tracked.window.webContents, sessionKey);
   }
 
-  async runWorkbenchBrowserActionsForWebContents(webContentsId: number, actions: unknown): Promise<unknown> {
+  async runWorkbenchBrowserActionsForWebContents(webContentsId: number, input: { actions?: unknown; sessionKey?: string | null }): Promise<unknown> {
     const tracked = this.trackedWindows.get(webContentsId);
     if (!tracked || tracked.window.isDestroyed()) {
       throw new Error('Workbench browser owner window is unavailable.');
     }
-    return this.workbenchBrowser.runActions(tracked.window.webContents, actions);
+    return this.workbenchBrowser.runActions(tracked.window.webContents, input.actions, input.sessionKey);
   }
 
   async snapshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
-    return this.workbenchBrowser.snapshot(owner);
+    return this.workbenchBrowser.snapshot(owner, conversationId);
   }
 
   async screenshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
-    return this.workbenchBrowser.screenshot(owner);
+    return this.workbenchBrowser.screenshot(owner, conversationId);
   }
 
   async runWorkbenchBrowserScriptForConversation(input: { conversationId?: string | null; script?: unknown; timeoutMs?: unknown }): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(input.conversationId);
-    return this.workbenchBrowser.runScript(owner, input);
+    return this.workbenchBrowser.runScript(owner, { ...input, sessionKey: input.conversationId });
   }
 
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {
@@ -500,7 +500,7 @@ export class DesktopWindowController {
 
     window.webContents.send(SHOW_WORKBENCH_BROWSER_CHANNEL, { conversationId: conversationId ?? null });
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      if (this.workbenchBrowser.hasView(window.webContents.id)) {
+      if (this.workbenchBrowser.hasView(window.webContents.id, conversationId)) {
         return window.webContents;
       }
       await delay(100);

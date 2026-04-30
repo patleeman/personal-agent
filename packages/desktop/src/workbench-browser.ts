@@ -232,76 +232,80 @@ function getScriptWorkerPath(): string {
 }
 
 export class WorkbenchBrowserViewController {
-  private views = new Map<number, WorkbenchBrowserViewEntry>();
-  private snapshotRefs = new Map<number, Map<string, { selector: string; xpath: string }>>();
+  private views = new Map<string, WorkbenchBrowserViewEntry>();
+  private activeViewKeysByOwner = new Map<number, string>();
+  private snapshotRefs = new Map<string, Map<string, { selector: string; xpath: string }>>();
 
-  getState(ownerWebContentsId: number): WorkbenchBrowserState | null {
-    const entry = this.views.get(ownerWebContentsId);
+  getState(ownerWebContentsId: number, sessionKey?: string | null): WorkbenchBrowserState | null {
+    const entry = this.views.get(this.viewKey(ownerWebContentsId, sessionKey));
     return entry ? getState(entry.view.webContents, entry) : null;
   }
 
-  hasView(ownerWebContentsId: number): boolean {
-    const entry = this.views.get(ownerWebContentsId);
+  hasView(ownerWebContentsId: number, sessionKey?: string | null): boolean {
+    const entry = this.views.get(this.viewKey(ownerWebContentsId, sessionKey));
     return Boolean(entry && !entry.view.webContents.isDestroyed());
   }
 
-  setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null): WorkbenchBrowserState | null {
+  setBounds(owner: WebContents, visible: boolean, bounds: WorkbenchBrowserBounds | null, sessionKey?: string | null): WorkbenchBrowserState | null {
     const ownerWindow = BrowserWindow.fromWebContents(owner);
     if (!ownerWindow || ownerWindow.isDestroyed()) {
       return null;
     }
 
     if (!visible || !bounds) {
-      this.hide(owner.id);
-      return this.getState(owner.id);
+      this.hide(this.viewKey(owner.id, sessionKey));
+      return this.getState(owner.id, sessionKey);
     }
 
-    const view = this.ensureView(ownerWindow, owner.id);
+    const viewKey = this.viewKey(owner.id, sessionKey);
+    this.hideActiveOwnerView(owner.id, viewKey);
+    const view = this.ensureView(ownerWindow, owner.id, sessionKey);
     view.setBounds(bounds);
-    return getState(view.webContents, this.views.get(owner.id));
+    this.activeViewKeysByOwner.set(owner.id, viewKey);
+    return getState(view.webContents, this.views.get(viewKey));
   }
 
-  async navigate(owner: WebContents, inputUrl: unknown): Promise<WorkbenchBrowserState> {
+  async navigate(owner: WebContents, inputUrl: unknown, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
     const ownerWindow = this.requireOwnerWindow(owner);
-    const view = this.ensureView(ownerWindow, owner.id);
+    const view = this.ensureView(ownerWindow, owner.id, sessionKey);
     const url = normalizeWorkbenchBrowserUrl(inputUrl);
     await view.webContents.loadURL(url);
-    return getState(view.webContents, this.views.get(owner.id));
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
   }
 
-  async goBack(owner: WebContents): Promise<WorkbenchBrowserState> {
-    const view = this.requireView(owner);
+  async goBack(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
+    const view = this.requireView(owner, sessionKey);
     if (view.webContents.canGoBack()) {
       view.webContents.goBack();
       await wait(120);
     }
-    return getState(view.webContents, this.views.get(owner.id));
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
   }
 
-  async goForward(owner: WebContents): Promise<WorkbenchBrowserState> {
-    const view = this.requireView(owner);
+  async goForward(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
+    const view = this.requireView(owner, sessionKey);
     if (view.webContents.canGoForward()) {
       view.webContents.goForward();
       await wait(120);
     }
-    return getState(view.webContents, this.views.get(owner.id));
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
   }
 
-  async reload(owner: WebContents): Promise<WorkbenchBrowserState> {
-    const view = this.requireView(owner);
+  async reload(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
+    const view = this.requireView(owner, sessionKey);
     view.webContents.reload();
     await wait(120);
-    return getState(view.webContents, this.views.get(owner.id));
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
   }
 
-  stop(owner: WebContents): WorkbenchBrowserState {
-    const view = this.requireView(owner);
+  stop(owner: WebContents, sessionKey?: string | null): WorkbenchBrowserState {
+    const view = this.requireView(owner, sessionKey);
     view.webContents.stop();
-    return getState(view.webContents, this.views.get(owner.id));
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
   }
 
-  async snapshot(owner: WebContents): Promise<WorkbenchBrowserSnapshot> {
-    const view = this.requireView(owner);
+  async snapshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserSnapshot> {
+    const view = this.requireView(owner, sessionKey);
     const raw = await view.webContents.executeJavaScript(`(() => {
       ${this.pageHelperSource()}
       const title = document.title ? 'Title: ' + document.title + '\n' : '';
@@ -330,8 +334,9 @@ export class WorkbenchBrowserViewController {
     const elements = raw && typeof raw === 'object' && Array.isArray(raw.elements)
       ? raw.elements as WorkbenchBrowserSnapshotElement[]
       : [];
-    this.snapshotRefs.set(owner.id, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
-    const entry = this.views.get(owner.id);
+    const viewKey = this.viewKey(owner.id, sessionKey);
+    this.snapshotRefs.set(viewKey, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
+    const entry = this.views.get(viewKey);
     if (entry) {
       entry.lastSnapshotRevision = entry.browserRevision;
     }
@@ -343,12 +348,12 @@ export class WorkbenchBrowserViewController {
     };
   }
 
-  async screenshot(owner: WebContents): Promise<WorkbenchBrowserScreenshot> {
-    const view = this.requireView(owner);
+  async screenshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserScreenshot> {
+    const view = this.requireView(owner, sessionKey);
     const image = await view.webContents.capturePage();
     const bounds = view.getBounds();
     return {
-      ...getState(view.webContents, this.views.get(owner.id)),
+      ...getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey))),
       mimeType: 'image/png',
       dataBase64: image.toPNG().toString('base64'),
       viewport: { width: bounds.width, height: bounds.height },
@@ -356,7 +361,7 @@ export class WorkbenchBrowserViewController {
     };
   }
 
-  async runScript(owner: WebContents, input: { script?: unknown; timeoutMs?: unknown }): Promise<WorkbenchBrowserScriptResult> {
+  async runScript(owner: WebContents, input: { script?: unknown; timeoutMs?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserScriptResult> {
     const script = typeof input.script === 'string' ? input.script : '';
     if (!script.trim()) {
       throw new Error('browser_script requires a script.');
@@ -367,7 +372,7 @@ export class WorkbenchBrowserViewController {
     const timeoutMs = typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs)
       ? Math.max(1_000, Math.min(MAX_BROWSER_SCRIPT_TIMEOUT_MS, Math.round(input.timeoutMs)))
       : 30_000;
-    const view = this.requireView(owner);
+    const view = this.requireView(owner, input.sessionKey);
     const worker = new Worker(getScriptWorkerPath());
 
     try {
@@ -390,7 +395,7 @@ export class WorkbenchBrowserViewController {
           }
           if (payload.type === 'rpc' && payload.request) {
             const request = payload.request;
-            void this.runScriptOperation(owner, view, request.op, request.args)
+            void this.runScriptOperation(owner, view, request.op, request.args, input.sessionKey)
               .then((value) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: true, value } }))
               .catch((error) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: false, error: error instanceof Error ? error.message : String(error) } }));
           }
@@ -406,16 +411,16 @@ export class WorkbenchBrowserViewController {
         ok: true,
         result: output.result,
         logs: output.logs,
-        snapshot: await this.snapshot(owner),
+        snapshot: await this.snapshot(owner, input.sessionKey),
       };
     } finally {
       await worker.terminate().catch(() => undefined);
     }
   }
 
-  async runActions(owner: WebContents, rawActions: unknown): Promise<WorkbenchBrowserBatchResult> {
+  async runActions(owner: WebContents, rawActions: unknown, sessionKey?: string | null): Promise<WorkbenchBrowserBatchResult> {
     const actions = normalizeWorkbenchBrowserActions(rawActions);
-    const view = this.requireView(owner);
+    const view = this.requireView(owner, sessionKey);
     const completed: WorkbenchBrowserBatchResult['actions'] = [];
 
     for (let index = 0; index < actions.length; index += 1) {
@@ -427,30 +432,45 @@ export class WorkbenchBrowserViewController {
     return {
       ok: true,
       actions: completed,
-      snapshot: await this.snapshot(owner),
+      snapshot: await this.snapshot(owner, sessionKey),
     };
   }
 
   destroy(ownerWebContentsId: number): void {
-    const entry = this.views.get(ownerWebContentsId);
-    if (!entry) {
-      return;
+    for (const [viewKey, entry] of this.views) {
+      if (!viewKey.startsWith(`${ownerWebContentsId}:`)) {
+        continue;
+      }
+      this.views.delete(viewKey);
+      try {
+        entry.ownerWindow.contentView.removeChildView(entry.view);
+      } catch {
+        // Best-effort cleanup. Electron may already have torn down the window.
+      }
+      entry.view.webContents.close();
+      this.snapshotRefs.delete(viewKey);
     }
-    this.views.delete(ownerWebContentsId);
-    try {
-      entry.ownerWindow.contentView.removeChildView(entry.view);
-    } catch {
-      // Best-effort cleanup. Electron may already have torn down the window.
-    }
-    entry.view.webContents.close();
+    this.activeViewKeysByOwner.delete(ownerWebContentsId);
   }
 
-  private hide(ownerWebContentsId: number): void {
-    const entry = this.views.get(ownerWebContentsId);
+  private viewKey(ownerWebContentsId: number, sessionKey?: string | null): string {
+    const normalizedSessionKey = sessionKey?.trim() || 'default';
+    return `${ownerWebContentsId}:${normalizedSessionKey}`;
+  }
+
+  private hide(viewKey: string): void {
+    const entry = this.views.get(viewKey);
     if (!entry) {
       return;
     }
     entry.view.setBounds({ x: -10_000, y: -10_000, width: 1, height: 1 });
+  }
+
+  private hideActiveOwnerView(ownerWebContentsId: number, exceptViewKey: string): void {
+    const activeViewKey = this.activeViewKeysByOwner.get(ownerWebContentsId);
+    if (activeViewKey && activeViewKey !== exceptViewKey) {
+      this.hide(activeViewKey);
+    }
   }
 
   private requireOwnerWindow(owner: WebContents): BrowserWindow {
@@ -461,13 +481,14 @@ export class WorkbenchBrowserViewController {
     return ownerWindow;
   }
 
-  private requireView(owner: WebContents): WebContentsView {
+  private requireView(owner: WebContents, sessionKey?: string | null): WebContentsView {
     const ownerWindow = this.requireOwnerWindow(owner);
-    return this.ensureView(ownerWindow, owner.id);
+    return this.ensureView(ownerWindow, owner.id, sessionKey);
   }
 
-  private ensureView(ownerWindow: BrowserWindow, ownerWebContentsId: number): WebContentsView {
-    const existing = this.views.get(ownerWebContentsId);
+  private ensureView(ownerWindow: BrowserWindow, ownerWebContentsId: number, sessionKey?: string | null): WebContentsView {
+    const viewKey = this.viewKey(ownerWebContentsId, sessionKey);
+    const existing = this.views.get(viewKey);
     if (existing && !existing.view.webContents.isDestroyed()) {
       return existing.view;
     }
@@ -486,7 +507,7 @@ export class WorkbenchBrowserViewController {
       browserRevision: 0,
       lastSnapshotRevision: 0,
     };
-    this.views.set(ownerWebContentsId, entry);
+    this.views.set(viewKey, entry);
     ownerWindow.contentView.addChildView(view);
     view.webContents.setWindowOpenHandler(({ url }) => {
       let target: string;
@@ -500,20 +521,20 @@ export class WorkbenchBrowserViewController {
       return { action: 'deny' };
     });
     view.webContents.on('context-menu', (_event, params) => {
-      this.showContextMenu(ownerWebContentsId, params.x, params.y);
+      this.showContextMenu(viewKey, params.x, params.y);
     });
-    view.webContents.on('did-start-loading', () => this.bumpRevision(ownerWebContentsId, 'page started loading'));
-    view.webContents.on('did-finish-load', () => this.bumpRevision(ownerWebContentsId, 'page finished loading'));
-    view.webContents.on('did-navigate', () => this.bumpRevision(ownerWebContentsId, 'navigated'));
-    view.webContents.on('did-navigate-in-page', () => this.bumpRevision(ownerWebContentsId, 'in-page navigation'));
-    view.webContents.on('page-title-updated', () => this.bumpRevision(ownerWebContentsId, 'page title changed'));
-    view.webContents.on('before-input-event', () => this.bumpRevision(ownerWebContentsId, 'page input'));
+    view.webContents.on('did-start-loading', () => this.bumpRevision(viewKey, 'page started loading'));
+    view.webContents.on('did-finish-load', () => this.bumpRevision(viewKey, 'page finished loading'));
+    view.webContents.on('did-navigate', () => this.bumpRevision(viewKey, 'navigated'));
+    view.webContents.on('did-navigate-in-page', () => this.bumpRevision(viewKey, 'in-page navigation'));
+    view.webContents.on('page-title-updated', () => this.bumpRevision(viewKey, 'page title changed'));
+    view.webContents.on('before-input-event', () => this.bumpRevision(viewKey, 'page input'));
     void view.webContents.loadURL(DEFAULT_BROWSER_URL).catch(() => undefined);
     return view;
   }
 
-  private bumpRevision(ownerWebContentsId: number, reason: string): void {
-    const entry = this.views.get(ownerWebContentsId);
+  private bumpRevision(viewKey: string, reason: string): void {
+    const entry = this.views.get(viewKey);
     if (!entry || entry.view.webContents.isDestroyed()) {
       return;
     }
@@ -522,8 +543,8 @@ export class WorkbenchBrowserViewController {
     entry.lastChangedAt = new Date().toISOString();
   }
 
-  private showContextMenu(ownerWebContentsId: number, x: number, y: number): void {
-    const entry = this.views.get(ownerWebContentsId);
+  private showContextMenu(viewKey: string, x: number, y: number): void {
+    const entry = this.views.get(viewKey);
     if (!entry || entry.owner.isDestroyed() || entry.view.webContents.isDestroyed()) {
       return;
     }
@@ -773,49 +794,49 @@ export class WorkbenchBrowserViewController {
     `;
   }
 
-  private resolveRefs(owner: WebContents): Record<string, { selector: string; xpath: string }> {
-    return Object.fromEntries(this.snapshotRefs.get(owner.id)?.entries() ?? []);
+  private resolveRefs(owner: WebContents, sessionKey?: string | null): Record<string, { selector: string; xpath: string }> {
+    return Object.fromEntries(this.snapshotRefs.get(this.viewKey(owner.id, sessionKey))?.entries() ?? []);
   }
 
-  private async runScriptOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[]): Promise<unknown> {
+  private async runScriptOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
     switch (op) {
-      case 'goto': return this.navigate(owner, args[0]);
-      case 'reload': return this.reload(owner);
-      case 'back': return this.goBack(owner);
-      case 'forward': return this.goForward(owner);
+      case 'goto': return this.navigate(owner, args[0], sessionKey);
+      case 'reload': return this.reload(owner, sessionKey);
+      case 'back': return this.goBack(owner, sessionKey);
+      case 'forward': return this.goForward(owner, sessionKey);
       case 'url': return view.webContents.getURL();
       case 'title': return view.webContents.getTitle();
-      case 'snapshot': return this.snapshot(owner);
-      case 'screenshot': return this.screenshot(owner);
-      case 'click': await this.runAction(view, { type: 'click', selector: this.resolveSelector(owner, args[0]) }); return true;
-      case 'type': await this.runAction(view, { type: 'type', selector: this.resolveSelector(owner, args[0]), text: String(args[1] ?? '') }); return true;
+      case 'snapshot': return this.snapshot(owner, sessionKey);
+      case 'screenshot': return this.screenshot(owner, sessionKey);
+      case 'click': await this.runAction(view, { type: 'click', selector: this.resolveSelector(owner, args[0], sessionKey) }); return true;
+      case 'type': await this.runAction(view, { type: 'type', selector: this.resolveSelector(owner, args[0], sessionKey), text: String(args[1] ?? '') }); return true;
       case 'press': await this.runAction(view, { type: 'key', key: String(args[0] ?? '') }); return true;
       case 'scroll': await this.runAction(view, { type: 'scroll', x: Number(args[0] ?? 0), y: Number(args[1] ?? 0) }); return true;
       case 'wait': await wait(Math.max(0, Math.min(30_000, Math.round(Number(args[0] ?? 500))))); return true;
-      case 'text': return this.evaluateDomOperation(owner, view, 'text', args);
-      case 'html': return this.evaluateDomOperation(owner, view, 'html', args);
-      case 'exists': return this.evaluateDomOperation(owner, view, 'exists', args);
-      case 'query': return this.evaluateDomOperation(owner, view, 'query', args);
-      case 'select': return this.evaluateDomOperation(owner, view, 'select', args);
-      case 'check': return this.evaluateDomOperation(owner, view, 'check', args);
-      case 'uncheck': return this.evaluateDomOperation(owner, view, 'uncheck', args);
-      case 'setInputFiles': return this.evaluateDomOperation(owner, view, 'setInputFiles', args);
-      case 'waitFor': return this.waitForDom(owner, view, String(args[0] ?? ''), false);
-      case 'waitForText': return this.waitForDom(owner, view, String(args[0] ?? ''), true);
+      case 'text': return this.evaluateDomOperation(owner, view, 'text', args, sessionKey);
+      case 'html': return this.evaluateDomOperation(owner, view, 'html', args, sessionKey);
+      case 'exists': return this.evaluateDomOperation(owner, view, 'exists', args, sessionKey);
+      case 'query': return this.evaluateDomOperation(owner, view, 'query', args, sessionKey);
+      case 'select': return this.evaluateDomOperation(owner, view, 'select', args, sessionKey);
+      case 'check': return this.evaluateDomOperation(owner, view, 'check', args, sessionKey);
+      case 'uncheck': return this.evaluateDomOperation(owner, view, 'uncheck', args, sessionKey);
+      case 'setInputFiles': return this.evaluateDomOperation(owner, view, 'setInputFiles', args, sessionKey);
+      case 'waitFor': return this.waitForDom(owner, view, String(args[0] ?? ''), false, sessionKey);
+      case 'waitForText': return this.waitForDom(owner, view, String(args[0] ?? ''), true, sessionKey);
       case 'waitForLoadState': return this.waitForLoadState(view);
       case 'evaluate': return this.evaluatePage(view, args);
       default: throw new Error(`Unsupported browser operation: ${op}`);
     }
   }
 
-  private resolveSelector(owner: WebContents, selectorOrRef: unknown): string {
+  private resolveSelector(owner: WebContents, selectorOrRef: unknown, sessionKey?: string | null): string {
     const raw = typeof selectorOrRef === 'string' ? selectorOrRef.trim() : '';
     if (!raw) throw new Error('selector/ref is required.');
-    return this.snapshotRefs.get(owner.id)?.get(raw)?.selector ?? raw;
+    return this.snapshotRefs.get(this.viewKey(owner.id, sessionKey))?.get(raw)?.selector ?? raw;
   }
 
-  private async evaluateDomOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[]): Promise<unknown> {
-    const refs = this.resolveRefs(owner);
+  private async evaluateDomOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
+    const refs = this.resolveRefs(owner, sessionKey);
     return view.webContents.executeJavaScript(`(() => {
       ${this.pageHelperSource()}
       const refs = ${JSON.stringify(refs)};
@@ -836,12 +857,12 @@ export class WorkbenchBrowserViewController {
     })()`, true);
   }
 
-  private async waitForDom(owner: WebContents, view: WebContentsView, target: string, textMode: boolean): Promise<boolean> {
+  private async waitForDom(owner: WebContents, view: WebContentsView, target: string, textMode: boolean, sessionKey?: string | null): Promise<boolean> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       const found = textMode
         ? await view.webContents.executeJavaScript(`(document.body?.innerText || '').includes(${JSON.stringify(target)})`, true)
-        : await this.evaluateDomOperation(owner, view, 'exists', [target]);
+        : await this.evaluateDomOperation(owner, view, 'exists', [target], sessionKey);
       if (found) return true;
       await wait(100);
     }

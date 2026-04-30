@@ -73,6 +73,8 @@ These tools should target the built-in Workbench Browser session, not an unrelat
 The product model:
 
 - the Browser tab is the visual surface
+- browser sessions are scoped to the active conversation, like the workbench file/explorer state
+- switching conversations preserves each conversation's embedded webview instead of reusing one global browser
 - Electron main owns navigation, state, snapshots, actions, and comments
 - agent browser tools target that same session when running inside desktop conversations
 - if an agent uses a built-in browser tool and the Browser tab is closed, the app opens Workbench → Browser automatically

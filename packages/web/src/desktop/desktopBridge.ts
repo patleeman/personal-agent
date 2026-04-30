@@ -452,15 +452,15 @@ export interface PersonalAgentDesktopBridge {
   unsubscribeRemoteOperations(subscriptionId: string): Promise<void>;
   goBack(): Promise<DesktopNavigationState>;
   goForward(): Promise<DesktopNavigationState>;
-  setWorkbenchBrowserBounds(input: { visible: boolean; bounds?: DesktopWorkbenchBrowserBounds }): Promise<DesktopWorkbenchBrowserState | null>;
-  getWorkbenchBrowserState(): Promise<DesktopWorkbenchBrowserState | null>;
-  navigateWorkbenchBrowser(input: { url: string }): Promise<DesktopWorkbenchBrowserState>;
-  goBackWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
-  goForwardWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
-  reloadWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
-  stopWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserState>;
-  snapshotWorkbenchBrowser(): Promise<DesktopWorkbenchBrowserSnapshot>;
-  runWorkbenchBrowserActions(input: { actions: unknown[] }): Promise<{ ok: true; actions: Array<{ index: number; type: string; ok: true }>; snapshot: DesktopWorkbenchBrowserSnapshot }>;
+  setWorkbenchBrowserBounds(input: { visible: boolean; sessionKey?: string | null; bounds?: DesktopWorkbenchBrowserBounds }): Promise<DesktopWorkbenchBrowserState | null>;
+  getWorkbenchBrowserState(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState | null>;
+  navigateWorkbenchBrowser(input: { url: string; sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+  goBackWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+  goForwardWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+  reloadWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+  stopWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
+  snapshotWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserSnapshot>;
+  runWorkbenchBrowserActions(input: { actions: unknown[]; sessionKey?: string | null }): Promise<{ ok: true; actions: Array<{ index: number; type: string; ok: true }>; snapshot: DesktopWorkbenchBrowserSnapshot }>;
 }
 
 export interface DesktopRemoteOperationEnvelope {

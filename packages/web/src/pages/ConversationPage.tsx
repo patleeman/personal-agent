@@ -364,14 +364,14 @@ function buildBrowserChangedContextMessage(state: DesktopWorkbenchBrowserState |
   };
 }
 
-async function readBrowserChangedContextMessage(): Promise<{ customType: string; content: string } | null> {
+async function readBrowserChangedContextMessage(sessionKey: string): Promise<{ customType: string; content: string } | null> {
   const bridge = getDesktopBridge();
   if (!bridge?.getWorkbenchBrowserState) {
     return null;
   }
 
   try {
-    return buildBrowserChangedContextMessage(await bridge.getWorkbenchBrowserState());
+    return buildBrowserChangedContextMessage(await bridge.getWorkbenchBrowserState({ sessionKey }));
   } catch {
     return null;
   }
@@ -4778,12 +4778,12 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       const filePromptImages = await buildPromptImages(pendingImageAttachments);
       const drawingPromptImages = pendingDrawingAttachments.map((drawing) => drawingAttachmentToPromptImage(drawing));
       const promptImages = [...filePromptImages, ...drawingPromptImages];
-      const browserChangedContextMessage = await readBrowserChangedContextMessage();
+      const browserChangedContextMessage = await readBrowserChangedContextMessage(id ?? 'draft');
       const browserContextMessages = mergeContextMessages(
         browserChangedContextMessage ? [browserChangedContextMessage] : undefined,
       );
       const textToSend = slashTextToSend ?? text;
-      const browserChangedContextMessage = await readBrowserChangedContextMessage();
+      const browserChangedContextMessage = await readBrowserChangedContextMessage(id ?? 'draft');
       const browserContextMessages = mergeContextMessages(
         browserCommentContextMessages,
         browserChangedContextMessage ? [browserChangedContextMessage] : undefined,

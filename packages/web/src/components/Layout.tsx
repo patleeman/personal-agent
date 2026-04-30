@@ -496,7 +496,7 @@ function WorkbenchDocumentPane({
   }
 
   if (activeTool === 'browser') {
-    return <WorkbenchBrowserTab />;
+    return <WorkbenchBrowserTab conversationId={conversationId} />;
   }
 
   if (!activeFileId && workspaceFile) {
@@ -537,7 +537,7 @@ function WorkbenchDocumentPane({
   );
 }
 
-function WorkbenchBrowserTab() {
+function WorkbenchBrowserTab({ conversationId }: { conversationId: string | null }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
   const [urlDraft, setUrlDraft] = useState('https://www.google.com/');
@@ -546,6 +546,7 @@ function WorkbenchBrowserTab() {
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
   const [pendingMarkers, setPendingMarkers] = useState<Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>>([]);
   const bridge = getDesktopBridge();
+  const browserSessionKey = conversationId ?? 'draft';
 
   const syncUrlDraftFromBrowserState = useCallback((nextState: DesktopWorkbenchBrowserState) => {
     if (document.activeElement === urlInputRef.current) {
@@ -565,6 +566,7 @@ function WorkbenchBrowserTab() {
     const visible = rect.width >= 24 && rect.height >= 24;
     void bridge.setWorkbenchBrowserBounds({
       visible,
+      sessionKey: browserSessionKey,
       ...(visible ? {
         bounds: {
           x: Math.round(rect.left),
@@ -579,7 +581,7 @@ function WorkbenchBrowserTab() {
         syncUrlDraftFromBrowserState(nextState);
       }
     }).catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
-  }, [bridge, syncUrlDraftFromBrowserState]);
+  }, [bridge, browserSessionKey, syncUrlDraftFromBrowserState]);
 
   useLayoutEffect(() => {
     syncBounds();
@@ -596,9 +598,9 @@ function WorkbenchBrowserTab() {
       observer?.disconnect();
       window.removeEventListener('resize', syncBounds);
       window.clearInterval(timer);
-      void bridge?.setWorkbenchBrowserBounds({ visible: false }).catch(() => undefined);
+      void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey }).catch(() => undefined);
     };
-  }, [bridge, syncBounds]);
+  }, [bridge, browserSessionKey, syncBounds]);
 
   useEffect(() => {
     function handleBrowserCommentTarget(event: Event) {
@@ -659,12 +661,12 @@ function WorkbenchBrowserTab() {
         className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-3 py-2"
         onSubmit={(event) => {
           event.preventDefault();
-          void runBrowserCommand(() => bridge!.navigateWorkbenchBrowser({ url: urlDraft }));
+          void runBrowserCommand(() => bridge!.navigateWorkbenchBrowser({ url: urlDraft, sessionKey: browserSessionKey }));
         }}
       >
-        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser())}>←</button>
-        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
-        <button type="button" className="rounded px-1.5 py-1 text-[13px] text-secondary hover:bg-surface hover:text-primary" aria-label={state?.loading ? 'Stop loading' : 'Reload'} title={state?.loading ? 'Stop loading' : 'Reload'} onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? '×' : '↻'}</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser({ sessionKey: browserSessionKey }))}>←</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser({ sessionKey: browserSessionKey }))}>→</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[13px] text-secondary hover:bg-surface hover:text-primary" aria-label={state?.loading ? 'Stop loading' : 'Reload'} title={state?.loading ? 'Stop loading' : 'Reload'} onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser({ sessionKey: browserSessionKey }) : bridge!.reloadWorkbenchBrowser({ sessionKey: browserSessionKey }))}>{state?.loading ? '×' : '↻'}</button>
         <input
           ref={urlInputRef}
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
