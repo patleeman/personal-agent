@@ -24,6 +24,24 @@ describe('linkedRuns', () => {
     expect(buildToolPreview(runToolBlock({ details: { action: 'start_agent', prompt: '# Fix architecture\n\nPlease do it' } }))).toBe('start_agent Fix architecture');
   });
 
+  it('builds useful previews for object-valued tool commands', () => {
+    expect(buildToolPreview({
+      type: 'tool_use',
+      ts: '2026-04-26T00:00:00.000Z',
+      tool: 'browser_cdp',
+      input: { command: { method: 'Page.navigate', params: { url: 'https://excalidraw.com/' } } },
+      output: '',
+    })).toBe('Page.navigate excalidraw.com/');
+
+    expect(buildToolPreview({
+      type: 'tool_use',
+      ts: '2026-04-26T00:00:00.000Z',
+      tool: 'browser_cdp',
+      input: { command: [{ method: 'Runtime.evaluate' }, { method: 'DOM.getDocument' }] },
+      output: '',
+    })).toBe('Runtime.evaluate, DOM.getDocument');
+  });
+
   it('presents listed durable runs with kind and status detail', () => {
     const linkedRuns = readLinkedRuns(runToolBlock({
       details: {

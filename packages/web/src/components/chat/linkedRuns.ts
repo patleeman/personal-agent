@@ -196,12 +196,60 @@ export function buildToolPreview(block: Extract<MessageBlock, { type: 'tool_use'
     }
   }
 
-  return block.input.command
-    ? String(block.input.command).split('\n')[0].slice(0, 64)
-    : block.input.path ? String(block.input.path)
-    : block.input.url ? String(block.input.url).replace('https://', '').slice(0, 60)
-    : block.input.query ? String(block.input.query).slice(0, 60)
+  return block.input.command !== undefined
+    ? buildGenericInputPreview(block.input.command)
+    : block.input.path !== undefined ? buildGenericInputPreview(block.input.path)
+    : block.input.url !== undefined ? buildGenericInputPreview(block.input.url).replace('https://', '').slice(0, 60)
+    : block.input.query !== undefined ? buildGenericInputPreview(block.input.query).slice(0, 60)
     : '';
+}
+
+function buildGenericInputPreview(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.split('\n')[0]?.slice(0, 64) ?? '';
+  }
+
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  const cdpPreview = buildCdpCommandPreview(value);
+  if (cdpPreview) {
+    return cdpPreview;
+  }
+
+  try {
+    return JSON.stringify(value).slice(0, 64);
+  } catch {
+    return '';
+  }
+}
+
+function buildCdpCommandPreview(value: unknown): string | null {
+  if (Array.isArray(value)) {
+    const methods = value
+      .map((item) => isRecord(item) && typeof item.method === 'string' ? item.method : null)
+      .filter((method): method is string => Boolean(method));
+    if (methods.length === 0) {
+      return null;
+    }
+
+    const preview = methods.slice(0, 2).join(', ');
+    return methods.length > 2 ? `${preview}, …` : preview;
+  }
+
+  if (!isRecord(value) || typeof value.method !== 'string') {
+    return null;
+  }
+
+  const params = isRecord(value.params) ? value.params : null;
+  const detail = typeof params?.url === 'string'
+    ? params.url.replace('https://', '').slice(0, 40)
+    : typeof params?.expression === 'string'
+      ? params.expression.split('\n')[0]?.slice(0, 40)
+      : null;
+
+  return detail ? `${value.method} ${detail}` : value.method;
 }
 
 function describeListedRunKind(details: ListedRunDetails): string | null {
