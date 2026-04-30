@@ -10,8 +10,9 @@ import {
 export const RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE = 'related_conversation_pointers';
 const MAX_RELATED_CONVERSATION_POINTERS = 5;
 const AUTO_POINTER_MIN_SCORE = 6;
-const MAX_AUTO_SESSION_SEARCH_READS = 24;
+const MAX_EXPLICIT_SESSION_SEARCH_READS = 24;
 const AUTO_POINTER_RECENT_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+const POINTER_CACHE_TTL_MS = 60_000;
 const PRODUCT_STOPWORDS = new Set([
   'actually', 'agent', 'agents', 'app', 'conversation', 'conversations', 'does', 'doing', 'done', 'good', 'how', 'junk',
   'like', 'look', 'looks', 'new', 'now', 'okay', 'please', 'pro', 'really', 'screen', 'stuff', 'thing', 'things',
@@ -41,6 +42,13 @@ export interface RelatedConversationPointersResult {
   warnings: string[];
 }
 
+interface CachedPointerResult {
+  cachedAtMs: number;
+  result: RelatedConversationPointersResult;
+}
+
+const pointerCache = new Map<string, CachedPointerResult>();
+
 function normalizeSessionIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -69,6 +77,24 @@ function normalizePointerLimit(value: number | undefined): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
     ? Math.min(value, MAX_RELATED_CONVERSATION_POINTERS)
     : MAX_RELATED_CONVERSATION_POINTERS;
+}
+
+function normalizeCacheText(value: string | undefined): string {
+  return (value ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function buildPointerCacheKey(input: {
+  prompt: string;
+  currentConversationId?: string;
+  currentCwd?: string;
+  limit?: number;
+}): string {
+  return JSON.stringify({
+    prompt: normalizeCacheText(input.prompt).toLowerCase(),
+    currentConversationId: input.currentConversationId ?? '',
+    currentCwd: input.currentCwd ?? '',
+    limit: normalizePointerLimit(input.limit),
+  });
 }
 
 function tokenize(value: string): string[] {
@@ -235,6 +261,8 @@ export function buildRelatedConversationPointers(input: {
   selectedSessionIds?: unknown;
   limit?: number;
   nowMs?: number;
+  includeAuto?: boolean;
+  allowSessionSearchRead?: boolean;
 }): RelatedConversationPointersResult {
   const prompt = input.prompt.trim();
   if (!prompt) {
@@ -260,12 +288,12 @@ export function buildRelatedConversationPointers(input: {
       continue;
     }
 
-    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: true, nowMs });
+    const pointer = buildPointer({ meta, promptTerms, currentCwd: input.currentCwd, source: 'manual', allowSessionSearchRead: input.allowSessionSearchRead === true, nowMs });
     pointers.push(pointer);
     used.add(pointer.sessionId);
   }
 
-  if (pointers.length < limit) {
+  if (input.includeAuto !== false && pointers.length < limit) {
     const autoMetas = listSessions()
       .filter((meta) => meta.id !== input.currentConversationId
         && !used.has(meta.id)
@@ -282,11 +310,11 @@ export function buildRelatedConversationPointers(input: {
       }
     }
 
-    if (promptTerms.length > 0) {
+    if (input.allowSessionSearchRead === true && promptTerms.length > 0) {
       for (const cheapPointer of cheapAutoCandidates
         .filter((pointer) => pointer.score < AUTO_POINTER_MIN_SCORE)
         .sort((a, b) => b.score - a.score || pointerActivityMs(b) - pointerActivityMs(a))
-        .slice(0, MAX_AUTO_SESSION_SEARCH_READS)) {
+        .slice(0, MAX_EXPLICIT_SESSION_SEARCH_READS)) {
         const meta = autoMetasById.get(cheapPointer.sessionId);
         if (!meta) {
           continue;
@@ -322,4 +350,46 @@ export function buildRelatedConversationPointers(input: {
     pointers,
     warnings,
   };
+}
+
+export function readCachedRelatedConversationPointers(input: {
+  prompt: string;
+  currentConversationId?: string;
+  currentCwd?: string;
+  limit?: number;
+  nowMs?: number;
+}): RelatedConversationPointersResult | null {
+  const key = buildPointerCacheKey(input);
+  const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
+  const cached = pointerCache.get(key);
+  if (!cached || nowMs - cached.cachedAtMs > POINTER_CACHE_TTL_MS) {
+    pointerCache.delete(key);
+    return null;
+  }
+
+  return cached.result;
+}
+
+export function warmRelatedConversationPointerCache(input: {
+  prompt: string;
+  currentConversationId?: string;
+  currentCwd?: string;
+  limit?: number;
+  nowMs?: number;
+}): RelatedConversationPointersResult {
+  const nowMs = Number.isSafeInteger(input.nowMs) && input.nowMs !== undefined ? input.nowMs : Date.now();
+  const key = buildPointerCacheKey(input);
+  const result = buildRelatedConversationPointers({
+    ...input,
+    selectedSessionIds: [],
+    includeAuto: true,
+    allowSessionSearchRead: false,
+    nowMs,
+  });
+  pointerCache.set(key, { cachedAtMs: nowMs, result });
+  return result;
+}
+
+export function clearRelatedConversationPointerCache(): void {
+  pointerCache.clear();
 }

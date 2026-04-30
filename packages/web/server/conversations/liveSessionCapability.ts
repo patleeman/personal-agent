@@ -52,6 +52,7 @@ import { appendConversationWorkspaceMetadata } from './sessions.js';
 import { invalidateAppTopics, logError, logWarn } from '../middleware/index.js';
 import {
   buildRelatedConversationPointers,
+  readCachedRelatedConversationPointers,
 } from './relatedConversationPointers.js';
 
 export interface LiveSessionCapabilityContext {
@@ -574,12 +575,22 @@ function buildPromptContextMessagesForSubmit(input: {
   }
 
   try {
-    const pointers = buildRelatedConversationPointers({
-      prompt: input.prompt,
-      currentConversationId: input.conversationId,
-      currentCwd: input.currentCwd,
-      selectedSessionIds: input.selectedSessionIds,
-    });
+    const hasSelectedRelatedConversations = Array.isArray(input.selectedSessionIds)
+      && input.selectedSessionIds.some((value) => typeof value === 'string' && value.trim().length > 0);
+    const pointers = hasSelectedRelatedConversations
+      ? buildRelatedConversationPointers({
+          prompt: input.prompt,
+          currentConversationId: input.conversationId,
+          currentCwd: input.currentCwd,
+          selectedSessionIds: input.selectedSessionIds,
+          includeAuto: false,
+          allowSessionSearchRead: false,
+        })
+      : readCachedRelatedConversationPointers({
+          prompt: input.prompt,
+          currentConversationId: input.conversationId,
+          currentCwd: input.currentCwd,
+        }) ?? { contextMessages: [], pointers: [], warnings: [] };
 
     return {
       contextMessages: [...contextMessages, ...pointers.contextMessages],

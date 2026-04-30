@@ -55,6 +55,7 @@ import {
   readConversationSummaryIndexCapability,
   startConversationSummaryBackfillLoop,
 } from '../conversations/conversationSummaries.js';
+import { warmRelatedConversationPointerCache } from '../conversations/relatedConversationPointers.js';
 import {
   readConversationContextDocs,
   writeConversationContextDocs,
@@ -402,6 +403,23 @@ export function registerConversationRoutes(
   router.post('/api/conversation-summaries', (req, res) => {
     try {
       res.json(readConversationSummaryIndexCapability(req.body as { sessionIds?: unknown }));
+    } catch (err) {
+      logError('request handler error', {
+        message: err instanceof Error ? err.message : String(err),
+        stack: err instanceof Error ? err.stack : undefined,
+      });
+      res.status(500).json({ error: String(err) });
+    }
+  });
+
+  router.post('/api/related-conversation-pointers/warm', (req, res) => {
+    try {
+      const body = req.body as { prompt?: unknown; currentConversationId?: unknown; currentCwd?: unknown };
+      const prompt = typeof body.prompt === 'string' ? body.prompt : '';
+      const currentConversationId = typeof body.currentConversationId === 'string' ? body.currentConversationId : undefined;
+      const currentCwd = typeof body.currentCwd === 'string' ? body.currentCwd : undefined;
+      const result = warmRelatedConversationPointerCache({ prompt, currentConversationId, currentCwd });
+      res.json({ ok: true, pointerCount: result.pointers.length });
     } catch (err) {
       logError('request handler error', {
         message: err instanceof Error ? err.message : String(err),

@@ -2218,6 +2218,20 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [input]);
 
   useEffect(() => {
+    if (!draft || debouncedRelatedThreadsQuery.length === 0) {
+      return;
+    }
+
+    api.warmRelatedConversationPointers({
+      prompt: debouncedRelatedThreadsQuery,
+      currentConversationId: id,
+      currentCwd: draftCwdValue || null,
+    }).catch(() => {
+      // Suggested context is an enhancement. Never interrupt drafting or submit for cache misses.
+    });
+  }, [debouncedRelatedThreadsQuery, draft, draftCwdValue, id]);
+
+  useEffect(() => {
     setSelectedRelatedThreadIds((current) => pruneRelatedThreadSelectionIds(current, relatedThreadCandidateById));
   }, [relatedThreadCandidateById]);
 

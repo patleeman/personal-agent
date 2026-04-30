@@ -25,6 +25,9 @@ vi.mock('./conversationSummaries.js', () => ({
 import {
   RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE,
   buildRelatedConversationPointers,
+  clearRelatedConversationPointerCache,
+  readCachedRelatedConversationPointers,
+  warmRelatedConversationPointerCache,
 } from './relatedConversationPointers.js';
 
 const baseMeta = {
@@ -43,6 +46,7 @@ beforeEach(() => {
   readSessionMetaMock.mockReset();
   readSessionSearchTextMock.mockReset();
   readConversationSummaryMock.mockReset();
+  clearRelatedConversationPointerCache();
   listSessionsMock.mockReturnValue([]);
   readSessionSearchTextMock.mockReturnValue('');
   readConversationSummaryMock.mockReturnValue(null);
@@ -64,6 +68,33 @@ describe('buildRelatedConversationPointers', () => {
     expect(result.pointers[0]).toMatchObject({ sessionId: 'manual-1', source: 'manual', weakMatch: true });
     expect(result.warnings).toEqual([]);
     expect(result.contextMessages[0]).toMatchObject({ customType: RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE });
+  });
+
+  it('serves warmed pointer results from a short-lived cache', () => {
+    readConversationSummaryMock.mockReturnValue({ displaySummary: 'release signing fix', promptSummary: '', keyTerms: [], filesTouched: [] });
+    listSessionsMock.mockReturnValue([
+      { ...baseMeta, id: 'cached-hit', title: 'Release signing cached', messageCount: 6, lastActivityAt: '2026-04-21T10:00:00.000Z' },
+    ]);
+
+    warmRelatedConversationPointerCache({
+      prompt: 'Fix release signing',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS,
+    });
+
+    expect(readCachedRelatedConversationPointers({
+      prompt: 'Fix release signing',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS + 30_000,
+    })?.pointers.map((pointer) => pointer.sessionId)).toEqual(['cached-hit']);
+    expect(readCachedRelatedConversationPointers({
+      prompt: 'Fix release signing',
+      currentConversationId: 'current',
+      currentCwd: '/repo/a',
+      nowMs: TEST_NOW_MS + 61_000,
+    })).toBeNull();
   });
 
   it('fills remaining slots with auto-ranked conversations above threshold', () => {
@@ -149,7 +180,7 @@ describe('buildRelatedConversationPointers', () => {
     expect(readSessionSearchTextMock).not.toHaveBeenCalled();
   });
 
-  it('caps expensive transcript fallback reads for auto ranking', () => {
+  it('does not read transcript files for auto ranking unless explicitly requested', () => {
     const metas = Array.from({ length: 40 }, (_, index) => ({
       ...baseMeta,
       id: `candidate-${index}`,
@@ -163,14 +194,15 @@ describe('buildRelatedConversationPointers', () => {
       ? 'needle release signing fix'
       : 'bananas only');
 
-    buildRelatedConversationPointers({
+    const result = buildRelatedConversationPointers({
       prompt: 'Find the needle release signing fix',
       currentConversationId: 'current',
       currentCwd: '/repo/a',
       nowMs: TEST_NOW_MS,
     });
 
-    expect(readSessionSearchTextMock).toHaveBeenCalledTimes(24);
+    expect(result.pointers).toEqual([]);
+    expect(readSessionSearchTextMock).not.toHaveBeenCalled();
   });
 
   it('omits missing manual selections after retry and warns', () => {

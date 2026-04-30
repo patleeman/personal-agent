@@ -31,6 +31,7 @@ const {
   readSessionBlocksMock,
   readSessionMetaMock,
   buildRelatedConversationPointersMock,
+  readCachedRelatedConversationPointersMock,
   reloadSessionResourcesMock,
   resolveConversationAttachmentPromptFilesMock,
   resolveConversationCwdMock,
@@ -83,6 +84,7 @@ const {
   readSessionBlocksMock: vi.fn(),
   readSessionMetaMock: vi.fn(),
   buildRelatedConversationPointersMock: vi.fn(),
+  readCachedRelatedConversationPointersMock: vi.fn(),
   reloadSessionResourcesMock: vi.fn(),
   resolveConversationAttachmentPromptFilesMock: vi.fn(),
   resolveConversationCwdMock: vi.fn(),
@@ -169,6 +171,7 @@ vi.mock('../conversations/sessions.js', () => ({
 vi.mock('../conversations/relatedConversationPointers.js', () => ({
   RELATED_CONVERSATION_POINTERS_CUSTOM_TYPE: 'related_conversation_pointers',
   buildRelatedConversationPointers: buildRelatedConversationPointersMock,
+  readCachedRelatedConversationPointers: readCachedRelatedConversationPointersMock,
 }));
 
 vi.mock('../conversations/conversationCwd.js', () => ({
@@ -328,6 +331,7 @@ describe('live session routes', () => {
     readSessionBlocksMock.mockReset();
     readSessionMetaMock.mockReset();
     buildRelatedConversationPointersMock.mockReset();
+    readCachedRelatedConversationPointersMock.mockReset();
     reloadSessionResourcesMock.mockReset();
     resolveConversationAttachmentPromptFilesMock.mockReset();
     resolveConversationCwdMock.mockReset();
@@ -385,6 +389,7 @@ describe('live session routes', () => {
     readSessionBlocksMock.mockReturnValue(null);
     readSessionMetaMock.mockReturnValue(null);
     buildRelatedConversationPointersMock.mockReturnValue({ contextMessages: [], pointers: [], warnings: [] });
+    readCachedRelatedConversationPointersMock.mockReturnValue(null);
     resolveConversationAttachmentPromptFilesMock.mockReturnValue([]);
     resolveConversationCwdMock.mockReturnValue('/repo/worktree');
     resolveDaemonPathsMock.mockReturnValue({ root: '/daemon' });
