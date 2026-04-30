@@ -327,7 +327,7 @@ export async function generateConversationTitle(options: {
   }
 
   const authResult = await options.modelRegistry.getApiKeyAndHeaders(model);
-  if (!authResult.ok) {
+  if (!authResult.ok || !authResult.apiKey) {
     return null;
   }
 

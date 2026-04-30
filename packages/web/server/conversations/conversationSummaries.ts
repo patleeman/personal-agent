@@ -424,7 +424,7 @@ async function generateConversationSummary(meta: SessionMeta): Promise<Conversat
   }
 
   const authResult = await modelRegistry.getApiKeyAndHeaders(model);
-  if (!authResult.ok) {
+  if (!authResult.ok || !authResult.apiKey) {
     return buildFallbackRecord(meta, fingerprint, sourceText);
   }
 

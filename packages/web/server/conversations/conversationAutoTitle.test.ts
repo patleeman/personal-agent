@@ -308,4 +308,35 @@ describe('generateConversationTitle', () => {
       now: 123,
     })).rejects.toThrow('Unsupported parameter: temperature');
   });
+
+  it('skips title generation when auth exists but yields no API key', async () => {
+    const model = {
+      id: 'gpt-5-mini',
+      provider: 'openai',
+      api: 'openai-responses',
+    } as unknown as TitleModel;
+    const modelRegistry = {
+      getAvailable: () => [model],
+      getApiKeyAndHeaders: vi.fn().mockResolvedValue({ ok: true }),
+    };
+
+    const title = await generateConversationTitle({
+      messages: [
+        { role: 'user', content: [{ type: 'text', text: 'Make conversation names easier to scan.' }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'I can generate a better title after the first reply.' }] },
+      ],
+      modelRegistry,
+      settings: {
+        enabled: true,
+        provider: 'openai',
+        model: 'gpt-5-mini',
+        reasoning: 'minimal',
+        maxMessages: 8,
+        maxTitleLength: 80,
+      },
+    });
+
+    expect(title).toBeNull();
+    expect(completeSimpleMock).not.toHaveBeenCalled();
+  });
 });
