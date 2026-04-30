@@ -124,10 +124,12 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_screenshot',
       label: 'Browser Screenshot',
-      description: 'Capture a PNG screenshot of the built-in Workbench Browser.',
-      promptSnippet: 'Use browser_screenshot when visual layout matters and snapshot text is not enough.',
+      description: 'Capture a PNG screenshot of the built-in Workbench Browser only when visual layout matters; prefer browser_snapshot for normal page understanding.',
+      promptSnippet: 'Prefer browser_snapshot for reading pages, lists, forms, text, selectors, and state. Use browser_screenshot only after snapshot is insufficient for visual layout/appearance.',
       promptGuidelines: [
-        'Use browser_snapshot first for normal page understanding; use screenshots for visual layout/appearance checks.',
+        'Default to browser_snapshot. It is cheaper, more structured, gives selectors/refs, and is better for text and page state.',
+        'Do not use browser_screenshot to read normal text, lists, feeds, buttons, form state, or navigation state.',
+        'Use browser_screenshot only for visual layout, rendering, screenshots requested by the user, image/canvas-heavy content, or when snapshot output is clearly insufficient.',
         'Targets the visible built-in Workbench Browser session for this conversation.',
       ],
       parameters: EmptyParams,
