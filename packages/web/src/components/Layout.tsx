@@ -537,23 +537,11 @@ function WorkbenchDocumentPane({
   );
 }
 
-function formatBrowserSnapshotForAgent(snapshot: { url: string; title: string; text: string }): string {
-  return [
-    'Browser snapshot:',
-    `URL: ${snapshot.url || '(blank)'}`,
-    `Title: ${snapshot.title || '(untitled)'}`,
-    '',
-    snapshot.text || '(No readable text.)',
-  ].join('\n');
-}
-
 function WorkbenchBrowserTab() {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const [urlDraft, setUrlDraft] = useState('https://www.google.com/search?q=personal%20agent');
   const latestUrlDraftRef = useRef(urlDraft);
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
-  const [actionsDraft, setActionsDraft] = useState('[\n  { "type": "wait", "ms": 500 }\n]');
-  const [snapshotText, setSnapshotText] = useState('');
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
   const [pendingMarkers, setPendingMarkers] = useState<Array<{ id: string; target: DesktopWorkbenchBrowserCommentTarget; comment: string }>>([]);
@@ -652,44 +640,6 @@ function WorkbenchBrowserTab() {
     }
   }
 
-  async function captureSnapshot() {
-    if (!bridge) {
-      setStatus('Workbench browser is only available in the Electron desktop app.');
-      return;
-    }
-    try {
-      setStatus('Capturing snapshot…');
-      const snapshot = await bridge.snapshotWorkbenchBrowser();
-      setState(snapshot);
-      setUrlDraft(snapshot.url || latestUrlDraftRef.current);
-      setSnapshotText(formatBrowserSnapshotForAgent(snapshot));
-      setStatus('Snapshot captured.');
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  async function runActionBatch() {
-    if (!bridge) {
-      setStatus('Workbench browser is only available in the Electron desktop app.');
-      return;
-    }
-    try {
-      const parsed = JSON.parse(actionsDraft) as unknown;
-      if (!Array.isArray(parsed)) {
-        throw new Error('Action batch must be a JSON array.');
-      }
-      setStatus('Running action batch…');
-      const result = await bridge.runWorkbenchBrowserActions({ actions: parsed });
-      setState(result.snapshot);
-      setUrlDraft(result.snapshot.url || latestUrlDraftRef.current);
-      setSnapshotText(formatBrowserSnapshotForAgent(result.snapshot));
-      setStatus(`Ran ${result.actions.length} action${result.actions.length === 1 ? '' : 's'}.`);
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : String(error));
-    }
-  }
-
   function saveCommentDraft() {
     const text = commentDraft?.text.trim();
     if (!commentDraft || !text) {
@@ -714,15 +664,15 @@ function WorkbenchBrowserTab() {
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <form
-        className="flex shrink-0 gap-1.5 border-b border-border-subtle px-2 py-2"
+        className="flex shrink-0 items-center gap-2 border-b border-border-subtle px-3 py-2"
         onSubmit={(event) => {
           event.preventDefault();
           void runBrowserCommand(() => bridge!.navigateWorkbenchBrowser({ url: urlDraft }));
         }}
       >
-        <button type="button" className="ui-toolbar-button px-2" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser())}>←</button>
-        <button type="button" className="ui-toolbar-button px-2" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
-        <button type="button" className="ui-toolbar-button px-2" onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? 'Stop' : 'Reload'}</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser())}>←</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary" onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? 'Stop' : 'Reload'}</button>
         <input
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
           value={urlDraft}
@@ -730,7 +680,6 @@ function WorkbenchBrowserTab() {
           onBlur={refreshState}
           placeholder="https://example.com"
         />
-        <button type="submit" className="ui-action-button px-2 py-1 text-[12px]">Go</button>
       </form>
       <div ref={browserHostRef} className="relative min-h-[220px] flex-1 overflow-hidden bg-base">
         {!bridge ? (
@@ -788,33 +737,7 @@ function WorkbenchBrowserTab() {
           </div>
         ) : null}
       </div>
-      <div className="flex max-h-[42%] shrink-0 flex-col gap-2 overflow-auto border-t border-border-subtle px-2 py-2">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <p className="truncate text-[12px] font-medium text-primary">{state?.title || 'Browser tools'}</p>
-            <p className="truncate text-[11px] text-dim">{state?.url || 'Ready'}</p>
-          </div>
-          <button type="button" className="ui-action-button px-2 py-1 text-[12px]" onClick={() => void captureSnapshot()}>Snapshot</button>
-        </div>
-        <textarea
-          className="min-h-[90px] rounded-md border border-border-subtle bg-surface px-2 py-2 font-mono text-[11px] leading-5 text-primary outline-none focus:border-accent/60"
-          value={actionsDraft}
-          onChange={(event) => setActionsDraft(event.target.value)}
-          spellCheck={false}
-          aria-label="Browser action batch JSON"
-        />
-        <button type="button" className="ui-action-button justify-center px-2 py-1 text-[12px]" onClick={() => void runActionBatch()}>Run action batch</button>
-        {status ? <p className="text-[11px] text-dim">{status}</p> : null}
-        {snapshotText ? (
-          <textarea
-            className="min-h-[120px] rounded-md border border-border-subtle bg-base px-2 py-2 font-mono text-[11px] leading-5 text-primary outline-none"
-            value={snapshotText}
-            onChange={(event) => setSnapshotText(event.target.value)}
-            spellCheck={false}
-            aria-label="Browser snapshot for agent"
-          />
-        ) : null}
-      </div>
+      {status ? <div className="shrink-0 border-t border-border-subtle px-3 py-1.5 text-[11px] text-dim">{status}</div> : null}
     </div>
   );
 }
