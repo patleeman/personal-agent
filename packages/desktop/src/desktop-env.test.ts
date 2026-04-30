@@ -125,4 +125,27 @@ describe('resolveDesktopRuntimePathsForContext', () => {
     expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
     expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
   });
+
+  it('can recover the repo root from a dev app bundle appRoot when cwd is elsewhere', () => {
+    const repoRoot = createTempDir('pa-desktop-dev-app-root-');
+    const stateRoot = createTempDir('pa-desktop-state-');
+    const appRoot = join(repoRoot, 'packages', 'desktop', 'dist', 'mac-arm64', 'Personal Agent.app', 'Contents', 'Resources', 'app.asar');
+    seedDevRepo(repoRoot);
+    process.env.PERSONAL_AGENT_STATE_ROOT = stateRoot;
+
+    const result = resolveDesktopRuntimePathsForContext({
+      currentDir: join(repoRoot, 'packages', 'desktop', 'dist'),
+      cwd: createTempDir('pa-desktop-unrelated-cwd-'),
+      env: {
+        ...process.env,
+      },
+      execPath: '/Applications/Personal Agent.app/Contents/MacOS/Personal Agent',
+      isPackaged: false,
+      appRoot,
+    });
+
+    expect(result.repoRoot).toBe(repoRoot);
+    expect(result.daemonEntryFile).toBe(join(repoRoot, 'packages', 'daemon', 'dist', 'index.js'));
+    expect(result.webDistDir).toBe(join(repoRoot, 'packages', 'web', 'dist'));
+  });
 });

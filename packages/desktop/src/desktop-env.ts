@@ -32,9 +32,11 @@ function resolveDevRepoRoot(context: DesktopRuntimePathContext): string {
   const currentDir = context.currentDir ?? dirname(fileURLToPath(import.meta.url));
   const env = context.env ?? process.env;
   const cwd = context.cwd ?? process.cwd();
+  const appPath = context.appRoot?.trim();
   const candidates = [
     env.PERSONAL_AGENT_REPO_ROOT,
     resolve(currentDir, '..', '..', '..'),
+    appPath ? resolve(appPath, '..', '..', '..', '..', '..') : undefined,
     resolve(cwd),
   ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
 
