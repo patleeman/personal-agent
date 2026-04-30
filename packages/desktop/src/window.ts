@@ -409,7 +409,7 @@ export class DesktopWindowController {
     return this.workbenchBrowser.screenshot(owner, conversationId);
   }
 
-  async cdpWorkbenchBrowserForConversation(input: { conversationId?: string | null; method?: unknown; params?: unknown }): Promise<unknown> {
+  async cdpWorkbenchBrowserForConversation(input: { conversationId?: string | null; command?: unknown; continueOnError?: unknown }): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(input.conversationId);
     return this.workbenchBrowser.cdp(owner, { ...input, sessionKey: input.conversationId });
   }

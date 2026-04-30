@@ -58,9 +58,10 @@ export interface WorkbenchBrowserScreenshot extends WorkbenchBrowserState {
 }
 
 export interface WorkbenchBrowserCdpResult {
-  ok: true;
-  method: string;
-  result: unknown;
+  ok: boolean;
+  results: unknown[];
+  failedAt?: number;
+  error?: string;
   state: WorkbenchBrowserState;
 }
 
@@ -148,6 +149,41 @@ function normalizeCdpParams(input: unknown): Record<string, unknown> | undefined
     throw new Error('CDP params must be an object when provided.');
   }
   return input as Record<string, unknown>;
+}
+
+export type NormalizedWorkbenchBrowserCdpCommand = { method: string; params?: Record<string, unknown> };
+
+function isCdpCommandTuple(input: unknown): input is unknown[] {
+  return Array.isArray(input) && typeof input[0] === 'string';
+}
+
+function normalizeCdpCommandTuple(input: unknown): NormalizedWorkbenchBrowserCdpCommand {
+  if (!isCdpCommandTuple(input)) {
+    throw new Error('CDP command must be a tuple: [method, params?].');
+  }
+  if (input.length < 1 || input.length > 2) {
+    throw new Error('CDP command tuple must be [method, params?].');
+  }
+  return {
+    method: normalizeCdpMethod(input[0]),
+    ...(input.length > 1 ? { params: normalizeCdpParams(input[1]) } : {}),
+  };
+}
+
+export function normalizeWorkbenchBrowserCdpCommands(input: unknown): NormalizedWorkbenchBrowserCdpCommand[] {
+  if (isCdpCommandTuple(input)) {
+    return [normalizeCdpCommandTuple(input)];
+  }
+  if (!Array.isArray(input)) {
+    throw new Error('CDP command must be [method, params?] or an array of command tuples.');
+  }
+  if (input.length === 0) {
+    throw new Error('At least one CDP command is required.');
+  }
+  if (input.length > 200) {
+    throw new Error('CDP command batches are limited to 200 commands.');
+  }
+  return input.map((entry) => normalizeCdpCommandTuple(entry));
 }
 
 interface WorkbenchBrowserViewEntry {
@@ -336,16 +372,36 @@ export class WorkbenchBrowserViewController {
     };
   }
 
-  async cdp(owner: WebContents, input: { method?: unknown; params?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserCdpResult> {
+  async cdp(owner: WebContents, input: { command?: unknown; continueOnError?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserCdpResult> {
     const view = this.requireView(owner, input.sessionKey);
-    const method = normalizeCdpMethod(input.method);
-    const params = normalizeCdpParams(input.params);
-    const result = await withCdp(view.webContents, async (send) => send(method, params));
+    const commands = normalizeWorkbenchBrowserCdpCommands(input.command);
+    const continueOnError = input.continueOnError === true;
+    const results: unknown[] = [];
+    let failedAt: number | undefined;
+    let error: string | undefined;
+
+    await withCdp(view.webContents, async (send) => {
+      for (let index = 0; index < commands.length; index += 1) {
+        const { method, params } = commands[index]!;
+        try {
+          results.push(await send(method, params));
+        } catch (err) {
+          failedAt ??= index;
+          error ??= err instanceof Error ? err.message : String(err);
+          if (!continueOnError) {
+            break;
+          }
+          results.push({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    });
+
     return {
-      ok: true,
-      method,
-      result,
+      ok: failedAt === undefined,
       state: getState(view.webContents, this.views.get(this.viewKey(owner.id, input.sessionKey))),
+      results,
+      ...(failedAt !== undefined ? { failedAt } : {}),
+      ...(error ? { error } : {}),
     };
   }
 

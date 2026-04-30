@@ -4,7 +4,7 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 export interface WorkbenchBrowserToolHost {
   snapshot(conversationId: string): Promise<unknown>;
   screenshot(conversationId: string): Promise<unknown>;
-  cdp(input: { conversationId: string; method: string; params?: Record<string, unknown> }): Promise<unknown>;
+  cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
 }
 
 let host: WorkbenchBrowserToolHost | null = null;
@@ -67,9 +67,17 @@ function formatSnapshot(value: unknown): string {
 
 const EmptyParams = Type.Object({});
 
+const CdpCommand = Type.Tuple([
+  Type.String({ description: 'Chrome DevTools Protocol method, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
+  Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
+]);
+
 const CdpParams = Type.Object({
-  method: Type.String({ description: 'Chrome DevTools Protocol method, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
-  params: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
+  command: Type.Union([
+    CdpCommand,
+    Type.Array(CdpCommand, { minItems: 1, maxItems: 200, description: 'Multiple CDP commands to execute sequentially.' }),
+  ], { description: 'A single CDP command tuple [method, params?], or an array of command tuples.' }),
+  continueOnError: Type.Optional(Type.Boolean({ description: 'Continue executing later commands after a protocol command fails. Defaults to false.' })),
 });
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
@@ -98,11 +106,12 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
     pi.registerTool({
       name: 'browser_cdp',
       label: 'Browser CDP',
-      description: 'Send one Chrome DevTools Protocol command to the built-in Workbench Browser.',
-      promptSnippet: 'Use browser_cdp for low-level browser automation: send a single CDP command such as Runtime.evaluate, Page.navigate, DOM.getDocument, or Input.dispatchMouseEvent.',
+      description: 'Send one or more Chrome DevTools Protocol commands to the built-in Workbench Browser.',
+      promptSnippet: 'Use browser_cdp for low-level browser automation: send raw CDP as [method, params?], or an array of those tuples for multi-step actions.',
       promptGuidelines: [
         'Targets the visible built-in Workbench Browser session for this conversation.',
-        'This is a thin CDP command surface; provide method and params exactly as Chrome DevTools Protocol expects.',
+        'This is a thin CDP command surface; provide raw command tuples exactly as Chrome DevTools Protocol expects: ["Runtime.evaluate", {"expression":"document.title","returnByValue":true}].',
+        'When doing more than one action, send one browser_cdp call with command set to an array of tuples instead of multiple tool calls.',
         'Prefer browser_snapshot for observation and browser_screenshot for visual checks; use browser_cdp when you need direct browser control.',
         'For page JS, use Runtime.evaluate with returnByValue=true when you need JSON-like results.',
       ],
@@ -111,8 +120,8 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         const conversationId = ctx.sessionManager.getSessionId();
         const result = await requireHost().cdp({
           conversationId,
-          method: params.method,
-          ...(params.params !== undefined ? { params: params.params } : {}),
+          command: params.command,
+          ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
         });
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],

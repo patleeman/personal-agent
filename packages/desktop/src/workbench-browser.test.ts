@@ -8,6 +8,7 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
 }));
 import {
+  normalizeWorkbenchBrowserCdpCommands,
   normalizeWorkbenchBrowserBounds,
   normalizeWorkbenchBrowserUrl,
 } from './workbench-browser.js';
@@ -39,5 +40,24 @@ describe('workbench browser validation', () => {
     expect(normalizeWorkbenchBrowserUrl('example.com/path')).toBe('https://example.com/path');
     expect(normalizeWorkbenchBrowserUrl('http://example.com/')).toBe('http://example.com/');
     expect(() => normalizeWorkbenchBrowserUrl('file:///etc/passwd')).toThrow('http(s)');
+  });
+
+  it('normalizes single and batched CDP tuple commands', () => {
+    expect(normalizeWorkbenchBrowserCdpCommands(['Runtime.evaluate', { expression: 'document.title' }])).toEqual([
+      { method: 'Runtime.evaluate', params: { expression: 'document.title' } },
+    ]);
+    expect(normalizeWorkbenchBrowserCdpCommands([
+      ['Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 2 }],
+      ['Page.captureScreenshot'],
+    ])).toEqual([
+      { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
+      { method: 'Page.captureScreenshot' },
+    ]);
+  });
+
+  it('rejects invalid CDP tuple commands', () => {
+    expect(() => normalizeWorkbenchBrowserCdpCommands({ method: 'Runtime.evaluate' })).toThrow('tuple');
+    expect(() => normalizeWorkbenchBrowserCdpCommands(['Runtime.evaluate', []])).toThrow('params');
+    expect(() => normalizeWorkbenchBrowserCdpCommands(['bad'])).toThrow('Domain.command');
   });
 });

@@ -65,7 +65,7 @@ Browser comments are prompt context, not durable page annotations. Avoid buildin
 There is one browser session per conversation workbench and three agent-facing browser tools:
 
 - `browser_snapshot` — observe the current browser state
-- `browser_cdp` — send one Chrome DevTools Protocol command to the current browser session
+- `browser_cdp` — send one or more Chrome DevTools Protocol commands to the current browser session
 - `browser_screenshot` — capture the current browser viewport as an image
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
@@ -114,19 +114,28 @@ If the user manually changes the page after the last agent snapshot — for exam
 
 ### `browser_cdp`
 
-Use `browser_cdp` when direct browser control is needed. It sends one raw Chrome DevTools Protocol command to the current Workbench Browser session:
+Use `browser_cdp` when direct browser control is needed. It sends raw Chrome DevTools Protocol command tuples to the current Workbench Browser session. Send a single tuple for one command:
 
 ```json
 {
-  "method": "Runtime.evaluate",
-  "params": {
-    "expression": "document.title",
-    "returnByValue": true
-  }
+  "command": ["Runtime.evaluate", { "expression": "document.title", "returnByValue": true }]
 }
 ```
 
-The tool is intentionally thin. Agents should provide CDP `method` and `params` exactly as Chrome expects. Useful commands include:
+Send an array of tuples for multi-step actions instead of firing many separate tool calls:
+
+```json
+{
+  "command": [
+    ["Input.dispatchMouseEvent", { "type": "mouseMoved", "x": 300, "y": 250 }],
+    ["Input.dispatchMouseEvent", { "type": "mousePressed", "x": 300, "y": 250, "button": "left", "clickCount": 1 }],
+    ["Input.dispatchMouseEvent", { "type": "mouseMoved", "x": 520, "y": 420, "button": "left", "buttons": 1 }],
+    ["Input.dispatchMouseEvent", { "type": "mouseReleased", "x": 520, "y": 420, "button": "left", "clickCount": 1 }]
+  ]
+}
+```
+
+The tool is intentionally thin. Agents should provide CDP method names and params exactly as Chrome expects. Commands execute sequentially and stop on the first protocol error unless `continueOnError` is true. Useful commands include:
 
 - `Runtime.evaluate` for page JavaScript and structured page inspection
 - `Page.navigate` for navigation
