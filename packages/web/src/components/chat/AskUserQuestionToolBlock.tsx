@@ -446,11 +446,11 @@ export function AskUserQuestionToolBlock({
             mode === 'composer' ? (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[14px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
                 <div className="mt-2.5 space-y-1.5">
                   {presentation.questions.map((question, index) => (
-                    <p key={question.id} className="flex items-start gap-2.5 text-[18px] leading-relaxed text-secondary">
+                    <p key={question.id} className="flex items-start gap-2.5 text-[14px] leading-relaxed text-secondary">
                       <span className="mt-px w-5 shrink-0 text-[13px] font-mono text-dim">{index + 1}.</span>
                       <span className="min-w-0 break-words">{question.label}</span>
                     </p>
@@ -463,7 +463,7 @@ export function AskUserQuestionToolBlock({
             ) : (
               <>
                 {presentation.details && (
-                  <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{presentation.details}</p>
+                  <p className="mt-2 text-[14px] leading-relaxed text-secondary break-words">{presentation.details}</p>
                 )}
 
                 <div className="mt-3 flex min-w-0 flex-wrap items-center gap-1.5" role="tablist" aria-label="Question navigation">
@@ -520,9 +520,9 @@ export function AskUserQuestionToolBlock({
                         Question {activeQuestionIndex + 1} of {presentation.questions.length}
                       </p>
                     )}
-                    <p className="mt-1.5 text-[22px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+                    <p className="mt-1.5 text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
                     {activeQuestion.details && (
-                      <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+                      <p className="mt-1.5 text-[14px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
                     )}
 
                     {activeQuestion.options.length > 0 ? (
@@ -554,13 +554,13 @@ export function AskUserQuestionToolBlock({
                                 submitting && 'cursor-default opacity-60',
                               )}
                             >
-                              <span className={cx('mt-0.5 w-5 shrink-0 text-[15px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
+                              <span className={cx('mt-0.5 w-5 shrink-0 text-[14px]', checked ? 'text-accent' : 'text-dim')} aria-hidden="true">
                                 {indicator}
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="ui-row-title block break-words text-[18px] leading-snug">{option.label}</span>
+                                <span className="ui-row-title block break-words text-[15px] leading-snug">{option.label}</span>
                                 {option.details && (
-                                  <span className="ui-row-summary block break-words text-[15px] leading-relaxed">{option.details}</span>
+                                  <span className="ui-row-summary block break-words text-[13px] leading-relaxed">{option.details}</span>
                                 )}
                               </span>
                             </button>

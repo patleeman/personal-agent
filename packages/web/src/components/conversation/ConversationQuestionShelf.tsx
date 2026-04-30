@@ -61,9 +61,9 @@ export function ConversationQuestionShelf({
       )}
 
       <div className="mt-2.5">
-        <p className="text-[22px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
+        <p className="text-[16px] font-medium leading-snug text-primary break-words">{activeQuestion.label}</p>
         {activeQuestion.details && (
-          <p className="mt-2 text-[18px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-secondary break-words">{activeQuestion.details}</p>
         )}
       </div>
 
@@ -90,13 +90,13 @@ export function ConversationQuestionShelf({
                 checked || active ? 'ui-list-row-selected' : 'ui-list-row-hover',
               )}
             >
-              <span className={cx('mt-0.5 w-12 shrink-0 text-[15px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
+              <span className={cx('mt-0.5 w-12 shrink-0 text-[14px]', checked || active ? 'text-accent' : 'text-dim')} aria-hidden="true">
                 {optionIndex + 1}. {indicator}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="ui-row-title block break-words text-[18px] leading-snug">{option.label}</span>
+                <span className="ui-row-title block break-words text-[15px] leading-snug">{option.label}</span>
                 {option.details && (
-                  <span className="ui-row-summary block break-words text-[15px] leading-relaxed">{option.details}</span>
+                  <span className="ui-row-summary block break-words text-[13px] leading-relaxed">{option.details}</span>
                 )}
               </span>
             </button>
