@@ -12,6 +12,13 @@ const MAX_BROWSER_SCRIPT_LENGTH = 80_000;
 const MAX_BROWSER_SCRIPT_TIMEOUT_MS = 60_000;
 const BROWSER_COMMENT_CHANNEL = 'personal-agent-desktop:workbench-browser-comment';
 
+type CdpCommand = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
+
+interface CdpRuntimeResult {
+  result?: { value?: unknown; unserializableValue?: string; description?: string };
+  exceptionDetails?: { text?: string; exception?: { description?: string; value?: unknown } };
+}
+
 export interface WorkbenchBrowserBounds {
   x: number;
   y: number;
@@ -228,6 +235,56 @@ async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function withCdp<T>(webContents: WebContents, callback: (send: CdpCommand) => Promise<T>): Promise<T> {
+  if (!webContents.debugger.isAttached()) {
+    webContents.debugger.attach('1.3');
+  }
+  return callback((method, params) => webContents.debugger.sendCommand(method, params));
+}
+
+function cdpRuntimeValue(raw: unknown): unknown {
+  const result = raw as CdpRuntimeResult;
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text || 'CDP evaluation failed.');
+  }
+  if (result.result && 'value' in result.result) {
+    return result.result.value;
+  }
+  return result.result?.unserializableValue ?? result.result?.description ?? null;
+}
+
+async function cdpEvaluate(webContents: WebContents, expression: string): Promise<unknown> {
+  return withCdp(webContents, async (send) => cdpRuntimeValue(await send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true,
+  })));
+}
+
+function keyEventFor(key: string): { key: string; code: string; windowsVirtualKeyCode: number; text?: string } {
+  const normalized = key.length === 1 ? key : key.trim();
+  const special: Record<string, { key: string; code: string; windowsVirtualKeyCode: number }> = {
+    Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 },
+    Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 },
+    Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
+    Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
+    Delete: { key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
+    ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
+    ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
+    ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+    ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+  };
+  if (special[normalized]) return special[normalized];
+  const char = normalized.length === 1 ? normalized : '';
+  return {
+    key: char || normalized,
+    code: char ? `Key${char.toUpperCase()}` : normalized,
+    windowsVirtualKeyCode: char ? char.toUpperCase().charCodeAt(0) : 0,
+    ...(char ? { text: char } : {}),
+  };
+}
+
 function getScriptWorkerPath(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), 'workbench-browser-script-worker.js');
 }
@@ -307,7 +364,7 @@ export class WorkbenchBrowserViewController {
 
   async snapshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserSnapshot> {
     const view = this.requireView(owner, sessionKey);
-    const raw = await view.webContents.executeJavaScript(`(() => {
+    const raw = await cdpEvaluate(view.webContents, `(() => {
       ${this.pageHelperSource()}
       const title = document.title ? 'Title: ' + document.title + '\n' : '';
       const url = location.href ? 'URL: ' + location.href + '\n' : '';
@@ -329,11 +386,12 @@ export class WorkbenchBrowserViewController {
         };
       }).filter(Boolean);
       return { text: (url + title + body).slice(0, ${MAX_SNAPSHOT_TEXT_LENGTH}), elements };
-    })()`, true);
+    })()`);
 
-    const text = raw && typeof raw === 'object' && typeof raw.text === 'string' ? raw.text : '';
-    const elements = raw && typeof raw === 'object' && Array.isArray(raw.elements)
-      ? raw.elements as WorkbenchBrowserSnapshotElement[]
+    const rawSnapshot = raw && typeof raw === 'object' ? raw as { text?: unknown; elements?: unknown } : {};
+    const text = typeof rawSnapshot.text === 'string' ? rawSnapshot.text : '';
+    const elements = Array.isArray(rawSnapshot.elements)
+      ? rawSnapshot.elements as WorkbenchBrowserSnapshotElement[]
       : [];
     const viewKey = this.viewKey(owner.id, sessionKey);
     this.snapshotRefs.set(viewKey, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
@@ -351,12 +409,12 @@ export class WorkbenchBrowserViewController {
 
   async screenshot(owner: WebContents, sessionKey?: string | null): Promise<WorkbenchBrowserScreenshot> {
     const view = this.requireView(owner, sessionKey);
-    const image = await view.webContents.capturePage();
+    const capture = await withCdp(view.webContents, async (send) => send('Page.captureScreenshot', { format: 'png', fromSurface: true })) as { data?: string };
     const bounds = view.getBounds();
     return {
       ...getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey))),
       mimeType: 'image/png',
-      dataBase64: image.toPNG().toString('base64'),
+      dataBase64: capture.data ?? '',
       viewport: { width: bounds.width, height: bounds.height },
       capturedAt: new Date().toISOString(),
     };
@@ -818,7 +876,7 @@ export class WorkbenchBrowserViewController {
 
   private async runScriptOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
     switch (op) {
-      case 'goto': return this.navigate(owner, args[0], sessionKey);
+      case 'goto': return this.cdpNavigate(owner, view, args[0], sessionKey);
       case 'reload': return this.reload(owner, sessionKey);
       case 'back': return this.goBack(owner, sessionKey);
       case 'forward': return this.goForward(owner, sessionKey);
@@ -838,7 +896,7 @@ export class WorkbenchBrowserViewController {
       case 'select': return this.evaluateDomOperation(owner, view, 'select', args, sessionKey);
       case 'check': return this.evaluateDomOperation(owner, view, 'check', args, sessionKey);
       case 'uncheck': return this.evaluateDomOperation(owner, view, 'uncheck', args, sessionKey);
-      case 'setInputFiles': return this.evaluateDomOperation(owner, view, 'setInputFiles', args, sessionKey);
+      case 'setInputFiles': return this.setInputFiles(owner, view, args, sessionKey);
       case 'waitFor': return this.waitForDom(owner, view, String(args[0] ?? ''), false, sessionKey);
       case 'waitForText': return this.waitForDom(owner, view, String(args[0] ?? ''), true, sessionKey);
       case 'waitForLoadState': return this.waitForLoadState(view);
@@ -853,9 +911,18 @@ export class WorkbenchBrowserViewController {
     return this.snapshotRefs.get(this.viewKey(owner.id, sessionKey))?.get(raw)?.selector ?? raw;
   }
 
+  private async cdpNavigate(owner: WebContents, view: WebContentsView, inputUrl: unknown, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
+    const url = normalizeWorkbenchBrowserUrl(inputUrl);
+    await withCdp(view.webContents, async (send) => {
+      await send('Page.navigate', { url });
+    });
+    await this.waitForLoadState(view).catch(() => undefined);
+    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
+  }
+
   private async evaluateDomOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
     const refs = this.resolveRefs(owner, sessionKey);
-    return view.webContents.executeJavaScript(`(() => {
+    return cdpEvaluate(view.webContents, `(() => {
       ${this.pageHelperSource()}
       const refs = ${JSON.stringify(refs)};
       const op = ${JSON.stringify(op)};
@@ -870,16 +937,32 @@ export class WorkbenchBrowserViewController {
       if (op === 'query') { const rect = element.getBoundingClientRect(); return { selector: selectorFor(element), xpath: xpathFor(element), role: elementRole(element), name: accessibleName(element), text: max(element.innerText || element.textContent || element.value || '', 500), bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) } }; }
       if (op === 'select') { element.value = ${JSON.stringify(args[1] ?? '')}; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
       if (op === 'check' || op === 'uncheck') { element.checked = op === 'check'; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
-      if (op === 'setInputFiles') throw new Error('setInputFiles is not supported by the embedded browser yet.');
       throw new Error('Unsupported DOM operation: ' + op);
-    })()`, true);
+    })()`);
+  }
+
+  private async setInputFiles(owner: WebContents, view: WebContentsView, args: unknown[], sessionKey?: string | null): Promise<boolean> {
+    const selector = this.resolveSelector(owner, args[0], sessionKey);
+    const files = Array.isArray(args[1]) ? args[1].filter((file): file is string => typeof file === 'string' && file.trim().length > 0) : [];
+    if (!files.length) {
+      throw new Error('setInputFiles requires at least one file path.');
+    }
+    await withCdp(view.webContents, async (send) => {
+      const document = await send('DOM.getDocument', { depth: -1, pierce: true }) as { root?: { nodeId?: number } };
+      const rootNodeId = document.root?.nodeId;
+      if (!rootNodeId) throw new Error('Could not inspect browser DOM.');
+      const query = await send('DOM.querySelector', { nodeId: rootNodeId, selector }) as { nodeId?: number };
+      if (!query.nodeId) throw new Error('No element matches selector: ' + selector);
+      await send('DOM.setFileInputFiles', { nodeId: query.nodeId, files });
+    });
+    return true;
   }
 
   private async waitForDom(owner: WebContents, view: WebContentsView, target: string, textMode: boolean, sessionKey?: string | null): Promise<boolean> {
     const deadline = Date.now() + 10_000;
     while (Date.now() < deadline) {
       const found = textMode
-        ? await view.webContents.executeJavaScript(`(document.body?.innerText || '').includes(${JSON.stringify(target)})`, true)
+        ? await cdpEvaluate(view.webContents, `(document.body?.innerText || '').includes(${JSON.stringify(target)})`)
         : await this.evaluateDomOperation(owner, view, 'exists', [target], sessionKey);
       if (found) return true;
       await wait(100);
@@ -903,48 +986,87 @@ export class WorkbenchBrowserViewController {
       throw new Error('browser.evaluate is blocked on Personal Agent app pages.');
     }
     const fnArgs = args.slice(1);
-    return view.webContents.executeJavaScript(`(() => {
+    return cdpEvaluate(view.webContents, `(() => {
       const source = ${JSON.stringify(source)};
       const args = ${JSON.stringify(fnArgs)};
       const fn = source.trim().startsWith('function') || source.trim().startsWith('(') ? (0, eval)('(' + source + ')') : null;
       return fn ? fn(...args) : (0, eval)(source);
-    })()`, true);
+    })()`);
+  }
+
+  private async cdpElementPoint(view: WebContentsView, selector: string): Promise<{ x: number; y: number }> {
+    const point = await cdpEvaluate(view.webContents, `(() => {
+      const selector = ${JSON.stringify(selector)};
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('No element matches selector: ' + selector);
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) throw new Error('Element is not visible: ' + selector);
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+    })()`) as { x?: unknown; y?: unknown };
+    const x = typeof point.x === 'number' && Number.isFinite(point.x) ? point.x : NaN;
+    const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : NaN;
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new Error('Could not resolve element click point.');
+    }
+    return { x, y };
+  }
+
+  private async cdpFocusAndClear(view: WebContentsView, selector: string): Promise<void> {
+    await cdpEvaluate(view.webContents, `(() => {
+      const selector = ${JSON.stringify(selector)};
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('No element matches selector: ' + selector);
+      element.scrollIntoView({ block: 'center', inline: 'center' });
+      element.focus();
+      if ('value' in element) {
+        element.value = '';
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+      } else {
+        element.textContent = '';
+      }
+      return true;
+    })()`);
   }
 
   private async runAction(view: WebContentsView, action: WorkbenchBrowserAction): Promise<void> {
     switch (action.type) {
-      case 'click':
-        await view.webContents.executeJavaScript(`(() => {
-          const selector = ${JSON.stringify(action.selector)};
-          const element = document.querySelector(selector);
-          if (!element) throw new Error('No element matches selector: ' + selector);
-          element.scrollIntoView({ block: 'center', inline: 'center' });
-          element.click();
-        })()`, true);
+      case 'click': {
+        const point = await this.cdpElementPoint(view, action.selector);
+        await withCdp(view.webContents, async (send) => {
+          await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none' });
+          await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+          await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
+        });
         return;
+      }
       case 'type':
-        await view.webContents.executeJavaScript(`(() => {
-          const selector = ${JSON.stringify(action.selector)};
-          const element = document.querySelector(selector);
-          if (!element) throw new Error('No element matches selector: ' + selector);
-          element.focus();
-          const value = ${JSON.stringify(action.text)};
-          if ('value' in element) {
-            element.value = value;
-            element.dispatchEvent(new Event('input', { bubbles: true }));
-            element.dispatchEvent(new Event('change', { bubbles: true }));
-          } else {
-            element.textContent = value;
-          }
-        })()`, true);
+        await this.cdpFocusAndClear(view, action.selector);
+        await withCdp(view.webContents, async (send) => {
+          await send('Input.insertText', { text: action.text });
+        });
         return;
-      case 'key':
-        view.webContents.sendInputEvent({ type: 'keyDown', keyCode: action.key });
-        view.webContents.sendInputEvent({ type: 'keyUp', keyCode: action.key });
+      case 'key': {
+        const event = keyEventFor(action.key);
+        await withCdp(view.webContents, async (send) => {
+          await send('Input.dispatchKeyEvent', { type: 'keyDown', ...event });
+          if (event.text) await send('Input.dispatchKeyEvent', { type: 'char', ...event });
+          await send('Input.dispatchKeyEvent', { type: 'keyUp', ...event });
+        });
         await wait(60);
         return;
+      }
       case 'scroll':
-        await view.webContents.executeJavaScript(`window.scrollBy(${Number(action.x ?? 0)}, ${Number(action.y ?? 0)})`, true);
+        await withCdp(view.webContents, async (send) => {
+          await send('Input.dispatchMouseEvent', {
+            type: 'mouseWheel',
+            x: 0,
+            y: 0,
+            deltaX: Number(action.x ?? 0),
+            deltaY: Number(action.y ?? 0),
+          });
+        });
         return;
       case 'wait':
         await wait(action.ms);

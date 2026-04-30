@@ -66,6 +66,7 @@ There is one browser session per conversation workbench and three agent-facing b
 
 - `browser_snapshot` — observe the current browser state
 - `browser_script` — run a browser automation script against the current browser session
+- `browser_screenshot` — capture the current browser viewport as an image
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
 
@@ -175,7 +176,7 @@ Diagnostics:
 - `browser.log(...values)` should append to the tool result logs.
 - returned values must be JSON-serializable and size-limited.
 
-Implementation note: `setInputFiles` is reserved in the script API but currently returns an unsupported error in the embedded browser. Prefer normal page flows unless file upload support has been explicitly added.
+Implementation note: `setInputFiles` uses Chrome DevTools Protocol (`DOM.setFileInputFiles`) in Electron main. Keep file path validation at the tool boundary if this API is ever exposed to untrusted callers outside agent scripts.
 
 ### `browser_screenshot`
 
@@ -223,7 +224,9 @@ Rules:
 - Hard-timeout scripts and terminate the worker/process on timeout.
 - Size-limit logs and return values.
 - Validate every operation in main before applying it to `WebContentsView`.
-- `browser.evaluate(...)` executes only in the loaded page via `webContents.executeJavaScript`.
+- Browser operations should be CDP-backed from Electron main where possible: `Runtime.evaluate` for page inspection/evaluate, `Input.dispatch*` for click/key/scroll/text insertion, `DOM.setFileInputFiles` for uploads, and `Page.captureScreenshot` for screenshots.
+- Keep DOM mutation fallbacks narrow and explicit for operations that are fundamentally DOM state changes (`select`, `check`, `uncheck`).
+- `browser.evaluate(...)` executes only in the loaded page via CDP `Runtime.evaluate`.
 - `evaluate` is blocked on `personal-agent://app` pages so the agent cannot casually poke the host UI.
 
 ### Auto-open behavior
