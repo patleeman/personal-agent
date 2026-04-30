@@ -44,4 +44,18 @@ describe('workbench browser agent extension', () => {
 
     setWorkbenchBrowserToolHost(null);
   });
+
+  it('accepts the legacy visual screenshot reason as visual_layout', async () => {
+    setWorkbenchBrowserToolHost({
+      snapshot: async () => ({}),
+      screenshot: async () => ({ mimeType: 'image/png', dataBase64: 'aW1n' }),
+      runScript: async () => ({}),
+    });
+
+    const screenshotTool = collectTools().find((tool) => tool.name === 'browser_screenshot')!;
+    const result = await screenshotTool.execute('tool-3' as never, { reason: 'visual', note: 'checking rendered layout' } as never, undefined as never, undefined as never, ctx as never) as { details: { reason: string } };
+
+    expect(result.details.reason).toBe('visual_layout');
+    setWorkbenchBrowserToolHost(null);
+  });
 });
