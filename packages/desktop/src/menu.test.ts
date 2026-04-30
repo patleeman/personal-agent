@@ -55,7 +55,7 @@ describe('buildDesktopApplicationMenuTemplate', () => {
     expect(fileMenu?.submenu).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: 'New Window' }),
       expect.objectContaining({ label: 'Close Tab', accelerator: 'CommandOrControl+W' }),
-      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'CommandOrControl+Shift+W' }),
+      expect.objectContaining({ label: 'Reopen Closed Tab', accelerator: 'Command+Shift+N' }),
       expect.objectContaining({ label: 'Previous Conversation', accelerator: 'CommandOrControl+[' }),
       expect.objectContaining({ label: 'Next Conversation', accelerator: 'CommandOrControl+]' }),
       expect.objectContaining({ label: 'Toggle Pinned', accelerator: 'CommandOrControl+Alt+P' }),

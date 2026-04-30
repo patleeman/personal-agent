@@ -30,6 +30,10 @@ interface DesktopApplicationMenuTemplateOptions {
   appName?: string;
 }
 
+function getReopenClosedTabAccelerator(platform: NodeJS.Platform): string {
+  return platform === 'darwin' ? 'Command+Shift+N' : 'CommandOrControl+Shift+W';
+}
+
 export function buildDesktopApplicationMenuTemplate(
   actions: DesktopApplicationMenuActions,
   options: DesktopApplicationMenuTemplateOptions = {},
@@ -62,7 +66,7 @@ export function buildDesktopApplicationMenuTemplate(
       },
       {
         label: 'Reopen Closed Tab',
-        accelerator: 'CommandOrControl+Shift+W',
+        accelerator: getReopenClosedTabAccelerator(platform),
         click: actions.onReopenClosedConversation,
       },
       {
