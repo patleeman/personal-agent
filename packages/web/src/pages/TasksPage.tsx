@@ -156,6 +156,47 @@ function runStatusText(run: DurableRunRecord): { text: string; cls: string } {
   return { text: status ?? 'Unknown', cls: 'text-dim' };
 }
 
+function formatRunDuration(run: DurableRunRecord): string {
+  const startedAt = run.status?.startedAt ?? run.status?.createdAt;
+  const completedAt = run.status?.completedAt ?? run.status?.updatedAt;
+  if (!startedAt || !completedAt) return '—';
+
+  const startedMs = Date.parse(startedAt);
+  const completedMs = Date.parse(completedAt);
+  if (!Number.isFinite(startedMs) || !Number.isFinite(completedMs) || completedMs < startedMs) return '—';
+
+  const totalSeconds = Math.max(0, Math.round((completedMs - startedMs) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes === 0) return `${seconds}s`;
+  if (seconds === 0) return `${minutes}m`;
+  return `${minutes}m ${seconds}s`;
+}
+
+function runResultText(run: DurableRunRecord): string {
+  if (run.status?.lastError) return run.status.lastError;
+  if (run.problems.length > 0) return run.problems[0] ?? 'Needs attention';
+  if (run.status?.status === 'completed') return 'Completed';
+  if (run.status?.status === 'cancelled') return 'Superseded or cancelled';
+  return run.status?.status ?? 'Unknown';
+}
+
+function formatSeconds(value: number | undefined): string {
+  if (!value || value <= 0) return 'None';
+  if (value % 60 === 0) return `${value / 60}m`;
+  return `${value}s`;
+}
+
+function formatScheduleTypeLabel(task: Pick<ScheduledTaskSummary, 'cron' | 'at' | 'scheduleType'>): string {
+  if (task.cron) return 'Cron';
+  if (task.at || task.scheduleType === 'at') return 'Once';
+  return capitalizeFirst(task.scheduleType || 'Manual');
+}
+
+function getRunLogsPath(run: DurableRunRecord): string | undefined {
+  return run.paths.outputLogPath || run.paths.root;
+}
+
 function CreateTaskModal({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -374,21 +415,39 @@ function PromptBody({ value }: { value: string }) {
   );
 }
 
-function DetailLine({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div className="grid gap-1 py-3 sm:grid-cols-[9rem_minmax(0,1fr)] sm:gap-5">
-      <dt className="text-[12px] text-dim">{label}</dt>
-      <dd className="min-w-0 break-words text-[14px] text-secondary">{children}</dd>
-    </div>
-  );
-}
-
 function DetailSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border-t border-border-subtle pt-5">
       <h2 className="text-[15px] font-semibold text-primary">{title}</h2>
       <div className="mt-3">{children}</div>
     </section>
+  );
+}
+
+function SummaryCell({ label, value, className = '' }: { label: string; value: ReactNode; className?: string }) {
+  return (
+    <div className="min-w-0 border-t border-border-subtle py-4 md:border-l md:border-t-0 md:first:border-l-0 md:first:pl-0 md:pl-5">
+      <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-dim">{label}</div>
+      <div className={`mt-2 break-words text-[14px] leading-5 text-primary ${className}`}>{value}</div>
+    </div>
+  );
+}
+
+function RailSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="border-t border-border-subtle py-5 first:border-t-0 first:pt-0">
+      <h2 className="text-[12px] font-semibold uppercase tracking-[0.08em] text-primary">{title}</h2>
+      <dl className="mt-3 divide-y divide-border-subtle">{children}</dl>
+    </section>
+  );
+}
+
+function RailLine({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="grid grid-cols-[8.5rem_minmax(0,1fr)] gap-4 py-2.5">
+      <dt className="text-[13px] text-secondary">{label}</dt>
+      <dd className="min-w-0 break-words text-[13px] text-primary">{children}</dd>
+    </div>
   );
 }
 
@@ -450,6 +509,25 @@ function AutomationDetailView({
     () => sortAutomationRuns((runs?.runs ?? []).filter((run) => getRunTaskId(run) === effectiveSummary?.id)),
     [effectiveSummary?.id, runs?.runs],
   );
+  const latestRun = taskRuns[0];
+  const latestRunStatus = latestRun ? runStatusText(latestRun) : null;
+  const latestRunMoment = latestRun ? getRunMoment(latestRun) : null;
+  const latestRunFailed = latestRun ? runNeedsAttention(latestRun) || latestRun.status?.status === 'failed' || latestRun.status?.status === 'interrupted' : isFailedTaskStatus(effectiveSummary?.lastStatus);
+  const lastRunLabel = effectiveSummary.lastRunAt ? `${isFailedTaskStatus(effectiveSummary.lastStatus) ? 'Failed' : 'Ran'} ${timeAgo(effectiveSummary.lastRunAt)}` : '—';
+  const modelLabel = detail?.model ?? effectiveSummary.model ?? 'Default';
+  const threadLabel = detail?.threadTitle ?? effectiveSummary.threadTitle ?? formatThreadModeLabel(detail?.threadMode);
+  const timeoutLabel = formatSeconds(detail?.timeoutSeconds);
+  const catchUpLabel = formatSeconds(detail?.catchUpWindowSeconds ?? effectiveSummary.catchUpWindowSeconds);
+  const scheduleTypeLabel = formatScheduleTypeLabel(effectiveSummary);
+
+  async function handleCopyPrompt() {
+    if (!prompt.trim()) return;
+    try {
+      await navigator.clipboard?.writeText(prompt);
+    } catch (nextError) {
+      console.error(nextError);
+    }
+  }
 
   async function handleRunNow() {
     if (!id || runningNow || effectiveSummary?.running) return;
@@ -530,7 +608,7 @@ function AutomationDetailView({
   return (
     <>
       <div className="h-full overflow-y-auto">
-        <AppPageLayout shellClassName="max-w-[72rem]" contentClassName="max-w-4xl space-y-8">
+        <AppPageLayout shellClassName="max-w-[88rem]" contentClassName="space-y-8">
           <div className="space-y-5">
             <button type="button" onClick={onBack} className="text-[13px] text-secondary transition-colors hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
               ← Automations
@@ -540,12 +618,14 @@ function AutomationDetailView({
               <div className="min-w-0 space-y-2">
                 <div className="flex min-w-0 items-center gap-3">
                   <span className={`h-3 w-3 shrink-0 rounded-full border ${statusDotClass(effectiveSummary)}`} aria-hidden="true" />
-                  <h1 className="break-words text-[36px] font-semibold tracking-tight text-primary sm:text-[42px]">{title}</h1>
+                  <h1 className="break-words text-[34px] font-semibold tracking-tight text-primary sm:text-[40px]">{title}</h1>
                 </div>
                 <p className="text-[14px] text-secondary">
                   <span className={status.cls}>{status.text}</span>
                   <span className="mx-2 text-dim">·</span>
                   <span>{projectLabel}</span>
+                  <span className="mx-2 text-dim">·</span>
+                  <span>{threadLabel}</span>
                   <span className="mx-2 text-dim">·</span>
                   <span>{scheduleLabel}</span>
                 </p>
@@ -564,46 +644,118 @@ function AutomationDetailView({
             </div>
           </div>
 
-          <DetailSection title="Prompt">
-            {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p className="text-[14px] text-secondary">No prompt configured.</p>}
-          </DetailSection>
+          <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="min-w-0 space-y-8">
+              <section className="grid border-y border-border-subtle md:grid-cols-5">
+                <SummaryCell label="Last run" value={lastRunLabel} className={isFailedTaskStatus(effectiveSummary.lastStatus) ? 'text-danger' : ''} />
+                <SummaryCell label="Next run" value={nextRunLabel} />
+                <SummaryCell label="Schedule" value={scheduleLabel} />
+                <SummaryCell label="Target" value={targetLabel} />
+                <SummaryCell label="Model" value={modelLabel} />
+              </section>
 
-          <DetailSection title="Details">
-            <dl className="divide-y divide-border-subtle">
-              <DetailLine label="Schedule">{scheduleLabel}</DetailLine>
-              <DetailLine label="Next run">{nextRunLabel}</DetailLine>
-              <DetailLine label="Target">{targetLabel}</DetailLine>
-              <DetailLine label="Thread">{detail?.threadTitle ?? formatThreadModeLabel(detail?.threadMode)}</DetailLine>
-              <DetailLine label="Model">{detail?.model ?? effectiveSummary.model ?? 'Default'}</DetailLine>
-            </dl>
-          </DetailSection>
-
-          <DetailSection title="Executions">
-            {taskRuns.length === 0 ? (
-              <p className="text-[14px] text-secondary">No executions yet.</p>
-            ) : (
-              <div className="divide-y divide-border-subtle border-t border-border-subtle">
-                {taskRuns.slice(0, 6).map((run) => {
-                  const runStatus = runStatusText(run);
-                  const moment = getRunMoment(run);
-                  return (
-                    <div key={run.runId} className="grid gap-2 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                      <div className="min-w-0">
-                        <p className="truncate text-[14px] font-medium text-primary">{run.runId}</p>
-                        <p className="mt-1 text-[12px] text-secondary">{moment.at ? timeAgo(moment.at) : 'No timestamp'}</p>
-                      </div>
-                      <p className={`text-[13px] ${runStatus.cls}`}>{runStatus.text}</p>
+              {latestRunFailed && (
+                <section className="border border-danger/35 border-l-danger bg-danger/10 px-5 py-4">
+                  <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-start">
+                    <div className="min-w-0 space-y-2">
+                      <h2 className="text-[16px] font-semibold tracking-tight text-danger">Latest execution failed</h2>
+                      <p className="max-w-3xl text-[14px] leading-6 text-primary">
+                        {latestRun ? runResultText(latestRun) : 'The latest run failed. Inspect logs to see what needs attention.'}
+                      </p>
+                      <p className="text-[12px] text-secondary">
+                        {latestRunMoment?.at ? `Started ${timeAgo(latestRunMoment.at)}` : 'No start timestamp'}
+                        <span className="mx-2 text-dim">·</span>
+                        Duration {latestRun ? formatRunDuration(latestRun) : '—'}
+                        {latestRunStatus && <><span className="mx-2 text-dim">·</span><span className={latestRunStatus.cls}>{latestRunStatus.text}</span></>}
+                      </p>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </DetailSection>
+                    <div className="flex shrink-0 flex-wrap gap-2 sm:flex-col">
+                      <ToolbarButton className="text-danger" onClick={() => { if (latestRun) window.open(getRunLogsPath(latestRun), '_blank'); }} disabled={!latestRun}>
+                        Inspect logs
+                      </ToolbarButton>
+                      <ToolbarButton onClick={() => { void handleRunNow(); }} disabled={runningNow || effectiveSummary.running}>
+                        Rerun
+                      </ToolbarButton>
+                    </div>
+                  </div>
+                </section>
+              )}
 
-          <div className="border-t border-border-subtle pt-5">
-            <button type="button" onClick={() => setDeleteModalOpen(true)} className="text-[13px] text-danger transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
-              Delete automation
-            </button>
+              <DetailSection title="Prompt">
+                <div className="mb-3 flex justify-end gap-5 text-[13px] text-secondary">
+                  <button type="button" onClick={() => { void handleCopyPrompt(); }} className="transition-colors hover:text-primary">Copy</button>
+                  <button type="button" onClick={onOpenEdit} className="transition-colors hover:text-primary">Edit</button>
+                </div>
+                <div className="rounded-lg border border-border-subtle bg-surface/35 px-4 py-3 font-mono text-[13px] leading-6 text-secondary">
+                  {prompt.trim().length > 0 ? <PromptBody value={prompt} /> : <p>No prompt configured.</p>}
+                </div>
+              </DetailSection>
+
+              <DetailSection title="Executions">
+                {taskRuns.length === 0 ? (
+                  <p className="text-[14px] text-secondary">No executions yet.</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-border-subtle">
+                    <div className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] border-b border-border-subtle px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-dim">
+                      <div>Status</div>
+                      <div>Run</div>
+                      <div>Started</div>
+                      <div>Duration</div>
+                      <div>Result</div>
+                      <div>Actions</div>
+                    </div>
+                    <div className="divide-y divide-border-subtle">
+                      {taskRuns.slice(0, 6).map((run) => {
+                        const runStatus = runStatusText(run);
+                        const moment = getRunMoment(run);
+                        const isBad = runStatus.cls === 'text-danger';
+                        return (
+                          <div key={run.runId} className="grid min-w-[58rem] grid-cols-[7rem_minmax(12rem,1fr)_7rem_6rem_minmax(10rem,1fr)_6rem] items-center gap-0 px-4 py-3 text-[13px]">
+                            <div className={`flex items-center gap-2 ${runStatus.cls}`}><span className={`h-2 w-2 rounded-full ${isBad ? 'bg-danger' : runStatus.cls === 'text-success' ? 'bg-success' : 'bg-secondary'}`} />{runStatus.text}</div>
+                            <div className="truncate text-primary">{run.runId}</div>
+                            <div className="text-secondary">{moment.at ? timeAgo(moment.at) : '—'}</div>
+                            <div className="text-secondary">{formatRunDuration(run)}</div>
+                            <div className={isBad ? 'truncate text-danger' : 'truncate text-secondary'}>{runResultText(run)}</div>
+                            <div className="flex gap-2 text-accent">
+                              <button type="button" onClick={() => window.open(getRunLogsPath(run), '_blank')} className="hover:text-primary">Logs</button>
+                              {isBad && <button type="button" onClick={() => { void handleRunNow(); }} className="hover:text-primary">Rerun</button>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </DetailSection>
+            </div>
+
+            <aside className="border-t border-border-subtle pt-1 xl:border-l xl:border-t-0 xl:pl-6">
+              <RailSection title="Schedule">
+                <RailLine label="Type">{scheduleTypeLabel}</RailLine>
+                <RailLine label="Time">{scheduleLabel}</RailLine>
+                <RailLine label="Next run">{nextRunLabel}</RailLine>
+                <RailLine label="Catch-up window">{catchUpLabel}</RailLine>
+              </RailSection>
+              <RailSection title="Delivery">
+                <RailLine label="Target">{targetLabel}</RailLine>
+                <RailLine label="Thread">{threadLabel}</RailLine>
+                <RailLine label="Owner">{projectLabel}</RailLine>
+              </RailSection>
+              <RailSection title="Runtime">
+                <RailLine label="Model">{modelLabel}</RailLine>
+                <RailLine label="Timeout">{timeoutLabel}</RailLine>
+                <RailLine label="Retries">{effectiveSummary.lastAttemptCount ?? 0}</RailLine>
+              </RailSection>
+              <RailSection title="Alerts">
+                <RailLine label="Notifications">{effectiveSummary.enabled ? 'On failure' : 'Disabled'}</RailLine>
+                <RailLine label="Last notification">{isFailedTaskStatus(effectiveSummary.lastStatus) && effectiveSummary.lastRunAt ? timeAgo(effectiveSummary.lastRunAt) : '—'}</RailLine>
+              </RailSection>
+              <RailSection title="Danger zone">
+                <button type="button" onClick={() => setDeleteModalOpen(true)} className="mt-2 text-[13px] text-danger transition-colors hover:text-danger focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/25 focus-visible:ring-offset-2 focus-visible:ring-offset-base">
+                  Delete automation
+                </button>
+              </RailSection>
+            </aside>
           </div>
         </AppPageLayout>
       </div>
