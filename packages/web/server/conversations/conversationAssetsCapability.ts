@@ -9,12 +9,14 @@ import {
   listConversationCommitCheckpoints,
   readConversationAttachmentDownload,
   saveConversationAttachment,
+  type ConversationCommitCheckpointSummary,
 } from '@personal-agent/core';
 import { invalidateAppTopics } from '../shared/appEvents.js';
 import {
   readConversationCheckpointReviewContext,
   resolveConversationCheckpointRecord,
 } from './checkpointReview.js';
+import { readSessionBlocks, type DisplayBlock } from './sessions.js';
 
 export class ConversationAssetCapabilityInputError extends Error {}
 export class ConversationAssetCapabilityNotFoundError extends Error {}
@@ -77,10 +79,94 @@ function buildArtifactListResult(profile: string, conversationId: string) {
 }
 
 function buildCheckpointListResult(profile: string, conversationId: string) {
+  const savedCheckpoints = listConversationCommitCheckpoints({ profile, conversationId });
+
   return {
     conversationId,
-    checkpoints: listConversationCommitCheckpoints({ profile, conversationId }),
+    checkpoints: mergeTranscriptCommitCheckpoints(profile, conversationId, savedCheckpoints),
   };
+}
+
+function stringifyUnknown(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value) ?? '';
+  } catch {
+    return String(value ?? '');
+  }
+}
+
+function extractDisplayBlockText(block: DisplayBlock): string {
+  switch (block.type) {
+    case 'user':
+    case 'text':
+    case 'thinking':
+      return block.text;
+    case 'context':
+      return `${block.customType ?? ''}\n${block.text}`;
+    case 'summary':
+      return `${block.kind}\n${block.title}\n${block.detail ?? ''}\n${block.text}`;
+    case 'tool_use':
+      return `${block.tool}\n${stringifyUnknown(block.input)}\n${block.output}`;
+    case 'image':
+      return `${block.alt}\n${block.caption ?? ''}`;
+    case 'error':
+      return `${block.tool ?? ''}\n${block.message}`;
+    default:
+      return '';
+  }
+}
+
+function extractCommitHashCandidates(blocks: DisplayBlock[]): string[] {
+  const commitHashes = new Set<string>();
+  const commitHashPattern = /\b[a-f0-9]{7,64}\b/gi;
+
+  for (const block of blocks) {
+    const text = extractDisplayBlockText(block);
+    let match: RegExpExecArray | null = null;
+    while ((match = commitHashPattern.exec(text)) !== null) {
+      const hash = match[0]?.toLowerCase();
+      if (hash && /[a-f]/i.test(hash)) {
+        commitHashes.add(hash);
+      }
+    }
+  }
+
+  return Array.from(commitHashes);
+}
+
+function mergeTranscriptCommitCheckpoints(
+  profile: string,
+  conversationId: string,
+  savedCheckpoints: ConversationCommitCheckpointSummary[],
+): ConversationCommitCheckpointSummary[] {
+  const checkpointsByCommit = new Map<string, ConversationCommitCheckpointSummary>();
+  for (const checkpoint of savedCheckpoints) {
+    checkpointsByCommit.set(checkpoint.commitSha.toLowerCase(), checkpoint);
+  }
+
+  const detail = readSessionBlocks(conversationId);
+  if (!detail) {
+    return savedCheckpoints;
+  }
+
+  for (const candidate of extractCommitHashCandidates(detail.blocks)) {
+    const checkpoint = resolveConversationCheckpointRecord({ profile, conversationId, checkpointId: candidate });
+    if (!checkpoint) {
+      continue;
+    }
+
+    const key = checkpoint.commitSha.toLowerCase();
+    if (!checkpointsByCommit.has(key)) {
+      checkpointsByCommit.set(key, checkpoint);
+    }
+  }
+
+  return Array.from(checkpointsByCommit.values())
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
 function buildAttachmentListResult(profile: string, conversationId: string) {

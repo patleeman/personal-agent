@@ -7,10 +7,12 @@ const {
   getConversationAttachmentMock,
   listConversationArtifactsMock,
   listConversationAttachmentsMock,
+  listConversationCommitCheckpointsMock,
   readConversationAttachmentDownloadMock,
   saveConversationAttachmentMock,
   addConversationCommitCheckpointCommentMock,
   resolveConversationCheckpointRecordMock,
+  readSessionBlocksMock,
   invalidateAppTopicsMock,
 } = vi.hoisted(() => ({
   deleteConversationArtifactMock: vi.fn(),
@@ -19,10 +21,12 @@ const {
   getConversationAttachmentMock: vi.fn(),
   listConversationArtifactsMock: vi.fn(),
   listConversationAttachmentsMock: vi.fn(),
+  listConversationCommitCheckpointsMock: vi.fn(),
   readConversationAttachmentDownloadMock: vi.fn(),
   saveConversationAttachmentMock: vi.fn(),
   addConversationCommitCheckpointCommentMock: vi.fn(),
   resolveConversationCheckpointRecordMock: vi.fn(),
+  readSessionBlocksMock: vi.fn(),
   invalidateAppTopicsMock: vi.fn(),
 }));
 
@@ -33,6 +37,7 @@ vi.mock('@personal-agent/core', () => ({
   getConversationAttachment: getConversationAttachmentMock,
   listConversationArtifacts: listConversationArtifactsMock,
   listConversationAttachments: listConversationAttachmentsMock,
+  listConversationCommitCheckpoints: listConversationCommitCheckpointsMock,
   readConversationAttachmentDownload: readConversationAttachmentDownloadMock,
   saveConversationAttachment: saveConversationAttachmentMock,
   addConversationCommitCheckpointComment: addConversationCommitCheckpointCommentMock,
@@ -47,6 +52,10 @@ vi.mock('./checkpointReview.js', () => ({
   resolveConversationCheckpointRecord: resolveConversationCheckpointRecordMock,
 }));
 
+vi.mock('./sessions.js', () => ({
+  readSessionBlocks: readSessionBlocksMock,
+}));
+
 import {
   ConversationAssetCapabilityInputError,
   ConversationAssetCapabilityNotFoundError,
@@ -58,6 +67,7 @@ import {
   readConversationAttachmentCapability,
   readConversationAttachmentDownloadCapability,
   readConversationAttachmentsCapability,
+  readConversationCommitCheckpointsCapability,
   updateConversationAttachmentCapability,
   createConversationCommitCheckpointCommentCapability,
 } from './conversationAssetsCapability.js';
@@ -69,14 +79,18 @@ beforeEach(() => {
   getConversationAttachmentMock.mockReset();
   listConversationArtifactsMock.mockReset();
   listConversationAttachmentsMock.mockReset();
+  listConversationCommitCheckpointsMock.mockReset();
   readConversationAttachmentDownloadMock.mockReset();
   saveConversationAttachmentMock.mockReset();
   addConversationCommitCheckpointCommentMock.mockReset();
   resolveConversationCheckpointRecordMock.mockReset();
+  readSessionBlocksMock.mockReset();
   invalidateAppTopicsMock.mockReset();
 
   listConversationArtifactsMock.mockReturnValue([{ id: 'artifact-1', title: 'Artifact 1' }]);
   listConversationAttachmentsMock.mockReturnValue([{ id: 'attachment-1', kind: 'excalidraw' }]);
+  listConversationCommitCheckpointsMock.mockReturnValue([]);
+  readSessionBlocksMock.mockReturnValue(null);
   getConversationArtifactMock.mockReturnValue({ id: 'artifact-1', title: 'Artifact 1' });
   getConversationAttachmentMock.mockReturnValue({ id: 'attachment-1', kind: 'excalidraw', currentRevision: 1, latestRevision: { revision: 1 } });
   readConversationAttachmentDownloadMock.mockReturnValue({
@@ -172,6 +186,69 @@ describe('conversationAssetsCapability', () => {
       checkpointId: 'missing',
       body: 'Nope',
     })).toThrowError(new ConversationAssetCapabilityNotFoundError('Commit checkpoint not found'));
+  });
+
+  it('merges saved checkpoints with git commits mentioned in the transcript', () => {
+    const savedCheckpoint = {
+      id: 'saved-checkpoint',
+      conversationId: 'session-1',
+      title: 'Saved checkpoint',
+      cwd: '/tmp/repo',
+      commitSha: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      shortSha: 'aaaaaaa',
+      subject: 'Saved checkpoint',
+      authorName: 'Patrick Lee',
+      committedAt: '2026-04-30T10:00:00.000Z',
+      createdAt: '2026-04-30T10:00:00.000Z',
+      updatedAt: '2026-04-30T10:00:00.000Z',
+      fileCount: 1,
+      linesAdded: 1,
+      linesDeleted: 0,
+      commentCount: 0,
+    };
+    const transcriptCheckpoint = {
+      id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      conversationId: 'session-1',
+      title: 'Transcript commit',
+      cwd: '/tmp/repo',
+      commitSha: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      shortSha: 'bbbbbbb',
+      subject: 'Transcript commit',
+      authorName: 'Patrick Lee',
+      committedAt: '2026-04-30T11:00:00.000Z',
+      createdAt: '2026-04-30T11:00:00.000Z',
+      updatedAt: '2026-04-30T11:00:00.000Z',
+      fileCount: 2,
+      linesAdded: 5,
+      linesDeleted: 1,
+      commentCount: 0,
+      files: [],
+      comments: [],
+      sourceKind: 'git',
+      commentable: false,
+    };
+
+    listConversationCommitCheckpointsMock.mockReturnValue([savedCheckpoint]);
+    readSessionBlocksMock.mockReturnValue({
+      blocks: [
+        { type: 'text', ts: '2026-04-30T12:00:00.000Z', text: 'Fixed in bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.' },
+        { type: 'tool_use', ts: '2026-04-30T12:01:00.000Z', tool: 'bash', input: {}, output: 'already saved aaaaaaa' },
+      ],
+    });
+    resolveConversationCheckpointRecordMock.mockImplementation((_input: { checkpointId: string }) => (
+      _input.checkpointId.startsWith('b') ? transcriptCheckpoint : savedCheckpoint
+    ));
+
+    expect(readConversationCommitCheckpointsCapability('assistant', ' session-1 ')).toEqual({
+      conversationId: 'session-1',
+      checkpoints: [transcriptCheckpoint, savedCheckpoint],
+    });
+
+    expect(resolveConversationCheckpointRecordMock).toHaveBeenCalledWith({
+      profile: 'assistant',
+      conversationId: 'session-1',
+      checkpointId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    });
   });
 
   it('reads and creates conversation attachments with invalidation', () => {
