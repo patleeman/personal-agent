@@ -45,7 +45,7 @@ import { subscribeDesktopRemoteOperations } from '../desktop/desktopRemoteOperat
 import { appendComposerHistory, readComposerHistory } from '../conversation/composerHistory';
 import { getConversationArtifactIdFromSearch, readArtifactPresentation, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
 import { getConversationCheckpointIdFromSearch, readCheckpointPresentation, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
-import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
+import { APP_LAYOUT_MODE_CHANGED_EVENT, readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { collectCompletedToolAutoOpenBlockKeys, findRequestedToolPresentationToOpen } from '../conversation/toolAutoOpen';
 import { createConversationLiveRunId } from '../conversation/conversationRuns';
 import { formatThinkingLevelLabel } from '../conversation/conversationHeader';
@@ -274,7 +274,6 @@ export {
 } from '../conversation/conversationPageState';
 
 const ConversationArtifactModal = lazy(() => import('../components/ConversationArtifactModal').then((module) => ({ default: module.ConversationArtifactModal })));
-const ConversationCheckpointModal = lazy(() => import('../components/ConversationCheckpointModal').then((module) => ({ default: module.ConversationCheckpointModal })));
 const ConversationDrawingsPickerModal = lazy(() => import('../components/ConversationDrawingsPickerModal').then((module) => ({ default: module.ConversationDrawingsPickerModal })));
 const ExcalidrawEditorModal = lazy(() => import('../components/ExcalidrawEditorModal').then((module) => ({ default: module.ExcalidrawEditorModal })));
 
@@ -460,6 +459,9 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
   }, [location.pathname, location.search, navigate, selectedArtifactId]);
 
   const openCheckpoint = useCallback((checkpointId: string) => {
+    setAppLayoutMode('workbench');
+    writeAppLayoutMode('workbench');
+
     if (selectedCheckpointId === checkpointId) {
       return;
     }
@@ -487,6 +489,15 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       window.removeEventListener('storage', handleAppLayoutModeChanged);
     };
   }, []);
+
+  useEffect(() => {
+    if (!selectedCheckpointId || appLayoutMode === 'workbench') {
+      return;
+    }
+
+    setAppLayoutMode('workbench');
+    writeAppLayoutMode('workbench');
+  }, [appLayoutMode, selectedCheckpointId]);
 
   useEffect(() => {
     if (draft || !id) {
@@ -6170,12 +6181,6 @@ export function ConversationPage({ draft = false }: { draft?: boolean }) {
       {selectedArtifactId && id && !artifactOpensInWorkbenchPane && (
         <Suspense fallback={null}>
           <ConversationArtifactModal conversationId={id} artifactId={selectedArtifactId} />
-        </Suspense>
-      )}
-
-      {selectedCheckpointId && id && (
-        <Suspense fallback={null}>
-          <ConversationCheckpointModal conversationId={id} checkpointId={selectedCheckpointId} />
         </Suspense>
       )}
 

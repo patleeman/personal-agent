@@ -7,6 +7,7 @@ import { DesktopTopBar } from './DesktopTopBar';
 import { PageSearchBar } from './PageSearchBar';
 import { VaultEditor } from './knowledge/VaultEditor';
 import { ConversationArtifactRailContent, ConversationArtifactWorkbenchPane, useConversationArtifactSummaries } from './ConversationArtifactWorkbench';
+import { ConversationCheckpointWorkbenchPane, ConversationDiffRailContent, useConversationCheckpointSummaries } from './ConversationCheckpointWorkbench';
 import { clampPanelWidth, getRailInitialWidth, getRailLayoutPrefs, getRailMaxWidth } from '../ui-state/layoutSizing';
 import { readAppLayoutMode, writeAppLayoutMode, type AppLayoutMode } from '../ui-state/appLayoutMode';
 import { DesktopChromeContext, type DesktopRightRailControl } from '../desktop/desktopChromeContext';
@@ -21,6 +22,7 @@ import { useSessionStream } from '../hooks/useSessionStream';
 import { clearWarmLiveSessionState, listWarmLiveSessionStateIds } from '../ui-state/liveSessionWarmth';
 import { navigateKnowledgeFile } from '../knowledge/knowledgeNavigation';
 import { getConversationArtifactIdFromSearch, setConversationArtifactIdInSearch } from '../conversation/conversationArtifacts';
+import { getConversationCheckpointIdFromSearch, setConversationCheckpointIdInSearch } from '../conversation/conversationCheckpoints';
 import { lazyRouteWithRecovery } from '../navigation/lazyRouteRecovery';
 import { cx } from './ui';
 
@@ -41,7 +43,7 @@ const KNOWLEDGE_ICON_PATH = 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20 M4 4.5A2.5 2.5 0 0 
 
 type DesktopLayoutShortcutAction = 'toggle-sidebar' | 'toggle-right-rail' | 'toggle-layout-mode' | 'cycle-view-mode';
 
-type WorkbenchRailMode = 'knowledge' | 'files' | 'artifacts' | 'browser';
+type WorkbenchRailMode = 'knowledge' | 'files' | 'diffs' | 'artifacts' | 'browser';
 
 function isDesktopLayoutShortcutAction(value: unknown): value is DesktopLayoutShortcutAction {
   return value === 'toggle-sidebar' || value === 'toggle-right-rail' || value === 'toggle-layout-mode' || value === 'cycle-view-mode';
@@ -467,13 +469,17 @@ function useWarmOpenConversationTabs(pathname: string): string[] {
 function WorkbenchDocumentPane({
   conversationId,
   artifactId,
+  checkpointId,
   workspaceFile,
   activeTool,
+  onMissingCheckpoint,
 }: {
   conversationId: string | null;
   artifactId: string | null;
+  checkpointId: string | null;
   workspaceFile: { cwd: string; path: string } | null;
   activeTool: WorkbenchRailMode;
+  onMissingCheckpoint: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
@@ -493,6 +499,10 @@ function WorkbenchDocumentPane({
 
   if (conversationId && artifactId) {
     return <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />;
+  }
+
+  if (activeTool === 'diffs' && conversationId) {
+    return <ConversationCheckpointWorkbenchPane conversationId={conversationId} checkpointId={checkpointId} onMissingCheckpoint={onMissingCheckpoint} />;
   }
 
   if (activeTool === 'browser') {
@@ -740,88 +750,133 @@ function WorkbenchKnowledgeRail({
   conversationId,
   workspaceCwd,
   activeArtifactId,
+  activeCheckpointId,
   activeWorkspaceFile,
   activeTool,
   onActiveToolChange,
+  onCheckpointSelect,
   onWorkspaceFileSelect,
   onWorkspaceFileClear,
 }: {
   conversationId: string | null;
   workspaceCwd: string | null;
   activeArtifactId: string | null;
+  activeCheckpointId: string | null;
   activeWorkspaceFile: { cwd: string; path: string } | null;
   activeTool: WorkbenchRailMode;
   onActiveToolChange: (mode: WorkbenchRailMode) => void;
+  onCheckpointSelect: (checkpointId: string | null) => void;
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
   onWorkspaceFileClear: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
+  const { checkpoints, loading: checkpointsLoading, error: checkpointsError } = useConversationCheckpointSummaries(conversationId);
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
     onActiveToolChange('knowledge');
     onWorkspaceFileClear();
+    onCheckpointSelect(null);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('artifact');
+      next.delete('checkpoint');
       next.set('file', id);
       return next;
     });
-  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleWorkspaceFileSelect = useCallback((file: { cwd: string; path: string }) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('file');
       next.delete('artifact');
+      next.delete('checkpoint');
       return next;
     });
+    onCheckpointSelect(null);
     onWorkspaceFileSelect(file);
-  }, [onWorkspaceFileSelect, setSearchParams]);
+  }, [onCheckpointSelect, onWorkspaceFileSelect, setSearchParams]);
   const handleKnowledgeModeSelect = useCallback(() => {
     onActiveToolChange('knowledge');
     onWorkspaceFileClear();
+    onCheckpointSelect(null);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('artifact');
+      next.delete('checkpoint');
       return next;
     });
-  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleFileExplorerModeSelect = useCallback(() => {
     onActiveToolChange('files');
     onWorkspaceFileClear();
+    onCheckpointSelect(null);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('file');
       next.delete('artifact');
+      next.delete('checkpoint');
       return next;
     });
-  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  const handleDiffsModeSelect = useCallback(() => {
+    const nextCheckpointId = activeCheckpointId ?? checkpoints[0]?.id ?? null;
+    onActiveToolChange('diffs');
+    onWorkspaceFileClear();
+    onCheckpointSelect(nextCheckpointId);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('file');
+      next.delete('artifact');
+      if (nextCheckpointId) {
+        next.set('checkpoint', nextCheckpointId);
+      } else {
+        next.delete('checkpoint');
+      }
+      return next;
+    });
+  }, [activeCheckpointId, checkpoints, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleArtifactsModeSelect = useCallback(() => {
     const firstArtifactId = activeArtifactId ?? artifacts[0]?.id ?? null;
     onActiveToolChange('artifacts');
     onWorkspaceFileClear();
+    onCheckpointSelect(null);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('file');
+      next.delete('checkpoint');
       if (firstArtifactId) {
         next.set('artifact', firstArtifactId);
       }
       return next;
     });
-  }, [activeArtifactId, artifacts, onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
+  }, [activeArtifactId, artifacts, onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
   const handleBrowserModeSelect = useCallback(() => {
     onActiveToolChange('browser');
     onWorkspaceFileClear();
   }, [onActiveToolChange, onWorkspaceFileClear]);
-  const handleArtifactSelect = useCallback((artifactId: string) => {
-    onActiveToolChange('artifacts');
+  const handleCheckpointSelect = useCallback((checkpointId: string) => {
+    onActiveToolChange('diffs');
     onWorkspaceFileClear();
+    onCheckpointSelect(checkpointId);
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('file');
+      next.delete('artifact');
+      return new URLSearchParams(setConversationCheckpointIdInSearch(next.toString(), checkpointId));
+    });
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
+  const handleArtifactSelect = useCallback((artifactId: string) => {
+    onActiveToolChange('artifacts');
+    onWorkspaceFileClear();
+    onCheckpointSelect(null);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('file');
+      next.delete('checkpoint');
       return new URLSearchParams(setConversationArtifactIdInSearch(next.toString(), artifactId));
     });
-  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onCheckpointSelect, onWorkspaceFileClear, setSearchParams]);
 
   useEffect(() => {
     if (activeArtifactId && artifacts.length > 0) {
@@ -829,6 +884,13 @@ function WorkbenchKnowledgeRail({
       onWorkspaceFileClear();
     }
   }, [activeArtifactId, artifacts.length, onActiveToolChange, onWorkspaceFileClear]);
+
+  useEffect(() => {
+    if (activeCheckpointId && checkpoints.some((checkpoint) => checkpoint.id === activeCheckpointId)) {
+      onActiveToolChange('diffs');
+      onWorkspaceFileClear();
+    }
+  }, [activeCheckpointId, checkpoints, onActiveToolChange, onWorkspaceFileClear]);
 
   useEffect(() => {
     if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
@@ -840,6 +902,18 @@ function WorkbenchKnowledgeRail({
       }, { replace: true });
     }
   }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
+
+  useEffect(() => {
+    if (activeTool === 'diffs' && !checkpointsLoading && checkpoints.length === 0) {
+      onActiveToolChange('knowledge');
+      onCheckpointSelect(null);
+      setSearchParams((current) => {
+        const next = new URLSearchParams(current);
+        next.delete('checkpoint');
+        return next;
+      }, { replace: true });
+    }
+  }, [activeTool, checkpoints.length, checkpointsLoading, onActiveToolChange, onCheckpointSelect, setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -856,6 +930,19 @@ function WorkbenchKnowledgeRail({
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
+        {checkpoints.length > 0 ? (
+          <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'diffs' && 'ui-sidebar-nav-item-active')} title="Diffs" onClick={handleDiffsModeSelect}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
+              <path d="M7.5 4.5v15" />
+              <path d="M16.5 4.5v15" />
+              <path d="M4.5 8.25h6" />
+              <path d="M13.5 15.75h6" />
+              <path d="M6 6.75 4.5 8.25 6 9.75" />
+              <path d="M18 14.25l1.5 1.5-1.5 1.5" />
+            </svg>
+            <span className="flex-1 text-left">Diffs</span>
+          </button>
+        ) : null}
         {artifacts.length > 0 ? (
           <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'artifacts' && 'ui-sidebar-nav-item-active')} title="Artifacts" onClick={handleArtifactsModeSelect}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
@@ -911,6 +998,16 @@ function WorkbenchKnowledgeRail({
             onOpenArtifact={handleArtifactSelect}
           />
         </div>
+      ) : activeTool === 'diffs' ? (
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <ConversationDiffRailContent
+            checkpoints={checkpoints}
+            activeCheckpointId={activeCheckpointId}
+            loading={checkpointsLoading}
+            error={checkpointsError}
+            onOpenCheckpoint={handleCheckpointSelect}
+          />
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-[12px] leading-5 text-dim">
           Browser is open in the workbench pane. Right-click the page to comment on an element.
@@ -929,6 +1026,7 @@ export function Layout() {
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<{ cwd: string; path: string } | null>(null);
   const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('knowledge');
+  const [selectedCheckpointByConversation, setSelectedCheckpointByConversation] = useState<Record<string, string | null>>({});
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
@@ -1012,14 +1110,50 @@ export function Layout() {
   const activeConversationId = getActiveConversationId(location.pathname);
   const activeWorkbenchKnowledgeFileId = showWorkbench ? searchParams.get('file') : null;
   const activeWorkbenchArtifactId = showWorkbench && activeConversationId ? getConversationArtifactIdFromSearch(location.search) : null;
+  const activeWorkbenchCheckpointFromSearch = showWorkbench && activeConversationId ? getConversationCheckpointIdFromSearch(location.search) : null;
+  const activeWorkbenchCheckpointId = activeConversationId
+    ? activeWorkbenchCheckpointFromSearch ?? selectedCheckpointByConversation[activeConversationId] ?? null
+    : null;
   const activeWorkspaceCwd = resolveActiveWorkspaceCwd(sessions, activeConversationId);
   const clearActiveWorkspaceFile = useCallback(() => setActiveWorkspaceFile(null), []);
+  const setActiveConversationCheckpoint = useCallback((checkpointId: string | null) => {
+    if (!activeConversationId) {
+      return;
+    }
+
+    setSelectedCheckpointByConversation((current) => ({
+      ...current,
+      [activeConversationId]: checkpointId,
+    }));
+  }, [activeConversationId]);
+
+  const clearActiveConversationCheckpoint = useCallback(() => {
+    setActiveConversationCheckpoint(null);
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('checkpoint');
+      return next;
+    }, { replace: true });
+  }, [setActiveConversationCheckpoint, setSearchParams]);
 
   useEffect(() => {
     setActiveWorkspaceFile((current) => (
       current && current.cwd === activeWorkspaceCwd ? current : null
     ));
   }, [activeWorkspaceCwd]);
+
+  useEffect(() => {
+    if (!activeConversationId || !activeWorkbenchCheckpointFromSearch) {
+      return;
+    }
+
+    setSelectedCheckpointByConversation((current) => ({
+      ...current,
+      [activeConversationId]: activeWorkbenchCheckpointFromSearch,
+    }));
+    setActiveWorkbenchTool('diffs');
+    setActiveWorkspaceFile(null);
+  }, [activeConversationId, activeWorkbenchCheckpointFromSearch]);
 
   useEffect(() => {
     function handleWorkbenchCloseActiveFile() {
@@ -1041,12 +1175,17 @@ export function Layout() {
         return;
       }
 
+      if (activeWorkbenchCheckpointId) {
+        clearActiveConversationCheckpoint();
+        return;
+      }
+
       setActiveWorkspaceFile(null);
     }
 
     window.addEventListener(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT, handleWorkbenchCloseActiveFile);
     return () => window.removeEventListener(WORKBENCH_CLOSE_ACTIVE_FILE_EVENT, handleWorkbenchCloseActiveFile);
-  }, [activeWorkbenchArtifactId, activeWorkbenchKnowledgeFileId, setSearchParams]);
+  }, [activeWorkbenchArtifactId, activeWorkbenchCheckpointId, activeWorkbenchKnowledgeFileId, clearActiveConversationCheckpoint, setSearchParams]);
 
   const activeRightRailControl = registeredRightRailControl ?? (canShowContextRail
     ? {
@@ -1186,13 +1325,15 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden border-x border-border-subtle bg-base select-text"
                     aria-label="Workbench note"
                     data-workbench-document-pane="true"
-                    data-has-open-file={activeWorkbenchKnowledgeFileId || activeWorkbenchArtifactId || activeWorkspaceFile || activeWorkbenchTool === 'browser' ? 'true' : 'false'}
+                    data-has-open-file={activeWorkbenchKnowledgeFileId || activeWorkbenchArtifactId || activeWorkbenchCheckpointId || activeWorkspaceFile || activeWorkbenchTool === 'browser' ? 'true' : 'false'}
                   >
                     <WorkbenchDocumentPane
                       conversationId={activeConversationId}
                       artifactId={activeWorkbenchArtifactId}
+                      checkpointId={activeWorkbenchCheckpointId}
                       workspaceFile={activeWorkspaceFile}
                       activeTool={activeWorkbenchTool}
+                      onMissingCheckpoint={clearActiveConversationCheckpoint}
                     />
                   </section>
                   <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
@@ -1205,9 +1346,11 @@ export function Layout() {
                       conversationId={activeConversationId}
                       workspaceCwd={activeWorkspaceCwd}
                       activeArtifactId={activeWorkbenchArtifactId}
+                      activeCheckpointId={activeWorkbenchCheckpointId}
                       activeWorkspaceFile={activeWorkspaceFile}
                       activeTool={activeWorkbenchTool}
                       onActiveToolChange={setActiveWorkbenchTool}
+                      onCheckpointSelect={setActiveConversationCheckpoint}
                       onWorkspaceFileSelect={setActiveWorkspaceFile}
                       onWorkspaceFileClear={clearActiveWorkspaceFile}
                     />

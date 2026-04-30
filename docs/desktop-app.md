@@ -35,7 +35,9 @@ The desktop top bar has a layout selector:
 
 Use `Cmd+Option+\` on macOS, or `Ctrl+Alt+\` elsewhere, to toggle between Compact and Workbench. It sits with the related layout shortcuts: `Cmd/Ctrl+\` toggles the left sidebar and `Cmd/Ctrl+Shift+\` toggles the right rail.
 
-The right-side workbench rail includes Knowledge, File Explorer, Artifacts when present, and Browser. Browser opens an Electron-owned embedded web view in the workbench pane with simple navigation controls. Right-click inside the browser and choose “Comment on this” to attach a targeted browser comment to the composer; it is sent as prompt context with selector, role/name, text, nearby text, and viewport metadata.
+The right-side workbench rail includes Knowledge, File Explorer, Diffs when the conversation has saved checkpoint diffs, Artifacts when present, and Browser. Browser opens an Electron-owned embedded web view in the workbench pane with simple navigation controls. Right-click inside the browser and choose “Comment on this” to attach a targeted browser comment to the composer; it is sent as prompt context with selector, role/name, text, nearby text, and viewport metadata.
+
+Diffs are conversation-scoped and replace the old checkpoint diff modal. Opening a checkpoint review switches the conversation to Workbench → Diffs, selects that diff, and renders the existing diff viewer in the workbench pane while the right rail lists all conversation diffs newest-first.
 
 Workbench Browser sessions are scoped to the conversation. Switching conversations hides the previous conversation's webview and restores the selected conversation's webview, matching the workbench file/explorer model instead of using one global browser.
 
