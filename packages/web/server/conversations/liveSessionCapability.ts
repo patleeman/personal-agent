@@ -549,6 +549,8 @@ function hasConversationTranscriptContent(conversationId: string): boolean {
   const liveSession = liveEntry?.session as {
     isStreaming?: boolean;
     state?: { messages?: unknown[] };
+    getSteeringMessages?: () => unknown[];
+    getFollowUpMessages?: () => unknown[];
   } | undefined;
   if (liveSession?.isStreaming) {
     return true;
@@ -556,6 +558,18 @@ function hasConversationTranscriptContent(conversationId: string): boolean {
 
   const liveStateMessages = liveSession?.state?.messages;
   if ((liveStateMessages?.length ?? 0) > 0) {
+    return true;
+  }
+
+  if (liveEntry?.activeHiddenTurnCustomType || (liveEntry?.pendingHiddenTurnCustomTypes?.length ?? 0) > 0) {
+    return true;
+  }
+
+  if ((liveSession?.getSteeringMessages?.().length ?? 0) > 0) {
+    return true;
+  }
+
+  if ((liveSession?.getFollowUpMessages?.().length ?? 0) > 0) {
     return true;
   }
 
