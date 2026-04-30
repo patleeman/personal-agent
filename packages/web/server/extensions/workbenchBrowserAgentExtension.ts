@@ -2,10 +2,19 @@ import { Type } from '@sinclair/typebox';
 import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 
 export interface WorkbenchBrowserToolHost {
+  isActive(conversationId: string): Promise<boolean>;
   snapshot(conversationId: string): Promise<unknown>;
   screenshot(conversationId: string): Promise<unknown>;
   cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;
 }
+
+const BrowserToolNames = [
+  'browser_snapshot',
+  'browser_cdp',
+  'browser_screenshot',
+] as const;
+
+const BrowserToolNameSet = new Set<string>(BrowserToolNames);
 
 let host: WorkbenchBrowserToolHost | null = null;
 
@@ -18,6 +27,39 @@ function requireHost(): WorkbenchBrowserToolHost {
     throw new Error('Workbench Browser tools are only available in the desktop app.');
   }
   return host;
+}
+
+async function requireActiveWorkbenchBrowser(conversationId: string): Promise<WorkbenchBrowserToolHost> {
+  const currentHost = requireHost();
+  if (!await currentHost.isActive(conversationId)) {
+    throw new Error('Workbench Browser is not active for this conversation. Open the Browser workbench panel before using browser tools.');
+  }
+  return currentHost;
+}
+
+async function isWorkbenchBrowserActive(conversationId: string): Promise<boolean> {
+  if (!host) {
+    return false;
+  }
+  try {
+    return await host.isActive(conversationId);
+  } catch {
+    return false;
+  }
+}
+
+function setBrowserToolsActive(pi: ExtensionAPI, active: boolean): void {
+  const current = pi.getActiveTools();
+  const withoutBrowserTools = current.filter((name) => !BrowserToolNameSet.has(name));
+  const next = active ? [...withoutBrowserTools, ...BrowserToolNames] : withoutBrowserTools;
+  if (current.length === next.length && current.every((name, index) => name === next[index])) {
+    return;
+  }
+  pi.setActiveTools(next);
+}
+
+async function syncBrowserToolsForSession(pi: ExtensionAPI, conversationId: string): Promise<void> {
+  setBrowserToolsActive(pi, await isWorkbenchBrowserActive(conversationId));
 }
 
 function formatSnapshot(value: unknown): string {
@@ -82,6 +124,14 @@ const CdpParams = Type.Object({
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
+    pi.on('session_start', async (_event, ctx) => {
+      await syncBrowserToolsForSession(pi, ctx.sessionManager.getSessionId());
+    });
+
+    pi.on('before_agent_start', async (_event, ctx) => {
+      await syncBrowserToolsForSession(pi, ctx.sessionManager.getSessionId());
+    });
+
     pi.registerTool({
       name: 'browser_snapshot',
       label: 'Browser Snapshot',
@@ -95,7 +145,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: EmptyParams,
       async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const snapshot = await requireHost().snapshot(conversationId);
+        const snapshot = await (await requireActiveWorkbenchBrowser(conversationId)).snapshot(conversationId);
         return {
           content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
           details: snapshot as Record<string, unknown>,
@@ -118,7 +168,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: CdpParams,
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const result = await requireHost().cdp({
+        const result = await (await requireActiveWorkbenchBrowser(conversationId)).cdp({
           conversationId,
           command: params.command,
           ...(params.continueOnError !== undefined ? { continueOnError: params.continueOnError } : {}),
@@ -143,7 +193,7 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       parameters: EmptyParams,
       async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
-        const screenshot = await requireHost().screenshot(conversationId) as {
+        const screenshot = await (await requireActiveWorkbenchBrowser(conversationId)).screenshot(conversationId) as {
           dataBase64?: string;
           mimeType?: string;
           url?: string;

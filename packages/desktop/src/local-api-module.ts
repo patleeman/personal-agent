@@ -331,6 +331,7 @@ export interface LocalApiModule {
     onEvent: (event: DesktopAppBridgeEvent) => void,
   ): Promise<() => void>;
   setDesktopWorkbenchBrowserToolHost?(host: {
+    isActive(conversationId: string): Promise<boolean>;
     snapshot(conversationId: string): Promise<unknown>;
     screenshot(conversationId: string): Promise<unknown>;
     cdp(input: { conversationId: string; command: unknown; continueOnError?: boolean }): Promise<unknown>;

@@ -25,6 +25,7 @@ describe('workbench browser validation', () => {
     const source = readFileSync(fileURLToPath(new URL('./workbench-browser.ts', import.meta.url)), 'utf-8');
 
     expect(source).toContain('entry.deactivated = true');
+    expect(source).toContain('entry.active = true');
     expect(source).toContain('if (!entry.deactivated)');
     expect(source).toContain('entry.view.webContents.stop();');
   });

@@ -269,6 +269,7 @@ export class WorkbenchBrowserViewController {
     const view = this.ensureView(ownerWindow, owner.id, sessionKey);
     const entry = this.views.get(viewKey);
     if (entry) {
+      entry.active = true;
       entry.deactivated = false;
     }
     view.setBounds(bounds);

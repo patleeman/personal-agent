@@ -345,6 +345,7 @@ async function bootstrapDesktopApp(): Promise<void> {
   void loadLocalApiModule()
     .then((module) => {
       module.setDesktopWorkbenchBrowserToolHost?.({
+        isActive: (conversationId) => Promise.resolve(windowController!.isWorkbenchBrowserActiveForConversation(conversationId)),
         snapshot: (conversationId) => windowController!.snapshotWorkbenchBrowserForConversation(conversationId),
         screenshot: (conversationId) => windowController!.screenshotWorkbenchBrowserForConversation(conversationId),
         cdp: (input) => windowController!.cdpWorkbenchBrowserForConversation(input),

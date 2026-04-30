@@ -403,6 +403,13 @@ export class DesktopWindowController {
     return this.workbenchBrowser.snapshot(owner, conversationId);
   }
 
+  isWorkbenchBrowserActiveForConversation(conversationId?: string | null): boolean {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+      return false;
+    }
+    return this.workbenchBrowser.getState(this.mainWindow.webContents.id, conversationId)?.active === true;
+  }
+
   async screenshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
     return this.workbenchBrowser.screenshot(owner, conversationId);
