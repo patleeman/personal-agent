@@ -14,6 +14,9 @@ import {
 
 const AUTO_MODE_COMPACTION_RECOVERY_DELAY_MS = 1500;
 
+const AutoModeControlToolNames = [CONVERSATION_AUTO_MODE_CONTROL_TOOL] as const;
+const AutoModeControlToolNameSet = new Set<string>(AutoModeControlToolNames);
+
 const ConversationAutoControlParams = Type.Object({
   action: Type.Union([
     Type.Literal('continue'),
@@ -55,6 +58,20 @@ function resolveCurrentTurnSourceCustomType(sessionManager: {
   return null;
 }
 
+function isAutoModeHiddenReviewTurn(sessionManager: { getBranch?: () => unknown[] }): boolean {
+  return resolveCurrentTurnSourceCustomType(sessionManager) === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE;
+}
+
+function setAutoModeControlToolActive(pi: ExtensionAPI, active: boolean): void {
+  const current = pi.getActiveTools();
+  const withoutAutoControlTool = current.filter((name) => !AutoModeControlToolNameSet.has(name));
+  const next = active ? [...withoutAutoControlTool, ...AutoModeControlToolNames] : withoutAutoControlTool;
+  if (current.length === next.length && current.every((name, index) => name === next[index])) {
+    return;
+  }
+  pi.setActiveTools(next);
+}
+
 export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     const pendingCompactionRecoveryTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -87,6 +104,14 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       pendingCompactionRecoveryTimers.set(sessionId, timer);
     });
 
+    pi.on('session_start', async (_event, ctx) => {
+      setAutoModeControlToolActive(pi, isAutoModeHiddenReviewTurn(ctx.sessionManager));
+    });
+
+    pi.on('before_agent_start', async (_event, ctx) => {
+      setAutoModeControlToolActive(pi, isAutoModeHiddenReviewTurn(ctx.sessionManager));
+    });
+
     pi.registerTool({
       name: CONVERSATION_AUTO_MODE_CONTROL_TOOL,
       label: 'Conversation auto control',
@@ -102,6 +127,10 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const sessionId = ctx.sessionManager.getSessionId?.()?.trim();
         const state = readConversationAutoModeStateFromSessionManager(ctx.sessionManager);
+
+        if (!isAutoModeHiddenReviewTurn(ctx.sessionManager)) {
+          throw new Error('conversation_auto_control is only available during hidden auto-review turns.');
+        }
 
         if (params.action === 'continue') {
           if (!sessionId) {
@@ -156,7 +185,7 @@ export function createConversationAutoModeAgentExtension(): (pi: ExtensionAPI) =
         return;
       }
 
-      if (resolveCurrentTurnSourceCustomType(ctx.sessionManager) === CONVERSATION_AUTO_MODE_HIDDEN_TURN_CUSTOM_TYPE) {
+      if (isAutoModeHiddenReviewTurn(ctx.sessionManager)) {
         return;
       }
 

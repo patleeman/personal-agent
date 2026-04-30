@@ -27,15 +27,18 @@ type TurnEndHandler = Parameters<ExtensionAPI['on']>[1];
 function createHarness() {
   const tools: RegisteredTool[] = [];
   const handlers = new Map<string, TurnEndHandler[]>();
-
-  createConversationAutoModeAgentExtension()({
+  const pi = {
     registerTool: (tool: RegisteredTool) => {
       tools.push(tool);
     },
     on: (event: string, handler: TurnEndHandler) => {
       handlers.set(event, [...(handlers.get(event) ?? []), handler]);
     },
-  } as never);
+    getActiveTools: vi.fn(() => ['read', 'conversation_auto_control', 'bash']),
+    setActiveTools: vi.fn(),
+  };
+
+  createConversationAutoModeAgentExtension()(pi as never);
 
   const tool = tools[0];
   if (!tool) {
@@ -45,6 +48,7 @@ function createHarness() {
   return {
     tool,
     handlers,
+    pi,
     lifecycleHandlers: registerLiveSessionLifecycleHandlerMock.mock.calls.map(([handler]) => handler),
   };
 }
@@ -94,7 +98,10 @@ describe('conversation auto mode agent extension', () => {
       undefined,
       undefined,
       {
-        sessionManager: createSessionManager({ enabled: true }),
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+        }),
       } as never,
     );
 
@@ -115,7 +122,10 @@ describe('conversation auto mode agent extension', () => {
       undefined,
       undefined,
       {
-        sessionManager: createSessionManager({ enabled: true }),
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+        }),
       } as never,
     );
 
@@ -142,6 +152,52 @@ describe('conversation auto mode agent extension', () => {
     await Promise.resolve();
 
     expect(requestConversationAutoModeTurnMock).toHaveBeenCalledWith('conversation-1');
+  });
+
+  it('keeps the auto control tool inactive outside hidden auto-review turns', async () => {
+    const { handlers, pi } = createHarness();
+    const beforeAgentStartHandlers = handlers.get('before_agent_start') ?? [];
+
+    await beforeAgentStartHandlers[0]?.({} as never, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        branch: [{ type: 'message', message: { role: 'user' } }],
+      }),
+    } as never);
+
+    expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash']);
+  });
+
+  it('activates the auto control tool for hidden auto-review turns', async () => {
+    const { handlers, pi } = createHarness();
+    pi.getActiveTools.mockReturnValue(['read', 'bash']);
+    const beforeAgentStartHandlers = handlers.get('before_agent_start') ?? [];
+
+    await beforeAgentStartHandlers[0]?.({} as never, {
+      sessionManager: createSessionManager({
+        enabled: true,
+        branch: [{ type: 'custom_message', customType: 'conversation_automation_post_turn_review' }],
+      }),
+    } as never);
+
+    expect(pi.setActiveTools).toHaveBeenCalledWith(['read', 'bash', 'conversation_auto_control']);
+  });
+
+  it('rejects stale auto control tool calls outside hidden auto-review turns', async () => {
+    const { tool } = createHarness();
+
+    await expect(tool.execute?.(
+      'tool-1',
+      { action: 'continue' },
+      undefined,
+      undefined,
+      {
+        sessionManager: createSessionManager({
+          enabled: true,
+          branch: [{ type: 'message', message: { role: 'user' } }],
+        }),
+      } as never,
+    )).rejects.toThrow('hidden auto-review turns');
   });
 
   it('does not reschedule hidden review turns from inside the hidden controller turn', async () => {
