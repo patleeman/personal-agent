@@ -70,9 +70,7 @@ const ScriptParams = Type.Object({
   timeoutMs: Type.Optional(Type.Number({ description: 'Hard timeout in milliseconds. Defaults to 30000, max 60000.' })),
 });
 
-const SnapshotParams = Type.Object({
-  includeScreenshot: Type.Optional(Type.Boolean({ description: 'Also include a screenshot image. Default false; use only when visual layout/image rendering matters or the user requested it.' })),
-});
+const EmptyParams = Type.Object({});
 
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
@@ -80,44 +78,20 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       name: 'browser_snapshot',
       label: 'Browser Snapshot',
       description: 'Observe the current built-in Workbench Browser state and interactive elements.',
-      promptSnippet: 'Use browser_snapshot as the browser equivalent of read: observe the current built-in Workbench Browser state before acting.',
+      promptSnippet: 'Use browser_snapshot as the browser equivalent of read: observe URL/title/text/refs/selectors before navigating or acting. It is more efficient than screenshots for page state.',
       promptGuidelines: [
         'Targets the visible built-in Workbench Browser, not agent-browser or Chrome.',
+        'Prefer browser_snapshot before navigating or acting because it is efficient, structured, and gives refs/selectors.',
         'Use this before browser_script when you need selectors or refs like @e1.',
-        'Set includeScreenshot=true only when visual layout/image rendering matters or the user requested a screenshot; leave it false for normal text, feeds, forms, and page state.',
         'Refs are snapshot-scoped; refresh the snapshot after navigation or major page changes.',
       ],
-      parameters: SnapshotParams,
-      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+      parameters: EmptyParams,
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
         const conversationId = ctx.sessionManager.getSessionId();
         const snapshot = await requireHost().snapshot(conversationId);
-        const content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [
-          { type: 'text' as const, text: formatSnapshot(snapshot) },
-        ];
-        let screenshotDetails: Record<string, unknown> | undefined;
-        if (params.includeScreenshot === true) {
-          const screenshot = await requireHost().screenshot(conversationId) as {
-            dataBase64?: string;
-            mimeType?: string;
-            url?: string;
-            title?: string;
-            viewport?: unknown;
-            capturedAt?: string;
-          };
-          content.push({ type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' });
-          screenshotDetails = {
-            url: screenshot.url,
-            title: screenshot.title,
-            viewport: screenshot.viewport,
-            capturedAt: screenshot.capturedAt,
-          };
-        }
         return {
-          content,
-          details: {
-            snapshot: snapshot as Record<string, unknown>,
-            ...(screenshotDetails ? { screenshot: screenshotDetails } : {}),
-          },
+          content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
+          details: snapshot as Record<string, unknown>,
         };
       },
     });
@@ -144,6 +118,42 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
           details: result as Record<string, unknown>,
+        };
+      },
+    });
+
+    pi.registerTool({
+      name: 'browser_screenshot',
+      label: 'Browser Screenshot',
+      description: 'Capture a PNG screenshot of the built-in Workbench Browser.',
+      promptSnippet: 'Use browser_screenshot when visual state matters. Prefer browser_snapshot for navigating, selectors, text, and page state because it is more efficient.',
+      promptGuidelines: [
+        'browser_screenshot is useful for visual appearance and image-heavy content.',
+        'Prefer browser_snapshot when navigating or when you need efficient text, selectors, refs, or page state.',
+        'Targets the visible built-in Workbench Browser session for this conversation.',
+      ],
+      parameters: EmptyParams,
+      async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
+        const conversationId = ctx.sessionManager.getSessionId();
+        const screenshot = await requireHost().screenshot(conversationId) as {
+          dataBase64?: string;
+          mimeType?: string;
+          url?: string;
+          title?: string;
+          viewport?: unknown;
+          capturedAt?: string;
+        };
+        return {
+          content: [
+            { type: 'text' as const, text: 'Captured Workbench Browser screenshot.' },
+            { type: 'image' as const, data: screenshot.dataBase64 ?? '', mimeType: screenshot.mimeType ?? 'image/png' },
+          ],
+          details: {
+            url: screenshot.url,
+            title: screenshot.title,
+            viewport: screenshot.viewport,
+            capturedAt: screenshot.capturedAt,
+          },
         };
       },
     });

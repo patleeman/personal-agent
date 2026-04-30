@@ -177,9 +177,9 @@ Diagnostics:
 
 Implementation note: `setInputFiles` is reserved in the script API but currently returns an unsupported error in the embedded browser. Prefer normal page flows unless file upload support has been explicitly added.
 
-### Screenshots
+### `browser_screenshot`
 
-Use `browser_snapshot` with `includeScreenshot: true` when visual layout matters or when DOM/accessibility snapshots are not enough. That keeps the structured page state and the image together. There is no standalone `browser_screenshot` tool; do not try to call one.
+Use `browser_screenshot` when visual layout matters or when DOM/accessibility snapshots are not enough.
 
 Default to `browser_snapshot`. Snapshot is preferred for normal browsing because it is structured, cheaper, includes refs/selectors, and is better for text, feeds, lists, forms, buttons, and current page state. Do not use screenshots just to read a page.
 
