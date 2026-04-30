@@ -540,7 +540,7 @@ function WorkbenchDocumentPane({
 function WorkbenchBrowserTab() {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
-  const [urlDraft, setUrlDraft] = useState('');
+  const [urlDraft, setUrlDraft] = useState('https://www.google.com/');
   const [state, setState] = useState<DesktopWorkbenchBrowserState | null>(null);
   const [status, setStatus] = useState('');
   const [commentDraft, setCommentDraft] = useState<null | { target: DesktopWorkbenchBrowserCommentTarget; text: string }>(null);
@@ -664,7 +664,7 @@ function WorkbenchBrowserTab() {
       >
         <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoBack} onClick={() => void runBrowserCommand(() => bridge!.goBackWorkbenchBrowser())}>←</button>
         <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary disabled:opacity-35" disabled={!state?.canGoForward} onClick={() => void runBrowserCommand(() => bridge!.goForwardWorkbenchBrowser())}>→</button>
-        <button type="button" className="rounded px-1.5 py-1 text-[12px] text-secondary hover:bg-surface hover:text-primary" onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? 'Stop' : 'Reload'}</button>
+        <button type="button" className="rounded px-1.5 py-1 text-[13px] text-secondary hover:bg-surface hover:text-primary" aria-label={state?.loading ? 'Stop loading' : 'Reload'} title={state?.loading ? 'Stop loading' : 'Reload'} onClick={() => void runBrowserCommand(() => state?.loading ? bridge!.stopWorkbenchBrowser() : bridge!.reloadWorkbenchBrowser())}>{state?.loading ? '×' : '↻'}</button>
         <input
           ref={urlInputRef}
           className="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface px-2 py-1 text-[12px] text-primary outline-none focus:border-accent/60"
