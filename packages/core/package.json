@@ -1,6 +1,6 @@
 {
   "name": "@personal-agent/core",
-  "version": "0.5.23",
+  "version": "0.5.24",
   "description": "Core personal agent library",
   "type": "module",
   "exports": {
