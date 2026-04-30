@@ -468,10 +468,12 @@ function WorkbenchDocumentPane({
   conversationId,
   artifactId,
   workspaceFile,
+  activeTool,
 }: {
   conversationId: string | null;
   artifactId: string | null;
   workspaceFile: { cwd: string; path: string } | null;
+  activeTool: WorkbenchRailMode;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeFileId = searchParams.get('file') ?? null;
@@ -491,6 +493,10 @@ function WorkbenchDocumentPane({
 
   if (conversationId && artifactId) {
     return <ConversationArtifactWorkbenchPane conversationId={conversationId} artifactId={artifactId} />;
+  }
+
+  if (activeTool === 'browser') {
+    return <WorkbenchBrowserTab />;
   }
 
   if (!activeFileId && workspaceFile) {
@@ -818,6 +824,8 @@ function WorkbenchKnowledgeRail({
   workspaceCwd,
   activeArtifactId,
   activeWorkspaceFile,
+  activeTool,
+  onActiveToolChange,
   onWorkspaceFileSelect,
   onWorkspaceFileClear,
 }: {
@@ -825,15 +833,16 @@ function WorkbenchKnowledgeRail({
   workspaceCwd: string | null;
   activeArtifactId: string | null;
   activeWorkspaceFile: { cwd: string; path: string } | null;
+  activeTool: WorkbenchRailMode;
+  onActiveToolChange: (mode: WorkbenchRailMode) => void;
   onWorkspaceFileSelect: (file: { cwd: string; path: string }) => void;
   onWorkspaceFileClear: () => void;
 }) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [railMode, setRailMode] = useState<WorkbenchRailMode>('knowledge');
   const { artifacts, loading: artifactsLoading, error: artifactsError } = useConversationArtifactSummaries(conversationId);
   const activeFileId = searchParams.get('file') ?? null;
   const handleFileSelect = useCallback((id: string) => {
-    setRailMode('knowledge');
+    onActiveToolChange('knowledge');
     onWorkspaceFileClear();
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -841,7 +850,7 @@ function WorkbenchKnowledgeRail({
       next.set('file', id);
       return next;
     });
-  }, [onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
   const handleWorkspaceFileSelect = useCallback((file: { cwd: string; path: string }) => {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -852,16 +861,16 @@ function WorkbenchKnowledgeRail({
     onWorkspaceFileSelect(file);
   }, [onWorkspaceFileSelect, setSearchParams]);
   const handleKnowledgeModeSelect = useCallback(() => {
-    setRailMode('knowledge');
+    onActiveToolChange('knowledge');
     onWorkspaceFileClear();
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('artifact');
       return next;
     });
-  }, [onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
   const handleFileExplorerModeSelect = useCallback(() => {
-    setRailMode('files');
+    onActiveToolChange('files');
     onWorkspaceFileClear();
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -869,10 +878,10 @@ function WorkbenchKnowledgeRail({
       next.delete('artifact');
       return next;
     });
-  }, [onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
   const handleArtifactsModeSelect = useCallback(() => {
     const firstArtifactId = activeArtifactId ?? artifacts[0]?.id ?? null;
-    setRailMode('artifacts');
+    onActiveToolChange('artifacts');
     onWorkspaceFileClear();
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
@@ -882,56 +891,56 @@ function WorkbenchKnowledgeRail({
       }
       return next;
     });
-  }, [activeArtifactId, artifacts, onWorkspaceFileClear, setSearchParams]);
+  }, [activeArtifactId, artifacts, onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
   const handleBrowserModeSelect = useCallback(() => {
-    setRailMode('browser');
+    onActiveToolChange('browser');
     onWorkspaceFileClear();
-  }, [onWorkspaceFileClear]);
+  }, [onActiveToolChange, onWorkspaceFileClear]);
   const handleArtifactSelect = useCallback((artifactId: string) => {
-    setRailMode('artifacts');
+    onActiveToolChange('artifacts');
     onWorkspaceFileClear();
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('file');
       return new URLSearchParams(setConversationArtifactIdInSearch(next.toString(), artifactId));
     });
-  }, [onWorkspaceFileClear, setSearchParams]);
+  }, [onActiveToolChange, onWorkspaceFileClear, setSearchParams]);
 
   useEffect(() => {
     if (activeArtifactId && artifacts.length > 0) {
-      setRailMode('artifacts');
+      onActiveToolChange('artifacts');
       onWorkspaceFileClear();
     }
-  }, [activeArtifactId, artifacts.length, onWorkspaceFileClear]);
+  }, [activeArtifactId, artifacts.length, onActiveToolChange, onWorkspaceFileClear]);
 
   useEffect(() => {
-    if (railMode === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
-      setRailMode('knowledge');
+    if (activeTool === 'artifacts' && !artifactsLoading && artifacts.length === 0) {
+      onActiveToolChange('knowledge');
       setSearchParams((current) => {
         const next = new URLSearchParams(current);
         next.delete('artifact');
         return next;
       }, { replace: true });
     }
-  }, [artifacts.length, artifactsLoading, railMode, setSearchParams]);
+  }, [activeTool, artifacts.length, artifactsLoading, onActiveToolChange, setSearchParams]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex shrink-0 flex-col gap-1 px-1.5 py-1.5">
-        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'knowledge' && 'ui-sidebar-nav-item-active')} title="Knowledge" onClick={handleKnowledgeModeSelect}>
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'knowledge' && 'ui-sidebar-nav-item-active')} title="Knowledge" onClick={handleKnowledgeModeSelect}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d={KNOWLEDGE_ICON_PATH} />
           </svg>
           <span className="flex-1 text-left">Knowledge</span>
         </button>
-        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'files' && 'ui-sidebar-nav-item-active')} title="File explorer" onClick={handleFileExplorerModeSelect}>
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'files' && 'ui-sidebar-nav-item-active')} title="File explorer" onClick={handleFileExplorerModeSelect}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <path d="M3.75 6.75h5.379a1.5 1.5 0 0 1 1.06.44l2.122 2.12a1.5 1.5 0 0 0 1.06.44H20.25m-16.5-3A2.25 2.25 0 0 0 1.5 9v8.25A2.25 2.25 0 0 0 3.75 19.5h16.5a2.25 2.25 0 0 0 2.25-2.25v-5.25a2.25 2.25 0 0 0-2.25-2.25H3.75" />
           </svg>
           <span className="flex-1 text-left">File Explorer</span>
         </button>
         {artifacts.length > 0 ? (
-          <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'artifacts' && 'ui-sidebar-nav-item-active')} title="Artifacts" onClick={handleArtifactsModeSelect}>
+          <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'artifacts' && 'ui-sidebar-nav-item-active')} title="Artifacts" onClick={handleArtifactsModeSelect}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
               <path d="M6.75 3.75h7.5L19.5 9v11.25H6.75V3.75Z" />
               <path d="M14.25 3.75V9h5.25" />
@@ -941,7 +950,7 @@ function WorkbenchKnowledgeRail({
             <span className="flex-1 text-left">Artifacts</span>
           </button>
         ) : null}
-        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', railMode === 'browser' && 'ui-sidebar-nav-item-active')} title="Browser" onClick={handleBrowserModeSelect}>
+        <button type="button" className={cx('ui-sidebar-nav-item w-full text-left', activeTool === 'browser' && 'ui-sidebar-nav-item-active')} title="Browser" onClick={handleBrowserModeSelect}>
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 opacity-70" aria-hidden="true">
             <circle cx="12" cy="12" r="8.25" />
             <path d="M3.75 12h16.5" />
@@ -951,13 +960,13 @@ function WorkbenchKnowledgeRail({
           <span className="flex-1 text-left">Browser</span>
         </button>
       </div>
-      {railMode === 'knowledge' ? (
+      {activeTool === 'knowledge' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading…</div>}>
             <VaultFileTree activeFileId={activeFileId} onFileSelect={handleFileSelect} />
           </Suspense>
         </div>
-      ) : railMode === 'files' ? (
+      ) : activeTool === 'files' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           {workspaceCwd ? (
             <Suspense fallback={<div className="flex h-full items-center justify-center px-4 text-[12px] text-dim">Loading workspace…</div>}>
@@ -975,7 +984,7 @@ function WorkbenchKnowledgeRail({
             <div className="px-4 py-5 text-[12px] text-dim">Open a local conversation to browse its workspace.</div>
           )}
         </div>
-      ) : railMode === 'artifacts' ? (
+      ) : activeTool === 'artifacts' ? (
         <div className="min-h-0 flex-1 overflow-hidden">
           <ConversationArtifactRailContent
             artifacts={artifacts}
@@ -986,8 +995,8 @@ function WorkbenchKnowledgeRail({
           />
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-hidden">
-          <WorkbenchBrowserTab />
+        <div className="flex min-h-0 flex-1 items-center justify-center px-4 text-center text-[12px] leading-5 text-dim">
+          Browser is open in the workbench pane. Right-click the page to comment on an element.
         </div>
       )}
     </div>
@@ -1002,6 +1011,7 @@ export function Layout() {
   const [desktopEnvironment, setDesktopEnvironment] = useState<DesktopEnvironmentState | null>(null);
   const [appLayoutMode, setAppLayoutMode] = useState<AppLayoutMode>(() => readAppLayoutMode());
   const [activeWorkspaceFile, setActiveWorkspaceFile] = useState<{ cwd: string; path: string } | null>(null);
+  const [activeWorkbenchTool, setActiveWorkbenchTool] = useState<WorkbenchRailMode>('knowledge');
   const warmLiveConversationIds = useWarmOpenConversationTabs(location.pathname);
   const viewportWidth = useViewportWidth();
   const sidebar = useResize({ initial: 224, min: 160, max: 320, storageKey: SIDEBAR_WIDTH_STORAGE_KEY, side: 'left'  });
@@ -1249,12 +1259,13 @@ export function Layout() {
                     className="flex-shrink-0 overflow-hidden border-x border-border-subtle bg-base select-text"
                     aria-label="Workbench note"
                     data-workbench-document-pane="true"
-                    data-has-open-file={activeWorkbenchKnowledgeFileId || activeWorkbenchArtifactId || activeWorkspaceFile ? 'true' : 'false'}
+                    data-has-open-file={activeWorkbenchKnowledgeFileId || activeWorkbenchArtifactId || activeWorkspaceFile || activeWorkbenchTool === 'browser' ? 'true' : 'false'}
                   >
                     <WorkbenchDocumentPane
                       conversationId={activeConversationId}
                       artifactId={activeWorkbenchArtifactId}
                       workspaceFile={activeWorkspaceFile}
+                      activeTool={activeWorkbenchTool}
                     />
                   </section>
                   <ResizeHandle onMouseDown={workbenchExplorer.onMouseDown} onDoubleClick={workbenchExplorer.reset} />
@@ -1268,6 +1279,8 @@ export function Layout() {
                       workspaceCwd={activeWorkspaceCwd}
                       activeArtifactId={activeWorkbenchArtifactId}
                       activeWorkspaceFile={activeWorkspaceFile}
+                      activeTool={activeWorkbenchTool}
+                      onActiveToolChange={setActiveWorkbenchTool}
                       onWorkspaceFileSelect={setActiveWorkspaceFile}
                       onWorkspaceFileClear={clearActiveWorkspaceFile}
                     />
