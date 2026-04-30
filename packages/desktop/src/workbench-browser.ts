@@ -153,29 +153,23 @@ function normalizeCdpParams(input: unknown): Record<string, unknown> | undefined
 
 export type NormalizedWorkbenchBrowserCdpCommand = { method: string; params?: Record<string, unknown> };
 
-function isCdpCommandTuple(input: unknown): input is unknown[] {
-  return Array.isArray(input) && typeof input[0] === 'string';
-}
-
-function normalizeCdpCommandTuple(input: unknown): NormalizedWorkbenchBrowserCdpCommand {
-  if (!isCdpCommandTuple(input)) {
-    throw new Error('CDP command must be a tuple: [method, params?].');
+function normalizeCdpCommandObject(input: unknown): NormalizedWorkbenchBrowserCdpCommand {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('CDP command must be an object: { method, params? }.');
   }
-  if (input.length < 1 || input.length > 2) {
-    throw new Error('CDP command tuple must be [method, params?].');
-  }
+  const candidate = input as { method?: unknown; params?: unknown };
   return {
-    method: normalizeCdpMethod(input[0]),
-    ...(input.length > 1 ? { params: normalizeCdpParams(input[1]) } : {}),
+    method: normalizeCdpMethod(candidate.method),
+    ...(candidate.params !== undefined ? { params: normalizeCdpParams(candidate.params) } : {}),
   };
 }
 
 export function normalizeWorkbenchBrowserCdpCommands(input: unknown): NormalizedWorkbenchBrowserCdpCommand[] {
-  if (isCdpCommandTuple(input)) {
-    return [normalizeCdpCommandTuple(input)];
+  if (input && typeof input === 'object' && !Array.isArray(input)) {
+    return [normalizeCdpCommandObject(input)];
   }
   if (!Array.isArray(input)) {
-    throw new Error('CDP command must be [method, params?] or an array of command tuples.');
+    throw new Error('CDP command must be { method, params? } or an array of command objects.');
   }
   if (input.length === 0) {
     throw new Error('At least one CDP command is required.');
@@ -183,7 +177,7 @@ export function normalizeWorkbenchBrowserCdpCommands(input: unknown): Normalized
   if (input.length > 200) {
     throw new Error('CDP command batches are limited to 200 commands.');
   }
-  return input.map((entry) => normalizeCdpCommandTuple(entry));
+  return input.map((entry) => normalizeCdpCommandObject(entry));
 }
 
 interface WorkbenchBrowserViewEntry {

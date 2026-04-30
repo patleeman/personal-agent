@@ -67,16 +67,16 @@ function formatSnapshot(value: unknown): string {
 
 const EmptyParams = Type.Object({});
 
-const CdpCommand = Type.Tuple([
-  Type.String({ description: 'Chrome DevTools Protocol method, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
-  Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
-]);
+const CdpCommand = Type.Object({
+  method: Type.String({ description: 'Chrome DevTools Protocol method in Domain.command form, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
+  params: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
+});
 
 const CdpParams = Type.Object({
   command: Type.Union([
     CdpCommand,
     Type.Array(CdpCommand, { minItems: 1, maxItems: 200, description: 'Multiple CDP commands to execute sequentially.' }),
-  ], { description: 'A single CDP command tuple [method, params?], or an array of command tuples.' }),
+  ], { description: 'A single CDP command object { method, params? }, or an array of command objects.' }),
   continueOnError: Type.Optional(Type.Boolean({ description: 'Continue executing later commands after a protocol command fails. Defaults to false.' })),
 });
 
@@ -107,11 +107,11 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
       name: 'browser_cdp',
       label: 'Browser CDP',
       description: 'Send one or more Chrome DevTools Protocol commands to the built-in Workbench Browser.',
-      promptSnippet: 'Use browser_cdp for low-level browser automation: send raw CDP as [method, params?], or an array of those tuples for multi-step actions.',
+      promptSnippet: 'Use browser_cdp for low-level browser automation: send raw CDP as { method, params? }, or an array of those objects for multi-step actions.',
       promptGuidelines: [
         'Targets the visible built-in Workbench Browser session for this conversation.',
-        'This is a thin CDP command surface; provide raw command tuples exactly as Chrome DevTools Protocol expects: ["Runtime.evaluate", {"expression":"document.title","returnByValue":true}].',
-        'When doing more than one action, send one browser_cdp call with command set to an array of tuples instead of multiple tool calls.',
+        'This is a thin CDP command surface; provide raw command objects exactly as Chrome DevTools Protocol expects, for example: {"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":true}}.',
+        'When doing more than one action, send one browser_cdp call with command set to an array of command objects instead of multiple tool calls.',
         'Prefer browser_snapshot for observation and browser_screenshot for visual checks; use browser_cdp when you need direct browser control.',
         'For page JS, use Runtime.evaluate with returnByValue=true when you need JSON-like results.',
       ],

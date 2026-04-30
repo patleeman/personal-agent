@@ -36,7 +36,7 @@ describe('workbench browser agent extension', () => {
     const snapshot = await tools[0]!.execute('tool-1' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
     expect(snapshot.content[0]?.text).toContain('https://example.com/');
 
-    const cdp = await tools[1]!.execute('tool-2' as never, { command: ['Runtime.evaluate', { expression: 'location.href', returnByValue: true }] } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
+    const cdp = await tools[1]!.execute('tool-2' as never, { command: { method: 'Runtime.evaluate', params: { expression: 'location.href', returnByValue: true } } } as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ text?: string }> };
     expect(cdp.content[0]?.text).toContain('Runtime.evaluate');
 
     const screenshot = await tools[2]!.execute('tool-3' as never, {} as never, undefined as never, undefined as never, ctx as never) as { content: Array<{ type: string; data?: string }> };

@@ -42,22 +42,22 @@ describe('workbench browser validation', () => {
     expect(() => normalizeWorkbenchBrowserUrl('file:///etc/passwd')).toThrow('http(s)');
   });
 
-  it('normalizes single and batched CDP tuple commands', () => {
-    expect(normalizeWorkbenchBrowserCdpCommands(['Runtime.evaluate', { expression: 'document.title' }])).toEqual([
+  it('normalizes single and batched CDP object commands', () => {
+    expect(normalizeWorkbenchBrowserCdpCommands({ method: 'Runtime.evaluate', params: { expression: 'document.title' } })).toEqual([
       { method: 'Runtime.evaluate', params: { expression: 'document.title' } },
     ]);
     expect(normalizeWorkbenchBrowserCdpCommands([
-      ['Input.dispatchMouseEvent', { type: 'mouseMoved', x: 1, y: 2 }],
-      ['Page.captureScreenshot'],
+      { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
+      { method: 'Page.captureScreenshot' },
     ])).toEqual([
       { method: 'Input.dispatchMouseEvent', params: { type: 'mouseMoved', x: 1, y: 2 } },
       { method: 'Page.captureScreenshot' },
     ]);
   });
 
-  it('rejects invalid CDP tuple commands', () => {
-    expect(() => normalizeWorkbenchBrowserCdpCommands({ method: 'Runtime.evaluate' })).toThrow('tuple');
-    expect(() => normalizeWorkbenchBrowserCdpCommands(['Runtime.evaluate', []])).toThrow('params');
-    expect(() => normalizeWorkbenchBrowserCdpCommands(['bad'])).toThrow('Domain.command');
+  it('rejects invalid CDP object commands', () => {
+    expect(() => normalizeWorkbenchBrowserCdpCommands('Runtime.evaluate')).toThrow('object');
+    expect(() => normalizeWorkbenchBrowserCdpCommands({ method: 'Runtime.evaluate', params: [] })).toThrow('params');
+    expect(() => normalizeWorkbenchBrowserCdpCommands({ method: 'bad' })).toThrow('Domain.command');
   });
 });
