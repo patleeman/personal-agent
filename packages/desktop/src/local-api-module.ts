@@ -333,6 +333,7 @@ export interface LocalApiModule {
   setDesktopWorkbenchBrowserToolHost?(host: {
     snapshot(conversationId: string): Promise<unknown>;
     screenshot(conversationId: string): Promise<unknown>;
+    cdp(input: { conversationId: string; method: string; params?: Record<string, unknown> }): Promise<unknown>;
   } | null): void;
 }
 

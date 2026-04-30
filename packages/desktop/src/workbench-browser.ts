@@ -56,6 +56,13 @@ export interface WorkbenchBrowserScreenshot extends WorkbenchBrowserState {
   capturedAt: string;
 }
 
+export interface WorkbenchBrowserCdpResult {
+  ok: true;
+  method: string;
+  result: unknown;
+  state: WorkbenchBrowserState;
+}
+
 export interface WorkbenchBrowserCommentTarget {
   url: string;
   title: string;
@@ -119,6 +126,27 @@ export function normalizeWorkbenchBrowserUrl(input: unknown): string {
   }
 
   return parsed.toString();
+}
+
+function normalizeCdpMethod(input: unknown): string {
+  const method = typeof input === 'string' ? input.trim() : '';
+  if (!method) {
+    throw new Error('CDP method is required.');
+  }
+  if (!/^[A-Za-z][A-Za-z0-9]*\.[A-Za-z][A-Za-z0-9]*$/.test(method)) {
+    throw new Error('CDP method must be in Domain.command form.');
+  }
+  return method;
+}
+
+function normalizeCdpParams(input: unknown): Record<string, unknown> | undefined {
+  if (input === undefined || input === null) {
+    return undefined;
+  }
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    throw new Error('CDP params must be an object when provided.');
+  }
+  return input as Record<string, unknown>;
 }
 
 interface WorkbenchBrowserViewEntry {
@@ -302,6 +330,19 @@ export class WorkbenchBrowserViewController {
       dataBase64: capture.data ?? '',
       viewport: { width: bounds.width, height: bounds.height },
       capturedAt: new Date().toISOString(),
+    };
+  }
+
+  async cdp(owner: WebContents, input: { method?: unknown; params?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserCdpResult> {
+    const view = this.requireView(owner, input.sessionKey);
+    const method = normalizeCdpMethod(input.method);
+    const params = normalizeCdpParams(input.params);
+    const result = await withCdp(view.webContents, async (send) => send(method, params));
+    return {
+      ok: true,
+      method,
+      result,
+      state: getState(view.webContents, this.views.get(this.viewKey(owner.id, input.sessionKey))),
     };
   }
 

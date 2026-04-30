@@ -39,7 +39,7 @@ The right-side workbench rail includes Knowledge, File Explorer, Artifacts when 
 
 Workbench Browser sessions are scoped to the conversation. Switching conversations hides the previous conversation's webview and restores the selected conversation's webview, matching the workbench file/explorer model instead of using one global browser.
 
-Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot` and `browser_screenshot`.
+Desktop conversations also expose agent tools for that same embedded browser: `browser_snapshot`, `browser_cdp`, and `browser_screenshot`. `browser_cdp` is a thin Chrome DevTools Protocol command surface for direct browser control.
 
 Agents should default to `browser_snapshot` for page understanding and navigation because it is more efficient and gives refs/selectors. Use `browser_screenshot` when visual layout or image/canvas-heavy content matters.
 

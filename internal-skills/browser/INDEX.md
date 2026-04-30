@@ -62,9 +62,10 @@ Browser comments are prompt context, not durable page annotations. Avoid buildin
 
 ## Agent-facing browser use
 
-There is one browser session per conversation workbench and two agent-facing browser tools:
+There is one browser session per conversation workbench and three agent-facing browser tools:
 
 - `browser_snapshot` — observe the current browser state
+- `browser_cdp` — send one Chrome DevTools Protocol command to the current browser session
 - `browser_screenshot` — capture the current browser viewport as an image
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
@@ -110,6 +111,29 @@ Refs are snapshot-scoped. After navigation or major DOM changes, take a fresh sn
 Prefer accessibility data for role/name/state, but always include DOM fallback selectors so the page can be inspected and discussed clearly.
 
 If the user manually changes the page after the last agent snapshot — for example logging in, clicking, typing, or navigating — the next user prompt includes `browser-changed-since-snapshot` context. Treat that as a stale-observation warning and call `browser_snapshot` before assuming the old page state is still true.
+
+### `browser_cdp`
+
+Use `browser_cdp` when direct browser control is needed. It sends one raw Chrome DevTools Protocol command to the current Workbench Browser session:
+
+```json
+{
+  "method": "Runtime.evaluate",
+  "params": {
+    "expression": "document.title",
+    "returnByValue": true
+  }
+}
+```
+
+The tool is intentionally thin. Agents should provide CDP `method` and `params` exactly as Chrome expects. Useful commands include:
+
+- `Runtime.evaluate` for page JavaScript and structured page inspection
+- `Page.navigate` for navigation
+- `DOM.getDocument`, `DOM.querySelector`, and related DOM commands for node-level inspection
+- `Input.dispatchMouseEvent` and `Input.dispatchKeyEvent` for low-level input
+
+Prefer `browser_snapshot` for normal observation and `browser_screenshot` for visual checks. Use CDP when the task needs direct control or a specific protocol capability.
 
 ### `browser_screenshot`
 
@@ -162,7 +186,7 @@ Current relevant files:
 - `packages/desktop/src/workbench-browser.ts` — Electron browser view controller, validation, snapshots, screenshots, comments
 - `packages/desktop/src/window.ts` — owns the browser controller and routes window-scoped operations
 - `packages/desktop/src/ipc.ts` and `packages/desktop/src/preload.ts` — bridge browser operations/events
-- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot` and `browser_screenshot`
+- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot`, `browser_cdp`, and `browser_screenshot`
 - `packages/web/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
 - `packages/web/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
 

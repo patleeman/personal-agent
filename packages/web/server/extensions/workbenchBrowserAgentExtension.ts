@@ -4,6 +4,7 @@ import type { ExtensionAPI } from '@mariozechner/pi-coding-agent';
 export interface WorkbenchBrowserToolHost {
   snapshot(conversationId: string): Promise<unknown>;
   screenshot(conversationId: string): Promise<unknown>;
+  cdp(input: { conversationId: string; method: string; params?: Record<string, unknown> }): Promise<unknown>;
 }
 
 let host: WorkbenchBrowserToolHost | null = null;
@@ -66,6 +67,11 @@ function formatSnapshot(value: unknown): string {
 
 const EmptyParams = Type.Object({});
 
+const CdpParams = Type.Object({
+  method: Type.String({ description: 'Chrome DevTools Protocol method, for example Runtime.evaluate, Page.navigate, or DOM.getDocument.' }),
+  params: Type.Optional(Type.Record(Type.String(), Type.Any(), { description: 'CDP command params object.' })),
+});
+
 export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => void {
   return (pi: ExtensionAPI) => {
     pi.registerTool({
@@ -85,6 +91,32 @@ export function createWorkbenchBrowserAgentExtension(): (pi: ExtensionAPI) => vo
         return {
           content: [{ type: 'text' as const, text: formatSnapshot(snapshot) }],
           details: snapshot as Record<string, unknown>,
+        };
+      },
+    });
+
+    pi.registerTool({
+      name: 'browser_cdp',
+      label: 'Browser CDP',
+      description: 'Send one Chrome DevTools Protocol command to the built-in Workbench Browser.',
+      promptSnippet: 'Use browser_cdp for low-level browser automation: send a single CDP command such as Runtime.evaluate, Page.navigate, DOM.getDocument, or Input.dispatchMouseEvent.',
+      promptGuidelines: [
+        'Targets the visible built-in Workbench Browser session for this conversation.',
+        'This is a thin CDP command surface; provide method and params exactly as Chrome DevTools Protocol expects.',
+        'Prefer browser_snapshot for observation and browser_screenshot for visual checks; use browser_cdp when you need direct browser control.',
+        'For page JS, use Runtime.evaluate with returnByValue=true when you need JSON-like results.',
+      ],
+      parameters: CdpParams,
+      async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+        const conversationId = ctx.sessionManager.getSessionId();
+        const result = await requireHost().cdp({
+          conversationId,
+          method: params.method,
+          ...(params.params !== undefined ? { params: params.params } : {}),
+        });
+        return {
+          content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2).slice(0, 80_000) }],
+          details: result as Record<string, unknown>,
         };
       },
     });
