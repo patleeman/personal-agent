@@ -1255,7 +1255,4 @@ export function registerDesktopIpc(options: {
     return options.windowController.snapshotWorkbenchBrowserForWebContents(event.sender.id, input?.sessionKey);
   });
 
-  ipcMain.handle(`${CHANNEL_PREFIX}:workbench-browser-run-actions`, async (event, input) => {
-    return options.windowController.runWorkbenchBrowserActionsForWebContents(event.sender.id, input ?? {});
-  });
 }

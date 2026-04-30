@@ -399,14 +399,6 @@ export class DesktopWindowController {
     return this.workbenchBrowser.snapshot(tracked.window.webContents, sessionKey);
   }
 
-  async runWorkbenchBrowserActionsForWebContents(webContentsId: number, input: { actions?: unknown; sessionKey?: string | null }): Promise<unknown> {
-    const tracked = this.trackedWindows.get(webContentsId);
-    if (!tracked || tracked.window.isDestroyed()) {
-      throw new Error('Workbench browser owner window is unavailable.');
-    }
-    return this.workbenchBrowser.runActions(tracked.window.webContents, input.actions, input.sessionKey);
-  }
-
   async snapshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
     return this.workbenchBrowser.snapshot(owner, conversationId);
@@ -415,11 +407,6 @@ export class DesktopWindowController {
   async screenshotWorkbenchBrowserForConversation(conversationId?: string | null): Promise<unknown> {
     const owner = await this.ensureWorkbenchBrowserOwner(conversationId);
     return this.workbenchBrowser.screenshot(owner, conversationId);
-  }
-
-  async runWorkbenchBrowserScriptForConversation(input: { conversationId?: string | null; script?: unknown; timeoutMs?: unknown }): Promise<unknown> {
-    const owner = await this.ensureWorkbenchBrowserOwner(input.conversationId);
-    return this.workbenchBrowser.runScript(owner, { ...input, sessionKey: input.conversationId });
   }
 
   sendShortcutToFocusedWindow(action: DesktopRendererShortcutAction): void {

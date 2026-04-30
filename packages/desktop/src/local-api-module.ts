@@ -333,7 +333,6 @@ export interface LocalApiModule {
   setDesktopWorkbenchBrowserToolHost?(host: {
     snapshot(conversationId: string): Promise<unknown>;
     screenshot(conversationId: string): Promise<unknown>;
-    runScript(input: { conversationId: string; script: string; timeoutMs?: number }): Promise<unknown>;
   } | null): void;
 }
 

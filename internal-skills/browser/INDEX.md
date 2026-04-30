@@ -62,10 +62,9 @@ Browser comments are prompt context, not durable page annotations. Avoid buildin
 
 ## Agent-facing browser use
 
-There is one browser session per conversation workbench and three agent-facing browser tools:
+There is one browser session per conversation workbench and two agent-facing browser tools:
 
 - `browser_snapshot` — observe the current browser state
-- `browser_script` — run a browser automation script against the current browser session
 - `browser_screenshot` — capture the current browser viewport as an image
 
 These tools should target the built-in Workbench Browser session, not an unrelated Playwright/`agent-browser` session.
@@ -108,75 +107,9 @@ Title: Sign in
 
 Refs are snapshot-scoped. After navigation or major DOM changes, take a fresh snapshot before using refs again.
 
-Prefer accessibility data for role/name/state, but always include DOM fallback selectors so scripts can act.
+Prefer accessibility data for role/name/state, but always include DOM fallback selectors so the page can be inspected and discussed clearly.
 
 If the user manually changes the page after the last agent snapshot — for example logging in, clicking, typing, or navigating — the next user prompt includes `browser-changed-since-snapshot` context. Treat that as a stale-observation warning and call `browser_snapshot` before assuming the old page state is still true.
-
-### `browser_script`
-
-Use `browser_script` as the browser equivalent of `bash`: one powerful script execution surface, not many tiny click/type tools.
-
-Scripts should run against the current Workbench Browser session and can use refs from the latest snapshot.
-
-Example:
-
-```js
-await browser.goto('https://www.google.com/');
-await browser.type('textarea[name=q]', 'personal agent');
-await browser.press('Enter');
-await browser.waitForText('Personal Agent');
-return await browser.snapshot();
-```
-
-Supported API should include at least:
-
-Navigation and state:
-
-- `await browser.goto(url)`
-- `await browser.reload()`
-- `await browser.back()`
-- `await browser.forward()`
-- `await browser.url()`
-- `await browser.title()`
-
-Observation:
-
-- `await browser.snapshot()`
-- `await browser.text(selectorOrRef?)`
-- `await browser.html(selectorOrRef?)`
-- `await browser.exists(selectorOrRef)`
-- `await browser.query(selectorOrRef)`
-
-Actions:
-
-- `await browser.click(selectorOrRef)`
-- `await browser.type(selectorOrRef, text)`
-- `await browser.press(key)`
-- `await browser.scroll(x, y)`
-- `await browser.select(selectorOrRef, value)`
-- `await browser.check(selectorOrRef)`
-- `await browser.uncheck(selectorOrRef)`
-- `await browser.setInputFiles(selectorOrRef, paths)`
-
-Waiting:
-
-- `await browser.wait(ms)`
-- `await browser.waitFor(selectorOrRef)`
-- `await browser.waitForText(text)`
-- `await browser.waitForLoadState(state?)`
-
-Escape hatch:
-
-- `await browser.evaluate(fnOrSource, ...args)`
-
-`evaluate` is allowed because it is too useful to omit. It runs in the loaded page context, not in Electron main or the Personal Agent renderer. It can inspect and mutate the loaded page, so tool output must show the script and failures clearly.
-
-Diagnostics:
-
-- `browser.log(...values)` should append to the tool result logs.
-- returned values must be JSON-serializable and size-limited.
-
-Implementation note: `setInputFiles` uses Chrome DevTools Protocol (`DOM.setFileInputFiles`) in Electron main. Keep file path validation at the tool boundary if this API is ever exposed to untrusted callers outside agent scripts.
 
 ### `browser_screenshot`
 
@@ -199,35 +132,6 @@ It should return an image attachment or image data plus basic metadata:
 - image MIME/data/path according to the tool system's normal attachment conventions
 
 Current desktop tool output returns PNG data as base64 in tool details with URL/title/viewport metadata.
-
-### Script isolation
-
-Never execute agent-provided browser scripts directly in Electron main.
-
-Correct model:
-
-```text
-agent script
-  ↓
-isolated worker / utility process / constrained VM
-  ↓ RPC calls such as browser.click('@e1')
-Electron main validates and applies operations to WebContentsView
-  ↓
-Workbench Browser page
-```
-
-Rules:
-
-- Electron main is the broker, not the script sandbox.
-- The worker gets only `browser`, `console`/`browser.log`, timers, and cancellation/timeout primitives.
-- Do not expose Node builtins, filesystem, environment variables, Electron objects, app state, or IPC directly to the script.
-- Hard-timeout scripts and terminate the worker/process on timeout.
-- Size-limit logs and return values.
-- Validate every operation in main before applying it to `WebContentsView`.
-- Browser operations should be CDP-backed from Electron main where possible: `Runtime.evaluate` for page inspection/evaluate, `Input.dispatch*` for click/key/scroll/text insertion, `DOM.setFileInputFiles` for uploads, and `Page.captureScreenshot` for screenshots.
-- Keep DOM mutation fallbacks narrow and explicit for operations that are fundamentally DOM state changes (`select`, `check`, `uncheck`).
-- `browser.evaluate(...)` executes only in the loaded page via CDP `Runtime.evaluate`.
-- `evaluate` is blocked on `personal-agent://app` pages so the agent cannot casually poke the host UI.
 
 ### Auto-open behavior
 
@@ -255,11 +159,10 @@ Long term, desktop browser tools should use the Workbench Browser session direct
 
 Current relevant files:
 
-- `packages/desktop/src/workbench-browser.ts` — Electron browser view controller, validation, actions, comments
-- `packages/desktop/src/workbench-browser-script-worker.ts` — isolated script worker for `browser_script`
+- `packages/desktop/src/workbench-browser.ts` — Electron browser view controller, validation, snapshots, screenshots, comments
 - `packages/desktop/src/window.ts` — owns the browser controller and routes window-scoped operations
 - `packages/desktop/src/ipc.ts` and `packages/desktop/src/preload.ts` — bridge browser operations/events
-- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot` and `browser_script`
+- `packages/web/server/extensions/workbenchBrowserAgentExtension.ts` — Pi tool registration for `browser_snapshot` and `browser_screenshot`
 - `packages/web/src/components/Layout.tsx` — Workbench Browser UI and comment overlay
 - `packages/web/src/pages/ConversationPage.tsx` — pending browser comments in the composer and prompt context injection
 

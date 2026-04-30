@@ -1,15 +1,8 @@
 import { BrowserWindow, Menu, WebContentsView, shell, type WebContents } from 'electron';
-import { Worker } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
 import { readStoredWorkbenchBrowserUrl, writeStoredWorkbenchBrowserUrl } from './state/workbench-browser-state.js';
 
 const DEFAULT_BROWSER_URL = 'https://www.google.com/';
 const MAX_SNAPSHOT_TEXT_LENGTH = 30_000;
-const MAX_ACTIONS_PER_BATCH = 25;
-const MAX_ACTION_TEXT_LENGTH = 5_000;
-const MAX_BROWSER_SCRIPT_LENGTH = 80_000;
-const MAX_BROWSER_SCRIPT_TIMEOUT_MS = 60_000;
 const BROWSER_COMMENT_CHANNEL = 'personal-agent-desktop:workbench-browser-comment';
 
 type CdpCommand = (method: string, params?: Record<string, unknown>) => Promise<unknown>;
@@ -63,13 +56,6 @@ export interface WorkbenchBrowserScreenshot extends WorkbenchBrowserState {
   capturedAt: string;
 }
 
-export interface WorkbenchBrowserScriptResult {
-  ok: true;
-  result: unknown;
-  logs: string[];
-  snapshot: WorkbenchBrowserSnapshot;
-}
-
 export interface WorkbenchBrowserCommentTarget {
   url: string;
   title: string;
@@ -85,19 +71,6 @@ export interface WorkbenchBrowserCommentTarget {
   viewportRect: { x: number; y: number; width: number; height: number };
   scroll: { x: number; y: number };
   devicePixelRatio: number;
-}
-
-export type WorkbenchBrowserAction =
-  | { type: 'click'; selector: string }
-  | { type: 'type'; selector: string; text: string }
-  | { type: 'key'; key: string }
-  | { type: 'scroll'; x?: number; y?: number }
-  | { type: 'wait'; ms: number };
-
-export interface WorkbenchBrowserBatchResult {
-  ok: true;
-  actions: Array<{ index: number; type: WorkbenchBrowserAction['type']; ok: true }>;
-  snapshot: WorkbenchBrowserSnapshot;
 }
 
 function isFiniteInteger(value: unknown): value is number {
@@ -146,64 +119,6 @@ export function normalizeWorkbenchBrowserUrl(input: unknown): string {
   }
 
   return parsed.toString();
-}
-
-function normalizeSelector(input: unknown, label: string): string {
-  const selector = typeof input === 'string' ? input.trim() : '';
-  if (!selector) {
-    throw new Error(`${label} selector is required.`);
-  }
-  if (selector.length > 1_000) {
-    throw new Error(`${label} selector is too long.`);
-  }
-  return selector;
-}
-
-function normalizeAction(input: unknown): WorkbenchBrowserAction {
-  if (!input || typeof input !== 'object') {
-    throw new Error('Action must be an object.');
-  }
-
-  const action = input as Record<string, unknown>;
-  switch (action.type) {
-    case 'click':
-      return { type: 'click', selector: normalizeSelector(action.selector, 'Click') };
-    case 'type': {
-      const text = typeof action.text === 'string' ? action.text : '';
-      if (text.length > MAX_ACTION_TEXT_LENGTH) {
-        throw new Error('Type action text is too long.');
-      }
-      return { type: 'type', selector: normalizeSelector(action.selector, 'Type'), text };
-    }
-    case 'key': {
-      const key = typeof action.key === 'string' ? action.key.trim() : '';
-      if (!key || key.length > 80) {
-        throw new Error('Key action requires a short key name.');
-      }
-      return { type: 'key', key };
-    }
-    case 'scroll': {
-      const x = typeof action.x === 'number' && Number.isFinite(action.x) ? action.x : 0;
-      const y = typeof action.y === 'number' && Number.isFinite(action.y) ? action.y : 0;
-      return { type: 'scroll', x, y };
-    }
-    case 'wait': {
-      const ms = typeof action.ms === 'number' && Number.isFinite(action.ms) ? Math.max(0, Math.min(10_000, Math.round(action.ms))) : 500;
-      return { type: 'wait', ms };
-    }
-    default:
-      throw new Error('Unsupported browser action type.');
-  }
-}
-
-export function normalizeWorkbenchBrowserActions(input: unknown): WorkbenchBrowserAction[] {
-  if (!Array.isArray(input)) {
-    throw new Error('Actions must be an array.');
-  }
-  if (input.length > MAX_ACTIONS_PER_BATCH) {
-    throw new Error(`A batch can run at most ${MAX_ACTIONS_PER_BATCH} actions.`);
-  }
-  return input.map(normalizeAction);
 }
 
 interface WorkbenchBrowserViewEntry {
@@ -262,37 +177,9 @@ async function cdpEvaluate(webContents: WebContents, expression: string): Promis
   })));
 }
 
-function keyEventFor(key: string): { key: string; code: string; windowsVirtualKeyCode: number; text?: string } {
-  const normalized = key.length === 1 ? key : key.trim();
-  const special: Record<string, { key: string; code: string; windowsVirtualKeyCode: number }> = {
-    Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 },
-    Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 },
-    Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
-    Backspace: { key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 },
-    Delete: { key: 'Delete', code: 'Delete', windowsVirtualKeyCode: 46 },
-    ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
-    ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
-    ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
-    ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
-  };
-  if (special[normalized]) return special[normalized];
-  const char = normalized.length === 1 ? normalized : '';
-  return {
-    key: char || normalized,
-    code: char ? `Key${char.toUpperCase()}` : normalized,
-    windowsVirtualKeyCode: char ? char.toUpperCase().charCodeAt(0) : 0,
-    ...(char ? { text: char } : {}),
-  };
-}
-
-function getScriptWorkerPath(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), 'workbench-browser-script-worker.js');
-}
-
 export class WorkbenchBrowserViewController {
   private views = new Map<string, WorkbenchBrowserViewEntry>();
   private activeViewKeysByOwner = new Map<number, string>();
-  private snapshotRefs = new Map<string, Map<string, { selector: string; xpath: string }>>();
 
   getState(ownerWebContentsId: number, sessionKey?: string | null): WorkbenchBrowserState | null {
     const entry = this.views.get(this.viewKey(ownerWebContentsId, sessionKey));
@@ -393,9 +280,7 @@ export class WorkbenchBrowserViewController {
     const elements = Array.isArray(rawSnapshot.elements)
       ? rawSnapshot.elements as WorkbenchBrowserSnapshotElement[]
       : [];
-    const viewKey = this.viewKey(owner.id, sessionKey);
-    this.snapshotRefs.set(viewKey, new Map(elements.map((element) => [element.ref, { selector: element.selector, xpath: element.xpath }])));
-    const entry = this.views.get(viewKey);
+    const entry = this.views.get(this.viewKey(owner.id, sessionKey));
     if (entry) {
       entry.lastSnapshotRevision = entry.browserRevision;
     }
@@ -420,81 +305,6 @@ export class WorkbenchBrowserViewController {
     };
   }
 
-  async runScript(owner: WebContents, input: { script?: unknown; timeoutMs?: unknown; sessionKey?: string | null }): Promise<WorkbenchBrowserScriptResult> {
-    const script = typeof input.script === 'string' ? input.script : '';
-    if (!script.trim()) {
-      throw new Error('browser_script requires a script.');
-    }
-    if (script.length > MAX_BROWSER_SCRIPT_LENGTH) {
-      throw new Error(`browser_script script is too long. Max ${MAX_BROWSER_SCRIPT_LENGTH} characters.`);
-    }
-    const timeoutMs = typeof input.timeoutMs === 'number' && Number.isFinite(input.timeoutMs)
-      ? Math.max(1_000, Math.min(MAX_BROWSER_SCRIPT_TIMEOUT_MS, Math.round(input.timeoutMs)))
-      : 30_000;
-    const view = this.requireView(owner, input.sessionKey);
-    const worker = new Worker(getScriptWorkerPath());
-
-    try {
-      const output = await new Promise<{ result: unknown; logs: string[] }>((resolvePromise, rejectPromise) => {
-        const timeout = setTimeout(() => {
-          rejectPromise(new Error(`browser_script timed out after ${timeoutMs}ms.`));
-        }, timeoutMs);
-
-        worker.on('message', (message: unknown) => {
-          const payload = message as { type?: string; request?: { id: number; op: string; args: unknown[] }; result?: unknown; logs?: string[]; error?: string };
-          if (payload.type === 'done') {
-            clearTimeout(timeout);
-            resolvePromise({ result: payload.result, logs: Array.isArray(payload.logs) ? payload.logs : [] });
-            return;
-          }
-          if (payload.type === 'error') {
-            clearTimeout(timeout);
-            rejectPromise(new Error(payload.error || 'browser_script failed.'));
-            return;
-          }
-          if (payload.type === 'rpc' && payload.request) {
-            const request = payload.request;
-            void this.runScriptOperation(owner, view, request.op, request.args, input.sessionKey)
-              .then((value) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: true, value } }))
-              .catch((error) => worker.postMessage({ type: 'rpc-response', response: { id: request.id, ok: false, error: error instanceof Error ? error.message : String(error) } }));
-          }
-        });
-        worker.on('error', (error) => {
-          clearTimeout(timeout);
-          rejectPromise(error);
-        });
-        worker.postMessage({ type: 'start', script });
-      });
-
-      return {
-        ok: true,
-        result: output.result,
-        logs: output.logs,
-        snapshot: await this.snapshot(owner, input.sessionKey),
-      };
-    } finally {
-      await worker.terminate().catch(() => undefined);
-    }
-  }
-
-  async runActions(owner: WebContents, rawActions: unknown, sessionKey?: string | null): Promise<WorkbenchBrowserBatchResult> {
-    const actions = normalizeWorkbenchBrowserActions(rawActions);
-    const view = this.requireView(owner, sessionKey);
-    const completed: WorkbenchBrowserBatchResult['actions'] = [];
-
-    for (let index = 0; index < actions.length; index += 1) {
-      const action = actions[index]!;
-      await this.runAction(view, action);
-      completed.push({ index, type: action.type, ok: true });
-    }
-
-    return {
-      ok: true,
-      actions: completed,
-      snapshot: await this.snapshot(owner, sessionKey),
-    };
-  }
-
   destroy(ownerWebContentsId: number): void {
     for (const [viewKey, entry] of this.views) {
       if (!viewKey.startsWith(`${ownerWebContentsId}:`)) {
@@ -507,7 +317,6 @@ export class WorkbenchBrowserViewController {
         // Best-effort cleanup. Electron may already have torn down the window.
       }
       entry.view.webContents.close();
-      this.snapshotRefs.delete(viewKey);
     }
     this.activeViewKeysByOwner.delete(ownerWebContentsId);
   }
@@ -772,220 +581,7 @@ export class WorkbenchBrowserViewController {
         }
         return '/' + parts.join('/');
       };
-      const resolveTarget = (selectorOrRef, refs) => {
-        const ref = refs[String(selectorOrRef || '')];
-        const selector = ref?.selector || String(selectorOrRef || '');
-        let element = selector ? document.querySelector(selector) : null;
-        if (!element && ref?.xpath) {
-          element = document.evaluate(ref.xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-        }
-        if (!element) throw new Error('No element matches: ' + selectorOrRef);
-        return element;
-      };
     `;
   }
 
-  private resolveRefs(owner: WebContents, sessionKey?: string | null): Record<string, { selector: string; xpath: string }> {
-    return Object.fromEntries(this.snapshotRefs.get(this.viewKey(owner.id, sessionKey))?.entries() ?? []);
-  }
-
-  private async runScriptOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
-    switch (op) {
-      case 'goto': return this.cdpNavigate(owner, view, args[0], sessionKey);
-      case 'reload': return this.reload(owner, sessionKey);
-      case 'back': return this.goBack(owner, sessionKey);
-      case 'forward': return this.goForward(owner, sessionKey);
-      case 'url': return view.webContents.getURL();
-      case 'title': return view.webContents.getTitle();
-      case 'snapshot': return this.snapshot(owner, sessionKey);
-      case 'screenshot': return this.screenshot(owner, sessionKey);
-      case 'click': await this.runAction(view, { type: 'click', selector: this.resolveSelector(owner, args[0], sessionKey) }); return true;
-      case 'type': await this.runAction(view, { type: 'type', selector: this.resolveSelector(owner, args[0], sessionKey), text: String(args[1] ?? '') }); return true;
-      case 'press': await this.runAction(view, { type: 'key', key: String(args[0] ?? '') }); return true;
-      case 'scroll': await this.runAction(view, { type: 'scroll', x: Number(args[0] ?? 0), y: Number(args[1] ?? 0) }); return true;
-      case 'wait': await wait(Math.max(0, Math.min(30_000, Math.round(Number(args[0] ?? 500))))); return true;
-      case 'text': return this.evaluateDomOperation(owner, view, 'text', args, sessionKey);
-      case 'html': return this.evaluateDomOperation(owner, view, 'html', args, sessionKey);
-      case 'exists': return this.evaluateDomOperation(owner, view, 'exists', args, sessionKey);
-      case 'query': return this.evaluateDomOperation(owner, view, 'query', args, sessionKey);
-      case 'select': return this.evaluateDomOperation(owner, view, 'select', args, sessionKey);
-      case 'check': return this.evaluateDomOperation(owner, view, 'check', args, sessionKey);
-      case 'uncheck': return this.evaluateDomOperation(owner, view, 'uncheck', args, sessionKey);
-      case 'setInputFiles': return this.setInputFiles(owner, view, args, sessionKey);
-      case 'waitFor': return this.waitForDom(owner, view, String(args[0] ?? ''), false, sessionKey);
-      case 'waitForText': return this.waitForDom(owner, view, String(args[0] ?? ''), true, sessionKey);
-      case 'waitForLoadState': return this.waitForLoadState(view);
-      case 'evaluate': return this.evaluatePage(view, args);
-      default: throw new Error(`Unsupported browser operation: ${op}`);
-    }
-  }
-
-  private resolveSelector(owner: WebContents, selectorOrRef: unknown, sessionKey?: string | null): string {
-    const raw = typeof selectorOrRef === 'string' ? selectorOrRef.trim() : '';
-    if (!raw) throw new Error('selector/ref is required.');
-    return this.snapshotRefs.get(this.viewKey(owner.id, sessionKey))?.get(raw)?.selector ?? raw;
-  }
-
-  private async cdpNavigate(owner: WebContents, view: WebContentsView, inputUrl: unknown, sessionKey?: string | null): Promise<WorkbenchBrowserState> {
-    const url = normalizeWorkbenchBrowserUrl(inputUrl);
-    await withCdp(view.webContents, async (send) => {
-      await send('Page.navigate', { url });
-    });
-    await this.waitForLoadState(view).catch(() => undefined);
-    return getState(view.webContents, this.views.get(this.viewKey(owner.id, sessionKey)));
-  }
-
-  private async evaluateDomOperation(owner: WebContents, view: WebContentsView, op: string, args: unknown[], sessionKey?: string | null): Promise<unknown> {
-    const refs = this.resolveRefs(owner, sessionKey);
-    return cdpEvaluate(view.webContents, `(() => {
-      ${this.pageHelperSource()}
-      const refs = ${JSON.stringify(refs)};
-      const op = ${JSON.stringify(op)};
-      const selectorOrRef = ${JSON.stringify(args[0] ?? '')};
-      if (op === 'text' && !selectorOrRef) return document.body?.innerText || '';
-      if (op === 'html' && !selectorOrRef) return document.documentElement?.outerHTML || '';
-      let element;
-      try { element = resolveTarget(selectorOrRef, refs); } catch (error) { if (op === 'exists') return false; throw error; }
-      if (op === 'exists') return true;
-      if (op === 'text') return element.innerText || element.textContent || element.value || '';
-      if (op === 'html') return element.outerHTML || '';
-      if (op === 'query') { const rect = element.getBoundingClientRect(); return { selector: selectorFor(element), xpath: xpathFor(element), role: elementRole(element), name: accessibleName(element), text: max(element.innerText || element.textContent || element.value || '', 500), bounds: { x: Math.round(rect.x), y: Math.round(rect.y), width: Math.round(rect.width), height: Math.round(rect.height) } }; }
-      if (op === 'select') { element.value = ${JSON.stringify(args[1] ?? '')}; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
-      if (op === 'check' || op === 'uncheck') { element.checked = op === 'check'; element.dispatchEvent(new Event('input', { bubbles: true })); element.dispatchEvent(new Event('change', { bubbles: true })); return true; }
-      throw new Error('Unsupported DOM operation: ' + op);
-    })()`);
-  }
-
-  private async setInputFiles(owner: WebContents, view: WebContentsView, args: unknown[], sessionKey?: string | null): Promise<boolean> {
-    const selector = this.resolveSelector(owner, args[0], sessionKey);
-    const files = Array.isArray(args[1]) ? args[1].filter((file): file is string => typeof file === 'string' && file.trim().length > 0) : [];
-    if (!files.length) {
-      throw new Error('setInputFiles requires at least one file path.');
-    }
-    await withCdp(view.webContents, async (send) => {
-      const document = await send('DOM.getDocument', { depth: -1, pierce: true }) as { root?: { nodeId?: number } };
-      const rootNodeId = document.root?.nodeId;
-      if (!rootNodeId) throw new Error('Could not inspect browser DOM.');
-      const query = await send('DOM.querySelector', { nodeId: rootNodeId, selector }) as { nodeId?: number };
-      if (!query.nodeId) throw new Error('No element matches selector: ' + selector);
-      await send('DOM.setFileInputFiles', { nodeId: query.nodeId, files });
-    });
-    return true;
-  }
-
-  private async waitForDom(owner: WebContents, view: WebContentsView, target: string, textMode: boolean, sessionKey?: string | null): Promise<boolean> {
-    const deadline = Date.now() + 10_000;
-    while (Date.now() < deadline) {
-      const found = textMode
-        ? await cdpEvaluate(view.webContents, `(document.body?.innerText || '').includes(${JSON.stringify(target)})`)
-        : await this.evaluateDomOperation(owner, view, 'exists', [target], sessionKey);
-      if (found) return true;
-      await wait(100);
-    }
-    throw new Error(`Timed out waiting for ${textMode ? 'text' : 'selector'}: ${target}`);
-  }
-
-  private async waitForLoadState(view: WebContentsView): Promise<boolean> {
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-      if (!view.webContents.isLoadingMainFrame()) return true;
-      await wait(100);
-    }
-    throw new Error('Timed out waiting for page load.');
-  }
-
-  private async evaluatePage(view: WebContentsView, args: unknown[]): Promise<unknown> {
-    const source = typeof args[0] === 'string' ? args[0] : '';
-    if (!source.trim()) throw new Error('evaluate requires source.');
-    if (view.webContents.getURL().startsWith('personal-agent://app')) {
-      throw new Error('browser.evaluate is blocked on Personal Agent app pages.');
-    }
-    const fnArgs = args.slice(1);
-    return cdpEvaluate(view.webContents, `(() => {
-      const source = ${JSON.stringify(source)};
-      const args = ${JSON.stringify(fnArgs)};
-      const fn = source.trim().startsWith('function') || source.trim().startsWith('(') ? (0, eval)('(' + source + ')') : null;
-      return fn ? fn(...args) : (0, eval)(source);
-    })()`);
-  }
-
-  private async cdpElementPoint(view: WebContentsView, selector: string): Promise<{ x: number; y: number }> {
-    const point = await cdpEvaluate(view.webContents, `(() => {
-      const selector = ${JSON.stringify(selector)};
-      const element = document.querySelector(selector);
-      if (!element) throw new Error('No element matches selector: ' + selector);
-      element.scrollIntoView({ block: 'center', inline: 'center' });
-      const rect = element.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) throw new Error('Element is not visible: ' + selector);
-      return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
-    })()`) as { x?: unknown; y?: unknown };
-    const x = typeof point.x === 'number' && Number.isFinite(point.x) ? point.x : NaN;
-    const y = typeof point.y === 'number' && Number.isFinite(point.y) ? point.y : NaN;
-    if (!Number.isFinite(x) || !Number.isFinite(y)) {
-      throw new Error('Could not resolve element click point.');
-    }
-    return { x, y };
-  }
-
-  private async cdpFocusAndClear(view: WebContentsView, selector: string): Promise<void> {
-    await cdpEvaluate(view.webContents, `(() => {
-      const selector = ${JSON.stringify(selector)};
-      const element = document.querySelector(selector);
-      if (!element) throw new Error('No element matches selector: ' + selector);
-      element.scrollIntoView({ block: 'center', inline: 'center' });
-      element.focus();
-      if ('value' in element) {
-        element.value = '';
-        element.dispatchEvent(new Event('input', { bubbles: true }));
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-      } else {
-        element.textContent = '';
-      }
-      return true;
-    })()`);
-  }
-
-  private async runAction(view: WebContentsView, action: WorkbenchBrowserAction): Promise<void> {
-    switch (action.type) {
-      case 'click': {
-        const point = await this.cdpElementPoint(view, action.selector);
-        await withCdp(view.webContents, async (send) => {
-          await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y, button: 'none' });
-          await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-          await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: point.x, y: point.y, button: 'left', clickCount: 1 });
-        });
-        return;
-      }
-      case 'type':
-        await this.cdpFocusAndClear(view, action.selector);
-        await withCdp(view.webContents, async (send) => {
-          await send('Input.insertText', { text: action.text });
-        });
-        return;
-      case 'key': {
-        const event = keyEventFor(action.key);
-        await withCdp(view.webContents, async (send) => {
-          await send('Input.dispatchKeyEvent', { type: 'keyDown', ...event });
-          if (event.text) await send('Input.dispatchKeyEvent', { type: 'char', ...event });
-          await send('Input.dispatchKeyEvent', { type: 'keyUp', ...event });
-        });
-        await wait(60);
-        return;
-      }
-      case 'scroll':
-        await withCdp(view.webContents, async (send) => {
-          await send('Input.dispatchMouseEvent', {
-            type: 'mouseWheel',
-            x: 0,
-            y: 0,
-            deltaX: Number(action.x ?? 0),
-            deltaY: Number(action.y ?? 0),
-          });
-        });
-        return;
-      case 'wait':
-        await wait(action.ms);
-        return;
-    }
-  }
 }

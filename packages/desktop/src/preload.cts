@@ -326,7 +326,6 @@ const desktopBridge = {
   reloadWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-reload`, input),
   stopWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-stop`, input),
   snapshotWorkbenchBrowser: (input?: { sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-snapshot`, input),
-  runWorkbenchBrowserActions: (input: { actions: unknown[]; sessionKey?: string | null }) => ipcRenderer.invoke(`${CHANNEL_PREFIX}:workbench-browser-run-actions`, input),
 };
 
 if (domGlobals.document?.documentElement) {

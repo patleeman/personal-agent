@@ -347,7 +347,6 @@ async function bootstrapDesktopApp(): Promise<void> {
       module.setDesktopWorkbenchBrowserToolHost?.({
         snapshot: (conversationId) => windowController!.snapshotWorkbenchBrowserForConversation(conversationId),
         screenshot: (conversationId) => windowController!.screenshotWorkbenchBrowserForConversation(conversationId),
-        runScript: (input) => windowController!.runWorkbenchBrowserScriptForConversation(input),
       });
     })
     .catch((error) => logBootstrapError(error));

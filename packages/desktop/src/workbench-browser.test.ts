@@ -8,11 +8,9 @@ vi.mock('electron', () => ({
   shell: { openExternal: vi.fn() },
 }));
 import {
-  normalizeWorkbenchBrowserActions,
   normalizeWorkbenchBrowserBounds,
   normalizeWorkbenchBrowserUrl,
 } from './workbench-browser.js';
-import { compileBrowserScript as compileWorkerBrowserScript } from './workbench-browser-script-worker.js';
 
 describe('workbench browser validation', () => {
   it('keeps browser page inspection on the CDP path', () => {
@@ -41,32 +39,5 @@ describe('workbench browser validation', () => {
     expect(normalizeWorkbenchBrowserUrl('example.com/path')).toBe('https://example.com/path');
     expect(normalizeWorkbenchBrowserUrl('http://example.com/')).toBe('http://example.com/');
     expect(() => normalizeWorkbenchBrowserUrl('file:///etc/passwd')).toThrow('http(s)');
-  });
-
-  it('normalizes a bounded batch of browser actions', () => {
-    expect(normalizeWorkbenchBrowserActions([
-      { type: 'click', selector: 'button.submit' },
-      { type: 'type', selector: 'input[name=q]', text: 'hello' },
-      { type: 'key', key: 'Enter' },
-      { type: 'scroll', y: 500 },
-      { type: 'wait', ms: 1500.4 },
-    ])).toEqual([
-      { type: 'click', selector: 'button.submit' },
-      { type: 'type', selector: 'input[name=q]', text: 'hello' },
-      { type: 'key', key: 'Enter' },
-      { type: 'scroll', x: 0, y: 500 },
-      { type: 'wait', ms: 1500 },
-    ]);
-  });
-
-  it('rejects unsafe action batches', () => {
-    expect(() => normalizeWorkbenchBrowserActions(new Array(26).fill({ type: 'wait', ms: 1 }))).toThrow('at most 25');
-    expect(() => normalizeWorkbenchBrowserActions([{ type: 'click', selector: '' }])).toThrow('selector is required');
-    expect(() => normalizeWorkbenchBrowserActions([{ type: 'key', key: '' }])).toThrow('short key');
-  });
-
-  it('compiles browser scripts with real or accidentally escaped line breaks', () => {
-    expect(() => compileWorkerBrowserScript("await browser.wait(1)\nreturn await browser.url()")).not.toThrow();
-    expect(() => compileWorkerBrowserScript("await browser.wait(1)\\nreturn await browser.url()")).not.toThrow();
   });
 });

@@ -460,7 +460,6 @@ export interface PersonalAgentDesktopBridge {
   reloadWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   stopWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserState>;
   snapshotWorkbenchBrowser(input?: { sessionKey?: string | null }): Promise<DesktopWorkbenchBrowserSnapshot>;
-  runWorkbenchBrowserActions(input: { actions: unknown[]; sessionKey?: string | null }): Promise<{ ok: true; actions: Array<{ index: number; type: string; ok: true }>; snapshot: DesktopWorkbenchBrowserSnapshot }>;
 }
 
 export interface DesktopRemoteOperationEnvelope {
