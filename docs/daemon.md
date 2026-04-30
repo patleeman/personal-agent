@@ -75,6 +75,8 @@ The desktop app can own the daemon directly instead of relying on a separately m
 
 The daemon package still owns the background behavior. Only the host process changes.
 
+Scheduled automations execute through the desktop/backend conversation runtime. The daemon schedules, records durable run state, and waits for the conversation turn to finish; it should not shell out to a `pi` binary for automation execution.
+
 ## What breaks when it is off
 
 - scheduled automations do not run

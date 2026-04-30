@@ -1,28 +1,12 @@
-import { spawn } from 'child_process';
 import {
   createWriteStream,
-  existsSync,
   mkdirSync,
-  readFileSync,
-  statSync,
   type WriteStream,
-  writeFileSync,
 } from 'fs';
 import { join } from 'path';
-import {
-  bootstrapStateOrThrow,
-  preparePiAgentDir,
-  resolveChildProcessEnv,
-  resolveNeutralChatCwd,
-  resolveStatePaths,
-  validateStatePathsOutsideRepo,
-} from '@personal-agent/core';
-import {
-  buildPiResourceArgs,
-  materializeProfileToAgentDir,
-  resolveResourceProfile,
-  type ResolvedResourceProfile,
-} from '@personal-agent/core';
+import type { CompanionRuntime } from '../companion/types.js';
+import { resolveCompanionRuntime } from '../companion/runtime.js';
+import { loadDaemonConfig } from '../config.js';
 import type { ParsedTaskDefinition } from './tasks-parser.js';
 
 export interface TaskRunThreadBinding {
@@ -31,10 +15,13 @@ export interface TaskRunThreadBinding {
   threadConversationId?: string;
 }
 
-export type RunnableTaskDefinition = ParsedTaskDefinition & TaskRunThreadBinding;
+export type RunnableTaskDefinition = ParsedTaskDefinition & TaskRunThreadBinding & {
+  targetType?: 'background-agent' | 'conversation';
+  conversationBehavior?: 'steer' | 'followUp';
+};
 
-const GRACEFUL_SHUTDOWN_MS = 5000;
 const MAX_CAPTURED_OUTPUT_CHARS = 16_000;
+const COMPLETION_POLL_INTERVAL_MS = 1000;
 
 export interface TaskRunRequest {
   task: RunnableTaskDefinition;
@@ -56,21 +43,9 @@ export interface TaskRunResult {
   outputText?: string;
 }
 
-interface PreparedTaskRunCommand {
-  command: string;
-  args: string[];
-  cwd: string;
-  env: NodeJS.ProcessEnv;
-}
-
-interface RunnerExecutionContext {
-  request: TaskRunRequest;
-  startedAt: string;
-  logPath: string;
-  stream: WriteStream;
-  prepared: PreparedTaskRunCommand;
-  captureOutput: (chunk: string) => void;
-  getCapturedOutput: () => string | undefined;
+interface CapturedOutputBuffer {
+  append(chunk: string): void;
+  value(): string | undefined;
 }
 
 function sanitizePathSegment(value: string): string {
@@ -96,239 +71,273 @@ function writeLine(stream: WriteStream, message: string): void {
   stream.write(`${message}\n`);
 }
 
-function toTaskRunArgs(task: RunnableTaskDefinition, resolvedProfile: ResolvedResourceProfile): string[] {
-  const args = [...buildPiResourceArgs(resolvedProfile)];
-
-  if (task.threadMode && task.threadMode !== 'none' && task.threadSessionFile) {
-    args.push('--session', task.threadSessionFile);
-  }
-
-  if (task.modelRef) {
-    args.push('--model', task.modelRef);
-  }
-
-  if (task.thinkingLevel) {
-    args.push('--thinking', task.thinkingLevel);
-  }
-
-  args.push('-p', task.prompt);
-  return args;
-}
-
-function resolvePiCommand(repoRoot: string): { command: string; argsPrefix: string[] } {
-  const localPiCli = join(
-    repoRoot,
-    'node_modules',
-    '@mariozechner',
-    'pi-coding-agent',
-    'dist',
-    'cli.js',
-  );
-
-  if (existsSync(localPiCli) && statSync(localPiCli).isFile()) {
-    return {
-      command: process.execPath,
-      argsPrefix: [localPiCli],
-    };
-  }
+function createCapturedOutputBuffer(): CapturedOutputBuffer {
+  let captured = '';
+  let truncated = false;
 
   return {
-    command: 'pi',
-    argsPrefix: [],
-  };
-}
-
-function normalizeThreadSessionTranscript(sessionFile: string | undefined): void {
-  if (!sessionFile || !existsSync(sessionFile)) {
-    return;
-  }
-
-  let raw = '';
-  try {
-    raw = readFileSync(sessionFile, 'utf-8');
-  } catch {
-    return;
-  }
-
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 3) {
-    return;
-  }
-
-  const prefix = [lines[0]];
-  let cursor = 1;
-  while (cursor < lines.length) {
-    try {
-      const parsed = JSON.parse(lines[cursor] ?? '{}') as { type?: string };
-      if (parsed.type !== 'session_info') {
-        break;
-      }
-      prefix.push(lines[cursor] as string);
-      cursor += 1;
-    } catch {
-      return;
-    }
-  }
-
-  if (cursor + prefix.length > lines.length) {
-    return;
-  }
-
-  const duplicatedPrefix = prefix.every((line, index) => lines[cursor + index] === line);
-  if (!duplicatedPrefix) {
-    return;
-  }
-
-  const normalized = [...prefix, ...lines.slice(cursor + prefix.length)];
-  writeFileSync(sessionFile, `${normalized.join('\n')}\n`, 'utf-8');
-}
-
-function appendCapturedOutput(current: string, chunk: string): { next: string; truncated: boolean } {
-  if (chunk.length === 0) {
-    return { next: current, truncated: false };
-  }
-
-  const remaining = MAX_CAPTURED_OUTPUT_CHARS - current.length;
-  if (remaining <= 0) {
-    return { next: current, truncated: true };
-  }
-
-  if (chunk.length <= remaining) {
-    return { next: current + chunk, truncated: false };
-  }
-
-  return {
-    next: current + chunk.slice(0, remaining),
-    truncated: true,
-  };
-}
-
-function formatCapturedOutput(raw: string, truncated: boolean): string | undefined {
-  const trimmed = raw.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-
-  if (!truncated) {
-    return trimmed;
-  }
-
-  return `${trimmed}\n\n[output truncated]`;
-}
-
-async function runTaskWithDirectSpawn(context: RunnerExecutionContext): Promise<TaskRunResult> {
-  return new Promise<TaskRunResult>((resolve) => {
-    const child = spawn(context.prepared.command, context.prepared.args, {
-      cwd: context.prepared.cwd,
-      env: context.prepared.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-
-    let settled = false;
-    let timedOut = false;
-    let cancelled = false;
-    let killTimer: NodeJS.Timeout | undefined;
-
-    const timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      writeLine(context.stream, `\n# timeout after ${context.request.task.timeoutSeconds}s`);
-      child.kill('SIGTERM');
-
-      killTimer = setTimeout(() => {
-        child.kill('SIGKILL');
-      }, GRACEFUL_SHUTDOWN_MS);
-    }, context.request.task.timeoutSeconds * 1000);
-
-    const abortHandler = () => {
-      cancelled = true;
-      writeLine(context.stream, '\n# cancelled by daemon shutdown');
-      child.kill('SIGTERM');
-
-      killTimer = setTimeout(() => {
-        child.kill('SIGKILL');
-      }, GRACEFUL_SHUTDOWN_MS);
-    };
-
-    context.request.signal?.addEventListener('abort', abortHandler, { once: true });
-
-    const finalize = (next: TaskRunResult) => {
-      if (settled) {
+    append(chunk: string) {
+      if (chunk.length === 0 || captured.length >= MAX_CAPTURED_OUTPUT_CHARS) {
+        if (chunk.length > 0) {
+          truncated = true;
+        }
         return;
       }
 
-      settled = true;
-      clearTimeout(timeoutTimer);
-      if (killTimer) {
-        clearTimeout(killTimer);
+      const remaining = MAX_CAPTURED_OUTPUT_CHARS - captured.length;
+      if (chunk.length <= remaining) {
+        captured += chunk;
+        return;
       }
 
-      context.request.signal?.removeEventListener('abort', abortHandler);
-      resolve(next);
+      captured += chunk.slice(0, remaining);
+      truncated = true;
+    },
+    value() {
+      const trimmed = captured.trim();
+      if (trimmed.length === 0) {
+        return undefined;
+      }
+
+      return truncated ? `${trimmed}\n\n[output truncated]` : trimmed;
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
+}
+
+function extractConversationId(value: unknown): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  return readString(value.conversationId)
+    ?? (isRecord(value.sessionMeta) ? readString(value.sessionMeta.id) : undefined)
+    ?? (isRecord(value.bootstrap) ? extractConversationId(value.bootstrap) : undefined)
+    ?? (isRecord(value.sessionDetail) ? readString(value.sessionDetail.conversationId) : undefined);
+}
+
+function extractIsRunning(value: unknown): boolean | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  if (typeof value.isRunning === 'boolean') {
+    return value.isRunning;
+  }
+
+  if (typeof value.isStreaming === 'boolean') {
+    return value.isStreaming;
+  }
+
+  if (isRecord(value.sessionMeta)) {
+    const nested = extractIsRunning(value.sessionMeta);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+
+  if (isRecord(value.bootstrap)) {
+    const nested = extractIsRunning(value.bootstrap);
+    if (nested !== undefined) {
+      return nested;
+    }
+  }
+
+  return undefined;
+}
+
+function summarizeEvent(event: unknown): string | undefined {
+  if (!isRecord(event)) {
+    return undefined;
+  }
+
+  const type = readString(event.type);
+  if (!type) {
+    return undefined;
+  }
+
+  switch (type) {
+    case 'text_delta':
+    case 'thinking_delta':
+      return readString(event.delta);
+    case 'tool_start':
+      return `tool_start ${readString(event.toolName) ?? 'tool'}`;
+    case 'tool_end': {
+      const toolName = readString(event.toolName) ?? 'tool';
+      const output = readString(event.output);
+      return output ? `tool_end ${toolName}: ${output}` : `tool_end ${toolName}`;
+    }
+    case 'error':
+      return `error: ${readString(event.message) ?? 'Conversation run failed.'}`;
+    case 'agent_start':
+    case 'agent_end':
+    case 'turn_end':
+      return type;
+    default:
+      return undefined;
+  }
+}
+
+function readEventError(event: unknown): string | undefined {
+  return isRecord(event) && event.type === 'error'
+    ? readString(event.message) ?? 'Conversation run failed.'
+    : undefined;
+}
+
+function wait(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      resolve();
     };
-
-    child.stdout.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      context.stream.write(text);
-      context.captureOutput(text);
-    });
-
-    child.stderr.on('data', (chunk: Buffer | string) => {
-      const text = chunk.toString();
-      context.stream.write(text);
-      context.captureOutput(text);
-    });
-
-    child.on('error', (error) => {
-      const endedAt = new Date().toISOString();
-      finalize({
-        success: false,
-        startedAt: context.startedAt,
-        endedAt,
-        exitCode: 1,
-        signal: null,
-        timedOut,
-        cancelled,
-        logPath: context.logPath,
-        error: error.message,
-        outputText: context.getCapturedOutput(),
-      });
-    });
-
-    child.on('close', (code, closeSignal) => {
-      const exitCode = code ?? 1;
-      const endedAt = new Date().toISOString();
-      const success = exitCode === 0 && !timedOut && !cancelled;
-
-      normalizeThreadSessionTranscript(context.request.task.threadSessionFile);
-
-      let error: string | undefined;
-      if (timedOut) {
-        error = `Task timed out after ${context.request.task.timeoutSeconds}s`;
-      } else if (cancelled) {
-        error = 'Task run cancelled';
-      } else if (exitCode !== 0) {
-        error = closeSignal
-          ? `pi exited with signal ${closeSignal}`
-          : `pi exited with code ${exitCode}`;
-      }
-
-      finalize({
-        success,
-        startedAt: context.startedAt,
-        endedAt,
-        exitCode,
-        signal: closeSignal,
-        timedOut,
-        cancelled,
-        logPath: context.logPath,
-        error,
-        outputText: context.getCapturedOutput(),
-      });
-    });
+    signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
-export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<TaskRunResult> {
+async function resolveTaskConversation(runtime: CompanionRuntime, task: RunnableTaskDefinition): Promise<string> {
+  if (task.threadMode && task.threadMode !== 'none' && task.threadSessionFile) {
+    const resumed = await runtime.resumeConversation({
+      sessionFile: task.threadSessionFile,
+      ...(task.cwd ? { cwd: task.cwd } : {}),
+    });
+    return extractConversationId(resumed) ?? task.threadConversationId ?? (() => {
+      throw new Error(`Conversation runtime did not return a conversation id for automation @${task.id}.`);
+    })();
+  }
+
+  if (task.threadConversationId) {
+    return task.threadConversationId;
+  }
+
+  const created = await runtime.createConversation({
+    ...(task.cwd ? { cwd: task.cwd } : {}),
+    ...(task.modelRef ? { model: task.modelRef } : {}),
+    ...(task.thinkingLevel ? { thinkingLevel: task.thinkingLevel } : {}),
+  });
+  const conversationId = extractConversationId(created);
+  if (!conversationId) {
+    throw new Error(`Conversation runtime did not return a conversation id for automation @${task.id}.`);
+  }
+
+  return conversationId;
+}
+
+async function waitForConversationCompletion(input: {
+  runtime: CompanionRuntime;
+  conversationId: string;
+  task: RunnableTaskDefinition;
+  signal?: AbortSignal;
+  stream: WriteStream;
+  capture: CapturedOutputBuffer;
+}): Promise<{ success: boolean; cancelled: boolean; timedOut: boolean; error?: string }> {
+  const { runtime, conversationId, task, signal, stream, capture } = input;
+  let settled = false;
+  let completed = false;
+  let errorMessage: string | undefined;
+  let unsubscribe: (() => void) | undefined;
+  let started = false;
+  let promptDispatchStarted = false;
+
+  const finish = (details: { completed?: boolean; error?: string }) => {
+    completed = details.completed === true;
+    errorMessage = details.error ?? errorMessage;
+    settled = true;
+  };
+
+  const abortHandler = () => finish({ error: 'Task run cancelled' });
+  signal?.addEventListener('abort', abortHandler, { once: true });
+
+  try {
+    unsubscribe = await runtime.subscribeConversation({
+      conversationId,
+      surfaceId: `automation-${task.id}`,
+      surfaceType: 'desktop_ui',
+      tailBlocks: 20,
+    }, (event) => {
+      const summary = summarizeEvent(event);
+      if (summary) {
+        writeLine(stream, summary);
+        capture.append(`${summary}\n`);
+      }
+
+      const eventError = readEventError(event);
+      if (eventError) {
+        finish({ error: eventError });
+        return;
+      }
+
+      if (isRecord(event) && event.type === 'agent_start' && promptDispatchStarted) {
+        started = true;
+      }
+
+      if (isRecord(event) && (event.type === 'turn_end' || event.type === 'agent_end') && started) {
+        finish({ completed: true });
+      }
+    });
+
+    promptDispatchStarted = true;
+    await runtime.promptConversation({
+      conversationId,
+      text: task.prompt,
+      behavior: task.conversationBehavior ?? 'followUp',
+      surfaceId: `automation-${task.id}`,
+    });
+
+    const deadline = Date.now() + task.timeoutSeconds * 1000;
+    while (!settled) {
+      if (signal?.aborted) {
+        finish({ error: 'Task run cancelled' });
+        break;
+      }
+
+      if (Date.now() >= deadline) {
+        finish({ error: `Task timed out after ${task.timeoutSeconds}s` });
+        break;
+      }
+
+      await wait(COMPLETION_POLL_INTERVAL_MS, signal);
+
+      const bootstrap = await runtime.readConversationBootstrap({ conversationId, tailBlocks: 5 }).catch(() => null);
+      const running = extractIsRunning(bootstrap);
+      if (started && running === false) {
+        finish({ completed: true });
+      }
+    }
+  } finally {
+    signal?.removeEventListener('abort', abortHandler);
+    unsubscribe?.();
+  }
+
+  const timedOut = errorMessage === `Task timed out after ${task.timeoutSeconds}s`;
+  const cancelled = errorMessage === 'Task run cancelled';
+  if (cancelled || timedOut) {
+    await runtime.abortConversation({ conversationId }).catch(() => undefined);
+  }
+
+  return {
+    success: completed && !errorMessage,
+    cancelled,
+    timedOut,
+    ...(errorMessage ? { error: errorMessage } : {}),
+  };
+}
+
+export async function runTaskInConversationRuntime(request: TaskRunRequest): Promise<TaskRunResult> {
   const startedAt = new Date().toISOString();
   const logDir = join(request.runsRoot, sanitizePathSegment(request.task.id));
   const logPath = join(logDir, `${toTimestampKey(startedAt)}-attempt-${request.attempt}.log`);
@@ -336,6 +345,8 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
   mkdirSync(logDir, { recursive: true, mode: 0o700 });
 
   const stream = createWriteStream(logPath, { flags: 'a', encoding: 'utf-8' });
+  const capture = createCapturedOutputBuffer();
+  let result: TaskRunResult | undefined;
 
   writeLine(stream, `# task=${request.task.id}`);
   if (request.task.title) {
@@ -347,26 +358,13 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
   writeLine(stream, `# profile=${request.task.profile}`);
   writeLine(stream, `# attempt=${request.attempt}`);
   writeLine(stream, `# startedAt=${startedAt}`);
-
-  let capturedOutput = '';
-  let outputTruncated = false;
-
-  const captureOutput = (chunk: string): void => {
-    const append = appendCapturedOutput(capturedOutput, chunk);
-    capturedOutput = append.next;
-    if (append.truncated) {
-      outputTruncated = true;
-    }
-  };
-
-  const getCapturedOutput = (): string | undefined => formatCapturedOutput(capturedOutput, outputTruncated);
-
-  let result: TaskRunResult | undefined;
+  writeLine(stream, '# mode=conversation-runtime');
+  writeLine(stream, '');
 
   try {
     if (request.signal?.aborted) {
       const endedAt = new Date().toISOString();
-      writeLine(stream, '# cancelled before spawn');
+      writeLine(stream, '# cancelled before conversation runtime dispatch');
       result = {
         success: false,
         startedAt,
@@ -376,62 +374,51 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
         timedOut: false,
         cancelled: true,
         logPath,
-        error: 'Task run cancelled before spawn',
-        outputText: getCapturedOutput(),
+        error: 'Task run cancelled before dispatch',
+        outputText: capture.value(),
       };
       return result;
     }
 
-    const resolvedProfile = resolveResourceProfile(request.task.profile);
-    const statePaths = resolveStatePaths();
-
-    validateStatePathsOutsideRepo(statePaths, resolvedProfile.repoRoot);
-    await bootstrapStateOrThrow(statePaths);
-
-    const runtime = await preparePiAgentDir({
-      statePaths,
-    });
-
-    materializeProfileToAgentDir(resolvedProfile, runtime.agentDir);
-
-    const args = toTaskRunArgs(request.task, resolvedProfile);
-    const piCommand = resolvePiCommand(resolvedProfile.repoRoot);
-    const envOverrides: Record<string, string> = {
-      PI_CODING_AGENT_DIR: runtime.agentDir,
-      PERSONAL_AGENT_ACTIVE_PROFILE: resolvedProfile.name,
-      PERSONAL_AGENT_REPO_ROOT: resolvedProfile.repoRoot,
-    };
-
-    const prepared: PreparedTaskRunCommand = {
-      command: piCommand.command,
-      args: [...piCommand.argsPrefix, ...args],
-      cwd: request.task.cwd ?? resolveNeutralChatCwd(resolvedProfile.name, statePaths.root),
-      env: resolveChildProcessEnv(envOverrides),
-    };
-
-    const threadLog = request.task.threadMode && request.task.threadMode !== 'none' && request.task.threadSessionFile
-      ? ` --session ${request.task.threadSessionFile}`
-      : '';
-    writeLine(stream, `# command=pi (profile resources)${request.task.modelRef ? ` --model ${request.task.modelRef}` : ''}${request.task.thinkingLevel ? ` --thinking ${request.task.thinkingLevel}` : ''}${threadLog} -p <task prompt>`);
-    writeLine(stream, '# mode=subprocess');
-    writeLine(stream, '');
-
-    result = await runTaskWithDirectSpawn({
-      request,
-      startedAt,
-      logPath,
-      stream,
-      prepared,
-      captureOutput,
-      getCapturedOutput,
-    });
-
-    writeLine(stream, '');
-    writeLine(stream, `# endedAt=${result.endedAt}`);
-    writeLine(stream, `# success=${result.success}`);
-    if (result.error) {
-      writeLine(stream, `# error=${result.error}`);
+    const runtime = await resolveCompanionRuntime(loadDaemonConfig());
+    if (!runtime) {
+      throw new Error('Conversation runtime unavailable; scheduled automations require the Personal Agent backend runtime.');
     }
+
+    const conversationId = await resolveTaskConversation(runtime, request.task);
+    writeLine(stream, `# conversation=${conversationId}`);
+
+    if (request.task.modelRef || request.task.thinkingLevel) {
+      await runtime.updateConversationModelPreferences({
+        conversationId,
+        ...(request.task.modelRef ? { model: request.task.modelRef } : {}),
+        ...(request.task.thinkingLevel ? { thinkingLevel: request.task.thinkingLevel } : {}),
+        surfaceId: `automation-${request.task.id}`,
+      });
+    }
+
+    const outcome = await waitForConversationCompletion({
+      runtime,
+      conversationId,
+      task: request.task,
+      signal: request.signal,
+      stream,
+      capture,
+    });
+
+    const endedAt = new Date().toISOString();
+    result = {
+      success: outcome.success,
+      startedAt,
+      endedAt,
+      exitCode: outcome.success ? 0 : 1,
+      signal: null,
+      timedOut: outcome.timedOut,
+      cancelled: outcome.cancelled,
+      logPath,
+      ...(outcome.error ? { error: outcome.error } : {}),
+      outputText: capture.value(),
+    };
 
     return result;
   } catch (error) {
@@ -451,11 +438,21 @@ export async function runTaskInIsolatedPi(request: TaskRunRequest): Promise<Task
       cancelled: false,
       logPath,
       error: message,
-      outputText: getCapturedOutput(),
+      outputText: capture.value(),
     };
 
     return result;
   } finally {
+    if (result) {
+      writeLine(stream, '');
+      writeLine(stream, `# endedAt=${result.endedAt}`);
+      writeLine(stream, `# success=${result.success}`);
+      if (result.error) {
+        writeLine(stream, `# error=${result.error}`);
+      }
+    }
     await closeStream(stream);
   }
 }
+
+export const runTaskInIsolatedPi = runTaskInConversationRuntime;
