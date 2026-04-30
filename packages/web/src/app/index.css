@@ -209,7 +209,7 @@
   }
 
   .ui-overlay-backdrop {
-    @apply fixed inset-0 z-50 flex items-start justify-center pt-12;
+    @apply fixed inset-0 z-[120] flex items-start justify-center pt-12;
   }
 
   .ui-dialog-shell {

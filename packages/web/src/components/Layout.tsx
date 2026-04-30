@@ -547,6 +547,14 @@ function WorkbenchDocumentPane({
   );
 }
 
+function hasBlockingHtmlModal(): boolean {
+  if (typeof document === 'undefined') {
+    return false;
+  }
+
+  return Boolean(document.querySelector('[aria-modal="true"]'));
+}
+
 function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: string | null; onClose: () => void }) {
   const browserHostRef = useRef<HTMLDivElement | null>(null);
   const urlInputRef = useRef<HTMLInputElement | null>(null);
@@ -569,6 +577,18 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
   const syncBounds = useCallback(() => {
     const host = browserHostRef.current;
     if (!bridge || !host) {
+      return;
+    }
+
+    if (hasBlockingHtmlModal()) {
+      void bridge.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey })
+        .then((nextState) => {
+          if (nextState) {
+            setState(nextState);
+            syncUrlDraftFromBrowserState(nextState);
+          }
+        })
+        .catch((error) => setStatus(error instanceof Error ? error.message : String(error)));
       return;
     }
 
@@ -602,10 +622,20 @@ function WorkbenchBrowserTab({ conversationId, onClose }: { conversationId: stri
       observer?.observe(browserHostRef.current);
     }
     window.addEventListener('resize', syncBounds);
+    const modalObserver = typeof MutationObserver !== 'undefined'
+      ? new MutationObserver(syncBounds)
+      : null;
+    modalObserver?.observe(document.body, {
+      attributes: true,
+      attributeFilter: ['aria-modal'],
+      childList: true,
+      subtree: true,
+    });
     const timer = window.setInterval(syncBounds, 1000);
 
     return () => {
       observer?.disconnect();
+      modalObserver?.disconnect();
       window.removeEventListener('resize', syncBounds);
       window.clearInterval(timer);
       void bridge?.setWorkbenchBrowserBounds({ visible: false, sessionKey: browserSessionKey }).catch(() => undefined);
